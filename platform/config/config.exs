@@ -45,6 +45,28 @@ config :regent_agents,
   },
   ash_domains: [RegentAgents]
 
+# The Claude connector signs in with the person's verified Keyfleet account
+# (`Keyfleet.OAuth`). Its one permission keeps a Regents identity for the app,
+# pairs it and checks it in. config/runtime.exs switches it on and sets its
+# issuer and resource from the site's own address.
+config :keyfleet, Keyfleet.OAuth,
+  brand: "platform",
+  scope: "regent.identity.manage",
+  permission_description:
+    "keep a Regents identity for this app, pair it with your account using your one-use code, and check it in",
+  consent_note: "Through Keyfleet, this app can only pair with your account and check in."
+
+# Codes, verifiers and tokens never reach the logs.
+config :phoenix, :filter_parameters, [
+  "password",
+  "code",
+  "code_verifier",
+  "access_token",
+  "refresh_token",
+  "client_secret",
+  "id_token"
+]
+
 # Regent Credits: one prepaid balance per Privy account, shared by every Regent
 # site. Credits are the private currency XRC, kept to the millionth. Admins come
 # from REGENT_CREDITS_ADMINS at runtime. Credits are bought here with USDC on
@@ -181,6 +203,11 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 
 # One budget per client address for the health check and every /api path.
 config :keyfleet, :api_rate_limit, limit: 120, window_seconds: 60
+
+# Claude connector requests carrying a token, per client address. Claude's
+# servers send every connected person's requests; each person also has 120 a
+# minute of their own at /mcp.
+config :keyfleet, :connector_rate_limit, limit: 6_000, window_seconds: 60
 
 # Tries at the early-access form per client address: five in ten minutes.
 config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600

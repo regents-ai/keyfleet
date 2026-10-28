@@ -61,7 +61,8 @@ defmodule KeyfleetWeb.AgentFilesTest do
 
     assert conn |> get("/agents.md") |> response(200) |> String.ends_with?(ideas)
 
-    slugs = for file <- Path.wildcard("priv/public/agents/*.md"), do: Path.basename(file, ".md")
+    # Claude's guide is served only while the Claude connector is on.
+    slugs = for {slug, _name} <- KeyfleetWeb.AgentGuides.runtimes(), do: slug
     assert "dots" in slugs
 
     for slug <- slugs do

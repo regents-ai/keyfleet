@@ -4,7 +4,8 @@ defmodule KeyfleetWeb.PairingBox do
   every page, in the shared pairing box (`Regent.Account.pairing`): the message to
   paste with its code in a short box with icons to copy it and make a new code,
   then the ten agents in `RegentAgents.Harness.featured/0` to choose from by their
-  pictures. Each agent keeps its own code until it expires, so choosing another
+  pictures, and Claude while its connector is on (`RegentAgents.Harness.hosted/0`,
+  read at runtime). Each agent keeps its own code until it expires, so choosing another
   agent and coming back shows the same message. Once the agent uses the code, the
   box names it.
 
@@ -79,13 +80,12 @@ defmodule KeyfleetWeb.PairingBox do
     """
   end
 
-  @doc "The ten agents to choose from, as the shared pairing box takes them."
+  @doc "The agents to choose from, as the shared pairing box takes them."
   def choices,
-    do:
-      for(
-        harness <- Harness.featured(),
-        do: %{value: to_string(harness), label: label(harness)}
-      )
+    do: for(harness <- offered(), do: %{value: to_string(harness), label: label(harness)})
+
+  # The ten featured agents, then Claude while its connector is on.
+  defp offered, do: Harness.featured() ++ Harness.hosted()
 
   defp label(:other), do: "Any agent"
   defp label(:codex), do: "OpenAI Codex"
@@ -110,7 +110,7 @@ defmodule KeyfleetWeb.PairingBox do
 
   defp with_offered(socket, harness, then) do
     with {:ok, harness} <- Harness.match(harness),
-         true <- harness in Harness.featured() do
+         true <- harness in offered() do
       then.(socket, harness)
     else
       _not_offered -> socket
@@ -227,6 +227,12 @@ defmodule KeyfleetWeb.PairingBox do
   defp setup(:dots),
     do: """
     After pairing, add a recurring task under Scheduled, every 30 minutes, with the instructions "#{@check_in}"\
+    """
+
+  defp setup(:claude),
+    do: """
+    If the Keyfleet connector isn't in your tools yet, ask me to add it in Claude's settings under Connectors, with the address #{KeyfleetWeb.Endpoint.url()}/mcp.
+    After pairing, call check_in each time you start on Keyfleet.\
     """
 
   defp setup(:other),

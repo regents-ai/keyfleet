@@ -17,7 +17,8 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   Every other page a browser opens, `/` included, is sent to `/early` with a
   302. Every other address answers 503 with `Retry-After`: the `not_open_yet`
-  JSON refusal for the API, sign-in and the other JSON documents,
+  JSON refusal for the API, sign-in, the connected apps' MCP address and
+  token endpoints, and the other JSON documents,
   and one line of Markdown for the rest, among them the joining guide, the fleet
   directory and the contract. Signing out closes with the rest of sign-in.
 
@@ -48,7 +49,13 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     ["auth"],
     ["metadata"],
     ["capabilities.json"],
-    [".well-known", "api-catalog"]
+    ["mcp"],
+    ["oauth", "register"],
+    ["oauth", "token"],
+    ["oauth", "revoke"],
+    [".well-known", "api-catalog"],
+    [".well-known", "oauth-protected-resource"],
+    [".well-known", "oauth-authorization-server"]
   ]
 
   @doc "True while the product surfaces are open."

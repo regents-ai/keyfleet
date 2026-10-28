@@ -4,9 +4,16 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "20ee19753a11c113fd1a8d2f9e151be14a0dafae"
+  # The Claude connector's packages: oauth, mcp_agents and agent_access.
+  @elixir_utils_ref "3a82fdeffc3bae997b5501045d5d0d6cb6c8fb94"
+  # agents: the held release plus Claude as a hosted runtime, so the connector
+  # changes nothing for any other agent.
+  @elixir_utils_agents_ref "edfc6f10f78c3556b076a104bcb964204d7ce477"
+  # Everything else stays here and moves with its own shared rollout: chain's Base
+  # Builder Code suffix is a wallet change, and credits brings card_purchases.
+  @elixir_utils_held_ref "20ee19753a11c113fd1a8d2f9e151be14a0dafae"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "d53b8f1283d12b1539ff710caae83342015b6279"
+  @design_system_ref "cda974fa964f4bfd009dbbe0afeb1f2eb88530b9"
 
   def project do
     [
@@ -77,26 +84,36 @@ defmodule Keyfleet.MixProject do
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.14.2"},
       {:regent_privy,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
+       git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "privy", override: true},
       {:regent_identity,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ash_components/identity"},
+       git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "ash_components/identity"},
       {:regent_agents,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ash_components/agents", override: true},
+       git: @elixir_utils,
+       ref: @elixir_utils_agents_ref,
+       sparse: "ash_components/agents",
+       override: true},
       {:regent_ui, git: @design_system, ref: @design_system_ref, sparse: "regent_ui"},
-      {:regent_agent_access, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access"},
+      # regent_mcp_agents names regent_agent_access by path; this pin replaces it.
+      {:regent_agent_access,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access", override: true},
       {:siwa,
        git: @elixir_utils,
-       ref: @elixir_utils_ref,
+       ref: @elixir_utils_held_ref,
        sparse: "siwa/siwa-elixir/apps/siwa",
        override: true},
       # regent_identity and regent_agents name regent_format by path; this pin replaces it.
       {:regent_format,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "format", override: true},
+       git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "format", override: true},
       {:regent_chain,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
-      {:regent_credits, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "credits"},
-      {:regent_points, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "points"},
-      {:ens_elixir, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ens"},
+       git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "chain", override: true},
+      {:regent_credits, git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "credits"},
+      {:regent_points, git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "points"},
+      {:ens_elixir, git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "ens"},
+      # The Claude connector: its sign-in, and the MCP address and identity tools
+      # it calls. regent_mcp_agents names regent_oauth by path; this pin replaces it.
+      {:regent_oauth,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "oauth", override: true},
+      {:regent_mcp_agents, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "mcp_agents"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
@@ -122,7 +139,7 @@ defmodule Keyfleet.MixProject do
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:credo_ash,
        git: @elixir_utils,
-       ref: @elixir_utils_ref,
+       ref: @elixir_utils_held_ref,
        sparse: "credo_ash",
        only: [:dev, :test],
        runtime: false},

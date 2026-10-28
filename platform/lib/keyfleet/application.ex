@@ -9,6 +9,10 @@ defmodule Keyfleet.Application do
   def start(_type, _args) do
     Keyfleet.ErrorHandlers.attach()
     :ok = KeyfleetWeb.VisitLog.Events.attach()
+    # The Claude connector stays off until its one switch turns it on
+    # (config/runtime.exs); these only check and store its settings.
+    :ok = RegentOAuth.configure(Keyfleet.OAuth)
+    :ok = RegentMCPAgents.configure!()
 
     children =
       Application.fetch_env!(:keyfleet, :machine)
@@ -43,6 +47,7 @@ defmodule Keyfleet.Application do
       KeyfleetWeb.Telemetry,
       {Keyfleet.Accounts.RequestRateLimiter, []},
       database_child(),
+      oauth_repo_child(),
       cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
       graph_processes_child(),
@@ -95,6 +100,13 @@ defmodule Keyfleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: Keyfleet.Repo
+  end
+
+  # Connected apps' grants and tokens, in this site's database.
+  defp oauth_repo_child do
+    if Application.get_env(:keyfleet, :database_startup_enabled, false) and
+         RegentOAuth.enabled?(),
+       do: RegentOAuth.Repo
   end
 
   # Background work lives in the database, so it starts with it. AshOban adds a

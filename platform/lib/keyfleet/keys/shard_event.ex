@@ -204,6 +204,28 @@ defmodule Keyfleet.Keys.ShardEvent do
       prepare build(sort: [token_id: :asc, expires_at: :asc, record_seq: :asc])
     end
 
+    # The wallets a key's owner gave a shard of it, in any of the key's
+    # ownerships that owner held, active or not: whoever wrote as the key
+    # with one wrote for that owner.
+    read :issued_by_owner do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false
+      argument :owner, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id) and kind == :issued and
+                 fragment(
+                   "? IN (SELECT held.ownership_epoch FROM keyfleet_app.key_attachments AS held WHERE held.fleet_id = ? AND held.token_id = ? AND held.owner_wallet = ?)",
+                   ownership_epoch,
+                   ^arg(:fleet_id),
+                   ^arg(:token_id),
+                   ^arg(:owner)
+                 )
+             )
+
+      prepare build(select: [:wallet], distinct: [:wallet])
+    end
+
     # The fleet's keys that have at least one active shard, by number, for
     # the key map.
     read :keys_with_shards do

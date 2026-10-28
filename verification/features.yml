@@ -1142,3 +1142,64 @@ features:
     gaps:
       - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three share its component.
       - WebKit is not run on the Mac.
+
+  - id: claude-connector
+    what: >-
+      With KEYFLEET_CLAUDE_CONNECTOR_ENABLED on, a person adds the Keyfleet
+      connector in Claude with the address /mcp, signs in to Keyfleet when
+      Claude asks and allows one permission; Claude then keeps an identity,
+      pairs it with the person's one-use code as `claude` and checks in, which
+      sets its last contact on Account (not its check-in light), and the person
+      can disconnect it from Connected apps. /mcp is the shared
+      RegentMCPAgents.Plug: 401 with the sign-in challenge without a live
+      token, 120 requests a minute per connected account; before that a
+      request without a token spends the /api per-address budget and one with
+      a token the connector's own per-address ceiling of 6,000 a minute, so
+      every person's Claude, calling from the same servers, never shares one
+      120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
+      words. Tokens are stored only as their hash. Claude's guide, its skill,
+      its place on /agents, the sitemap and /connect, the pair request's
+      `claude` harness and the lines in llms.txt and agents.md naming /mcp
+      exist only while the switch is on; off, /agents/claude is not found and
+      /mcp answers 404. Turning it on without the site's hosted signing key
+      stops the boot, naming the setting. Off by default.
+    who: agent
+    level: protected
+    paths:
+      - platform/mix.exs
+      - platform/config/config.exs
+      - platform/config/runtime.exs
+      - platform/lib/keyfleet/application.ex
+      - platform/lib/keyfleet/oauth.ex
+      - platform/lib/keyfleet_web/controllers/oauth_controller.ex
+      - platform/lib/keyfleet_web/endpoint.ex
+      - platform/lib/keyfleet_web/plugs/launch_gate.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet_web/components/send_agent.ex
+      - platform/lib/keyfleet_web/live/connect_live.ex
+      - platform/priv/public/agents/claude.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+      - platform/priv/repo/migrations/20261028180000_add_oauth_provider.exs
+    entry:
+      - route: POST /mcp
+      - route: GET /oauth/authorize
+      - route: POST /oauth/token
+      - route: GET /oauth/connections
+      - route: GET /agents/claude
+      - route: GET /connect
+    proofs:
+      - platform/test/keyfleet_web/router_gate_coverage_test.exs
+      - platform/test/keyfleet_web/rate_limit_test.exs
+    gaps:
+      - Not compiled here, and no Keyfleet test runs the connector itself; the proofs check that the launch gate answers the new addresses while the site is closed, and which per-address budget a request to /mcp spends with and without a token. The library's own plug and hashed-token tests run in elixir-utils, not against Keyfleet.
+      - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, /connect?agent=claude, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
+      - Nothing checks that runtime.exs stops the boot without SIWA_HOSTED_SIGNING_KEY, or that the issuer and resource follow PHX_HOST.
+      - The migration has not run anywhere. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
+      - Sign-in, consent, token exchange, refresh, disconnect and an /mcp call without, with and with a revoked token are unchecked on Keyfleet, as are the per-account 429, the 405 for a GET and a 401 when the account can't be read.
+      - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
+      - The connector's packages are pinned to elixir-utils branch claude/mcp-self-calls-1028 and agents to claude/agents-claude-only-1028, neither on main yet. The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
+      - siwa-server limits what a hosted signer may sign (e9a822d) and holds Keyfleet's entry in v73, not yet deployed.
+      - The browser walk does not open the connect step or the Claude guide with the connector on; WebKit is not run on the Mac.

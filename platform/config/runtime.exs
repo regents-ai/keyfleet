@@ -9,6 +9,59 @@ if config_env() != :test do
     verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
 end
 
+# The Claude connector, behind one switch: its sign-in (Keyfleet.OAuth), its
+# MCP address at /mcp, pairing as a connected app, and its guide at
+# /agents/claude. A release switches it on only after the provider's tables are
+# migrated. The hosted signer is the sign-in server's, asked with this site's
+# own key there.
+claude_connector? = System.get_env("KEYFLEET_CLAUDE_CONNECTOR_ENABLED") == "true"
+hosted_signing_key = System.get_env("SIWA_HOSTED_SIGNING_KEY")
+
+if claude_connector? and
+     not (is_binary(hosted_signing_key) and
+            Regex.match?(~r/\A[A-Za-z0-9_-]{32,}\z/, hosted_signing_key)) do
+  raise "KEYFLEET_CLAUDE_CONNECTOR_ENABLED is true, so SIWA_HOSTED_SIGNING_KEY must be " <>
+          "this site's hosted signing key from the sign-in server: 32 or more letters, " <>
+          "digits, - or _"
+end
+
+# The connector's sign-in answers at the site's own address, and its MCP
+# address is under it: in production the host PHX_HOST names (the release's
+# migration step has it too), elsewhere the endpoint's configured URL.
+site_url =
+  if config_env() == :prod do
+    case String.trim(System.get_env("PHX_HOST", "")) do
+      "" -> nil
+      host -> "https://" <> host
+    end
+  else
+    url = Application.fetch_env!(:keyfleet, KeyfleetWeb.Endpoint)[:url]
+    URI.to_string(%URI{scheme: url[:scheme] || "http", host: url[:host], port: url[:port]})
+  end
+
+config :keyfleet, Keyfleet.OAuth,
+  enabled?: claude_connector?,
+  issuer: site_url,
+  resource: site_url && site_url <> "/mcp"
+
+# The words after "The identity request could not be completed." when a tool
+# call is refused, in Keyfleet's own words.
+config :regent_mcp_agents, :config,
+  enabled?: claude_connector?,
+  audience: "keyfleet",
+  hosted_signer: [
+    base_url: System.get_env("SIWA_HOSTED_URL", "https://siwa.regents.sh"),
+    key: hosted_signing_key
+  ],
+  refusal:
+    "Ask your person to connect Keyfleet again in Claude's settings, then call get_identity. " <>
+      "If you aren't paired, ask them for a new code from Pair New Agent in the side panel. " <>
+      "Fleets, Keys and votes stay with agents that join with the joining guide."
+
+# Claude is the one connected app Keyfleet serves, and the pair request accepts
+# it only while the connector is on; ChatGPT is never offered here.
+config :regent_agents, hosted_pairing: if(claude_connector?, do: [:claude], else: [])
+
 # The Privy accounts that may give Credits, handle refunds and read the saved
 # errors at /admin/errors, comma separated.
 if admins = System.get_env("REGENT_CREDITS_ADMINS") do

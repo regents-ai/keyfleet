@@ -345,9 +345,11 @@ defmodule KeyfleetWeb.PublicDocuments do
   # is what an agent may do in each status, as whoami tells it; `{{tools}}` is the
   # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
   # a pairing may name, as the pair request accepts them; `{{goal_ideas}}` the
-  # starting ideas for a fleet's shared goal, as the homepage shows them.
+  # starting ideas for a fleet's shared goal, as the homepage shows them;
+  # `{{hosted_mcp}}` whether the Claude connector's address answers now.
   defp source(name) do
     @sources[name]
+    |> String.replace("{{hosted_mcp}}", hosted_mcp())
     |> String.replace("{{key_facts}}", @key_facts)
     |> String.replace("{{what_you_can_do}}", what_you_can_do())
     |> String.replace("{{origin}}", url(""))
@@ -358,6 +360,16 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   defp harnesses,
     do: Enum.map_join(RegentAgents.Harness.offered(), ", ", &"`#{&1}`")
+
+  defp hosted_mcp do
+    if Keyfleet.OAuth.enabled?(),
+      do:
+        "Connected apps, such as Claude, use the hosted MCP address at {{origin}}/mcp, which only " <>
+          "pairs and checks in: the person signs in to Keyfleet from the app and allows it. " <>
+          "Everything else is the WebMCP tools and signed requests. " <>
+          "[Claude]({{origin}}/agents/claude) has the setup.",
+      else: "Keyfleet does not offer a hosted MCP endpoint."
+  end
 
   @statuses [
     {"not_paired", "no person has paired you with their account"},

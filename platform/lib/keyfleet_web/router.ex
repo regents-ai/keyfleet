@@ -276,6 +276,56 @@ defmodule KeyfleetWeb.Router do
     forward "/api/agents/v1", RegentAgents.HTTP
   end
 
+  # Connected apps, such as a Claude connector. Discovery, client registration
+  # and tokens never use cookies; consent uses the verified Privy session and
+  # CSRF. Nothing here is logged: it carries codes, tokens and verifiers.
+  scope "/", KeyfleetWeb do
+    pipe_through :api
+    get "/.well-known/oauth-protected-resource", OAuthController, :resource_metadata
+    get "/.well-known/oauth-protected-resource/mcp", OAuthController, :resource_metadata
+    get "/.well-known/oauth-authorization-server", OAuthController, :server_metadata
+    post "/oauth/register", OAuthController, :register, log: false
+    post "/oauth/token", OAuthController, :token, log: false
+    post "/oauth/revoke", OAuthController, :revoke, log: false
+  end
+
+  scope "/oauth", KeyfleetWeb do
+    pipe_through :browser
+    get "/authorize", OAuthController, :authorize, log: false
+    post "/authorize", OAuthController, :approve, log: false
+    get "/connections", OAuthController, :connections, log: false
+    post "/connections/revoke", OAuthController, :revoke_connection, log: false
+  end
+
+  # The Claude connector's MCP address, the shared one (`RegentMCPAgents.Plug`):
+  # Claude's handshake, the 401 challenge that starts sign-in, and the identity
+  # tools. Each connected account gets 120 requests a minute. Before that the
+  # endpoint counts a request without a token against the /api per-address
+  # budget, and one with a token against the connector's own per-address
+  # ceiling (`KeyfleetWeb.Endpoint.connector_rate_limit/0`), since every
+  # person's Claude calls from the same servers. It answers 404 while the
+  # connector is off. No `:api` pipeline: the endpoint has parsed the JSON, and
+  # a GET for an event stream must be answered 405 by the plug, not 406 here.
+  # Tool calls carry pairing codes, so it is not logged.
+  scope "/" do
+    forward "/mcp",
+            RegentMCPAgents.Plug,
+            [
+              app: :keyfleet,
+              title: "Keyfleet",
+              about:
+                "Keyfleet, where people and their agents work together in fleets, " <>
+                  "each Key a seat in one.",
+              rate_limit: [
+                policy: "mcp",
+                limit: 120,
+                window: 60,
+                admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3
+              ]
+            ],
+            log: false
+  end
+
   # An agent's picture, at the address `POST /api/v1/agent/avatar/start`
   # answered. The ticket in the address is its permission, so the request is
   # not signed and sits outside /api/v1/agent, where every request is.
@@ -313,6 +363,18 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/projects/archive", AgentProjectController, :archive
     post "/fleets/:fleet_id/projects/:project/take_over", AgentProjectController, :take_over
     post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
+    post "/fleets/:fleet_id/projects/:project/describe", AgentProjectController, :describe
+    post "/fleets/:fleet_id/projects/:project/show", AgentProjectController, :show
+    get "/fleets/:fleet_id/projects/:project/publications", AgentPublicationController, :index
+
+    post "/fleets/:fleet_id/projects/:project/publications/posts",
+         AgentPublicationController,
+         :posts
+
+    post "/fleets/:fleet_id/publications/:publication_id/withdraw",
+         AgentPublicationController,
+         :withdraw
+
     get "/fleets/:fleet_id/projects/:project/code/pushes", AgentCodeController, :pushes
     get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
 

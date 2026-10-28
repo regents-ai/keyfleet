@@ -18,6 +18,11 @@ defmodule KeyfleetWeb.AgentGuides do
   from there, under its name, and on `/agents`; that page is
   `/agents/compatibility`. Adding a runtime is adding its file. Nothing here
   reads the database.
+
+  Claude joins only through the Claude connector, so its page, its skill and
+  its place on `/agents`, the sitemap and `/connect` exist only while the
+  connector is switched on (`Keyfleet.OAuth.enabled?/0`), read on each call;
+  switched off, `/agents/claude` is not found like any other unknown runtime.
   """
 
   alias KeyfleetWeb.{AgentCompatibility, PublicDocuments}
@@ -38,7 +43,9 @@ defmodule KeyfleetWeb.AgentGuides do
              %{name: name, summary: summary, source: source, setup: String.trim(setup)}}
           end)
           |> Enum.sort_by(fn {_slug, guide} -> guide.name end)
-  @by_slug Map.new(@guides)
+
+  # The runtimes that join only through the Claude connector.
+  @connector_only ["claude"]
 
   # A runtime's new file recompiles this module, as an edited one does.
   def __mix_recompile__?,
@@ -48,7 +55,7 @@ defmodule KeyfleetWeb.AgentGuides do
   def paths,
     do: [
       "/agents",
-      "/agents/compatibility" | Enum.map(@guides, fn {slug, _guide} -> "/agents/" <> slug end)
+      "/agents/compatibility" | Enum.map(guides(), fn {slug, _guide} -> "/agents/" <> slug end)
     ]
 
   @doc "The page of the agent on `harness`."
@@ -59,8 +66,8 @@ defmodule KeyfleetWeb.AgentGuides do
   def document("/agents/compatibility"), do: %{markdown: fill(AgentCompatibility.markdown())}
 
   def document("/agents/" <> slug) do
-    case @by_slug do
-      %{^slug => guide} ->
+    case guide(slug) do
+      %{} = guide ->
         %{
           markdown: fill(with_status(slug, guide.source) <> "\n" <> Keyfleet.GoalIdeas.markdown())
         }
@@ -84,27 +91,43 @@ defmodule KeyfleetWeb.AgentGuides do
        "Which agents have passed Keyfleet's checks, through which connection, with the run behind each result."}
 
   def page("/agents/" <> slug) do
-    guide = Map.fetch!(@by_slug, slug)
+    %{} = guide = guide(slug)
     {guide.name, guide.summary}
   end
 
   @doc "Every runtime's slug and name, in the order `/agents` lists them."
-  def runtimes, do: Enum.map(@guides, fn {slug, guide} -> {slug, guide.name} end)
+  def runtimes, do: Enum.map(guides(), fn {slug, guide} -> {slug, guide.name} end)
 
   @doc "The runtime's name."
-  def name(slug), do: Map.fetch!(@by_slug, slug).name
+  def name(slug) do
+    %{} = guide = guide(slug)
+    guide.name
+  end
 
   @doc "The runtime's name and its Set up section, or nil when `slug` names none."
   def setup(slug) do
-    case @by_slug do
-      %{^slug => guide} -> {guide.name, fill(guide.setup)}
-      _other -> nil
+    case guide(slug) do
+      %{} = guide -> {guide.name, fill(guide.setup)}
+      nil -> nil
+    end
+  end
+
+  defp guides do
+    if Keyfleet.OAuth.enabled?(),
+      do: @guides,
+      else: Enum.reject(@guides, fn {slug, _guide} -> slug in @connector_only end)
+  end
+
+  defp guide(slug) do
+    case List.keyfind(guides(), slug, 0) do
+      {^slug, guide} -> guide
+      nil -> nil
     end
   end
 
   defp index do
     lines =
-      Enum.map_join(@guides, "\n", fn {slug, guide} ->
+      Enum.map_join(guides(), "\n", fn {slug, guide} ->
         label =
           case AgentCompatibility.status(slug) do
             {label, _line} -> " (#{label})"

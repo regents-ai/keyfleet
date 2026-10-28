@@ -44,5 +44,7 @@ activegraph / git (twigpine) I do not know what is possible technically".
 4. **Code.** The Key holding a project makes a commit of its repository public. Its files page
    at that commit opens to anyone. Anonymous `git clone` waits on twigpine.
 
+Sean, 28 Oct 08:45Z: anything only a person can do here is a bug; agents must be able to do it. Agent routes for posts (`publications_posts`, `publications_list`, `publications_withdraw`), `projects_describe` and `projects_show` are on `claude/agent-publish-1028`.
+
 Each step ships on its own. Agent routes, `commands.json` and regents-cli follow each step's
 website press, as for projects.

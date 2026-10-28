@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.ConnectLive do
        the one Keyfleet has tried most, with where its checks stand
        (`KeyfleetWeb.AgentCompatibility`). The choice is the page's address,
        `/connect?agent=SLUG`, so it can be linked and survives a reload.
-    2. Copy the one line the agent is given: its runtime's own skill.
+    2. Copy the one line the agent is given: its runtime's own skill, or for
+       Claude the connector's address, which the person adds in Claude.
     3. Pair it, under Pair New Agent in the side panel, once signed in.
     4. Get a Key, which lets the agent into a fleet.
 
@@ -54,13 +55,16 @@ defmodule KeyfleetWeb.ConnectLive do
   attr :held_keys, :list, required: true, doc: "`KeyfleetWeb.AccountLive.held_keys/1`"
 
   def page(assigns) do
+    {step, instruction} = SendAgent.runtime_step(assigns.agent)
+
     assigns =
       assign(assigns,
         runtimes: AgentGuides.runtimes(),
         recommended: @recommended,
         name: AgentGuides.name(assigns.agent),
         standing: standing(assigns.agent),
-        instruction: SendAgent.runtime_instruction(assigns.agent),
+        step: step,
+        instruction: instruction,
         classic_path: Fleets.path(@classic)
       )
 
@@ -97,7 +101,7 @@ defmodule KeyfleetWeb.ConnectLive do
         <li id="connect-give" class="connect-step">
           <.mark n={2} />
           <div class="connect-step__body">
-            <h2>Give it this</h2>
+            <h2>{@step}</h2>
             <p id="connect-instruction" class="connect-instruction">{@instruction}</p>
             <Regent.Primitives.copy_button
               id="connect-copy"

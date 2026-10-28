@@ -86,9 +86,10 @@ defmodule KeyfleetWeb.Endpoint do
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
   # One budget per client address, shared by the health check, the browser's
-  # visit reports and every /api path, answered or not. Every answer, including
-  # a signed agent request refused before the router, says what is left of it;
-  # past it the answer is 429 with Retry-After.
+  # visit reports, every /api path and a Claude connector request without a
+  # token, answered or not; a connector request with a token has a ceiling of
+  # its own. Every answer, including a signed agent request refused before the
+  # router, says what is left of it; past it the answer is 429 with Retry-After.
   plug :limit_rate
 
   plug KeyfleetWeb.Plugs.SignedAgent
@@ -127,6 +128,23 @@ defmodule KeyfleetWeb.Endpoint do
   defp limit_rate(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
+  # The Claude connector's address, and anything under it, which the router
+  # forwards there too. Every Claude user's request comes from Claude's own
+  # servers, so a per-address budget there is shared by all of them. A request
+  # carrying a bearer token therefore spends a ceiling of its own for this
+  # address instead, and its real budget is the per-account one the plug
+  # counts once the token verifies. The ceiling still bounds how many invented
+  # tokens one address can have looked up, each one indexed hash query; it is
+  # one bucket per address, not one per token, since an invented token would
+  # buy a fresh bucket. A request without a token is answered before any
+  # account is known, so it spends the /api budget.
+  defp limit_rate(%Plug.Conn{path_info: ["mcp" | _]} = conn, _opts) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      ["Bearer " <> _token] -> RegentAgentAccess.RateLimit.call(conn, connector_rate_limit())
+      _no_token -> RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+    end
+  end
+
   defp limit_rate(conn, _opts), do: conn
 
   @doc """
@@ -140,6 +158,24 @@ defmodule KeyfleetWeb.Endpoint do
 
     RegentAgentAccess.RateLimit.init(
       policy: "default",
+      limit: Keyword.fetch!(budget, :limit),
+      window: Keyword.fetch!(budget, :window_seconds),
+      admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
+      key: &KeyfleetWeb.ClientAddress.key/1
+    )
+  end
+
+  @doc """
+  The ceiling per client address for requests to the Claude connector's
+  address that carry a bearer token, a few thousand a minute: Claude's servers
+  send every connected person's requests, and each person also has the
+  plug's own 120 a minute. Read on each request, as `api_rate_limit/0` is.
+  """
+  def connector_rate_limit do
+    budget = Application.fetch_env!(:keyfleet, :connector_rate_limit)
+
+    RegentAgentAccess.RateLimit.init(
+      policy: "connector",
       limit: Keyword.fetch!(budget, :limit),
       window: Keyword.fetch!(budget, :window_seconds),
       admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
