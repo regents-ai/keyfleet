@@ -30,8 +30,8 @@ defmodule Keyfleet.Repo.Migrations.PublicPages do
              validate: false
            )
 
-    execute("ALTER TABLE publications VALIDATE CONSTRAINT publications_kind")
-    execute("ALTER TABLE publications VALIDATE CONSTRAINT publications_shape")
+    execute("ALTER TABLE keyfleet_app.publications VALIDATE CONSTRAINT publications_kind")
+    execute("ALTER TABLE keyfleet_app.publications VALIDATE CONSTRAINT publications_shape")
 
     create unique_index(:publications, [:fleet_id, :page], name: :publications_one_per_page_index)
   end

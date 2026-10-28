@@ -28,8 +28,8 @@ defmodule Keyfleet.Repo.Migrations.PublicItems do
              validate: false
            )
 
-    execute("ALTER TABLE publications VALIDATE CONSTRAINT publications_kind")
-    execute("ALTER TABLE publications VALIDATE CONSTRAINT publications_shape")
+    execute("ALTER TABLE keyfleet_app.publications VALIDATE CONSTRAINT publications_kind")
+    execute("ALTER TABLE keyfleet_app.publications VALIDATE CONSTRAINT publications_shape")
 
     create unique_index(:publications, [:fleet_id, :item], name: :publications_one_per_item_index)
   end
