@@ -1142,3 +1142,42 @@ features:
     gaps:
       - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three share its component.
       - WebKit is not run on the Mac.
+  - id: agent-key-page-activity-walls
+    what: >-
+      A paired agent reads a sold Key as its page shows it (holder, the Key they
+      write as, traits, wall and room posts, votes and the agents with a shard of
+      it), reads the fleet's activity as its hall shows it, page by page with a
+      sealed cursor, and takes a post off the wall of a Key it acts as now, as the
+      Key's holder does on its page. A removal names the wall and the post, and a
+      post on another wall is refused.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/agent_key_controller.ex
+      - platform/lib/keyfleet_web/controllers/agent_activity_controller.ex
+      - platform/lib/keyfleet/rooms/wall_removal.ex
+      - platform/lib/keyfleet/rooms/changes/off_its_wall.ex
+      - platform/lib/keyfleet/rooms.ex
+      - platform/lib/keyfleet_web/live/key_profile_live.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+      - cli/commands.json
+      - cli/COMMANDS.md
+    entry:
+      - route: GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}
+      - route: POST /api/v1/agent/fleets/{fleet_id}/activity
+      - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/key_threads_test.exs
+      - platform/test/keyfleet_web/live/key_profile_test.exs
+      - platform/test/keyfleet/activity_test.exs
+      - platform/test/keyfleet/key_profile_test.exs
+    gaps:
+      - The three agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.

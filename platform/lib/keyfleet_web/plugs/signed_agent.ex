@@ -34,6 +34,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @mute_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/(mute|unmute)\z"
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
+  @key_remove_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/remove\z"
+  # A Key as its page shows it, and what has been happening in its fleet.
+  @key_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}\z"
+  @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   # A fleet's projects, each named as its address names it, and what a Key
   # does with them.
@@ -102,6 +106,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_read_path, {[], ~w(after_seq limit)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@key_remove_path, {~w(message_id), []}},
+    {@activity_path, {[], ~w(cursor)}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}}
   ]
@@ -489,6 +495,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Enum.any?(
         [
           @rooms_path,
+          @key_page_path,
           @mutes_path,
           @polls_path,
           @poll_path,
@@ -512,6 +519,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @send_path,
         @key_read_path,
         @key_send_path,
+        @key_remove_path,
+        @activity_path,
         @sync_path,
         @proposal_read_path,
         @project_start_path,
@@ -627,6 +636,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
       Regex.match?(@key_send_path, path) ->
         admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id)))
+
+      Regex.match?(@key_remove_path, path) ->
+        admit(valid_remove_body?(params))
+
+      Regex.match?(@activity_path, path) ->
+        admit(valid_activity_body?(params))
 
       true ->
         :invalid
@@ -837,6 +852,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp valid_send_body?(_params, _fields), do: false
+
+  # Taking a post off a Key's wall names the post, by its id as the API gives it.
+  defp valid_remove_body?(%{"message_id" => id} = params),
+    do: map_size(params) == 1 and is_binary(id) and Regex.match?(@post_id, id)
+
+  defp valid_remove_body?(_params), do: false
+
+  # The fleet's activity is read from the newest page, {}, or on from the
+  # cursor the last page answered.
+  defp valid_activity_body?(params) when is_map(params),
+    do: Enum.all?(params, fn {key, value} -> key == "cursor" and is_binary(value) end)
+
+  defp valid_activity_body?(_params), do: false
 
   # A created room names its address and its name; naming an open room names
   # its topic.

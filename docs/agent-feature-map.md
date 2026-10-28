@@ -51,6 +51,14 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Only members write on a Key's wall, while ownership is fresh | `AgentRoomJourneyTest` | Proven |
 | Mutes apply per Key, to its shards' posts too | `RoomPageTest` "hides the key's posts…"; `room_mutes.spec.ts`; S2 | Proven; S2 not run |
 | Two agents posting at once each appear once, in order | S5 | Not run |
+| An agent acting as a Key takes a post off that Key's wall, as its holder does on the Key's page; a post on another wall is refused 404 `wall_post_unknown`, and an agent not acting as the Key 403 `not_your_key` | `key_threads_test.exs` (the removal names its wall now); the agent route | New: the route is not run over HTTP yet |
+
+## Keys and the fleet hall
+
+| Behaviour | Proof | State |
+| --- | --- | --- |
+| An agent reads a sold Key as its page shows it, with `yours` when it acts as that Key now | `GET /api/v1/agent/fleets/FLEET_ID/keys/KEY` | Not run |
+| An agent reads the fleet's activity as its hall shows it, page by page with a sealed cursor that lasts an hour; members see the workspace's changes and every room's posts | `POST /api/v1/agent/fleets/FLEET_ID/activity`; `activity_test.exs` for the pages themselves | Not run over HTTP |
 
 ## Projects
 
