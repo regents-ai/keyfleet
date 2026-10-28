@@ -10,8 +10,12 @@ defmodule Keyfleet.Projects.Publish do
   the Key for the wallet that owns it today, so a Key that changes hands
   never makes a former owner's posts public. A post is written for the owner
   when the owner's wallet wrote it, or a wallet the owner gave a shard of the
-  Key: an agent writes as the Key with its own wallet. Only the Key that made
-  something public takes it back. A refusal says why in words
+  Key: an agent writes as the Key with its own wallet.
+
+  An item is made public into its own project, which is active, while it
+  isn't archived, when the Key added it in the ownership it is in today,
+  whoever wrote for the Key; each item once. Only the Key that made something public
+  takes it back. A refusal says why in words
   (`Keyfleet.Projects.Errors.PublishError`).
 
   The room is read as the site reads it, whoever may read it: what is shown
@@ -19,6 +23,7 @@ defmodule Keyfleet.Projects.Publish do
   """
   use Ash.Resource.Actions.Implementation
 
+  alias Keyfleet.Graph
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.{Keys, Rooms}
   alias Keyfleet.Projects
@@ -43,7 +48,7 @@ defmodule Keyfleet.Projects.Publish do
     with :ok <- active(fleet_id, project),
          :ok <- range(from, to),
          :ok <- room(fleet_id, room),
-         {:ok, owner} <- owner(fleet_id, key),
+         {:ok, %{owner_wallet: owner}} <- held(fleet_id, key),
          :ok <- written(fleet_id, room, from, to, key, owner) do
       Publication
       |> Ash.Changeset.for_create(
@@ -57,6 +62,29 @@ defmodule Keyfleet.Projects.Publish do
           room: room,
           from_seq: from,
           to_seq: to
+        },
+        actor: @system
+      )
+      |> Ash.create()
+    end
+  end
+
+  defp step(:item, fleet_id, key, %{item: id}) do
+    with {:ok, object} <- item(fleet_id, id),
+         :ok <- active(fleet_id, object.project),
+         :ok <- once(fleet_id, id),
+         {:ok, %{owner_wallet: owner, ownership_epoch: epoch}} <- held(fleet_id, key),
+         :ok <- added(object, key, epoch) do
+      Publication
+      |> Ash.Changeset.for_create(
+        :record,
+        %{
+          fleet_id: fleet_id,
+          project: object.project,
+          key: key,
+          author_wallet: owner,
+          kind: :item,
+          item: id
         },
         actor: @system
       )
@@ -122,10 +150,45 @@ defmodule Keyfleet.Projects.Publish do
     end
   end
 
-  # The wallet that owns the Key today.
-  defp owner(fleet_id, key) do
+  defp item(fleet_id, id) do
+    case Graph.read_objects(fleet_id, [id], actor: @system) do
+      {:ok, [%{sys: %{"archived" => true}}]} ->
+        refuse(:item_archived, "This item is archived. Only an item in use goes public.")
+
+      {:ok, [object]} ->
+        {:ok, object}
+
+      {:ok, []} ->
+        refuse(:item_unknown, "This workspace has no item #{id}.")
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp once(fleet_id, id) do
+    case Projects.item_publication(fleet_id, id, actor: @system) do
+      {:ok, nil} -> :ok
+      {:ok, _public} -> refuse(:already_public, "This item is already public.")
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  # The Key added the item in the ownership it is in today: every write as a
+  # Key carries the ownership it was made in.
+  defp added(%{sys: %{"created_by" => %{"key" => %{"token_id" => key}} = by}}, key, epoch) do
+    if by["ownership_epoch"] == epoch,
+      do: :ok,
+      else: refuse(:not_added, "Key #{key} added this item for an earlier owner.")
+  end
+
+  defp added(_object, key, _epoch),
+    do: refuse(:not_added, "Key #{key} didn’t add this item. A Key makes public only what it added.")
+
+  # The Key as it is held today: its owner's wallet and its ownership.
+  defp held(fleet_id, key) do
     case Keys.current_key(fleet_id, key, authorize?: false) do
-      {:ok, %{owner_wallet: owner}} -> {:ok, owner}
+      {:ok, %{} = held} -> {:ok, held}
       {:ok, nil} -> refuse(:key_unknown, "This fleet has no Key #{key}.")
       {:error, error} -> {:error, error}
     end
@@ -144,12 +207,7 @@ defmodule Keyfleet.Projects.Publish do
   owner gave a shard of the Key.
   """
   def posts(fleet_id, room, from, to, key, owner) do
-    writers =
-      MapSet.new(
-        Keys.shards_issued_by_owner!(fleet_id, key, owner, authorize?: false),
-        & &1.wallet
-      )
-      |> MapSet.put(owner)
+    writers = writers(fleet_id, key, owner)
 
     fleet_id
     |> Rooms.read_messages!(
@@ -162,6 +220,15 @@ defmodule Keyfleet.Projects.Publish do
     |> Enum.filter(
       &(&1.kind == :post and &1.as_key == key and &1.author_wallet in writers and &1.seq <= to)
     )
+  end
+
+  # The wallets that write as `key` for the wallet `owner`: the owner's own,
+  # and each wallet the owner gave a shard of the Key while it held it.
+  defp writers(fleet_id, key, owner) do
+    fleet_id
+    |> Keys.shards_issued_by_owner!(key, owner, authorize?: false)
+    |> MapSet.new(& &1.wallet)
+    |> MapSet.put(owner)
   end
 
   defp refuse(code, words), do: {:error, PublishError.exception(code: code, words: words)}

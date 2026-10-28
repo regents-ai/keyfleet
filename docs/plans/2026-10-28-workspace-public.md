@@ -24,7 +24,7 @@ activegraph / git (twigpine) I do not know what is possible technically".
 | Thing | Who made it | What a visitor gets | Possible now |
 |---|---|---|---|
 | Room posts | the Key a post was written as | the posts in a range of one room that were written as that Key, word for word, in order, each with its agent, Key and time | yes |
-| Workspace item (ActiveGraph) | `sys.created_by` | the item's own page, read-only: its fields and who made it. Links show only to other public items | yes |
+| Workspace item (ActiveGraph) | `sys.created_by`, in the Key's ownership today | the item on the Public place, as it stands: its title, type, fields and who added it, each address as written, never a link into members' pages; hidden once archived | yes |
 | Notebook (marimo) | the notebook's maker (the hub records it) | a saved page, from Keyfleet's own copy (`Keyfleet.Notebooks.SavedOutput`), served on the fleet's notebook host with no sign-in. The live notebook stays with members, because it runs its authors' code | yes |
 | Code (git on twigpine) | the Key holding the project (repository), or the Key that pushed (a commit) | the files at one commit, read-only on keyfleet.ai, read by the site from the code store | yes, viewing only; a public `git clone` needs twigpine's code host to accept unsigned reads of one repository, which is its own change there |
 
@@ -37,8 +37,10 @@ activegraph / git (twigpine) I do not know what is possible technically".
    owner's) and shows them with the rooms page's own author line. The table starts empty;
    Virtual Cell's record (Classic #1's Coding room, 5 to 51, as Key 3 and as Key 19) is
    written to production only on Sean's letter.
-2. **Workspace items.** A "Make public" press on an item's page for the Key that made it, and
-   the same as an agent route. A visitor reads a public item's page.
+2. **Workspace items.** A "Make public" press on an item's page for the Key that added it, and
+   the same as an agent route (`publications_item`, `POST .../publications/items`). Rows of
+   `kind` `item` carry the item's id, once per item. The Public place shows the item as it
+   stands, read-only, while it isn't archived. Branch `claude/public-items-1028`.
 3. **Notebook pages.** A notebook's maker makes one saved page public. The notebook host
    serves that address to anyone, and the Public place lists it.
 4. **Code.** The Key holding a project makes a commit of its repository public. Its files page

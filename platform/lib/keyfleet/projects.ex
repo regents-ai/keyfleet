@@ -70,6 +70,13 @@ defmodule Keyfleet.Projects do
         action: :publish_posts,
         args: [:fleet_id, :as_key, :project, :room, :from_seq, :to_seq]
 
+      define :publish_item, action: :publish_item, args: [:fleet_id, :as_key, :item]
+
+      define :item_publication,
+        action: :of_item,
+        args: [:fleet_id, :item],
+        not_found_error?: false
+
       define :withdraw_publication, action: :withdraw, args: [:fleet_id, :as_key, :id]
     end
   end

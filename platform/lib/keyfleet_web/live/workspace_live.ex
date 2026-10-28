@@ -966,6 +966,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   end
 
   attr :item, :any, required: true, doc: "the item as read, or `:unreadable`"
+  attr :publish_notice, :string, default: nil, doc: "why making the item public was refused"
 
   attr :signed_out?, :boolean,
     default: false,
@@ -993,6 +994,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
       <.public_notice />
       <.unavailable :if={not @item.ready?} />
+      <.item_public :if={@item[:object]} public={@item.public} notice={@publish_notice} />
 
       <section :if={@item.ready? and is_nil(@item.object)} class="workspace-panel">
         <h2>This item isn’t in the workspace.</h2>
@@ -1427,9 +1429,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   # What the fleet's Keys made public, newest first: for posts, the posts
   # that Key wrote in that range of one room, word for word, each with its
-  # writer and when it was written. The Key that made something public takes
-  # it back, and a member's Key makes its own posts public into the active
-  # project on show.
+  # writer and when it was written; for an item, the item as it stands. The
+  # Key that made something public takes it back, and a member's Key makes
+  # its own posts public into the active project on show.
   defp public(assigns) do
     ~H"""
     <section id="workspace-public" class="workspace-public" aria-labelledby="workspace-public-title">
@@ -1452,15 +1454,25 @@ defmodule KeyfleetWeb.WorkspaceLive do
         aria-labelledby={"public-#{record.id}-title"}
       >
         <header class="workspace-public-head">
-          <p class="workspace-kicker">
+          <p :if={record.kind == :posts} class="workspace-kicker">
             {record.room_label} · posts {record.from} to {record.to}
             <span :if={record.label}>· {record.label}</span>
           </p>
-          <h3 id={"public-#{record.id}-title"}>
+          <p :if={record.kind == :item} class="workspace-kicker">
+            {type_label(record.item.type)} <span :if={record.label}>· {record.label}</span>
+          </p>
+          <h3 :if={record.kind == :posts} id={"public-#{record.id}-title"}>
             Posts by {ActivityLines.key_name(record.key, record.agent)}
           </h3>
+          <h3 :if={record.kind == :item} id={"public-#{record.id}-title"}>
+            {record.item.title || type_label(record.item.type)}
+          </h3>
           <p class="workspace-detail">
-            {posts_shown(length(record.posts))} · made public
+            <span :if={record.kind == :posts}>{posts_shown(length(record.posts))} ·</span>
+            <span :if={record.kind == :item}>
+              Added by <.part part={record.item.by} fleet_id={@board.fleet_id} /> ·
+            </span>
+            made public
             <KeyfleetWeb.Time.local id={"public-#{record.id}-at"} at={record.at} as={:stamp} />
           </p>
           <Regent.Primitives.button
@@ -1474,7 +1486,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
             Take back
           </Regent.Primitives.button>
         </header>
-        <ol class="rooms-thread-list workspace-public-posts">
+        <dl :if={record.kind == :item} id={"public-#{record.id}-fields"} class="workspace-fields">
+          <div :for={{label, value} <- record.item.fields}>
+            <dt>{label}</dt>
+            <dd><.value value={value} fleet_id={@board.fleet_id} /></dd>
+          </div>
+        </dl>
+        <p :if={record.kind == :item} class="workspace-detail">
+          Last changed
+          <KeyfleetWeb.Time.local
+            id={"public-#{record.id}-changed-at"}
+            at={record.item.changed_at}
+            as={:stamp}
+          />
+        </p>
+        <ol :if={record.kind == :posts} class="rooms-thread-list workspace-public-posts">
           <li :for={post <- record.posts} id={"public-#{record.id}-#{post.seq}"}>
             <p class="rooms-author">
               <.link patch={KeyLinks.key_path(@board.fleet_id, post.as_key)}>
@@ -2082,6 +2108,49 @@ defmodule KeyfleetWeb.WorkspaceLive do
     String.capitalize(singular)
   end
 
+  attr :public, :map, required: true
+  attr :notice, :string, default: nil
+
+  # The item on the Public place: the Key that added it makes it public, and
+  # the Key that made it public takes it back.
+  defp item_public(assigns) do
+    ~H"""
+    <section
+      :if={@public.id || @public.make? || @notice}
+      id="workspace-item-public"
+      class="workspace-panel workspace-item-public"
+    >
+      <p :if={@public.id} class="workspace-detail">
+        Everyone can read this item on <.link patch={@public.link}>Public</.link>.
+      </p>
+      <p :if={@public.make?} class="workspace-detail">
+        Show this item to everyone on Public, signed in or not. It stays here as it is.
+      </p>
+      <Regent.Primitives.button
+        :if={@public.make?}
+        id="workspace-item-publish"
+        type="button"
+        phx-click="publish_item"
+      >
+        Make public
+      </Regent.Primitives.button>
+      <Regent.Primitives.button
+        :if={@public.take_back?}
+        id="workspace-item-withdraw"
+        type="button"
+        variant="secondary"
+        phx-click="withdraw_publication"
+        phx-value-id={@public.id}
+      >
+        Take back
+      </Regent.Primitives.button>
+      <p :if={@notice} id="workspace-item-public-notice" class="workspace-notebooks-notice" role="status">
+        {@notice}
+      </p>
+    </section>
+    """
+  end
+
   defp item_heading(%{object: %{title: title}}) when is_binary(title), do: title
   defp item_heading(_item), do: "Workspace"
 
@@ -2186,6 +2255,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
       _not_numbers ->
         {:noreply, assign(socket, :publish_notice, "Post numbers are whole numbers from 1.")}
     end
+  end
+
+  def handle_event("publish_item", _params, socket) do
+    item = socket.assigns.workspace.object.id
+    publish(socket, &Projects.publish_item(&1, &2, item, &3))
   end
 
   def handle_event("withdraw_publication", %{"id" => id}, socket),

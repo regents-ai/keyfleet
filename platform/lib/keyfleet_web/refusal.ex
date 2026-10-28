@@ -98,6 +98,18 @@ defmodule KeyfleetWeb.Refusal do
     "publish_not_yours" =>
       {"Another Key made this public.",
        "Only the Key that made something public takes it back. publications_list names each one's key."},
+    "publish_item_unknown" =>
+      {"This workspace has no item by that id.",
+       "Name an item by its id, as the workspace's get and list give it."},
+    "publish_item_archived" =>
+      {"This item is archived.",
+       "Only an item in use goes public: choose one that isn't archived."},
+    "publish_already_public" =>
+      {"This item is already public.",
+       "publications_list gives its publication. Take it back with publications_withdraw first to make it public again."},
+    "publish_not_added" =>
+      {"This Key didn't add this item.",
+       "A Key makes public only the items it added for its owner today: sys.created_by names the Key and wallet that added each item."},
     "publish_unknown" =>
       {"This fleet has nothing public by that id.",
        "publications_list gives the id of everything public in a project."},
