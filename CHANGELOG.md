@@ -5601,3 +5601,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The Key holding a project can give it one line on the workspace's project
   view, under Description. Its page shows the line under the title, and
   links to the page share it as their description.
+
+## 2026-10-28 — regents-cli 1.10.19
+
+- The command reference check now runs regents-cli 1.10.19, the version every
+  Regent site uses.
