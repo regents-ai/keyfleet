@@ -158,9 +158,11 @@ defmodule Keyfleet.Projects.Project do
       argument :fleet_id, :string, allow_nil?: false
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id) and name == ^arg(:name) and state != :deleted)
+
       prepare build(
                 select: [:fleet_id, :name, :title, :description, :key, :state, :shown_to_everyone]
               )
+
       get? true
     end
 
