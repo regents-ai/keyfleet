@@ -11,6 +11,7 @@ defmodule Keyfleet.Rooms do
   require Ash.Query
 
   alias Keyfleet.Access
+  alias Keyfleet.Actors.{Agent, Human}
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
@@ -103,6 +104,19 @@ defmodule Keyfleet.Rooms do
       define :my_quote_requests, action: :mine, args: [:fleet_id]
     end
   end
+
+  @doc """
+  The wallets whose posts share one sender's send keys: a person's own
+  wallets, or an agent's wallet and its person's. A send key belongs to the
+  sender, not to one of its wallets, so a person's retry finds their first
+  post whichever of their wallets holds the Key they write as now.
+  """
+  def sender_wallets(%Human{wallet_addresses: wallets}), do: wallets
+
+  def sender_wallets(%Agent{wallet_address: wallet, pairing: %Human{wallet_addresses: person}}),
+    do: [wallet | person]
+
+  def sender_wallets(%Agent{wallet_address: wallet}), do: [wallet]
 
   @doc """
   Takes away `actor`'s mute of a key, if it has one: `{:ok, mute | nil}`.
@@ -336,7 +350,7 @@ defmodule Keyfleet.Rooms do
   defp dm_topics(_fleet_id, nil, _actor), do: []
   defp dm_topics(fleet_id, _cursors, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
 
-  defp quote_topics(fleet_id, after_seq, %Keyfleet.Actors.Agent{human_account_id: account})
+  defp quote_topics(fleet_id, after_seq, %Agent{human_account_id: account})
        when not is_nil(after_seq) and not is_nil(account),
        do: [Keyfleet.Rooms.QuoteRequest.topic(fleet_id, account)]
 

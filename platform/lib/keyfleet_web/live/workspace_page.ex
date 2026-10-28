@@ -45,6 +45,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{Agents, Code, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Graph
+  alias Keyfleet.Graph.RerunCheck
   alias Keyfleet.Notebooks.HubClient
   alias Keyfleet.Projects.Publish
   alias Keyfleet.Rooms
@@ -1373,7 +1374,7 @@ defmodule KeyfleetWeb.WorkspacePage do
               nil -> []
               shown -> [{label, shown}]
             end
-          end) ++ joined_field(object.sys, agents),
+          end) ++ rerun_check(object) ++ joined_field(object.sys, agents),
       discussion: discussion(object.data["discussion"], fleet_id, opts)
     }
   end
@@ -1392,6 +1393,19 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   defp receipt(_object, _fleet_id), do: []
+
+  # Once a task names its commit or its rerun, whether it carries everything
+  # a rerun needs, or each thing it still needs.
+  defp rerun_check(%{type: "task", data: data}) do
+    if data["commit_ref"] || data["rerun"],
+      do: [{"Rerun check", rerun_needs(RerunCheck.missing(data))}],
+      else: []
+  end
+
+  defp rerun_check(_object), do: []
+
+  defp rerun_needs([]), do: "Complete"
+  defp rerun_needs(missing), do: {:list, Enum.map(missing, &("Needs " <> &1.need))}
 
   defp field_value(_field, nil, _fleet_id), do: nil
   defp field_value(_field, [], _fleet_id), do: nil
@@ -1434,15 +1448,17 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp source(nil, _fleet_id), do: nil
 
   defp source(uri, fleet_id) do
-    code = String.replace_prefix(uri, Endpoint.url() <> Fleets.path(fleet_id) <> "/code/", "")
+    case fleet_commit(uri, fleet_id) do
+      {repository, hash} -> {:commit, hash, Code.commit_path(fleet_id, repository, hash)}
+      nil -> notebook_source(uri, fleet_id)
+    end
+  end
+
+  defp notebook_source(uri, fleet_id) do
     saved = String.replace_prefix(uri, Notebooks.url(fleet_id, "/results/"), "")
     path = String.replace_prefix(uri, Notebooks.url(fleet_id, ""), "")
 
     cond do
-      code != uri and commit?(fleet_id, code) ->
-        [repository, "commits", hash] = String.split(code, "/")
-        {:commit, hash, Code.commit_path(fleet_id, repository, hash)}
-
       saved != uri and Regex.match?(@saved_result, saved) ->
         {:notebook_result, uri}
 
@@ -1454,17 +1470,25 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # `<repository>/commits/<full hash>`, in one of the fleet's repositories by
-  # its name.
-  defp commit?(fleet_id, code) do
-    case String.split(code, "/") do
-      [repository, "commits", hash] ->
-        Code.repository_fleet(repository) == {:ok, fleet_id} and Code.full_hash?(hash)
+  @doc """
+  The repository and full hash a workspace's address of a commit names, as
+  `{repository, hash}`, when it is a commit of one of the fleet's own
+  repositories on this site (`commit_url/3`); nil for any other address.
+  """
+  def fleet_commit(uri, fleet_id) when is_binary(uri) do
+    code = String.replace_prefix(uri, Endpoint.url() <> Fleets.path(fleet_id) <> "/code/", "")
 
-      _other ->
-        false
+    with true <- code != uri,
+         [repository, "commits", hash] <- String.split(code, "/"),
+         {:ok, ^fleet_id} <- Code.repository_fleet(repository),
+         true <- Code.full_hash?(hash) do
+      {repository, hash}
+    else
+      _other -> nil
     end
   end
+
+  def fleet_commit(_uri, _fleet_id), do: nil
 
   # Text as written; an address with a scheme allowed for links is a link.
   defp value(value) when is_binary(value) do

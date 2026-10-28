@@ -139,18 +139,14 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     end
   end
 
-  # A send key belongs to the sender, not to one of its wallets: a person's
-  # retry finds their first post whichever of their wallets holds the key they
-  # write as now.
   defp earlier_post(fleet_id, actor, idempotency_key),
-    do: Rooms.get_post_under_send_key!(fleet_id, wallets(actor), idempotency_key, actor: actor)
-
-  defp wallets(%Human{wallet_addresses: wallets}), do: wallets
-
-  defp wallets(%Agent{wallet_address: wallet, pairing: %Human{wallet_addresses: person}}),
-    do: [wallet | person]
-
-  defp wallets(%Agent{wallet_address: wallet}), do: [wallet]
+    do:
+      Rooms.get_post_under_send_key!(
+        fleet_id,
+        Rooms.sender_wallets(actor),
+        idempotency_key,
+        actor: actor
+      )
 
   # A retry is written under the wallet of the first post, so the database
   # hands that post back instead of taking a second one.

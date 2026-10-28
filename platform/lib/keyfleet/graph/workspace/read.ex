@@ -9,9 +9,14 @@ defmodule Keyfleet.Graph.Workspace.Read do
   it is in the answer, and nothing past it is.
 
   `get` answers one object, with where a submitted task's review stands
-  (`review`), and a page of up to 200 of its links, oldest first, made after
-  `relations_after`; `relations_next_cursor` is the `relations_after` to read
-  the next page from, or nil after the last one. `changes` answers the copied
+  (`review`), the Key it belongs to (`owner_key`), and a page of up to 200 of
+  its links, oldest first, made after `relations_after`;
+  `relations_next_cursor` is the `relations_after` to read the next page
+  from, or nil after the last one. `linked` names the item at the other end
+  of each of those links by id, with its type, title, standing and whether it
+  is archived, so a task's goal, what it depends on and what it produced read
+  with it. A task also answers `rerun_check` (`Keyfleet.Graph.RerunCheck`):
+  whether it carries everything a rerun needs, and what it is missing. `changes` answers the copied
   events after `after_seq`, the whole fleet's or, given `project`, those that
   touched that project, oldest first, at most `limit` of them and no more
   than 512 KiB of them unless one event alone is larger;
@@ -29,6 +34,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.RefusedError
   alias Keyfleet.Graph.Event
+  alias Keyfleet.Graph.RerunCheck
 
   @relation_page 200
 
@@ -54,8 +60,11 @@ defmodule Keyfleet.Graph.Workspace.Read do
 
         %{
           object: Map.take(object, [:id, :type, :data, :sys, :version, :review]),
+          owner_key: owner_key(object),
           relations: Enum.map(page, &Map.take(&1, [:id, :type, :source, :target, :data])),
           relations_next_cursor: if(rest != [], do: List.last(page).created_seq),
+          linked: linked(fleet_id, id, page, opts),
+          rerun_check: rerun_check(object),
           watermark: watermark,
           agents: Agents.names_by_wallet([creator(object.sys) | joiners(object.sys)])
         }
@@ -82,6 +91,39 @@ defmodule Keyfleet.Graph.Workspace.Read do
       agents: page |> Enum.map(&writer(&1.actor)) |> Agents.names_by_wallet()
     }
   end
+
+  # The Key an object belongs to: the Key holding it, for a held task, and
+  # otherwise the Key that created it; none for a starting goal.
+  defp owner_key(%{type: "task", data: %{"assignee_key" => key}}) when is_integer(key), do: key
+  defp owner_key(%{sys: sys}), do: get_in(sys, ["created_by", "key", "token_id"])
+
+  # The item at the other end of each link on the page, by id, with what a
+  # reader needs to judge it without reading it: its type, title, standing
+  # and whether it is archived.
+  defp linked(_fleet_id, _id, [], _opts), do: %{}
+
+  defp linked(fleet_id, id, page, opts) do
+    ids = page |> Enum.map(&if(&1.source == id, do: &1.target, else: &1.source)) |> Enum.uniq()
+
+    fleet_id
+    |> Graph.object_titles!(ids, [load: [:standing]] ++ opts)
+    |> Map.new(fn other ->
+      {other.id,
+       %{
+         type: other.type,
+         title: other.title,
+         standing: other.standing,
+         archived: other.sys["archived"] == true
+       }}
+    end)
+  end
+
+  defp rerun_check(%{type: "task", data: data}) do
+    missing = RerunCheck.missing(data)
+    %{ready: missing == [], missing: missing}
+  end
+
+  defp rerun_check(_object), do: nil
 
   defp creator(%{"created_by" => by}), do: agent_wallet(by)
 

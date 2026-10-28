@@ -40,6 +40,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
   # The Key the agent's person writes as.
   @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"
+  # What the agent's posts and workspace writes made under one send key or
+  # command id.
+  @receipts_path ~r"\A/api/v1/agent/fleets/#{@fleet}/receipts\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   # A fleet's projects, each named as its address names it, and what a Key
   # does with them.
@@ -127,6 +130,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_remove_path, {~w(message_id), []}},
     {@activity_path, {[], ~w(cursor)}},
     {@posting_key_path, {~w(token_id), []}},
+    {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}}
   ]
@@ -610,6 +614,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_remove_path,
         @activity_path,
         @posting_key_path,
+        @receipts_path,
         @sync_path,
         @proposal_read_path,
         @project_start_path,
@@ -770,7 +775,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         files_list: @files_list_path,
         file_read: @file_read_path,
         file_write: @file_write_path,
-        notebook_lock: @notebook_lock_path
+        notebook_lock: @notebook_lock_path,
+        receipts: @receipts_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -832,6 +838,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_fleet_body(:publish_item, _params), do: :invalid
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
+
+  # A send key or command id, as long as either may be.
+  defp check_fleet_body(:receipts, %{"idempotency_key" => key} = params)
+       when map_size(params) == 1 and is_binary(key),
+       do: admit(String.length(key) in 1..128)
+
+  defp check_fleet_body(:receipts, _params), do: :invalid
   defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
   defp check_fleet_body(:files_list, params), do: check_files_list_body(params)
 

@@ -67,6 +67,13 @@ defmodule Keyfleet.Graph.Event do
 
       # The fleet's notable changes, newest first, for its activity.
       index(["fleet_id", "seq DESC"], name: "graph_events_notable_index", where: @notable)
+
+      # The record each write left of itself, by its command id.
+      index(["fleet_id", "(payload ->> 'command_id')"],
+        name: "graph_events_command_id_index",
+        where: "type = 'keyfleet.command'",
+        concurrently: true
+      )
     end
   end
 
@@ -219,6 +226,22 @@ defmodule Keyfleet.Graph.Event do
               )
     end
 
+    # The record a write left of itself under one command id, from every Key
+    # it was sent as: the caller keeps those of its own wallet
+    # (`KeyfleetWeb.AgentReceiptController`). The type is written out so
+    # `graph_events_command_id_index` serves every plan of it.
+    read :command do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and fragment("? = 'keyfleet.command'", type) and
+                 fragment("(? ->> 'command_id') = ?", payload, ^arg(:command_id))
+             )
+
+      prepare build(sort: [seq: :asc], limit: 20)
+    end
+
     # The events a page's command records name that an earlier page copied.
     read :with_event_ids do
       public? false
@@ -262,7 +285,7 @@ defmodule Keyfleet.Graph.Event do
       authorize_if always()
     end
 
-    policy action([:page, :activity, :history]) do
+    policy action([:page, :activity, :history, :command]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 

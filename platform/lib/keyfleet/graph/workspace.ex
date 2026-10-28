@@ -58,7 +58,7 @@ defmodule Keyfleet.Graph.Workspace do
 
   actions do
     action :get, :map do
-      description "One object with a page of its relations."
+      description "One object with a page of its relations and the items at their other ends."
       argument :fleet_id, :string, allow_nil?: false
       argument :id, :string, allow_nil?: false, constraints: @text
 

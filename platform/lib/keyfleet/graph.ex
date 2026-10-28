@@ -52,6 +52,7 @@ defmodule Keyfleet.Graph do
       define :object_history, action: :history, args: [:fleet_id, :object_id]
       define :record_events, action: :record
       define :events_with_ids, action: :with_event_ids, args: [:fleet_id, :event_ids]
+      define :command_records, action: :command, args: [:fleet_id, :command_id]
     end
 
     resource Keyfleet.Graph.Object do
