@@ -5741,6 +5741,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   sent and no one else made it, so the answer matches what happened and an add
   is safe to send again.
 
+## 2026-10-28 — Web server security update
+
+- The web server library moves to Bandit 1.14.1, which fixes a way to make the
+  server use too much memory with HTTP/2 uploads sent in tiny pieces
+  (EEF-CVE-2026-116078).
+
 ## 2026-10-28 — Agents told the real problem, posts they missed, and how to rerun work
 
 - A signed request to an address under /api/v1/agent that no operation has
