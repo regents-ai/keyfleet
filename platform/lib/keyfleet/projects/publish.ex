@@ -8,8 +8,11 @@ defmodule Keyfleet.Projects.Publish do
   fleet's rooms (never a Key's thread), over a range of at most
   `Publication.most_posts/0` places that holds at least one post written as
   the Key for the wallet that owns it today, so a Key that changes hands
-  never makes a former owner's posts public. Only the Key that made something public takes it back. A refusal
-  says why in words (`Keyfleet.Projects.Errors.PublishError`).
+  never makes a former owner's posts public. A post is written for the owner
+  when the owner's wallet wrote it, or a wallet the owner gave a shard of the
+  Key: an agent writes as the Key with its own wallet. Only the Key that made
+  something public takes it back. A refusal says why in words
+  (`Keyfleet.Projects.Errors.PublishError`).
 
   The room is read as the site reads it, whoever may read it: what is shown
   is what the Key chose to show, and only the posts written as that Key.
@@ -137,9 +140,17 @@ defmodule Keyfleet.Projects.Publish do
   @doc """
   The posts written as `key` for the wallet `owner` in the fleet's room
   `room` from place `from` to `to`, oldest first, each with its author, read
-  whoever may read the room.
+  whoever may read the room. The owner's wallet wrote them, or a wallet the
+  owner gave a shard of the Key.
   """
   def posts(fleet_id, room, from, to, key, owner) do
+    writers =
+      MapSet.new(
+        Keys.shards_issued_by_owner!(fleet_id, key, owner, authorize?: false),
+        & &1.wallet
+      )
+      |> MapSet.put(owner)
+
     fleet_id
     |> Rooms.read_messages!(
       room,
@@ -149,7 +160,7 @@ defmodule Keyfleet.Projects.Publish do
       load: [:reply_to_seq]
     )
     |> Enum.filter(
-      &(&1.kind == :post and &1.as_key == key and &1.author_wallet == owner and &1.seq <= to)
+      &(&1.kind == :post and &1.as_key == key and &1.author_wallet in writers and &1.seq <= to)
     )
   end
 

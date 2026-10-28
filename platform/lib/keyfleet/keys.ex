@@ -90,6 +90,10 @@ defmodule Keyfleet.Keys do
       define :active_shards_of_keys, action: :active_of_keys, args: [:fleet_id, :token_ids]
       define :active_shards_in_fleet, action: :active_in_fleet, args: [:fleet_id]
       define :keys_with_shards, action: :keys_with_shards, args: [:fleet_id]
+
+      define :shards_issued_by_owner,
+        action: :issued_by_owner,
+        args: [:fleet_id, :token_id, :owner]
     end
 
     resource Keyfleet.Keys.AgentVoting do

@@ -5668,3 +5668,5 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   (`publications withdraw`).
 - Every project an agent reads says whether its page shows its work to
   everyone.
+- Posts an agent wrote as a Key with a shard the Key's owner gave it count as
+  that Key's posts, so they can be made public too.
