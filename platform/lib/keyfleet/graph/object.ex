@@ -217,8 +217,30 @@ defmodule Keyfleet.Graph.Object do
       prepare build(
                 sort: [changed_seq: :desc],
                 limit: 20,
-                select: [:fleet_id, :id, :type, :sys, :changed_seq, :changed_at],
+                select: [:fleet_id, :id, :type, :data, :sys, :changed_seq, :changed_at],
                 load: [:title, :card]
+              )
+    end
+
+    # The tasks and evidence citing any of `uris` (the commits on a page of
+    # history), with the field that cites each, for the page to mark.
+    read :citing_any do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :uris, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 ((type == "evidence" and
+                     fragment("(? ->> 'source_uri') = ANY(?)", data, ^arg(:uris))) or
+                    (type == "task" and
+                       fragment("(? ->> 'commit_ref') = ANY(?)", data, ^arg(:uris))))
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 500,
+                select: [:fleet_id, :id, :type, :data, :sys, :changed_seq],
+                load: [:title]
               )
     end
 
@@ -424,7 +446,8 @@ defmodule Keyfleet.Graph.Object do
              :assigned_to_keys,
              :review_asked_of,
              :joined_by,
-             :citing
+             :citing,
+             :citing_any
            ]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end

@@ -192,6 +192,11 @@ defmodule KeyfleetWeb.WorkspacePage do
   # One saved page of a notebook version or background run, after the
   # notebooks' `/results/`: notebook id, version or run id, and when the page
   # was saved in milliseconds since 1970.
+  # A page of history, and the most pages back a reader goes: past that, git
+  # itself reads further.
+  @history_page 30
+  @history_pages 300
+
   @saved_result ~r/\Anb-[a-z0-9]{16}\/(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\/[1-9][0-9]{0,15}\z/
 
   @doc "The types of item a workspace holds."
@@ -460,6 +465,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     %{
       repository: repository,
       clone_url: Code.clone_url(repository),
+      history_link: Code.history_path(fleet.id, repository),
       pushes: pushes(Code.recent_pushes!(fleet.id, project.name, opts), fleet.id, repository),
       files: folder_entries(fleet.id, repository, ""),
       repositories: [],
@@ -832,10 +838,151 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp standing("task", progress), do: choice("progress", progress)
 
   @doc """
+  One page of a project's repository history, newest first, named by the
+  repository: from the commit `from` (a full hash, so the pages hold still
+  while changes arrive) or the default branch now, `page` by `page`. Each
+  commit with its first line, its git author, when it was written, the Key
+  and agent that sent it, and the tasks and evidence that cite it. `commits`
+  is `:unreadable` when the code store doesn't answer. An address naming a
+  repository none of the fleet's projects has, a `from` that isn't a full
+  hash or a commit there, or a page past the history's end is a page that
+  doesn't exist.
+  """
+  def history(fleet_id, repository, from, page, actor) do
+    from = commit!(from)
+    page = history_page!(page)
+    project = project_of!(fleet_id, repository)
+    opts = [actor: actor]
+
+    # Reading who sent no commit at all still asks whether the reader is
+    # one of the fleet's members.
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, _members} <- members_read(fleet, Code.senders(fleet_id, project.name, [], opts)) do
+      fleet_id
+      |> history_page(repository, project, from, page, opts)
+      |> Map.merge(%{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        repository: repository,
+        project: project.name,
+        page: page,
+        files_link: Code.files_path(fleet_id, repository, "")
+      })
+    else
+      {:missing, _name} ->
+        raise NotFoundError
+
+      {:members_only, name} ->
+        %{fleet_id: fleet_id, fleet_name: name, members_only?: true}
+    end
+  end
+
+  defp history_page(fleet_id, repository, project, from, page, opts) do
+    case Code.history(repository, from, (page - 1) * @history_page, @history_page) do
+      {:ok, %{commits: []}} when page > 1 ->
+        raise NotFoundError
+
+      {:ok, %{commits: commits, head: head, more?: more?}} ->
+        hashes = Enum.map(commits, & &1["hash"])
+        senders = Code.senders!(fleet_id, project.name, hashes, opts)
+        agents = agent_names(senders |> Map.values() |> Enum.map(& &1.acting_agent_wallet))
+
+        citing =
+          citing_any(fleet_id, Enum.map(hashes, &commit_url(fleet_id, repository, &1)), opts)
+
+        %{
+          commits:
+            Enum.map(commits, &history_row(&1, fleet_id, repository, senders, agents, citing)),
+          head: head,
+          more?: more?,
+          newer: if(page > 1, do: Code.history_path(fleet_id, repository, head, page - 1)),
+          older: if(more?, do: Code.history_path(fleet_id, repository, head, page + 1)),
+          latest: if(from, do: Code.history_path(fleet_id, repository))
+        }
+
+      :not_found ->
+        raise NotFoundError
+
+      {:error, error} ->
+        %{
+          commits: unreadable_code(repository, error),
+          head: nil,
+          more?: false,
+          newer: nil,
+          older: nil,
+          latest: nil
+        }
+    end
+  end
+
+  defp history_row(commit, fleet_id, repository, senders, agents, citing) do
+    hash = commit["hash"]
+
+    %{
+      hash: hash,
+      subject: commit["message"],
+      author: commit["author"],
+      at: time(commit["date"]),
+      link: Code.commit_path(fleet_id, repository, hash),
+      sent: sender(senders[hash], agents),
+      citing: Map.get(citing, commit_url(fleet_id, repository, hash), [])
+    }
+  end
+
+  # Who sent a commit: the Key, the agent beside it when one sent it, the
+  # branch it came on and when.
+  defp sender(nil, _agents), do: nil
+
+  defp sender(push, agents) do
+    %{
+      token_id: push.token_id,
+      agent: agents[push.acting_agent_wallet],
+      ref: push.ref,
+      what: moved(push.ref),
+      at: push.pushed_at
+    }
+  end
+
+  # The tasks and evidence that cite each address, by address, each as a
+  # link to it.
+  defp citing_any(_fleet_id, [], _opts), do: %{}
+
+  defp citing_any(fleet_id, urls, opts) do
+    fleet_id
+    |> Graph.work_citing_any!(urls, opts)
+    |> Enum.reject(&archived?(&1.sys))
+    |> Enum.group_by(
+      &if(&1.type == "task", do: &1.data["commit_ref"], else: &1.data["source_uri"]),
+      &%{id: &1.id, type: &1.type, title: &1.title}
+    )
+  end
+
+  defp history_page!(page) when page in 1..@history_pages, do: page
+  defp history_page!(_page), do: raise(NotFoundError)
+
+  @doc """
+  The page a History address names: 1 when it names none. A page that isn't
+  a whole number is a page that doesn't exist.
+  """
+  def history_page_number!(nil), do: 1
+
+  def history_page_number!(page) do
+    case Integer.parse(page) do
+      {page, ""} -> page
+      _not_a_page -> raise NotFoundError
+    end
+  end
+
+  @doc """
   One commit of one of the fleet's repositories, named by the repository and
-  its full hash: the pushes that left a branch or tag at it, and the evidence
-  that cites it with the tasks that produced that evidence. An address naming
-  a repository none of the fleet's projects has, or less than a full hash, is
+  its full hash: its message, its git author and when it was written, the
+  Key and agent that sent it, the commits before it, and each file it
+  changed with the lines that changed; beside it the tasks that name it as
+  their commit, with the notebook and result each names, and the evidence
+  that cites it with the tasks that produced that evidence. `change` is
+  `:not_found` while the code holds no commit by that hash, and
+  `:unreadable` when the code store doesn't answer. An address naming a
+  repository none of the fleet's projects has, or less than a full hash, is
   a page that doesn't exist.
   """
   def commit(fleet_id, repository, hash, actor) do
@@ -845,12 +992,17 @@ defmodule KeyfleetWeb.WorkspacePage do
     url = commit_url(fleet_id, repository, hash)
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pushes} <-
-           members_read(fleet, Code.pushes_of_commit(fleet_id, project.name, hash, opts)),
+         {:ok, senders} <-
+           members_read(fleet, Code.senders(fleet_id, project.name, [hash], opts)),
          {:ok, citing} <- members_read(fleet, Graph.work_citing(fleet_id, url, opts)) do
       producers = producers(fleet_id, Enum.filter(citing, &(&1.type == "evidence")), opts)
       titles = titles(fleet_id, producers |> Map.values() |> List.flatten(), opts)
-      agents = agent_names(Enum.map(citing, &creator_wallet(&1.sys)))
+
+      agents =
+        agent_names([
+          senders[hash] && senders[hash].acting_agent_wallet
+          | Enum.map(citing, &creator_wallet(&1.sys))
+        ])
 
       %{
         fleet_id: fleet_id,
@@ -859,8 +1011,12 @@ defmodule KeyfleetWeb.WorkspacePage do
         project: project.name,
         public: commit_public(fleet_id, project, repository, hash, actor),
         url: url,
+        repository: repository,
         clone_url: Code.clone_url(repository),
-        pushes: pushes(pushes, fleet_id, repository),
+        sent: sender(senders[hash], agents),
+        change: commit_change(fleet_id, repository, hash),
+        history_link: Code.history_path(fleet_id, repository),
+        files_link: Code.files_path(fleet_id, repository, "", hash),
         citing:
           for object <- citing do
             %{
@@ -870,6 +1026,10 @@ defmodule KeyfleetWeb.WorkspacePage do
               excerpt: object.card["gist"],
               archived?: archived?(object.sys),
               by: created_by(object.sys, agents),
+              notebook_ref: task_ref(object, "notebook_ref"),
+              result_ref: task_ref(object, "result_ref"),
+              notebook: source(task_ref(object, "notebook_ref"), fleet_id),
+              result: source(task_ref(object, "result_ref"), fleet_id),
               tasks: Enum.map(Map.get(producers, object.id, []), &item_part(&1, titles))
             }
           end
@@ -897,6 +1057,63 @@ defmodule KeyfleetWeb.WorkspacePage do
       make?:
         is_nil(publication) and is_integer(key) and project.key == key and
           project.state == :active
+    }
+  end
+
+  # The notebook or result a task names, for a task.
+  defp task_ref(%{type: "task", data: data}, field), do: data[field]
+  defp task_ref(_object, _field), do: nil
+
+  # The commit as the code holds it: its message split into the first line
+  # and the rest, its author and time, its parents, and each file it changed
+  # with its lines.
+  defp commit_change(fleet_id, repository, hash) do
+    case Code.commit(repository, hash) do
+      {:ok, commit} ->
+        {subject, body} = message(commit["message"])
+        files = commit["files"] |> Enum.with_index() |> Enum.map(&changed_file/1)
+
+        %{
+          subject: subject,
+          body: body,
+          author: commit["author"],
+          at: time(commit["date"]),
+          parents:
+            for parent <- commit["parents"] do
+              %{hash: parent, link: Code.commit_path(fleet_id, repository, parent)}
+            end,
+          files: files,
+          files_cut?: commit["files_truncated"] == true,
+          additions: files |> Enum.map(&(&1.additions || 0)) |> Enum.sum(),
+          deletions: files |> Enum.map(&(&1.deletions || 0)) |> Enum.sum()
+        }
+
+      :not_found ->
+        :not_found
+
+      {:error, error} ->
+        unreadable_code(repository, error)
+    end
+  end
+
+  defp message(message) do
+    case String.split(message, "\n", parts: 2) do
+      [subject] -> {subject, nil}
+      [subject, body] -> {subject, if(String.trim(body) != "", do: String.trim(body))}
+    end
+  end
+
+  defp changed_file({file, index}) do
+    %{
+      id: index,
+      path: file["path"],
+      old_path: file["old_path"],
+      status: file["status"],
+      additions: file["additions"],
+      deletions: file["deletions"],
+      binary?: file["binary"] == true,
+      patch: file["patch"],
+      cut?: file["patch_truncated"] == true
     }
   end
 
@@ -939,7 +1156,9 @@ defmodule KeyfleetWeb.WorkspacePage do
         crumbs: crumbs(fleet_id, repository, path, at),
         clone_url: Code.clone_url(repository),
         pushes: if(at, do: [], else: pushes(pushes, fleet_id, repository)),
-        listing: listing(fleet_id, repository, path, at)
+        listing: listing(fleet_id, repository, path, at),
+        history_link: Code.history_path(fleet_id, repository),
+        commit_link: at && Code.commit_path(fleet_id, repository, at)
       }
     else
       {:missing, _name} ->
@@ -973,7 +1192,9 @@ defmodule KeyfleetWeb.WorkspacePage do
       crumbs: crumbs(fleet_id, repository, path, at),
       clone_url: nil,
       pushes: [],
-      listing: listing(fleet_id, repository, path, at)
+      listing: listing(fleet_id, repository, path, at),
+      history_link: nil,
+      commit_link: nil
     }
   end
 

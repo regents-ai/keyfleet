@@ -75,6 +75,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @publish_item_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/items\z"
   @publish_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/pages\z"
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
+  @code_history_path ~r"\A#{@in_project}/code/commits\z"
+  @code_commit_path ~r"\A#{@in_project}/code/commits/(?:[0-9a-f]{40}|[0-9a-f]{64})\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
@@ -148,6 +150,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
     {@key_remove_path, {~w(message_id), []}},
     {@activity_path, {[], ~w(cursor)}},
+    {@code_history_path, {[], ~w(from page)}},
     {@posting_key_path, {~w(token_id), []}},
     {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
@@ -643,6 +646,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @poll_path,
           @dm_inbox_path,
           @code_pushes_path,
+          @code_commit_path,
           @notebooks_path,
           @copies_path,
           @run_path,
@@ -691,6 +695,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @chain_path,
         @graph_path,
         @dm_path,
+        @code_history_path,
         @dm_changes_path
         | @poll_post_paths
       ],
@@ -859,7 +864,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         file_write: @file_write_path,
         notebook_lock: @notebook_lock_path,
         receipts: @receipts_path,
-        checkpoint_save: @checkpoint_save_path
+        checkpoint_save: @checkpoint_save_path,
+        code_history: @code_history_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -975,6 +981,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: admit(map_size(params) == 1 and is_boolean(locked))
 
   defp check_fleet_body(:notebook_lock, _params), do: :invalid
+
+  # A project's history reads from the newest, or on from the commit its first
+  # page started at, by page number; a page it doesn't have is the
+  # controller's to refuse.
+  defp check_fleet_body(:code_history, params) do
+    from = Map.get(params, "from")
+    page = Map.get(params, "page", 1)
+
+    admit(
+      Map.keys(params) -- ~w(from page) == [] and (is_nil(from) or is_binary(from)) and
+        is_integer(page)
+    )
+  end
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do

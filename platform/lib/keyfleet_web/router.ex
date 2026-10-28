@@ -398,6 +398,12 @@ defmodule KeyfleetWeb.Router do
          :withdraw
 
     get "/fleets/:fleet_id/projects/:project/code/pushes", AgentCodeController, :pushes
+    post "/fleets/:fleet_id/projects/:project/code/commits", AgentCodeController, :commits
+
+    get "/fleets/:fleet_id/projects/:project/code/commits/:commit",
+        AgentCodeController,
+        :commit
+
     get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
 
     post "/fleets/:fleet_id/projects/:project/notebooks/create",

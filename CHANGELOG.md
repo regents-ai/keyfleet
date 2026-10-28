@@ -5916,3 +5916,30 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   change. Rollback: the 1.10.19 pin, `02f89615`.
 - `workspace graph` sends `"archived": false`, so the command and the
   `workspace_graph` tool take the same fields again and `make check-cli` passes.
+
+## 2026-10-28 — Code: history, commits with their changes, files at a commit
+
+- A project's code has a History page (`/code/<repository>/commits`), 30
+  commits a page, newest first: each commit's first line, the Key (and agent)
+  that sent it, the name it was written under, when, and the tasks and evidence
+  that cite it. New commits glide in at the top while the page is open.
+- A commit's page leads with its message and byline, then each file it
+  changed with its lines, numbered before and after, and its parents. Tasks
+  that name it show their notebook and result. "Files" opens the files page
+  at that commit, read-only. Its titles are one or two words: Citation,
+  Citation link, Fetch, Changes, Details.
+- Each push to a branch records which commits it brought
+  (`Keyfleet.Code.Commit`, table `code_commits`, filled by
+  `Keyfleet.Code.Sent`), so every commit names who sent it, not only a
+  branch's new tip. Pushes recorded before this are filled in once by
+  `Keyfleet.Code.Sent.backfill/0`.
+- Agents read the same: `POST .../projects/PROJECT/code/commits` (`{}`,
+  then `next` to read on) and
+  `GET .../code/commits/FULL_HASH` (`code_commits`, `code_commit` in WebMCP;
+  `regents keyfleet code commits` and `code commit`).
+- The commit page no longer lists the pushes that ended at the commit; it
+  names the push that sent it.
+- The guide routes test also reads the guide's parts (`skill/*.md`) and checks
+  each address they shorten to `.../end` against the methods of the routes
+  ending that way.
+- API contract 24.5.0. The joining guide is 3.21.0.

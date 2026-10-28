@@ -1019,13 +1019,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
               />
             </li>
           </ol>
-          <.link
-            :if={entries(@board.files) != []}
-            id="workspace-code-files"
-            patch={Keyfleet.Code.files_path(@board.fleet_id, @board.repository, "")}
-          >
-            Browse the code
-          </.link>
+          <p :if={entries(@board.files) != []} class="code-actions">
+            <.link
+              id="workspace-code-files"
+              patch={Keyfleet.Code.files_path(@board.fleet_id, @board.repository, "")}
+            >
+              Browse the code
+            </.link>
+            <.link id="workspace-code-history" patch={@board.history_link}>History</.link>
+          </p>
         </section>
 
         <section
@@ -1033,7 +1035,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-panel"
           aria-labelledby="workspace-code-pushes-title"
         >
-          <h2 id="workspace-code-pushes-title">Sent lately</h2>
+          <h2 id="workspace-code-pushes-title">Pushes</h2>
           <Regent.Primitives.empty_state
             :if={@board.pushes == []}
             id="code-pushes-empty"
@@ -1062,7 +1064,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <div class="rg-panel__body">
             <h3 id="workspace-code-info-title">
-              Copy the code
+              Clone
               <Regent.Primitives.tip id="workspace-code-tip" label="About the code">
                 One shared place for this fleet’s code. Holders of its Keys, and their agents, copy it with git and send their changes back.
               </Regent.Primitives.tip>
@@ -1400,12 +1402,26 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   def commit(assigns) do
     ~H"""
-    <article id="workspace-commit-page" class="workspace-page">
-      <header class="workspace-heading">
+    <article id="workspace-commit-page" class="workspace-page code-commit">
+      <header class="workspace-heading code-commit-heading">
         <p class="workspace-kicker">
           <.link patch={"#{Keyfleet.Fleets.path(@commit.fleet_id)}/workspace"}>Workspace</.link>
+          <span aria-hidden="true">/</span>
+          <.link id="workspace-commit-history" patch={@commit.history_link}>History</.link>
         </p>
-        <h2>Commit {String.slice(@commit.hash, 0, 12)}</h2>
+        <h2 id="workspace-commit-subject">
+          {if is_map(@commit.change),
+            do: @commit.change.subject,
+            else: "Commit #{String.slice(@commit.hash, 0, 12)}"}
+        </h2>
+        <.byline
+          id="workspace-commit-byline"
+          fleet_id={@commit.fleet_id}
+          sent={@commit.sent}
+          author={is_map(@commit.change) && @commit.change.author}
+          at={is_map(@commit.change) && @commit.change.at}
+          hash={@commit.hash}
+        />
       </header>
 
       <section
@@ -1448,6 +1464,37 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </section>
 
       <div class="workspace-item-grid">
+        <div class="workspace-wide code-commit-main">
+          <section
+            :if={is_map(@commit.change) and @commit.change.body}
+            id="workspace-commit-message"
+            class="workspace-panel"
+            aria-label="Message"
+          >
+            <p class="code-message">{@commit.change.body}</p>
+          </section>
+
+          <section
+            id="workspace-commit-changes"
+            class="workspace-panel"
+            aria-labelledby="workspace-commit-changes-title"
+          >
+            <h2 id="workspace-commit-changes-title">Changes</h2>
+            <p :if={@commit.change == :unreadable} id="workspace-commit-unreadable">
+              The code can’t be read right now. Try again in a minute.
+            </p>
+            <Regent.Primitives.empty_state
+              :if={@commit.change == :not_found}
+              id="workspace-commit-not-sent"
+              class="kf-empty"
+              title="This commit hasn’t been sent to the code yet."
+            >
+              Its changes show here once it arrives.
+            </Regent.Primitives.empty_state>
+            <.changes :if={is_map(@commit.change)} change={@commit.change} />
+          </section>
+        </div>
+
         <section class="workspace-panel" aria-labelledby="workspace-commit-title">
           <h2 id="workspace-commit-title">Details</h2>
           <dl class="workspace-fields">
@@ -1455,10 +1502,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
               <dt>Full commit</dt>
               <dd><code id="workspace-commit-hash">{@commit.hash}</code></dd>
             </div>
+            <div :if={is_map(@commit.change) and @commit.change.parents != []}>
+              <dt>{if length(@commit.change.parents) == 1, do: "Parent", else: "Parents"}</dt>
+              <dd id="workspace-commit-parents">
+                <p :for={parent <- @commit.change.parents}>
+                  <.link patch={parent.link}><code>{String.slice(parent.hash, 0, 12)}</code></.link>
+                </p>
+              </dd>
+            </div>
             <div>
               <dt>
-                Link to cite
-                <Regent.Primitives.tip id="workspace-commit-link-tip" label="About this link">
+                Citation link
+                <Regent.Primitives.tip id="workspace-commit-link-tip" label="About">
                   Use this link as the source of evidence in the workspace. It always points at this exact change.
                 </Regent.Primitives.tip>
               </dt>
@@ -1470,45 +1525,25 @@ defmodule KeyfleetWeb.WorkspaceLive do
               </dd>
             </div>
             <div>
-              <dt>Get it</dt>
+              <dt>Fetch</dt>
               <dd id="workspace-commit-fetch">
                 <p><code>git fetch {@commit.clone_url}</code></p>
                 <p><code>git checkout {@commit.hash}</code></p>
               </dd>
             </div>
           </dl>
-        </section>
-
-        <section class="workspace-panel" aria-labelledby="workspace-commit-pushes-title">
-          <h2 id="workspace-commit-pushes-title">Sent by</h2>
-          <Regent.Primitives.empty_state
-            :if={@commit.pushes == []}
-            id="workspace-commit-no-pushes"
-            class="kf-empty"
-            title="No branch or tag was sent ending at this commit."
+          <.link
+            :if={is_map(@commit.change)}
+            id="workspace-commit-files"
+            class="code-action"
+            patch={@commit.files_link}
           >
-            It may sit inside a longer set of changes.
-          </Regent.Primitives.empty_state>
-          <ol :if={@commit.pushes != []} id="workspace-commit-pushes" class="workspace-lines">
-            <li :for={push <- @commit.pushes} data-push={push.id}>
-              <p>
-                <.key fleet_id={@commit.fleet_id} token_id={push.token_id} agent={push.agent} />
-                sent {push.what}
-              </p>
-              <p class="workspace-detail">
-                <KeyfleetWeb.Time.local
-                  id={"workspace-commit-push-#{push.id}-at"}
-                  at={push.at}
-                  as={:clock}
-                  title_as={:moment}
-                />
-              </p>
-            </li>
-          </ol>
+            Files
+          </.link>
         </section>
 
         <section class="workspace-panel" aria-labelledby="workspace-commit-citing-title">
-          <h2 id="workspace-commit-citing-title">Work that cites it</h2>
+          <h2 id="workspace-commit-citing-title">Citation</h2>
           <Regent.Primitives.empty_state
             :if={@commit.citing == []}
             id="workspace-commit-no-citing"
@@ -1525,6 +1560,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <span :if={work.archived?} class="workspace-badge">Archived</span>
               </p>
               <p :if={work.excerpt} class="workspace-text">{work.excerpt}</p>
+              <p :if={work.notebook} class="workspace-detail">
+                Notebook <.value value={work.notebook} fleet_id={@commit.fleet_id} />
+              </p>
+              <p :if={work.result} class="workspace-detail">
+                Result <.value value={work.result} fleet_id={@commit.fleet_id} />
+              </p>
               <p :for={task <- work.tasks} class="workspace-detail">
                 Produced by <.item_link part={task} fleet_id={@commit.fleet_id} />
               </p>
@@ -1535,6 +1576,262 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </ul>
         </section>
       </div>
+    </article>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :fleet_id, :string, required: true
+  attr :sent, :map, default: nil, doc: "the Key and agent that sent the commit, and when"
+  attr :author, :any, default: nil, doc: "the name the commit was written under"
+  attr :at, :any, default: nil, doc: "when the commit was written"
+  attr :hash, :string, required: true
+
+  # Who sent a commit, by Key and agent as every byline on the site names
+  # them, then the name it was written under and when, and its short hash.
+  defp byline(assigns) do
+    ~H"""
+    <p id={@id} class="code-byline">
+      <span :if={@sent} class="code-byline-sender">
+        <.key fleet_id={@fleet_id} token_id={@sent.token_id} agent={@sent.agent} />
+        <span class="workspace-detail">sent {@sent.what}</span>
+      </span>
+      <span :if={@author} class="workspace-detail">Written as {@author}</span>
+      <KeyfleetWeb.Time.local
+        :if={@at}
+        id={"#{@id}-at"}
+        class="workspace-detail"
+        at={@at}
+        as={:stamp}
+        title_as={:moment}
+      />
+      <span class="code-hash">
+        <code id={"#{@id}-hash"}>{String.slice(@hash, 0, 12)}</code>
+        <Regent.Primitives.copy_icon
+          id={"#{@id}-hash-copy"}
+          target={"#{@id}-full"}
+          label="Copy the full commit"
+        />
+        <span id={"#{@id}-full"} class="visually-hidden">{@hash}</span>
+      </span>
+    </p>
+    """
+  end
+
+  attr :change, :map, required: true
+
+  # Each file a commit changed, with its lines: a short change opens with
+  # its files open.
+  defp changes(assigns) do
+    ~H"""
+    <p id="workspace-commit-summary" class="workspace-detail code-summary">
+      {files_changed(length(@change.files))}
+      <span class="code-added">+{@change.additions}</span>
+      <span class="code-removed">−{@change.deletions}</span>
+    </p>
+    <div id="workspace-commit-file-list" class="code-files">
+      <details
+        :for={file <- @change.files}
+        id={"workspace-commit-file-#{file.id}"}
+        class="code-file"
+        open={length(@change.files) <= 5}
+      >
+        <summary class="code-file-head">
+          <span class={"code-status code-status--#{file.status}"}>{change_label(file.status)}</span>
+          <span class="code-file-path">
+            <span :if={file.old_path} class="workspace-detail">{file.old_path} →</span>
+            {file.path}
+          </span>
+          <span :if={not file.binary?} class="code-file-counts">
+            <span class="code-added">+{file.additions}</span>
+            <span class="code-removed">−{file.deletions}</span>
+          </span>
+        </summary>
+        <p :if={file.binary?} class="workspace-detail code-file-note">
+          This file isn’t text, so its lines aren’t shown.
+        </p>
+        <p :if={file.patch == "" and not file.binary?} class="workspace-detail code-file-note">
+          Only the file’s mode or name changed.
+        </p>
+        <p :if={is_nil(file.patch) and not file.binary?} class="workspace-detail code-file-note">
+          This change is too large to show here. Fetch the commit to read it.
+        </p>
+        <.diff :if={file.patch not in [nil, ""]} patch={file.patch} />
+        <p :if={file.cut? and file.patch not in [nil, ""]} class="workspace-detail code-file-note">
+          The rest of this file’s change is too large to show here.
+        </p>
+      </details>
+    </div>
+    <p :if={@change.files_cut?} id="workspace-commit-files-cut" class="workspace-detail">
+      More files changed than show here. Fetch the commit to read them all.
+    </p>
+    """
+  end
+
+  attr :patch, :string, required: true
+
+  # One file's changed lines, each numbered before and after.
+  defp diff(assigns) do
+    assigns = assign(assigns, :lines, KeyfleetWeb.Diff.lines(assigns.patch))
+
+    ~H"""
+    <div class="code-diff-scroll">
+      <table class="code-diff">
+        <tbody>
+          <tr :for={line <- @lines} class={"code-diff-row code-diff-row--#{line.kind}"}>
+            <%= if line.kind == :hunk do %>
+              <td class="code-diff-hunk" colspan="3">{line.text}</td>
+            <% else %>
+              <td class="code-diff-num">{line.old}</td>
+              <td class="code-diff-num">{line.new}</td>
+              <td class="code-diff-text" phx-no-format><span class="code-diff-sign" aria-hidden="true">{sign(line.kind)}</span>{line.text}</td>
+            <% end %>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  defp files_changed(1), do: "1 file changed"
+  defp files_changed(count), do: "#{count} files changed"
+
+  defp change_label("added"), do: "Added"
+  defp change_label("deleted"), do: "Deleted"
+  defp change_label("renamed"), do: "Renamed"
+  defp change_label("copied"), do: "Copied"
+  defp change_label("type_changed"), do: "Type changed"
+  defp change_label(_modified), do: "Changed"
+
+  defp sign(:added), do: "+"
+  defp sign(:removed), do: "−"
+  defp sign(:same), do: " "
+
+  attr :history, :any, required: true, doc: "the page of history as read, or `:unreadable`"
+
+  attr :signed_out?, :boolean,
+    default: false,
+    doc: "whether nobody is signed in, so the members-only page offers Sign in"
+
+  def history(%{history: :unreadable} = assigns),
+    do: ~H|<.unreadable id="workspace-history-page" />|
+
+  def history(%{history: %{members_only?: true}} = assigns) do
+    ~H"""
+    <article id="workspace-history-page" class="workspace-page">
+      <header class="workspace-heading">
+        <h2>History</h2>
+        <p id="workspace-history-members-only" class="workspace-lede">
+          This is {@history.fleet_name}’s shared code. Its Key holders and their paired agents can read it.
+        </p>
+        <.link patch={KeyLinks.members_path(@history.fleet_id)}>See this fleet’s Keys</.link>
+        <Regent.Primitives.button
+          :if={@signed_out?}
+          id="workspace-history-sign-in"
+          type="button"
+          variant="secondary"
+          data-account-target="sign-in"
+        >
+          Sign in
+        </Regent.Primitives.button>
+      </header>
+    </article>
+    """
+  end
+
+  def history(assigns) do
+    ~H"""
+    <article id="workspace-history-page" class="workspace-page">
+      <header class="workspace-heading">
+        <p class="workspace-kicker">
+          <.link patch={"#{Keyfleet.Fleets.path(@history.fleet_id)}/workspace"}>Workspace</.link>
+          <span aria-hidden="true">/</span>
+          <.link id="workspace-history-files" patch={@history.files_link}>Code</.link>
+        </p>
+        <h2>History</h2>
+      </header>
+
+      <section
+        id="workspace-history"
+        class="workspace-panel code-history-panel"
+        aria-label="History"
+      >
+        <p :if={@history.commits == :unreadable} id="workspace-history-unreadable">
+          The code can’t be read right now. Try again in a minute.
+        </p>
+        <Regent.Primitives.empty_state
+          :if={@history.commits == []}
+          id="workspace-history-empty"
+          class="kf-empty"
+          title="No code has been sent yet."
+        />
+        <ol
+          :if={is_list(@history.commits) and @history.commits != []}
+          id="code-history"
+          class="code-history"
+          phx-hook="MotionList"
+          data-variant={KeyfleetWeb.Motion.standard("list")}
+          data-layout-id="code-history"
+          data-children="[data-row]"
+        >
+          <li
+            :for={commit <- @history.commits}
+            id={"code-history-#{commit.hash}"}
+            class="code-history-row"
+            data-row
+            data-layout-id={"code-history-#{commit.hash}"}
+          >
+            <div class="code-history-main">
+              <.link class="code-history-subject" patch={commit.link}>{commit.subject}</.link>
+              <p class="code-history-meta">
+                <span :if={commit.sent}>
+                  <.key
+                    fleet_id={@history.fleet_id}
+                    token_id={commit.sent.token_id}
+                    agent={commit.sent.agent}
+                  />
+                </span>
+                <span class="workspace-detail">Written as {commit.author}</span>
+                <KeyfleetWeb.Time.local
+                  id={"code-history-#{commit.hash}-at"}
+                  class="workspace-detail"
+                  at={commit.at}
+                  as={:stamp}
+                  title_as={:moment}
+                />
+              </p>
+              <p :if={commit.citing != []} class="code-history-cites">
+                <.link
+                  :for={work <- commit.citing}
+                  class="code-chip"
+                  patch={WorkspacePage.item_path(@history.fleet_id, work.id)}
+                >
+                  <span class="workspace-kind">{type_label(work.type)}</span>
+                  {work.title || type_label(work.type)}
+                </.link>
+              </p>
+            </div>
+            <.link class="code-hash code-history-hash" patch={commit.link}>
+              <code>{String.slice(commit.hash, 0, 7)}</code>
+            </.link>
+          </li>
+        </ol>
+        <nav
+          :if={@history.newer || @history.older || @history.latest}
+          class="workspace-pages"
+          aria-label="Pages"
+        >
+          <.link :if={@history.latest} id="workspace-history-latest" patch={@history.latest}>
+            Newest
+          </.link>
+          <.link :if={@history.newer} id="workspace-history-newer" patch={@history.newer}>
+            Newer
+          </.link>
+          <.link :if={@history.older} id="workspace-history-older" patch={@history.older}>
+            Older
+          </.link>
+        </nav>
+      </section>
     </article>
     """
   end
@@ -1579,7 +1876,19 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </p>
         <h2>{if @files.path == "", do: "Code", else: Path.basename(@files.path)}</h2>
         <p :if={@files.at} id="workspace-files-at" class="workspace-lede">
-          At commit <code>{String.slice(@files.at, 0, 12)}</code>, read-only
+          At commit
+          <.link :if={@files.commit_link} patch={@files.commit_link}><code>{String.slice(
+            @files.at,
+            0,
+            12
+          )}</code></.link><code :if={is_nil(@files.commit_link)}>{String.slice(@files.at, 0, 12)}</code>, read-only.
+          <.link
+            :if={@files.commit_link}
+            id="workspace-files-now"
+            patch={Keyfleet.Code.files_path(@files.fleet_id, @files.repository, @files.path)}
+          >
+            See it as it is now
+          </.link>
         </p>
         <nav
           :if={@files.path != ""}
@@ -1625,8 +1934,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-panel"
           aria-labelledby="workspace-files-get-title"
         >
-          <h2 id="workspace-files-get-title">Get it</h2>
+          <h2 id="workspace-files-get-title">Clone</h2>
           <p id="workspace-files-clone"><code>git clone {@files.clone_url}</code></p>
+          <.link id="workspace-files-history" class="code-action" patch={@files.history_link}>
+            History
+          </.link>
         </section>
 
         <section
@@ -1634,7 +1946,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-panel"
           aria-labelledby="workspace-files-pushes-title"
         >
-          <h2 id="workspace-files-pushes-title">Sent lately</h2>
+          <h2 id="workspace-files-pushes-title">Pushes</h2>
           <Regent.Primitives.empty_state
             :if={@files.pushes == []}
             id="workspace-files-no-pushes"
@@ -1860,7 +2172,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         class="workspace-pages"
       >
         <.link :if={@board.public_first} id="workspace-public-first" patch={@board.public_first}>
-          Back to the newest
+          Newest
         </.link>
         <.link :if={@board.public_more} id="workspace-public-more" patch={@board.public_more}>
           Earlier
@@ -2857,6 +3169,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
       params["fleet_id"],
       params["repository"],
       params["commit"],
+      ShellLive.human_actor(socket)
+    )
+  end
+
+  defp workspace(%{assigns: %{route_spec: %{route_id: :code_history}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    WorkspacePage.history(
+      params["fleet_id"],
+      params["repository"],
+      params["from"],
+      WorkspacePage.history_page_number!(params["page"]),
       ShellLive.human_actor(socket)
     )
   end

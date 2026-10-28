@@ -18,13 +18,14 @@ defmodule Keyfleet.Code do
 
   The store records every change under the wallet that holds the key, and
   this site keeps a line for each (`Keyfleet.Code.Push`), under its project,
-  for the fleet's workspace to show.
+  for the fleet's workspace to show, and the push that first sent each
+  commit (`Keyfleet.Code.Commit`).
   """
   use Ash.Domain
 
   alias Keyfleet.AccessCache
   alias Keyfleet.Actors.System
-  alias Keyfleet.Code.{NodeClient, Push, RecordsDownError, Repository, Setup}
+  alias Keyfleet.Code.{Commit, NodeClient, Push, RecordsDownError, Repository, Sent, Setup}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.{Keys, Projects}
@@ -38,7 +39,14 @@ defmodule Keyfleet.Code do
 
     resource Push do
       define :recent_pushes, action: :recent, args: [:fleet_id, :project]
-      define :pushes_of_commit, action: :of_commit, args: [:fleet_id, :project, :head]
+      define :pushes_of_ids, action: :of_ids, args: [:fleet_id, :project, :ids]
+      define :push, action: :one, args: [:id], not_found_error?: false
+      define :branch_pushes, action: :branches
+      define :tips_before, action: :tips_before, args: [:fleet_id, :project, :before]
+    end
+
+    resource Commit do
+      define :commits_of_hashes, action: :of_hashes, args: [:fleet_id, :project, :hashes]
     end
   end
 
@@ -94,6 +102,16 @@ defmodule Keyfleet.Code do
   """
   def commit_path(fleet_id, repository, hash),
     do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{repository}/commits/#{hash}"
+
+  @doc """
+  The path of a project's repository history on this site: from the default
+  branch now, or from the commit `from` (a full hash) at `page`.
+  """
+  def history_path(fleet_id, repository),
+    do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{repository}/commits"
+
+  def history_path(fleet_id, repository, from, page),
+    do: history_path(fleet_id, repository) <> "?" <> URI.encode_query(from: from, page: page)
 
   @doc """
   The path of a file or folder in a project's repository on this site, `""`
@@ -155,6 +173,63 @@ defmodule Keyfleet.Code do
       {:ok, nil} -> :not_found
       {:ok, owner} -> NodeClient.blob(repository, owner, path, at)
       {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  One page of the repository's history, newest first, from the commit `from`
+  (a full hash) or the default branch for nil: `{:ok, %{commits:, head:,
+  more?:}}` (`NodeClient.commits/3`), nothing while the fleet has no
+  repository; `:not_found` for a `from` the repository has no commit by; or
+  `{:error, error}` when the store can't be read.
+  """
+  def history(repository, from, skip, limit) do
+    case stored_owner(repository) do
+      {:ok, nil} -> {:ok, %{commits: [], head: nil, more?: false}}
+      {:ok, owner} -> NodeClient.commits(repository, owner, start: from, skip: skip, limit: limit)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  The commit `hash` and what it changed (`NodeClient.commit/3`): `{:ok,
+  commit}`, `:not_found` while the repository has no commit by it (or no
+  repository is made yet), or `{:error, error}`.
+  """
+  def commit(repository, hash) do
+    case stored_owner(repository) do
+      {:ok, nil} -> :not_found
+      {:ok, owner} -> NodeClient.commit(repository, owner, hash)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  The push that first sent each of `hashes` (at most 100) to the project's
+  repository, by hash, for those it has recorded: `{:ok, %{hash => push}}`,
+  read as `opts[:actor]`, or `{:error, error}`, `Ash.Error.Forbidden` for an
+  actor that may not read the fleet's code.
+  """
+  def senders!(fleet_id, project, hashes, opts) do
+    case senders(fleet_id, project, hashes, opts) do
+      {:ok, senders} -> senders
+      {:error, error} -> raise Ash.Error.to_error_class(error)
+    end
+  end
+
+  def senders(fleet_id, project, hashes, opts) do
+    with {:ok, commits} <- commits_of_hashes(fleet_id, project, hashes, opts),
+         {:ok, pushes} <-
+           pushes_of_ids(
+             fleet_id,
+             project,
+             commits |> Enum.map(& &1.push_id) |> Enum.uniq(),
+             opts
+           ) do
+      by_id = Map.new(pushes, &{&1.id, &1})
+
+      {:ok,
+       for(commit <- commits, push = by_id[commit.push_id], into: %{}, do: {commit.hash, push})}
     end
   end
 
@@ -261,6 +336,23 @@ defmodule Keyfleet.Code do
   def record_pushes(_fleet_id, _project, _holder, []), do: :ok
 
   def record_pushes(fleet_id, project, holder, updates) do
+    case Ash.transact([Push], fn -> record(fleet_id, project, holder, updates) end) do
+      {:ok, :ok} ->
+        Phoenix.PubSub.broadcast(Keyfleet.PubSub, topic(fleet_id), {:code_pushed, fleet_id})
+
+      {:error, errors} ->
+        RecordsDownError.report(
+          "A push to #{fleet_id}'s #{project} could not be recorded: " <>
+            Enum.map_join(List.wrap(errors), ", ", &inspect(Map.get(&1, :__struct__, &1)))
+        )
+
+        :ok
+    end
+  end
+
+  # Each push to a branch queues the job that records the commits it brought
+  # (`Keyfleet.Code.Sent`), in the same transaction.
+  defp record(fleet_id, project, holder, updates) do
     updates
     |> Enum.map(
       &Map.merge(
@@ -278,20 +370,21 @@ defmodule Keyfleet.Code do
     )
     |> Ash.bulk_create(Push, :record,
       actor: %System{},
+      return_records?: true,
       return_errors?: true,
       stop_on_error?: true
     )
     |> case do
-      %Ash.BulkResult{status: :success} ->
-        Phoenix.PubSub.broadcast(Keyfleet.PubSub, topic(fleet_id), {:code_pushed, fleet_id})
-
-      %Ash.BulkResult{errors: errors} ->
-        RecordsDownError.report(
-          "A push to #{fleet_id}'s #{project} could not be recorded: " <>
-            Enum.map_join(errors, ", ", &inspect(&1.__struct__))
-        )
+      %Ash.BulkResult{status: :success, records: pushes} ->
+        pushes
+        |> Enum.filter(&String.starts_with?(&1.ref, "refs/heads/"))
+        |> Enum.map(&Sent.new(%{push_id: &1.id}))
+        |> Oban.insert_all()
 
         :ok
+
+      %Ash.BulkResult{errors: errors} ->
+        {:error, errors}
     end
   end
 end

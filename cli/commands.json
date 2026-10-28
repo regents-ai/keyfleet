@@ -2690,6 +2690,81 @@
         ]
       },
       {
+        "command": "code commits <fleet> <project>",
+        "description": "Read one page of a project's history, 30 commits newest first, each with its full hash, the address a workspace cites it by, its first line, the name it was written under and when, the Key (and agent) that sent it, and the tasks and evidence that cite it. Changes nothing.",
+        "operation_id": "listCodeCommits",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          }
+        ],
+        "flags": [
+          {
+            "name": "from",
+            "type": "string",
+            "in": "body",
+            "field": "from",
+            "description": "Pass next.from unchanged to read on; omit for the default branch now."
+          },
+          {
+            "name": "page",
+            "type": "integer",
+            "in": "body",
+            "field": "page",
+            "description": "Pass next.page unchanged to read on; pages count from 1."
+          }
+        ]
+      },
+      {
+        "command": "code commit <fleet> <project> <commit>",
+        "description": "Read one commit by its full hash: its message, the name it was written under and when, its parents, the Key (and agent) that sent it, each file it changed with its patch, and the tasks and evidence that cite it. Changes nothing.",
+        "operation_id": "getCodeCommit",
+        "method": "GET",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits/{commit}",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          },
+          {
+            "name": "commit",
+            "type": "string",
+            "in": "path",
+            "field": "commit",
+            "description": "The commit's full hash, as `git rev-parse HEAD` or `regents keyfleet code commits` names it."
+          }
+        ]
+      },
+      {
         "command": "notebooks list <fleet> <project>",
         "description": "List a project's 50 newest notebooks, newest first, each with its id, its title, whether it is locked, the Key whose scratchpad it is (or null) and the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none. Changes nothing.",
         "operation_id": "listNotebooks",

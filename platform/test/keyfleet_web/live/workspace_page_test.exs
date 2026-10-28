@@ -1,11 +1,13 @@
 defmodule KeyfleetWeb.Live.WorkspacePageTest do
   use KeyfleetWeb.ConnCase, async: false
+  use Oban.Testing, repo: Keyfleet.Repo
 
   import Keyfleet.WorkspaceFixtures
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.CodeHistory
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -1992,7 +1994,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         actor: Keyfleet.PairingHelpers.pair_wallet!(agent)
       )
 
-      hash = String.duplicate("5", 40)
+      hash = CodeHistory.hash(1)
+      store!(%{"README.md" => "Hello"}, [CodeHistory.commit(1)])
 
       Keyfleet.Code.record_pushes(
         @fleet,
@@ -2004,8 +2007,73 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       {:ok, board, _html} = live(conn, @board <> "?place=code&project=general")
       assert has_element?(board, "#code-pushes", "Mate (Key 1) sent changes to main")
 
+      [job] = all_enqueued(worker: Keyfleet.Code.Sent)
+      assert :ok = perform_job(Keyfleet.Code.Sent, job.args)
+
       {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, @repository, hash))
-      assert has_element?(commit, "#workspace-commit-pushes", "Mate (Key 1) sent changes to main")
+      assert has_element?(commit, "#workspace-commit-byline", "Mate (Key 1)")
+      assert has_element?(commit, "#workspace-commit-byline", "sent changes to main")
+    end
+
+    test "the History reads thirty commits a page, each with what cites it, and a commit shows its changes",
+         %{conn: conn} do
+      commits = Enum.map(32..1//-1, &CodeHistory.commit/1)
+      store!(%{"steps/3.txt" => "step 3"}, commits)
+      newest = CodeHistory.hash(32)
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Take step 3",
+          "progress" => "doing",
+          "commit_ref" =>
+            KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, CodeHistory.hash(3))
+        })
+
+      {:ok, history, _html} = live(conn, Keyfleet.Code.history_path(@fleet, @repository))
+      assert length(rows(history)) == 30
+      assert has_element?(history, "#code-history-#{newest}", "Step 32")
+      refute has_element?(history, "#workspace-history-newer")
+
+      older = Keyfleet.Code.history_path(@fleet, @repository, newest, 2)
+      assert has_element?(history, ~s(#workspace-history-older[href="#{older}"]))
+
+      {:ok, history, _html} = live(conn, older)
+      assert length(rows(history)) == 2
+      assert has_element?(history, "#code-history-#{CodeHistory.hash(1)}", "Step 1")
+      assert has_element?(history, "#workspace-history-newer")
+      assert has_element?(history, "#workspace-history-latest")
+
+      # Step 3 is on the first page, cited by its task.
+      {:ok, history, _html} = live(conn, Keyfleet.Code.history_path(@fleet, @repository))
+
+      assert has_element?(
+               history,
+               ~s(#code-history-#{CodeHistory.hash(3)} a[href="#{item_path(task)}"]),
+               "Take step 3"
+             )
+
+      {:ok, commit, _html} =
+        live(conn, Keyfleet.Code.commit_path(@fleet, @repository, CodeHistory.hash(3)))
+
+      assert has_element?(commit, "#workspace-commit-subject", "Step 3")
+      assert has_element?(commit, "#workspace-commit-message", "Why step 3 was taken.")
+      assert has_element?(commit, "#workspace-commit-changes", "steps/3.txt")
+      assert has_element?(commit, "#workspace-commit-changes", "step 3")
+
+      assert has_element?(
+               commit,
+               "#workspace-commit-parents",
+               String.slice(CodeHistory.hash(2), 0, 12)
+             )
+    end
+
+    test "a commit the repository doesn't have says so", %{conn: conn} do
+      store!(%{}, [CodeHistory.commit(1)])
+
+      {:ok, commit, _html} =
+        live(conn, Keyfleet.Code.commit_path(@fleet, @repository, CodeHistory.hash(2)))
+
+      assert has_element?(commit, "#workspace-commit-not-sent")
     end
 
     # A visitor who followed a commit link an agent posted saw no sign of
@@ -2068,24 +2136,35 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   # The fleet's repository, holding `files` by their paths, answered as the
   # code store answers: a folder's names, or one file's bytes.
-  defp store!(files) do
+  defp store!(files, commits \\ []) do
     Keyfleet.Code.record_repository!(@repository, "z6MkOwner", actor: %Actors.System{})
-    serve_code(files)
+    serve_code(files, commits)
   end
 
-  # The code store, holding `files` from now on.
-  defp serve_code(files) do
+  # The commits a History page lists.
+  defp rows(history),
+    do:
+      history
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#code-history > li")
+      |> Enum.to_list()
+
+  # The code store, holding `files` and the history `commits` (newest
+  # first) from now on.
+  defp serve_code(files, commits \\ []) do
     test = self()
 
     Req.Test.stub(Keyfleet.Code.NodeClient, fn conn ->
       send(test, {:store, conn.request_path, Plug.Conn.get_req_header(conn, "authorization")})
 
-      ["", "api", "v1", "repos", "z6MkOwner", @fleet, read | path] =
+      ["", "api", "v1", "repos", "z6MkOwner", @fleet, read | segments] =
         String.split(conn.request_path, "/")
 
-      path = Enum.map_join(path, "/", &URI.decode/1)
+      path = Enum.map_join(segments, "/", &URI.decode/1)
 
       case read do
+        "commits" -> CodeHistory.answer(conn, commits, segments)
         "tree" -> Req.Test.json(conn, %{"entries" => entries(files, path), "path" => path})
         "blob" when is_map_key(files, path) -> Plug.Conn.send_resp(conn, 200, files[path])
         "blob" -> Plug.Conn.send_resp(conn, 404, "")

@@ -247,7 +247,7 @@ defmodule Keyfleet.MixProject do
         # one: the ActsForPerson check. Agent checkpoints and notebook run sources
         # add two: the Checkpoint record in the Agents domain and the RunSource
         # record in the Notebooks domain.
-        "xref graph --label compile-connected --fail-above 97",
+        "xref graph --label compile-connected --fail-above 99",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

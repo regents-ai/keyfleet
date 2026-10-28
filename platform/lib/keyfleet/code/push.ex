@@ -54,27 +54,56 @@ defmodule Keyfleet.Code.Push do
       prepare build(sort: [pushed_at: :desc], limit: 10)
     end
 
-    # The pushes that left a branch or tag at `head`, oldest first: who sent
-    # that commit to the project's repository, where and when.
-    read :of_commit do
+    # The pushes `ids` names in one project's repository: who sent the
+    # commits each one first brought (`Keyfleet.Code.Commit`).
+    read :of_ids do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, allow_nil?: false
-      argument :head, :string, allow_nil?: false
+      argument :ids, {:array, :uuid}, allow_nil?: false, constraints: [max_length: 100]
+
+      filter expr(fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and id in ^arg(:ids))
+    end
+
+    # The push with `id`, for the job that records the commits it brought.
+    read :one do
+      public? false
+      get_by [:id]
+    end
+
+    # Every push to a branch, oldest first, for `Keyfleet.Code.Sent.backfill/0`.
+    read :branches do
+      public? false
+      filter expr(fragment("starts_with(?, 'refs/heads/')", ref))
+      prepare build(sort: [pushed_at: :asc])
+    end
+
+    # The newest tip of each branch before `before`, at most 100 of them: a
+    # push brought the commits its tip reaches and none of these reach.
+    read :tips_before do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false
+      argument :before, :utc_datetime_usec, allow_nil?: false
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and head == ^arg(:head)
+               fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and
+                 pushed_at < ^arg(:before) and fragment("starts_with(?, 'refs/heads/')", ref)
              )
 
-      prepare build(sort: [pushed_at: :asc], limit: 20)
+      prepare build(
+                distinct: [:ref],
+                distinct_sort: [pushed_at: :desc],
+                limit: 100
+              )
     end
   end
 
   policies do
-    policy action([:recent, :of_commit]) do
+    policy action([:recent, :of_ids]) do
       authorize_if {Keyfleet.Access.Check, read: :code, scope: :fleet_id}
     end
 
-    policy action([:record, :of_project, :forget]) do
+    policy action([:record, :of_project, :forget, :one, :branches, :tips_before]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

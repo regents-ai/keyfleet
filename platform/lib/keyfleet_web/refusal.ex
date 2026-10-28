@@ -468,6 +468,12 @@ defmodule KeyfleetWeb.Refusal do
     "code_body_not_signed" =>
       {"This request doesn't match what its signature covers, so none of it was used.",
        "Send it again."},
+    "commit_unknown" =>
+      {"This project's code has no commit by that hash.",
+       "Name a commit by its full hash (40 or 64 lowercase hex characters). code_commits lists the project's history."},
+    "history_page_unknown" =>
+      {"The history has no such page.",
+       "Start from page 1, or follow next from the page before. Pages count from 1, up to 300."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
        "Send them in smaller pushes, and keep large files out of the code."}
