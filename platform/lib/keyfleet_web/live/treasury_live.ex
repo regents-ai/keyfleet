@@ -81,7 +81,7 @@ defmodule KeyfleetWeb.TreasuryLive do
         class="proposals-panel"
         aria-labelledby="treasury-carried-title"
       >
-        <h2 id="treasury-carried-title">Votes carried out</h2>
+        <h2 id="treasury-carried-title">Executed votes</h2>
         <Regent.Primitives.empty_state
           :if={@page.carried == []}
           id="treasury-carried-empty"
@@ -110,7 +110,7 @@ defmodule KeyfleetWeb.TreasuryLive do
       </section>
 
       <section id="treasury-rules" class="proposals-panel" aria-labelledby="treasury-rules-title">
-        <h2 id="treasury-rules-title">Permissions & contracts</h2>
+        <h2 id="treasury-rules-title">Contracts</h2>
         <div :if={@page.manager_address} class="proposals-address">
           <span>Manager</span>
           <Regent.Primitives.address id="fleet-manager" address={@page.manager_address} />
@@ -125,7 +125,7 @@ defmodule KeyfleetWeb.TreasuryLive do
         </Regent.Primitives.disclosure>
         <Regent.Primitives.disclosure
           id="treasury-fleet-details"
-          summary="Fleet details & token launch"
+          summary="Fleet details"
         >
           <p>{Rules.pricing(@page.fleet_id)}</p>
           <.progress :if={@page.deployed?} page={@page} />

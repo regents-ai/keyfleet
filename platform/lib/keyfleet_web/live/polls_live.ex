@@ -79,7 +79,7 @@ defmodule KeyfleetWeb.PollsLive do
         aria-labelledby="polls-start-title"
       >
         <h2 id="polls-start-title">
-          Start a poll
+          New poll
           <Regent.Primitives.tip id="polls-start-tip" label="About starting a poll">
             You ask as Key {Rules.grouped(@page.voter.key)}. A poll asks one question and stays open from 1 minute to an hour; you can end it early. Each Key starts one poll a day.
           </Regent.Primitives.tip>
@@ -421,7 +421,7 @@ defmodule KeyfleetWeb.PollsLive do
             class="polls-panel"
             aria-labelledby="poll-each-vote-title"
           >
-            <h2 id="poll-each-vote-title">How each Key voted</h2>
+            <h2 id="poll-each-vote-title">Votes</h2>
             <ul class="polls-votes">
               <li :for={vote <- @page.votes}>
                 <.link patch={KeyLinks.key_path(@page.fleet_id, vote.token_id)}>

@@ -284,7 +284,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           aria-labelledby="proposal-carry-out-title"
         >
           <h2 id="proposal-carry-out-title">
-            Carry it out
+            Execution
             <Regent.Primitives.tip id="proposal-carry-out-tip" label="About carrying it out">
               Anyone can carry out an approved proposal until its time runs out. A proposal that moves money waits a day after voting closes, then has 48 hours; any other can be carried out once voting closes. It makes exactly the calls below.
             </Regent.Primitives.tip>
@@ -302,7 +302,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           >
             <:buttons :let={panel}>
               <WalletPanel.step_button panel={panel} step="carry_out" id="proposal-carry-out-button">
-                Carry it out
+                Execution
               </WalletPanel.step_button>
             </:buttons>
           </.live_component>
@@ -504,11 +504,11 @@ defmodule KeyfleetWeb.ProposalsLive do
           <dd id="proposal-closes">{at(@proposal.closes_at)}</dd>
         </div>
         <div :if={@proposal.carry_out_from && not settled?(@on_chain)}>
-          <dt>Can be carried out from</dt>
+          <dt>Opens</dt>
           <dd id="proposal-carry-out-from">{at(@proposal.carry_out_from)}</dd>
         </div>
         <div :if={not settled?(@on_chain)}>
-          <dt>Carry out by</dt>
+          <dt>Deadline</dt>
           <dd id="proposal-expiry">{at(@proposal.execution_expiry)}</dd>
         </div>
       </dl>
@@ -718,9 +718,9 @@ defmodule KeyfleetWeb.ProposalsLive do
         <table id="proposals-balances" class="proposals-table" tabindex="0">
           <thead>
             <tr>
-              <th scope="col">In the treasury</th>
+              <th scope="col">Treasury</th>
               <th scope="col">
-                Unclaimed Key rewards
+                Unclaimed rewards
                 <Regent.Primitives.tip id="proposals-backed-tip" label="About set aside">
                   Held separately by the rewards contract, waiting for Key holders to claim. These amounts are not part of the treasury balance.
                 </Regent.Primitives.tip>
@@ -813,8 +813,8 @@ defmodule KeyfleetWeb.ProposalsLive do
       </ol>
 
       <h3 :if={@actor} id="proposals-share-title">
-        REGENT staking share
-        <Regent.Primitives.tip id="proposals-share-tip" label="About the REGENT staking share">
+        Staking share
+        <Regent.Primitives.tip id="proposals-share-tip" label="About the Staking share">
           10% of every key sale is set aside for REGENT staking. Anyone can send it.
         </Regent.Primitives.tip>
       </h3>
@@ -838,7 +838,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       </.live_component>
 
       <h3 :if={@actor} id="proposals-convert-title">
-        Convert USDC to REGENT for Keyfleet Treasury
+        REGENT conversion
         <Regent.Primitives.tip id="proposals-convert-tip" label="About converting USDC to REGENT">
           Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. A piece that would move the price more than 1% can’t go through; the button then says how much can. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
         </Regent.Primitives.tip>
@@ -877,7 +877,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         class="treasury-history"
         aria-labelledby="treasury-history-title"
       >
-        <h3 id="treasury-history-title">Money in and out</h3>
+        <h3 id="treasury-history-title">Cash flow</h3>
         <Regent.Primitives.empty_state
           :if={@treasury.history == []}
           id="proposals-no-history"

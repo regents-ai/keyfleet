@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   test "the page offers a key to roll" do
     page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
 
-    assert text(page, "#roller-title") == "Roll an example Key"
+    assert text(page, "#roller-title") == "Example Key"
     assert text(page, "#key-roller button[type=button]") == "Roll an example Key"
   end
 

@@ -418,7 +418,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
 
         <section class="workspace-panel workspace-items" aria-labelledby="workspace-items-title">
-          <h2 id="workspace-items-title">Work and notes</h2>
+          <h2 id="workspace-items-title">Items</h2>
 
           <nav class="workspace-filters" aria-label="Kinds of item">
             <.link
@@ -502,7 +502,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <div class="rg-panel__body">
             <h3 id="workspace-project-info-title">
-              How work moves
+              Workflow
               <Regent.Primitives.tip id="workspace-project-tip" label="About ActiveGraph">
                 Goals, tasks, findings and evidence live in this fleet’s ActiveGraph. Agents write them; every change shows in the workstream.
               </Regent.Primitives.tip>
@@ -805,7 +805,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <div class="rg-panel__body">
             <h3 id="workspace-docs-info-title">
-              Write and run
+              Editing
               <Regent.Primitives.tip id="workspace-docs-tip" label="About the notebooks">
                 This fleet’s marimo notebooks. Key holders open them as themselves, and their agents read and run them too.
               </Regent.Primitives.tip>
@@ -1193,7 +1193,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp agent_guide(assigns) do
     ~H"""
-    <Regent.Primitives.disclosure id="workspace-agent-guide" summary="Work here with an agent">
+    <Regent.Primitives.disclosure id="workspace-agent-guide" summary="Agent guide">
       <p>
         Pair your agent with your account, then have it check access to this fleet.
       </p>
@@ -1886,7 +1886,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # notebook page the member made, into the project whose notebook made it.
   defp publish_posts(assigns) do
     ~H"""
-    <Regent.Primitives.disclosure id="public-posts" summary="Make your posts public">
+    <Regent.Primitives.disclosure id="public-posts" summary="Public posts">
       <form id="public-posts-form" class="workspace-project-form" phx-submit="publish_posts">
         <input type="hidden" name="project" value={@board.project} />
         <label>
@@ -1909,7 +1909,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </Regent.Primitives.button>
       </form>
     </Regent.Primitives.disclosure>
-    <Regent.Primitives.disclosure id="public-page" summary="Make a saved notebook page public">
+    <Regent.Primitives.disclosure id="public-page" summary="Public page">
       <form id="public-page-form" class="workspace-project-form" phx-submit="publish_page">
         <label>
           Saved page address <input name="page" type="url" required />
@@ -2040,7 +2040,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp tools(assigns) do
     ~H"""
     <section class="workspace-tools workspace-panel" aria-labelledby="workspace-tools-title">
-      <h2 id="workspace-tools-title">Places to work</h2>
+      <h2 id="workspace-tools-title">Places</h2>
       <dl class="workspace-tools-list">
         <div>
           <dt>Project <span class="workspace-detail">ActiveGraph</span></dt>
@@ -2185,7 +2185,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       class="workspace-panel workspace-wide"
       aria-labelledby="workspace-goal-work-title"
     >
-      <h2 id="workspace-goal-work-title">Work and notes</h2>
+      <h2 id="workspace-goal-work-title">Items</h2>
       <Regent.Primitives.empty_state
         :if={@goal.items == []}
         id="workspace-goal-work-empty"

@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
         </section>
 
         <section class="rg-panel rg-panel--surface" aria-labelledby="privy-state-heading">
-          <h2 id="privy-state-heading">Account and wallet</h2>
+          <h2 id="privy-state-heading">Account</h2>
           <dl class="privy-reference-facts">
             <div>
               <dt>Session</dt><dd id="privy-session-state">
@@ -87,7 +87,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
               <dt>Account</dt><dd>{@account_control.label}</dd>
             </div>
             <div>
-              <dt>Selected connected wallet</dt><dd id="privy-selected-wallet">
+              <dt>Wallet</dt><dd id="privy-selected-wallet">
                 {@wallet || "No wallet selected"}
               </dd>
             </div>
@@ -110,7 +110,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
           class="rg-panel rg-panel--surface privy-reference-setup"
           aria-labelledby="privy-setup-heading"
         >
-          <h2 id="privy-setup-heading">Setup and source map</h2>
+          <h2 id="privy-setup-heading">Setup</h2>
           <ol>
             <li>Enable wallet login in your Privy app and admit your exact localhost origin.</li>
             <li>
