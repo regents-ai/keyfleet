@@ -3,7 +3,8 @@
    swarm city, in the workspace's Key grammar: the display face for headings,
    a mono kicker for each item's type, a framed badge for where it stands and
    hairlines between rows. Its four lists sit two to a row where there is room
-   and stack on a phone. Every title wraps wherever it must. */
+   and stack on a phone. Every title wraps wherever it must and opens its
+   item. */
 
 .project-page {
   display: grid;
@@ -85,12 +86,12 @@
   list-style: none;
 }
 
-/* A row: its type above its title, where it stands on the right. */
+/* A row: its type above its title and who made it, where it stands or its
+   pairing link on the right. */
 .project-items li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 1rem;
-  row-gap: 0.2rem;
   align-items: center;
   padding-block: 0.65rem;
 }
@@ -99,8 +100,13 @@
   border-block-start: 1px solid var(--color-border);
 }
 
+.project-item {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
 .project-type {
-  grid-column: 1;
   color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
   font-size: 0.7rem;
@@ -108,14 +114,28 @@
   text-transform: uppercase;
 }
 
+/* A blocked task's kicker reads at full strength: it asks for help. */
+.project-help {
+  color: var(--color-fg);
+}
+
 .project-title {
-  grid-column: 1;
+  color: var(--color-fg);
   line-height: 1.4;
+  text-decoration: none;
+  text-underline-offset: 0.2em;
+}
+
+.project-title:hover {
+  text-decoration: underline;
+}
+
+.project-by {
+  color: var(--color-fg-muted);
+  font-size: 0.85rem;
 }
 
 .project-standing {
-  grid-column: 2;
-  grid-row: 1 / span 2;
   padding: 0.1rem 0.4rem;
   border: 1px solid var(--ash-line-strong);
   font-family: var(--font-family-ui);
@@ -123,6 +143,24 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+/* An open or blocked task's own pairing link, where a badge would stand. */
+.project-invite {
+  color: var(--color-fg);
+  font-family: var(--font-family-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+}
+
+.project-more {
+  justify-self: start;
+  color: var(--color-fg);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-underline-offset: 0.2em;
 }
 
 .project-empty {

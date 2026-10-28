@@ -4,9 +4,12 @@ defmodule KeyfleetWeb.ProjectPage do
   such as `/classic/1/projects/virtual-cell`: the project, its open goals by
   title as every visitor sees them, and, once the Key holding it shows its
   work to everyone (`Keyfleet.Projects.Project`), its latest work, what it
-  produced and the tasks open to take, each by title, with how many there are
-  of each. A project's page never shows more than titles: members read the
-  rest in the workspace.
+  produced and the tasks open to take or blocked, each by title and the agent
+  and Key that made it, with how many there are of each. Each title links to
+  its item's page in the workspace, and each open or blocked task has a link
+  that pairs a visitor's agent and sends it to that task. A project's page
+  never shows more than titles and who made them: members read the rest in
+  the workspace.
 
   A name that is no project of the fleet, or a deleted one's, is a page that
   doesn't exist.
@@ -14,7 +17,7 @@ defmodule KeyfleetWeb.ProjectPage do
 
   alias Keyfleet.{Fleets, Graph, Projects}
   alias Keyfleet.Graph.Object
-  alias KeyfleetWeb.{DirectoryMD, NotFoundError, WorkspacePage}
+  alias KeyfleetWeb.{ActivityLines, DirectoryMD, NotFoundError, WorkspacePage}
 
   # How many of each part the page lists, newest first.
   @shown 6
@@ -43,7 +46,7 @@ defmodule KeyfleetWeb.ProjectPage do
       key: project.key,
       state: project.state,
       shown?: project.shown_to_everyone,
-      pair_path: "/pair?to=" <> URI.encode_www_form(path),
+      pair_path: pair_path(path),
       workspace_path: WorkspacePage.place_path(fleet_id, :project, project.name),
       goals: if(not project.shown_to_everyone, do: goal_titles(fleet_id, project.name)),
       parts: if(project.shown_to_everyone, do: parts(fleet_id, project.name))
@@ -56,33 +59,54 @@ defmodule KeyfleetWeb.ProjectPage do
     |> Enum.map(&seen(&1.title, "A goal"))
   end
 
-  # Every part from one moment of the read tables.
+  # Every part from one moment of the read tables, each row with the agent
+  # and Key that made it.
   defp parts(fleet_id, name) do
-    {:ok, parts} =
-      Graph.in_snapshot(fn -> Map.new(@parts, &{&1, part(fleet_id, name, &1)}) end)
+    {:ok, reads} =
+      Graph.in_snapshot(fn -> Map.new(@parts, &{&1, read_part(fleet_id, name, &1)}) end)
 
-    parts
+    agents =
+      reads
+      |> Enum.flat_map(fn {_part, {objects, _count}} -> objects end)
+      |> Enum.map(&WorkspacePage.creator_wallet(&1.sys))
+      |> WorkspacePage.agent_names()
+
+    Map.new(reads, fn {part, {objects, count}} ->
+      {part,
+       %{
+         items: Enum.map(objects, &item(fleet_id, &1, agents)),
+         count: count,
+         more?: count > @shown
+       }}
+    end)
   end
 
-  defp part(fleet_id, name, part) do
+  defp read_part(fleet_id, name, part) do
     query = Ash.Query.for_read(Object, :shown, %{fleet_id: fleet_id, project: name, part: part})
-
-    %{
-      items: query |> Ash.Query.limit(@shown) |> Ash.read!() |> Enum.map(&item/1),
-      count: Ash.count!(query)
-    }
+    {query |> Ash.Query.limit(@shown) |> Ash.read!(), Ash.count!(query)}
   end
 
-  defp item(object) do
+  defp item(fleet_id, object, agents) do
     {type, _plural} = WorkspacePage.type_name(object.type)
+    path = WorkspacePage.item_path(fleet_id, object.id)
 
     %{
       id: object.id,
       type: type,
       title: seen(object.title, "Untitled"),
-      standing: standing(object.type, object.standing)
+      by: made_by(WorkspacePage.created_by(object.sys, agents)),
+      standing: standing(object.type, object.standing),
+      blocked?: object.type == "task" and object.standing == "blocked",
+      path: path,
+      pair_path: pair_path(path)
     }
   end
+
+  defp made_by({:key, token_id, agent}), do: ActivityLines.key_name(token_id, agent)
+  defp made_by(keyfleet), do: keyfleet
+
+  # A link that pairs a visitor's agent and sends it to `path`.
+  defp pair_path(path), do: "/pair?to=" <> URI.encode_www_form(path)
 
   # The graph keeps each status and progress to its choices.
   defp standing(_type, nil), do: nil

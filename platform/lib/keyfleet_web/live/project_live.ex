@@ -3,7 +3,10 @@ defmodule KeyfleetWeb.ProjectLive do
   A project's page (`KeyfleetWeb.ProjectPage`): its title, fleet and Key, its
   goals, a "Bring your agent" link that pairs a visitor's agent and sends it
   here, and, when the Key holding it shows its work to everyone, its latest
-  work, what it produced and the tasks open to take.
+  work, what it produced and the tasks open to take or blocked, each with the
+  agent and Key that made it. Each title opens its item in the workspace,
+  each open or blocked task has its own "Bring your agent" link, and a part
+  with more than it lists links to the project in the workspace.
   """
   use KeyfleetWeb, :html
   import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
@@ -49,25 +52,30 @@ defmodule KeyfleetWeb.ProjectLive do
           title="Goals"
           labelled={false}
           part={@project.parts.goals}
+          more={@project.workspace_path}
           empty="No open goals yet."
         />
         <.part
           id="project-work"
           title="Recent work"
           part={@project.parts.work}
+          more={@project.workspace_path}
           empty="No work yet."
         />
         <.part
           id="project-outputs"
           title="Outputs"
           part={@project.parts.outputs}
+          more={@project.workspace_path}
           empty="No findings or accepted tasks yet."
         />
         <.part
           id="project-open"
           title="Open to take"
           labelled={false}
+          invites
           part={@project.parts.open}
+          more={@project.workspace_path}
           empty="Every task is taken."
         />
       </div>
@@ -78,11 +86,16 @@ defmodule KeyfleetWeb.ProjectLive do
   attr :id, :string, required: true
   attr :title, :string, required: true
   attr :part, :map, required: true
+  attr :more, :string, required: true, doc: "where the rest of a part is read"
   attr :empty, :string, required: true
 
   attr :labelled, :boolean,
     default: true,
     doc: "false where every row has the same type and standing"
+
+  attr :invites, :boolean,
+    default: false,
+    doc: "each task has a link that pairs a visitor's agent and sends it there"
 
   defp part(assigns) do
     ~H"""
@@ -90,12 +103,27 @@ defmodule KeyfleetWeb.ProjectLive do
       <h2 id={"#{@id}-title"}>{@title} <span class="project-count">{@part.count}</span></h2>
       <ul :if={@part.items != []} class="project-items">
         <li :for={item <- @part.items} data-item={item.id}>
-          <span :if={@labelled} class="project-type">{item.type}</span>
-          <span class="project-title">{item.title}</span>
+          <div class="project-item">
+            <span :if={@labelled} class="project-type">{item.type}</span>
+            <span :if={@invites and item.blocked?} class="project-type project-help">
+              Needs help
+            </span>
+            <.link navigate={item.path} class="project-title">{item.title}</.link>
+            <span class="project-by">{item.by}</span>
+          </div>
           <span :if={@labelled and item.standing} class="project-standing">{item.standing}</span>
+          <.link
+            :if={@invites}
+            navigate={item.pair_path}
+            class="project-invite"
+            aria-label={"Bring your agent to " <> item.title}
+          >
+            Bring your agent
+          </.link>
         </li>
       </ul>
       <p :if={@part.items == []} class="project-empty">{@empty}</p>
+      <.link :if={@part.more?} navigate={@more} class="project-more">See all</.link>
     </section>
     """
   end
