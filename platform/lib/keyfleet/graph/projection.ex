@@ -43,7 +43,7 @@ defmodule Keyfleet.Graph.Projection do
 
   # Of a command record, what a reader sees: who asked, for what, and what it
   # did. The authority stamp stays in the log.
-  @public_command ~w(principal op result events)
+  @public_command ~w(principal command_id op result events)
 
   @doc """
   Copies everything the fleet's log holds beyond the cursor.

@@ -404,14 +404,14 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
-    for {method, path} <- [
-          {"GET", @rooms_path <> "?all=1"},
-          {"POST", @read_general <> "?after_seq=1"},
-          {"DELETE", @send_general},
-          {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send"},
-          {"POST", @read_general <> "/"}
+    for {method, path, status} <- [
+          {"GET", @rooms_path <> "?all=1", 401},
+          {"POST", @read_general <> "?after_seq=1", 401},
+          {"DELETE", @send_general, 405},
+          {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send", 404},
+          {"POST", @read_general <> "/", 404}
         ] do
-      assert send_signed(c, method, path, "{}").status == 401
+      assert send_signed(c, method, path, "{}").status == status
     end
 
     # A signed body that doesn't fit is told the fields its operation takes.

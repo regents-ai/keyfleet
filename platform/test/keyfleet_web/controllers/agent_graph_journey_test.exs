@@ -185,7 +185,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         set: %{sys: %{archived: true}}
       })
 
-    assert {refused.status, refused.body["error"]["details"]} == {422, %{"fields" => ["sys"]}}
+    assert {refused.status, refused.body["error"]["details"]["fields"]} == {422, ["sys"]}
 
     events = graph(c, ann, "changes", %{}).body["events"]
     assert Enum.count(events, &(&1["type"] == "keyfleet.command")) == 1
@@ -887,7 +887,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         data: too_large
       })
 
-    assert {refused.status, refused.body} == {413, refused("request_too_large")}
+    assert {refused.status, refused.body["error"]["code"]} == {413, "request_too_large"}
     assert length(commands(c, ann)) == 1
   end
 

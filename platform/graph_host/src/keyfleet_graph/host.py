@@ -733,7 +733,11 @@ def _check_not_starting(obj) -> None:
 def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command, current) -> None:
     unknown = sorted(field for field in fields if field not in member.model_fields)
     if unknown:
-        raise Refusal("forbidden_field", "these fields are not member-writable", {"fields": unknown})
+        raise Refusal(
+            "forbidden_field",
+            "this kind of item has no such fields",
+            {"fields": unknown, "allowed": sorted(member.model_fields)},
+        )
     if "result_ref" in fields or values.get("progress") == "done":
         raise Refusal(
             "forbidden_field",

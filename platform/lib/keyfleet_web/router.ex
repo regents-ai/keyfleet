@@ -350,6 +350,7 @@ defmodule KeyfleetWeb.Router do
     post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall
     get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
     post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
+    post "/fleets/:fleet_id/receipts", AgentReceiptController, :show
     post "/fleets/:fleet_id/activity", AgentActivityController, :index
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
     post "/fleets/:fleet_id/rooms/create", AgentRoomController, :create_room
@@ -369,7 +370,10 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
     post "/fleets/:fleet_id/projects/:project/describe", AgentProjectController, :describe
     post "/fleets/:fleet_id/projects/:project/show", AgentProjectController, :show
-    get "/fleets/:fleet_id/projects/:project/publications", AgentPublicationController, :index
+
+    post "/fleets/:fleet_id/projects/:project/publications/list",
+         AgentPublicationController,
+         :index
 
     post "/fleets/:fleet_id/projects/:project/publications/posts",
          AgentPublicationController,

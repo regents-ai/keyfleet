@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{Code, Fleets, Graph, Notebooks, Projects}
+  alias Keyfleet.{Code, Fleets, Graph, Notebooks, Projects, Rooms}
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
@@ -12,7 +12,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Limits
   alias Keyfleet.Projects.Errors.UnknownProjectError
-  alias KeyfleetWeb.{Endpoint, Refusal, WorkspacePage}
+  alias KeyfleetWeb.{Endpoint, Refusal, RoomJSON, WorkspacePage}
 
   # The workspace's own refusals: the status each is answered with, and what
   # to do next. The workspace's reason is the message.
@@ -28,7 +28,7 @@ defmodule KeyfleetWeb.AgentGraphController do
     "invalid" => {422, "Correct the value the message names, then send the request again."},
     "forbidden_field" =>
       {422,
-       "Leave out the fields details names. Members may not set them; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
+       "Leave out the fields details.fields names. details.allowed, when present, lists the fields this kind of item takes; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
     "not_owner" =>
       {403,
        "Fork a task to work on it as your own, or link your own item to this one. details.owner_key names the Key it belongs to."},
@@ -44,12 +44,19 @@ defmodule KeyfleetWeb.AgentGraphController do
   # As many goals as the workspace reads in one page.
   @board_goals 24
 
+  # One item as its page in the workspace shows it, in one read: the item,
+  # its links and the items at their other ends, its page's address, the posts
+  # its discussion names and, for a task, the commit to clone and what its
+  # rerun is missing.
   def get_object(conn, %{"fleet_id" => fleet_id, "id" => id} = params) do
-    fleet_id
-    |> Graph.get_object(id, Map.take(params, ~w(relations_after)),
-      actor: conn.assigns.agent_actor
-    )
-    |> read(conn, fleet_id)
+    actor = conn.assigns.agent_actor
+
+    result =
+      with {:ok, read} <-
+             Graph.get_object(fleet_id, id, Map.take(params, ~w(relations_after)), actor: actor),
+           do: {:ok, Map.merge(read, around(read.object, fleet_id, actor))}
+
+    read(result, conn, fleet_id)
   end
 
   def changes(conn, %{"fleet_id" => fleet_id} = params) do
@@ -184,6 +191,48 @@ defmodule KeyfleetWeb.AgentGraphController do
     end)
 
     refusal(503, "graph_unavailable")
+  end
+
+  defp around(object, fleet_id, actor) do
+    %{
+      url: Endpoint.url() <> WorkspacePage.item_path(fleet_id, object.id),
+      discussion: discussion(object.data["discussion"], fleet_id, actor),
+      commit: commit(object.data["commit_ref"], fleet_id)
+    }
+  end
+
+  # Each post the item's discussion names, as a room read answers it: nil for
+  # one the agent can't read there, such as a post by a Key it muted, or a
+  # place the room has no post at.
+  defp discussion(links, fleet_id, actor) when is_list(links) and links != [] do
+    muted = Rooms.muted_keys!(fleet_id, actor)
+
+    for %{"room" => room, "seq" => seq} <- links do
+      %{room: room, seq: seq, post: post(fleet_id, room, seq, muted, actor)}
+    end
+  end
+
+  defp discussion(_links, _fleet_id, _actor), do: []
+
+  defp post(fleet_id, room, seq, muted, actor) do
+    case Rooms.read_messages(fleet_id, room, %{after_seq: seq - 1, limit: 1}, actor: actor) do
+      {:ok, [%{seq: ^seq} = message]} ->
+        case Rooms.unmuted([message], muted) do
+          [shown] -> RoomJSON.message(shown)
+          [] -> nil
+        end
+
+      _other ->
+        nil
+    end
+  end
+
+  # A commit of one of the fleet's own repositories, with the address its
+  # agent clones it from.
+  defp commit(uri, fleet_id) do
+    with {repository, hash} <- WorkspacePage.fleet_commit(uri, fleet_id) do
+      %{repository: repository, hash: hash, clone_url: Code.agent_clone_url(repository)}
+    end
   end
 
   defp goal(object, fleet_id) do

@@ -166,16 +166,58 @@ defmodule KeyfleetWeb.PairingBox do
   What the person pastes to their agent: the shared pairing words, then this
   runtime's own setup from its page under /agents, so agents sharing one
   computer each keep their own key and folder and each comes back on its own,
-  and last the page it begins on when a pairing link names one (`start`).
+  and last the page it begins on when a pairing link names one (`start`). A
+  link to a workspace item or a project's page also names the agent's first
+  read of that work.
   """
   def agent_message(code, harness, start) do
     origin = KeyfleetWeb.Endpoint.url()
 
     PairingMessage.text(code, origin, harness,
-      setup: setup(harness) <> "\nYour full setup: " <> origin <> AgentGuides.path(harness),
+      setup:
+        Enum.join(
+          [setup(harness), "Your full setup: " <> origin <> AgentGuides.path(harness)] ++
+            List.wrap(if harness not in Harness.hosted(), do: first_read(start)),
+          "\n"
+        ),
       start: start
     )
   end
+
+  # A workspace item is named by its type and number, a project as
+  # `Keyfleet.Projects.Project` names it.
+  @item ~r/\A[a-z][a-z_]{0,31}#[1-9][0-9]{0,17}\z/
+  @project ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/
+
+  # A link to a workspace item or a project's page names the work, so the
+  # agent's first read once paired is that work itself, as its page shows it
+  # to a person, rather than the whole fleet. A hosted agent, such as Claude
+  # through its connector, only pairs and checks in, so it gets no such read.
+  defp first_read(nil), do: nil
+
+  defp first_read(start) do
+    path = URI.parse(start).path || ""
+
+    with %{id: fleet_id, path: fleet_path} <- Keyfleet.Fleets.at_path(path) do
+      path |> String.replace_prefix(fleet_path, "") |> String.split("/") |> work(fleet_id)
+    end
+  end
+
+  defp work(["", "workspace", item], fleet_id) do
+    id = URI.decode(item)
+
+    if id =~ @item,
+      do:
+        "Start with #{id} in the fleet #{fleet_id}. Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: regents keyfleet workspace get #{fleet_id} '#{id}', or a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/get with {\"id\":\"#{id}\"}."
+  end
+
+  defp work(["", "projects", project], fleet_id) do
+    if project =~ @project,
+      do:
+        "Start with the project #{project} in the fleet #{fleet_id}. Once paired, read its goals and pinned work with a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/board with {\"project\":\"#{project}\"}, then read any task in it with graph/get."
+  end
+
+  defp work(_path, _fleet_id), do: nil
 
   @check_in "Check in on Keyfleet as your keyfleet skill says."
 

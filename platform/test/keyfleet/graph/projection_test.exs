@@ -26,6 +26,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
   @holder %Actors.Human{human_account_id: 1, wallet_addresses: [@wallet]}
   @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
   @page_bytes 512 * 1024
+  # What the agent route adds around a read: the item's page, the posts its
+  # discussion names and its commit (KeyfleetWeb.AgentGraphController).
+  @around %{url: "https://keyfleet.ai/workspace/item", discussion: [], commit: nil}
 
   setup %{tmp_dir: tmp_dir} = context do
     if context[:independent_connections] do
@@ -80,7 +83,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     # A reader sees who asked for each write and what it did; the authority
     # stamp stays in the log.
     for %{type: "keyfleet.command", payload: payload} <- copied[Graph.Event] do
-      assert Enum.sort(Map.keys(payload)) == ~w(events op principal result)
+      assert Enum.sort(Map.keys(payload)) == ~w(command_id events op principal result)
     end
 
     stop_supervised!(Keyfleet.Graph.Projectors)
@@ -382,7 +385,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
     {:ok, read} = Graph.get_object(@fleet, ids.task, actor: @holder)
     assert length(read.relations) == 200
-    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+    assert ContractSchema.errors(Map.merge(read, @around), "WorkspaceObjectView") == []
     # The task's link to the goal came first, so the newest link is left out.
     assert hd(read.relations).target == ids.goal
 
@@ -395,7 +398,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
         actor: @holder
       )
 
-    assert ContractSchema.errors(rest, "WorkspaceObjectView") == []
+    assert ContractSchema.errors(Map.merge(rest, @around), "WorkspaceObjectView") == []
     assert Enum.map(rest.relations, & &1.id) == [links |> List.last() |> elem(1)]
     assert rest.relations_next_cursor == nil
   end
