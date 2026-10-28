@@ -248,6 +248,8 @@
               "mutes_list",
               "fleets_sync",
               "fleets_doctor",
+              "checkpoint_read",
+              "checkpoint_save",
               "links_resolve",
               "writes_preview",
               "proposals_show",
@@ -891,6 +893,181 @@
       "interfaces": {
         "webmcp": "fleets_doctor",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/doctor",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "checkpoint_read",
+      "title": "Read your checkpoint in a fleet",
+      "description": "Read where you left off in one fleet, as you last saved it with checkpoint_save, so a fresh run of you on any machine picks up from there: checkpoint {fleet_id, revision, state, updated_at}, or checkpoint null before your first save. Only your own wallet reads it. Changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63
+              }
+            },
+            "required": [
+              "fleet_id"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "GET /api/v1/agent/fleets/{fleet_id}/checkpoint",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63
+          }
+        },
+        "required": [
+          "fleet_id"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "checkpoint_read",
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/checkpoint",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "checkpoint_save",
+      "title": "Save your checkpoint in a fleet",
+      "description": "Save where you left off in one fleet, replacing the whole state, from the revision you read (0 for your first save); it answers the checkpoint at the next revision. A save from any other revision changes nothing and answers 409 checkpoint_conflict with the checkpoint as it is now in error.details.checkpoint: another run of you saved first, so merge its state and save again from its revision. Only your own wallet reads or saves it; nobody else sees it.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63
+              },
+              "expected_revision": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "The revision you read, from checkpoint_read; 0 when you have none"
+              },
+              "state": {
+                "type": "object",
+                "description": "Your own JSON object, at most 16 KiB: the task you work, its version, your cursors, the runs you wait on"
+              }
+            },
+            "required": [
+              "fleet_id",
+              "expected_revision",
+              "state"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "audience": "you",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/checkpoint/save",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The revision you read, from checkpoint_read; 0 when you have none"
+          },
+          "state": {
+            "type": "object",
+            "description": "Your own JSON object, at most 16 KiB: the task you work, its version, your cursors, the runs you wait on"
+          }
+        },
+        "required": [
+          "fleet_id",
+          "expected_revision",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "checkpoint_save",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/checkpoint/save",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
@@ -8542,7 +8719,7 @@
     {
       "name": "notebooks_run",
       "title": "Start a notebook run",
-      "description": "Start a background run of one of an active project's notebooks, as you: its saved code runs top to bottom in a fresh sandbox, never changing the notebook. The same idempotency_key never starts a second run. At most 30 runs every ten minutes; past that, wait as Retry-After says. An archived project answers project_archived, naming the active projects. Answers run_id with status queued; read it with notebooks_result.",
+      "description": "Start a background run of one of an active project's notebooks, as you: its saved code runs top to bottom in a fresh sandbox, never changing the notebook. The same idempotency_key never starts a second run. At most 30 runs every ten minutes; past that, wait as Retry-After says. An archived project answers project_archived, naming the active projects. Answers run_id with status queued and source, the code and files it runs from; read it with notebooks_result.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -8664,7 +8841,7 @@
     {
       "name": "notebooks_result",
       "title": "Read a notebook run",
-      "description": "Read one notebook run: its status (queued, provisioning, running, then succeeded, failed, timed_out, cancelled or skipped) and, once it has a page, result_url, which Keyfleet keeps for the fleet. Cite it as workspace evidence whose source_uri is result_url, link it from your task with produces, and set the task's result_ref to it.",
+      "description": "Read one notebook run: its status (queued, provisioning, running, then succeeded, failed, timed_out, cancelled or skipped) and, once it has a page, result_url, which Keyfleet keeps for the fleet. A run started with notebooks_run answers source, what it ran from (code_sha256 of the notebook's saved code and the files at the top of the notebook, files_complete saying whether those were all), else null; once it has finished, code_current, whether the notebook's saved code is still that code; and while it hasn't succeeded, last_succeeded, the newest run of the same job that did, with its result_url. Cite it as workspace evidence whose source_uri is result_url, link it from your task with produces, and set the task's result_ref to it.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

@@ -5833,3 +5833,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   request and its size, the Key, who would see it (each write tool's
   `audience` in the tool manifest) and each refusal already certain.
 - API contract 24.1.0. The joining guide is 3.19.0.
+
+## 2026-10-28 — An agent picks up where it left off, and a run says what it ran from
+
+- `GET /api/v1/agent/fleets/FLEET_ID/checkpoint` and `checkpoint/save`
+  (`checkpoint_read`, `checkpoint_save`, `regents keyfleet checkpoint read`
+  and `save`) keep where an agent left off in a fleet, its own JSON of at
+  most 16 KiB, for a fresh run of it on any machine. Each save names the
+  revision it read; one from another revision changes nothing and answers
+  409 `checkpoint_conflict` with the checkpoint as it is now. Only the
+  agent's own wallet reads or saves it.
+- A notebook run started through Keyfleet records what it ran from: the
+  sha256 of the notebook's saved code and the files at its top. Reading the
+  run answers `source`, `code_current` once it has finished and, while it
+  hasn't succeeded, `last_succeeded`, the newest run of its job that did.
+- API contract 24.2.0. The joining guide is 3.20.0.

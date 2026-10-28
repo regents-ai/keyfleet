@@ -36,9 +36,55 @@ defmodule Keyfleet.Agents do
 
       define :check_ins_in_fleet, action: :in_fleet, args: [:fleet_id, :agent_profile_ids]
     end
+
+    resource Keyfleet.Agents.Checkpoint do
+      define :checkpoint, action: :mine, args: [:fleet_id], not_found_error?: false
+      define :start_checkpoint, action: :start, args: [:fleet_id, :state]
+    end
   end
 
-  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, CheckInStatus, DeleteAvatar}
+  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, CheckInStatus, Checkpoint, DeleteAvatar}
+
+  @doc """
+  Saves `state` as the agent's checkpoint in `fleet_id`, from the revision
+  it read, `expected_revision` (0 when it has none): `{:ok, checkpoint}` at
+  the next revision, or `{:stale, current}` with the checkpoint as it is now
+  (nil for none) when that wasn't the revision kept, and nothing is saved.
+  """
+  def save_checkpoint(actor, fleet_id, 0, state) do
+    case start_checkpoint(fleet_id, state, actor: actor) do
+      {:ok, checkpoint} -> {:ok, checkpoint}
+      {:error, _error} = refused -> stale_or(refused, actor, fleet_id)
+    end
+  end
+
+  def save_checkpoint(actor, fleet_id, expected_revision, state) do
+    Checkpoint
+    |> Ash.Query.for_read(:mine, %{fleet_id: fleet_id}, actor: actor)
+    |> Ash.Query.filter(revision == ^expected_revision)
+    |> Ash.bulk_update(:save, %{state: state},
+      actor: actor,
+      strategy: [:atomic],
+      return_records?: true,
+      return_errors?: true
+    )
+    |> case do
+      %Ash.BulkResult{status: :success, records: [checkpoint]} -> {:ok, checkpoint}
+      %Ash.BulkResult{status: :success, records: []} -> stale_or(nil, actor, fleet_id)
+      %Ash.BulkResult{errors: [error | _rest]} -> {:error, error}
+    end
+  end
+
+  # A first save that found one already kept, or a later one from another
+  # revision, answers the checkpoint as it is now; a first save refused with
+  # none kept answers that refusal.
+  defp stale_or(refused, actor, fleet_id) do
+    case checkpoint(fleet_id, actor: actor) do
+      {:ok, nil} when refused != nil -> refused
+      {:ok, current} -> {:stale, current}
+      {:error, error} -> {:error, error}
+    end
+  end
 
   @doc """
   The names agents gave themselves, as `%{wallet => name}`, for the agents

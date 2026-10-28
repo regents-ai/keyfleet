@@ -55,6 +55,14 @@ defmodule Keyfleet.Notebooks do
       define :remove_saved_output, action: :remove
     end
 
+    resource Keyfleet.Notebooks.RunSource do
+      define :record_run_source,
+        action: :record,
+        args: [:fleet_id, :run_id, :notebook_id, :code_sha256, :files, :files_complete]
+
+      define :run_source, action: :of_run, args: [:fleet_id, :run_id], not_found_error?: false
+    end
+
     resource Keyfleet.Notebooks.Setting do
       define :notebook_setting,
         action: :of,

@@ -51,6 +51,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @receipts_path ~r"\A/api/v1/agent/fleets/#{@fleet}/receipts\z"
   # The agent's standing in a fleet, read without writing anything.
   @doctor_path ~r"\A/api/v1/agent/fleets/#{@fleet}/doctor\z"
+  # Where an agent left off in a fleet, read and saved.
+  @checkpoint_path ~r"\A/api/v1/agent/fleets/#{@fleet}/checkpoint\z"
+  @checkpoint_save_path ~r"\A/api/v1/agent/fleets/#{@fleet}/checkpoint/save\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   # A fleet's projects, each named as its address names it, and what a Key
   # does with them.
@@ -131,6 +134,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@file_write_path, {~w(path content), []}},
     {@notebook_lock_path, {~w(locked), []}},
     {@topic_path, {~w(topic), []}},
+    {@checkpoint_save_path, {~w(expected_revision state), []}},
     {@read_path, {[], ~w(after_seq limit max_bytes)}},
     {@key_read_path, {[], ~w(after_seq limit max_bytes)}},
     {@get_path, {[], ~w(seq id context)}},
@@ -188,6 +192,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # supply limit (the Regents Club's 1,998). Catching up on direct messages
   # alone fits the same body.
   @sync_max_body 128 * 1024
+  # A checkpoint's state is the agent's own, up to 16 KiB.
+  @checkpoint_max_body 16 * 1024 + 256
   @max_sync_rooms 111
   @max_sync_walls 100
   @max_dm_keys 2_000
@@ -623,6 +629,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         [
           @rooms_path,
           @doctor_path,
+          @checkpoint_path,
           @key_page_path,
           @mutes_path,
           @polls_path,
@@ -642,6 +649,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     Enum.any?(
       [
         @mute_path,
+        @checkpoint_save_path,
         @create_room_path,
         @topic_path,
         @read_path,
@@ -690,6 +698,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def body_limit(path) do
     cond do
       send?(path) -> @send_max_body
+      Regex.match?(@checkpoint_save_path, path) -> @checkpoint_max_body
       catch_up?(path) -> @sync_max_body
       limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
@@ -763,6 +772,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(path, params) do
     cond do
       Enum.any?(@empty_body_paths, &Regex.match?(&1, path)) -> admit(params == %{})
+      Regex.match?(@checkpoint_save_path, path) -> check_checkpoint_body(params)
       op = fleet_op(path) -> check_fleet_body(op, params)
       op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
@@ -1068,6 +1078,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_read_body(_params), do: :invalid
+
+  # A checkpoint is saved whole, from the revision read: 0 for the first.
+  defp check_checkpoint_body(%{"expected_revision" => revision, "state" => state} = params)
+       when map_size(params) == 2 and is_integer(revision) and is_map(state),
+       do: in_range(revision in 0..@max_seq)
+
+  defp check_checkpoint_body(_params), do: :invalid
 
   # A read that takes `max_bytes` is checked without it, then the budget.
   defp with_budget(params, budgets, check) when is_map(params) do

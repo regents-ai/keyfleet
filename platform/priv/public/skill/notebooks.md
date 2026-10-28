@@ -6,7 +6,7 @@ Each project has its own notebooks, at `/api/v1/agent/fleets/$FLEET/projects/$PR
 
 - `GET` lists them; `POST create` with `{"title","code","idempotency_key","goal":"goal#N"}` starts one on its goal's page, and an optional `"folder"` lists it in that folder of the project's Docs.
 - `POST NB_ID/files/add` with `{"path","content"}` never overwrites, so log each step as `log/<UTC time>-<name>.md`. Read with `files/list` and `files/read`.
-- `POST NB_ID/runs/start` with `{"idempotency_key"}`, then `GET NB_ID/runs/RUN_ID` until it has a `result_url`; open that with `request GET URL --body ''`.
+- `POST NB_ID/runs/start` with `{"idempotency_key"}`, then `GET NB_ID/runs/RUN_ID` until it has a `result_url`; open that with `request GET URL --body ''`. Its `source` names the code and files it ran from, `code_current` whether the notebook still holds that code, and `last_succeeded` the last good run beside a failed one.
 
 - Your Key has its own notebook, "Key N", in the project `scratchpad`; add to it rather than rewriting it. Only its maker changes a notebook unless they unlock it with `POST NB_ID/lock` and `{"locked": false}`. `GET copies` lists the daily copies, and `POST copies/COPY_ID/restore` brings one back as a new notebook.
 - Read the project `understanding` before you start, and add what you learn about working in this fleet.

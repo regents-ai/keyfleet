@@ -1010,6 +1010,51 @@ command's own.
 - **Server needs:** the `keys`, `agent_profiles` and chain-reader tables.
 - **History:** 2026-10-28 added.
 
+## regents keyfleet checkpoint read <fleet>
+
+- **Purpose:** reads where the agent left off in one fleet, as it last saved it, so a
+  fresh run of it on any machine picks up from there.
+- **Access:** a paired agent signed in with its wallet (wallet proof). Only the agent's
+  own wallet reads its checkpoint.
+- **Changes:** nothing (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/checkpoint` → `readCheckpoint`
+- **Inputs:** `<fleet>`.
+- **Answer:** `{"checkpoint"}`: `{"fleet_id", "revision", "state", "updated_at"}`, or
+  `null` before the agent's first save.
+- **Refusals:** 404 `fleet_unknown`; 503 `checkpoint_unavailable`. And those every signed
+  command shares.
+- **Server needs:** the `agent_checkpoints` table.
+- **History:** 2026-10-28 added.
+
+## regents keyfleet checkpoint save <fleet>
+
+- **Purpose:** saves where the agent left off in one fleet: the task it works, that
+  task's version, its cursors, the runs it waits on, in the agent's own words.
+- **Access:** a paired agent signed in with its wallet (wallet proof). Nobody else reads
+  or saves it.
+- **Changes:** replaces the agent's whole checkpoint in the fleet (write, seen only by the
+  agent).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/checkpoint/save` → `saveCheckpoint`
+- **Inputs:** `<fleet>`; on stdin `{"expected_revision", "state"}`: the revision read,
+  0 for the first save, and the agent's own JSON object, the body at most 16 KiB.
+- **Answer:** `{"checkpoint"}` at the next revision.
+- **Refusals:** 409 `checkpoint_conflict`: the checkpoint is no longer at that revision,
+  because another run of the agent saved first; nothing is saved, and
+  `error.details.checkpoint` is the checkpoint as it is now (`null` for none), to merge
+  and save again from its revision. 404 `fleet_unknown`; 503 `checkpoint_unavailable`.
+  And those every signed command shares.
+
+Server:
+
+```text
+expected_revision 0       -> create revision 1; one already kept -> 409 with it
+otherwise                 -> revision + 1 where revision = expected_revision
+                             none matched -> 409 with the checkpoint as it is now
+```
+
+- **Server needs:** the `agent_checkpoints` table.
+- **History:** 2026-10-28 added.
+
 ## regents keyfleet preview <tool>
 
 - **Purpose:** tells what a write would do before it is sent, without sending it.
@@ -2192,8 +2237,9 @@ answer the notebooks, newest first
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>` (the notebook's id, `nb-` and 16
   characters, as `notebooks list` answers it) and `--idempotency-key KEY`, up to 128
   visible ASCII characters you choose. The body is `{"idempotency_key"}`.
-- **Answer:** `{"notebook_id", "run_id", "status", "result_url"}`, with `status` `queued`
-  and `result_url` `null`.
+- **Answer:** `{"notebook_id", "run_id", "status", "result_url", "source",
+  "code_current", "last_succeeded"}`, with `status` `queued`, `result_url` `null` and
+  `source` what the run runs from, as `notebooks result` describes it.
 - **Refusals:** 403 `notebooks_not_holder`, `notebooks_agent_profile` or
   `notebooks_edits_restricted` (a fleet vote has restricted the Key's edits) (join first
   with `profile join`); 404 `notebooks_not_found` (the fleet has no notebooks) or
@@ -2217,14 +2263,18 @@ Notebooks.admit(agent, fleet, subject)
 Projects.open(fleet, project)             no such project -> 404 project_unknown
                                           archived -> 409 project_archived
 Runs.start(fleet, subject, project's space, notebook, idempotency_key)
+       read the notebook's saved code and the files at its top
        in the agent's own "Agent runs" job on the notebook
        no such notebook -> 404 notebook_run_not_found
        queue full -> 429 notebook_runs_full
+record the code's sha256 and those files as the run's source; the first record stays
 answer the run, waiting to start
 ```
 
 - **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
-- **History:** 2026-10-16 added. 2026-10-26: in its project's address.
+- **Server needs:** the `notebook_run_sources` table.
+- **History:** 2026-10-16 added. 2026-10-26: in its project's address. 2026-10-28:
+  answers `source`.
 
 ## regents keyfleet notebooks result <fleet> <project> <notebook> <run>
 
@@ -2244,7 +2294,16 @@ answer the run, waiting to start
   → `readNotebookResult`
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>` and `<run>` (the `run_id` that
   `notebooks run` answered). It sends no body.
-- **Answer:** `{"notebook_id", "run_id", "status", "result_url"}`.
+- **Answer:** `{"notebook_id", "run_id", "status", "result_url", "source",
+  "code_current", "last_succeeded"}`. `source` is what a run started with `notebooks run`
+  ran from, `{"started_at", "code_sha256", "files", "files_complete"}`: the sha256 of the
+  notebook's saved code just before it started, and the files at the top of the notebook
+  then, each `{"path", "kind", "size"}`, with `files_complete` saying whether those were
+  all of them; `null` for a run started on the notebook host. Once the run has finished,
+  `code_current` says whether the notebook's saved code is still that code, else `null`.
+  While the run hasn't succeeded, `last_succeeded` is the newest run of the same job that
+  did, `{"run_id", "result_url"}`, so a failed or waiting run never hides the last good
+  result; `null` when there is none or this run succeeded.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found` or `notebook_run_not_found` (no such notebook or run); 503
   `notebooks_catching_up`, `notebooks_setting_up` or `notebooks_unavailable`; 404
@@ -2261,12 +2320,16 @@ Projects.open(fleet, project)             no such project -> 404 project_unknown
 Runs.read(fleet, subject, project's space, notebook, run)
        no such notebook or run -> 404 notebook_run_not_found
        finished with a page -> keep the page, answer its address as result_url
+source = the run's recorded source, if any
+finished and recorded -> code_current = the saved code's sha256 is source's
+not succeeded -> last_succeeded = the newest succeeded run of its job's 20 newest
 answer the run as it stands
 ```
 
 - **Server needs:** the fleet's notebook hub and its kept pages; the keys, shards and
-  pairings as recorded.
-- **History:** 2026-10-16 added. 2026-10-26: in its project's address.
+  pairings as recorded; the `notebook_run_sources` table.
+- **History:** 2026-10-16 added. 2026-10-26: in its project's address. 2026-10-28:
+  answers `source`, `code_current` and `last_succeeded`.
 
 ## regents keyfleet notebooks create <fleet> <project>
 
