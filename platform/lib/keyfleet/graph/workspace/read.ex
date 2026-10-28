@@ -21,12 +21,18 @@ defmodule Keyfleet.Graph.Workspace.Read do
   touched that project, oldest first, at most `limit` of them and no more
   than 512 KiB of them unless one event alone is larger;
   `next_cursor` is the `after_seq` to read on from, and `run_id` names the
-  log they come from.
+  log they come from. `graph` answers the items its graph draws, the
+  120 most recently changed, the whole fleet's or one project's,
+  type's or owner's, with the archived ones only when asked for: each with
+  its type, title, project, standing, owner and when it last changed. Beside
+  them the links between them, oldest first, at most 600;
+  `more_nodes` and `more_edges` say whether any were left out, and `owners`
+  counts the items each Key owns among them.
 
-  Both name, in `agents`, the agents behind what they answer, by wallet: the
-  agent that created the object, or that made each change, with the name it
-  gave itself, as the fleet's pages show it beside the Key. A goal's agents
-  include each agent that joined it.
+  `get` and `changes` name, in `agents`, the agents behind what they
+  answer, by wallet: the agent that created the object, or that made each
+  change, with the name it gave itself, as the fleet's pages show it beside
+  the Key. A goal's agents include each agent that joined it.
   """
   use Ash.Resource.Actions.Implementation
 
@@ -37,6 +43,8 @@ defmodule Keyfleet.Graph.Workspace.Read do
   alias Keyfleet.Graph.RerunCheck
 
   @relation_page 200
+  @graph_nodes 120
+  @graph_edges 600
 
   @impl true
   def run(input, opts, context) do
@@ -47,7 +55,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
   defp read(:get, %{fleet_id: fleet_id, id: id, relations_after: after_seq}, opts) do
     {_run_id, watermark} = standing(fleet_id, opts)
 
-    case Graph.read_object!(fleet_id, id, [load: [:review]] ++ opts) do
+    case Graph.read_object!(fleet_id, id, [load: [:review, :owner_key]] ++ opts) do
       nil ->
         {:error,
          RefusedError.exception(code: "not_found", reason: "no such object", details: %{id: id})}
@@ -60,7 +68,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
 
         %{
           object: Map.take(object, [:id, :type, :data, :sys, :version, :review]),
-          owner_key: owner_key(object),
+          owner_key: object.owner_key,
           relations: Enum.map(page, &Map.take(&1, [:id, :type, :source, :target, :data])),
           relations_next_cursor: if(rest != [], do: List.last(page).created_seq),
           linked: linked(fleet_id, id, page, opts),
@@ -92,10 +100,61 @@ defmodule Keyfleet.Graph.Workspace.Read do
     }
   end
 
-  # The Key an object belongs to: the Key holding it, for a held task, and
-  # otherwise the Key that created it; none for a starting goal.
-  defp owner_key(%{type: "task", data: %{"assignee_key" => key}}) when is_integer(key), do: key
-  defp owner_key(%{sys: sys}), do: get_in(sys, ["created_by", "key", "token_id"])
+  defp read(:graph, %{fleet_id: fleet_id} = args, opts) do
+    {_run_id, watermark} = standing(fleet_id, opts)
+    filter = Map.take(args, [:project, :type, :owner_key, :archived])
+
+    {nodes, more_nodes} =
+      fleet_id
+      |> Graph.graph_objects!(filter, [query: [limit: @graph_nodes + 1]] ++ opts)
+      |> Enum.split(@graph_nodes)
+
+    {edges, more_edges} =
+      case nodes do
+        [] ->
+          {[], []}
+
+        nodes ->
+          fleet_id
+          |> Graph.relations_among!(
+            Enum.map(nodes, & &1.id),
+            [query: [limit: @graph_edges + 1]] ++ opts
+          )
+          |> Enum.split(@graph_edges)
+      end
+
+    %{
+      nodes: Enum.map(nodes, &node/1),
+      edges: Enum.map(edges, &Map.take(&1, [:id, :type, :source, :target])),
+      owners: owners(nodes),
+      more_nodes: more_nodes != [],
+      more_edges: more_edges != [],
+      watermark: watermark
+    }
+  end
+
+  defp node(object) do
+    %{
+      id: object.id,
+      type: object.type,
+      title: object.title,
+      project: object.project,
+      standing: object.standing,
+      owner_key: object.owner_key,
+      archived: object.sys["archived"] == true,
+      changed_at: object.changed_at
+    }
+  end
+
+  # Each Key that owns any of the items, lowest first, with how many it owns.
+  defp owners(nodes) do
+    nodes
+    |> Enum.map(& &1.owner_key)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.frequencies()
+    |> Enum.sort()
+    |> Enum.map(fn {key, items} -> %{key: key, items: items} end)
+  end
 
   # The item at the other end of each link on the page, by id, with what a
   # reader needs to judge it without reading it: its type, title, standing

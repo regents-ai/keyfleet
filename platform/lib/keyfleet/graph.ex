@@ -25,6 +25,7 @@ defmodule Keyfleet.Graph do
     resource Keyfleet.Graph.Workspace do
       define :get_object, action: :get, args: [:fleet_id, :id]
       define :list_changes, action: :changes, args: [:fleet_id]
+      define :workspace_graph, action: :graph, args: [:fleet_id]
       define :create_object, action: :create, args: [:fleet_id]
       define :patch_object, action: :patch, args: [:fleet_id]
       define :link_objects, action: :link, args: [:fleet_id]
@@ -59,6 +60,7 @@ defmodule Keyfleet.Graph do
       define :read_object, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
       define :read_objects, action: :with_ids, args: [:fleet_id, :ids]
       define :workspace_cards, action: :cards, args: [:fleet_id]
+      define :graph_objects, action: :graph, args: [:fleet_id]
       define :goal_work, action: :around_goal, args: [:fleet_id, :goal_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_goals, action: :open_goals, args: [:fleet_id]
@@ -77,6 +79,7 @@ defmodule Keyfleet.Graph do
 
       define :object_links, action: :linked, args: [:fleet_id, :object_id]
       define :producers_of, action: :producing, args: [:fleet_id, :targets]
+      define :relations_among, action: :among, args: [:fleet_id, :ids]
       define :project_relations, action: :project
       define :remove_relations, action: :remove
       define :read_relations, action: :with_ids, args: [:fleet_id, :ids]

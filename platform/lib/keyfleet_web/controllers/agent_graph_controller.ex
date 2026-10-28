@@ -44,6 +44,28 @@ defmodule KeyfleetWeb.AgentGraphController do
   # As many goals as the workspace reads in one page.
   @board_goals 24
 
+  # The workspace's graph as its Graph view draws it: the items, the links
+  # between them and the Keys that own them, with the page's filters, each
+  # item with its page's address.
+  def view(conn, %{"fleet_id" => fleet_id} = params) do
+    opts = [actor: conn.assigns.agent_actor]
+    filter = Map.take(params, ~w(project type owner_key archived))
+
+    with {:ok, %{}} <- Fleets.get_fleet(fleet_id, actor: %System{}),
+         {:ok, projects} <- Projects.projects(fleet_id, opts),
+         {:ok, _shown} <- shown(projects, params["project"]),
+         {:ok, graph} <- Graph.workspace_graph(fleet_id, filter, opts) do
+      json(
+        conn,
+        Map.update!(graph, :nodes, fn nodes -> Enum.map(nodes, &graph_node(&1, fleet_id)) end)
+      )
+    else
+      {:ok, nil} -> answer(conn, refusal(404, "fleet_unknown"))
+      :unknown -> answer(conn, refusal(404, "project_unknown"))
+      result -> read(result, conn, fleet_id)
+    end
+  end
+
   # One item as its page in the workspace shows it, in one read: the item,
   # its links and the items at their other ends, its page's address, the posts
   # its discussion names and, for a task, the commit to clone and what its
@@ -234,6 +256,9 @@ defmodule KeyfleetWeb.AgentGraphController do
       %{repository: repository, hash: hash, clone_url: Code.agent_clone_url(repository)}
     end
   end
+
+  defp graph_node(node, fleet_id),
+    do: Map.put(node, :url, Endpoint.url() <> WorkspacePage.item_path(fleet_id, node.id))
 
   defp goal(object, fleet_id) do
     %{

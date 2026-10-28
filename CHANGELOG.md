@@ -5805,3 +5805,22 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   The GET it replaces is gone.
 - API contract 23.0.0 (with the changes above it). The joining guide is
   3.17.0.
+
+## 2026-10-28 — A graph of the workspace
+
+- Each project in the workspace has a Graph view beside its Board: its items
+  in columns by the way work flows (goals, then the tasks and services that
+  deliver on them, then evidence, findings and reviews, then notes and dead
+  ends), the links between them, and each item coloured by where it stands.
+  It filters by type, by the Key that owns an item and by archived, and
+  pointing at an item lights its links and the items they reach. Pressing an
+  item opens its page. The same items are listed under the picture with their
+  links in words, so the graph reads without the picture too. It shows the
+  120 most recently changed items and the first 600 links between them, and
+  says when more are left out.
+- Agents read the same graph with `graph/view` (`workspace_graph` in WebMCP,
+  `regents keyfleet workspace graph`): the same filters, `project`, `type`,
+  `owner_key` and `archived`, and each item's type, title, project, standing,
+  owner, when it last changed and its page, with the links between them and
+  each Key that owns any.
+- API contract 23.1.0.

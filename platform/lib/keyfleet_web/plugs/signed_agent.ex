@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim)\z"
-  @graph_ops ~w(board get changes create patch link unlink archive join leave submit review fork)
+  @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
   @outside_projects_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(notebooks|code)(/|\z)"
@@ -195,6 +195,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @command_fields %{"as_key" => :key, "command_id" => :text}
   @graph_bodies %{
     "board" => {%{}, %{"project" => :text}},
+    "view" =>
+      {%{}, %{"project" => :text, "type" => :text, "owner_key" => :key, "archived" => :flag}},
     "get" => {%{"id" => :text}, %{"relations_after" => :seq}},
     "changes" => {%{}, %{"project" => :text, "after_seq" => :seq, "limit" => :graph_page}},
     "create" =>
@@ -981,6 +983,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp shaped?(:text, value), do: is_binary(value)
   defp shaped?(:object, value), do: is_map(value)
   defp shaped?(:texts, value), do: is_list(value) and Enum.all?(value, &is_binary/1)
+  defp shaped?(:flag, value), do: is_boolean(value)
 
   defp shaped?(kind, value) when kind in [:key, :version, :seq, :graph_page],
     do: is_integer(value)

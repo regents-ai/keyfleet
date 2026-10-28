@@ -76,6 +76,20 @@ defmodule Keyfleet.Graph.Relation do
       prepare build(sort: [created_seq: :asc], limit: 100)
     end
 
+    # The links whose both ends are among `ids`, oldest first: the edges of
+    # the workspace's graph between the items it draws. Callers bound it
+    # with a limit.
+    read :among do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :ids, {:array, :string},
+        allow_nil?: false,
+        constraints: [items: @text, max_length: 200]
+
+      filter expr(fleet_id == ^arg(:fleet_id) and source in ^arg(:ids) and target in ^arg(:ids))
+      prepare build(sort: [created_seq: :asc])
+    end
+
     read :with_ids do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -115,7 +129,7 @@ defmodule Keyfleet.Graph.Relation do
   end
 
   policies do
-    policy action([:touching, :linked, :producing]) do
+    policy action([:touching, :linked, :producing, :among]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
