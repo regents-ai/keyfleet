@@ -350,10 +350,12 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          files,
          _body
        ) do
-    folder = conn.query_params["path"] <> "/"
+    # No path lists the whole workspace, as a run's record of its files does;
+    # the jobs kept beside the files are not files.
+    folder = if path = conn.query_params["path"], do: path <> "/", else: ""
 
     items =
-      for {path, content} <- Enum.sort(Agent.get(files, & &1)),
+      for {path, content} when is_binary(content) <- Enum.sort(Agent.get(files, & &1)),
           String.starts_with?(path, folder),
           do: item(path, content)
 
@@ -409,6 +411,17 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          _body
        ),
        do: json(conn, 201, %{success: true, data: %{}})
+
+  # A run records the code it ran from, so starting one reads the notebook.
+  defp hub_answer(
+         %Plug.Conn{
+           method: "GET",
+           request_path: "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/content"
+         } = conn,
+         _files,
+         _body
+       ),
+       do: json(conn, 200, %{success: true, data: %{code: "import marimo"}})
 
   defp hub_answer(conn, _files, _body), do: json(conn, 200, %{success: true, data: %{}})
 

@@ -17,6 +17,15 @@ defmodule Keyfleet.Notebooks.Runs do
   keeps no page: it answers each one's newest run in the agent's own "Agent
   runs" with `result_url` once that run's page has been kept.
 
+  A run started here records what it ran from (`Keyfleet.Notebooks.RunSource`):
+  the sha256 of the notebook's saved code just before it started, and the
+  entries at the top of its files. Reading the run answers that `source`;
+  once the run has finished, `code_current`, whether the notebook's saved
+  code is still that code; and while the run hasn't succeeded,
+  `last_succeeded`, the newest run of the same job that did, with its saved
+  result's address once Keyfleet keeps it, so a pending or failed run never
+  hides the last good result.
+
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
   once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
   or `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
@@ -27,7 +36,7 @@ defmodule Keyfleet.Notebooks.Runs do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.RecordsDownError
+  alias Keyfleet.Notebooks.{Files, RecordsDownError}
 
   import Keyfleet.Notebooks.MemberRequest
 
@@ -36,6 +45,10 @@ defmodule Keyfleet.Notebooks.Runs do
   @jobs 100
   # A finished run has made its page, unless it was cancelled or skipped.
   @with_page ~w(succeeded failed timed_out)
+  @finished ["cancelled" | @with_page]
+  # How many of a job's newest runs are looked through for the last that
+  # succeeded.
+  @recent_runs 20
   # A listing asks after this many notebooks' runs at once.
   @lookups 4
 
@@ -62,13 +75,17 @@ defmodule Keyfleet.Notebooks.Runs do
   end
 
   @doc """
-  Starts a run of `notebook_id`'s saved code as `subject`. The same
-  `idempotency_key` starts one run however often it is sent.
+  Starts a run of `notebook_id`'s saved code as `subject`, recording what it
+  runs from. The same `idempotency_key` starts one run however often it is
+  sent.
   """
   def start(fleet_id, subject, project_id, notebook_id, idempotency_key) do
     notebook = notebook_path(project_id, notebook_id)
 
-    with {:ok, job_id} <- job(fleet_id, subject, notebook),
+    with {:ok, %{"code" => code}} <-
+           fleet_id |> request(subject, :get, notebook <> "/content") |> answer(200),
+         {:ok, files} <- Files.list(fleet_id, subject, project_id, notebook_id, nil, nil),
+         {:ok, job_id} <- job(fleet_id, subject, notebook),
          {:ok, run} <-
            fleet_id
            |> request(subject, :post, "#{notebook}/jobs/#{segment(job_id)}/runs",
@@ -76,7 +93,12 @@ defmodule Keyfleet.Notebooks.Runs do
              headers: [{"idempotency-key", idempotency_key}]
            )
            |> answer(201) do
-      {:ok, view(notebook_id, run, nil)}
+      source = record_source(fleet_id, notebook_id, run["run_id"], code, files)
+
+      {:ok,
+       notebook_id
+       |> view(run, nil)
+       |> Map.merge(%{source: source, code_current: nil, last_succeeded: nil})}
     end
   end
 
@@ -88,8 +110,14 @@ defmodule Keyfleet.Notebooks.Runs do
   """
   def read(fleet_id, subject, project_id, notebook_id, run_id) do
     with {:ok, run_path, run} <- find(fleet_id, subject, project_id, notebook_id, run_id),
-         {:ok, result_url} <- result_url(fleet_id, subject, notebook_id, run_id, run, run_path) do
-      {:ok, view(notebook_id, run, result_url)}
+         {:ok, result_url} <- result_url(fleet_id, subject, notebook_id, run_id, run, run_path),
+         {:ok, source} <- source(fleet_id, run_id),
+         {:ok, current} <- code_current(fleet_id, subject, project_id, notebook_id, source, run),
+         {:ok, last} <- last_succeeded(fleet_id, subject, notebook_id, run_path, run) do
+      {:ok,
+       notebook_id
+       |> view(run, result_url)
+       |> Map.merge(%{source: source, code_current: current, last_succeeded: last})}
     end
   end
 
@@ -227,6 +255,101 @@ defmodule Keyfleet.Notebooks.Runs do
         end
     }
   end
+
+  # What the run ran from, as recorded the moment it started; nil when the
+  # record couldn't be written, which is saved with the site's errors.
+  defp record_source(fleet_id, notebook_id, run_id, code, files) do
+    entries = Enum.map(files.entries, &Map.take(&1, [:path, :kind, :size]))
+
+    recorded =
+      Notebooks.record_run_source(
+        fleet_id,
+        run_id,
+        notebook_id,
+        sha256(code),
+        entries,
+        files.cursor == nil,
+        actor: %System{}
+      )
+
+    with {:ok, _recorded} <- recorded,
+         {:ok, source} <- source(fleet_id, run_id) do
+      source
+    else
+      {:error, :unavailable} ->
+        nil
+
+      {:error, error} ->
+        RecordsDownError.report(
+          "What #{fleet_id}'s run #{run_id} ran from could not be recorded: " <>
+            inspect(error.__struct__)
+        )
+
+        nil
+    end
+  end
+
+  defp source(fleet_id, run_id) do
+    case Notebooks.run_source(fleet_id, run_id, actor: %System{}) do
+      {:ok, nil} ->
+        {:ok, nil}
+
+      {:ok, source} ->
+        {:ok,
+         %{
+           started_at: source.started_at,
+           code_sha256: source.code_sha256,
+           files: source.files,
+           files_complete: source.files_complete
+         }}
+
+      {:error, error} ->
+        RecordsDownError.report(
+          "What #{fleet_id}'s run #{run_id} ran from could not be read: " <>
+            inspect(error.__struct__)
+        )
+
+        {:error, :unavailable}
+    end
+  end
+
+  # Whether a finished run's notebook still holds the code it ran from.
+  defp code_current(fleet_id, subject, project_id, notebook_id, %{code_sha256: ran}, %{
+         "status" => status
+       })
+       when status in @finished do
+    with {:ok, %{"code" => code}} <-
+           fleet_id
+           |> request(subject, :get, notebook_path(project_id, notebook_id) <> "/content")
+           |> answer(200),
+         do: {:ok, sha256(code) == ran}
+  end
+
+  defp code_current(_fleet_id, _subject, _project_id, _notebook_id, _source, _run),
+    do: {:ok, nil}
+
+  # The newest run of the same job that succeeded, beside a run that hasn't:
+  # its id and its saved result's address once Keyfleet keeps it.
+  defp last_succeeded(_fleet_id, _subject, _notebook_id, _run_path, %{"status" => "succeeded"}),
+    do: {:ok, nil}
+
+  defp last_succeeded(fleet_id, subject, notebook_id, run_path, _run) do
+    with {:ok, %{"items" => runs}} <-
+           fleet_id
+           |> request(subject, :get, Path.dirname(run_path), params: [limit: @recent_runs])
+           |> answer(200) do
+      runs |> Enum.find(&(&1["status"] == "succeeded")) |> succeeded(fleet_id, notebook_id)
+    end
+  end
+
+  defp succeeded(nil, _fleet_id, _notebook_id), do: {:ok, nil}
+
+  defp succeeded(%{"run_id" => run_id}, fleet_id, notebook_id) do
+    with {:ok, kept} <- result_urls(fleet_id, [%{"run_id" => run_id}]),
+         do: {:ok, %{run_id: run_id, result_url: kept[{notebook_id, run_id}]}}
+  end
+
+  defp sha256(code), do: :sha256 |> :crypto.hash(code) |> Base.encode16(case: :lower)
 
   # Each job is asked in turn until one has the run.
   defp find_run(fleet_id, subject, notebook, jobs, run_id) do

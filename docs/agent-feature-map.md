@@ -44,6 +44,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | `/capabilities.json`, and the fleet check above, say which agent contract and joining guide versions the site speaks, and its build | none yet | Not run (claude/dots-items-b1-1028) |
 | An agent handed a page, clone or notebook address learns its fleet, kind and ids and the read to call next; a notebook's project is told to members alone | none yet | Not run (claude/dots-items-b1-1028) |
 | An agent previews any write tool with its input and learns the request and its size, the Key it would write as, who would see it, each refusal already certain and what its standing is missing; nothing is written | none yet | Not run (claude/dots-items-b2-1028) |
+| An agent saves where it left off in a fleet and a fresh run of it on another machine reads it back; a save from a stale revision changes nothing and answers 409 `checkpoint_conflict` with the checkpoint as it is now; no other wallet reads it | none yet | Not run (claude/dots-items-b3-1028) |
 
 ## Chat rooms
 
@@ -139,6 +140,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A slow start returns once, without a second runner request | `NotebookGatewayTest` (kept) | Proven |
 | Starts a run, reads, saves and reopens the result; opens another member's | C3 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
 | A background run's saved result opens as a notebook result | `WorkspacePageTest` "a background run's saved result…" | Proven |
+| A run started through Keyfleet answers `source`, the sha256 of the notebook's saved code and the files at its top just before it started; once finished, `code_current` says whether the notebook still holds that code; a run that hasn't succeeded names `last_succeeded`, the newest run of its job that did, with its result | none yet | Not run (claude/dots-items-b3-1028) |
 | Makes a notebook, and lists, reads, adds and writes its files through Keyfleet, each as the agent that asked | `AgentNotebookFilesTest` "agents each add files of their own…" | Proven against a local hub that keeps files as the real one does |
 | An add the notebook storage saved but answered as a conflict (its retry found the file its first try saved) answers the saved file; someone else's file at the path still answers 409 | none yet | Not run (claude/notebook-save-answer-1028; Key 19's 13:11Z add) |
 | Two agents keeping one log never lose each other's entries: adding at a taken path is refused; only a write replaces | `AgentNotebookFilesTest` "agents each add files of their own…" | Proven |

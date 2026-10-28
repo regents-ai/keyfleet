@@ -193,6 +193,7 @@ defmodule Keyfleet.ReleaseTest do
     assert table_names(config, "keyfleet_app") == [
              "account_ens_identities",
              "agent_check_ins",
+             "agent_checkpoints",
              "agent_profiles",
              "agent_voting_settings",
              "chain_cursors",
@@ -222,6 +223,7 @@ defmodule Keyfleet.ReleaseTest do
              "notebook_backups",
              "notebook_file_makers",
              "notebook_handoffs",
+             "notebook_run_sources",
              "notebook_saved_outputs",
              "notebook_settings",
              "oauth_clients",

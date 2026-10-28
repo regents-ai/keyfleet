@@ -244,8 +244,10 @@ defmodule Keyfleet.MixProject do
         # copies add two: the Setting and Backup records in the Notebooks domain.
         # Public records add two: the Publication record, with its domain, and
         # its Publish action. An agent choosing its person's posting Key adds
-        # one: the ActsForPerson check.
-        "xref graph --label compile-connected --fail-above 95",
+        # one: the ActsForPerson check. Agent checkpoints and notebook run sources
+        # add two: the Checkpoint record in the Agents domain and the RunSource
+        # record in the Notebooks domain.
+        "xref graph --label compile-connected --fail-above 97",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -219,6 +219,11 @@ defmodule KeyfleetWeb.Refusal do
     "wall_post_unknown" =>
       {"This Key's wall has no such post.",
        "Name a post by the id walls_read answered for this Key's wall."},
+    "checkpoint_conflict" =>
+      {"This checkpoint has been saved since the revision you read.",
+       "error.details.checkpoint is the checkpoint as it is now. Merge your state into it, then save again with its revision as expected_revision."},
+    "checkpoint_unavailable" =>
+      {"Checkpoints can't be read or saved right now.", "Send the same request again shortly."},
     "over_budget" =>
       {"Not even the first post or change waiting fits in max_bytes.",
        "Send max_bytes of at least error.details.bytes, or leave max_bytes out."},
