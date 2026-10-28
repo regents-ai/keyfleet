@@ -33,7 +33,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   then names the page's address in a `Link` header; the address shows that
   copy whatever the hub keeps, until one of the fleet's members removes it
   (`DELETE` on the address). Someone without a notebook sign-in who opens one
-  is sent to Keyfleet to get one (`open_url/2`), and comes back to it.
+  is sent to Keyfleet to get one (`open_url/2`), and comes back to it, unless
+  a Key made it public (`Keyfleet.Projects.Publication`): then anyone reads it,
+  signed in or not, from that copy alone, and nothing else on the host opens
+  for them.
 
   Background runs (the hub's jobs) start only when a member asks: a job that
   names a schedule is refused. A fleet has at most `max_sessions` notebook
@@ -75,7 +78,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   import Plug.Conn
 
-  alias Keyfleet.{AccessCache, Limits, Notebooks}
+  alias Keyfleet.{AccessCache, Limits, Notebooks, Projects}
 
   alias Keyfleet.Notebooks.{
     HubSilentError,
@@ -235,7 +238,20 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp route(conn, fleet_id) do
+  # A saved page a Key made public opens for anyone, from this site's own
+  # copy; the hub never sees the request. Any other, or one that can't be
+  # read now, needs a sign-in as before.
+  defp route(%Plug.Conn{method: method, request_path: "/results/" <> _ = path} = conn, fleet_id)
+       when method in ["GET", "HEAD"] do
+    case Projects.page_publication(fleet_id, path, actor: %Keyfleet.Actors.System{}) do
+      {:ok, %{}} -> send_saved_output(conn, fleet_id, path)
+      _not_public -> signed_in(conn, fleet_id)
+    end
+  end
+
+  defp route(conn, fleet_id), do: signed_in(conn, fleet_id)
+
+  defp signed_in(conn, fleet_id) do
     case identify(conn, fleet_id) do
       {:ok, conn, subject, actor} ->
         conn |> assign(:notebook_actor, actor) |> within_allowances(fleet_id, subject, actor)

@@ -110,6 +110,15 @@ defmodule KeyfleetWeb.Refusal do
     "publish_not_added" =>
       {"This Key didn't add this item.",
        "A Key makes public only the items it added for its owner today: sys.created_by names the Key and wallet that added each item."},
+    "publish_page_unknown" =>
+      {"This fleet's notebooks have no saved page at that address.",
+       "Send the address of a saved notebook page, as a notebook's run or version gives it."},
+    "publish_not_made" =>
+      {"Only the person or agent that made a saved page makes it public.",
+       "A version's page is its notebook's author's; a run's page is whoever started the run."},
+    "publish_page_unavailable" =>
+      {"The notebooks can't say who made this page right now.",
+       "Nothing changed. Send it again shortly."},
     "publish_unknown" =>
       {"This fleet has nothing public by that id.",
        "publications_list gives the id of everything public in a project."},

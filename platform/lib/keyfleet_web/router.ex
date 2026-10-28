@@ -322,6 +322,7 @@ defmodule KeyfleetWeb.Router do
          :posts
 
     post "/fleets/:fleet_id/publications/items", AgentPublicationController, :item
+    post "/fleets/:fleet_id/publications/pages", AgentPublicationController, :page
     post "/fleets/:fleet_id/publications/:publication_id/withdraw", AgentPublicationController, :withdraw
     get "/fleets/:fleet_id/projects/:project/code/pushes", AgentCodeController, :pushes
     get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index

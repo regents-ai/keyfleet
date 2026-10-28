@@ -14,8 +14,11 @@ defmodule Keyfleet.Projects.Publish do
 
   An item is made public into its own project, which is active, while it
   isn't archived, when the Key added it in the ownership it is in today,
-  whoever wrote for the Key; each item once. Only the Key that made something public
-  takes it back. A refusal says why in words
+  whoever wrote for the Key; each item once. A saved notebook page is made
+  public, once, by the person or agent that made it (`Keyfleet.Notebooks.Makers`)
+  acting as the Key, into the project whose notebook made it, which is
+  active, once this site keeps its own copy of the page. Only the Key that
+  made something public takes it back. A refusal says why in words
   (`Keyfleet.Projects.Errors.PublishError`).
 
   The room is read as the site reads it, whoever may read it: what is shown
@@ -23,9 +26,11 @@ defmodule Keyfleet.Projects.Publish do
   """
   use Ash.Resource.Actions.Implementation
 
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.{Keys, Rooms}
+  alias Keyfleet.{Keys, Notebooks, Rooms}
+  alias Keyfleet.Notebooks.Makers
   alias Keyfleet.Projects
   alias Keyfleet.Projects.Errors.{PublishError, UnknownProjectError}
   alias Keyfleet.Projects.Publication
@@ -38,11 +43,11 @@ defmodule Keyfleet.Projects.Publish do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 
     with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within) do
-      step(Keyword.fetch!(opts, :step), fleet_id, key, input.arguments)
+      step(Keyword.fetch!(opts, :step), fleet_id, key, input.arguments, actor)
     end
   end
 
-  defp step(:posts, fleet_id, key, %{project: project, room: room} = arguments) do
+  defp step(:posts, fleet_id, key, %{project: project, room: room} = arguments, _actor) do
     %{from_seq: from, to_seq: to} = arguments
 
     with :ok <- active(fleet_id, project),
@@ -69,10 +74,10 @@ defmodule Keyfleet.Projects.Publish do
     end
   end
 
-  defp step(:item, fleet_id, key, %{item: id}) do
+  defp step(:item, fleet_id, key, %{item: id}, _actor) do
     with {:ok, object} <- item(fleet_id, id),
          :ok <- active(fleet_id, object.project),
-         :ok <- once(fleet_id, id),
+         :ok <- once(Projects.item_publication(fleet_id, id, actor: @system), "item"),
          {:ok, %{owner_wallet: owner, ownership_epoch: epoch}} <- held(fleet_id, key),
          :ok <- added(object, key, epoch) do
       Publication
@@ -92,7 +97,32 @@ defmodule Keyfleet.Projects.Publish do
     end
   end
 
-  defp step(:withdraw, fleet_id, key, %{id: id}) do
+  defp step(:page, fleet_id, key, %{page: address}, actor) do
+    with {:ok, path, {notebook_id, source_id, saved_at}} <- page(fleet_id, address),
+         :ok <- kept(fleet_id, notebook_id, source_id, saved_at),
+         {:ok, subject} <- subject(actor),
+         {:ok, project} <- made(fleet_id, subject, notebook_id, source_id),
+         :ok <- active(fleet_id, project),
+         :ok <- once(Projects.page_publication(fleet_id, path, actor: @system), "page"),
+         {:ok, %{owner_wallet: owner}} <- held(fleet_id, key) do
+      Publication
+      |> Ash.Changeset.for_create(
+        :record,
+        %{
+          fleet_id: fleet_id,
+          project: project,
+          key: key,
+          author_wallet: owner,
+          kind: :page,
+          page: path
+        },
+        actor: @system
+      )
+      |> Ash.create()
+    end
+  end
+
+  defp step(:withdraw, fleet_id, key, %{id: id}, _actor) do
     case Ash.get(Publication, id, actor: @system, not_found_error?: false) do
       {:ok, %{fleet_id: ^fleet_id, key: ^key} = publication} ->
         with :ok <- Ash.destroy(publication, action: :remove, actor: @system),
@@ -166,11 +196,57 @@ defmodule Keyfleet.Projects.Publish do
     end
   end
 
-  defp once(fleet_id, id) do
-    case Projects.item_publication(fleet_id, id, actor: @system) do
-      {:ok, nil} -> :ok
-      {:ok, _public} -> refuse(:already_public, "This item is already public.")
+  defp once({:ok, nil}, _thing), do: :ok
+  defp once({:ok, _public}, thing), do: refuse(:already_public, "This #{thing} is already public.")
+  defp once({:error, error}, _thing), do: {:error, error}
+
+  # A saved page by its address on the fleet's notebook host, or its path.
+  defp page(fleet_id, address) do
+    path = String.replace_prefix(address, Notebooks.url(fleet_id, ""), "")
+
+    case Notebooks.result(path) do
+      {:ok, parts} ->
+        {:ok, path, parts}
+
+      :error ->
+        refuse(:page_unknown, "Name a saved notebook page by its address, as the notebook gives it.")
+    end
+  end
+
+  # Only a page this site keeps its own copy of opens for anyone.
+  defp kept(fleet_id, notebook_id, source_id, saved_at) do
+    case Notebooks.saved_output(fleet_id, notebook_id, source_id, saved_at, actor: @system) do
+      {:ok, nil} -> refuse(:page_unknown, "This fleet's notebooks have no saved page there.")
+      {:ok, _kept} -> :ok
       {:error, error} -> {:error, error}
+    end
+  end
+
+  # How the fleet's notebooks know whoever acts.
+  defp subject(%Human{} = actor), do: {:ok, Notebooks.subject(actor)}
+
+  defp subject(actor) do
+    case Notebooks.agent(actor) do
+      {:ok, nil} -> refuse(:not_made, "Only the person or agent that made a saved page makes it public.")
+      {:ok, subject} -> {:ok, subject}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  # The project whose notebook made the page, when `subject` made it.
+  defp made(fleet_id, subject, notebook_id, source_id) do
+    case Makers.result_project(fleet_id, subject, notebook_id, source_id) do
+      {:ok, project} ->
+        {:ok, project}
+
+      {:error, :not_maker} ->
+        refuse(:not_made, "Only the person or agent that made a saved page makes it public.")
+
+      {:error, :not_found} ->
+        refuse(:page_unknown, "This fleet's notebooks have no saved page there.")
+
+      {:error, :unavailable} ->
+        refuse(:page_unavailable, "The notebooks can't say who made this page right now.")
     end
   end
 

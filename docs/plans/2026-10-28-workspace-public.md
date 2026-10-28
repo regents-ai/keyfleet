@@ -42,7 +42,11 @@ activegraph / git (twigpine) I do not know what is possible technically".
    `kind` `item` carry the item's id, once per item. The Public place shows the item as it
    stands, read-only, while it isn't archived. Branch `claude/public-items-1028`.
 3. **Notebook pages.** A notebook's maker makes one saved page public. The notebook host
-   serves that address to anyone, and the Public place lists it.
+   serves that address to anyone, and the Public place lists it. Built on
+   `claude/public-pages-1028`: rows of `kind` `page` carry the page's `/results/` path, once
+   per page; only `GET`/`HEAD` of that exact path skips sign-in, served from Keyfleet's kept
+   copy with `sandbox allow-scripts`, and the hub never sees the request. Pressed from the
+   Public place (paste the address) or `publications_page`.
 4. **Code.** The Key holding a project makes a commit of its repository public. Its files page
    at that commit opens to anyone. Anonymous `git clone` waits on twigpine.
 

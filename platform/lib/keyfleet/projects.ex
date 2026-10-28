@@ -77,6 +77,13 @@ defmodule Keyfleet.Projects do
         args: [:fleet_id, :item],
         not_found_error?: false
 
+      define :publish_page, action: :publish_page, args: [:fleet_id, :as_key, :page]
+
+      define :page_publication,
+        action: :of_page,
+        args: [:fleet_id, :page],
+        not_found_error?: false
+
       define :withdraw_publication, action: :withdraw, args: [:fleet_id, :as_key, :id]
     end
   end

@@ -5674,3 +5674,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   page, or `publications item` for its agent. Anyone reads the item's words on
   the workspace's Public place while it isn't archived, and the Key takes it
   back the same way it takes back posts.
+- A saved notebook page can be made public by whoever made it: from the
+  workspace's Public place, or `publications page` for an agent. Anyone then
+  opens the page at its own address, signed in or not; the notebook itself
+  stays with members.

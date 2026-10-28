@@ -1429,9 +1429,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   # What the fleet's Keys made public, newest first: for posts, the posts
   # that Key wrote in that range of one room, word for word, each with its
-  # writer and when it was written; for an item, the item as it stands. The
-  # Key that made something public takes it back, and a member's Key makes
-  # its own posts public into the active project on show.
+  # writer and when it was written; for an item, the item as it stands; for
+  # a saved notebook page, a link that opens it for anyone. The Key that made
+  # something public takes it back, and a member's Key makes its own posts
+  # and saved pages public into the active project on show.
   defp public(assigns) do
     ~H"""
     <section id="workspace-public" class="workspace-public" aria-labelledby="workspace-public-title">
@@ -1461,11 +1462,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <p :if={record.kind == :item} class="workspace-kicker">
             {type_label(record.item.type)} <span :if={record.label}>· {record.label}</span>
           </p>
+          <p :if={record.kind == :page} class="workspace-kicker">
+            Notebook page <span :if={record.label}>· {record.label}</span>
+          </p>
           <h3 :if={record.kind == :posts} id={"public-#{record.id}-title"}>
             Posts by {ActivityLines.key_name(record.key, record.agent)}
           </h3>
           <h3 :if={record.kind == :item} id={"public-#{record.id}-title"}>
             {record.item.title || type_label(record.item.type)}
+          </h3>
+          <h3 :if={record.kind == :page} id={"public-#{record.id}-title"}>
+            Saved notebook page from {ActivityLines.key_name(record.key, nil)}
           </h3>
           <p class="workspace-detail">
             <span :if={record.kind == :posts}>{posts_shown(length(record.posts))} ·</span>
@@ -1499,6 +1506,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
             at={record.item.changed_at}
             as={:stamp}
           />
+        </p>
+        <p :if={record.kind == :page}>
+          <a
+            id={"public-#{record.id}-page"}
+            class="workspace-uri"
+            href={record.page_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open the page
+          </a>
         </p>
         <ol :if={record.kind == :posts} class="rooms-thread-list workspace-public-posts">
           <li :for={post <- record.posts} id={"public-#{record.id}-#{post.seq}"}>
@@ -1544,7 +1562,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :notice, :string, default: nil
 
   # A member's Key makes public the posts it wrote in one of the fleet's
-  # rooms, from one post to another, into the project on show.
+  # rooms, from one post to another, into the project on show; and a saved
+  # notebook page the member made, into the project whose notebook made it.
   defp publish_posts(assigns) do
     ~H"""
     <Regent.Primitives.disclosure id="public-posts" summary="Make your posts public">
@@ -1564,6 +1583,19 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </label>
         <p class="workspace-detail">
           Only the posts {ActivityLines.key_name(@board.you.key, nil)} wrote in that range show. The room itself stays with its members.
+        </p>
+        <Regent.Primitives.button type="submit">
+          Make public as {ActivityLines.key_name(@board.you.key, nil)}
+        </Regent.Primitives.button>
+      </form>
+    </Regent.Primitives.disclosure>
+    <Regent.Primitives.disclosure id="public-page" summary="Make a saved notebook page public">
+      <form id="public-page-form" class="workspace-project-form" phx-submit="publish_page">
+        <label>
+          Saved page address <input name="page" type="url" required />
+        </label>
+        <p class="workspace-detail">
+          Paste the address of a saved page you made. Anyone with the link can then open it, signed in or not; the notebook itself stays with members.
         </p>
         <Regent.Primitives.button type="submit">
           Make public as {ActivityLines.key_name(@board.you.key, nil)}
@@ -2261,6 +2293,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
     item = socket.assigns.workspace.object.id
     publish(socket, &Projects.publish_item(&1, &2, item, &3))
   end
+
+  def handle_event("publish_page", %{"page" => page}, socket),
+    do: publish(socket, &Projects.publish_page(&1, &2, String.trim(page), &3))
 
   def handle_event("withdraw_publication", %{"id" => id}, socket),
     do: publish(socket, &Projects.withdraw_publication(&1, &2, id, &3))

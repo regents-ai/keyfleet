@@ -487,8 +487,9 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # Newest first, each with what a visitor reads of it: for posts, the posts
   # its Key wrote in that range of the room, word for word, each with its
-  # writer; for an item, the item as it stands, while it isn't archived. Only
-  # the Key that made it public (`key`) takes it back.
+  # writer; for an item, the item as it stands, while it isn't archived; for
+  # a saved notebook page, its address, which opens for anyone. Only the Key
+  # that made it public (`key`) takes it back.
   defp public(fleet_id, shown, projects, key) do
     labels = labels(shown, projects)
 
@@ -558,6 +559,9 @@ defmodule KeyfleetWeb.WorkspacePage do
       object -> %{item: public_item(object, agents)}
     end
   end
+
+  defp public_record(%{kind: :page} = publication, _rooms, _objects, _agents),
+    do: %{page_url: Notebooks.url(publication.fleet_id, publication.page)}
 
   defp public_objects(_fleet_id, []), do: %{}
 
