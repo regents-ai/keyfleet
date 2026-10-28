@@ -1162,6 +1162,37 @@ paths:
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503": {$ref: "#/components/responses/ProjectUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/projects/{project}/describe:
+    post:
+      x-pairing-required: true
+      operationId: describeProject
+      description: >-
+        Gives a project the Key as_key holds its one-line description, which the project's
+        public page shows under its title. null or an empty line takes it away.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/Project"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProjectDescribeRequest"}
+      responses:
+        "200":
+          description: The project as it now stands
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProjectHeld"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/ProjectRefused"}
+        "404": {$ref: "#/components/responses/ProjectNotFound"}
+        "409": {$ref: "#/components/responses/ProjectConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/ProjectInvalid"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "503": {$ref: "#/components/responses/ProjectUnavailable"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/projects/{project}/code/pushes:
     get:
       x-pairing-required: true
@@ -4270,10 +4301,11 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [name, title, key, state, yours, clone_url]
+      required: [name, title, description, key, state, yours, clone_url]
       properties:
         name: {$ref: "#/components/schemas/ProjectName"}
         title: {type: string, minLength: 1, maxLength: 60, description: What pages call the project}
+        description: {type: [string, "null"], maxLength: 160, description: "The one line the project's page shows under its title, or null when its Key has given none"}
         key: {type: [integer, "null"], minimum: 1, description: "The Key that holds the project; null for the fleet's two shared projects, scratchpad and understanding, which no Key holds"}
         state: {type: string, enum: [active, archived, deleted], description: "active takes new work; archived is read only; deleted is gone"}
         yours: {type: boolean, description: "Whether this is the signing agent's own Key's active project"}
@@ -4292,6 +4324,13 @@ components:
       required: [as_key]
       properties:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+    ProjectDescribeRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, description]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        description: {type: [string, "null"], maxLength: 160, description: "One line, no control characters; null or an empty line takes the description away"}
     ProjectError:
       type: object
       additionalProperties: false

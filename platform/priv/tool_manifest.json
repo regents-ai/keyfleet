@@ -198,6 +198,7 @@
               "projects_archive",
               "projects_take_over",
               "projects_delete",
+              "projects_describe",
               "workspace_board",
               "workspace_show",
               "workspace_changes",
@@ -6548,6 +6549,129 @@
       "interfaces": {
         "webmcp": "projects_delete",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/delete",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "projects_describe",
+      "title": "Describe a project",
+      "description": "Give a project your Key holds its one-line description, which its public page shows under the title. null or an empty line takes it away. Answers the project.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "project",
+              "as_key",
+              "description"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "project": {
+                "type": "string",
+                "description": "The project's name, from projects_list",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                "maxLength": 32
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "One line, at most 160 characters, no control characters; null or an empty line takes it away",
+                "maxLength": 160
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/describe",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "project",
+          "as_key",
+          "description"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "project": {
+            "type": "string",
+            "description": "The project's name, from projects_list",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "maxLength": 32
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One line, at most 160 characters, no control characters; null or an empty line takes it away",
+            "maxLength": 160
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "projects_describe",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/describe",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

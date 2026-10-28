@@ -43,6 +43,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @project_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/projects/start\z"
   @project_archive_path ~r"\A/api/v1/agent/fleets/#{@fleet}/projects/archive\z"
   @project_hold_path ~r"\A#{@in_project}/(take_over|delete)\z"
+  @project_describe_path ~r"\A#{@in_project}/describe\z"
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
@@ -90,6 +91,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@project_start_path, {~w(as_key name title), []}},
     {@project_archive_path, {~w(as_key), []}},
     {@project_hold_path, {~w(as_key), []}},
+    {@project_describe_path, {~w(as_key description), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
     {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
@@ -517,6 +519,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @project_start_path,
         @project_archive_path,
         @project_hold_path,
+        @project_describe_path,
         @run_start_path,
         @notebook_create_path,
         @files_list_path,
@@ -643,6 +646,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         project_start: @project_start_path,
         project_archive: @project_archive_path,
         project_hold: @project_hold_path,
+        project_describe: @project_describe_path,
         run_start: @run_start_path,
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
@@ -674,6 +678,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(key in 1..@max_seq)
 
   defp check_fleet_body(op, _params) when op in [:project_archive, :project_hold], do: :invalid
+
+  # A description names the Key and the line, or null to take it away.
+  defp check_fleet_body(:project_describe, %{"as_key" => key, "description" => line} = params)
+       when map_size(params) == 2 and is_integer(key) and (is_binary(line) or is_nil(line)),
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(:project_describe, _params), do: :invalid
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
   defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
   defp check_fleet_body(:files_list, params), do: check_files_list_body(params)

@@ -1834,6 +1834,48 @@
         ]
       },
       {
+        "command": "projects describe <fleet> <key> <project> <description>",
+        "description": "Give a project your Key holds its one-line description, which its public page shows under the title. An empty line takes it away.",
+        "operation_id": "describeProject",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/describe",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "projects_describe",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key you act as: yours, your shard's or your paired person's."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "in": "body",
+            "field": "description",
+            "description": "One line, at most 160 characters, with no control characters; an empty line takes it away."
+          }
+        ]
+      },
+      {
         "command": "code pushes <fleet> <project>",
         "description": "List a project's 10 newest pushes to its repository, newest first, each with the commit's full hash and the address a workspace cites it by. Changes nothing.",
         "operation_id": "listCodePushes",
