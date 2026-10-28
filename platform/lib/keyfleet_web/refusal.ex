@@ -24,6 +24,15 @@ defmodule KeyfleetWeb.Refusal do
     "unsupported_query" =>
       {"A signed request here takes no query string.",
        "Put what the request asks for in its signed JSON body, then send it again."},
+    "operation_unknown" =>
+      {"There is no agent operation at this address.",
+       "/docs lists each operation with its method and address: lowercase, with no trailing slash."},
+    "method_not_allowed" =>
+      {"This operation takes another method.",
+       "Send it with the method the Allow header names, signed over that method."},
+    "json_required" =>
+      {"A signed request here carries a JSON body, or none.",
+       "Send a POST with content-type: application/json and a JSON body, {} when there is nothing to say. Send a GET with no body."},
     "missing_signed_body" =>
       {"Send the body as JSON, signed with the rest of the request.",
        "Sign the request again with its whole body, then send it again."},

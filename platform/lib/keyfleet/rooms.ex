@@ -6,6 +6,8 @@ defmodule Keyfleet.Rooms do
   """
   use Ash.Domain
 
+  import Ecto.Query, only: [from: 2, subquery: 1]
+
   require Ash.Query
 
   alias Keyfleet.Access
@@ -23,6 +25,9 @@ defmodule Keyfleet.Rooms do
   @quotes_page 20
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
+  # How far back a Key's own posts count when telling it where others have
+  # posted after it.
+  @posted_after_days 7
 
   resources do
     resource Keyfleet.Rooms.Room do
@@ -127,6 +132,70 @@ defmodule Keyfleet.Rooms do
   """
   def unmuted(messages, muted),
     do: Enum.reject(messages, &(&1.kind == :post and MapSet.member?(muted, &1.as_key)))
+
+  @doc """
+  The fleet's rooms where others have posted since `token_id` last did, of
+  the ones it posted in over the last week, as `[%{slug, after_seq, posts}]`
+  by slug: `after_seq` is the place of the Key's latest post there, to read
+  on from, and `posts` how many posts written as another Key, or as none,
+  came after it. Muted Keys' posts are counted, as a room's places are.
+  """
+  def posted_after_key(fleet_id, token_id) do
+    since = DateTime.add(DateTime.utc_now(), -@posted_after_days * 86_400)
+
+    latest =
+      from(m in "messages",
+        where:
+          m.fleet_id == ^fleet_id and m.as_key == ^token_id and m.kind == "post" and
+            not m.in_key_thread and m.inserted_at >= type(^since, :utc_datetime_usec),
+        group_by: m.room_id,
+        select: %{room_id: m.room_id, seq: max(m.seq)}
+      )
+
+    from(mine in subquery(latest),
+      join: m in "messages",
+      on: m.room_id == mine.room_id and m.seq > mine.seq,
+      join: r in "rooms",
+      on: r.id == mine.room_id,
+      where: m.kind == "post" and (is_nil(m.as_key) or m.as_key != ^token_id),
+      group_by: [r.slug, mine.seq],
+      order_by: r.slug,
+      select: %{slug: r.slug, after_seq: mine.seq, posts: count(m.id)}
+    )
+    |> Keyfleet.Repo.all()
+  end
+
+  @doc """
+  How many posts written as another Key, or as none, came between `message`
+  and the Key's post before it in the same room or thread, as `%{after_seq,
+  posts}`, `after_seq` being that earlier post's place; nil when the Key
+  hadn't posted there before, or `message` was written as no Key.
+  """
+  def posted_after_previous(%{as_key: nil}), do: nil
+
+  def posted_after_previous(%{room_id: room_id, as_key: key, seq: seq}) do
+    in_room =
+      from(m in "messages",
+        where: m.room_id == type(^room_id, Ecto.UUID) and m.kind == "post" and m.seq < ^seq
+      )
+
+    previous =
+      from(m in in_room, where: m.as_key == ^key, order_by: [desc: m.seq], limit: 1, select: m.seq)
+
+    case Keyfleet.Repo.one(previous) do
+      nil ->
+        nil
+
+      after_seq ->
+        others =
+          from(m in in_room,
+            where: m.seq > ^after_seq and (is_nil(m.as_key) or m.as_key != ^key),
+            select: count(m.id)
+          )
+
+        %{after_seq: after_seq, posts: Keyfleet.Repo.one(others)}
+    end
+  end
 
   @doc """
   Where a reader of `class` (`Keyfleet.Access.class/2`) hears what changed in

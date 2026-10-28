@@ -217,12 +217,13 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       assert Jason.decode!(refusal.resp_body) == refused("duplicate_proof")
     end
 
-    for {method, path} <- [
-          {:get, @path},
-          {:put, @path},
-          {:post, @path <> "?name=x"},
-          {:post, "/api/v1/agent/other"},
-          {:post, "/api/v1/%61gent/join/status"}
+    # A wrong method or address is told so, never that the sign-in failed.
+    for {method, path, status} <- [
+          {:get, @path, 405},
+          {:put, @path, 405},
+          {:post, @path <> "?name=x", 401},
+          {:post, "/api/v1/agent/other", 404},
+          {:post, "/api/v1/%61gent/join/status", 404}
         ] do
       assert Req.request!(
                method: method,
@@ -231,7 +232,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                body: @body,
                retry: false,
                redirect: false
-             ).status == 401
+             ).status == status
     end
 
     queried =
@@ -249,7 +250,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, %{
              signed
              | headers: Map.put(signed.headers, "content-type", "text/plain")
-           }).status == 401
+           }).status == 415
 
     refute_receive {:broker_payload, _}
     assert send_request(c, signed).status == 200

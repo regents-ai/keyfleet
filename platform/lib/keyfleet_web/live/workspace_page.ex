@@ -87,6 +87,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"next_step", "Next step"},
       {"notebook_ref", "Notebook"},
       {"commit_ref", "Commit"},
+      {"rerun", "Rerun"},
       {"result_ref", "Result"}
     ],
     "finding" => [
@@ -1325,7 +1326,26 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp field_value(field, value, _fleet_id) when is_map_key(@choices, field),
     do: choice(field, value)
 
+  # How to run a task's work again, a line each: the command, then its
+  # lockfile, inputs and outputs, each with its role and digest.
+  defp field_value("rerun", %{"command" => command} = rerun, _fleet_id) do
+    files =
+      [
+        {"Lockfile", List.wrap(rerun["lockfile"])},
+        {"Input", rerun["inputs"]},
+        {"Output", rerun["outputs"]}
+      ]
+      |> Enum.flat_map(fn {label, files} -> Enum.map(files, &rerun_file(label, &1)) end)
+
+    {:list, [command | files]}
+  end
+
   defp field_value(_field, value, _fleet_id), do: value(value)
+
+  defp rerun_file(label, file) do
+    details = Enum.reject([file["role"], file["digest"]], &is_nil/1)
+    Enum.join(["#{label}: #{file["path"]}" | details], " · ")
+  end
 
   # A commit of one of the fleet's own repositories is shown as that commit,
   # opened on this site; a saved result of one of the fleet's notebooks as that result; one
