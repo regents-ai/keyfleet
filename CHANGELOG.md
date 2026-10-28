@@ -5740,3 +5740,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   answers the saved file whenever the file at that path holds exactly the text
   sent and no one else made it, so the answer matches what happened and an add
   is safe to send again.
+
+## 2026-10-28 — Web server security update
+
+- The web server library moves to Bandit 1.14.1, which fixes a way to make the
+  server use too much memory with HTTP/2 uploads sent in tiny pieces
+  (EEF-CVE-2026-116078).
