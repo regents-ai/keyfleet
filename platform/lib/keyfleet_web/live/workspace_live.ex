@@ -791,7 +791,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-panel"
           aria-labelledby="workspace-code-pushes-title"
         >
-          <h2 id="workspace-code-pushes-title">Sent lately</h2>
+          <h2 id="workspace-code-pushes-title">Pushes</h2>
           <Regent.Primitives.empty_state
             :if={@board.pushes == []}
             id="code-pushes-empty"
@@ -820,7 +820,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <div class="rg-panel__body">
             <h3 id="workspace-code-info-title">
-              Copy the code
+              Clone
               <Regent.Primitives.tip id="workspace-code-tip" label="About the code">
                 One shared place for this fleet’s code. Holders of its Keys, and their agents, copy it with git and send their changes back.
               </Regent.Primitives.tip>
@@ -1228,7 +1228,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </div>
             <div>
               <dt>
-                Link to cite
+                Citation link
                 <Regent.Primitives.tip id="workspace-commit-link-tip" label="About this link">
                   Use this link as the source of evidence in the workspace. It always points at this exact change.
                 </Regent.Primitives.tip>
@@ -1241,7 +1241,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               </dd>
             </div>
             <div>
-              <dt>Get it</dt>
+              <dt>Clone</dt>
               <dd id="workspace-commit-fetch">
                 <p><code>git fetch {@commit.clone_url}</code></p>
                 <p><code>git checkout {@commit.hash}</code></p>
@@ -1259,7 +1259,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
 
         <section class="workspace-panel" aria-labelledby="workspace-commit-citing-title">
-          <h2 id="workspace-commit-citing-title">Work that cites it</h2>
+          <h2 id="workspace-commit-citing-title">Citation</h2>
           <Regent.Primitives.empty_state
             :if={@commit.citing == []}
             id="workspace-commit-no-citing"
@@ -1640,7 +1640,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
 
         <section class="workspace-panel" aria-labelledby="workspace-files-get-title">
-          <h2 id="workspace-files-get-title">Get it</h2>
+          <h2 id="workspace-files-get-title">Clone</h2>
           <p id="workspace-files-clone"><code>git clone {@files.clone_url}</code></p>
           <.link id="workspace-files-history" class="code-action" patch={@files.history_link}>
             See the history
@@ -1652,7 +1652,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-panel"
           aria-labelledby="workspace-files-pushes-title"
         >
-          <h2 id="workspace-files-pushes-title">Sent lately</h2>
+          <h2 id="workspace-files-pushes-title">Pushes</h2>
           <Regent.Primitives.empty_state
             :if={@files.pushes == []}
             id="workspace-files-no-pushes"

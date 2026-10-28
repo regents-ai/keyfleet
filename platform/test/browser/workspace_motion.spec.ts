@@ -3,7 +3,7 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {addWork, itemPath, openWorkspace, prepareFleet, pushCode, reworkItem, sellKey} from "./support/fleet_chain"
 import {forget, leftovers, moved, watchMotion} from "./support/motion"
 
-// A push glides into the code's Sent lately and a change into an item's
+// A push glides into the code's Pushes and a change into an item's
 // History while a Key holder watches, and each list ends clean.
 const fleet = "fibonacci_cascade"
 const me = "0x1111111111111111111111111111111111111111"
@@ -14,7 +14,7 @@ test.beforeAll(() => {
   addWork(fleet, 17, "Read the brief")
 })
 
-test("a new push glides into Sent lately and ends clean", async ({page}) => {
+test("a new push glides into Pushes and ends clean", async ({page}) => {
   const key = sellKey(fleet, me)
   pushCode(fleet, key, me, "1".repeat(40))
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()

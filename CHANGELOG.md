@@ -5835,3 +5835,5 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `regents keyfleet code commits` and `code commit`).
 - The commit page no longer lists the pushes that ended at the commit; it
   names the push that sent it.
+- The code pages' titles are one or two words: Citation, Pushes, Clone,
+  Citation link.
