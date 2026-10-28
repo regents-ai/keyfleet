@@ -22,11 +22,22 @@ defmodule KeyfleetWeb.AgentPublicationController do
   # How many publications a list answers, newest first.
   @listed 100
 
-  def index(conn, %{"fleet_id" => fleet_id, "project" => name}) do
+  # A page at a time, newest first; `after` is the last page's next_cursor.
+  def index(conn, %{"fleet_id" => fleet_id, "project" => name} = params) do
+    page =
+      case params do
+        %{"after" => cursor} when is_binary(cursor) -> [limit: @listed, after: cursor]
+        _newest -> [limit: @listed]
+      end
+
     with {:fleet, {:ok, %{}}} <- {:fleet, Fleets.get_fleet(fleet_id, actor: %System{})},
          {:project, {:ok, %{}}} <- {:project, Projects.project_page(fleet_id, name)},
-         {:ok, publications} <- Projects.publications(fleet_id, name, query: [limit: @listed]) do
-      json(conn, %{publications: Enum.map(publications, &publication/1)})
+         {:ok, %{results: publications, more?: more?}} <-
+           Projects.publications(fleet_id, name, page: page) do
+      json(conn, %{
+        publications: Enum.map(publications, &publication/1),
+        next_cursor: if(more?, do: List.last(publications).__metadata__.keyset)
+      })
     else
       {:fleet, {:ok, nil}} -> Refusal.json(conn, 404, "fleet_unknown")
       {:project, {:ok, nil}} -> Refusal.json(conn, 404, "project_unknown")

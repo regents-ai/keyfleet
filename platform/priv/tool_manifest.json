@@ -7196,7 +7196,7 @@
     {
       "name": "publications_list",
       "title": "List what is public in a project",
-      "description": "Read what the fleet's Keys made public in a project, newest first: each one's id, the Key that made it public, its kind and, for posts, the room and range, for an item, its id, for a page, its address, or for a commit, its hash. Anyone reads them on the workspace's Public place. Changes nothing.",
+      "description": "Read what the fleet's Keys made public in a project, newest first, 100 at a time (send next_cursor as after for more): each one's id, the Key that made it public, its kind and, for posts, the room and range, for an item, its id, for a page, its address, or for a commit, its hash. Anyone reads them on the workspace's Public place. Changes nothing.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -7225,6 +7225,11 @@
                 "description": "The project's name, from projects_list",
                 "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
                 "maxLength": 32
+              },
+              "after": {
+                "type": "string",
+                "description": "The last answer's next_cursor, unchanged; omit for the newest",
+                "minLength": 1
               }
             }
           },
@@ -7273,6 +7278,11 @@
             "description": "The project's name, from projects_list",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
+          },
+          "after": {
+            "type": "string",
+            "description": "The last answer's next_cursor, unchanged; omit for the newest",
+            "minLength": 1
           }
         }
       },

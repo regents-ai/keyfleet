@@ -2096,6 +2096,15 @@
             "field": "project",
             "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
           }
+        ],
+        "flags": [
+          {
+            "name": "after",
+            "type": "string",
+            "in": "query",
+            "field": "after",
+            "description": "Pass next_cursor unchanged to read the next 100; omit for the newest."
+          }
         ]
       },
       {

@@ -5758,3 +5758,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Anyone then reads the files and folders at that commit, read-only, signed
   in or not; later changes stay with members.
 - API contract 22.2.0: `publications/pages` and `publications/commit`.
+- The workspace's Public place shows a dozen at a time with Earlier and Back
+  to the newest, signed in or not, and `publications list` reads 100 at a
+  time with `next_cursor` and `--after`.
