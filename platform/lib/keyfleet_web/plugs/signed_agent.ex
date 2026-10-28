@@ -66,8 +66,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @publication ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
   @publications_list_path ~r"\A#{@in_project}/publications/list\z"
   @publish_posts_path ~r"\A#{@in_project}/publications/posts\z"
+  @publish_commit_path ~r"\A#{@in_project}/publications/commit\z"
   @withdraw_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/#{@publication}/withdraw\z"
   @publish_item_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/items\z"
+  @publish_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/pages\z"
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
@@ -123,6 +125,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@withdraw_path, {~w(as_key), []}},
     {@publications_list_path, {[], ~w(after)}},
     {@publish_item_path, {~w(as_key item), []}},
+    {@publish_page_path, {~w(as_key page), []}},
+    {@publish_commit_path, {~w(as_key commit), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
     {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
@@ -641,6 +645,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @withdraw_path,
         @publications_list_path,
         @publish_item_path,
+        @publish_page_path,
+        @publish_commit_path,
         @run_start_path,
         @notebook_create_path,
         @files_list_path,
@@ -801,6 +807,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         withdraw: @withdraw_path,
         publications_list: @publications_list_path,
         publish_item: @publish_item_path,
+        publish_page: @publish_page_path,
+        publish_commit: @publish_commit_path,
         run_start: @run_start_path,
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
@@ -877,6 +885,22 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(key in 1..@max_seq)
 
   defp check_fleet_body(:publish_item, _params), do: :invalid
+
+  # A saved notebook page goes public by its address, as a Key.
+  defp check_fleet_body(:publish_page, %{"as_key" => key, "page" => page} = params)
+       when map_size(params) == 2 and is_integer(key) and is_binary(page) and
+              byte_size(page) in 1..512,
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(:publish_page, _params), do: :invalid
+
+  # A project's code goes public at one commit, by its full hash, as a Key.
+  defp check_fleet_body(:publish_commit, %{"as_key" => key, "commit" => hash} = params)
+       when map_size(params) == 2 and is_integer(key) and is_binary(hash) and
+              byte_size(hash) in [40, 64],
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(:publish_commit, _params), do: :invalid
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
 
   # A send key or command id, as long as either may be.

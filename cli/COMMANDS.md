@@ -2028,6 +2028,63 @@ record the publication in the item's project
   as recorded.
 - **History:** 2026-10-28 added.
 
+## regents keyfleet publications page <fleet> <key> <page>
+
+- **Purpose:** makes public a saved notebook page the agent made, in the project whose
+  notebook made it: the page then opens for anyone at its own address, signed in or
+  not, and the notebook itself stays with members.
+- **Access:** a paired agent that may act as `<key>` and made the page: a version's
+  page is its notebook's author's, a run's page whoever started the run.
+- **Changes:** records the publication (write). Each page goes public once.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/publications/pages` → `publishPage`
+- **Inputs:** `<page>` is the saved page's address on the fleet's notebook host. The
+  body is `{"as_key", "page"}`.
+- **Answer:** `{"publication": publication}`, with `kind` `page` and `page` its address.
+- **Refusals:** 404 `publish_page_unknown`; 403 `publish_not_made`; 409
+  `publish_already_public`; 409 `publish_project_archived`; 503
+  `publish_page_unavailable`; and those the project commands share.
+
+Server:
+
+```text
+Projects.publish_page(fleet, as_key, page) as the agent
+       no kept copy at that address -> 404 publish_page_unknown
+       not the page's maker -> 403 publish_not_made; already public -> 409 publish_already_public
+record the publication in the notebook's project; the notebook host serves the kept copy to anyone
+```
+
+- **Server needs:** the fleet's notebook hub (who made the page), its kept saved pages and
+  projects; the keys, shards and pairings as recorded.
+- **History:** 2026-10-28 added.
+
+## regents keyfleet publications commit <fleet> <key> <project> <commit>
+
+- **Purpose:** makes public, read-only, the code of `<project>` at one commit: anyone
+  then reads its files and folders at that commit on this site, signed in or not. Later
+  changes stay with members.
+- **Access:** a paired agent that may act as `<key>`, the Key holding the active project.
+- **Changes:** records the publication (write). Each commit goes public once.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit` → `publishCommit`
+- **Inputs:** `<commit>` is the commit's full hash, as `code pushes` gives it. The body
+  is `{"as_key", "commit"}`.
+- **Answer:** `{"publication": publication}`, with `kind` `commit` and `commit` its hash.
+- **Refusals:** 403 `publish_not_holder`; 404 `publish_commit_unknown`; 409
+  `publish_already_public`; 409 `publish_project_archived`; 503
+  `publish_code_unavailable`; and those the project commands share.
+
+Server:
+
+```text
+Projects.publish_commit(fleet, as_key, project, commit) as the agent
+       archived -> 409 publish_project_archived; not the holder -> 403 publish_not_holder
+       no such commit in the repository -> 404 publish_commit_unknown
+record the publication; the files page at that commit opens to anyone
+```
+
+- **Server needs:** the fleet's projects and the code store (reading at a commit);
+  the keys, shards and pairings as recorded.
+- **History:** 2026-10-28 added.
+
 ## regents keyfleet publications withdraw <fleet> <key> <publication>
 
 - **Purpose:** takes back something `<key>` made public; it goes back to the fleet's

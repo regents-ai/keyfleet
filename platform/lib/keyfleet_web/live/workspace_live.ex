@@ -1122,6 +1122,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   end
 
   attr :commit, :any, required: true, doc: "the commit as read, or `:unreadable`"
+  attr :publish_notice, :string, default: nil, doc: "why making the code public was refused"
 
   attr :signed_out?, :boolean,
     default: false,
@@ -1162,6 +1163,45 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </p>
         <h2>Commit {String.slice(@commit.hash, 0, 12)}</h2>
       </header>
+
+      <section
+        :if={@commit.public.id || @commit.public.make? || @publish_notice}
+        id="workspace-commit-public"
+        class="workspace-panel workspace-item-public"
+      >
+        <p :if={@commit.public.id} class="workspace-detail">
+          Everyone can read <.link patch={@commit.public.link}>the code at this commit</.link>, signed in or not.
+        </p>
+        <p :if={@commit.public.make?} class="workspace-detail">
+          Show the code at this commit to everyone, read-only. Later changes stay with members.
+        </p>
+        <Regent.Primitives.button
+          :if={@commit.public.make?}
+          id="workspace-commit-publish"
+          type="button"
+          phx-click="publish_commit"
+        >
+          Make public
+        </Regent.Primitives.button>
+        <Regent.Primitives.button
+          :if={@commit.public.take_back?}
+          id="workspace-commit-withdraw"
+          type="button"
+          variant="secondary"
+          phx-click="withdraw_publication"
+          phx-value-id={@commit.public.id}
+        >
+          Take back
+        </Regent.Primitives.button>
+        <p
+          :if={@publish_notice}
+          id="workspace-commit-public-notice"
+          class="workspace-notebooks-notice"
+          role="status"
+        >
+          {@publish_notice}
+        </p>
+      </section>
 
       <div class="workspace-item-grid">
         <section class="workspace-panel" aria-labelledby="workspace-commit-title">
@@ -1294,13 +1334,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <.link patch={"#{Keyfleet.Fleets.path(@files.fleet_id)}/workspace"}>Workspace</.link>
         </p>
         <h2>{if @files.path == "", do: "Code", else: Path.basename(@files.path)}</h2>
+        <p :if={@files.at} id="workspace-files-at" class="workspace-lede">
+          At commit <code>{String.slice(@files.at, 0, 12)}</code>, read-only
+        </p>
         <nav
           :if={@files.path != ""}
           id="workspace-files-crumbs"
           class="workspace-crumbs"
           aria-label="Folders"
         >
-          <.link patch={Keyfleet.Code.files_path(@files.fleet_id, @files.repository, "")}>Code</.link>
+          <.link patch={Keyfleet.Code.files_path(@files.fleet_id, @files.repository, "", @files.at)}>
+            Code
+          </.link>
           <%= for crumb <- @files.crumbs do %>
             <span aria-hidden="true">/</span>
             <.link patch={crumb.link}>{crumb.name}</.link>
@@ -1331,12 +1376,20 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <.file :if={match?({:file, _}, @files.listing)} listing={@files.listing} />
         </section>
 
-        <section class="workspace-panel" aria-labelledby="workspace-files-get-title">
+        <section
+          :if={@files.clone_url}
+          class="workspace-panel"
+          aria-labelledby="workspace-files-get-title"
+        >
           <h2 id="workspace-files-get-title">Get it</h2>
           <p id="workspace-files-clone"><code>git clone {@files.clone_url}</code></p>
         </section>
 
-        <section class="workspace-panel" aria-labelledby="workspace-files-pushes-title">
+        <section
+          :if={is_nil(@files.at)}
+          class="workspace-panel"
+          aria-labelledby="workspace-files-pushes-title"
+        >
           <h2 id="workspace-files-pushes-title">Sent lately</h2>
           <Regent.Primitives.empty_state
             :if={@files.pushes == []}
@@ -1429,9 +1482,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   # What the fleet's Keys made public, newest first: for posts, the posts
   # that Key wrote in that range of one room, word for word, each with its
-  # writer and when it was written; for an item, the item as it stands. The
-  # Key that made something public takes it back, and a member's Key makes
-  # its own posts public into the active project on show.
+  # writer and when it was written; for an item, the item as it stands; for
+  # a saved notebook page, a link that opens it for anyone. The Key that made
+  # something public takes it back, and a member's Key makes its own posts
+  # and saved pages public into the active project on show.
   defp public(assigns) do
     ~H"""
     <section id="workspace-public" class="workspace-public" aria-labelledby="workspace-public-title">
@@ -1461,11 +1515,23 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <p :if={record.kind == :item} class="workspace-kicker">
             {type_label(record.item.type)} <span :if={record.label}>· {record.label}</span>
           </p>
+          <p :if={record.kind == :page} class="workspace-kicker">
+            Notebook page <span :if={record.label}>· {record.label}</span>
+          </p>
+          <p :if={record.kind == :commit} class="workspace-kicker">
+            Code <span :if={record.label}>· {record.label}</span>
+          </p>
           <h3 :if={record.kind == :posts} id={"public-#{record.id}-title"}>
             Posts by {ActivityLines.key_name(record.key, record.agent)}
           </h3>
           <h3 :if={record.kind == :item} id={"public-#{record.id}-title"}>
             {record.item.title || type_label(record.item.type)}
+          </h3>
+          <h3 :if={record.kind == :page} id={"public-#{record.id}-title"}>
+            Saved notebook page from {ActivityLines.key_name(record.key, nil)}
+          </h3>
+          <h3 :if={record.kind == :commit} id={"public-#{record.id}-title"}>
+            Code at commit {String.slice(record.commit, 0, 12)}
           </h3>
           <p class="workspace-detail">
             <span :if={record.kind == :posts}>{posts_shown(length(record.posts))} ·</span>
@@ -1499,6 +1565,22 @@ defmodule KeyfleetWeb.WorkspaceLive do
             at={record.item.changed_at}
             as={:stamp}
           />
+        </p>
+        <p :if={record.kind == :page}>
+          <a
+            id={"public-#{record.id}-page"}
+            class="workspace-uri"
+            href={record.page_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open the page
+          </a>
+        </p>
+        <p :if={record.kind == :commit}>
+          <.link id={"public-#{record.id}-files"} class="workspace-uri" patch={record.files_url}>
+            Browse the files
+          </.link>
         </p>
         <ol :if={record.kind == :posts} class="rooms-thread-list workspace-public-posts">
           <li :for={post <- record.posts} id={"public-#{record.id}-#{post.seq}"}>
@@ -1556,7 +1638,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :notice, :string, default: nil
 
   # A member's Key makes public the posts it wrote in one of the fleet's
-  # rooms, from one post to another, into the project on show.
+  # rooms, from one post to another, into the project on show; and a saved
+  # notebook page the member made, into the project whose notebook made it.
   defp publish_posts(assigns) do
     ~H"""
     <Regent.Primitives.disclosure id="public-posts" summary="Make your posts public">
@@ -1576,6 +1659,19 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </label>
         <p class="workspace-detail">
           Only the posts {ActivityLines.key_name(@board.you.key, nil)} wrote in that range show. The room itself stays with its members.
+        </p>
+        <Regent.Primitives.button type="submit">
+          Make public as {ActivityLines.key_name(@board.you.key, nil)}
+        </Regent.Primitives.button>
+      </form>
+    </Regent.Primitives.disclosure>
+    <Regent.Primitives.disclosure id="public-page" summary="Make a saved notebook page public">
+      <form id="public-page-form" class="workspace-project-form" phx-submit="publish_page">
+        <label>
+          Saved page address <input name="page" type="url" required />
+        </label>
+        <p class="workspace-detail">
+          Paste the address of a saved page you made. Anyone with the link can then open it, signed in or not; the notebook itself stays with members.
         </p>
         <Regent.Primitives.button type="submit">
           Make public as {ActivityLines.key_name(@board.you.key, nil)}
@@ -2277,6 +2373,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
   def handle_event("publish_item", _params, socket) do
     item = socket.assigns.workspace.object.id
     publish(socket, &Projects.publish_item(&1, &2, item, &3))
+  end
+
+  def handle_event("publish_page", %{"page" => page}, socket),
+    do: publish(socket, &Projects.publish_page(&1, &2, String.trim(page), &3))
+
+  def handle_event("publish_commit", _params, socket) do
+    %{project: project, hash: hash} = socket.assigns.workspace
+    publish(socket, &Projects.publish_commit(&1, &2, project, hash, &3))
   end
 
   def handle_event("withdraw_publication", %{"id" => id}, socket),

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.0.0
+  version: 24.1.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -1630,6 +1630,39 @@ paths:
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503": {$ref: "#/components/responses/ProjectUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit:
+    post:
+      x-pairing-required: true
+      operationId: publishCommit
+      description: >-
+        Makes public, read-only, the project's code at one commit, by its full hash, for the Key
+        as_key holding the active project: anyone then reads its files and folders at that commit
+        on this site, signed in or not. Later changes stay with members. Each commit goes public
+        once.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/Project"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PublishCommitRequest"}
+      responses:
+        "200":
+          description: What was made public
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PublicationHeld"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/ProjectRefused"}
+        "404": {$ref: "#/components/responses/ProjectNotFound"}
+        "409": {$ref: "#/components/responses/ProjectConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/ProjectInvalid"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "503": {$ref: "#/components/responses/ProjectUnavailable"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/publications/items:
     post:
       x-pairing-required: true
@@ -1647,6 +1680,38 @@ paths:
         content:
           application/json:
             schema: {$ref: "#/components/schemas/PublishItemRequest"}
+      responses:
+        "200":
+          description: What was made public
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PublicationHeld"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/ProjectRefused"}
+        "404": {$ref: "#/components/responses/ProjectNotFound"}
+        "409": {$ref: "#/components/responses/ProjectConflict"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/ProjectInvalid"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "503": {$ref: "#/components/responses/ProjectUnavailable"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/publications/pages:
+    post:
+      x-pairing-required: true
+      operationId: publishPage
+      description: >-
+        Makes public a saved notebook page that the signing agent made, acting as the Key as_key,
+        in the project whose notebook made it, which is active. The page then opens for anyone at
+        its own address, signed in or not; the notebook itself stays with members. Each page goes
+        public once.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PublishPageRequest"}
       responses:
         "200":
           description: What was made public
@@ -4313,7 +4378,8 @@ components:
         project_not_holder: only the Key that holds an archived project deletes it.
         publish_not_yours: only the Key that made something public takes it back.
         publish_not_added: a Key makes public only the items it added in the ownership it is in
-        today.
+        today. publish_not_made: only the person or agent that made a saved page makes it public.
+        publish_not_holder: only the Key holding a project makes its code public.
         agent_not_paired: the agent has no current pairing; its person signs in on this site and
         pairs it with Pair New Agent in the side panel, then it signs the request again.
       content:
@@ -4329,7 +4395,9 @@ components:
         project by that name; GET /api/v1/agent/fleets/{fleet_id}/projects lists them.
         publish_room_unknown: the fleet has no room by that slug. publish_key_unknown: the fleet
         has no Key by that number. publish_unknown: the fleet has nothing public by that id.
-        publish_item_unknown: the workspace has no item by that id.
+        publish_item_unknown: the workspace has no item by that id. publish_page_unknown: the
+        fleet's notebooks have no saved page at that address. publish_commit_unknown: the
+        project's code has no commit by that hash.
       content:
         application/json:
           schema:
@@ -4380,7 +4448,9 @@ components:
         not be reached. pairing_unavailable: the agent's pairing could not be checked; send the
         same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when
         to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of
-        its own; send the same request again shortly.
+        its own; send the same request again shortly. publish_page_unavailable: the notebooks
+        can't say who made the page right now; send the same request again shortly.
+        publish_code_unavailable: the code can't be read right now; send it again shortly.
       headers:
         Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
@@ -4857,6 +4927,13 @@ components:
         room: {type: string, description: "The room's slug, as rooms_list gives it; never a Key's thread"}
         from_seq: {type: integer, minimum: 1, description: The first post of the range}
         to_seq: {type: integer, minimum: 1, description: "The last post of the range, at most 199 after from_seq"}
+    PublishCommitRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, commit]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        commit: {type: string, pattern: "^([0-9a-f]{40}|[0-9a-f]{64})$", description: "The commit's full hash, as code_pushes gives it"}
     PublishItemRequest:
       type: object
       additionalProperties: false
@@ -4864,6 +4941,13 @@ components:
       properties:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
         item: {type: string, minLength: 1, maxLength: 128, description: "The item's id, such as task#27"}
+    PublishPageRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, page]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        page: {type: string, minLength: 1, maxLength: 512, description: "The saved page's address on the fleet's notebook host, or its /results/ path"}
     PublicationListRequest:
       type: object
       additionalProperties: false
@@ -4888,16 +4972,18 @@ components:
     Publication:
       type: object
       additionalProperties: false
-      required: [id, project, key, kind, room, from_seq, to_seq, item, made_at, url]
+      required: [id, project, key, kind, room, from_seq, to_seq, item, page, commit, made_at, url]
       properties:
         id: {type: string, format: uuid}
         project: {$ref: "#/components/schemas/ProjectName"}
         key: {type: integer, minimum: 1, description: The Key that made it public; only that Key takes it back}
-        kind: {type: string, enum: [posts, item], description: "posts: the Key's own posts in one room, over a range; item: one workspace item the Key added"}
+        kind: {type: string, enum: [posts, item, page, commit], description: "posts: the Key's own posts in one room, over a range; item: one workspace item the Key added; page: one saved notebook page; commit: the project's code at one commit"}
         room: {type: [string, "null"], description: The room's slug, for posts}
         from_seq: {type: [integer, "null"], minimum: 1}
         to_seq: {type: [integer, "null"], minimum: 1}
         item: {type: [string, "null"], description: "The item's id, for an item"}
+        page: {type: [string, "null"], format: uri, description: "The saved page's address, which anyone opens, for a page"}
+        commit: {type: [string, "null"], description: "The commit's full hash, for a commit"}
         made_at: {type: string, format: date-time}
         url: {type: string, format: uri, description: "The workspace's Public place for the project, which anyone reads"}
     ProjectKeyRequest:
@@ -4925,7 +5011,7 @@ components:
           properties:
             code:
               type: string
-              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_shared, project_name_taken, project_invalid, publish_project_archived, publish_range, publish_room_unknown, publish_key_unknown, publish_none_written, publish_not_yours, publish_unknown, publish_item_unknown, publish_item_archived, publish_already_public, publish_not_added, publish_invalid, ownership_refreshing, graph_unavailable]
+              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_shared, project_name_taken, project_invalid, publish_project_archived, publish_range, publish_room_unknown, publish_key_unknown, publish_none_written, publish_not_yours, publish_unknown, publish_item_unknown, publish_item_archived, publish_already_public, publish_not_added, publish_page_unknown, publish_not_made, publish_page_unavailable, publish_not_holder, publish_commit_unknown, publish_code_unavailable, publish_invalid, ownership_refreshing, graph_unavailable]
             message: {type: string}
             hint: {type: string}
     ProjectClosedError:

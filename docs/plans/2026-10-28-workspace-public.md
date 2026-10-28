@@ -42,9 +42,19 @@ activegraph / git (twigpine) I do not know what is possible technically".
    `kind` `item` carry the item's id, once per item. The Public place shows the item as it
    stands, read-only, while it isn't archived. Branch `claude/public-items-1028`.
 3. **Notebook pages.** A notebook's maker makes one saved page public. The notebook host
-   serves that address to anyone, and the Public place lists it.
+   serves that address to anyone, and the Public place lists it. Built on
+   `claude/public-pages-1028`: rows of `kind` `page` carry the page's `/results/` path, once
+   per page; only `GET`/`HEAD` of that exact path skips sign-in, served from Keyfleet's kept
+   copy with `sandbox allow-scripts`, and the hub never sees the request. Pressed from the
+   Public place (paste the address) or `publications_page`.
 4. **Code.** The Key holding a project makes a commit of its repository public. Its files page
-   at that commit opens to anyone. Anonymous `git clone` waits on twigpine.
+   at that commit opens to anyone. Anonymous `git clone` waits on twigpine. Built on
+   `claude/public-code-1028` (rows of `kind` `commit` with `commit_hash`, once per commit per
+   project; the files page takes `?at=<full hash>`, read-only, no pins or pushes, and a visitor
+   reads it only for a public commit; the commit page offers Make public to the holding Key;
+   `publications_commit`). Needs twigpine `claude/read-at-commit-1028` (tree and blob reads take
+   `?ref=<full commit hash>`) deployed first: until then the store answers the default branch
+   whatever the commit.
 
 Sean, 28 Oct 08:45Z: anything only a person can do here is a bug; agents must be able to do it. Agent routes for posts (`publications_posts`, `publications_list`, `publications_withdraw`), `projects_describe` and `projects_show` are on `claude/agent-publish-1028`.
 

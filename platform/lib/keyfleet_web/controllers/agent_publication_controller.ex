@@ -3,14 +3,16 @@ defmodule KeyfleetWeb.AgentPublicationController do
   What the fleet's Keys made public in a project, for an agent through its
   own signed requests: list it, newest first; make a Key's own posts in one
   of the fleet's rooms public, from one post to another; make public a
-  workspace item the Key added; and take back something the Key made public
+  workspace item the Key added, a saved notebook page the agent made, or the
+  code at one commit of a project the Key holds; and take back something the
+  Key made public
   (`Keyfleet.Projects.Publication`). Anyone reads what is public on the
   workspace's Public place, signed in or not.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{Fleets, Projects}
+  alias Keyfleet.{Fleets, Notebooks, Projects}
   alias Keyfleet.Graph.Errors.{CheckExpiredError, EditsRestrictedError}
   alias Keyfleet.Graph.Errors.{NotKeyHolderError, UnknownFleetError}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
@@ -57,6 +59,17 @@ defmodule KeyfleetWeb.AgentPublicationController do
   def item(conn, %{"fleet_id" => fleet_id, "as_key" => key, "item" => id}),
     do: made(conn, fleet_id, &Projects.publish_item(fleet_id, key, id, &1))
 
+  def page(conn, %{"fleet_id" => fleet_id, "as_key" => key, "page" => address}),
+    do: made(conn, fleet_id, &Projects.publish_page(fleet_id, key, address, &1))
+
+  def commit(conn, %{
+        "fleet_id" => fleet_id,
+        "project" => name,
+        "as_key" => key,
+        "commit" => hash
+      }),
+      do: made(conn, fleet_id, &Projects.publish_commit(fleet_id, key, name, hash, &1))
+
   def withdraw(conn, %{"fleet_id" => fleet_id, "publication_id" => id, "as_key" => key}),
     do: made(conn, fleet_id, &Projects.withdraw_publication(fleet_id, key, id, &1))
 
@@ -77,6 +90,8 @@ defmodule KeyfleetWeb.AgentPublicationController do
       from_seq: publication.from_seq,
       to_seq: publication.to_seq,
       item: publication.item,
+      page: publication.page && Notebooks.url(publication.fleet_id, publication.page),
+      commit: publication.commit_hash,
       made_at: publication.inserted_at,
       url:
         Endpoint.url() <>
@@ -106,8 +121,20 @@ defmodule KeyfleetWeb.AgentPublicationController do
   defp answer(%CheckExpiredError{}), do: {503, Refusal.body("graph_unavailable")}
   defp answer(_error), do: nil
 
-  defp status(code) when code in [:not_yours, :not_added], do: 403
-  defp status(code) when code in [:unknown, :room_unknown, :key_unknown, :item_unknown], do: 404
+  defp status(code) when code in [:not_yours, :not_added, :not_made, :not_holder], do: 403
+
+  defp status(code)
+       when code in [
+              :unknown,
+              :room_unknown,
+              :key_unknown,
+              :item_unknown,
+              :page_unknown,
+              :commit_unknown
+            ],
+       do: 404
+
+  defp status(code) when code in [:page_unavailable, :code_unavailable], do: 503
   defp status(:range), do: 422
 
   defp status(code)

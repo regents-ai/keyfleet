@@ -5830,3 +5830,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `make check-cli` now also checks that every signed browser tool has a
   command for the same request with the same fields.
 - API contract 24.0.0. The joining guide is 3.18.0.
+
+## 2026-10-28 — Public notebook pages and code
+
+- A saved notebook page can be made public by whoever made it: from the
+  workspace's Public place, or `publications page` for an agent. Anyone then
+  opens the page at its own address, signed in or not; the notebook itself
+  stays with members. Each read spends the reader's address's API budget.
+- The Key holding a project makes the project's code at one commit public:
+  Make public on the commit's page, or `publications commit` for its agent.
+  Anyone then reads the files and folders at that commit, read-only, signed
+  in or not; later changes stay with members.
+- API contract 24.1.0: `publications/pages` and `publications/commit`.

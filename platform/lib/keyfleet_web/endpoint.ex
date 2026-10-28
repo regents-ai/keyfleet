@@ -148,8 +148,9 @@ defmodule KeyfleetWeb.Endpoint do
   defp limit_rate(conn, _opts), do: conn
 
   @doc """
-  The per-address budget above, which a signed request to a fleet's notebooks
-  also spends (`KeyfleetWeb.Plugs.NotebookGateway`). Read on each request, as
+  The per-address budget above, which a signed request to a fleet's notebooks,
+  and a read of a saved page a Key made public, also spend
+  (`KeyfleetWeb.Plugs.NotebookGateway`). Read on each request, as
   the session budget is, so the test suite can run on a larger one and a
   focused test can put the release budget back.
   """

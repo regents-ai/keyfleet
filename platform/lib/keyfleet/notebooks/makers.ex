@@ -101,6 +101,15 @@ defmodule Keyfleet.Notebooks.Makers do
   The notebook is looked for in each of the fleet's spaces in turn.
   """
   def result(fleet_id, subject, notebook_id, source_id) do
+    with {:ok, _project} <- result_project(fleet_id, subject, notebook_id, source_id), do: :ok
+  end
+
+  @doc """
+  The project whose notebook holds the saved result `subject` made, as
+  `{:ok, project}`, by the same rule and with the same refusals as
+  `result/4`.
+  """
+  def result_project(fleet_id, subject, notebook_id, source_id) do
     case Notebooks.spaces(fleet_id) do
       {:ok, spaces} -> find_result(spaces, fleet_id, subject, notebook_id, source_id)
       {:error, _error} -> {:error, :unavailable}
@@ -109,10 +118,11 @@ defmodule Keyfleet.Notebooks.Makers do
 
   defp find_result([], _fleet_id, _subject, _notebook_id, _source_id), do: {:error, :not_found}
 
-  defp find_result([{_project, space} | spaces], fleet_id, subject, notebook_id, source_id) do
+  defp find_result([{project, space} | spaces], fleet_id, subject, notebook_id, source_id) do
     case result_in(fleet_id, subject, space, notebook_id, source_id) do
+      :ok -> {:ok, project}
       {:error, :not_found} -> find_result(spaces, fleet_id, subject, notebook_id, source_id)
-      answer -> answer
+      error -> error
     end
   end
 
