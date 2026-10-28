@@ -150,6 +150,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # may do now: start a project when it has none active, archive its active
   # one, take over the archived project on show, or delete it when it is
   # the Key's own and not General, which is never deleted. Delete asks first.
+  # The Key holding the project on show also chooses who sees its page's work
+  # and the line its page describes it with.
   defp projects(assigns) do
     on_show = Enum.find(assigns.board.projects, &(&1.name == assigns.board.project))
 
@@ -260,6 +262,29 @@ defmodule KeyfleetWeb.WorkspaceLive do
             do: "Show its page’s work to members only",
             else: "Show its page’s work to everyone"}
         </Regent.Primitives.button>
+        <Regent.Primitives.disclosure
+          :if={@on_show && @on_show.key == @board.you.key}
+          id="project-describe"
+          summary="Description"
+        >
+          <form
+            id="project-describe-form"
+            class="workspace-project-form"
+            phx-submit="project_describe"
+          >
+            <input type="hidden" name="project" value={@on_show.name} />
+            <label>
+              One line its page shows under the title
+              <input
+                name="description"
+                type="text"
+                maxlength="160"
+                value={@on_show.description}
+              />
+            </label>
+            <Regent.Primitives.button type="submit">Save description</Regent.Primitives.button>
+          </form>
+        </Regent.Primitives.disclosure>
       </div>
       <p :if={@on_show} id="project-page-link">
         <.link navigate={ProjectPage.path(@board.fleet_id, @on_show.name)}>
@@ -1990,6 +2015,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   def handle_event("project_show", %{"project" => name, "shown" => shown}, socket),
     do: hold(socket, &Projects.show_project(&1, &2, name, shown == "true", &3))
+
+  def handle_event("project_describe", %{"project" => name, "description" => line}, socket),
+    do: hold(socket, &Projects.describe_project(&1, &2, name, line, &3))
 
   def handle_event(
         "notebook_lock",

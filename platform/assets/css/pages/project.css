@@ -33,6 +33,14 @@
   color: inherit;
 }
 
+/* The line its Key describes it with, read with the heading above it. */
+.project-page > .project-description {
+  margin-block-start: -0.75rem;
+  max-width: 42rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
 .project-actions {
   display: flex;
   flex-wrap: wrap;

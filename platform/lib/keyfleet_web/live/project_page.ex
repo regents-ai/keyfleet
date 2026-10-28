@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.ProjectPage do
   @moduledoc """
   What a project's page reads, at the fleet's address and the project's name,
-  such as `/classic/1/projects/virtual-cell`: the project, its open goals by
-  title as every visitor sees them, and, once the Key holding it shows its
+  such as `/classic/1/projects/virtual-cell`: the project and the line its
+  Key describes it with, its open goals by title as every visitor sees them,
+  and, once the Key holding it shows its
   work to everyone (`Keyfleet.Projects.Project`), its latest work, what it
   produced and the tasks open to take or blocked, each by title and the agent
   and Key that made it, with how many there are of each. Each title links to
@@ -43,6 +44,7 @@ defmodule KeyfleetWeb.ProjectPage do
       fleet_path: Fleets.path(fleet_id),
       name: project.name,
       title: seen(project.title, "A project"),
+      description: seen(project.description, nil),
       key: project.key,
       state: project.state,
       shown?: project.shown_to_everyone,

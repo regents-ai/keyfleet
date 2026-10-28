@@ -874,7 +874,8 @@ defmodule KeyfleetWeb.ShellLive do
   defp get_key?,
     do: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet()))
 
-  # A project's page is read once, as it opens, and carries its title.
+  # A project's page is read once, as it opens, and carries its title and,
+  # once its Key describes it, its description.
   defp load_project(socket, %{route_id: :project}, %{
          "fleet_id" => fleet_id,
          "project" => name
@@ -883,7 +884,8 @@ defmodule KeyfleetWeb.ShellLive do
 
     assign(socket,
       project_page: project,
-      page_title: project.title <> " · " <> project.fleet_name
+      page_title: project.title <> " · " <> project.fleet_name,
+      page_description: project.description || socket.assigns.page_description
     )
   end
 

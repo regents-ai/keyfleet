@@ -256,7 +256,10 @@ defmodule KeyfleetWeb.WorkspacePage do
         project: shown && shown.name,
         active?: is_nil(shown) or shown.state == :active,
         projects:
-          Enum.map(projects, &Map.take(&1, [:name, :title, :key, :state, :shown_to_everyone])),
+          Enum.map(
+            projects,
+            &Map.take(&1, [:name, :title, :description, :key, :state, :shown_to_everyone])
+          ),
         you: you(projects, actor, fleet_id)
       })
     else

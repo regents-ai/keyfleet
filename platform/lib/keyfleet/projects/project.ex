@@ -29,7 +29,8 @@ defmodule Keyfleet.Projects.Project do
   The Key holding a project chooses whether its page shows anyone its work
   (`show`, `shown_to_everyone`): its goals, its latest work, what it produced
   and the tasks open to take or blocked, each by title. It starts shown to
-  members only.
+  members only. The Key also gives it a one-line `description` (`describe`),
+  which its page shows under the title and shares as its description.
 
   Every fleet also has two shared projects, active and held by no Key
   (`shared`): `scratchpad`, where each Key has a notebook of its own
@@ -48,6 +49,8 @@ defmodule Keyfleet.Projects.Project do
 
   @bigint 9_223_372_036_854_775_807
   @states [:active, :archived, :deleted]
+  # One line of text, never a control character.
+  @description [max_length: 160, match: ~r/\A[^\x00-\x1f\x7f]*\z/]
   # The most archived projects one Key holds.
   @archived_most 5
 
@@ -155,7 +158,9 @@ defmodule Keyfleet.Projects.Project do
       argument :fleet_id, :string, allow_nil?: false
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id) and name == ^arg(:name) and state != :deleted)
-      prepare build(select: [:fleet_id, :name, :title, :key, :state, :shown_to_everyone])
+      prepare build(
+                select: [:fleet_id, :name, :title, :description, :key, :state, :shown_to_everyone]
+              )
       get? true
     end
 
@@ -216,6 +221,19 @@ defmodule Keyfleet.Projects.Project do
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
       run fn input, context -> Hold.run(input, [step: :show], context) end
+    end
+
+    # The Key holding a project gives it a line its page shows under the
+    # title and shares as its description, or clears it with none.
+    action :describe, :struct do
+      constraints instance_of: __MODULE__
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :name, :string, allow_nil?: false, constraints: [trim?: false]
+      argument :description, :string, constraints: @description
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run fn input, context -> Hold.run(input, [step: :describe], context) end
     end
 
     create :create do
@@ -303,6 +321,13 @@ defmodule Keyfleet.Projects.Project do
       change filter(expr(state != :deleted and key == ^arg(:key)))
     end
 
+    update :described do
+      public? false
+      accept [:description]
+      argument :key, :integer, allow_nil?: false
+      change filter(expr(state != :deleted and key == ^arg(:key)))
+    end
+
     update :record_space do
       accept [:hub_project_id]
       require_atomic? false
@@ -311,7 +336,7 @@ defmodule Keyfleet.Projects.Project do
   end
 
   policies do
-    policy action([:start, :archive, :take_over, :delete, :show]) do
+    policy action([:start, :archive, :take_over, :delete, :show, :describe]) do
       authorize_if KeyActor
     end
 
@@ -335,6 +360,7 @@ defmodule Keyfleet.Projects.Project do
              :taken_over,
              :deleted,
              :shown,
+             :described,
              :record_space,
              :by_repository,
              :locked_by_repository
@@ -366,6 +392,8 @@ defmodule Keyfleet.Projects.Project do
     attribute :hub_project_id, :string, public?: true
     # Whether the project's page shows its work to everyone, or to members only.
     attribute :shown_to_everyone, :boolean, allow_nil?: false, default: false, public?: true
+    # One line its page shows under the title and shares as its description.
+    attribute :description, :string, public?: true, constraints: @description
     create_timestamp :inserted_at, public?: true
   end
 

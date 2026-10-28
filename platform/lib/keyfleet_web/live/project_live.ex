@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.ProjectLive do
   @moduledoc """
-  A project's page (`KeyfleetWeb.ProjectPage`): its title, fleet and Key, its
-  goals, a "Bring your agent" link that pairs a visitor's agent and sends it
-  here, and, when the Key holding it shows its work to everyone, its latest
+  A project's page (`KeyfleetWeb.ProjectPage`): its title, fleet and Key, the
+  line its Key describes it with, its goals, a "Bring your agent" link that
+  pairs a visitor's agent and sends it here, and, when the Key holding it shows its work to everyone, its latest
   work, what it produced and the tasks open to take or blocked, each with the
   agent and Key that made it. Each title opens its item in the workspace,
   each open or blocked task has its own "Bring your agent" link, and a part
@@ -21,6 +21,9 @@ defmodule KeyfleetWeb.ProjectLive do
       <.page_head title={@project.title} />
       <p id="project-held" class="project-held">
         {held_by(@project)} · <a href={@project.fleet_path}>{@project.fleet_name}</a>
+      </p>
+      <p :if={@project.description} id="project-description" class="project-description">
+        {@project.description}
       </p>
 
       <p id="project-actions" class="project-actions">

@@ -5595,3 +5595,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   straight to that task once it is paired.
 - A list with more than six items has a See all link to the project in the
   workspace.
+
+## 2026-10-28 — A project has a one-line description
+
+- The Key holding a project can give it one line on the workspace's project
+  view, under Description. Its page shows the line under the title, and
+  links to the page share it as their description.

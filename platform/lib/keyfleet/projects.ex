@@ -52,6 +52,10 @@ defmodule Keyfleet.Projects do
         action: :show,
         args: [:fleet_id, :as_key, :name, :shown_to_everyone]
 
+      define :describe_project,
+        action: :describe,
+        args: [:fleet_id, :as_key, :name, :description]
+
       define :project_page, action: :page, args: [:fleet_id, :name], not_found_error?: false
       define :record_space, action: :record_space, args: [:hub_project_id]
     end

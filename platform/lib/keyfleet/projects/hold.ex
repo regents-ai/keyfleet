@@ -1,7 +1,8 @@
 defmodule Keyfleet.Projects.Hold do
   @moduledoc """
   Starts, archives, takes over and deletes a project as one of the fleet's
-  Keys, and shows its page's work to everyone or to members only (`Keyfleet.Projects.Project`). The actor acts as the Key the same way
+  Keys, shows its page's work to everyone or to members only, and describes
+  it (`Keyfleet.Projects.Project`). The actor acts as the Key the same way
   a workspace write does (`Keyfleet.Graph.Checks.KeyActor`); then, in one
   transaction, the step is checked against the projects the Key holds and
   made. A refusal says why in words that name the project
@@ -15,8 +16,8 @@ defmodule Keyfleet.Projects.Hold do
   (`active_held`), in the index's own words.
 
   A project the whole fleet shares, held by no Key, is never archived, taken
-  over, deleted or shown to everyone: no Key holds it as its active project,
-  and it is never archived.
+  over, deleted, shown to everyone or described: no Key holds it as its
+  active project, and it is never archived.
 
   Once a delete is kept, everyone's admission to the fleet's notebooks ends,
   so their next request is let in to the spaces left, without the deleted
@@ -99,6 +100,20 @@ defmodule Keyfleet.Projects.Hold do
          :ok <- holder(project, key, "choose who sees its work") do
       project
       |> Ash.Changeset.for_update(:shown, %{shown_to_everyone: shown, key: key}, actor: @system)
+      |> Ash.update()
+      |> unwrap()
+    end
+  end
+
+  defp step(:describe, fleet_id, key, %{name: name} = arguments) do
+    with {:ok, project} <- named(fleet_id, name),
+         :ok <- holder(project, key, "describe it") do
+      project
+      |> Ash.Changeset.for_update(
+        :described,
+        %{description: arguments[:description], key: key},
+        actor: @system
+      )
       |> Ash.update()
       |> unwrap()
     end
