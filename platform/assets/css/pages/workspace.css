@@ -796,7 +796,8 @@
   #workspace-page[data-active="code"] .workspace-places-ink { transform: translateX(calc(200% + 1rem)); }
   #workspace-page[data-active="public"] .workspace-places-ink { transform: translateX(calc(300% + 1.5rem)); }
   .workspace-place-tab { padding: 0.65rem 0.45rem; }
-  .workspace-place-name { font-size: 1rem; }
+  /* Four names stay whole on one line, down to a 320px phone. */
+  .workspace-place-name { font-size: clamp(0.85rem, 4vw, 1rem); white-space: nowrap; }
   .workspace-place-name::before { display: none; }
   .workspace-place-tool {
     overflow: hidden;

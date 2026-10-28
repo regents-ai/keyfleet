@@ -5629,3 +5629,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The motion lab's floating parts take the shared stacking places.
 - The agent guides (/agents.md and /llms.txt) name the regents-cli to install:
   1.10.19, with its source commit and wheel SHA256.
+
+## 2026-10-28 — Workspace place names fit a phone
+
+- On a phone the four workspace places (Project, Docs, Code, Public) keep each name whole on one line, down to 320px; "Project" no longer breaks inside the word.
