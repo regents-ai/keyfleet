@@ -130,8 +130,9 @@ defmodule Keyfleet.Graph.Object do
     # it to everyone (`Keyfleet.Projects.Project`): one part of it, the most
     # recently changed first, not archived. `goals` are its open goals,
     # `work` everything but goals and reviews, `outputs` its findings and its
-    # accepted tasks, `open` the tasks nobody has taken. Each comes with its
-    # title, type and standing alone. Callers bound it with a limit.
+    # accepted tasks, `open` the tasks nobody has taken and the blocked ones,
+    # which need someone's help. Each comes with its title, type, standing and
+    # who made it alone. Callers bound it with a limit.
     read :shown do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, allow_nil?: false, constraints: @text
@@ -154,13 +155,14 @@ defmodule Keyfleet.Graph.Object do
                     (^arg(:part) == :outputs and
                        (type == "finding" or (type == "task" and review == "accepted"))) or
                     (^arg(:part) == :open and type == "task" and
-                       fragment("(? ->> 'progress') = 'todo'", data) and
-                       fragment("(? ->> 'assignee_key') IS NULL", data)))
+                       (fragment("(? ->> 'progress') = 'blocked'", data) or
+                          (fragment("(? ->> 'progress') = 'todo'", data) and
+                             fragment("(? ->> 'assignee_key') IS NULL", data)))))
              )
 
       prepare build(
                 sort: [changed_seq: :desc],
-                select: [:fleet_id, :id, :type, :project, :changed_seq, :changed_at],
+                select: [:fleet_id, :id, :type, :project, :sys, :changed_seq, :changed_at],
                 load: [:title, :standing]
               )
     end

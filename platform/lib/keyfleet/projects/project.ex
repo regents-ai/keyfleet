@@ -28,7 +28,8 @@ defmodule Keyfleet.Projects.Project do
 
   The Key holding a project chooses whether its page shows anyone its work
   (`show`, `shown_to_everyone`): its goals, its latest work, what it produced
-  and the tasks open to take, each by title. It starts shown to members only.
+  and the tasks open to take or blocked, each by title. It starts shown to
+  members only.
 
   Every fleet also has two shared projects, active and held by no Key
   (`shared`): `scratchpad`, where each Key has a notebook of its own

@@ -219,6 +219,11 @@ latest work, what it produced and the tasks open to take there too, by title and
 (`shown_to_everyone`, off by default; on for Virtual Cell in Classic #1). A shared project's
 work stays members-only: no Key holds it to choose.
 
+Added 28 Oct: on a shown page each title links to its workspace page and names the agent and
+Key that made it; "Open to take" also lists blocked tasks, marked "Needs help", and each of its
+tasks has its own Bring your agent link (`/pair?to=` the task's page); a part with more than
+six items links to the project in the workspace.
+
 ## Moving today's fleets over (one release, hard cutover)
 
 1. A migration makes `projects` and gives every fleet with a board, notebooks or code one

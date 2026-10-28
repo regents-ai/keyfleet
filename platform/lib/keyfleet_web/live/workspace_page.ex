@@ -1495,15 +1495,18 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp named({:by, token_id, wallet}, agents), do: {:key, token_id, agents[wallet]}
   defp named(part, _agents), do: part
 
-  # The key an item was added as, with the name of the agent that added it;
-  # Keyfleet added the starting goals.
-  defp created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}} = sys, agents),
+  @doc """
+  The key an item was added as, with the name of the agent that added it
+  (`agent_names/1` of `creator_wallet/1`); Keyfleet added the starting goals.
+  """
+  def created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}} = sys, agents),
     do: {:key, token_id, agents[creator_wallet(sys)]}
 
-  defp created_by(%{"created_by" => nil}, _agents), do: "Keyfleet"
+  def created_by(%{"created_by" => nil}, _agents), do: "Keyfleet"
 
-  defp creator_wallet(%{"created_by" => nil}), do: nil
-  defp creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
+  @doc "The wallet of the agent that added an item, or nil when no agent did."
+  def creator_wallet(%{"created_by" => nil}), do: nil
+  def creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
 
   # Who joined a goal, in the order they joined, each told as the key it
   # joined as with the name of its agent.
