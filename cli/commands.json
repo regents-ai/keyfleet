@@ -2037,6 +2037,41 @@
         ]
       },
       {
+        "command": "publications item <fleet> <key> <item>",
+        "description": "Make public a workspace item a Key added, in the item's own active project. Anyone reads its words on the workspace's Public place while it isn't archived; it stays in the workspace as it is.",
+        "operation_id": "publishItem",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/publications/items",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "publications_item",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key you act as: yours, your shard's or your paired person's."
+          },
+          {
+            "name": "item",
+            "type": "string",
+            "in": "body",
+            "field": "item",
+            "description": "The id of a workspace item that Key added, as `regents keyfleet workspace get` gives it."
+          }
+        ]
+      },
+      {
         "command": "publications withdraw <fleet> <key> <publication>",
         "description": "Take back something a Key made public; it goes back to the fleet's members only. Only the Key that made it public takes it back.",
         "operation_id": "withdrawPublication",

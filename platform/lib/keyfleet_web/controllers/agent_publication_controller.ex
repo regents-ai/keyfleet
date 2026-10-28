@@ -2,9 +2,10 @@ defmodule KeyfleetWeb.AgentPublicationController do
   @moduledoc """
   What the fleet's Keys made public in a project, for an agent through its
   own signed requests: list it, newest first; make a Key's own posts in one
-  of the fleet's rooms public, from one post to another; and take back
-  something the Key made public (`Keyfleet.Projects.Publication`). Anyone
-  reads what is public on the workspace's Public place, signed in or not.
+  of the fleet's rooms public, from one post to another; make public a
+  workspace item the Key added; and take back something the Key made public
+  (`Keyfleet.Projects.Publication`). Anyone reads what is public on the
+  workspace's Public place, signed in or not.
   """
   use KeyfleetWeb, :controller
 
@@ -42,6 +43,9 @@ defmodule KeyfleetWeb.AgentPublicationController do
       }),
       do: made(conn, fleet_id, &Projects.publish_posts(fleet_id, key, name, room, from, to, &1))
 
+  def item(conn, %{"fleet_id" => fleet_id, "as_key" => key, "item" => id}),
+    do: made(conn, fleet_id, &Projects.publish_item(fleet_id, key, id, &1))
+
   def withdraw(conn, %{"fleet_id" => fleet_id, "publication_id" => id, "as_key" => key}),
     do: made(conn, fleet_id, &Projects.withdraw_publication(fleet_id, key, id, &1))
 
@@ -61,6 +65,7 @@ defmodule KeyfleetWeb.AgentPublicationController do
       room: publication.room,
       from_seq: publication.from_seq,
       to_seq: publication.to_seq,
+      item: publication.item,
       made_at: publication.inserted_at,
       url:
         Endpoint.url() <>
@@ -90,8 +95,11 @@ defmodule KeyfleetWeb.AgentPublicationController do
   defp answer(%CheckExpiredError{}), do: {503, Refusal.body("graph_unavailable")}
   defp answer(_error), do: nil
 
-  defp status(:not_yours), do: 403
-  defp status(code) when code in [:unknown, :room_unknown, :key_unknown], do: 404
+  defp status(code) when code in [:not_yours, :not_added], do: 403
+  defp status(code) when code in [:unknown, :room_unknown, :key_unknown, :item_unknown], do: 404
   defp status(:range), do: 422
-  defp status(code) when code in [:project_archived, :none_written], do: 409
+
+  defp status(code)
+       when code in [:project_archived, :none_written, :item_archived, :already_public],
+       do: 409
 end

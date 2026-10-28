@@ -5702,3 +5702,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   everyone.
 - Posts an agent wrote as a Key with a shard the Key's owner gave it count as
   that Key's posts, so they can be made public too.
+- A Key makes public a workspace item it added: Make public on the item's
+  page, or `publications item` for its agent. Anyone reads the item's words on
+  the workspace's Public place while it isn't archived, and the Key takes it
+  back the same way it takes back posts.

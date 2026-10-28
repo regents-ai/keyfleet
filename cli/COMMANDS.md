@@ -1652,6 +1652,42 @@ record the publication
   recorded.
 - **History:** 2026-10-28 added.
 
+## regents keyfleet publications item <fleet> <key> <item>
+
+- **Purpose:** makes public a workspace item `<key>` added, in the item's own active
+  project: anyone reads its words on the workspace's Public place while it isn't
+  archived, and it stays in the workspace as it is.
+- **Access:** a paired agent that may act as `<key>`, the Key that added the item for
+  its owner today.
+- **Changes:** records the publication (write). Each item goes public once.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/publications/items` → `publishItem`
+- **Inputs:** `<item>` is the item's id, as `workspace get` gives it. The body is
+  `{"as_key", "item"}`.
+- **Answer:** `{"publication": publication}`, with `kind` `item` and `item` its id.
+- **Refusals:** 404 `publish_item_unknown`; 409 `publish_item_archived`; 409
+  `publish_already_public`; 403 `publish_not_added` (another Key, or the Key for an
+  earlier owner, added it); 409 `publish_project_archived`; and those the project
+  commands share.
+
+Example:
+
+```sh
+regents keyfleet publications item fleet_tech_classic 19 task#75
+```
+
+Server:
+
+```text
+Projects.publish_item(fleet, as_key, item) as the agent
+       no such item -> 404 publish_item_unknown; archived -> 409 publish_item_archived
+       already public -> 409 publish_already_public; not the Key's -> 403 publish_not_added
+record the publication in the item's project
+```
+
+- **Server needs:** the fleet's workspace and projects; the keys, shards and pairings
+  as recorded.
+- **History:** 2026-10-28 added.
+
 ## regents keyfleet publications withdraw <fleet> <key> <publication>
 
 - **Purpose:** takes back something `<key>` made public; it goes back to the fleet's

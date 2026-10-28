@@ -487,48 +487,109 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # Newest first, each with what a visitor reads of it: for posts, the posts
   # its Key wrote in that range of the room, word for word, each with its
-  # writer. Only the Key that made it public (`key`) takes it back.
+  # writer; for an item, the item as it stands, while it isn't archived. Only
+  # the Key that made it public (`key`) takes it back.
   defp public(fleet_id, shown, projects, key) do
     labels = labels(shown, projects)
+
+    publications =
+      Projects.publications!(fleet_id, shown && shown.name, query: [limit: @public_shown])
 
     rooms =
       fleet_id
       |> Rooms.list_rooms!(authorize?: false)
       |> Map.new(&{&1.slug, RoomsLive.room_label(&1)})
 
+    objects = public_objects(fleet_id, for(%{kind: :item, item: id} <- publications, do: id))
+    agents = agent_names(for {_id, object} <- objects, do: creator_wallet(object.sys))
+
     %{
       public:
-        for publication <-
-              Projects.publications!(fleet_id, shown && shown.name, query: [limit: @public_shown]) do
-          posts =
-            for post <-
-                  Publish.posts(
-                    fleet_id,
-                    publication.room,
-                    publication.from_seq,
-                    publication.to_seq,
-                    publication.key,
-                    publication.author_wallet
-                  ),
-                do: Message.public(post, post.reply_to_seq)
+        Enum.flat_map(publications, fn publication ->
+          case public_record(publication, rooms, objects, agents) do
+            nil ->
+              []
 
-          %{
-            id: publication.id,
-            project: publication.project,
-            label: labels[publication.project],
-            key: publication.key,
-            agent: Enum.find_value(posts, &(&1.author.kind == :agent && &1.author.name)),
-            room: publication.room,
-            room_label: Map.get(rooms, publication.room, publication.room),
-            from: publication.from_seq,
-            to: publication.to_seq,
-            at: publication.inserted_at,
-            mine?: publication.key == key,
-            posts: posts
-          }
-        end
+            record ->
+              [
+                Map.merge(record, %{
+                  id: publication.id,
+                  kind: publication.kind,
+                  project: publication.project,
+                  label: labels[publication.project],
+                  key: publication.key,
+                  at: publication.inserted_at,
+                  mine?: publication.key == key
+                })
+              ]
+          end
+        end)
     }
   end
+
+  defp public_record(%{kind: :posts} = publication, rooms, _objects, _agents) do
+    posts =
+      for post <-
+            Publish.posts(
+              publication.fleet_id,
+              publication.room,
+              publication.from_seq,
+              publication.to_seq,
+              publication.key,
+              publication.author_wallet
+            ),
+          do: Message.public(post, post.reply_to_seq)
+
+    %{
+      agent: Enum.find_value(posts, &(&1.author.kind == :agent && &1.author.name)),
+      room: publication.room,
+      room_label: Map.get(rooms, publication.room, publication.room),
+      from: publication.from_seq,
+      to: publication.to_seq,
+      posts: posts
+    }
+  end
+
+  # An item archived since it was made public stops showing.
+  defp public_record(%{kind: :item, item: id}, _rooms, objects, agents) do
+    case objects[id] do
+      %{sys: %{"archived" => true}} -> nil
+      nil -> nil
+      object -> %{item: public_item(object, agents)}
+    end
+  end
+
+  defp public_objects(_fleet_id, []), do: %{}
+
+  defp public_objects(fleet_id, ids),
+    do: fleet_id |> Graph.read_objects!(ids, actor: %System{}) |> Map.new(&{&1.id, &1})
+
+  # What a visitor reads of an item: its words and choices, each address as
+  # written, never a link into the members' pages.
+  defp public_item(object, agents) do
+    %{
+      type: object.type,
+      title: object.data["title"],
+      by: created_by(object.sys, agents),
+      changed_at: time(object.changed_at),
+      fields:
+        Enum.flat_map(Map.get(@fields, object.type, []), fn {field, label} ->
+          case public_value(field, object.data[field]) do
+            nil -> []
+            shown -> [{label, shown}]
+          end
+        end)
+    }
+  end
+
+  defp public_value(_field, nil), do: nil
+  defp public_value(_field, []), do: nil
+
+  defp public_value(field, token_id) when field in ["assignee_key", "reviewer_key"],
+    do: key_or(token_id, nil)
+
+  defp public_value(field, value) when is_map_key(@choices, field), do: choice(field, value)
+  defp public_value(_field, value), do: value(value)
 
   defp room_choice(room), do: %{slug: room.slug, label: RoomsLive.room_label(room)}
 
@@ -611,6 +672,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
           Map.merge(base, %{
             object: detail(object, fleet_id, agents, opts),
+            public: item_public(fleet_id, object, actor),
             goal: goal,
             links: links && link_rows(links, object, titles, path, links_at != []),
             history: %{
@@ -624,6 +686,24 @@ defmodule KeyfleetWeb.WorkspacePage do
       {:missing, name} -> %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil}
       {:members_only, name} -> members_only(fleet_id, name)
     end
+  end
+
+  # Whether everyone reads the item on the Public place, and what the
+  # member's Key does about it: the Key that added it makes it public, and
+  # the Key that made it public takes it back.
+  defp item_public(fleet_id, object, actor) do
+    publication = Projects.item_publication!(fleet_id, object.id, actor: actor)
+    key = with %{token_id: key} <- Keys.identity(actor, fleet_id), do: key
+    added_by = get_in(object.sys, ["created_by", "key", "token_id"])
+
+    %{
+      id: publication && publication.id,
+      link: place_path(fleet_id, :public, object.project),
+      take_back?: publication != nil and publication.key == key,
+      make?:
+        is_nil(publication) and is_integer(key) and added_by == key and
+          not archived?(object.sys)
+    }
   end
 
   # A goal's page lists the work around it in place of its links.

@@ -202,6 +202,7 @@
               "projects_show",
               "publications_list",
               "publications_posts",
+              "publications_item",
               "publications_withdraw",
               "workspace_board",
               "workspace_show",
@@ -6801,7 +6802,7 @@
     {
       "name": "publications_list",
       "title": "List what is public in a project",
-      "description": "Read what the fleet's Keys made public in a project, newest first: each one's id, the Key that made it public, its kind and, for posts, the room and range. Anyone reads them on the workspace's Public place. Changes nothing.",
+      "description": "Read what the fleet's Keys made public in a project, newest first: each one's id, the Key that made it public, its kind and, for posts, the room and range, or for an item, its id. Anyone reads them on the workspace's Public place. Changes nothing.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -7027,6 +7028,111 @@
       "interfaces": {
         "webmcp": "publications_posts",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/posts",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "publications_item",
+      "title": "Make an item public",
+      "description": "Make public a workspace item your Key added, in the item's own active project. Anyone reads its words on the workspace's Public place while it isn't archived; it stays in the workspace as it is. Each item goes public once. Answers what was made public.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "as_key",
+              "item"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "item": {
+                "type": "string",
+                "description": "The id of a workspace item your Key added",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/publications/items",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "as_key",
+          "item"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "item": {
+            "type": "string",
+            "description": "The id of a workspace item your Key added",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "publications_item",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/publications/items",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

@@ -51,6 +51,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @publications_path ~r"\A#{@in_project}/publications\z"
   @publish_posts_path ~r"\A#{@in_project}/publications/posts\z"
   @withdraw_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/#{@publication}/withdraw\z"
+  @publish_item_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/items\z"
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
@@ -102,6 +103,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@project_show_path, {~w(as_key shown_to_everyone), []}},
     {@publish_posts_path, {~w(as_key room from_seq to_seq), []}},
     {@withdraw_path, {~w(as_key), []}},
+    {@publish_item_path, {~w(as_key item), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
     {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
@@ -534,6 +536,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @project_show_path,
         @publish_posts_path,
         @withdraw_path,
+        @publish_item_path,
         @run_start_path,
         @notebook_create_path,
         @files_list_path,
@@ -664,6 +667,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         project_show: @project_show_path,
         publish_posts: @publish_posts_path,
         withdraw: @withdraw_path,
+        publish_item: @publish_item_path,
         run_start: @run_start_path,
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
@@ -722,6 +726,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(key in 1..@max_seq and from in 1..@max_seq and to in 1..@max_seq)
 
   defp check_fleet_body(:publish_posts, _params), do: :invalid
+
+  # An item goes public by its id, as a Key.
+  defp check_fleet_body(:publish_item, %{"as_key" => key, "item" => item} = params)
+       when map_size(params) == 2 and is_integer(key) and is_binary(item) and
+              byte_size(item) in 1..128,
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(:publish_item, _params), do: :invalid
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
   defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
   defp check_fleet_body(:files_list, params), do: check_files_list_body(params)
