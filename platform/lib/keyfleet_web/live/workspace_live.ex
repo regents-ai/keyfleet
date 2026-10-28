@@ -1528,6 +1528,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </li>
         </ol>
       </article>
+      <nav
+        :if={@board.public_more || @board.public_first}
+        id="workspace-public-pages"
+        class="workspace-pages"
+      >
+        <.link :if={@board.public_first} id="workspace-public-first" patch={@board.public_first}>
+          Back to the newest
+        </.link>
+        <.link :if={@board.public_more} id="workspace-public-more" patch={@board.public_more}>
+          Earlier
+        </.link>
+      </nav>
       <.publish_posts
         :if={@board.you && @board.project && @board.active? && @board.rooms != []}
         board={@board}

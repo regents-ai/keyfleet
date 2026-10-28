@@ -5746,3 +5746,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The web server library moves to Bandit 1.14.1, which fixes a way to make the
   server use too much memory with HTTP/2 uploads sent in tiny pieces
   (EEF-CVE-2026-116078).
+
+## 2026-10-28 — The Public place pages through everything
+
+- The workspace's Public place showed only the newest dozen things made public,
+  so anything older couldn't be reached. It now shows a dozen at a time with
+  Earlier and Back to the newest, signed in or not; an address with a cursor
+  that doesn't fit answers the not-found page.

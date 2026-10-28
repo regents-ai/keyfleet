@@ -284,7 +284,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     shown = shown_project!(projects, params["project"])
 
     fleet_id
-    |> public(shown, projects, nil)
+    |> public(shown, projects, nil, params)
     |> Map.merge(%{
       fleet_id: fleet_id,
       fleet_name: name,
@@ -458,11 +458,11 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # What the fleet's Keys made public, in the project on show or every
   # project, and the rooms the member's Key makes its posts public from.
-  defp place(fleet, :public, shown, projects, _params, opts) do
+  defp place(fleet, :public, shown, projects, params, opts) do
     you = you(projects, opts[:actor], fleet.id)
 
     fleet.id
-    |> public(shown, projects, you && you.key)
+    |> public(shown, projects, you && you.key, params)
     |> Map.put(
       :rooms,
       if(you,
@@ -488,12 +488,18 @@ defmodule KeyfleetWeb.WorkspacePage do
   # Newest first, each with what a visitor reads of it: for posts, the posts
   # its Key wrote in that range of the room, word for word, each with its
   # writer; for an item, the item as it stands, while it isn't archived. Only
-  # the Key that made it public (`key`) takes it back.
-  defp public(fleet_id, shown, projects, key) do
+  # the Key that made it public (`key`) takes it back. A page at a time,
+  # `@public_shown` long: `more` reads on from the last one, and `first` goes
+  # back to the newest.
+  defp public(fleet_id, shown, projects, key, params) do
     labels = labels(shown, projects)
+    project = shown && shown.name
+    from = Map.take(params, ["after"])
 
-    publications =
-      Projects.publications!(fleet_id, shown && shown.name, query: [limit: @public_shown])
+    %Ash.Page.Keyset{results: publications, more?: more?} =
+      fleet_id
+      |> Projects.publications(project, page: [limit: @public_shown] ++ public_position(from))
+      |> page!()
 
     rooms =
       fleet_id
@@ -523,9 +529,24 @@ defmodule KeyfleetWeb.WorkspacePage do
                 })
               ]
           end
-        end)
+        end),
+      public_more:
+        if(more?,
+          do: public_path(fleet_id, project, after: List.last(publications).__metadata__.keyset)
+        ),
+      public_first: if(from != %{}, do: public_path(fleet_id, project, []))
     }
   end
+
+  defp public_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]
+  defp public_position(_newest), do: []
+
+  defp public_path(fleet_id, project, position),
+    do:
+      with_query(
+        "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+        given([place: "public", project: project] ++ position)
+      )
 
   defp public_record(%{kind: :posts} = publication, rooms, _objects, _agents) do
     posts =

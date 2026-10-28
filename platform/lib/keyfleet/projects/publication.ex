@@ -65,10 +65,11 @@ defmodule Keyfleet.Projects.Publication do
     end
 
     # What the fleet's Keys made public, newest first: in one project, or in
-    # every project for none.
+    # every project for none, a page at a time when asked.
     read :in_fleet do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string
+      pagination keyset?: true, required?: false, max_page_size: 100
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and
