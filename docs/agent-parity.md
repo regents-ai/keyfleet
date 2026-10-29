@@ -26,7 +26,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **WebMCP**: the tool in `platform/priv/tool_manifest.json`. Signed tools are prepared
   with `prepare_agent_request`, signed by the agent's own SIWA key, and act for the
   agent's paired person. The wallet tools (`keys_claim`, `proposals_vote` and the rest)
-  instead press the page's own button, so the browser's active Privy wallet signs (K5).
+  instead press the page's own button, so the browser's active Privy wallet signs; the
+  `chain_*` tools answer the same steps for the agent's own wallet (K5).
 - **MCP**: hosted `/mcp` for an agent that signs its own requests. Keyfleet serves no
   tool there yet (K8).
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
@@ -34,7 +35,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
   allows the agent permission, 92 tools as the paired agent: every signed and public tool
   in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),
-  which a wallet signs on the page, and five it has no use for: `prepare_agent_request`,
+  which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
+  wallet signs, and five it has no use for: `prepare_agent_request`,
   `about`, `docs`, `agents_whoami` and `agents_status`, whose answers the identity tools
   give. Each is the
   same Ash action, policies and allowance as the signed request (K8).
@@ -82,9 +84,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show`, `keys_held` | — | `keys_show`, `keys_held` | `keys show`, `keys held` (1.10.21 candidate) | no | K8, K13 |
 | Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | `keys_post_as` | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
-| Mark Keys present | Presence card (proposals page, Key page) | `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
-| Claim one Key's share | Key page | `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
-| Claim every Key in a fleet | `/account` Your Keys | `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
+| Mark Keys present | Presence card (proposals page, Key page) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
+| Claim one Key's share | Key page | `chain_claim`; page `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
+| Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
 | Claim a Regents Club Key (Pass holder) | Key page | — | — | — | — | wallet | K4, K8 |
 | Ask again for a Key's traits | Key page | — | — | — | — | wallet | K4, K8 |
 | Shards: issue, renew, end (Key holder) | Key page | — | — | — | — | wallet | K3, K8 |
@@ -123,10 +125,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Proposals: list and read | `/proposals`, `/proposals/:n` | `proposals_list`, `proposals_show` | — | the same two | `proposals list`, `proposals read` | no | K8 |
-| Propose | `/proposals` form | `proposals_create` | — | — | `proposals create` | wallet | K5, K8 |
-| Vote on a proposal | `/proposals/:n` | `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
-| Cancel a proposal | `/proposals/:n` | `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
-| Carry out a proposal | `/proposals/:n` | `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5, K8 |
+| Propose | `/proposals` form | `chain_propose`; page `proposals_create` | — | — | `proposals create` | wallet | K5, K8 |
+| Vote on a proposal | `/proposals/:n` | `chain_vote`; page `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
+| Cancel a proposal | `/proposals/:n` | `chain_cancel`; page `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
+| Carry out a proposal | `/proposals/:n` | `chain_carry_out`; page `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5, K8 |
 | Polls: list and read | `/polls`, `/polls/:id` | `polls_list`, `polls_show` | — | the same two | `polls list`, `polls show` | no | K8 |
 | Polls: start, vote, end | `/polls` | `polls_start`, `polls_vote`, `polls_end` | — | the same three | `polls start`, `polls vote`, `polls end` | no | K8 |
 
@@ -135,9 +137,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read the treasury | `/treasury` (with refresh) | `treasury_show` | — | `treasury_show` | `treasury get` | no | K8 |
-| Release the Daily Treasury Slice | `/treasury` | `treasury_release` | — | — | `split run` | money, wallet | K5, K8 |
-| Send the REGENT staking share | `/treasury` | `treasury_send_share` | — | — | `treasury send-share` | money, wallet | K5, K8 |
-| Turn USDC into REGENT | `/treasury` | `treasury_buy_regent` | — | — | `treasury convert` | money, wallet | K5, K8 |
+| Release the Daily Treasury Slice | `/treasury` | `chain_split`; page `treasury_release` | — | — | `split run` | money, wallet | K5, K8 |
+| Send the REGENT staking share | `/treasury` | `chain_send_share`; page `treasury_send_share` | — | — | `treasury send-share` | money, wallet | K5, K8 |
+| Turn USDC into REGENT | `/treasury` | `chain_convert`; page `treasury_buy_regent` | — | — | `treasury convert` | money, wallet | K5, K8 |
 | Return an advance | treasury, Advances out | — | — | — | — | money, wallet | K4, K8 |
 | Token launch upkeep (settle, add to the slice, release, collect fees) | `/treasury` Token launch | — | — | — | — | money, wallet | K4, K8 |
 
@@ -194,12 +196,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   again for a Key's traits, returning an advance and token-launch upkeep (`club_claim`,
   `reveal`, `return_advance`, `launch_upkeep`). Plan: the same chain routes, CLI
   commands and WebMCP tools, built from those flows. Protected (wallet, money).
-- **K5. WebMCP wallet tools sign with the browser's wallet.** The ten wallet tools press
-  the page's button, so they need a signed-in browser with Privy's active wallet, and
-  they are held until launch. The CLI already gets the same steps built for the agent's
-  own key, but no WebMCP tool does, and the manifest does not name the matching
-  command. Plan: give each a signed version on the existing chain routes and link the
-  CLI command in the manifest. Protected (wallet, money).
+- **K5. WebMCP wallet tools sign with the browser's wallet.** Closed for WebMCP: the ten
+  `chain_*` signed tools answer the same steps the CLI gets, built for the agent's own
+  key on the existing chain routes, and each command's `webmcp` names its tool. The page
+  wallet tools (`keys_claim`, `proposals_vote` and the rest) still press the page's
+  button for the signed-in person's Privy wallet. Protected (wallet, money): ships on
+  Sean's letter.
 - **K6. Owner-only agent controls have no tools.** Making a pairing code, choosing the
   agent, opening, renaming and unpairing an agent, and reading its last actions run only
   on the page. They stay out of reach of a paired helper agent and open only to the

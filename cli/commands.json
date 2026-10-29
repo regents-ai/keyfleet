@@ -155,7 +155,7 @@
       "operation_id": "buildPresence",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/presence",
-      "webmcp": "keys_mark_present",
+      "webmcp": "chain_presence",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -174,7 +174,7 @@
       "operation_id": "buildProposal",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/create",
-      "webmcp": "proposals_create",
+      "webmcp": "chain_propose",
       "authority": "paired_agent",
       "effect": "write",
       "arguments": [
@@ -279,7 +279,7 @@
       "operation_id": "buildVote",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/vote",
-      "webmcp": "proposals_vote",
+      "webmcp": "chain_vote",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -318,7 +318,7 @@
       "operation_id": "buildCancel",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/cancel",
-      "webmcp": "proposals_cancel",
+      "webmcp": "chain_cancel",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -345,7 +345,7 @@
       "operation_id": "buildCarryOut",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out",
-      "webmcp": "proposals_carry_out",
+      "webmcp": "chain_carry_out",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -372,7 +372,7 @@
       "operation_id": "buildSplit",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/split",
-      "webmcp": "treasury_release",
+      "webmcp": "chain_split",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -391,7 +391,7 @@
       "operation_id": "buildSendShare",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/treasury/send_share",
-      "webmcp": "treasury_send_share",
+      "webmcp": "chain_send_share",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -410,7 +410,7 @@
       "operation_id": "buildConvert",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/treasury/convert",
-      "webmcp": "treasury_buy_regent",
+      "webmcp": "chain_convert",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -437,7 +437,7 @@
       "operation_id": "buildClaim",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
-      "webmcp": "keys_claim",
+      "webmcp": "chain_claim",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -464,7 +464,7 @@
       "operation_id": "buildClaimAll",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/keys/claim",
-      "webmcp": "keys_claim_all",
+      "webmcp": "chain_claim_all",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [

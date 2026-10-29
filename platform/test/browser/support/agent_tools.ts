@@ -78,6 +78,23 @@ export async function callSigned(page: Page, agent: string, name: string, input:
   return callTool(page, name, {input, request, proof: signRequest(agent, request)})
 }
 
+/**
+ * Sends the request the page prepares for the signed tool `name` straight to
+ * the site, signed afresh by `agent`, as a signed HTTP client sends it; answers
+ * its status and body, to set beside what the tool answers.
+ */
+export async function sendSigned(page: Page, agent: string, name: string, input: Record<string, unknown>) {
+  const prepared = await callTool(page, "prepare_agent_request", {operation: name, input})
+  expect(prepared.ok, JSON.stringify(prepared)).toBe(true)
+  const request = prepared.request!
+  const response = await page.request.fetch(new URL(request.path, request.origin).href, {
+    method: request.method,
+    headers: {...signRequest(agent, request), "content-type": "application/json"},
+    data: request.body,
+  })
+  return {status: response.status(), data: await response.json()}
+}
+
 const agents = "Keyfleet.BrowserAgents"
 
 /** Makes an agent with a signer of its own; returns its wallet. */

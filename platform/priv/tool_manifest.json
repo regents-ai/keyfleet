@@ -263,6 +263,16 @@
               "links_resolve",
               "writes_preview",
               "proposals_show",
+              "chain_presence",
+              "chain_propose",
+              "chain_vote",
+              "chain_cancel",
+              "chain_carry_out",
+              "chain_split",
+              "chain_send_share",
+              "chain_convert",
+              "chain_claim",
+              "chain_claim_all",
               "rooms_create",
               "rooms_topic",
               "dms_list",
@@ -11371,6 +11381,1051 @@
       "interfaces": {
         "webmcp": "proposals_show",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/proposals/read",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_presence",
+      "title": "Presence step",
+      "description": "Mark the Keys you act for present for 48 hours. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/presence",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_presence",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/presence",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_propose",
+      "title": "Proposal step",
+      "description": "Make a proposal with one of your Keys: its words are kept here and the chain holds their fingerprint. Every value is a string. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "kind",
+              "key",
+              "text"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "description": "Proposal kind.",
+                "enum": [
+                  "decision",
+                  "pay",
+                  "rate",
+                  "edits",
+                  "launch"
+                ]
+              },
+              "key": {
+                "type": "string",
+                "description": "The number of the Key it is made with: one the wallet holds, or holds a shard of while the Key's agent voting is on."
+              },
+              "text": {
+                "type": "string",
+                "description": "The proposal's words, up to 4,000 bytes. They are kept on Keyfleet; the chain holds their fingerprint."
+              },
+              "asset": {
+                "type": "string",
+                "description": "pay: the address of the asset paid, one the page offers."
+              },
+              "recipient": {
+                "type": "string",
+                "description": "pay: the address paid."
+              },
+              "rate": {
+                "type": "string",
+                "description": "rate: the Daily Treasury Slice to Keys in percent, 0.1 to 2."
+              },
+              "target": {
+                "type": "string",
+                "description": "edits: the number of the Key whose edits change."
+              },
+              "restricted": {
+                "type": "string",
+                "description": "edits: \"true\" restricts the Key's edits, \"false\" allows them.",
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "description": "launch: the token's name."
+              },
+              "symbol": {
+                "type": "string",
+                "description": "launch: the token's symbol."
+              },
+              "description": {
+                "type": "string",
+                "description": "launch: the token's description."
+              },
+              "website": {
+                "type": "string",
+                "description": "launch: the token's website."
+              },
+              "image": {
+                "type": "string",
+                "description": "launch: the token's image address."
+              },
+              "share": {
+                "type": "string",
+                "description": "pay: percentage of the treasury balance, 0.0001 to 99. Voting lasts 24 hours."
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/proposals/create",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "kind",
+          "key",
+          "text"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "description": "Proposal kind.",
+            "enum": [
+              "decision",
+              "pay",
+              "rate",
+              "edits",
+              "launch"
+            ]
+          },
+          "key": {
+            "type": "string",
+            "description": "The number of the Key it is made with: one the wallet holds, or holds a shard of while the Key's agent voting is on."
+          },
+          "text": {
+            "type": "string",
+            "description": "The proposal's words, up to 4,000 bytes. They are kept on Keyfleet; the chain holds their fingerprint."
+          },
+          "asset": {
+            "type": "string",
+            "description": "pay: the address of the asset paid, one the page offers."
+          },
+          "recipient": {
+            "type": "string",
+            "description": "pay: the address paid."
+          },
+          "rate": {
+            "type": "string",
+            "description": "rate: the Daily Treasury Slice to Keys in percent, 0.1 to 2."
+          },
+          "target": {
+            "type": "string",
+            "description": "edits: the number of the Key whose edits change."
+          },
+          "restricted": {
+            "type": "string",
+            "description": "edits: \"true\" restricts the Key's edits, \"false\" allows them.",
+            "enum": [
+              "true",
+              "false"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "launch: the token's name."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "launch: the token's symbol."
+          },
+          "description": {
+            "type": "string",
+            "description": "launch: the token's description."
+          },
+          "website": {
+            "type": "string",
+            "description": "launch: the token's website."
+          },
+          "image": {
+            "type": "string",
+            "description": "launch: the token's image address."
+          },
+          "share": {
+            "type": "string",
+            "description": "pay: percentage of the treasury balance, 0.0001 to 99. Voting lasts 24 hours."
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_propose",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/proposals/create",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated",
+      "audience": "anyone"
+    },
+    {
+      "name": "chain_vote",
+      "title": "Vote step",
+      "description": "Vote on a proposal with every Key you may vote. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "number",
+              "choice"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The proposal's number, as the fleet's proposals page shows it"
+              },
+              "choice": {
+                "type": "string",
+                "enum": [
+                  "yes",
+                  "no",
+                  "abstain"
+                ],
+                "description": "Your vote"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/proposals/vote",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "number",
+          "choice"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The proposal's number, as the fleet's proposals page shows it"
+          },
+          "choice": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no",
+              "abstain"
+            ],
+            "description": "Your vote"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_vote",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/proposals/vote",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_cancel",
+      "title": "Cancel step",
+      "description": "Cancel a proposal made with your Key. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "number"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The proposal's number, as the fleet's proposals page shows it"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/proposals/cancel",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "number"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The proposal's number, as the fleet's proposals page shows it"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_cancel",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/proposals/cancel",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_carry_out",
+      "title": "Carry-out step",
+      "description": "Carry out an approved proposal; anyone may. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "number"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The proposal's number, as the fleet's proposals page shows it"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/proposals/carry_out",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "number"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The proposal's number, as the fleet's proposals page shows it"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_carry_out",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/proposals/carry_out",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_split",
+      "title": "Slice step",
+      "description": "Run the fleet's daily split of each asset to its Keys; anyone may, once a day. Answers each asset's split too. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/split",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_split",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/split",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_send_share",
+      "title": "Staking step",
+      "description": "Send what the fleet owes REGENT staking from its Key sales; anyone may, and it moves no one's own money. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/treasury/send_share",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_send_share",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/treasury/send_share",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_convert",
+      "title": "Purchase step",
+      "description": "Turn USDC the fleet has waiting into REGENT, at most the amount named and at most 250 USDC a press; anyone may. Answers what is waiting and when the next piece may run too. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "inputs"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "inputs": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "amount"
+                ],
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "pattern": "^[0-9]+(\\.[0-9]{1,6})?$",
+                    "description": "USDC to turn, as a decimal string such as \"250\" or \"12.5\""
+                  }
+                },
+                "description": "The amount to turn"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/treasury/convert",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "inputs"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "amount"
+            ],
+            "properties": {
+              "amount": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]{1,6})?$",
+                "description": "USDC to turn, as a decimal string such as \"250\" or \"12.5\""
+              }
+            },
+            "description": "The amount to turn"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_convert",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/treasury/convert",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_claim",
+      "title": "Claim step",
+      "description": "Claim what a Key has earned; the money goes to the Key's holder. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "The Key to claim: its exact decimal token id, as a string"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The Key to claim: its exact decimal token id, as a string"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_claim",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_claim_all",
+      "title": "Claims step",
+      "description": "Claim what every Key your wallet holds, or holds an active shard of, in the fleet has earned; each Key's money goes to its holder. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/claim",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_claim_all",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/claim",
         "cli": {
           "release_status": "released",
           "descriptor": "cli/commands.json"

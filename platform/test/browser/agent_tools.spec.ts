@@ -1,8 +1,8 @@
 import {randomBytes, randomUUID} from "node:crypto"
 import {readFileSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
-import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent} from "./support/agent_tools"
-import {prepareFleet, sayInPublic, sellKey} from "./support/fleet_chain"
+import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent, sendSigned} from "./support/agent_tools"
+import {offerRewards, prepareFleet, readTreasury, sayInPublic, sellKey} from "./support/fleet_chain"
 
 // An agent in a person's browser uses Keyfleet through the tools its pages
 // register (priv/tool_manifest.json), as the WebMCP acceptance of 16 October
@@ -191,4 +191,29 @@ test("an agent posts one line in the Public room, and catching up again after a 
   const seen = new Set(first.messages.map(message => message.id))
   expect(since.filter(message => seen.has(message.id))).toEqual([])
   expect(since.filter(message => message.body === meanwhile)).toHaveLength(1)
+})
+
+test("an agent's own wallet gets the same split and claim steps from the browser tools as from its signed requests", async ({page}) => {
+  // The agent's own wallet holds a Key with USDC waiting, and the treasury was just read.
+  const agent = newAgent()
+  pairAgent(agent, wallet())
+  const key = sellKey(fleet, agent)
+  offerRewards(fleet, key, 2_500_000)
+  readTreasury(fleet, 40_000_000)
+  await open(page, fleetPath)
+
+  for (const [name, input] of [
+    ["chain_claim", {fleet_id: fleet, token_id: String(key)}],
+    ["chain_split", {fleet_id: fleet}],
+  ] as const) {
+    const tool = await callSigned(page, agent, name, input)
+    const http = await sendSigned(page, agent, name, input)
+    expect(tool.status, name).toBe(http.status)
+    expect(tool.ok ? tool.data : {error: tool.error}, name).toEqual(http.data)
+  }
+
+  // The claim is steps for the agent's own wallet to send; Keyfleet sent nothing.
+  const claim = await callSigned(page, agent, "chain_claim", {fleet_id: fleet, token_id: String(key)})
+  expect(claim).toMatchObject({ok: true, status: 200})
+  expect(claim.data.transactions.length).toBeGreaterThan(0)
 })

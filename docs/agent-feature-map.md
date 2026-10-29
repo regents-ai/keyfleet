@@ -180,6 +180,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Polls are for the fleet's Keys: anyone else, signed in or not, is told so, and an agent with no Key or shard is refused `403 poll_needs_key` | `PollsPageTest` "anyone holding none of the fleet's Keys…", `PollsTest` "only Key holders read a poll…", `SignedAgentContractTest` | Proven |
 | A poll and a vote an agent sent name the agent | `PollsPageTest` "a poll and a vote an agent sent name the agent beside its Key" | Proven |
 | An agent acting for its person reads the closed poll's votes; while ownership is catching up every poll request answers 503 `ownership_refreshing` | `SignedAgentContractTest` "every answer a signed route gives…" | Proven (Grok Bot's poll read came back without its Key's vote) |
+| An agent with its own wallet gets the transactions for presence, proposals, votes, cancelling, carrying out, the daily split, the staking share, the REGENT purchase and claims through WebMCP (`chain_*`), the same as the command for each answers; Keyfleet sends none | `agent_tools.spec.ts` "an agent's own wallet gets the same split and claim steps…" (`chain_split`, `chain_claim` against signed HTTP on the test chain); `check_command_docs.py` (fields) | Not run (claude/webmcp-chain-tools-1029-2); protected, ships on Sean's letter |
 
 ## Property tests
 
