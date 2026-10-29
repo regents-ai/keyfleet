@@ -261,6 +261,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     board = graph(c, bea, "board", %{}).body
     assert ContractSchema.errors(board, "WorkspaceBoard") == []
 
+    # The goal just made is open and joined; a starting goal nobody joined
+    # isn't counted, and there are no tasks yet.
+    assert board["counts"] == %{
+             "open_goals" => 1,
+             "open_tasks" => 0,
+             "working" => 0,
+             "waiting_review" => 0,
+             "accepted" => 0
+           }
+
     # The newest first: the goal just made, then the starting goals.
     assert [newest | starting] = board["goals"]
     assert %{"title" => "First paying customer", "status" => "open", "joined" => 1} = newest

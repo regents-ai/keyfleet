@@ -17,6 +17,8 @@ defmodule Keyfleet.Graph do
   use Ash.Domain, extensions: [AshAi]
 
   @goals_shown 50
+  # Where a goal or task stands, as `tally/3` counts them.
+  @standings [:open_goals, :open_tasks, :working, :waiting_review, :accepted]
   @tables [
     Keyfleet.Graph.Cursor,
     Keyfleet.Graph.Event,
@@ -165,6 +167,40 @@ defmodule Keyfleet.Graph do
       end)
 
     shown
+  end
+
+  @doc """
+  How many of a fleet's goals and tasks stand where, or one project's,
+  archived ones left out: its open goals, the tasks nobody has taken, the
+  taken ones not yet submitted (`working`), the submitted ones waiting for
+  a review and the ones a review accepted (the `:in_standing` read of
+  objects). Each is counted on its own, so a write between two counts shows
+  in one of them only. Only the fleet's members read it.
+  """
+  @spec tally(String.t(), String.t() | nil, keyword()) ::
+          {:ok, %{atom() => non_neg_integer()}} | {:error, term()}
+  def tally(fleet_id, project, opts) do
+    Enum.reduce_while(@standings, {:ok, %{}}, fn standing, {:ok, counts} ->
+      Keyfleet.Graph.Object
+      |> Ash.Query.for_read(
+        :in_standing,
+        %{fleet_id: fleet_id, project: project, standing: standing},
+        opts
+      )
+      |> Ash.count()
+      |> case do
+        {:ok, count} -> {:cont, {:ok, Map.put(counts, standing, count)}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  @doc "`tally/3`, raising what it can't count."
+  def tally!(fleet_id, project, opts) do
+    case tally(fleet_id, project, opts) do
+      {:ok, counts} -> counts
+      {:error, error} -> raise Ash.Error.to_error_class(error)
+    end
   end
 
   @doc """

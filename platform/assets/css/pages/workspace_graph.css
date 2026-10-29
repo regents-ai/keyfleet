@@ -34,6 +34,85 @@
   color: var(--color-fg);
 }
 
+/* How many goals and tasks stand where: one line of numbers between
+   hairlines, each marked in its standing's colour as the graph draws it.
+   On a phone the line wraps into two columns, the last number across both. */
+.workspace-counts {
+  --kf-tone-open: var(--color-fg-muted);
+  --kf-tone-doing: var(--color-info);
+  --kf-tone-waiting: var(--color-warning);
+  --kf-tone-done: var(--color-success);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 0 1rem;
+  border-block: 1px solid var(--color-border);
+}
+
+.workspace-counts [data-tone="open"] { --kf-tone: var(--kf-tone-open); }
+.workspace-counts [data-tone="doing"] { --kf-tone: var(--kf-tone-doing); }
+.workspace-counts [data-tone="waiting"] { --kf-tone: var(--kf-tone-waiting); }
+.workspace-counts [data-tone="done"] { --kf-tone: var(--kf-tone-done); }
+
+.workspace-counts > div {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.workspace-counts > div:first-child {
+  border-inline-start: 0;
+}
+
+.workspace-counts dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-fg-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.workspace-counts dt::before {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  background: var(--kf-tone);
+}
+
+.workspace-counts dd {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+@media (max-width: 47.99rem) {
+  .workspace-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-counts > div {
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .workspace-counts > div:nth-child(odd) {
+    border-inline-start: 0;
+  }
+
+  .workspace-counts > div:nth-child(-n + 2) {
+    border-block-start: 0;
+  }
+
+  .workspace-counts > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
 /* The graph: each item in the colour of where it stands, its links behind
    it, and the same items as a list under the picture. Colours report state
    only; an item with no state keeps the plain hairline. */

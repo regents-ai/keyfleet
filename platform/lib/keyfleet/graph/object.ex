@@ -199,6 +199,43 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The fleet's goals or tasks in one standing, or one project's, archived
+    # ones left out, for the workspace to count (`Keyfleet.Graph.tally/3`):
+    # its open goals, as `open_goals` reads them; the tasks nobody has taken;
+    # the taken tasks not yet submitted; the submitted tasks waiting for a
+    # review of their current version; and the ones a review accepted.
+    read :in_standing do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
+
+      argument :standing, :atom,
+        allow_nil?: false,
+        constraints: [one_of: [:open_goals, :open_tasks, :working, :waiting_review, :accepted]]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
+                 ((^arg(:standing) == :open_goals and type == "goal" and
+                     fragment("(? ->> 'status') = 'open'", data) and
+                     fragment(
+                       "(? ->> 'starting' IS NULL OR jsonb_array_length(? -> 'joined') > 0)",
+                       sys,
+                       sys
+                     )) or
+                    (^arg(:standing) == :open_tasks and type == "task" and
+                       fragment("(? ->> 'progress') = 'todo'", data) and
+                       fragment("(? ->> 'assignee_key') IS NULL", data)) or
+                    (^arg(:standing) == :working and type == "task" and
+                       fragment("(? ->> 'progress') <> 'done'", data) and
+                       fragment("(? ->> 'assignee_key') IS NOT NULL", data)) or
+                    (^arg(:standing) == :waiting_review and type == "task" and
+                       review == "awaiting_review") or
+                    (^arg(:standing) == :accepted and type == "task" and
+                       review in ["accepted", "reproduced"]))
+             )
+    end
+
     # The evidence that cites `uri` as its source and the tasks that name it
     # as their commit, the most recently changed first, archived ones
     # included.
@@ -442,6 +479,7 @@ defmodule Keyfleet.Graph.Object do
              :titled,
              :cards,
              :graph,
+             :in_standing,
              :around_goal,
              :assigned_to_keys,
              :review_asked_of,

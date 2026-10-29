@@ -358,9 +358,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :board, :map, required: true
 
-  # The Project as a board, or as a graph of its items and their links.
+  # The Project as a board, or as a graph of its items and their links, under
+  # how many of its goals and tasks stand where.
   defp project(assigns) do
     ~H"""
+    <.counts :if={@board.ready?} counts={@board.counts} />
+
     <nav id="workspace-views" class="workspace-views" aria-label="Project views">
       <.link
         :for={{view, label} <- [board: "Board", graph: "Graph"]}
@@ -377,6 +380,37 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <.board_view :if={@board.ready? and @board.filter.view == :board} board={@board} />
     <.graph_view :if={@board.ready? and @board.filter.view == :graph} board={@board} />
     """
+  end
+
+  attr :counts, :map, required: true
+
+  # One line of numbers, each in the colour of where it stands as the graph
+  # draws it; a number rolls to its new value when the work moves.
+  defp counts(assigns) do
+    ~H"""
+    <dl id="workspace-counts" class="workspace-counts">
+      <div :for={{standing, label, tone} <- counted()} data-standing={standing} data-tone={tone}>
+        <dt>{label}</dt>
+        <dd>
+          <span
+            id={"workspace-count-#{standing}"}
+            phx-hook="MotionCount"
+            data-variant={KeyfleetWeb.Motion.standard("count")}
+          ><span data-count>{Rules.grouped(@counts[standing])}</span></span>
+        </dd>
+      </div>
+    </dl>
+    """
+  end
+
+  defp counted do
+    [
+      {:open_goals, "Open goals", "open"},
+      {:open_tasks, "Open tasks", "open"},
+      {:working, "In progress", "doing"},
+      {:waiting_review, "Awaiting review", "waiting"},
+      {:accepted, "Accepted", "done"}
+    ]
   end
 
   # Switching keeps the kind of item shown, and the archived ones.

@@ -341,7 +341,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp labels(_shown, _projects), do: %{}
 
   # The project's items, or the whole fleet's, drawn as a graph with the
-  # links between them (`KeyfleetWeb.WorkspaceGraph`).
+  # links between them (`KeyfleetWeb.WorkspaceGraph`), under how many goals
+  # and tasks stand where (`Keyfleet.Graph.tally/3`).
   defp place(fleet, :project, shown, projects, params, opts)
        when is_map_key(params, "view") do
     filter = filter!(params, shown)
@@ -364,6 +365,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           ready?: true,
           seen: seen(cursor),
           filter: filter,
+          counts: Graph.tally!(fleet.id, filter.project, opts),
           graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects))
         }
 
@@ -373,7 +375,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # The project's items, or the whole fleet's, a page of them, beside its
-  # goals and its latest changes.
+  # goals, its latest changes and how many goals and tasks stand where
+  # (`Keyfleet.Graph.tally/3`).
   defp place(fleet, :project, shown, projects, params, opts) do
     filter = filter!(params, shown)
     within = %{project: filter.project}
@@ -412,6 +415,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           ready?: true,
           seen: seen(cursor),
           filter: filter,
+          counts: Graph.tally!(fleet.id, filter.project, opts),
           cards: Enum.map(page.results, &entry(&1, filter, fleet.id, agents, labels)),
           goals: Enum.map(goals, &goal_row(&1, labels)),
           all_goals: board_path(fleet.id, %{filter | type: "goal", archived?: false}),

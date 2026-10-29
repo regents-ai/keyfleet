@@ -1784,6 +1784,96 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "how the work stands" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    # Costly failure: a count that took in archived, achieved or another
+    # fleet's or project's items would tell members the work stands where it
+    # doesn't, in a line they read before anything else.
+    test "the Project counts each goal and task where it stands, in both views",
+         %{conn: conn} do
+      create(@fleet, "goal", %{"title" => "Revenue"})
+      edit(@fleet, create(@fleet, "goal", %{"title" => "Shipped"}), %{"status" => "achieved"})
+      archive(@fleet, create(@fleet, "goal", %{"title" => "Old plan"}))
+      starting_goal(@fleet, 1, %{"title" => "Nobody joined"})
+      join(@fleet, starting_goal(@fleet, 2, %{"title" => "Someone joined"}))
+
+      create(@fleet, "task", %{"title" => "Untaken"})
+      create(@fleet, "task", %{"title" => "Taken", "assignee_key" => 4})
+      create(@fleet, "task", %{"title" => "Doing", "progress" => "doing", "assignee_key" => 4})
+      create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked", "assignee_key" => 5})
+      submit(@fleet, create(@fleet, "task", %{"title" => "Waiting"}), "https://example.com/r1")
+
+      accepted = create(@fleet, "task", %{"title" => "Accepted"})
+      submit(@fleet, accepted, "https://example.com/r2")
+      review(@fleet, accepted, "accept", by: 6)
+
+      reproduced = create(@fleet, "task", %{"title" => "Reproduced"})
+      submit(@fleet, reproduced, "https://example.com/r3")
+      review(@fleet, reproduced, "accept", by: 6, reproduction: "passed")
+
+      disputed = create(@fleet, "task", %{"title" => "Disputed"})
+      submit(@fleet, disputed, "https://example.com/r4")
+      review(@fleet, disputed, "dispute", by: 6)
+
+      archive(@fleet, create(@fleet, "task", %{"title" => "Archived"}))
+
+      open_log(@other)
+      create(@other, "task", %{"title" => "Theirs"})
+
+      for path <- [@board, @board <> "?view=graph"] do
+        {:ok, view, _html} = live(conn, path)
+
+        assert counts(view) == %{
+                 open_goals: "2",
+                 open_tasks: "1",
+                 working: "3",
+                 waiting_review: "1",
+                 accepted: "2"
+               }
+      end
+    end
+
+    test "one project's counts leave out the others' work", %{conn: conn} do
+      start_project(@fleet, "lab", "Lab")
+      create(@fleet, "task", %{"title" => "In general"})
+      create(@fleet, "task", %{"title" => "In the lab"}, project: "lab")
+      create(@fleet, "goal", %{"title" => "Lab goal"}, project: "lab")
+
+      {:ok, view, _html} = live(conn, @board <> "?project=lab")
+      assert %{open_goals: "1", open_tasks: "1"} = counts(view)
+
+      {:ok, view, _html} = live(conn, @board)
+      assert %{open_goals: "1", open_tasks: "2"} = counts(view)
+    end
+
+    test "a visitor sees no counts", %{visitor: visitor} do
+      create(@fleet, "task", %{"title" => "Untaken"})
+
+      {:ok, view, _html} = live(visitor, @board)
+      assert has_element?(view, "#workspace-members-only")
+      refute has_element?(view, "#workspace-counts")
+    end
+
+    defp counts(view) do
+      for standing <- [:open_goals, :open_tasks, :working, :waiting_review, :accepted],
+          into: %{} do
+        figure =
+          view
+          |> element("#workspace-count-#{standing}")
+          |> render()
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.text()
+          |> String.trim()
+
+        {standing, figure}
+      end
+    end
+  end
+
   describe "the workspace's graph" do
     # Costly failure: the graph is a second way into the workspace, so a graph
     # that skipped the board's members-only rule would show anyone every item.
