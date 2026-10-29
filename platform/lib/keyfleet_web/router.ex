@@ -298,10 +298,8 @@ defmodule KeyfleetWeb.Router do
   end
 
   # The Claude connector's MCP address, the shared one (`RegentMCPAgents.Plug`):
-  # Claude's handshake, the 401 challenge that starts sign-in, the identity
-  # tools, and Keyfleet's own tools (`KeyfleetWeb.MCPTools`), each served
-  # through this endpoint in process as a signed agent request. Each connected
-  # account gets 120 requests a minute. Before that the
+  # Claude's handshake, the 401 challenge that starts sign-in, and the identity
+  # tools. Each connected account gets 120 requests a minute. Before that the
   # endpoint counts a request without a token against the /api per-address
   # budget, and one with a token against the connector's own per-address
   # ceiling (`KeyfleetWeb.Endpoint.connector_rate_limit/0`), since every
@@ -325,13 +323,7 @@ defmodule KeyfleetWeb.Router do
                 limit: 120,
                 window: 60,
                 admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3
-              ],
-              tools: KeyfleetWeb.MCPTools,
-              endpoint: KeyfleetWeb.Endpoint,
-              # Each of Keyfleet's own tool calls is a hosted sign-in at the
-              # sign-in server; 30 a minute leaves room for ten busy
-              # connections in one machine's share there.
-              tool_limit: [policy: "mcp_tools", limit: 30, window: 60]
+              ]
             ],
             log: false
   end

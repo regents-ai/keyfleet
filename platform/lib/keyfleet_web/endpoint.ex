@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.Endpoint do
   # One budget per client address, shared by the health check, the browser's
   # visit reports, every /api path and a Claude connector request without a
   # token, answered or not; a connector request with a token has a ceiling of
-  # its own, and a connector tool's request inside it spends none. Every answer, including a signed agent request refused before the
+  # its own. Every answer, including a signed agent request refused before the
   # router, says what is left of it; past it the answer is 429 with Retry-After.
   plug :limit_rate
 
@@ -118,12 +118,6 @@ defmodule KeyfleetWeb.Endpoint do
   plug Plug.Session, @session_options
   plug :markdown_addresses
   plug KeyfleetWeb.Router
-
-  # A Claude connector tool's request, served in this process
-  # (`conn.private[:regent_mcp_agents]`, which nothing sent over the network
-  # can set): it spent its account's budget at /mcp already, and every
-  # connected account would otherwise share this one address's.
-  defp limit_rate(%Plug.Conn{private: %{regent_mcp_agents: _tool}} = conn, _opts), do: conn
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())

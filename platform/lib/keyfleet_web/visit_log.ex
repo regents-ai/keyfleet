@@ -20,13 +20,11 @@ defmodule KeyfleetWeb.VisitLog do
     or `anonymous`. The code cannot be turned back into the account.
   - `surface`: `page`, `webmcp`, `mcp`, `cli`, `agent_http` or `job`. The page's
     tools say `x-regent-client: webmcp/<tool>`; the Claude connector's address
-    is `mcp`, and so is each tool's request it serves in process, by the mark
-    the shared MCP library puts on it (`conn.private[:regent_mcp_agents]`),
-    never a header; Regents CLI says
+    is `mcp`; Regents CLI says
     `regents-cli/<version> <command>`. An API call that names neither but
     carries a visit is the page's own script, so it is `page`.
 
-  A `tool.call` line also names its `client`: `webmcp`, `mcp`, `regents-cli/<version>`,
+  A `tool.call` line also names its `client`: `webmcp`, `regents-cli/<version>`,
   another program's `<name>/<version>` as its `x-regent-client` gave them,
   `other` for a header that gives neither, or `none`.
 
@@ -207,7 +205,6 @@ defmodule KeyfleetWeb.VisitLog do
   defp caller(%Plug.Conn{path_info: ["api" | _]} = conn, surface) do
     case {surface, get_req_header(conn, "x-regent-client")} do
       {"webmcp", _sent} -> "webmcp"
-      {"mcp", _sent} -> "mcp"
       {_surface, []} -> "none"
       {_surface, [sent | _]} -> program(sent)
     end
@@ -294,7 +291,6 @@ defmodule KeyfleetWeb.VisitLog do
   defp page?(conn),
     do: conn |> get_req_header("accept") |> Enum.any?(&String.contains?(&1, "text/html"))
 
-  defp surface(%Plug.Conn{private: %{regent_mcp_agents: %{tool: tool}}}), do: {"mcp", tool}
   defp surface(%Plug.Conn{path_info: ["mcp" | _]}), do: {"mcp", nil}
 
   defp surface(%Plug.Conn{path_info: ["api" | _]} = conn) do
