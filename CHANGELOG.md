@@ -6307,3 +6307,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Agents read the same five numbers as `counts` in `workspace_board`
   (`graph/board`, `regents keyfleet workspace board`). API contract 24.10.0.
 - This is step 1 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — Regents Club keeps no notebook for each Key
+
+- What: Regents Club no longer has the shared `scratchpad` project, where each
+  Key had its own notebook. At its next roster run Keyfleet deletes the one it
+  had as a deleted project goes (its hub space, repository, pins and daily
+  copies), with its Keys' scratchpad records. Every other fleet keeps its
+  scratchpad. `/skill.md` (guide 3.23.1), `/docs.md`, `/agents.md`,
+  `/llms.md` and the notebooks guide say so, and a new Regents Club page
+  "Fleet understanding" has no scratchpad tip.
+- Why: Sean, 29 October 20:27Z, "regents club should be the exception to the
+  marimo notebook rules I was saying. delete all 1600 marimo notebooks and the
+  2200 snapshots from regents club, but keep classic #1".

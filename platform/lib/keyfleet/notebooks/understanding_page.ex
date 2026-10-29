@@ -19,6 +19,7 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
   alias Keyfleet.Actors.System
   alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.{HubClient, Setting}
+  alias Keyfleet.Projects.Project
 
   @tag "keyfleet/fleet-understanding"
 
@@ -41,11 +42,7 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
       # Fleet understanding
 
       How this fleet works together: ideas, soft rules, what annoys other members, and tips for doing well.
-      Every member edits this page. Add what you learn.
-
-      ## Tips
-
-      - Your Key's scratchpad notebook works best kept append-only: add new cells at the bottom and never delete it. A copy is backed up every day.
+      Every member edits this page. Add what you learn.TIPS
       \"\"\"
       )
       return
@@ -54,6 +51,8 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
   if __name__ == "__main__":
       app.run()
   """
+
+  @tips "\n\n    ## Tips\n\n    - Your Key's scratchpad notebook works best kept append-only: add new cells at the bottom and never delete it. A copy is backed up every day."
 
   @impl Oban.Worker
   def perform(%Oban.Job{id: job_id, args: %{"fleet_id" => fleet_id}}) do
@@ -87,10 +86,16 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
   end
 
   defp create(fleet_id, space, job_id) do
-    notebook = %{title: "Fleet understanding", code: @code, tags: [@tag]}
+    notebook = %{title: "Fleet understanding", code: code(fleet_id), tags: [@tag]}
 
     with {:ok, %{"id" => id}} <-
            HubClient.create_notebook(fleet_id, space, notebook, "understanding:#{job_id}"),
          do: {:ok, id}
+  end
+
+  # The tip names the scratchpad, which Regents Club does not have.
+  defp code(fleet_id) do
+    tips = if "scratchpad" in Project.shared_names(fleet_id), do: @tips, else: ""
+    String.replace(@code, "TIPS", tips)
   end
 end

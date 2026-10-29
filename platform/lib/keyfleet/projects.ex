@@ -6,9 +6,10 @@ defmodule Keyfleet.Projects do
   by Key 3 (Key 329 in Regents Club), which holds the starting goals, the fleet's first notebook space
   and its first repository.
 
-  Every fleet also shares two projects that no Key holds, always active: the
-  `scratchpad`, with a notebook for each Key, and `understanding`, the
-  fleet's notes on working together (`bootstrap_shared!/1`).
+  Every fleet also shares projects that no Key holds, always active:
+  `understanding`, the fleet's notes on working together, and, in every fleet
+  but Regents Club, the `scratchpad`, with a notebook for each Key
+  (`bootstrap_shared!/1`).
 
   Every other project is held by one of the fleet's Keys and is active, archived or
   deleted. A Key holds at most one active project and five archived ones; it
@@ -32,6 +33,9 @@ defmodule Keyfleet.Projects do
   use Ash.Domain
 
   alias Keyfleet.Projects.Errors.ClosedError
+  alias Keyfleet.Projects.Project
+
+  require Ash.Query
 
   resources do
     resource Keyfleet.Projects.Project do
@@ -120,24 +124,20 @@ defmodule Keyfleet.Projects do
   end
 
   @doc """
-  Gives each of these fleets its two shared projects (`Project.shared_names/0`),
-  active and held by no Key, unless it has them already: the `scratchpad`,
-  titled "Append-only scratchpad", and `understanding`, titled after the
-  fleet. A fleet that has them keeps them, their titles made canonical again.
+  Gives each of these fleets the projects it shares (`Project.shared_names/1`),
+  active and held by no Key, unless it has them already: `understanding`,
+  titled after the fleet, and the `scratchpad`, titled "Append-only
+  scratchpad". A fleet that has them keeps them, their titles made canonical
+  again. One it no longer shares goes at its next roster run (`unshare!/1`).
   """
   def bootstrap_shared!(fleets) do
     Ash.bulk_create!(
-      Enum.flat_map(fleets, fn fleet ->
-        [
-          %{fleet_id: fleet.id, name: "scratchpad", title: "Append-only scratchpad"},
-          %{
-            fleet_id: fleet.id,
-            name: "understanding",
-            title: "Keyfleet #{fleet.name} Collaborative Understanding"
-          }
-        ]
-      end),
-      Keyfleet.Projects.Project,
+      for(
+        fleet <- fleets,
+        name <- Project.shared_names(fleet.id),
+        do: %{fleet_id: fleet.id, name: name, title: shared_title(name, fleet)}
+      ),
+      Project,
       :shared,
       actor: %Keyfleet.Actors.System{},
       return_errors?: true,
@@ -148,6 +148,32 @@ defmodule Keyfleet.Projects do
 
     :ok
   end
+
+  @doc """
+  Deletes each shared project the fleet no longer shares
+  (`Project.shared_names/1`), as a deleted project goes: its space and
+  repository go by the jobs it queues (`Keyfleet.Projects.Changes.Forget`).
+  The fleet's roster run calls it (`Keyfleet.Notebooks.Roster`); a fleet
+  that has none changes nothing.
+  """
+  def unshare!(fleet_id) do
+    Project
+    |> Ash.Query.for_read(:in_fleet, %{fleet_id: fleet_id}, actor: %Keyfleet.Actors.System{})
+    |> Ash.Query.filter(is_nil(key) and name not in ^Project.shared_names(fleet_id))
+    |> Ash.bulk_update!(:unshared, %{},
+      actor: %Keyfleet.Actors.System{},
+      strategy: [:stream],
+      allow_stream_with: :full_read,
+      return_errors?: true
+    )
+
+    :ok
+  end
+
+  defp shared_title("scratchpad", _fleet), do: "Append-only scratchpad"
+
+  defp shared_title("understanding", fleet),
+    do: "Keyfleet #{fleet.name} Collaborative Understanding"
 
   @doc """
   The fleet's project `name` as `{:ok, project}` while it is active, so it

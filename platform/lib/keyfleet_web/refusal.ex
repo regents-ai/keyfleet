@@ -86,7 +86,7 @@ defmodule KeyfleetWeb.Refusal do
        "Act as the Key projects_list names for it, or take it over first."},
     "project_shared" =>
       {"This project belongs to the whole fleet.",
-       "The scratchpad and the fleet's collaborative understanding are always active and held by no Key, so no Key archives, takes over or deletes them. Any member works in them."},
+       "A project the whole fleet shares is always active and held by no Key, so no Key archives, takes over or deletes it. Any member works in it."},
     "project_general_kept" =>
       {"General can't be deleted.",
        "General keeps the fleet's starting goals, first notebooks and first repository. A Key with no active project can take it over with projects_take_over."},
