@@ -4,7 +4,8 @@
  * link's curve, fades from where the link leaves to where it arrives, and
  * widens into a soft glow as it lights up. Lit links take the page's link
  * colour; one that contradicts its target takes the error colour; the rest
- * recede while any link is lit.
+ * recede while any link is lit. A fork's or a review's link is dashed, as the
+ * page draws it.
  */
 export const graphWgsl = /* wgsl */ `
 struct Params {
@@ -33,7 +34,13 @@ struct Ribbon {
   @location(2) along: f32,
   @location(3) light: f32,
   @location(4) against: f32,
+  // How long the link runs, in points, when it is dashed; 0 when solid.
+  @location(5) dashed: f32,
 }
+
+// A dash and the gap after it, in points, as the page draws them.
+const DASH = 5.0;
+const PERIOD = 9.0;
 
 fn curve(a: vec4f, b: vec4f, t: f32) -> vec2f {
   let s = 1.0 - t;
@@ -46,7 +53,8 @@ fn slope(a: vec4f, b: vec4f, t: f32) -> vec2f {
 }
 
 // a: start and first handle, b: second handle and end, in points of the
-// picture; c: how lit the link is, 0..1, and 1 when it contradicts.
+// picture; c: how lit the link is, 0..1, 1 when it contradicts, and how long
+// it runs when it is dashed.
 @vertex fn vs_main(
   @builtin(vertex_index) vertex: u32,
   @location(0) a: vec4f,
@@ -74,10 +82,14 @@ fn slope(a: vec4f, b: vec4f, t: f32) -> vec2f {
   ribbon.along = t;
   ribbon.light = light;
   ribbon.against = c.y;
+  ribbon.dashed = c.z;
   return ribbon;
 }
 
 @fragment fn fs_main(ribbon: Ribbon) -> @location(0) vec4f {
+  if (ribbon.dashed > 0.0 && (ribbon.along * ribbon.dashed) % PERIOD > DASH) {
+    discard;
+  }
   let scale = params.size.z;
   let distance = abs(ribbon.across);
   let solid = 1.0 - smoothstep(ribbon.half - 0.5, ribbon.half + 0.75, distance);

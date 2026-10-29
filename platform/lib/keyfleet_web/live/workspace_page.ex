@@ -178,7 +178,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   @docs_shown 24
   @section_shown 6
 
-  # How many items of the work around a goal its page lists.
+  # How many items of the work around a goal, the most recently changed, its
+  # page reads for what they cite.
   @goal_items 100
   # How many of the notebooks its work cites a goal's page asks the hub for.
   @cited_notebooks 20
@@ -1445,16 +1446,18 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
-  # What a goal's page lists of the work around it (`Keyfleet.Graph.Object`,
-  # `:around_goal`): each item one line, and of what its tasks and evidence
-  # cite, the saved notebook results, the notebooks and the commits of the
-  # fleet's code; beside them the goal's own place in the code, the folder
-  # `goals/goal-N`, and the notebooks tagged `goal-N` in its project's space.
-  # `code` and `notebooks` are `:unreadable` when the code store or the
-  # notebook hub doesn't answer, and `notebooks` is nil for a fleet without
-  # notebooks. `graph` is the goal's map in its project's Graph view.
+  # What a goal's page shows of the work around it: its map, as the Graph
+  # view draws it around the goal (`KeyfleetWeb.WorkspaceGraph.tree/2`), and
+  # of what the work around it cites (`Keyfleet.Graph.Object`,
+  # `:around_goal`), the saved notebook results, the notebooks and the
+  # commits of the fleet's code; beside them the goal's own place in the
+  # code, the folder `goals/goal-N`, and the notebooks tagged `goal-N` in its
+  # project's space. `code` and `notebooks` are `:unreadable` when the code
+  # store or the notebook hub doesn't answer, and `notebooks` is nil for a
+  # fleet without notebooks. `graph` is the same map in its project's Graph
+  # view.
   defp goal_work(fleet_id, goal, opts) do
-    {objects, more} = fleet_id |> Graph.goal_work!(goal.id, opts) |> Enum.split(@goal_items)
+    objects = fleet_id |> Graph.goal_work!(goal.id, opts) |> Enum.take(@goal_items)
     name = String.replace(goal.id, "#", "-")
     folder = "goals/" <> name
     repository = repository!(fleet_id, goal.project)
@@ -1474,18 +1477,14 @@ defmodule KeyfleetWeb.WorkspacePage do
         for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: notebook_in(uri))
       )
 
+    map =
+      fleet_id
+      |> Graph.workspace_graph!(%{goal: goal.id}, opts)
+      |> WorkspaceGraph.draw(fleet_id, %{})
+
     %{
-      items:
-        for object <- objects do
-          %{
-            id: object.id,
-            type: object.type,
-            title: object.title,
-            standing: standing(object.type, object.standing),
-            changed_on: time(object.changed_at)
-          }
-        end,
-      more?: more != [],
+      map: WorkspaceGraph.tree(map, goal.id),
+      more?: map.more_nodes?,
       graph:
         board_path(fleet_id, %{
           view: :graph,

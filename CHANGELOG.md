@@ -6227,3 +6227,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `regents keyfleet workspace graph --goal`). An id that names no goal
   answers no items. API contract 24.10.0.
 - This is step 2 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — A goal's map on its page, as cards
+
+- A goal's page shows its map in place of its list of items: a card for each
+  item, the items that hang from it under it, each joined to the card above
+  by a line. A fork's or a review's line is dashed. Each card names the item's
+  kind and its Key, and the status of a goal or task in its colour. On a
+  phone it is one column. "Open in the Graph view" opens the same map there.
+- The Graph view's items are cards of the same kind, cut at two corners, and
+  its fork and review links are dashed, on screens with WebGPU too.
+- This is step 3 of the Workspace plan drawn from four reference videos.

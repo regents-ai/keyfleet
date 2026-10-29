@@ -522,13 +522,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                goal_view,
-               ~s(#workspace-goal-items [data-item="#{task}"] a[href="#{item_path(task)}"]),
+               ~s(#workspace-goal-map-items [data-item="#{task}"] a[href="#{item_path(task)}"]),
                "Draft the brief"
              )
 
       assert has_element?(
                goal_view,
-               ~s(#workspace-goal-items [data-item="#{task}"]),
+               ~s(#workspace-goal-map-items [data-item="#{task}"]),
                "In progress"
              )
 
@@ -647,9 +647,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
-      assert work(view) == [run, code, finding, task]
-      assert has_element?(view, ~s(#workspace-goal-items [data-item="#{task}"]), "Task")
-      refute has_element?(view, "#workspace-goal-work-more")
+      assert work(view) == [task, code, run, finding]
+      assert has_element?(view, ~s(#workspace-goal-map-items [data-item="#{task}"]), "Task")
+      refute has_element?(view, "#workspace-goal-map-more")
 
       assert has_element?(
                view,
@@ -672,7 +672,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               "#workspace-goal-work-empty",
+               "#workspace-goal-map-empty",
                "No work is linked to this goal yet."
              )
 
@@ -691,12 +691,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       refute has_element?(view, "#workspace-goal-folder")
     end
 
-    test "a goal's page lists the hundred most recently changed items around it",
+    test "a goal's map holds the 120 most recently changed items around it",
          %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
 
       notes =
-        for n <- 1..101 do
+        for n <- 1..120 do
           note = create(@fleet, "note", %{"title" => "Note #{n}", "body" => "b"})
           link(@fleet, note, goal, "references")
           note
@@ -704,8 +704,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
-      assert work(view) == notes |> Enum.reverse() |> Enum.take(100)
-      assert has_element?(view, "#workspace-goal-work-more", "The 100 most recently changed.")
+      # The goal changed longest ago, so it is the one left out; its page
+      # stands for it, and every note still shows.
+      assert Enum.sort(work(view)) == Enum.sort(notes)
+      assert has_element?(view, "#workspace-goal-map-more", "The 120 most recently changed.")
     end
 
     test "a review is told once, as its decision on the task", %{conn: conn} do
@@ -1943,6 +1945,48 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert render(view) =~ "Unrelated"
     end
 
+    # Costly failure: a fork shown as the owner's own work, or work hung
+    # under the wrong task, would misstate who did what for the goal.
+    test "stands on the goal's page as cards, each under the item it hangs from",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+      task = create(@fleet, "task", %{"title" => "Draft the brief", "assignee_key" => 4})
+      link(@fleet, task, goal, "implements")
+      finding = create(@fleet, "finding", %{"title" => "Funds read briefs", "statement" => "S"})
+      link(@fleet, task, finding, "produces")
+      fork = create(@fleet, "task", %{"title" => "Draft it shorter"}, by: 7)
+      link(@fleet, fork, task, "forks")
+      note = create(@fleet, "note", %{"title" => "Call notes", "body" => "B"})
+      link(@fleet, note, goal, "references")
+
+      {:ok, view, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, goal))
+
+      branch = fn id ->
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query(~s([data-item="#{id}"] > ol > li))
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-item"))
+      end
+
+      top =
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#workspace-goal-map-items > li")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-item"))
+
+      assert top == [task, note]
+      assert branch.(task) == [finding, fork]
+      assert has_element?(view, ~s([data-item="#{fork}"][data-via="forks"]))
+      assert has_element?(view, ~s([data-item="#{finding}"][data-via="produces"]))
+
+      card = ~s([data-item="#{task}"] > .workspace-map-card)
+      assert has_element?(view, card, "Key 4")
+      assert has_element?(view, card <> " .workspace-map-standing", "To do")
+      assert has_element?(view, ~s([data-item="#{fork}"] > .workspace-map-card), "Key 7")
+    end
+
     test "is linked from the goal's page", %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue"})
 
@@ -2568,7 +2612,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#workspace-goal-items > li")
+    |> LazyHTML.query("#workspace-goal-map-items li")
     |> LazyHTML.attribute("data-item")
   end
 

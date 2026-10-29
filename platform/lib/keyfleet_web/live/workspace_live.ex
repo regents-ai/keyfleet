@@ -699,18 +699,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 data-archived={node.archived?}
               >
                 <title>{node.title}</title>
-                <rect x={node.x} y={node.y} width={node.width} height={node.height} />
-                <rect
-                  class="workspace-graph-tone"
-                  x={node.x}
-                  y={node.y}
-                  width="4"
-                  height={node.height}
-                />
-                <text class="workspace-graph-kind" x={node.x + 16} y={node.y + 20}>
-                  {node.kind}{if node.standing, do: " · #{node.standing}"}
+                <path class="workspace-graph-card" d={node.shape} />
+                <text class="workspace-graph-kind" x={node.x + 14} y={node.y + 21}>
+                  {node.kind}{if node.owner, do: " · #{node.owner}"}
                 </text>
-                <text class="workspace-graph-title" x={node.x + 16} y={node.y + 39}>
+                <text
+                  :if={node.standing}
+                  class="workspace-graph-standing"
+                  x={node.x + node.width - 14}
+                  y={node.y + 21}
+                  text-anchor="end"
+                >
+                  <tspan class="workspace-graph-dot">●</tspan>
+                  {node.standing}
+                </text>
+                <text class="workspace-graph-title" x={node.x + 14} y={node.y + 41}>
                   {node.shown_title}
                 </text>
               </.link>
@@ -2551,47 +2554,68 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
+  attr :id, :string, default: nil
+  attr :branch, :list, required: true
+
+  # One level of a goal's map: each item a card, cut at two corners and
+  # edged in the colour of where it stands, with the items that hang from it
+  # under it. A line joins each to the card above; a fork's or a review's
+  # line is dashed.
+  defp map_branch(assigns) do
+    ~H"""
+    <ol id={@id} class="workspace-map-branch">
+      <li
+        :for={entry <- @branch}
+        data-item={entry.item.id}
+        data-tone={entry.item.tone}
+        data-via={entry.via}
+      >
+        <div class="workspace-map-card">
+          <p class="workspace-map-top">
+            <span class="workspace-kind">
+              {entry.item.kind}{if entry.item.owner, do: " · #{entry.item.owner}"}
+            </span>
+            <span :if={entry.item.standing} class="workspace-map-standing">
+              <span class="workspace-graph-mark" aria-hidden="true"></span>{entry.item.standing}
+            </span>
+          </p>
+          <.link class="workspace-map-title" patch={entry.item.path}>{entry.item.title}</.link>
+        </div>
+        <.map_branch :if={entry.branch != []} branch={entry.branch} />
+      </li>
+    </ol>
+    """
+  end
+
   attr :goal, :map, required: true
   attr :fleet_id, :string, required: true
 
-  # The work around a goal, by where it is kept: the workspace's items, and
-  # the notebooks, their saved results and the commits of the fleet's code
-  # its tasks and evidence cite. Each line opens one of them.
+  # The work around a goal, by where it is kept: the workspace's items as the
+  # goal's map, and the notebooks, their saved results and the commits of the
+  # fleet's code its tasks and evidence cite. Each card and line opens one of
+  # them.
   defp goal_work(assigns) do
     ~H"""
     <section
-      id="workspace-goal-work"
-      class="workspace-panel workspace-wide"
-      aria-labelledby="workspace-goal-work-title"
+      id="workspace-goal-map"
+      class="workspace-panel workspace-wide workspace-map"
+      aria-labelledby="workspace-goal-map-title"
     >
-      <h2 id="workspace-goal-work-title">Items</h2>
-      <.link id="workspace-goal-graph" class="workspace-toggle" patch={@goal.graph}>
-        See it as a graph
-      </.link>
+      <header class="workspace-graph-head">
+        <h2 id="workspace-goal-map-title">Map</h2>
+        <.link id="workspace-goal-graph" class="workspace-toggle" patch={@goal.graph}>
+          Open in the Graph view
+        </.link>
+      </header>
       <Regent.Primitives.empty_state
-        :if={@goal.items == []}
-        id="workspace-goal-work-empty"
+        :if={@goal.map == []}
+        id="workspace-goal-map-empty"
         class="kf-empty"
         title="No work is linked to this goal yet."
       />
-      <ol :if={@goal.items != []} id="workspace-goal-items" class="workspace-rows">
-        <li :for={row <- @goal.items} class="workspace-row" data-item={row.id} data-type={row.type}>
-          <span class="workspace-kind">{type_label(row.type)}</span>
-          <.link class="workspace-row-title" patch={WorkspacePage.item_path(@fleet_id, row.id)}>
-            {row.title}
-          </.link>
-          <span class="workspace-row-meta">
-            <span :if={row.standing}>{row.standing}</span>
-            <KeyfleetWeb.Time.local
-              id={"workspace-goal-item-#{row.id}-on"}
-              at={row.changed_on}
-              as={:date}
-            />
-          </span>
-        </li>
-      </ol>
-      <p :if={@goal.more?} id="workspace-goal-work-more" class="workspace-detail">
-        The 100 most recently changed.
+      <.map_branch :if={@goal.map != []} id="workspace-goal-map-items" branch={@goal.map} />
+      <p :if={@goal.more?} id="workspace-goal-map-more" class="workspace-detail">
+        The 120 most recently changed.
       </p>
     </section>
 

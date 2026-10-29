@@ -25,6 +25,7 @@ const links = (root: HTMLElement): Link[] =>
   edges(root).map(edge => ({
     points: (edge.dataset.curve ?? "").split(" ").map(Number),
     against: edge.dataset.type === "contradicts",
+    dashed: edge.dataset.type === "forks" || edge.dataset.type === "reviews",
   }))
 
 // The item a pointer or focus is on: a node of the picture or a row of the list.
