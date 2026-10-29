@@ -446,6 +446,72 @@
       ]
     },
     {
+      "command": "treasury return <fleet> <advance> <amount>",
+      "description": "Get the transactions that return part or all of one advance to the treasury, for your wallet to send: for a token, approving exactly the amount first. Anyone may. `regents keyfleet treasury get` lists the advances still out.",
+      "operation_id": "buildReturnAdvance",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return",
+      "webmcp": "chain_return_advance",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "advance",
+          "type": "integer",
+          "in": "path",
+          "field": "advance_id",
+          "minimum": 1,
+          "description": "The advance's number, as treasury.advances names it."
+        },
+        {
+          "name": "amount",
+          "type": "string",
+          "in": "body",
+          "field": "amount",
+          "description": "How much to return, in whole tokens, such as 250 or 0.25."
+        }
+      ]
+    },
+    {
+      "command": "treasury launch <fleet> <step>",
+      "description": "Get one upkeep transaction of the fleet's token launch, for your wallet to send: settle the ended sale, bind the token to the Daily Treasury Slice to Keys, release the tokens set aside for the treasury, or collect the pool's fees. Anyone may.",
+      "operation_id": "buildLaunchUpkeep",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/treasury/launch",
+      "webmcp": "chain_launch_upkeep",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "step",
+          "type": "string",
+          "in": "body",
+          "field": "step",
+          "enum": [
+            "settle",
+            "bind",
+            "release",
+            "collect"
+          ],
+          "description": "The one upkeep step to build."
+        }
+      ]
+    },
+    {
       "command": "keys claim <fleet> <key>",
       "description": "Get the transactions that claim what a Key has earned, for your wallet to send. The money goes to the Key's holder.",
       "operation_id": "buildClaim",
@@ -507,6 +573,60 @@
           "in": "path",
           "field": "fleet_id",
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ]
+    },
+    {
+      "command": "keys club-claim <fleet> <key>",
+      "description": "Get the transaction that takes Regents Club Key N, with everything it earned while it waited, for your wallet to send. Only the holder of Regents Club Pass N may.",
+      "operation_id": "buildClubClaim",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim",
+      "webmcp": "chain_club_claim",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "integer",
+          "in": "path",
+          "field": "token_id",
+          "minimum": 1,
+          "description": "The Regents Club Key to claim, the same number as your Pass."
+        }
+      ]
+    },
+    {
+      "command": "keys reveal <fleet> <key>",
+      "description": "Get the transaction that asks again for a Key's random draw of its traits, for your wallet to send. Anyone may, while the Key's request was refused.",
+      "operation_id": "buildReveal",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal",
+      "webmcp": "chain_reveal",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "integer",
+          "in": "path",
+          "field": "token_id",
+          "minimum": 1,
+          "description": "The Key whose draw to ask for again."
         }
       ]
     },

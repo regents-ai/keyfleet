@@ -115,7 +115,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms/#{@token}/(#{Enum.join(@dm_ops, "|")})\z"
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
-  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim|keys/buy|keys/#{@token}/shards/end|shards/(?:issue|voting))\z"
+  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert|launch|advances/#{@token}/return)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim|keys/buy|keys/#{@token}/(?:shards/end|club_claim|reveal)|shards/(?:issue|voting))\z"
   @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork pin unpin)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
@@ -194,6 +194,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @propose_fields @propose_required ++
                     ~w(asset share recipient rate target restricted name symbol description website image)
   @choices ~w(yes no abstain)
+  # The token launch's upkeep, one button each.
+  @launch_steps ~w(settle bind release collect)
   # A direct message's parts sit beside its words, so it fits the same body
   # as a post.
   @max_dm_parts 8
@@ -1056,11 +1058,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # Presence, the split, sending the staking share, claiming, buying a Key
-  # and ending a Key's shards say nothing more than their path. Issuing
-  # shards names the Keys, the wallet and the days as typed, and agent voting
-  # the Keys and on or off. Turning USDC into REGENT names its amount as a
-  # string. A proposal names its fields as strings; a vote, a cancellation and
+  # Presence, the split, sending the staking share, claiming, buying a Key,
+  # claiming a Regents Club Key, asking again for a Key's draw and ending a
+  # Key's shards say nothing more than their path. Issuing shards names the
+  # Keys, the wallet and the days as typed, and agent voting the Keys and on
+  # or off. Turning USDC into REGENT names its amount as a string, and so does
+  # returning an advance; the launch's upkeep names its one step. A proposal names its fields as strings; a vote, a cancellation and
   # carrying out name the proposal, and a vote its choice.
   defp check_chain_body(op, params) when op in ["presence", "split", "treasury/send_share"],
     do: admit(params == %{})
@@ -1088,18 +1091,31 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
               is_integer(number),
        do: in_range(number in 1..@max_seq)
 
-  defp check_chain_body("keys/" <> _claim_buy_or_end, params), do: admit(params == %{})
+  defp check_chain_body("treasury/advances/" <> _return, %{"amount" => amount} = params),
+    do: admit(map_size(params) == 1 and typed?(amount, 100))
+
+  defp check_chain_body("treasury/launch", %{"step" => step} = params),
+    do: admit(map_size(params) == 1 and step in @launch_steps)
+
+  defp check_chain_body("keys/" <> _path_only, params), do: admit(params == %{})
 
   defp check_chain_body(
          "shards/issue",
          %{"keys" => keys, "wallet" => wallet, "days" => days} = params
        ),
-       do: admit(map_size(params) == 3 and Enum.all?([keys, wallet, days], &is_binary/1))
+       do:
+         admit(
+           map_size(params) == 3 and typed?(keys, 1000) and typed?(wallet, 100) and
+             typed?(days, 10)
+         )
 
   defp check_chain_body("shards/voting", %{"keys" => keys, "voting" => voting} = params),
-    do: admit(map_size(params) == 2 and is_binary(keys) and voting in ~w(on off))
+    do: admit(map_size(params) == 2 and typed?(keys, 1000) and voting in ~w(on off))
 
   defp check_chain_body(_op, _params), do: :invalid
+
+  # A field as a form types it, no longer than the contract says.
+  defp typed?(value, max_length), do: is_binary(value) and String.length(value) <= max_length
 
   # "changes" for catching up, or what is done in one conversation.
   defp dm_op(path) do
@@ -1589,6 +1605,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp chain_fields("treasury/convert"), do: {~w(inputs), []}
   defp chain_fields("shards/issue"), do: {~w(keys wallet days), []}
   defp chain_fields("shards/voting"), do: {~w(keys voting), []}
+  defp chain_fields("treasury/launch"), do: {~w(step), []}
+  defp chain_fields("treasury/advances/" <> _return), do: {~w(amount), []}
 
   defp chain_fields(op) when op in ["proposals/cancel", "proposals/carry_out"],
     do: {~w(number), []}

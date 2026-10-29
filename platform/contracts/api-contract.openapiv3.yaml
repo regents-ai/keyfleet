@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.14.0
+  version: 24.15.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -181,7 +181,7 @@ paths:
   /api/v1/fleets/{fleet_id}/treasury:
     get:
       operationId: readTreasury
-      description: Public indexed balances, separate rewards, history and permissions; inspect catching_up and treasury.as_of. Atomic amounts are decimal strings. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Buy REGENT starts with, at most "250", or "" when nothing waits. No transaction is submitted.
+      description: Public indexed balances, separate rewards, history and permissions; inspect catching_up and treasury.as_of. Atomic amounts are decimal strings. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Buy REGENT starts with, at most "250", or "" when nothing waits. treasury.advances lists each advance still out, oldest first, each with id, operator, amount and outstanding as the page words them, and typed, all that is still out in whole tokens, the amount a return of all of it takes. No transaction is submitted.
       security: []
       parameters:
         - {name: fleet_id, in: path, required: true, schema: {type: string}}
@@ -3331,6 +3331,166 @@ paths:
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim:
+    post:
+      x-pairing-required: true
+      operationId: buildClubClaim
+      description: >-
+        The transaction that takes Regents Club Key N from the claims contract, where it waits for
+        whoever holds Regents Club Pass N, with everything it earned while it waited, in every asset
+        at once, paid to the signing wallet, as the Key page's Claim Key button does. Blocked
+        "Already claimed" once the Key has left the contract, "Only its Pass's holder can claim"
+        while the signing wallet doesn't hold Pass N, and "Its Pass was burned" for good once the
+        Pass is burned. Nothing is sent here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/TokenId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction and the Key it claims
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainKeyStep"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/KeyNotFound"}
+        "409": {$ref: "#/components/responses/AgentClubClaimRefused"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal:
+    post:
+      x-pairing-required: true
+      operationId: buildReveal
+      description: >-
+        The transaction that asks again for a Key's random draw of its traits, as the Key page's Ask
+        again button does. Anyone may send it while the Key's request was refused. Blocked "Traits
+        drawn" once the draw is made, "Draw on its way" while a request waits, and "Its number
+        gives its traits" for a Key dealt its card by number, which never draws. Nothing is sent
+        here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/TokenId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction and the Key it asks for
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainKeyStep"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/KeyNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return:
+    post:
+      x-pairing-required: true
+      operationId: buildReturnAdvance
+      description: >-
+        The transactions that return part or all of one advance to the treasury from the signing
+        wallet, as the treasury page's Return button does: for a token, approving exactly the amount
+        to the treasury, then the return; for ETH, the return alone, with the ETH sent with it.
+        Anyone may return an advance. Blocked "Fully returned", "More than is owed", "Not enough in
+        your wallet" or "Approve first" when so. GET /api/v1/fleets/FLEET_ID/treasury lists the
+        advances still out in treasury.advances. Nothing is sent here: the signing wallet sends them
+        itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - name: advance_id
+          in: path
+          required: true
+          description: The advance's number, as treasury.advances names it
+          schema: {type: string, pattern: '^[1-9][0-9]{0,17}$'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount]
+              properties:
+                amount:
+                  type: string
+                  maxLength: 100
+                  description: >-
+                    How much to return, in whole tokens as a decimal string, such as "250" or
+                    "0.25", with at most as many decimal places as the token has.
+                    treasury.advances[].typed is all that is still out.
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transactions, the advance and the amount they return
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainReturnAdvance"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AdvanceNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422":
+          description: >-
+            invalid_amount: the amount can't be read in the token's units; error.details.problem
+            says how to write it, in a line. Nothing was built. invalid_request: the body doesn't
+            fit the operation; the hint names the fields it takes.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/AmountInvalidError"}
+                  - {$ref: "#/components/schemas/AgentError"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/treasury/launch:
+    post:
+      x-pairing-required: true
+      operationId: buildLaunchUpkeep
+      description: >-
+        One of the upkeep transactions of the fleet's token launch through Autolaunch, as the
+        treasury page's Token launch buttons do; anyone may send them. settle settles the sale once
+        it has ended, bind adds the launched token to the Daily Treasury Slice to Keys, release
+        releases the launch's tokens set aside for the treasury, and collect collects the pool's
+        fees. Blocked "Sale still running", "Already settled", "Already added", "Not settled yet"
+        or "The sale didn't sell" when so. Nothing is sent here: the signing wallet sends it
+        itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [step]
+              properties:
+                step: {type: string, enum: [settle, bind, release, collect], description: "The one upkeep transaction to build"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction and the launch it keeps up
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainLaunchUpkeep"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentNoLaunch"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/board:
     post:
       x-pairing-required: true
@@ -4814,6 +4974,35 @@ components:
             anyOf:
               - {$ref: "#/components/schemas/BuyRefusedError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
+    AgentClubClaimRefused:
+      description: >-
+        not_club_key: only a Regents Club Key is claimed with its Pass; claim another fleet's Key's
+        money with keys/TOKEN_ID/claim. request_replayed: the sign-in service has seen this signed
+        request before; sign it again and send it.
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - {$ref: "#/components/schemas/NotClubKeyError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
+    AgentNoLaunch:
+      description: >-
+        no_launch: the fleet hasn't launched a token yet; a launch comes from a carried-out launch
+        proposal. request_replayed: the sign-in service has seen this signed request before; sign
+        it again and send it.
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - {$ref: "#/components/schemas/NoLaunchError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
+    AdvanceNotFound:
+      description: >-
+        fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or Keys. advance_unknown: the treasury made no
+        advance with this number.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AdvanceNotFoundError"}
     AgentProposalNotFound:
       description: >-
         fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or Keys. proposal_unknown: the fleet has no
@@ -9322,6 +9511,88 @@ components:
         token_id: {type: integer, minimum: 1}
         wallets: {type: array, items: {$ref: "#/components/schemas/ChainAddress"}, description: "The wallets holding an active shard of the Key, as the chain reader recorded them"}
         renew_days: {type: integer, description: "How long a renewed shard lasts, in days"}
+    ChainKeyStep:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, token_id]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        token_id: {type: integer, minimum: 1}
+    ChainReturnAdvance:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, advance_id, operator, asset, symbol, decimals, outstanding, amount]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        advance_id: {type: integer, minimum: 1}
+        operator: {$ref: "#/components/schemas/ChainAddress"}
+        asset: {$ref: "#/components/schemas/ChainAddress"}
+        symbol: {$ref: "#/components/schemas/ChainAssetSymbol"}
+        decimals: {$ref: "#/components/schemas/ChainAssetDecimals"}
+        outstanding:
+          $ref: "#/components/schemas/UintString"
+          description: What is still out, in the asset's smallest units
+        amount:
+          $ref: "#/components/schemas/UintString"
+          description: What the transactions return, in the asset's smallest units
+    ChainLaunchUpkeep:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, launch_id, token, lifecycle, added_to_split]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        launch_id: {type: integer, minimum: 1}
+        token: {$ref: "#/components/schemas/ChainAddress"}
+        lifecycle:
+          type: [string, "null"]
+          enum: [none, active, graduated, failed, null]
+          description: The sale as its strategy says it stands now; graduated is sold
+        added_to_split: {type: boolean, description: "Whether the token is in the Daily Treasury Slice to Keys"}
+    NotClubKeyError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: not_club_key}
+            message: {type: string}
+            hint: {type: string}
+    NoLaunchError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: no_launch}
+            message: {type: string}
+            hint: {type: string}
+    AdvanceNotFoundError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [fleet_unknown, fleet_coming_soon, advance_unknown]}
+            message: {type: string}
+            hint: {type: string}
     ShardInvalidError:
       type: object
       additionalProperties: false

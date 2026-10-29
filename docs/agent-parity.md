@@ -87,8 +87,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Mark Keys present | Presence card (proposals page, Key page) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
 | Claim one Key's share | Key page | `chain_claim`; page `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
 | Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
-| Claim a Regents Club Key (Pass holder) | Key page | — | — | — | — | wallet | K4, K8 |
-| Ask again for a Key's traits | Key page | — | — | — | — | wallet | K4, K8 |
+| Claim a Regents Club Key (Pass holder) | Key page | `chain_club_claim` | — | — | `keys club-claim` (not released) | wallet | K8 |
+| Ask again for a Key's traits | Key page | `chain_reveal` | — | — | `keys reveal` (not released) | wallet | K8 |
 | Shards: issue, renew, end (Key holder) | Key page | `chain_issue_shard`, `chain_end_shard` | — | — | `shards issue`, `shards end` (not released) | wallet | K8 |
 | Agent voting on or off (Key holder) | Key page | `chain_agent_voting` | — | — | `shards voting` (not released) | wallet | K8 |
 | Read the agent's own shards | Key page | `shards_list` | — | `shards_list` | `shards list` | no | K8 |
@@ -140,8 +140,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Release the Daily Treasury Slice | `/treasury` | `chain_split`; page `treasury_release` | — | — | `split run` | money, wallet | K5, K8 |
 | Send the REGENT staking share | `/treasury` | `chain_send_share`; page `treasury_send_share` | — | — | `treasury send-share` | money, wallet | K5, K8 |
 | Turn USDC into REGENT | `/treasury` | `chain_convert`; page `treasury_buy_regent` | — | — | `treasury convert` | money, wallet | K5, K8 |
-| Return an advance | treasury, Advances out | — | — | — | — | money, wallet | K4, K8 |
-| Token launch upkeep (settle, add to the slice, release, collect fees) | `/treasury` Token launch | — | — | — | — | money, wallet | K4, K8 |
+| Return an advance | treasury, Advances out | `chain_return_advance` | — | — | `treasury return` (not released) | money, wallet | K8 |
+| Token launch upkeep (settle, add to the slice, release, collect fees) | `/treasury` Token launch | `chain_launch_upkeep` | — | — | `treasury launch` (not released) | money, wallet | K8 |
 
 ## Credits
 
@@ -196,11 +196,17 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   them: for anyone else the steps answer blocked "Not your Key", and the contract refuses
   them. Tools `chain_issue_shard`, `chain_agent_voting`, `chain_end_shard`; commands `shards
   issue`, `shards voting`, `shards end`.
-- **K4. Four more wallet buttons are page-only.** Claiming a Regents Club Key, asking
-  again for a Key's traits, returning an advance and token-launch upkeep (`club_claim`,
-  `reveal`, `return_advance`, `launch_upkeep`). Plan: the same chain routes, CLI
-  commands and WebMCP tools, built from those flows. Protected (wallet, money).
-- **K5. WebMCP wallet tools sign with the browser's wallet.** Closed for WebMCP: the ten
+- **K4. Four more wallet buttons were page-only. Built** (29 Oct, waits for Sean's go to
+  ship: wallet, money): the signed `keys/KEY/club_claim` and `keys/KEY/reveal` (`{}`),
+  `treasury/advances/ADVANCE_ID/return` (`{"amount"}`, in whole tokens, as the Return field
+  types it) and `treasury/launch` (`{"step"}`, one of `settle`, `bind`, `release`,
+  `collect`) answer the same steps the Key and treasury pages build (flows `club_claim`,
+  `reveal`, `return_advance`, `launch_upkeep`) for the agent's own wallet. Refusals:
+  `not_club_key` (409, any fleet but the Regents Club), `advance_unknown` (404),
+  `invalid_amount` (422) and `no_launch` (409). Tools `chain_club_claim`, `chain_reveal`,
+  `chain_return_advance`, `chain_launch_upkeep`; commands `keys club-claim`, `keys
+  reveal`, `treasury return`, `treasury launch`.
+- **K5. WebMCP wallet tools sign with the browser's wallet.** Closed for WebMCP: the 18
   `chain_*` signed tools answer the same steps the CLI gets, built for the agent's own
   key on the existing chain routes, and each command's `webmcp` names its tool. The page
   wallet tools (`keys_claim`, `proposals_vote` and the rest) still press the page's
@@ -236,13 +242,15 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   the same answer as the signed start and remove requests and the upload address
   (`KeyfleetWeb.AgentTools.Account.Answer`). The upload takes the address the start
   answered, on this site only, and the picture as base64, as the browser tool does.
-- **K13. 32 CLI commands are not released.** Keyfleet's `cli/commands.json` has 113
+- **K13. 40 CLI commands are not released.** Keyfleet's `cli/commands.json` has 121
   commands; released regents-cli 1.10.20 (PyPI, 28 Oct) carries 82, read from its
   wheel on 29 Oct. Not in it: checkpoint read and save, code commit and commits,
   fleets activity and doctor, keys held, message, post-as, remove and show, links
   resolve, preview, profile avatar-start, avatar-upload, avatar-remove and edit, projects
   describe, hide and show, publications list, commit, item, page, posts and withdraw,
-  receipts read, rooms message, workspace board, graph, pin and unpin. The release still
+  receipts read, rooms message, workspace board, graph, pin and unpin, and the wallet
+  commands from K2 to K4: keys buy, club-claim and reveal, shards issue, voting and end,
+  and treasury return and launch. The release still
   has `profile status`, which the site's list now calls `profile edit`. Each manifest
   tool a command names now links the command list with the status the release gives it
   (`Keyfleet.ToolCommandsTest` keeps every link in one shape). Owner: regents-cli chief,

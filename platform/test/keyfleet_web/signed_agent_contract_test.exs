@@ -58,6 +58,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @issue_shard "/api/v1/agent/fleets/{fleet_id}/shards/issue"
   @agent_voting "/api/v1/agent/fleets/{fleet_id}/shards/voting"
   @end_shard "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end"
+  @club_claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim"
+  @reveal "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal"
+  @return_advance "/api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return"
+  @launch_upkeep "/api/v1/agent/fleets/{fleet_id}/treasury/launch"
   @polls "/api/v1/agent/fleets/{fleet_id}/polls"
   @poll_start "/api/v1/agent/fleets/{fleet_id}/polls/start"
   @poll "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}"
@@ -81,6 +85,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     "slug" => "general",
     "project" => "general",
     "poll_id" => "00000000-0000-4000-8000-000000000000",
+    "advance_id" => "7",
     "notebook_id" => "nb-0123456789abcdef"
   }
   @poll_question %{
@@ -177,6 +182,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
      %{"keys" => "2", "wallet" => "0x" <> String.duplicate("b", 40), "days" => "30"}},
     {"POST", @agent_voting, [], %{"keys" => "2", "voting" => "on"}},
     {"POST", @end_shard, [], %{}},
+    {"POST", @club_claim, [], %{}},
+    {"POST", @reveal, [], %{}},
+    {"POST", @return_advance, [], %{"amount" => "2"}},
+    {"POST", @launch_upkeep, [], %{"step" => "release"}},
     {"GET", @dm_inbox, [], nil},
     {"GET", @dm_blocks, [], nil},
     {"POST", @dm <> "read", [], %{"after_seq" => 0, "limit" => 1}},
@@ -1061,7 +1070,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           {@buy, %{}},
           {@issue_shard, empty_or_minimal(@issue_shard)},
           {@agent_voting, empty_or_minimal(@agent_voting)},
-          {@end_shard, %{}}
+          {@end_shard, %{}},
+          {@club_claim, %{}},
+          {@reveal, %{}},
+          {@return_advance, empty_or_minimal(@return_advance)},
+          {@launch_upkeep, empty_or_minimal(@launch_upkeep)}
         ] do
       assert answer(c, c.signer, "POST", template, offchain, body, 404).body ==
                refused("fleet_coming_soon")
@@ -1165,7 +1178,182 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              answer(c, c.signer, "POST", @claim_all, @address, %{}, 200).body
 
     shard_routes(c, fleet, wallet, own, unsold)
+    money_routes(c, fleet, wallet, uint)
+    reveal_routes(c, fleet, own, unsold)
     buy_routes(c, fleet, wallet, uint)
+    club_routes(c, wallet, own)
+  end
+
+  # Advance 7 is out: 5 USDC, none approved to the treasury, and the wallet
+  # holds 10. Advance 8 was never made. Launch 3 has sold, and nothing has
+  # launched once the treasury names no launch.
+  defp money_routes(c, fleet, wallet, uint) do
+    usdc = fleet.usdc_address
+    treasury = fleet.treasury_address
+    purpose = "0x" <> String.duplicate("9", 64)
+
+    advance = fn id, operator, outstanding ->
+      {treasury, "advances(uint256)", [id],
+       {"address,address,uint256,bytes32", [operator, usdc, outstanding, purpose]}}
+    end
+
+    ChainViews.put!([
+      advance.(7, @owner, 5_000_000),
+      advance.(8, "0x" <> String.duplicate("0", 40), 0),
+      uint.(usdc, "balanceOf(address)", [wallet], 10_000_000),
+      uint.(usdc, "allowance(address,address)", [wallet, treasury], 0)
+    ])
+
+    assert %{
+             "advance_id" => 7,
+             "operator" => @owner,
+             "asset" => ^usdc,
+             "symbol" => "USDC",
+             "outstanding" => "5000000",
+             "amount" => "2500000",
+             "transactions" => [approve, give_back]
+           } =
+             answer(c, c.signer, "POST", @return_advance, @address, %{"amount" => "2.5"}, 200).body
+
+    assert {approve["name"], approve["blocked"]} == {"approve", nil}
+
+    assert approve["data"] ==
+             RegentChain.Call.encode("approve(address,uint256)", [treasury, 2_500_000])
+
+    assert {give_back["name"], give_back["blocked"]} == {"return", "Approve first"}
+
+    assert give_back["data"] ==
+             RegentChain.Call.encode("returnAdvance(uint256,uint256)", [7, 2_500_000])
+
+    assert [_approve, %{"blocked" => "More than is owed"}] =
+             answer(c, c.signer, "POST", @return_advance, @address, %{"amount" => "6"}, 200).body[
+               "transactions"
+             ]
+
+    long = %{"amount" => String.duplicate("1", 101)}
+
+    assert answer(c, c.signer, "POST", @return_advance, @address, long, 422).body["error"]["code"] ==
+             "invalid_request"
+
+    refused = answer(c, c.signer, "POST", @return_advance, @address, %{"amount" => "2,5"}, 422)
+    assert refused.body["error"]["code"] == "invalid_amount"
+    assert is_binary(refused.body["error"]["details"]["problem"])
+
+    never = Map.put(@address, "advance_id", "8")
+
+    assert answer(c, c.signer, "POST", @return_advance, never, %{"amount" => "1"}, 404).body ==
+             refused("advance_unknown")
+
+    launch_routes(c, fleet, uint)
+  end
+
+  defp launch_routes(c, fleet, uint) do
+    factory = fleet.autolaunch_factory_address
+
+    [auction, subject, escrow, strategy, locker] =
+      for n <- 1..5, do: "0x" <> String.duplicate("#{n}a", 20)
+
+    sold = [
+      uint.(fleet.treasury_address, "launchId()", [], 3),
+      {factory, "launches(uint256)", [3],
+       {"address,address,address,address,address",
+        [fleet.treasury_address, subject, auction, escrow, fleet.treasury_address]}},
+      {factory, "strategy()", [], {"address", [strategy]}},
+      {strategy, "lpLocker()", [], {"address", [locker]}},
+      {strategy, "distribution(address)", [auction],
+       {"uint8,uint64,uint64,uint64,uint64,uint128,uint128,uint128,uint160,uint256,address,address,address,address,address,bytes32,uint256",
+        [2, 1, 2, 3, 900, 0, 0, 0, 0, 0] ++
+          List.duplicate("0x" <> String.duplicate("0", 40), 5) ++
+          ["0x" <> String.duplicate("0", 64), 77]}}
+    ]
+
+    ChainViews.put!(sold)
+
+    assert %{
+             "launch_id" => 3,
+             "token" => ^subject,
+             "lifecycle" => "graduated",
+             "added_to_split" => true,
+             "transactions" => [release]
+           } =
+             answer(c, c.signer, "POST", @launch_upkeep, @address, %{"step" => "release"}, 200).body
+
+    assert {release["name"], release["to"], release["blocked"]} == {"release", escrow, nil}
+
+    assert [%{"name" => "bind", "blocked" => "Already added"}] =
+             answer(c, c.signer, "POST", @launch_upkeep, @address, %{"step" => "bind"}, 200).body[
+               "transactions"
+             ]
+
+    ChainViews.put!([uint.(fleet.treasury_address, "launchId()", [], 0)])
+
+    assert answer(c, c.signer, "POST", @launch_upkeep, @address, %{"step" => "settle"}, 409).body ==
+             refused("no_launch")
+  end
+
+  # Key 2's draw was never asked for, then is on its way.
+  defp reveal_routes(c, fleet, own, unsold) do
+    key = ChainHelpers.onchain_id(@fleet, 2)
+    zero = "0x" <> String.duplicate("0", 64)
+
+    draw = fn requested_at ->
+      ChainViews.put!([
+        {fleet.keys_address, "revealSeed(uint256)", [key], {"bytes32", [zero]}},
+        {fleet.keys_address, "revealRequestedAt(uint256)", [key], {"uint64", [requested_at]}}
+      ])
+    end
+
+    draw.(0)
+
+    assert %{"token_id" => 2, "transactions" => [step]} =
+             answer(c, c.signer, "POST", @reveal, own, %{}, 200).body
+
+    assert {step["name"], step["to"], step["blocked"]} == {"reveal", fleet.keys_address, nil}
+    assert step["data"] == RegentChain.Call.encode("requestReveal(uint256)", [key])
+
+    draw.(1)
+
+    assert [%{"blocked" => "Draw on its way"}] =
+             answer(c, c.signer, "POST", @reveal, own, %{}, 200).body["transactions"]
+
+    answer(c, c.signer, "POST", @reveal, unsold, %{}, 404)
+  end
+
+  # Regents Club Key 1 waits in the claims contract for the holder of Pass 1,
+  # the signing wallet; then the Pass is another's. Another fleet's Key is
+  # never claimed with a Pass.
+  defp club_routes(c, wallet, own) do
+    club = Fleets.get_fleet!("regents_club")
+    claims = club.club_claims_address
+    pass = "0x" <> String.duplicate("a3", 20)
+    ChainHelpers.seed_cursor!("regents_club")
+    record_owner(1, claims, "regents_club")
+    address = %{@address | "fleet_id" => "regents_club", "token_id" => "1"}
+
+    waiting = fn pass_holder ->
+      ChainViews.put!([
+        {club.keys_address, "ownerOf(uint256)", [ChainHelpers.onchain_id("regents_club", 1)],
+         {"address", [claims]}},
+        {claims, "PASS()", [], {"address", [pass]}},
+        {pass, "ownerOf(uint256)", [1], {"address", [pass_holder]}}
+      ])
+    end
+
+    waiting.(wallet)
+
+    assert %{"token_id" => 1, "transactions" => [step]} =
+             answer(c, c.signer, "POST", @club_claim, address, %{}, 200).body
+
+    assert {step["name"], step["to"], step["blocked"]} == {"club-claim", claims, nil}
+    assert step["data"] == RegentChain.Call.encode("claim(uint256,address)", [1, wallet])
+
+    waiting.(@owner)
+
+    assert [%{"blocked" => "Only its Pass’s holder can claim"}] =
+             answer(c, c.signer, "POST", @club_claim, address, %{}, 200).body["transactions"]
+
+    assert answer(c, c.signer, "POST", @club_claim, own, %{}, 409).body ==
+             refused("not_club_key")
   end
 
   # The agent holds Key 2; Key 1 is another's. Issuing names the Keys, the
@@ -1196,6 +1384,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              answer(c, c.signer, "POST", @issue_shard, @address, %{issue | "keys" => "1, 2"}, 200).body[
                "transactions"
              ]
+
+    # Longer than the contract allows, the body fits no operation.
+    for {field, typed} <- [{"keys", String.duplicate("2,", 501)}, {"days", "00000000030"}] do
+      assert answer(c, c.signer, "POST", @issue_shard, @address, %{issue | field => typed}, 422).body[
+               "error"
+             ]["code"] == "invalid_request",
+             field
+    end
 
     for {field, typed} <- [{"wallet", "0x12"}, {"days", "400"}, {"keys", "two"}] do
       refused =
@@ -1519,6 +1715,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @issue_shard},
       {"POST", @agent_voting},
       {"POST", @end_shard},
+      {"POST", @club_claim},
+      {"POST", @reveal},
+      {"POST", @return_advance},
+      {"POST", @launch_upkeep},
       {"GET", @polls},
       {"POST", @poll_start},
       {"GET", @poll},
@@ -1579,6 +1779,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     do: %{"keys" => "2", "wallet" => "0x" <> String.duplicate("b", 40), "days" => "30"}
 
   defp empty_or_minimal(@agent_voting), do: %{"keys" => "2", "voting" => "on"}
+  defp empty_or_minimal(@return_advance), do: %{"amount" => "2"}
+  defp empty_or_minimal(@launch_upkeep), do: %{"step" => "release"}
   defp empty_or_minimal(_template), do: %{}
 
   # A body the check finds the wrong shape is refused before anything else
@@ -1675,17 +1877,17 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp fill(template, address),
     do: Regex.replace(~r/\{(\w+)\}/, template, fn _, name -> Map.fetch!(address, name) end)
 
-  defp record_owner(token_id, wallet) do
+  defp record_owner(token_id, wallet, fleet_id \\ @fleet) do
     Keys.record_epoch!(
       %{
-        fleet_id: @fleet,
+        fleet_id: fleet_id,
         token_id: token_id,
         ownership_epoch: 1,
         owner_wallet: wallet,
         block_number: 10,
         block_hash: "0x" <> String.duplicate("a", 64),
         transaction_hash:
-          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{token_id}"), case: :lower),
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet_id}/#{token_id}"), case: :lower),
         log_index: 0
       },
       actor: %Actors.System{}

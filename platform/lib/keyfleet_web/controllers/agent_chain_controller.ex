@@ -4,10 +4,12 @@ defmodule KeyfleetWeb.AgentChainController do
   marking its keys present, proposing, voting, cancelling, carrying a
   proposal out, running the daily split, sending the REGENT staking share,
   turning waiting USDC into REGENT, claiming one key's money or every key's
-  at once, buying the next Key, and, as a Key's holder, issuing, renewing
-  and ending its shards and turning its shards' voting on or off. Each is built by `Keyfleet.WalletSteps` for the signing
-  agent's wallet, as the site's buttons are built for a person's, from the
-  chain read at the latest block.
+  at once, buying the next Key, claiming a Regents Club Key with its Pass,
+  asking again for a Key's draw, returning an advance, the token launch's
+  upkeep, and, as a Key's holder, issuing, renewing and ending its shards and
+  turning its shards' voting on or off. Each is built by
+  `Keyfleet.WalletSteps` for the signing agent's wallet, as the site's
+  buttons are built for a person's, from the chain read at the latest block.
 
   The answer names the chain, says in a line what the transactions do, and
   lists them in the order to send them (`KeyfleetWeb.AgentChainJSON`). Each
@@ -54,11 +56,8 @@ defmodule KeyfleetWeb.AgentChainController do
     end)
   end
 
-  def vote(conn, %{"fleet_id" => fleet_id, "number" => number, "choice" => choice}) do
-    answer(conn, fleet_id, :ballot, %{proposal: number}, fn built ->
-      update_in(built.review.steps, fn steps -> Enum.filter(steps, &(&1.step == choice)) end)
-    end)
-  end
+  def vote(conn, %{"fleet_id" => fleet_id, "number" => number, "choice" => choice}),
+    do: answer(conn, fleet_id, :ballot, %{proposal: number}, &only(&1, choice))
 
   def cancel(conn, %{"fleet_id" => fleet_id, "number" => number}),
     do: answer(conn, fleet_id, :cancel, %{proposal: number})
@@ -89,11 +88,31 @@ defmodule KeyfleetWeb.AgentChainController do
 
   # Whether the shards of the Keys named may vote and propose with them: the
   # one step that turns it on or off.
-  def agent_voting(conn, %{"fleet_id" => fleet_id, "keys" => keys, "voting" => voting}) do
-    answer(conn, fleet_id, :agent_voting, %{inputs: %{"keys" => keys}}, fn built ->
-      update_in(built.review.steps, fn steps -> Enum.filter(steps, &(&1.step == voting)) end)
-    end)
-  end
+  def agent_voting(conn, %{"fleet_id" => fleet_id, "keys" => keys, "voting" => voting}),
+    do: answer(conn, fleet_id, :agent_voting, %{inputs: %{"keys" => keys}}, &only(&1, voting))
+
+  # Taking Regents Club Key N, with what it earned while it waited, for the
+  # holder of Regents Club Pass N.
+  def club_claim(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
+    do: answer(conn, fleet_id, :club_claim, %{token_id: String.to_integer(token_id)})
+
+  # Asking again for a Key's random draw, which anyone may do while its
+  # request was refused.
+  def reveal(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
+    do: answer(conn, fleet_id, :reveal, %{token_id: String.to_integer(token_id)})
+
+  # Part or all of one advance, back to the treasury from the signing wallet,
+  # as the treasury page's Return field types it.
+  def return_advance(conn, %{"fleet_id" => fleet_id, "advance_id" => id, "amount" => amount}),
+    do:
+      answer(conn, fleet_id, :return_advance, %{
+        advance_id: String.to_integer(id),
+        inputs: %{"amount" => amount}
+      })
+
+  # One of the token launch's four upkeep buttons: the one asked for.
+  def launch_upkeep(conn, %{"fleet_id" => fleet_id, "step" => step}),
+    do: answer(conn, fleet_id, :launch_upkeep, %{}, &only(&1, step))
 
   defp answer(conn, fleet_id, flow, params, shape \\ &Function.identity/1) do
     agent = conn.assigns.agent_actor
@@ -114,6 +133,10 @@ defmodule KeyfleetWeb.AgentChainController do
       {:key_unknown, token_id} -> Refusal.key_unknown(conn, fleet_id, token_id)
     end
   end
+
+  # The one step of a group of buttons that was asked for.
+  defp only(built, name),
+    do: update_in(built.review.steps, fn steps -> Enum.filter(steps, &(&1.step == name)) end)
 
   # Words past the wallet's allowance stay unsaved; any other failure is saved
   # with the site's errors. The steps are answered either way.
@@ -164,16 +187,25 @@ defmodule KeyfleetWeb.AgentChainController do
   defp refuse(conn, :buy, _built, :sold_out, _inputs),
     do: Refusal.json(conn, 409, "keys_sold_out")
 
-  # Only a proposal's own fields, the amount to turn into REGENT, and the Keys,
-  # wallet and days of shards can be written wrong.
+  defp refuse(conn, :club_claim, _built, :not_club, _inputs),
+    do: Refusal.json(conn, 409, "not_club_key")
+
+  defp refuse(conn, :return_advance, _built, :advance_unknown, _inputs),
+    do: Refusal.json(conn, 404, "advance_unknown")
+
+  defp refuse(conn, :launch_upkeep, _built, :no_launch, _inputs),
+    do: Refusal.json(conn, 409, "no_launch")
+
+  # Only a proposal's own fields, the amounts to turn into REGENT and to
+  # return, and the Keys, wallet and days of shards can be written wrong.
   defp refuse(conn, :propose, built, _problem, inputs),
     do: unreadable(conn, "invalid_proposal", WalletWords.line(:propose, built, inputs))
 
   defp refuse(conn, flow, built, _problem, inputs) when flow in [:issue_shard, :agent_voting],
     do: unreadable(conn, "invalid_shard", WalletWords.line(flow, built, inputs))
 
-  defp refuse(conn, :convert, built, _problem, inputs),
-    do: unreadable(conn, "invalid_amount", WalletWords.line(:convert, built, inputs))
+  defp refuse(conn, flow, built, _problem, inputs) when flow in [:convert, :return_advance],
+    do: unreadable(conn, "invalid_amount", WalletWords.line(flow, built, inputs))
 
   defp unreadable(conn, code, problem) do
     conn

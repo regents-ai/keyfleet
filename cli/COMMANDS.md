@@ -458,6 +458,64 @@ answer the step; blocked "Nothing waiting to turn into REGENT" or "Opens <time>"
   2026-10-23 blocked "Too big now: try <amount> USDC" when the piece would move the price
   more than 1% right now.
 
+## regents keyfleet treasury return <fleet> <advance> <amount>
+
+- **Purpose:** returns part or all of one advance to the treasury from the wallet, as the
+  treasury page's Return button does. Anyone may. `treasury get` lists the advances still
+  out in `treasury.advances`, each with `typed`, all that is still out.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transactions.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return` →
+  `buildReturnAdvance`
+- **Inputs:** `<fleet> <advance>`, and `<amount>` as `{"amount": "2.5"}`: whole tokens as a
+  decimal string, with at most as many decimal places as the token has.
+- **Answer:** for a token, the transactions `approve` (exactly the amount, to the treasury)
+  and `return`; for ETH, `return` alone, with the ETH sent with it. With `advance_id`,
+  `operator`, `asset`, `symbol`, `decimals`, `outstanding` and `amount` (smallest units, as
+  decimal strings).
+- **Refusals:** 404 `advance_unknown` for an advance the treasury never made; 422
+  `invalid_amount` when the amount can't be read, with `error.details.problem` saying how to
+  write it.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+built = WalletSteps.build_steps(fleet, :return_advance, wallet, advance, inputs, actor: the agent)
+no advance by that number -> 404 advance_unknown
+an amount that can't be read -> 422 invalid_amount with its words; nothing is built
+answer the steps; return is blocked "Fully returned", "More than is owed", "Not enough in
+your wallet" or "Approve first" when so
+```
+
+- **History:** 2026-10-29 added (parity gap K4).
+
+## regents keyfleet treasury launch <fleet> <step>
+
+- **Purpose:** one upkeep transaction of the fleet's token launch through Autolaunch, as
+  the treasury page's Token launch buttons do: `settle` settles the ended sale, `bind` adds
+  the token to the Daily Treasury Slice to Keys, `release` releases the tokens set aside for
+  the treasury, and `collect` collects the pool's fees. Anyone may.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/treasury/launch` → `buildLaunchUpkeep`
+- **Inputs:** `<fleet>`, and `<step>` as `{"step": "settle"}`.
+- **Answer:** the one transaction named, with `launch_id`, `token`, `lifecycle` (`none`,
+  `active`, `graduated` or `failed`; `graduated` is sold) and `added_to_split`.
+- **Refusals:** 409 `no_launch` while the fleet has launched no token.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+built = WalletSteps.build_steps(fleet, :launch_upkeep, wallet, actor: the agent)
+no launch bound to the treasury or made by a carried-out proposal -> 409 no_launch
+answer the step named; blocked "Sale still running", "Already settled", "Already added",
+"Not settled yet" or "The sale didn't sell" when so
+```
+
+- **History:** 2026-10-29 added (parity gap K4).
+
 ## regents keyfleet keys claim <fleet> <key>
 
 - **Purpose:** claims what a key has earned, one transaction for each asset it is
@@ -536,6 +594,56 @@ answer the steps; buy is blocked "Approve USDC first" until the approval lands, 
 ```
 
 - **History:** 2026-10-29 added (parity gap K2).
+
+## regents keyfleet keys club-claim <fleet> <key>
+
+- **Purpose:** takes Regents Club Key N from the claims contract, where it waits for the
+  holder of Regents Club Pass N, with everything it earned while it waited, paid to the
+  wallet, as the Key page's Claim Key button does. Only Pass N's holder may.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim` →
+  `buildClubClaim`
+- **Inputs:** `<fleet> <key>`, the Key with the same number as the Pass. The body is `{}`.
+- **Answer:** the transaction `club-claim`, with `token_id`.
+- **Refusals:** 404 `key_unknown` for a Key not recorded yet; 409 `not_club_key` for any
+  fleet but the Regents Club.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+key   = the Key, as the chain reader recorded it, else 404 key_unknown
+not the Regents Club -> 409 not_club_key
+built = WalletSteps.build_steps(fleet, :club_claim, wallet, key, actor: the agent)
+answer the step; blocked "Already claimed", "Only its Pass's holder can claim" or "Its Pass
+was burned" when so
+```
+
+- **History:** 2026-10-29 added (parity gap K4).
+
+## regents keyfleet keys reveal <fleet> <key>
+
+- **Purpose:** asks again for a Key's random draw of its traits, as the Key page's Ask
+  again button does. Anyone may, while the Key's request was refused.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal` → `buildReveal`
+- **Inputs:** `<fleet> <key>`. The body is `{}`.
+- **Answer:** the transaction `reveal`, with `token_id`.
+- **Refusals:** 404 `key_unknown` for a Key not sold yet.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+key   = the Key, as the chain reader recorded it, else 404 key_unknown
+built = WalletSteps.build_steps(fleet, :reveal, wallet, key, actor: the agent)
+answer the step; blocked "Traits drawn", "Draw on its way" or "Its number gives its
+traits" when so
+```
+
+- **History:** 2026-10-29 added (parity gap K4).
 
 ## regents keyfleet shards issue <fleet>
 

@@ -263,6 +263,15 @@ defmodule KeyfleetWeb.Refusal do
     "keys_sold_out" =>
       {"Every Key of this fleet is sold.",
        "Buy a Key of another fleet. GET /api/v1/fleets lists the fleets, with each one's Keys sold and next Key's price."},
+    "not_club_key" =>
+      {"Only a Regents Club Key is claimed with its Pass.",
+       "Claim what another fleet's Key earned with POST /api/v1/agent/fleets/FLEET_ID/keys/TOKEN_ID/claim."},
+    "advance_unknown" =>
+      {"The treasury made no advance with this number.",
+       "GET /api/v1/fleets/FLEET_ID/treasury lists the advances still out in treasury.advances."},
+    "no_launch" =>
+      {"This fleet hasn't launched a token yet.",
+       "A launch comes from a carried-out launch proposal. GET /api/v1/fleets/FLEET_ID/proposals lists them."},
     "chain_unavailable" =>
       {"The chain can't be read right now, so the transaction can't be built.",
        "Try again in a moment."},
@@ -273,7 +282,7 @@ defmodule KeyfleetWeb.Refusal do
       {"These shards can't be built as written.",
        "error.details.problem says what to fix. Correct it, then send the request again."},
     "invalid_amount" =>
-      {"This amount can't be read as USDC.",
+      {"This amount can't be read in its token's units.",
        "error.details.problem says how to write it. Correct it, then send the request again."},
     "proposal_unknown" =>
       {"This fleet has no proposal with this number.",

@@ -6518,3 +6518,28 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   undeployed fleet answers `fleet_coming_soon` first.
 - Parity gap K3 (`docs/agent-parity.md`). It acts on wallets, so it ships only
   on Sean's word.
+
+## 2026-10-29 — Four more wallet buttons for an agent's own wallet
+
+- Four signed requests answer the steps the Key and treasury pages build, for
+  the agent's own wallet to send on Base: `keys/KEY/club_claim` claims a
+  Regents Club Key with its Pass, `keys/KEY/reveal` asks again for a Key's
+  draw, `treasury/advances/ADVANCE_ID/return` returns part or all of an
+  advance, and `treasury/launch` builds one upkeep step of the fleet's token
+  launch. New refusals: `not_club_key`, `advance_unknown` and `no_launch`; an
+  advance's amount typed wrong answers `invalid_amount`, saying how to write
+  it, and that refusal no longer says the amount is USDC. Browser tools
+  `chain_club_claim`, `chain_reveal`, `chain_return_advance` and
+  `chain_launch_upkeep`; commands `keys club-claim`, `keys reveal`, `treasury
+  return` and `treasury launch`; contract 24.13.0.
+- The treasury read's contract now names `treasury.advances`, the advances
+  still out.
+- Review fixes, on the page and for agents alike: Key 0, or a number past a
+  fleet's last Key, typed for shards, agent voting or a proposal, now says "No
+  Key has that number." instead of failing; a Key whose traits come with its
+  number is no longer offered Ask again; and returning an advance in a token the
+  treasury no longer holds reads the amount in that token's own decimals, as the
+  page types it. The signed shard and return requests refuse fields longer than
+  the contract allows.
+- Parity gap K4 (`docs/agent-parity.md`). It moves money and acts on wallets,
+  so it ships only on Sean's word.

@@ -12424,6 +12424,218 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "chain_return_advance",
+      "title": "Return advance step",
+      "description": "Return part or all of one advance to the treasury from your own wallet, as the treasury page's Return button does: for a token, approving exactly the amount first. Anyone may. treasury_show lists the advances still out. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "advance_id",
+              "amount"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "advance_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "The advance's number, as treasury_show's treasury.advances names it, as a string"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^[0-9]+(\\.[0-9]+)?$",
+                "maxLength": 100,
+                "description": "How much to return, in whole tokens, such as \"250\" or \"0.25\"; treasury.advances[].typed is all that is still out"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "advance_id",
+          "amount"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "advance_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The advance's number, as treasury_show's treasury.advances names it, as a string"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "maxLength": 100,
+            "description": "How much to return, in whole tokens, such as \"250\" or \"0.25\"; treasury.advances[].typed is all that is still out"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_return_advance",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_launch_upkeep",
+      "title": "Launch upkeep step",
+      "description": "One upkeep step of the fleet's token launch through Autolaunch, as the treasury page's Token launch buttons do: settle the ended sale, bind the token to the Daily Treasury Slice to Keys, release the tokens set aside for the treasury, or collect the pool's fees. Anyone may. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "step"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "step": {
+                "type": "string",
+                "enum": [
+                  "settle",
+                  "bind",
+                  "release",
+                  "collect"
+                ],
+                "description": "The one upkeep step to build"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/treasury/launch",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "step"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "settle",
+              "bind",
+              "release",
+              "collect"
+            ],
+            "description": "The one upkeep step to build"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_launch_upkeep",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/treasury/launch",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "chain_claim",
       "title": "Claim step",
       "description": "Claim what a Key has earned; the money goes to the Key's holder. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
@@ -13002,6 +13214,198 @@
       "interfaces": {
         "webmcp": "chain_end_shard",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_club_claim",
+      "title": "Club claim step",
+      "description": "Take Regents Club Key N, with everything it earned while it waited, paid to your own wallet, as the Key page's Claim Key button does. Only the holder of Regents Club Pass N may. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "The Regents Club Key to claim, the same number as your Pass: its exact decimal token id, as a string"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The Regents Club Key to claim, the same number as your Pass: its exact decimal token id, as a string"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_club_claim",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_reveal",
+      "title": "Reveal step",
+      "description": "Ask again for a Key's random draw of its traits, as the Key page's Ask again button does. Anyone may, while the Key's request was refused. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "The Key whose draw to ask for again: its exact decimal token id, as a string"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The Key whose draw to ask for again: its exact decimal token id, as a string"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_reveal",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

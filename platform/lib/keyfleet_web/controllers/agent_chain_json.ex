@@ -102,6 +102,30 @@ defmodule KeyfleetWeb.AgentChainJSON do
          approve_first: approve?
        }
 
+  defp figures(flow, %{token_id: token_id}) when flow in [:club_claim, :reveal],
+    do: %{token_id: token_id}
+
+  defp figures(:return_advance, figures) do
+    %{
+      advance_id: figures.advance_id,
+      operator: figures.operator,
+      asset: figures.asset.address,
+      symbol: figures.asset.symbol,
+      decimals: figures.asset.decimals,
+      outstanding: Integer.to_string(figures.outstanding),
+      amount: Integer.to_string(figures.amount)
+    }
+  end
+
+  defp figures(:launch_upkeep, figures) do
+    %{
+      launch_id: figures.launch_id,
+      token: figures.token,
+      lifecycle: figures.lifecycle,
+      added_to_split: figures.bound?
+    }
+  end
+
   defp figures(:claim_all, %{keys: keys, waiting: waiting}),
     do: %{token_ids: keys, waiting: Enum.map(waiting, &waiting/1)}
 
