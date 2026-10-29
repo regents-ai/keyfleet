@@ -6471,3 +6471,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   requests and the upload address. The upload takes the address the start
   answered, on this site only, with the picture as base64.
 - Closes parity gap K12 (`docs/agent-parity.md`).
+
+## 2026-10-29 — Every tool a command names says so
+
+- Each browser tool in `priv/tool_manifest.json` that a command in
+  `cli/commands.json` names now links the command list in one shape, with
+  whether released regents-cli 1.10.20 carries that command. `fleets_list`,
+  `fleets_show`, `workspace_pulse`, `treasury_show`, `workspace_board`,
+  `workspace_graph` and `agents_avatar_upload` had no link; `agents_whoami` had
+  its own shape; 23 tools said the wrong release status. A test now keeps every
+  link in step with the command list.
+- Parity gap K13 (`docs/agent-parity.md`) now lists the 32 commands the release
+  lacks, read from its published package.

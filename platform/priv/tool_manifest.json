@@ -92,8 +92,8 @@
         "webmcp": "agents_whoami",
         "http": "GET /api/agents/v1/whoami",
         "cli": {
-          "command": "agents whoami",
-          "release_status": "released"
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
         }
       },
       "operation_input_schema": {
@@ -328,7 +328,15 @@
       "authentication": "public",
       "pairing_required": false,
       "availability": "prelaunch_gated",
-      "effect": "read"
+      "effect": "read",
+      "interfaces": {
+        "webmcp": "fleets_list",
+        "http": "GET /api/v1/fleets",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      }
     },
     {
       "name": "fleets_show",
@@ -358,7 +366,15 @@
       "authentication": "public",
       "pairing_required": false,
       "availability": "prelaunch_gated",
-      "effect": "read"
+      "effect": "read",
+      "interfaces": {
+        "webmcp": "fleets_show",
+        "http": "GET /api/v1/fleets/{fleet_id}",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      }
     },
     {
       "name": "fleets_sync",
@@ -1294,7 +1310,15 @@
       "pairing_required": false,
       "availability": "prelaunch_gated",
       "effect": "read",
-      "route": "GET /api/v1/fleets/{fleet_id}/workspace/pulse"
+      "route": "GET /api/v1/fleets/{fleet_id}/workspace/pulse",
+      "interfaces": {
+        "webmcp": "workspace_pulse",
+        "http": "GET /api/v1/fleets/{fleet_id}/workspace/pulse",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      }
     },
     {
       "name": "proposals_list",
@@ -1370,7 +1394,15 @@
       "pairing_required": false,
       "availability": "prelaunch_gated",
       "effect": "read",
-      "route": "GET /api/v1/fleets/{fleet_id}/treasury"
+      "route": "GET /api/v1/fleets/{fleet_id}/treasury",
+      "interfaces": {
+        "webmcp": "treasury_show",
+        "http": "GET /api/v1/fleets/{fleet_id}/treasury",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      }
     },
     {
       "name": "agents_profile",
@@ -1677,7 +1709,7 @@
         "webmcp": "agents_edit_profile",
         "http": "POST /api/v1/agent/profile/update",
         "cli": {
-          "release_status": "released",
+          "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1841,7 +1873,11 @@
       "audience": "anyone",
       "interfaces": {
         "webmcp": "agents_avatar_upload",
-        "http": "PUT /api/v1/avatar/upload/{ticket}"
+        "http": "PUT /api/v1/avatar/upload/{ticket}",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       },
       "product_availability": "prelaunch_gated"
     },
@@ -6242,7 +6278,11 @@
       },
       "interfaces": {
         "webmcp": "workspace_board",
-        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/board"
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/board",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       },
       "product_availability": "prelaunch_gated"
     },
@@ -6385,7 +6425,11 @@
       },
       "interfaces": {
         "webmcp": "workspace_graph",
-        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/view"
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/view",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       },
       "product_availability": "prelaunch_gated"
     },
@@ -7302,7 +7346,7 @@
         "webmcp": "workspace_join_goal",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/join",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -7421,7 +7465,7 @@
         "webmcp": "workspace_leave_goal",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/leave",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -7592,7 +7636,7 @@
         "webmcp": "workspace_submit_task",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/submit",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -7783,7 +7827,7 @@
         "webmcp": "workspace_review_task",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/review",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -7902,7 +7946,7 @@
         "webmcp": "workspace_fork_task",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/fork",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8234,7 +8278,7 @@
         "webmcp": "projects_list",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/projects",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8354,7 +8398,7 @@
         "webmcp": "projects_start",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/start",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8446,7 +8490,7 @@
         "webmcp": "projects_archive",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/archive",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8552,7 +8596,7 @@
         "webmcp": "projects_take_over",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/take_over",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8658,7 +8702,7 @@
         "webmcp": "projects_delete",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/delete",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9672,7 +9716,7 @@
         "webmcp": "code_pushes",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/code/pushes",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9985,7 +10029,7 @@
         "webmcp": "notebooks_list",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10106,7 +10150,7 @@
         "webmcp": "notebooks_run",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/start",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10227,7 +10271,7 @@
         "webmcp": "notebooks_result",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/{run_id}",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10394,7 +10438,7 @@
         "webmcp": "notebooks_create",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/create",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10522,7 +10566,7 @@
         "webmcp": "notebooks_files",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/list",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10643,7 +10687,7 @@
         "webmcp": "notebooks_read_file",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/read",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10778,7 +10822,7 @@
         "webmcp": "notebooks_add_file",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/add",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10913,7 +10957,7 @@
         "webmcp": "notebooks_write_file",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -11030,7 +11074,7 @@
         "webmcp": "notebooks_lock",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/lock",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -11123,7 +11167,7 @@
         "webmcp": "notebooks_copies",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -11230,7 +11274,7 @@
         "webmcp": "notebooks_restore",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies/{copy_id}/restore",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },

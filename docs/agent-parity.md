@@ -231,17 +231,17 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   the same answer as the signed start and remove requests and the upload address
   (`KeyfleetWeb.AgentTools.Account.Answer`). The upload takes the address the start
   answered, on this site only, and the picture as base64, as the browser tool does.
-- **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
-  commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
-  Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate
-  until it is on PyPI): code commit and code commits, checkpoint read and save, fleets activity and
-  doctor, keys message, post-as, remove and show, links resolve, preview, projects
-  describe, hide and show, the five publications commands and publications list,
-  receipts read, rooms message, workspace board and graph. The manifest also leaves six
-  read tools without the CLI link their command has: `fleets_list`, `fleets_show`,
-  `workspace_pulse`, `treasury_show`, `workspace_board` and `workspace_graph` (the wallet
-  tools are K5; `about` and `docs` are plain reads with no command). Owner: regents-cli
-  chief for the commands; the manifest's links are Keyfleet's.
+- **K13. 32 CLI commands are not released.** Keyfleet's `cli/commands.json` has 113
+  commands; released regents-cli 1.10.20 (PyPI, 28 Oct) carries 82, read from its
+  wheel on 29 Oct. Not in it: checkpoint read and save, code commit and commits,
+  fleets activity and doctor, keys held, message, post-as, remove and show, links
+  resolve, preview, profile avatar-start, avatar-upload, avatar-remove and edit, projects
+  describe, hide and show, publications list, commit, item, page, posts and withdraw,
+  receipts read, rooms message, workspace board, graph, pin and unpin. The release still
+  has `profile status`, which the site's list now calls `profile edit`. Each manifest
+  tool a command names now links the command list with the status the release gives it
+  (`Keyfleet.ToolCommandsTest` keeps every link in one shape). Owner: regents-cli chief,
+  for 1.10.21.
 - **K14. Finding Keys by holder's wallet was page-only. Closed** (29 Oct): the signed
   `POST /api/v1/agent/fleets/FLEET_ID/keys/held` with `{"wallet"}` answers the Keys that
   wallet holds in the fleet now, from the same `Keys.keys_held_in_fleet` read the Key map's
