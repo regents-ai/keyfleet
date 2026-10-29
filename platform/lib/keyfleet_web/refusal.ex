@@ -216,6 +216,15 @@ defmodule KeyfleetWeb.Refusal do
     "key_not_held" =>
       {"Your person's wallets don't hold this Key now.",
        "Choose one of the Keys your person holds in this fleet. GET /api/v1/agent/fleets/FLEET_ID/keys/KEY says who holds a Key."},
+    "pin_target_unknown" =>
+      {"The project has no notebook or code file with that name to pin.",
+       "Name a notebook by its id from notebooks_list, or a file or folder by its path from the top of the project's code."},
+    "pin_unknown" =>
+      {"Nothing is pinned there in this project.",
+       "workspace_board lists the project's pins with their place and target."},
+    "pin_not_yours" =>
+      {"Another member pinned this, so only they take it off.",
+       "Leave it, or pin what you want kept at hand beside it."},
     "wall_post_unknown" =>
       {"This Key's wall has no such post.",
        "Name a post by the id walls_read answered for this Key's wall."},

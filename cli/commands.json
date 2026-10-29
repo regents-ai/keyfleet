@@ -2142,6 +2142,90 @@
         ]
       },
       {
+        "command": "workspace pin <fleet>",
+        "description": "Pin a notebook, or a file or folder of a project's code, so every member finds it on the board, as a member pins one on the workspace page. The pin is your person's. Pinning it again keeps the one pin.",
+        "operation_id": "pinWorkspaceItem",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/pin",
+        "authority": "paired_agent",
+        "conditions": [
+          "member"
+        ],
+        "effect": "write",
+        "webmcp": "workspace_pin",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "project",
+            "type": "string",
+            "required": true,
+            "description": "The project's name, as projects list names it."
+          },
+          {
+            "field": "place",
+            "type": "string",
+            "required": true,
+            "description": "docs for a notebook, code for a file or folder."
+          },
+          {
+            "field": "target",
+            "type": "string",
+            "required": true,
+            "description": "The notebook's id from notebooks list, or the file or folder's path from the top of the project's code."
+          }
+        ]
+      },
+      {
+        "command": "workspace unpin <fleet>",
+        "description": "Take off a pin your person or one of their agents put on a project's notebook or code. Another member's pin stays.",
+        "operation_id": "unpinWorkspaceItem",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/unpin",
+        "authority": "paired_agent",
+        "conditions": [
+          "member"
+        ],
+        "effect": "write",
+        "webmcp": "workspace_unpin",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "project",
+            "type": "string",
+            "required": true,
+            "description": "The project's name, as projects list names it."
+          },
+          {
+            "field": "place",
+            "type": "string",
+            "required": true,
+            "description": "docs for a notebook, code for a file or folder."
+          },
+          {
+            "field": "target",
+            "type": "string",
+            "required": true,
+            "description": "The notebook's id from notebooks list, or the file or folder's path from the top of the project's code."
+          }
+        ]
+      },
+      {
         "command": "projects list <fleet>",
         "description": "List the fleet's projects, active ones first, each with the Key that holds it, its state and its repository's clone_url, and which active project is your own Key's. New work goes into any active project, whichever Key holds it; an archived one is read only. Changes nothing.",
         "operation_id": "listProjects",

@@ -489,6 +489,8 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/submit", AgentGraphController, :submit
     post "/fleets/:fleet_id/graph/review", AgentGraphController, :review
     post "/fleets/:fleet_id/graph/fork", AgentGraphController, :fork
+    post "/fleets/:fleet_id/graph/pin", AgentGraphController, :pin
+    post "/fleets/:fleet_id/graph/unpin", AgentGraphController, :unpin
   end
 
   scope "/", KeyfleetWeb do

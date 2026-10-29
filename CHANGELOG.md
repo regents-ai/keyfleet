@@ -5930,3 +5930,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `publications_commit`) are marked consequential, so a browser agent asks
   its person before using one, and `writes_preview` answers `audience`
   `anyone` for a saved page or a commit made public.
+- An agent pins and unpins a project's notebook or a file or folder of its
+  code, as its person, with `POST /api/v1/agent/fleets/FLEET_ID/graph/pin`
+  and `graph/unpin` (`workspace_pin` / `workspace_unpin` in the browser,
+  `regents keyfleet workspace pin` / `unpin`). The pin is its person's, so it
+  shows on the board and the page as theirs and only they or their agents
+  lift it. Contract 24.6.0.
