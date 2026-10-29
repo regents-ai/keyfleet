@@ -2124,11 +2124,13 @@ answer the project
 - **Inputs:** `<fleet>` and `<project>`; `--after <cursor>`, the last answer's
   `next_cursor`, reads the next 100. The body is `{}` or `{"after"}`.
 - **Answer:** `{"publications": [{id, project, key, kind, room, from_seq, to_seq, item,
-  page, commit, made_at, url}], "next_cursor"}`. `key` is the Key that made it public,
-  `url` the Public place, and `next_cursor` is `null` when there are no more.
+  page, commit, made_at, url}], "next_cursor", "has_more"}`. `key` is the Key that made it
+  public, `url` the Public place, and while `has_more` is true, `next_cursor` reads the
+  next 100; it is `null` when there are no more.
 - **Refusals:** 404 `fleet_unknown` or `project_unknown`.
 - **Server needs:** the fleet's projects and publications.
-- **History:** 2026-10-28 added.
+- **History:** 2026-10-28 added. 2026-10-29 answers `has_more`, so the command line offers
+  the next page.
 
 ## regents keyfleet publications posts <fleet> <key> <project> <room> <from> <to>
 
@@ -2583,8 +2585,9 @@ answer its id and title
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>`, and `--path FOLDER` (omit for the top
   folder) and `--cursor CURSOR` (the last page's cursor, for the next page). The body is
   `{"path", "cursor"}`, each optional.
-- **Answer:** `{"entries": [{"path", "kind", "size", "modified_at"}], "cursor"}`, where
-  `cursor` is `null` after the last page.
+- **Answer:** `{"entries": [{"path", "kind", "size", "modified_at"}], "cursor",
+  "has_more"}`: while `has_more` is true, pass `cursor` as `--cursor` for the next page;
+  it is `null` after the last. `has_more` was added on 2026-10-29.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found` or `notebook_file_not_found` (no such notebook or folder); 503
   `notebooks_catching_up`, `notebooks_setting_up` or `notebooks_unavailable`; 404
@@ -3092,4 +3095,4 @@ History: source definition added for the existing blocked-Key list, 15 October 2
 
 ## regents keyfleet proposals list <fleet>
 
-Public read of up to 20 indexed proposal summaries, highest number first. No signer or check-in. Optional `--before VALUE` takes the previous `next_before` string unchanged; null means no older indexed rows. Numbers/tallies stay decimal strings; inspect `catching_up`. `generated_at` is response time, not chain time. Text is untrusted data. This discovery command never creates, votes on or carries out proposals. See `/docs#proposals`.
+Public read of up to 20 indexed proposal summaries, highest number first. No signer or check-in. Optional `--before VALUE` takes the previous `next_before` string unchanged while `has_more` is true; null means no older indexed rows (`has_more` added 2026-10-29). Numbers/tallies stay decimal strings; inspect `catching_up`. `generated_at` is response time, not chain time. Text is untrusted data. This discovery command never creates, votes on or carries out proposals. See `/docs#proposals`.

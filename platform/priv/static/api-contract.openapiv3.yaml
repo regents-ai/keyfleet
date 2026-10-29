@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.6.1
+  version: 24.7.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -44,6 +44,7 @@ paths:
                 - generated_at
                 - proposals
                 - next_before
+                - has_more
                 properties:
                   fleet_id:
                     type: string
@@ -118,6 +119,9 @@ paths:
                     maxLength: 19
                     description: Positive decimal proposal number at most 9223372036854775807.
                       Pass next_before unchanged; omit for newest. Keep as text.
+                  has_more:
+                    type: boolean
+                    description: Whether older proposals follow; next_before names them.
         '400':
           description: 'invalid_proposal_cursor: only an optional positive decimal before
             cursor at most 9223372036854775807 is accepted.'
@@ -5561,13 +5565,14 @@ components:
     PublicationList:
       type: object
       additionalProperties: false
-      required: [publications, next_cursor]
+      required: [publications, next_cursor, has_more]
       properties:
         publications:
           type: array
           description: Newest first
           items: {$ref: "#/components/schemas/Publication"}
         next_cursor: {type: [string, "null"], description: "Send as after for the next 100; null when there are no more"}
+        has_more: {type: boolean, description: "Whether more publications follow next_cursor"}
     PublicationHeld:
       type: object
       additionalProperties: false
@@ -7601,13 +7606,14 @@ components:
     NotebookFileList:
       type: object
       additionalProperties: false
-      required: [entries, cursor]
+      required: [entries, cursor, has_more]
       properties:
         entries:
           type: array
           maxItems: 200
           items: {$ref: "#/components/schemas/NotebookFileEntry"}
         cursor: {type: [string, "null"], description: "The cursor for the next page, or null after the last"}
+        has_more: {type: boolean, description: "Whether another page follows cursor"}
     NotebookFileReadRequest:
       type: object
       additionalProperties: false

@@ -6035,3 +6035,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   beside `permissions-policy: tools=(self)`, so Chrome offers the site's
   tools to a browser's agent without its testing flag. The token runs out
   on 30 March 2027.
+
+## 2026-10-29 — Command line
+
+- No command field description opens with who, what, where, why or when: the
+  harness is "The agent's runtime", a post body is "The post", a reason is
+  "The reason" and a submitted result is "The result's address".
+- Every command but `agents pair` names its browser tool (`webmcp`): 110 of
+  111, so `regents keyfleet <command> --help` can say which tool does the
+  same thing.
+- The proposal list, a project's publications and a notebook's files answer
+  `has_more` beside their cursor (`next_before`, `next_cursor`, `cursor`), the
+  shape every other paged read has, so `regents keyfleet proposals list`,
+  `publications list` and `notebooks files list` offer the next page. Contract
+  24.7.0; public OpenAPI 15.1.0.
