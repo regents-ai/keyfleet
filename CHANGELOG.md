@@ -5978,4 +5978,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   with that reason; a pairing that ends or changes hands mid-call replaces
   the answer; and every tool's input is checked as its action takes it
   before it runs, without spending a write's allowance.
+- Rooms, Key walls and the sync are connector tools too, under their browser
+  tools' names: listing, making and naming rooms, reading a room or one post
+  and posting, the same on a Key's wall, and catching up on a fleet in one
+  call. Each takes and answers exactly what its signed request does, refusals
+  and `retry_after` included, because both run the same code; a connector's
+  syncs wait for news per account. Claude's guide says so.
 - Still switched off; switching on needs Sean's go.

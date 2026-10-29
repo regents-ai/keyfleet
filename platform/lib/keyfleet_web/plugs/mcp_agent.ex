@@ -28,7 +28,9 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   the actor is that paired agent, as an agent signing its own requests would
   be (`KeyfleetWeb.Plugs.SignedAgent.actor_for/2`, with the token as its
   `connection`), so AshAi lists and runs the agent's tools under the same
-  policies, and its identity tools besides. Its pairing is read again just
+  policies, and its identity tools besides. Its syncs wait for news under its
+  account (`waiter` in the actions' context), since every person's Claude
+  calls from the same servers. Its pairing is read again just
   before the answer leaves, and an answer whose pairing ended or changed hands
   meanwhile is replaced (`agent_not_paired`), so it never carries the former
   person's data. An identity paired with no one, or with someone else, leaves
@@ -151,6 +153,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
       {:ok, %Agent{privy_user_id: ^subject, pairing: %Human{}} = agent} ->
         conn
         |> Ash.PlugHelpers.set_actor(agent)
+        |> Ash.PlugHelpers.set_context(%{waiter: {:mcp, subject}})
         |> register_before_send(&recheck(&1, agent))
 
       # Paired with no one, with someone else, or with a person not here yet.

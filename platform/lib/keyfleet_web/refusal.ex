@@ -507,20 +507,24 @@ defmodule KeyfleetWeb.Refusal do
   number within them was sold moments ago and is known once its sale is read.
   """
   def key_unknown(conn, fleet_id, token_id) do
+    conn
+    |> Plug.Conn.put_status(404)
+    |> Phoenix.Controller.json(key_unknown(fleet_id, token_id))
+  end
+
+  @doc "The body `key_unknown/3` answers with."
+  def key_unknown(fleet_id, token_id) do
     {:ok, sold} = Keyfleet.Chain.minted(fleet_id)
 
-    body =
-      if token_id in 1..sold//1,
-        do: body("key_unknown"),
-        else:
-          body("key_unknown")
-          |> put_in([:error, :message], "Key #{token_id} has not been sold yet.")
-          |> put_in(
-            [:error, :hint],
-            "Only a sold Key can be named. GET /api/v1/fleets/#{fleet_id} says how many Keys are sold."
-          )
-
-    conn |> Plug.Conn.put_status(404) |> Phoenix.Controller.json(body)
+    if token_id in 1..sold//1,
+      do: body("key_unknown"),
+      else:
+        body("key_unknown")
+        |> put_in([:error, :message], "Key #{token_id} has not been sold yet.")
+        |> put_in(
+          [:error, :hint],
+          "Only a sold Key can be named. GET /api/v1/fleets/#{fleet_id} says how many Keys are sold."
+        )
   end
 
   @doc """

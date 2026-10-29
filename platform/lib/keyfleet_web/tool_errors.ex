@@ -4,7 +4,9 @@ defmodule KeyfleetWeb.ToolErrors do
   refuses: the JSON the same refusal answers over HTTP,
   `{"error": {"code", "message", "hint"}}`, as the tool error's text
   (`AshAi.ToToolError`), with `retry_after` in seconds where HTTP sends
-  `Retry-After`. A workspace refusal takes the workspace's words
+  `Retry-After`. A refusal of a tool that answers as its signed request
+  (`KeyfleetWeb.AgentTools.Refused`) is that request's body. A workspace
+  refusal takes the workspace's words
   (`KeyfleetWeb.WorkspaceRefusal`), with its `details`. A connected app's
   identity refusal takes this site's own code and words, or, when no answer
   came, the words every Regent site gives it.
@@ -15,13 +17,15 @@ defmodule KeyfleetWeb.ToolErrors do
   pairing's as `invalid_request` in the library's words
   (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's in the
   words every Regent site gives it, a fleet tool's with the refusal its signed
-  request answers (an unknown fleet as `fleet_unknown`, say), or else as
+  request answers (an unknown fleet as `fleet_unknown`, or a body the request
+  would not take as `invalid_request` naming what it takes), or else as
   `invalid_request`. Input that is not an object, or names an input the
   action has not, is refused too. A write's allowance is spent only when it
   runs (`Keyfleet.Graph.Validations.WriteAllowance`), so checking spends none.
   """
 
   alias Keyfleet.Agents.Connection
+  alias KeyfleetWeb.AgentTools.Refused
   alias KeyfleetWeb.WorkspaceRefusal
 
   @doc """
@@ -50,11 +54,17 @@ defmodule KeyfleetWeb.ToolErrors do
   defp refused(Connection, _identity, _errors), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
 
   defp refused(_resource, _action, errors) do
-    {_status, body} =
-      Enum.find_value(errors, &WorkspaceRefusal.for_error/1) ||
-        WorkspaceRefusal.refusal(422, "invalid_request")
+    case Enum.find(errors, &is_struct(&1, Refused)) do
+      %Refused{body: body, retry_after: retry_after} ->
+        text(body, retry_after)
 
-    text(body)
+      nil ->
+        {_status, body} =
+          Enum.find_value(errors, &WorkspaceRefusal.for_error/1) ||
+            WorkspaceRefusal.refusal(422, "invalid_request")
+
+        text(body)
+    end
   end
 
   @doc "`body` as a tool error's text, with `retry_after` in seconds when there is one."
@@ -105,4 +115,9 @@ defimpl AshAi.ToToolError, for: Keyfleet.Graph.Errors.WriteLimitError do
     {_status, body} = KeyfleetWeb.WorkspaceRefusal.for_error(error)
     KeyfleetWeb.ToolErrors.text(body, seconds)
   end
+end
+
+defimpl AshAi.ToToolError, for: KeyfleetWeb.AgentTools.Refused do
+  def to_tool_error(%{body: body, retry_after: retry_after}),
+    do: KeyfleetWeb.ToolErrors.text(body, retry_after)
 end

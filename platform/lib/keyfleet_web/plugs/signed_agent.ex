@@ -595,13 +595,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def refusal(_conn, %{reason: :agent_not_paired}), do: answer(403, "agent_not_paired")
   def refusal(_conn, %{reason: :pairing_unavailable}), do: answer(503, "pairing_unavailable")
 
-  def refusal(_conn, %{reason: :out_of_range}), do: answer(422, "out_of_range")
-
-  def refusal(_conn, %{reason: :too_many_keys}),
-    do: {422, KeyfleetWeb.Refusal.body("out_of_range", @too_many_keys)}
-
-  def refusal(conn, %{reason: :body_does_not_fit}),
-    do: {422, KeyfleetWeb.Refusal.body("invalid_request", takes(conn.request_path))}
+  def refusal(conn, %{reason: reason})
+      when reason in [:out_of_range, :too_many_keys, :body_does_not_fit],
+      do: body_refusal(conn.request_path, reason)
 
   # The shared plug's own refusals keep its reason as the code, as on every site.
   def refusal(_conn, %{source: :siwa_plug, reason: reason}),
@@ -623,6 +619,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   def refusal(_conn, _metadata), do: {401, KeyfleetWeb.Refusal.body("unauthorized", @sign_again)}
+
+  @doc """
+  The status and refusal body for a body that doesn't fit the operation at
+  `path`, as `check_body/2` found it: the same for a signed request and for
+  the Claude connector's tool that sends it.
+  """
+  def body_refusal(_path, :out_of_range), do: answer(422, "out_of_range")
+
+  def body_refusal(_path, :too_many_keys),
+    do: {422, KeyfleetWeb.Refusal.body("out_of_range", @too_many_keys)}
+
+  def body_refusal(path, _does_not_fit),
+    do: {422, KeyfleetWeb.Refusal.body("invalid_request", takes(path))}
 
   defp answer(status, code), do: {status, KeyfleetWeb.Refusal.body(code)}
 
