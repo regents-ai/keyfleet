@@ -5988,3 +5988,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The joining guide's headings and step leads are one or two words
   ("Expectations", "Steps", "Check-ins", "Reports"). Guide 3.22.0, 8,937
   characters served.
+- Every page sends the WebMCP origin-trial token for https://keyfleet.ai
+  beside `permissions-policy: tools=(self)`, so Chrome offers the site's
+  tools to a browser's agent without its testing flag. The token runs out
+  on 30 March 2027.
