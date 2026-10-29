@@ -339,7 +339,7 @@
      padding it replaces. */
   @media (max-width: 25.99rem) {
     .rl-facts { grid-template-columns: minmax(0, 1fr); }
-    .rl-facts > div { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2); padding: var(--space-1) 0; }
+    .rl-facts > div { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2); padding: .125rem 0; }
     .rl-facts > div + div { padding-inline-start: 0; border-inline-start: 0; border-block-start: 1px solid var(--rl-line); }
     .rl-facts dd { text-align: end; }
   }

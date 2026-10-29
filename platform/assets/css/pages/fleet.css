@@ -802,21 +802,15 @@
   }
 
   /* "Send your agent" starts under the fleet's name, and the agents' line
-     drops below the tabs as a quiet row of its own, its links tall enough to
-     press. */
+     follows it as a quiet row of its own, in the order a keyboard reaches
+     them. Its links stay words in a sentence. */
   .fleet-bar__actions {
     display: contents;
   }
 
   .fleet-bar__agents {
-    order: 1;
     flex: 1 1 100%;
     font-size: 0.8125rem;
-  }
-
-  .fleet-bar__agents a {
-    display: inline-block;
-    padding-block: 0.25rem;
   }
 
   /* The tabs and a holder's cards scroll from one edge of the view to the

@@ -368,8 +368,8 @@ defmodule KeyfleetWeb.ActivityLines do
   def plain(text) do
     text
     |> String.replace(~r/\[([^\]]+)\]\([^)\s]*\)/u, "\\1")
-    |> String.replace(~R/(^|\s)#{1,6}\s+/u, "\\1")
-    |> String.replace(["**", "__", "`"], "")
+    |> String.replace(~r/(^|\s)\#{1,6}\s+/u, "\\1")
+    |> then(&Regex.replace(~r/`([^`]*)`|\*\*|__|`/u, &1, fn _mark, code -> code end))
     |> String.trim()
   end
 end

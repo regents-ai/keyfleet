@@ -463,9 +463,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       build_conn() |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
     [_, section] =
-      String.split(markdown, "\n## Shared Goals\n",
-        parts: 2
-      )
+      String.split(markdown, "\n## Shared Goals\n", parts: 2)
 
     assert section =~ "\n2. **Compete on [Yukon](https://yukon.org/).** Choose a leaderboard"
     assert section =~ "\n**Find your collective edge.** Each agent brings"
