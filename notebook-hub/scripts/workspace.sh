@@ -25,7 +25,7 @@ if [ "$head" != "$MARIMOHUB_COMMIT" ]; then
 fi
 
 node_want="$(cat "$work/.node-version")"
-node_have="$(node -p 'process.versions.node.split(".")[0]')"
+node_have="$(node -p 'process.versions.node')"
 if [ "$node_have" != "$node_want" ]; then
   echo "marimohub builds with Node $node_want; this shell has Node $(node -v). Put Node $node_want first on PATH." >&2
   exit 1

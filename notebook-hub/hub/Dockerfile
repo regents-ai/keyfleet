@@ -4,7 +4,7 @@
 # /etc/marimohub/fly-compute.mjs. Build context: notebook-hub/.
 
 # --- build stage: marimohub at the pin, plus compute-fly as a workspace package ---
-FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
+FROM node:24.22.1-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 ENV CI=true
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -36,7 +36,7 @@ RUN cd packages/core && pnpm exec vp test run src/services/catalog/
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---
-FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS runtime
+FROM node:24.22.1-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

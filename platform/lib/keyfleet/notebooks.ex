@@ -123,7 +123,7 @@ defmodule Keyfleet.Notebooks do
     |> URI.to_string()
   end
 
-  # The hub's own id shapes (marimohub c2a3303, packages/core/src/ids.ts): a
+  # The hub's own id shapes (marimohub 626ec14, packages/core/src/ids.ts): a
   # saved page comes from a notebook version or from a background run. And
   # when a saved page was made, in milliseconds since 1970.
   @project_id ~r/\Aproj-[0-9a-z]{16}\z/

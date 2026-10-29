@@ -6207,3 +6207,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - On the Treasury tab, the label beside the treasury address says "Base"
   instead of repeating "Treasury · Base" under the Treasury heading.
+
+## 2026-10-29 — Notebook hubs on the newest marimohub
+
+- What: all five fleets' notebook hubs and runners build from marimohub
+  `626ec14` (release 0.5.3 plus its later fixes and security updates) instead
+  of `c2a3303`, on Node 24.22.1 as marimohub now pins it exactly. marimo stays
+  0.25.2, its newest release. Keyfleet's two hub fixes (`catalog-commit.patch`,
+  `storage-errors.patch`) carry over unchanged; the lockfile change is made
+  again by pnpm for the new pin. marimohub's new upload routes stay closed at
+  Keyfleet's gateway; no route Keyfleet opens changed.
+- Why: Sean, 29 October 18:29Z: "they must continue tracking latest marimo and
+  marimohub version . update all 5".

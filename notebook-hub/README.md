@@ -44,7 +44,8 @@ them to the hub. That part is built separately, in `platform/`.
 
 ## Building and checking
 
-You need Node 24 (marimohub's version) first on your PATH, plus Docker.
+You need marimohub's exact Node version (24.22.1 at this pin, from its
+`.node-version`) first on your PATH, plus Docker.
 
 ```sh
 make check-notebook-hub              # from the repository root; or notebook-hub/scripts/check.sh
@@ -58,9 +59,9 @@ things:
    first run only).
 2. Runs the type check, lint and tests for `compute-fly`, and bundles it.
 3. Builds the three images:
-   - `keyfleet/marimo-sandbox:c2a3303`, marimohub's notebook image, about 3 GB;
-   - `keyfleet/notebook-runner:c2a3303`;
-   - `keyfleet/notebook-hub:c2a3303-a1b75d2`, about 440 MB. The part after
+   - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
+   - `keyfleet/notebook-runner:626ec14`;
+   - `keyfleet/notebook-hub:626ec14-cf56553`, about 440 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -157,8 +158,8 @@ Keyfleet's server puts on each request, which the hub checks.
    Apple Silicon Mac the check above builds `arm64` images, so build again for
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
-   - tag `keyfleet/notebook-runner:c2a3303` as `registry.fly.io/kf-nbk-<fleet>:c2a3303` and push it;
-   - tag `keyfleet/notebook-hub:c2a3303-a1b75d2` as `registry.fly.io/kf-nb-<fleet>:c2a3303-a1b75d2`
+   - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
+   - tag `keyfleet/notebook-hub:626ec14-cf56553` as `registry.fly.io/kf-nb-<fleet>:626ec14-cf56553`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:

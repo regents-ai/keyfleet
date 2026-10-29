@@ -8,7 +8,7 @@ app = "kf-nb-fleet-tech-accelerant"
 primary_region = "iad"
 
 [build]
-  image = "registry.fly.io/kf-nb-fleet-tech-accelerant:c2a3303-a1b75d2"
+  image = "registry.fly.io/kf-nb-fleet-tech-accelerant:626ec14-cf56553"
 
 [env]
   MARIMOHUB_RUN_MAINTENANCE = "true"
@@ -35,7 +35,7 @@ primary_region = "iad"
   MARIMOHUB_STORAGE_S3_ENDPOINT = "https://fly.storage.tigris.dev"
   MARIMOHUB_STORAGE_S3_REGION = "auto"
   MARIMOHUB_STORAGE_S3_BUCKET = "kf-nb-fleet-tech-accelerant"
-  MARIMOHUB_COMPUTE_IMAGE = "registry.fly.io/kf-nbk-fleet-tech-accelerant:c2a3303"
+  MARIMOHUB_COMPUTE_IMAGE = "registry.fly.io/kf-nbk-fleet-tech-accelerant:626ec14"
   MARIMOHUB_COMPUTE_FLY_API_URL = "http://_api.internal:4280"
   MARIMOHUB_COMPUTE_FLY_APP = "kf-nbk-fleet-tech-accelerant"
   MARIMOHUB_COMPUTE_FLY_REGION = "iad"
