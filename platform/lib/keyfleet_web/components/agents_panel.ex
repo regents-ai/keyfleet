@@ -7,7 +7,9 @@ defmodule KeyfleetWeb.AgentsPanel do
   and a larger view of one agent with where it has been active across the Regent
   sites, a line for each site and day (`Keyfleet.Agents.ActivityReading`), its
   name, which the person may change, what it has spent of their Credits, and
-  Unpair, which asks first in a window of its own.
+  Unpair, which asks first in a window of its own. Beside each agent are the
+  Keys it holds a shard of, or Give It a Shard from one of the person's own
+  (`KeyfleetWeb.AgentKeys`).
 
   Pairing immediately lets an agent do what `Keyfleet.Capabilities.may/0`
   lists, which the list's tip and the agent's view show the person. Pairing is
@@ -181,6 +183,7 @@ defmodule KeyfleetWeb.AgentsPanel do
       >
         <:about>Once paired, an agent may: {may_words()}.</:about>
         <:actions :let={agent}>
+          <.agent_keys id={"#{@id}-keys-#{agent.id}"} keys={@keys[agent.wallet]} />
           <P.button
             type="button"
             variant="quiet"
@@ -268,6 +271,32 @@ defmodule KeyfleetWeb.AgentsPanel do
     """
   end
 
+  attr :id, :string, required: true
+  attr :keys, :any, required: true, doc: "the agent's Keys, as `KeyfleetWeb.AgentKeys.read/2`"
+
+  @doc "The Keys an agent holds a shard of, or where to give it one."
+  def agent_keys(%{keys: {:shards, _keys}} = assigns) do
+    ~H"""
+    <.link
+      :for={key <- elem(@keys, 1)}
+      navigate={key.path}
+      class="rg-button rg-button--quiet rg-button--no-arrow"
+    >
+      <span class="rg-button__label">{key.label}</span>
+    </.link>
+    """
+  end
+
+  def agent_keys(%{keys: {:give, _path}} = assigns) do
+    ~H"""
+    <.link id={@id} navigate={elem(@keys, 1)} class="rg-button rg-button--quiet">
+      <span class="rg-button__label">Give it a shard</span>
+    </.link>
+    """
+  end
+
+  def agent_keys(assigns), do: ~H""
+
   @doc """
   Each agent as the shared list shows it, newest first as the account reads
   them, with its wallet and its check-in light from `lights`, by wallet.
@@ -346,6 +375,11 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   defp lights(:unavailable, _now), do: %{}
 
+  defp keys(account, agents) when is_list(agents),
+    do: KeyfleetWeb.AgentKeys.read(account, Enum.map(agents, & &1.wallet))
+
+  defp keys(_account, :unavailable), do: %{}
+
   defp read_agents(socket) do
     agents =
       case RegentAgents.list_my_agents(actor: socket.assigns.person) do
@@ -354,7 +388,14 @@ defmodule KeyfleetWeb.AgentsPanel do
       end
 
     now = DateTime.utc_now()
-    socket = assign(socket, agents: agents, lights: lights(agents, now), now: now)
+
+    socket =
+      assign(socket,
+        agents: agents,
+        lights: lights(agents, now),
+        keys: keys(socket.assigns.account, agents),
+        now: now
+      )
 
     case socket.assigns.detail do
       %{agent: %{id: id}} -> show_agent(socket, id)

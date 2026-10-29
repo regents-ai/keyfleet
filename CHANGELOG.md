@@ -6236,3 +6236,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The shared library pins stay where they are: they already hold the help-link
   and Claude Duet commits, and a newer pin would bring wallet and payment
   changes this release does not take.
+
+## 2026-10-29 — Give a new agent a shard
+
+- What: once an agent pairs on the Account page, a "Give <name> a shard" button
+  appears under the pairing box (in space kept for it, so nothing below moves).
+  It opens the New shard form of the person's lowest-numbered Key in the first
+  fleet where they hold one, with the agent's wallet already filled in; the
+  press there still goes to the wallet as before. Each agent in the Agents list
+  now shows the Keys it holds a shard of, linked to their pages, or "Give it a
+  shard" when it holds none and the person holds a Key. A Key page opened with
+  `shard_to=<wallet>` starts its New shard form with that wallet.
+- Why: Sean, 29 October 18:56Z, "1. a" (offer a shard right after pairing), and
+  18:57Z: "this work was started to fix how the pair agent and Key assigned to
+  your agents works, make sure it continues and gets release".

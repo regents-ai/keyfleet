@@ -107,6 +107,10 @@ export const pairAgent = (agent: string, person: string) => void call("pair!", [
 export const pairPerson = (agent: string, person: string, name: string) =>
   void call("pair_person!", [agent, person, name], agents)
 
+/** Pairs `agent`, called `name`, with the `code` a pairing box shows. */
+export const useCode = (agent: string, code: string, name: string) =>
+  void call("use_code!", [agent, code, name], agents)
+
 // The proof headers `agent`'s signer makes for the prepared request.
 function signRequest(agent: string, {method, path, body}: Prepared): Record<string, string> {
   return JSON.parse(call("sign!", [agent, body === undefined ? {method, path} : {method, path, body}], agents))

@@ -479,3 +479,10 @@ div.verified-connections__notice p {
     block-size: 2rem;
   }
 }
+
+/* Give It a Shard appears under the pairing box once an agent pairs; its line
+   keeps a button's height before, so the page below never moves. */
+.account-pairing-next {
+  min-block-size: 2.75rem;
+  margin: 0.75rem 0 0;
+}

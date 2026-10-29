@@ -19,6 +19,13 @@ defmodule KeyfleetWeb.KeyLinks do
   @doc "Key `token_id`'s own page, where its holder manages it."
   def page_path(fleet_id, token_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/keys/#{token_id}"
 
+  @doc """
+  Key `token_id`'s New shard form, with the agent's `wallet` filled in
+  (`KeyfleetWeb.KeysLive.key_view/4`).
+  """
+  def give_shard_path(fleet_id, token_id, wallet),
+    do: "#{page_path(fleet_id, token_id)}?#{URI.encode_query(shard_to: wallet)}#key-issue-shard"
+
   @doc "The messages written to and from key `token_id`."
   def dms_path(fleet_id, token_id), do: "#{page_path(fleet_id, token_id)}/dms"
 

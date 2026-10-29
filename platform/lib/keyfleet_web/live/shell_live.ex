@@ -1155,8 +1155,13 @@ defmodule KeyfleetWeb.ShellLive do
       |> assign(:key_profile, nil)
       |> stream(:key_thread, [], reset: true)
 
-  defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
-    assign(socket, :key, KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)))
+  defp load_key(
+         socket,
+         %{route_id: :keys},
+         %{"fleet_id" => fleet_id, "token_id" => token_id} = params
+       ) do
+    key = KeysLive.key_view(socket, fleet_id, String.to_integer(token_id), params["shard_to"])
+    assign(socket, :key, key)
   end
 
   defp load_key(socket, _route_spec, _params), do: assign(socket, :key, nil)

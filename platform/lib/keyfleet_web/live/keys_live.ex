@@ -180,7 +180,7 @@ defmodule KeyfleetWeb.KeysLive do
             fleet={@key.fleet}
             actor={@actor}
             lease={@lease}
-            inputs={%{"keys" => "#{@key.token_id}", "wallet" => "", "days" => "30"}}
+            inputs={%{"keys" => "#{@key.token_id}", "wallet" => @key.shard_to, "days" => "30"}}
           >
             <:fields :let={panel}>
               <div class="key-shard-form">
@@ -348,8 +348,12 @@ defmodule KeyfleetWeb.KeysLive do
   """
   def refreshing, do: @refreshing
 
-  @doc "What the key's page shows of the key, as the visitor may see it."
-  def key_view(socket, fleet_id, token_id) do
+  @doc """
+  What the key's page shows of the key, as the visitor may see it, and the
+  agent wallet its New shard form starts with: `shard_to` from the address
+  (`KeyfleetWeb.KeyLinks.give_shard_path/3`) when it is a wallet address.
+  """
+  def key_view(socket, fleet_id, token_id, shard_to) do
     actor = ShellLive.human_actor(socket)
     key = Keys.current_key!(fleet_id, token_id, actor: actor, load: [:fleet])
     {holder_name, holder_ens} = PublicIdentity.holder(holder(key))
@@ -369,18 +373,25 @@ defmodule KeyfleetWeb.KeysLive do
       edits_restricted?:
         match?([%{restricted: true}], Keys.latest_edits_restrictions!(fleet_id, [token_id])),
       shards: if(key, do: Profile.shards(fleet_id, token_id), else: []),
-      messages: DmsLive.message_link(actor, key && key.owner_wallet, fleet_id, token_id)
+      messages: DmsLive.message_link(actor, key && key.owner_wallet, fleet_id, token_id),
+      shard_to: wallet(shard_to)
     }
   end
 
+  defp wallet(address) when is_binary(address),
+    do: if(address =~ ~r/\A0x[0-9a-fA-F]{40}\z/, do: address, else: "")
+
+  defp wallet(_none), do: ""
+
   @doc "The key on show read again when it is among the fleet's changed keys."
   def refresh_key(
-        %{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id}}} = socket,
+        %{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id, shard_to: shard_to}}} =
+          socket,
         fleet_id,
         token_ids
       ) do
     if token_id in token_ids,
-      do: assign(socket, :key, key_view(socket, fleet_id, token_id)),
+      do: assign(socket, :key, key_view(socket, fleet_id, token_id, shard_to)),
       else: socket
   end
 
