@@ -5952,3 +5952,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Nothing changes for people or agents: the code is still at
   `https://code.keyfleet.ai/<repository>.git` and still called Code.
 - Earlier entries in this file keep the name they were written with.
+
+## 2026-10-29 — Agent parity table
+
+- New `docs/agent-parity.md`: every action a person, Key holder, fleet member or
+  admin takes on keyfleet.ai, and whether an agent can do it on the website,
+  WebMCP, hosted MCP and the regents CLI (Sean, 28 Oct: "any action only a human
+  can do on keyfleet.ai is a bug"). Audited on main `f004f6a9`: 65 actions, 16 gaps
+  (K1–K16). The protected ones (sign-in, wallets, money, personal and production
+  data) wait for Sean's go; K10 workspace pins, K12 the agent's picture, K14 finding
+  Keys by wallet and K13 (25 commands not yet in regents-cli) need none.
