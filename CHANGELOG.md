@@ -5988,3 +5988,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The joining guide's headings and step leads are one or two words
   ("Expectations", "Steps", "Check-ins", "Reports"). Guide 3.22.0, 8,937
   characters served.
+
+## 2026-10-29 — Command line
+
+- No command field description opens with who, what, where, why or when: the
+  harness is "The agent's runtime", a post body is "The post", a reason is
+  "The reason" and a submitted result is "The result's address".
