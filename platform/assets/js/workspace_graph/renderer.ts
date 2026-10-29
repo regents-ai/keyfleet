@@ -15,8 +15,24 @@ import {graphWgsl} from "./shader"
 
 type Rgb = readonly [number, number, number]
 
-/** One link: its start, two handles and end, in points of the picture, and whether it contradicts. */
-export type Link = {readonly points: readonly number[]; readonly against: boolean}
+/**
+ * One link: its start, two handles and end, in points of the picture,
+ * whether it contradicts, and whether it is dashed, as a fork or a review is.
+ */
+export type Link = {
+  readonly points: readonly number[]
+  readonly against: boolean
+  readonly dashed: boolean
+}
+
+// About how long a curve runs, in points: between its chord and the path
+// through its handles, which is near enough to space its dashes.
+const length = ([x1, y1, c1x, c1y, c2x, c2y, x2, y2]: readonly number[]) => {
+  const chord = Math.hypot(x2 - x1, y2 - y1)
+  const hull =
+    Math.hypot(c1x - x1, c1y - y1) + Math.hypot(c2x - c1x, c2y - c1y) + Math.hypot(x2 - c2x, y2 - c2y)
+  return (chord + hull) / 2
+}
 
 /** As many links as the workspace's graph read answers. */
 export const MAX_LINKS = 600
@@ -113,6 +129,7 @@ export async function createGraphRenderer(
         links.slice(0, count).forEach((link, i) => {
           data.set(link.points.slice(0, 8), i * FLOATS)
           data[i * FLOATS + 9] = link.against ? 1 : 0
+          data[i * FLOATS + 10] = link.dashed ? length(link.points) : 0
         })
         for (const light of lights) light.value = light.target = 0
         recede.value = recede.target = 0

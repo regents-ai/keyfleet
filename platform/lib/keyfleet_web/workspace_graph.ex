@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.WorkspaceGraph do
   @moduledoc """
   Lays out the workspace's graph, as `Keyfleet.Graph.Workspace` reads it
-  (its `graph` action), for the Graph view of a workspace's Project.
+  (its `graph` action), for the Graph view of a workspace's Project, and
+  one goal's map as a tree for the goal's page (`tree/2`).
 
   Items stand in columns by the way work flows: goals, then the tasks and
   services that deliver on them, then what the work found (evidence,
@@ -25,15 +26,17 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   @columns [~w(goal), ~w(task service), ~w(evidence finding review), ~w(note dead_end)]
   @rows 12
 
-  @node_width 208
-  @node_height 52
-  @row_pitch 68
+  @node_width 256
+  @node_height 56
+  @row_pitch 72
+  # How far each item's card is cut at two opposite corners.
+  @cut 8
   @wrap_gap 24
   @column_gap 72
 
   # The longest title an item shows in the picture; its full title is in the
   # list under it and in its own page.
-  @title_shown 28
+  @title_shown 32
 
   @tones %{
     "open" => :open,
@@ -95,6 +98,72 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       more_nodes?: graph.more_nodes,
       more_edges?: graph.more_edges
     }
+  end
+
+  @doc """
+  One goal's map as a tree, for the goal's page, from what `draw/3` drew of
+  it: the items linked to the goal, each with the items linked to it in
+  turn. Every item stands once, under the first item that reaches it along
+  the links, nearest the goal first and the oldest link first. Each says by
+  which kind of link it hangs from the one above it (`via`). Items no link
+  joins to the goal follow at the top, so none is left out. The goal itself
+  is the page, so it is not in the tree.
+  """
+  def tree(%{nodes: nodes, edges: edges}, goal) do
+    by_id = Map.new(nodes, &{&1.id, &1})
+
+    around =
+      edges
+      |> Enum.reduce(%{}, fn %{source: source, target: target, type: type}, around ->
+        around
+        |> Map.update(source, [{target, type}], &[{target, type} | &1])
+        |> Map.update(target, [{source, type}], &[{source, type} | &1])
+      end)
+      |> Map.new(fn {id, links} -> {id, Enum.reverse(links)} end)
+
+    {children, seen} = grow([goal], MapSet.new([goal]), %{}, around)
+
+    {loose, children, _seen} =
+      Enum.reduce(nodes, {[], children, seen}, fn node, {loose, children, seen} ->
+        if MapSet.member?(seen, node.id) do
+          {loose, children, seen}
+        else
+          {children, seen} = grow([node.id], MapSet.put(seen, node.id), children, around)
+          {[{node.id, nil} | loose], children, seen}
+        end
+      end)
+
+    branch(under(children, goal) ++ Enum.reverse(loose), children, by_id)
+  end
+
+  # One step out from the items reached last, to the items not yet reached.
+  defp grow([], seen, children, _around), do: {children, seen}
+
+  defp grow(frontier, seen, children, around) do
+    {next, seen, children} =
+      for id <- frontier,
+          {other, type} <- Map.get(around, id, []),
+          reduce: {[], seen, children} do
+        {next, seen, children} ->
+          if MapSet.member?(seen, other),
+            do: {next, seen, children},
+            else:
+              {[other | next], MapSet.put(seen, other),
+               Map.update(children, id, [{other, type}], &[{other, type} | &1])}
+      end
+
+    grow(Enum.reverse(next), seen, children, around)
+  end
+
+  defp under(children, id), do: children |> Map.get(id, []) |> Enum.reverse()
+
+  defp branch(entries, children, by_id) do
+    for {id, via} <- entries,
+        do: %{
+          item: Map.fetch!(by_id, id),
+          via: via,
+          branch: branch(under(children, id), children, by_id)
+        }
   end
 
   @doc "The tone an item is drawn in, by its standing."
@@ -197,6 +266,7 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       kind: String.capitalize(kind),
       title: node.title,
       shown_title: shorten(node.title),
+      shape: shape(node.x, node.y),
       tone: tone,
       standing: Map.get(@standing_names, node.standing),
       owner: node.owner_key && ActivityLines.key_name(node.owner_key, nil),
@@ -205,6 +275,13 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       path: WorkspacePage.item_path(fleet_id, node.id)
     }
   end
+
+  # A card cut at its top left and bottom right corners, as the site's panels
+  # are.
+  defp shape(x, y),
+    do:
+      "M #{x + @cut} #{y} H #{x + @node_width} V #{y + @node_height - @cut} " <>
+        "L #{x + @node_width - @cut} #{y + @node_height} H #{x} V #{y + @cut} Z"
 
   defp shorten(nil), do: ""
 
