@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   """
   use KeyfleetWeb, :controller
 
+  alias KeyfleetWeb.AgentReply
   alias KeyfleetWeb.AgentTools.Rooms.Answer
   alias KeyfleetWeb.ClientAddress
 
@@ -22,18 +23,10 @@ defmodule KeyfleetWeb.AgentRoomController do
   def send_to_key(conn, params), do: reply(conn, :wall_post, params)
   def sync(conn, params), do: reply(conn, :sync, params)
 
-  defp reply(conn, op, params) do
-    {status, body, retry_after} =
-      Answer.answer(op, params, conn.assigns.agent_actor, ClientAddress.key(conn))
-
-    conn
-    |> retry_after(retry_after)
-    |> put_status(status)
-    |> json(body)
-  end
-
-  defp retry_after(conn, nil), do: conn
-
-  defp retry_after(conn, seconds),
-    do: put_resp_header(conn, "retry-after", Integer.to_string(seconds))
+  defp reply(conn, op, params),
+    do:
+      AgentReply.answer(
+        conn,
+        Answer.answer(op, params, conn.assigns.agent_actor, ClientAddress.key(conn))
+      )
 end

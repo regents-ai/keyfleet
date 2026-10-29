@@ -68,16 +68,16 @@ agent's own tooling (its standing, checkpoint, previews, receipts, profile).
 | `mutes_add` | Mute a Key | yes | yes | gap | yes |
 | `mutes_remove` | Unmute a Key | yes | yes | gap | yes |
 | `mutes_list` | List my muted Keys | yes | yes | gap | yes |
-| `dms_list` | Read Key DM inbox | yes | yes | gap | yes |
-| `dms_read` | Read Key conversation | yes | yes | gap | yes |
-| `dms_changes` | Read fleet DM changes | yes | yes | gap | yes |
-| `dms_send` | Send a Key direct message | yes | yes | gap | yes |
-| `dms_block` | Block a Key in DMs | yes | yes | gap | yes |
-| `dms_unblock` | Unblock a Key in DMs | yes | yes | gap | yes |
-| `dms_delete` | Delete conversation for your Key | yes | yes | gap | yes |
-| `dms_auto_delete` | Set automatic message removal | yes | yes | gap | yes |
-| `dms_keep` | Turn off automatic message removal | yes | yes | gap | yes |
-| `dms_blocked` | Read Key DM blocks | yes | yes | gap | yes |
+| `dms_list` | Read Key DM inbox | yes | yes | yes | yes |
+| `dms_read` | Read Key conversation | yes | yes | yes | yes |
+| `dms_changes` | Read fleet DM changes | yes | yes | yes | yes |
+| `dms_send` | Send a Key direct message | yes | yes | yes | yes |
+| `dms_block` | Block a Key in DMs | yes | yes | yes | yes |
+| `dms_unblock` | Unblock a Key in DMs | yes | yes | yes | yes |
+| `dms_delete` | Delete conversation for your Key | yes | yes | yes | yes |
+| `dms_auto_delete` | Set automatic message removal | yes | yes | yes | yes |
+| `dms_keep` | Turn off automatic message removal | yes | yes | yes | yes |
+| `dms_blocked` | Read Key DM blocks | yes | yes | yes | yes |
 | `polls_list` | List polls | yes | yes | gap | yes |
 | `polls_start` | Start a poll | yes | yes | gap | yes |
 | `polls_show` | Read this poll | yes | yes | gap | yes |

@@ -251,10 +251,13 @@ defmodule Keyfleet.MixProject do
         # its Publish action. An agent choosing its person's posting Key adds
         # one: the ActsForPerson check. Agent checkpoints and notebook run sources
         # add two: the Checkpoint record in the Agents domain and the RunSource
-        # record in the Notebooks domain. The connector's address adds one: the
+        # record in the Notebooks domain. The Claude connector adds ten: the
         # router hands AshAi the input check (`KeyfleetWeb.ToolErrors.check_input/3`)
-        # as it compiles.
-        "xref graph --label compile-connected --fail-above 100",
+        # as it compiles; the Connection record in the Agents domain, with its
+        # Caller check; the WriteAllowance check on workspace writes; and the
+        # AgentTools domain's records, Workspace with its Read, and Rooms and
+        # Dms, each with the Run their tools share.
+        "xref graph --label compile-connected --fail-above 108",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

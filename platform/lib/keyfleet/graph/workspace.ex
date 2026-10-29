@@ -28,11 +28,11 @@ defmodule Keyfleet.Graph.Workspace do
 
   Each write is one operation on the fleet's graph, answered by its writer,
   and first spends the acting agent wallet's allowance of writes in the fleet
-  (`Keyfleet.Graph.Validations.WriteAllowance`), once the write runs, never
-  while its input is only checked. A write names the key it acts as
-  (`as_key`) and a command id of the caller's choosing; the same command id
-  with the same body answers the original result instead of writing twice.
-  Every member reads every object and builds on it,
+  (`Keyfleet.Graph.Validations.WriteAllowance`), refused or not. A write
+  names the key it acts as (`as_key`) and a command id of the caller's
+  choosing; the same command id with the same body answers the original
+  result instead of writing twice. Every member reads every object and
+  builds on it,
   but an object belongs to one Key: the Key holding it, for a held task, and
   otherwise the Key that created it. Only that Key changes it or links from
   it, and only the Key that created it archives it; the fleet's writer
@@ -117,7 +117,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :type, :string, allow_nil?: false, constraints: @text
       argument :data, :map, allow_nil?: false
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "create", body: [:project, :type, :data]}
     end
@@ -134,7 +134,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :reason, :string, constraints: @text
       argument :evidence, {:array, :string}, constraints: [items: @text]
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
 
       run {Relay, op: "patch", body: [:id, :expected_version, :set, :unset, :reason, :evidence]}
@@ -150,7 +150,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :type, :string, allow_nil?: false, constraints: @text
       argument :note, :string, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "link", body: [:source, :target, :type, :note]}
     end
@@ -162,7 +162,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :command_id, :string, allow_nil?: false, constraints: @text
       argument :relation_id, :string, allow_nil?: false, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "unlink", body: [:relation_id]}
     end
@@ -178,7 +178,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :evidence, {:array, :string}, constraints: [items: @text]
       argument :reason, :string, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "submit", body: [:id, :expected_version, :result_ref, :evidence, :reason]}
     end
@@ -195,7 +195,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :conflicts_of_interest, :string, allow_nil?: false, constraints: @text
       argument :reproduction, :string, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
 
       run {Relay,
@@ -219,7 +219,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :expected_version, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :reason, :string, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "archive", body: [:id, :expected_version, :reason]}
     end
@@ -231,7 +231,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :command_id, :string, allow_nil?: false, constraints: @text
       argument :id, :string, allow_nil?: false, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "join", body: [:id]}
     end
@@ -243,7 +243,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :command_id, :string, allow_nil?: false, constraints: @text
       argument :id, :string, allow_nil?: false, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "leave", body: [:id]}
     end
@@ -255,7 +255,7 @@ defmodule Keyfleet.Graph.Workspace do
       argument :command_id, :string, allow_nil?: false, constraints: @text
       argument :id, :string, allow_nil?: false, constraints: @text
       validate KnownFleet
-      validate WriteAllowance, only_when_valid?: true, before_action?: true
+      validate WriteAllowance, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "fork", body: [:id]}
     end

@@ -7,9 +7,8 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
   (`KeyfleetWeb.AgentGraphController`) and refuses as it does
   (`KeyfleetWeb.WorkspaceRefusal`): a reader who is none of the fleet's
   members is told so, or that the fleet's Key ownership is being refreshed.
-  Only an agent signed in on the request runs them
-  (`Keyfleet.Checks.SignedInAgent`); the workspace's own policies decide every
-  read (`Keyfleet.Graph.Checks.KeyReader`).
+  Only an agent runs them, never a connected app on its own; the workspace's
+  own policies decide every read (`Keyfleet.Graph.Checks.KeyReader`).
   """
   use Ash.Resource,
     domain: KeyfleetWeb.AgentTools,
@@ -79,7 +78,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
 
   policies do
     policy always() do
-      authorize_if Keyfleet.Checks.SignedInAgent
+      authorize_if actor_attribute_equals(:role, :agent)
     end
   end
 end

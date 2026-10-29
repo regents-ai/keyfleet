@@ -26,7 +26,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
-  alias KeyfleetWeb.AgentDmController
+  alias KeyfleetWeb.AgentTools.Dms.Answer, as: DmAnswer
   alias KeyfleetWeb.AgentWaits
   alias KeyfleetWeb.Budget
   alias KeyfleetWeb.ProposalJSON
@@ -403,11 +403,11 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
 
   # Direct messages are followed only when asked for.
   defp dm_cursors(nil), do: nil
-  defp dm_cursors(dms), do: AgentDmController.key_cursors(dms)
+  defp dm_cursors(dms), do: DmAnswer.key_cursors(dms)
 
   # Direct messages answer only when asked for.
   defp put_dms(answer, nil), do: answer
-  defp put_dms(answer, page), do: Map.put(answer, :dms, AgentDmController.changes_json(page))
+  defp put_dms(answer, page), do: Map.put(answer, :dms, DmAnswer.changes_json(page))
 
   # So do the person's requests to quote them.
   defp put_quotes(answer, nil), do: answer

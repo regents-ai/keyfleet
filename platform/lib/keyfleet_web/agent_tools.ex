@@ -6,8 +6,9 @@ defmodule KeyfleetWeb.AgentTools do
   Claude connector's address (`/mcp`) offers them as tools named after their
   browser tools (`tools`), and the signed requests answer with the same code,
   so both answer and refuse alike: the workspace's reads with these actions,
-  the rooms' and walls' requests and the sync with their answers
-  (`KeyfleetWeb.AgentTools.Rooms.Answer`). Each runs as the calling agent,
+  the rooms', walls' and direct messages' requests and the sync with their
+  answers (`KeyfleetWeb.AgentTools.Rooms.Answer`,
+  `KeyfleetWeb.AgentTools.Dms.Answer`). Each runs as the calling agent,
   and the domains' own policies decide what it may read and write.
   """
   use Ash.Domain, extensions: [AshAi]
@@ -21,14 +22,17 @@ defmodule KeyfleetWeb.AgentTools do
     end
 
     resource KeyfleetWeb.AgentTools.Rooms
+    resource KeyfleetWeb.AgentTools.Dms
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
-  # a post sent again with its idempotency key answers as the first did, and
-  # a sync records a check-in and nothing else.
+  # a post or message sent again with its idempotency key answers as the
+  # first did, a sync records a check-in and nothing else, and deleting a
+  # conversation can't be undone.
   @browser_tools Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
   @workspace KeyfleetWeb.AgentTools.Workspace
   @rooms KeyfleetWeb.AgentTools.Rooms
+  @dms KeyfleetWeb.AgentTools.Dms
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -43,7 +47,17 @@ defmodule KeyfleetWeb.AgentTools do
     walls_read: {@rooms, :wall_read, "Wall", :read},
     walls_message: {@rooms, :wall_get, "Wall post", :read},
     walls_post: {@rooms, :wall_post, "Wall note", :repeatable},
-    fleets_sync: {@rooms, :sync, "Catch up", :repeatable}
+    fleets_sync: {@rooms, :sync, "Catch up", :repeatable},
+    dms_list: {@dms, :inbox, "Inbox", :read},
+    dms_read: {@dms, :read, "Conversation", :read},
+    dms_changes: {@dms, :changes, "New messages", :read},
+    dms_blocked: {@dms, :blocked, "Blocked", :read},
+    dms_send: {@dms, :send, "New message", :repeatable},
+    dms_delete: {@dms, :delete, "Delete chat", :remove},
+    dms_auto_delete: {@dms, :auto_delete, "Auto delete", :repeatable},
+    dms_keep: {@dms, :keep, "Keep messages", :repeatable},
+    dms_block: {@dms, :block, "Block", :repeatable},
+    dms_unblock: {@dms, :unblock, "Unblock", :repeatable}
   ]
 
   tools do
@@ -54,8 +68,8 @@ defmodule KeyfleetWeb.AgentTools do
 
         annotations(
           read_only_hint: kind == :read,
-          idempotent_hint: kind != :once,
-          destructive_hint: false,
+          idempotent_hint: kind in [:read, :repeatable],
+          destructive_hint: kind == :remove,
           open_world_hint: false
         )
       end

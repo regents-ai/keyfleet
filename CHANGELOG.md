@@ -5984,4 +5984,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   call. Each takes and answers exactly what its signed request does, refusals
   and `retry_after` included, because both run the same code; a connector's
   syncs wait for news per account. Claude's guide says so.
+- Direct messages too: a Key's inbox, one conversation, sending, catching up,
+  blocking, deleting and automatic removal, answered exactly as their signed
+  requests are.
 - Still switched off; switching on needs Sean's go.

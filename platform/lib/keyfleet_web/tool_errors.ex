@@ -17,15 +17,16 @@ defmodule KeyfleetWeb.ToolErrors do
   pairing's as `invalid_request` in the library's words
   (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's in the
   words every Regent site gives it, a fleet tool's with the refusal its signed
-  request answers (an unknown fleet as `fleet_unknown`, or a body the request
-  would not take as `invalid_request` naming what it takes), or else as
-  `invalid_request`. Input that is not an object, or names an input the
-  action has not, is refused too. A write's allowance is spent only when it
-  runs (`Keyfleet.Graph.Validations.WriteAllowance`), so checking spends none.
+  request answers (an unknown fleet as `fleet_unknown`), or else as
+  `invalid_request`. A tool that answers as its signed request also checks
+  its body as that request's is when it runs (`KeyfleetWeb.AgentTools.Run`).
+  Input that is not an object, or names an input the action has not, is
+  refused too. The check says so in the action's context
+  (`input_check`), so it spends no write allowance
+  (`Keyfleet.Graph.Validations.WriteAllowance`); the run that follows does.
   """
 
   alias Keyfleet.Agents.Connection
-  alias KeyfleetWeb.AgentTools.Refused
   alias KeyfleetWeb.WorkspaceRefusal
 
   @doc """
@@ -39,7 +40,7 @@ defmodule KeyfleetWeb.ToolErrors do
          %{valid?: true} <-
            Ash.ActionInput.for_action(resource, action, input,
              actor: context[:actor],
-             context: context[:context] || %{}
+             context: Map.put(context[:context] || %{}, :input_check, true)
            ) do
       {:ok, arguments}
     else
@@ -54,17 +55,11 @@ defmodule KeyfleetWeb.ToolErrors do
   defp refused(Connection, _identity, _errors), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
 
   defp refused(_resource, _action, errors) do
-    case Enum.find(errors, &is_struct(&1, Refused)) do
-      %Refused{body: body, retry_after: retry_after} ->
-        text(body, retry_after)
+    {_status, body} =
+      Enum.find_value(errors, &WorkspaceRefusal.for_error/1) ||
+        WorkspaceRefusal.refusal(422, "invalid_request")
 
-      nil ->
-        {_status, body} =
-          Enum.find_value(errors, &WorkspaceRefusal.for_error/1) ||
-            WorkspaceRefusal.refusal(422, "invalid_request")
-
-        text(body)
-    end
+    text(body)
   end
 
   @doc "`body` as a tool error's text, with `retry_after` in seconds when there is one."

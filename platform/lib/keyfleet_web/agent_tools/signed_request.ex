@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
   @moduledoc """
   An agent tool's input as the signed request its browser tool sends, so the
   Claude connector's tool is checked and answered as that request is:
-  `params/1` gives the request's JSON (its body with the names in its
+  `params/2` gives the request's JSON (its body with the names in its
   address), `check/2` checks its body as a signed request's is checked
   (`KeyfleetWeb.Plugs.SignedAgent.check_body/2`), and `result/1` turns the
   request's answer into the action's result.
@@ -12,9 +12,12 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
   alias KeyfleetWeb.AgentTools.Refused
   alias KeyfleetWeb.Plugs.SignedAgent
 
-  @doc "The signed request's JSON for an action's `arguments`, leaving out those not given."
-  @spec params(map()) :: map()
-  def params(arguments), do: json(arguments)
+  @doc """
+  The signed request's JSON for an action's `arguments`, leaving out those not
+  given, with the `fixed` fields its browser tool always sends.
+  """
+  @spec params(map(), map()) :: map()
+  def params(arguments, fixed), do: arguments |> json() |> Map.merge(fixed)
 
   defp json(%{__struct__: _} = value), do: value
 
