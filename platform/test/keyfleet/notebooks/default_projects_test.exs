@@ -9,13 +9,14 @@ defmodule Keyfleet.Notebooks.DefaultProjectsTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.{Backups, Makers, Scratchpads, Setting}
+  alias Keyfleet.Notebooks.{Backups, DeleteSpace, Makers, Scratchpads, Setting}
   alias Keyfleet.Projects
   alias Keyfleet.Projects.Errors.HoldError
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.SignedAgentHelpers
 
   @fleet "fleet_tech_classic"
+  @club "regents_club"
   @system %Actors.System{}
   @notebook "nb-0000000000000007"
 
@@ -42,6 +43,45 @@ defmodule Keyfleet.Notebooks.DefaultProjectsTest do
       assert {:error, %{errors: [%HoldError{code: :shared}]}} =
                Projects.delete_project(@fleet, 7, name, actor: owner(7))
     end
+  end
+
+  # Sean, 29 Oct 2026: Regents Club keeps no notebook for each Key. Costly
+  # failure: another fleet's scratchpad deleted, or Regents Club's back.
+  test "Regents Club shares no scratchpad: the one it had goes with its Keys' records, and other fleets keep theirs" do
+    ChainHelpers.seed_cursor!(@club)
+
+    Projects.Project
+    |> Ash.Changeset.for_create(
+      :shared,
+      %{fleet_id: @club, name: "scratchpad", title: "Append-only scratchpad"},
+      actor: @system
+    )
+    |> Ash.create!()
+    |> Projects.record_space!("proj-club-scratch", actor: @system)
+
+    keep(:scratchpad, %{key: 7})
+    keep(:scratchpad, %{fleet_id: @club, key: 7})
+
+    for _run <- 1..2, fleet <- [@club, @fleet], do: assert(:ok = Projects.unshare!(fleet))
+    Fleets.bootstrap_catalog!()
+
+    assert Projects.project!(@club, "scratchpad", actor: @system) == nil
+    assert %{state: :active} = Projects.project!(@club, "understanding", actor: @system)
+    assert %{state: :active} = Projects.project!(@fleet, "scratchpad", actor: @system)
+
+    assert [
+             %{
+               args: %{
+                 "fleet_id" => @club,
+                 "project" => "scratchpad",
+                 "space" => "proj-club-scratch"
+               }
+             }
+           ] =
+             all_enqueued(worker: DeleteSpace)
+
+    assert Notebooks.notebook_settings!(@club, actor: @system) == []
+    assert [%{key: 7}] = Notebooks.notebook_settings!(@fleet, actor: @system)
   end
 
   # Costly failure: another member writing in a Key's scratchpad, or anyone

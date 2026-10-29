@@ -6294,3 +6294,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Key as soon as the shard is recorded, without reopening the page.
 - Why: the coordinator's review of the shard links release (29 October 20:15Z),
   asked to be fixed with tests and released.
+
+## 2026-10-29 — Regents Club keeps no notebook for each Key
+
+- What: Regents Club no longer has the shared `scratchpad` project, where each
+  Key had its own notebook. At its next roster run Keyfleet deletes the one it
+  had as a deleted project goes (its hub space, repository, pins and daily
+  copies), with its Keys' scratchpad records. Every other fleet keeps its
+  scratchpad. `/skill.md` (guide 3.23.1), `/docs.md` and the notebooks guide
+  say so.
+- Why: Sean, 29 October 20:27Z, "regents club should be the exception to the
+  marimo notebook rules I was saying. delete all 1600 marimo notebooks and the
+  2200 snapshots from regents club, but keep classic #1".

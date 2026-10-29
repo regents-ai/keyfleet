@@ -32,11 +32,13 @@ defmodule Keyfleet.Projects.Project do
   members only. The Key also gives it a one-line `description` (`describe`),
   which its page shows under the title and shares as its description.
 
-  Every fleet also has two shared projects, active and held by no Key
-  (`shared`): `scratchpad`, where each Key has a notebook of its own
-  (`Keyfleet.Notebooks.Scratchpads`), and `understanding`, the fleet's notes on
-  how its members work together. No Key archives, takes over or deletes one,
-  and neither counts as a Key's active project.
+  Every fleet also has shared projects, active and held by no Key
+  (`shared`, `shared_names/1`): `understanding`, the fleet's notes on how its
+  members work together, and, in every fleet but Regents Club, `scratchpad`,
+  where each Key has a notebook of its own (`Keyfleet.Notebooks.Scratchpads`).
+  No Key archives, takes over or deletes one, and none counts as a Key's
+  active project. A shared project the fleet no longer shares is deleted
+  (`unshared`, `Keyfleet.Projects.unshare!/1`).
   """
   use Ash.Resource,
     domain: Keyfleet.Projects,
@@ -57,8 +59,9 @@ defmodule Keyfleet.Projects.Project do
   @doc "The most archived projects one Key holds."
   def archived_most, do: @archived_most
 
-  @doc "The names of the two projects every fleet shares, held by no Key."
-  def shared_names, do: ["scratchpad", "understanding"]
+  @doc "The names of the projects the fleet shares, held by no Key: Regents Club has no scratchpad."
+  def shared_names("regents_club"), do: ["understanding"]
+  def shared_names(_fleet_id), do: ["scratchpad", "understanding"]
 
   @doc "The Key that holds a fleet's `general`: 329 in Regents Club, 3 in every other."
   def general_key("regents_club"), do: 329
@@ -295,6 +298,18 @@ defmodule Keyfleet.Projects.Project do
       end
     end
 
+    # Deletes a shared project the fleet no longer shares, as a deleted
+    # project goes (`Keyfleet.Projects.Changes.Forget`).
+    update :unshared do
+      public? false
+      accept []
+      require_atomic? false
+      change filter(expr(state == :active and is_nil(key)))
+      change set_attribute(:state, :deleted)
+      change Keyfleet.Projects.Changes.Forget
+      change Keyfleet.Notebooks.Changes.ForgetScratchpads
+    end
+
     update :archived do
       public? false
       accept []
@@ -366,6 +381,7 @@ defmodule Keyfleet.Projects.Project do
              :archived,
              :taken_over,
              :deleted,
+             :unshared,
              :shown,
              :described,
              :record_space,

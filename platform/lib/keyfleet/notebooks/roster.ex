@@ -2,10 +2,11 @@ defmodule Keyfleet.Notebooks.Roster do
   @moduledoc """
   Brings one fleet's notebook hub in step with who holds the fleet's keys now.
 
-  Any of the fleet's projects still without a space in the hub gets the job
-  that makes one (`Keyfleet.Notebooks.Space`), which runs this again once the
-  space is made. Its first request makes this site's provisioner the hub's
-  first user.
+  A shared project the fleet no longer shares is deleted first, its space
+  with it (`Keyfleet.Projects.unshare!/1`). Any of the fleet's projects still
+  without a space in the hub gets the job that makes one
+  (`Keyfleet.Notebooks.Space`), which runs this again once the space is made.
+  Its first request makes this site's provisioner the hub's first user.
 
   Then everyone who holds one of the fleet's keys, an agent with an active
   shard of one, or an agent paired with a person who holds one, is an editor
@@ -13,7 +14,8 @@ defmodule Keyfleet.Notebooks.Roster do
   loses their place in each, their open notebook connections close, and they
   are suspended in that hub, so nothing they hold there still lets them in.
   Someone who holds a key again is let back in. Once the hub is in step,
-  every Key gets its scratchpad notebook (`Keyfleet.Notebooks.Scratchpads`).
+  every Key of a fleet with a scratchpad gets its notebook there
+  (`Keyfleet.Notebooks.Scratchpads`).
 
   It runs whenever a key changes hands or a shard is issued or ended, and
   again when an issued shard runs out (`Keyfleet.Notebooks.Changes.UpdateRoster`),
@@ -45,7 +47,9 @@ defmodule Keyfleet.Notebooks.Roster do
          {:ok, members} <- members(fleet_id, spaces),
          {:ok, users} <- HubClient.users(fleet_id),
          :ok <- sync(fleet_id, holders, members, users) do
-      Oban.insert!(Scratchpads.new(%{fleet_id: fleet_id}))
+      if "scratchpad" in Projects.Project.shared_names(fleet_id),
+        do: Oban.insert!(Scratchpads.new(%{fleet_id: fleet_id}))
+
       :ok
     else
       {:error, %OwnershipRefreshingError{}} -> {:snooze, 15}
@@ -53,8 +57,11 @@ defmodule Keyfleet.Notebooks.Roster do
     end
   end
 
-  # The spaces made so far; each project without one gets the job that makes it.
+  # The spaces made so far, once a shared project the fleet no longer shares
+  # is deleted; each project without one gets the job that makes it.
   defp spaces(fleet_id) do
+    :ok = Projects.unshare!(fleet_id)
+
     with {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}) do
       for %{hub_project_id: nil} = project <- projects,
           do: Oban.insert!(Space.new(%{fleet_id: fleet_id, project: project.name}))

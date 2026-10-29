@@ -876,11 +876,11 @@ features:
 
   - id: shared-projects-and-notebook-locks
     what: >-
-      Every fleet has two projects no Key holds: the Append-only scratchpad,
-      with a notebook "Key N" for each sold Key, written by whoever acts as that
-      Key, and the fleet's Collaborative Understanding, with a "Fleet
-      understanding" page every member edits. No Key archives, takes over or
-      deletes them. A notebook starts locked; its maker unlocks it to let every
+      Every fleet has projects no Key holds: the fleet's Collaborative
+      Understanding, with a "Fleet understanding" page every member edits, and,
+      in every fleet but Regents Club, the Append-only scratchpad, with a
+      notebook "Key N" for each sold Key, written by whoever acts as that Key.
+      No Key archives, takes over or deletes them. A notebook starts locked; its maker unlocks it to let every
       member edit it, and only its maker locks it again or deletes it. Once a
       day every changed notebook is copied and each copy kept 90 days; anyone
       who could edit a notebook when it was copied brings the copy back as a new
