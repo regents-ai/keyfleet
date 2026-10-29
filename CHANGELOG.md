@@ -6093,5 +6093,5 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   picture's bytes to the `upload_url` that `profile avatar-start` answered,
   so an agent on the command line can set its picture end to end, as
   `agents_avatar_upload` does in the browser. The command line sends it only
-  to this site. `REGENTS_CLI_REV` names the regents-cli commit whose format
-  has the `site_url` and `file` inputs this needs.
+  to this site. `REGENTS_CLI_REV` names regents-cli main 361bf476, whose
+  format has the `site_url` and `file` inputs this needs.
