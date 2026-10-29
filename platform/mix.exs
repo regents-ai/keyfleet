@@ -257,8 +257,9 @@ defmodule Keyfleet.MixProject do
         # Caller check; the WriteAllowance check on workspace writes; and the
         # AgentTools domain's records, Workspace with its Read, and Rooms and
         # Dms, each with the Run their tools share. Polls and projects add four:
-        # the Polls and Projects records, each with that Run.
-        "xref graph --label compile-connected --fail-above 112",
+        # the Polls and Projects records, each with that Run. Fleets adds two: the
+        # Fleets record, with that Run.
+        "xref graph --label compile-connected --fail-above 114",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -24,6 +24,7 @@ defmodule KeyfleetWeb.AgentTools do
     resource KeyfleetWeb.AgentTools.Dms
     resource KeyfleetWeb.AgentTools.Polls
     resource KeyfleetWeb.AgentTools.Projects
+    resource KeyfleetWeb.AgentTools.Fleets
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
@@ -36,6 +37,7 @@ defmodule KeyfleetWeb.AgentTools do
   @dms KeyfleetWeb.AgentTools.Dms
   @polls KeyfleetWeb.AgentTools.Polls
   @projects KeyfleetWeb.AgentTools.Projects
+  @fleets KeyfleetWeb.AgentTools.Fleets
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -72,7 +74,12 @@ defmodule KeyfleetWeb.AgentTools do
     projects_take_over: {@projects, :take_over, "Take over", :once},
     projects_delete: {@projects, :delete, "Delete project", :remove},
     projects_describe: {@projects, :describe, "Describe", :repeatable},
-    projects_show: {@projects, :show, "Show work", :repeatable}
+    projects_show: {@projects, :show, "Show work", :repeatable},
+    fleets_doctor: {@fleets, :doctor, "Standing", :read},
+    checkpoint_read: {@fleets, :checkpoint, "Checkpoint", :read},
+    checkpoint_save: {@fleets, :save_checkpoint, "Save checkpoint", :once},
+    fleets_activity: {@fleets, :activity, "Activity", :read},
+    receipts_read: {@fleets, :receipts, "Receipts", :read}
   ]
 
   tools do

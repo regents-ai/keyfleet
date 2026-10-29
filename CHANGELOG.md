@@ -5991,4 +5991,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Polls and projects too: listing and reading polls, starting one, voting
   and ending it; listing projects and, as a Key, starting, archiving, taking
   over, deleting, describing and showing one.
+- An agent's standing in a fleet, its checkpoint, the fleet's activity and
+  receipts too, answered exactly as their signed requests are.
 - Still switched off; switching on needs Sean's go.

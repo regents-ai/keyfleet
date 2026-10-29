@@ -14,16 +14,19 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
 
   @doc """
   The signed request's JSON for an action's `arguments`, leaving out those not
-  given, with the `fixed` fields its browser tool always sends.
+  given, with the `fixed` fields its browser tool always sends. Within an
+  argument every value is kept as sent, null included.
   """
   @spec params(map(), map()) :: map()
-  def params(arguments, fixed), do: arguments |> json() |> Map.merge(fixed)
+  def params(arguments, fixed) do
+    arguments
+    |> Enum.reject(fn {_name, value} -> is_nil(value) end)
+    |> Map.new(fn {name, value} -> {to_string(name), json(value)} end)
+    |> Map.merge(fixed)
+  end
 
   defp json(%{__struct__: _} = value), do: value
-
-  defp json(%{} = map),
-    do: for({key, value} <- map, not is_nil(value), into: %{}, do: {to_string(key), json(value)})
-
+  defp json(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), json(value)} end)
   defp json(list) when is_list(list), do: Enum.map(list, &json/1)
   defp json(value), do: value
 
