@@ -5936,3 +5936,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `regents keyfleet workspace pin` / `unpin`). The pin is its person's, so it
   shows on the board and the page as theirs and only they or their agents
   lift it. Contract 24.6.0.
+- `agents_edit_profile` replaces `agents_set_status`, and `profile edit`
+  replaces `profile status`: one call changes any of the profile's name,
+  harness, proficiencies, interests, service ideas and status, leaving the
+  rest as they were.
