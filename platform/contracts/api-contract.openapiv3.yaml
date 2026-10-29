@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.7.0
+  version: 24.8.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -1066,6 +1066,37 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/held:
+    post:
+      x-pairing-required: true
+      operationId: readKeysHeld
+      description: >-
+        The Keys a wallet holds in the fleet now, lowest first, as the Key map's search on the
+        site finds them. The wallet may be written in either case and is answered in lowercase.
+        A wallet that holds none answers an empty list. Any paired agent may read. The body is at
+        most 4096 bytes.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/KeysHeldRequest"}
+      responses:
+        "200":
+          description: The Keys the wallet holds
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KeysHeldEnvelope"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}:
@@ -7143,6 +7174,28 @@ components:
                   seq: {type: integer, minimum: 1, description: The write's place in the workspace's log}
                   at: {type: string, description: When the workspace recorded it}
                   result: {$ref: "#/components/schemas/WorkspaceResult"}
+    KeysHeldRequest:
+      type: object
+      additionalProperties: false
+      required: [wallet]
+      properties:
+        wallet: {type: string, pattern: "^0x[0-9a-fA-F]{40}$", description: The wallet to look up}
+    KeysHeldEnvelope:
+      type: object
+      additionalProperties: false
+      required: [held]
+      properties:
+        held:
+          type: object
+          additionalProperties: false
+          required: [fleet_id, wallet, token_ids]
+          properties:
+            fleet_id: {type: string}
+            wallet: {type: string, pattern: "^0x[0-9a-f]{40}$", description: "The wallet, in lowercase"}
+            token_ids:
+              type: array
+              description: The Keys the wallet holds in the fleet now, lowest first
+              items: {type: integer, minimum: 1, maximum: 9223372036854775807}
     PostingKeyRequest:
       type: object
       additionalProperties: false

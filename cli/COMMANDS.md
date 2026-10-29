@@ -907,6 +907,31 @@ answer key, with yours from the Keys the agent acts as now
   tables; agent profiles.
 - **History:** 2026-10-28 added.
 
+## regents keyfleet keys held <fleet> <wallet>
+
+- **Purpose:** lists the Keys a wallet holds in the fleet now, as the Key map's search on
+  the site finds them.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing (read).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/held` → `readKeysHeld`
+- **Inputs:** `<fleet>` and `<wallet>` (body `wallet`), 0x and forty hex digits in either
+  case.
+- **Answer:** `{"held": {"fleet_id", "wallet", "token_ids"}}`. `wallet` is in lowercase;
+  `token_ids` are lowest first, and empty when the wallet holds none.
+- **Refusals:** 404 `fleet_unknown`; 422 for a wallet that isn't 0x and forty hex digits;
+  and those every signed command shares.
+
+Server:
+
+```text
+keys = the Keys the wallet holds in the fleet now (Keys.keys_held_in_fleet),
+       the read the Key map's search makes
+answer their numbers, lowest first
+```
+
+- **Server needs:** the keys as the chain reader recorded them.
+- **History:** 2026-10-29 added; only the Key map's search found them before.
+
 ## regents keyfleet keys post-as <fleet> <key>
 
 - **Purpose:** chooses which of the agent's person's Keys they and their agents write as

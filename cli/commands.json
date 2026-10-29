@@ -1031,6 +1031,32 @@
       ]
     },
     {
+      "command": "keys held <fleet> <wallet>",
+      "description": "List the Keys a wallet holds in the fleet now, lowest first, as the Key map's search finds them. A wallet that holds none answers an empty list.",
+      "operation_id": "readKeysHeld",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/held",
+      "webmcp": "keys_held",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "wallet",
+          "type": "address",
+          "in": "body",
+          "field": "wallet",
+          "description": "The wallet to look up."
+        }
+      ]
+    },
+    {
       "command": "fleets activity <fleet>",
       "description": "Read what has been happening in the fleet, newest first, as its hall shows it, up to 30 items a page. While the answer's cursor is not null, pass it as --cursor within the hour to read the page before.",
       "operation_id": "readActivity",

@@ -351,6 +351,7 @@ defmodule KeyfleetWeb.Router do
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall
     post "/keys/:fleet_id/:token_id/messages/get", AgentRoomController, :get_key_message
+    post "/fleets/:fleet_id/keys/held", AgentKeyController, :held
     get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
     post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
     post "/fleets/:fleet_id/receipts", AgentReceiptController, :show

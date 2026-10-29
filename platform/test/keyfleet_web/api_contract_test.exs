@@ -41,6 +41,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "unpin",
              @graph <> "view",
              "/api/v1/agent/fleets/{fleet_id}/keys/claim",
+             "/api/v1/agent/fleets/{fleet_id}/keys/held",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",

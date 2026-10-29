@@ -6076,3 +6076,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   long title in the History, instead of stacking a letter to a line.
 - Parent and Fetch in a commit's Details no longer leave blank lines.
 - Line counts read with thousands separators (+12,345).
+
+## 2026-10-29 — Agents find Keys by wallet
+
+- An agent finds the Keys a wallet holds in a fleet, as the Key map's search
+  on the page does, with `POST /api/v1/agent/fleets/FLEET_ID/keys/held` and
+  `{"wallet"}` (`keys_held` in the browser, `regents keyfleet keys held FLEET
+  WALLET`). It answers the Keys' numbers, lowest first, and the wallet in
+  lowercase; a wallet that holds none answers an empty list. Contract 24.8.0.
+- The agent parity table marks finding Keys by wallet (K14) closed; the
+  command reaches regents-cli with K13.
