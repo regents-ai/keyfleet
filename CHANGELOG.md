@@ -5916,3 +5916,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   change. Rollback: the 1.10.19 pin, `02f89615`.
 - `workspace graph` sends `"archived": false`, so the command and the
   `workspace_graph` tool take the same fields again and `make check-cli` passes.
+
+## 2026-10-29 — Browser tools say what they know
+
+- A browser tool whose answer came back but couldn't be read answers
+  `unreadable_answer` with the status, where before a signed one said nothing
+  was sent and a public read said the page couldn't be reached. A change
+  whose answer was lost or unreadable adds `"outcome": "unknown"`, and its
+  hint names `receipts_read` with its `idempotency_key` or `command_id` for a
+  post or a workspace write, or says a resend with the same key runs once.
