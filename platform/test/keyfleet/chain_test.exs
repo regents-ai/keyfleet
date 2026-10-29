@@ -146,6 +146,44 @@ defmodule Keyfleet.ChainTest do
       assert Keys.current_key!(@fleet, 2) == nil
     end
 
+    # Through the real client: a node answering the log request with HTTP 429
+    # is asked for those logs once, and the pass ends where it began, rather
+    # than being asked again for each half of the range.
+    test "a node asking for fewer requests is asked for the logs once", %{fleet: fleet} do
+      config = Application.fetch_env!(:keyfleet, Chain)
+      on_exit(fn -> Application.put_env(:keyfleet, Chain, config) end)
+      test_pid = self()
+
+      node!(config, fn
+        "eth_getBlockByNumber" ->
+          {200,
+           %{
+             "number" => "0x" <> Integer.to_string(@deployed + 100, 16),
+             "hash" => "0x" <> String.duplicate("f", 64),
+             "timestamp" => "0x6553f100",
+             "baseFeePerGas" => "0x0"
+           }}
+
+        "eth_call" ->
+          {200, "0x" <> String.duplicate("0", 24) <> String.duplicate("b0", 20)}
+
+        "eth_getLogs" ->
+          send(test_pid, :logs_asked)
+          {429, nil}
+      end)
+
+      log =
+        capture_log(fn ->
+          assert Scanner.step(fleet, Keyfleet.Chain.RpcClient) ==
+                   {:error, {:block_unanswered, @deployed, :chain_busy}}
+        end)
+
+      assert_received :logs_asked
+      refute_received :logs_asked
+      assert log =~ "429"
+      assert next_block() == @deployed
+    end
+
     # The job reading a fleet never takes a node serving another chain at its
     # word; a pass that read waits five minutes and runs again, and one that
     # failed is retried a minute later.
@@ -624,6 +662,37 @@ defmodule Keyfleet.ChainTest do
     after
       0 -> Enum.reverse(writes)
     end
+  end
+
+  # Points the app's node address at a local server answering each JSON-RPC
+  # method with `answer.(method)`: an HTTP status and, for 200, the result.
+  defp node!(config, answer) do
+    plug = fn conn, _opts ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      case answer.(Jason.decode!(body)["method"]) do
+        {200, result} ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(200, Jason.encode!(%{jsonrpc: "2.0", id: 1, result: result}))
+
+        {status, nil} ->
+          Plug.Conn.send_resp(conn, status, "")
+      end
+    end
+
+    pid =
+      start_supervised!(
+        Supervisor.child_spec({Bandit, plug: plug, ip: {127, 0, 0, 1}, port: 0}, id: make_ref())
+      )
+
+    {:ok, {_address, port}} = ThousandIsland.listener_info(pid)
+
+    Application.put_env(
+      :keyfleet,
+      Chain,
+      Keyword.put(config, :rpc_url, "http://127.0.0.1:#{port}")
+    )
   end
 
   defp head(number),
