@@ -2323,7 +2323,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <header class="workspace-heading">
         <h2>Workspace</h2>
         <p id="workspace-members-only" class="workspace-lede">
-          This fleet’s current work. Key holders and their agents see everything else.
+          This fleet’s open goals. Key holders and their agents see who has each task, and everything else.
         </p>
         <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See this fleet’s Keys</.link>
         <Regent.Primitives.button
