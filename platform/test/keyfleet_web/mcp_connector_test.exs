@@ -219,6 +219,92 @@ defmodule KeyfleetWeb.McpConnectorTest do
     end
   end
 
+  # A picture is larger than a signed request can carry, so it goes in two
+  # steps, as the browser tools send it: the start answers an address on this
+  # site, and the upload sends the bytes there as base64.
+  test "the picture tools set and remove the agent's picture", c do
+    subject = account!()
+    pair!(subject, c.signer.address)
+    token = connect!(subject, @agent_scopes)
+    test = self()
+
+    Req.Test.stub(Keyfleet.Agents.AvatarBucket, fn conn ->
+      send(test, {:bucket, conn.method})
+      Plug.Conn.send_resp(conn, 200, "")
+    end)
+
+    picture = png(64, 64)
+
+    declared = %{
+      "sha256" => :sha256 |> :crypto.hash(picture) |> Base.encode16(case: :lower),
+      "byte_size" => byte_size(picture),
+      "content_type" => "image/png"
+    }
+
+    started = result(call(token, "agents_avatar_start", declared, c))
+    assert %{"isError" => true, "content" => [%{"text" => text}]} = started
+    assert Jason.decode!(text)["error"]["code"] == "profile_not_found"
+
+    joined = %{"name" => "Claude", "declared_harness" => "claude"}
+    assert %{"isError" => false} = result(call(token, "agents_join", joined, c))
+
+    refused = result(call(token, "agents_avatar_start", %{declared | "byte_size" => 0}, c))
+    assert %{"isError" => true, "content" => [%{"text" => text}]} = refused
+    assert Jason.decode!(text)["error"]["code"] == "invalid_avatar"
+
+    assert %{"isError" => false, "structuredContent" => address} =
+             result(call(token, "agents_avatar_start", declared, c))
+
+    assert %{"method" => "PUT", "content_type" => "image/png", "upload_url" => url} = address
+    upload = fn input -> result(call(token, "agents_avatar_upload", input, c)) end
+    bytes = %{"upload_url" => url, "content_type" => "image/png"}
+
+    for {input, code} <- [
+          {Map.put(bytes, "bytes_base64", Base.encode64(png(64, 65))), "avatar_mismatch"},
+          {Map.put(bytes, "bytes_base64", "not base64!"), "invalid_request"},
+          {%{bytes | "content_type" => "image/webp"}
+           |> Map.put("bytes_base64", Base.encode64(picture)), "avatar_mismatch"},
+          {%{
+             bytes
+             | "upload_url" => String.replace(url, URI.parse(url).host, "elsewhere.example")
+           }
+           |> Map.put("bytes_base64", Base.encode64(picture)), "avatar_upload_expired"},
+          {%{bytes | "upload_url" => url <> "?x=1"}
+           |> Map.put("bytes_base64", Base.encode64(picture)), "avatar_upload_expired"}
+        ] do
+      assert %{"isError" => true, "content" => [%{"text" => text}]} = upload.(input)
+      assert Jason.decode!(text)["error"]["code"] == code, inspect(input)
+    end
+
+    refute_received {:bucket, _method}
+
+    # The address's path alone is taken too, as the browser tool takes it.
+    path = URI.parse(url).path
+
+    assert %{"isError" => false, "structuredContent" => %{"avatar_url" => avatar}} =
+             upload.(
+               %{bytes | "upload_url" => path}
+               |> Map.put("bytes_base64", Base.encode64(picture))
+             )
+
+    assert is_binary(avatar)
+    assert_received {:bucket, "PUT"}
+
+    assert %{"structuredContent" => %{"profile" => %{"avatar_url" => ^avatar}}} =
+             result(call(token, "agents_profile", %{}, c))
+
+    assert %{"isError" => false, "structuredContent" => %{"avatar_url" => nil}} =
+             result(call(token, "agents_avatar_remove", %{}, c))
+  end
+
+  # A PNG's signature and header chunk, which say its size; enough for the
+  # size check, which reads no further.
+  defp png(width, height) do
+    header = <<width::32, height::32, 8, 6, 0, 0, 0>>
+    chunk = "IHDR" <> header
+    <<0x89, "PNG\r\n", 0x1A, "\n", 13::32>> <> chunk <> <<:erlang.crc32(chunk)::32>>
+  end
+
   defp pin(fleet),
     do: %{"fleet_id" => fleet, "project" => "main", "place" => "code", "target" => "a"}
 

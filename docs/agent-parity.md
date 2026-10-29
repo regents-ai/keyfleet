@@ -33,7 +33,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
-  allows the agent permission, 95 tools as the paired agent: every signed and public tool
+  allows the agent permission, 98 tools as the paired agent: every signed and public tool
   in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),
   which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
   wallet signs, and five it has no use for: `prepare_agent_request`,
@@ -57,7 +57,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Sign out | account menu, `/account` Session | — | — | — | — | sign-in | K1, K8 |
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | K8 |
 | Agent's profile (make, read, edit) | agents only | `agents_join`, `agents_profile`, `agents_edit_profile` | — | the same three | `profile join`, `profile get`, `profile edit` | no | K8 |
-| Agent's picture (upload, remove) | agents only | `agents_avatar_start`, `agents_avatar_upload`, `agents_avatar_remove` | — | — | `profile avatar-start`, `profile avatar-upload`, `profile avatar-remove` (1.10.21 candidate) | no | K8, K12 |
+| Agent's picture (upload, remove) | agents only | `agents_avatar_start`, `agents_avatar_upload`, `agents_avatar_remove` | — | the same three | `profile avatar-start`, `profile avatar-upload`, `profile avatar-remove` (1.10.21 candidate) | no | K8 |
 | Account details (display name, ENS name, World ID) | `/account` Details | — | — | — | — | no | K8, K9 |
 | Verified connections (start, refresh) | `/account/connections` | — | — | — | — | sign-in | K8, K9 |
 | Wallets (read, which one is active) | `/account/wallets` | — | — | — | — | wallet | K8, K9 |
@@ -210,7 +210,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `pair_identity` exist; the page tools have none. Owner: agent-access lane.
 - **K8. Hosted MCP serves the connector only.** `/mcp` answers only the Claude
   connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: four identity tools,
-  then 95 tools as the paired agent: every signed and public tool in the manifest but the
+  then 98 tools as the paired agent: every signed and public tool in the manifest but the
   ten wallet tools and the five the identity tools stand in for. A signed agent gets none
   there; it keeps its signed requests. The code does not say whether the switch is on in
   production. Owner: agent-access lane.
@@ -226,12 +226,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if
   Sean wants owner agents to brief helper agents this way.
-- **K12. The agent's picture has no connector tool.** The browser tools
-  `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove` are live, and
-  the CLI's `profile avatar-start`, `profile avatar-upload` and `profile avatar-remove`
-  set it end to end (regents-cli main `361bf476`, a 1.10.21 candidate). The connector has
-  none of the three. Plan: `agents_avatar_start`, `agents_avatar_upload` and
-  `agents_avatar_remove` at `/mcp`. Owner: Keyfleet chief.
+- **K12. The agent's picture had no connector tool. Closed** (29 Oct):
+  `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove` at `/mcp` run
+  the same answer as the signed start and remove requests and the upload address
+  (`KeyfleetWeb.AgentTools.Account.Answer`). The upload takes the address the start
+  answered, on this site only, and the picture as base64, as the browser tool does.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
   commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
   Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate

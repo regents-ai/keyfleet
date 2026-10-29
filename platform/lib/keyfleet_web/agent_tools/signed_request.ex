@@ -38,13 +38,13 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
   action takes its address's names, so its request always has them. A
   request that fits but names a coming-soon fleet is refused as every agent
   request about one is (`KeyfleetWeb.Plugs.FleetComingSoon`), so nothing is
-  read or written. A public read sends no signed request, so its action's
-  arguments are its whole check.
+  read or written. A public read and a picture's upload send no signed
+  request, so the action's arguments and its answer are their whole check.
   """
   @spec check(String.t(), map()) :: :ok | {:error, Exception.t()}
   def check(tool, params) do
     case Enum.find(Capabilities.tools(), &(&1["name"] == tool)) do
-      %{"authentication" => "public"} -> :ok
+      %{"authentication" => unsigned} when unsigned in ["public", "upload_address"] -> :ok
       browser_tool -> signed(browser_tool, params)
     end
   end

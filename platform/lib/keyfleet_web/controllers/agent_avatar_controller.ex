@@ -1,113 +1,41 @@
 defmodule KeyfleetWeb.AgentAvatarController do
   @moduledoc """
-  An agent's picture, set in two steps because a picture is larger than a
-  signed request can carry.
-
-  `start` is a signed request naming the picture: its SHA-256, its length and
-  its type. It answers one upload address, good for ten minutes, carrying a
-  ticket signed by this site that binds the agent, its profile and exactly
-  that picture. `upload` takes the bytes at that address; the ticket is its
-  permission, so it is not signed itself. `remove` is a signed request that
-  takes the picture away. Each start and each upload spends the agent's
-  wallet's `:avatar_uploads` allowance, since every upload keeps a new
-  picture and has the one it replaces deleted.
+  An agent's picture, for an agent through its own requests: `start` and
+  `remove` are signed, and `upload` takes the bytes at the address `start`
+  answered, whose ticket is its permission. Each answers what the Claude
+  connector's tool of the same name answers
+  (`KeyfleetWeb.AgentTools.Account.Answer`).
   """
   use KeyfleetWeb, :controller
 
-  alias Keyfleet.Actors.Agent
-  alias Keyfleet.Agents
   alias Keyfleet.Agents.Avatar
-  alias Keyfleet.Limits
-  alias KeyfleetWeb.Refusal
+  alias KeyfleetWeb.AgentReply
+  alias KeyfleetWeb.AgentTools.Account.Answer
 
-  @salt "agent avatar upload"
-  @ticket_seconds 10 * 60
-  # The ticket is signed, not sealed, so it names the agent and nothing the
-  # SIWA service said about it.
-  @ticket_actor_fields [
-    :wallet_address,
-    :chain_id,
-    :verification_method,
-    :audience,
-    :credential_ref,
-    :pairing_id,
-    :privy_user_id,
-    :human_account_id
-  ]
+  def start(conn, params), do: reply(conn, :avatar_start, params)
+  def remove(conn, params), do: reply(conn, :avatar_remove, params)
 
-  def start(conn, params) do
-    actor = conn.assigns.agent_actor
-
-    with :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
-         {:ok, declared} <- Avatar.declare(params),
-         %{id: profile_id} <- Agents.get_my_profile!(actor: actor) do
-      ticket =
-        Phoenix.Token.sign(conn, @salt, %{
-          profile_id: profile_id,
-          declared: declared,
-          agent: Map.take(actor, @ticket_actor_fields)
-        })
-
-      json(conn, %{
-        upload_url: url(~p"/api/v1/avatar/upload/#{ticket}"),
-        method: "PUT",
-        content_type: declared.content_type,
-        expires_at: DateTime.utc_now() |> DateTime.add(@ticket_seconds) |> DateTime.to_iso8601()
-      })
-    else
-      {:limited, seconds} -> limited(conn, seconds)
-      :error -> Refusal.json(conn, 422, "invalid_avatar")
-      nil -> Refusal.json(conn, 404, "profile_not_found")
-    end
-  end
-
+  # A body longer than a picture may be is refused before it is read in full.
   def upload(conn, %{"ticket" => ticket}) do
-    case Phoenix.Token.verify(conn, @salt, ticket, max_age: @ticket_seconds) do
-      {:ok, %{profile_id: profile_id, declared: declared, agent: agent}} ->
-        store(conn, struct!(Agent, agent), profile_id, declared)
-
-      {:error, _reason} ->
-        Refusal.json(conn, 401, "avatar_upload_expired")
-    end
-  end
-
-  def remove(conn, _params) do
-    actor = conn.assigns.agent_actor
-
-    case Agents.get_my_profile!(actor: actor) do
-      nil ->
-        Refusal.json(conn, 404, "profile_not_found")
-
-      profile ->
-        json(conn, %{avatar_url: Avatar.url(Agents.remove_avatar!(profile, actor: actor))})
-    end
-  end
-
-  defp store(conn, actor, profile_id, declared) do
     cap = Avatar.max_bytes()
 
-    with true <- Agent.valid?(actor),
-         :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
-         [type] when type == declared.content_type <- get_req_header(conn, "content-type"),
-         {:ok, bytes, conn} when byte_size(bytes) <= cap <-
-           read_body(conn, length: cap, read_length: cap + 1),
-         {:ok, profile} <- Agents.store_avatar(actor, profile_id, declared, bytes) do
-      json(conn, %{avatar_url: Avatar.url(profile)})
-    else
-      false -> Refusal.json(conn, 403, "agent_not_paired")
-      {:limited, seconds} -> limited(conn, seconds)
-      {:more, _partial, conn} -> Refusal.json(conn, 413, "request_too_large")
-      {:error, :mismatch} -> Refusal.json(conn, 422, "avatar_mismatch")
-      {:error, :unreadable} -> Refusal.json(conn, 422, "invalid_avatar")
-      {:error, :profile_not_found} -> Refusal.json(conn, 404, "profile_not_found")
-      {:error, _reason} -> Refusal.json(conn, 503, "avatar_unavailable")
-      _other_type -> Refusal.json(conn, 422, "avatar_mismatch")
-    end
+    {bytes, conn} =
+      case read_body(conn, length: cap, read_length: cap + 1) do
+        {:ok, bytes, conn} -> {bytes, conn}
+        {:more, _partial, conn} -> {:too_large, conn}
+        # A body that stopped coming is none of the picture's bytes.
+        {:error, _reason} -> {"", conn}
+      end
+
+    type =
+      case get_req_header(conn, "content-type") do
+        [type] -> type
+        _none_or_more -> nil
+      end
+
+    AgentReply.answer(conn, Answer.upload(ticket, type, bytes))
   end
 
-  defp limited(conn, seconds) do
-    conn
-    |> put_resp_header("retry-after", Integer.to_string(seconds))
-    |> Refusal.json(429, "avatar_limit_reached")
-  end
+  defp reply(conn, op, params),
+    do: AgentReply.answer(conn, Answer.answer(op, params, conn.assigns.agent_actor, nil))
 end

@@ -3,9 +3,22 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   An agent's own profile and its person's account, the same over its signed
   requests and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Account`):
   reading, making and setting the status of its profile (`:profile`, `:join`,
-  `:edit_profile`), and its person's Credits, Credits history and Points
-  (`:balances`, `:credits_history`, `:points`). Each answer is
-  `{status, body, nil}`; `params` is the signed request's JSON body.
+  `:edit_profile`), setting and removing its picture (`:avatar_start`,
+  `:avatar_upload`, `:avatar_remove`), and its person's Credits, Credits
+  history and Points (`:balances`, `:credits_history`, `:points`). Each answer
+  is `{status, body, retry_after}`, `retry_after` in seconds past a limit and
+  otherwise nil; `params` is the signed request's JSON body.
+
+  A picture is set in two steps because it is larger than a signed request
+  can carry. `:avatar_start` names it: its SHA-256, its length and its type.
+  It answers one upload address, good for ten minutes, carrying a ticket
+  signed by this site that binds the agent, its profile and exactly that
+  picture. `upload/3` takes the bytes for that ticket; the ticket is its
+  permission, so the upload is not signed itself, and `:avatar_upload` sends
+  them to the address as base64. `:avatar_remove` takes the picture away.
+  Each start and each upload spends the agent's wallet's `:avatar_uploads`
+  allowance, since every upload keeps a new picture and has the one it
+  replaces deleted.
 
   A profile is answered with the agent's page in the agent registry, whether
   a World ID-verified person stands behind it and how many agents that person
@@ -15,15 +28,33 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents
   alias Keyfleet.Agents.Avatar
-  alias KeyfleetWeb.Refusal
+  alias Keyfleet.Limits
+  alias KeyfleetWeb.{Endpoint, Refusal}
   alias RegentAgents.HumanBacking
   alias RegentPoints.{Amount, Rules}
 
   @points_off "Earning Points is off on this site."
   @spending_off "Approving agent spending is off on this site."
 
+  @salt "agent avatar upload"
+  @ticket_seconds 10 * 60
+  @uploads "/api/v1/avatar/upload/"
+  # The ticket is signed, not sealed, so it names the agent and nothing the
+  # SIWA service said about it.
+  @ticket_actor_fields [
+    :wallet_address,
+    :chain_id,
+    :verification_method,
+    :audience,
+    :credential_ref,
+    :pairing_id,
+    :privy_user_id,
+    :human_account_id
+  ]
+
   @doc "Answers `op` for `actor`; nothing here waits, so the waiter is unused."
-  @spec answer(atom(), map(), Agent.t(), term()) :: {pos_integer(), map(), nil}
+  @spec answer(atom(), map(), Agent.t(), term()) ::
+          {pos_integer(), map(), pos_integer() | nil}
   def answer(:join, %{"name" => name, "declared_harness" => harness}, actor, _waiter) do
     case Agents.ensure_profile(%{name: name, declared_harness: harness}, actor: actor) do
       {:ok, profile} -> profile(profile)
@@ -123,6 +154,115 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
         refusal(503, "account_unavailable")
     end
   end
+
+  def answer(:avatar_start, params, actor, _waiter) do
+    with :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
+         {:ok, declared} <- Avatar.declare(params),
+         {:ok, %{id: profile_id}} <- Agents.get_my_profile(actor: actor) do
+      ticket =
+        Phoenix.Token.sign(Endpoint, @salt, %{
+          profile_id: profile_id,
+          declared: declared,
+          agent: Map.take(actor, @ticket_actor_fields)
+        })
+
+      ok(%{
+        upload_url: Endpoint.url() <> @uploads <> ticket,
+        method: "PUT",
+        content_type: declared.content_type,
+        expires_at: DateTime.utc_now() |> DateTime.add(@ticket_seconds) |> DateTime.to_iso8601()
+      })
+    else
+      {:limited, seconds} -> limited(seconds)
+      :error -> refusal(422, "invalid_avatar")
+      {:ok, nil} -> refusal(404, "profile_not_found")
+      {:error, _error} -> refusal(503, "profile_unavailable")
+    end
+  end
+
+  # The bytes go to the address the start answered, on this site only, as
+  # the browser tool sends them.
+  def answer(:avatar_upload, %{"upload_url" => url} = params, _actor, _waiter) do
+    with {:ok, ticket} <- ticket(url),
+         {:ok, bytes} <- Base.decode64(params["bytes_base64"]) do
+      upload(ticket, params["content_type"], bytes)
+    else
+      :not_here -> refusal(401, "avatar_upload_expired")
+      :error -> refusal(422, "invalid_request")
+    end
+  end
+
+  def answer(:avatar_remove, _params, actor, _waiter) do
+    case Agents.get_my_profile(actor: actor) do
+      {:ok, nil} ->
+        refusal(404, "profile_not_found")
+
+      {:ok, profile} ->
+        ok(%{avatar_url: Avatar.url(Agents.remove_avatar!(profile, actor: actor))})
+
+      {:error, _error} ->
+        refusal(503, "profile_unavailable")
+    end
+  end
+
+  @doc """
+  Keeps `bytes`, sent as `content_type`, as the picture the upload `ticket`
+  was started for, as the agent the ticket names: its new `avatar_url`, or
+  the refusal. Bytes longer than a picture may be are refused unread.
+  """
+  @spec upload(String.t(), term(), binary() | :too_large) ::
+          {pos_integer(), map(), pos_integer() | nil}
+  def upload(ticket, content_type, bytes) do
+    case Phoenix.Token.verify(Endpoint, @salt, ticket, max_age: @ticket_seconds) do
+      {:ok, %{profile_id: profile_id, declared: declared, agent: agent}} ->
+        store(struct!(Agent, agent), profile_id, declared, content_type, bytes)
+
+      {:error, _reason} ->
+        refusal(401, "avatar_upload_expired")
+    end
+  end
+
+  defp store(actor, profile_id, declared, content_type, bytes) do
+    with {:paired, true} <- {:paired, Agent.valid?(actor)},
+         :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
+         {:type, true} <- {:type, content_type == declared.content_type},
+         {:fits, true} <- {:fits, is_binary(bytes) and byte_size(bytes) <= Avatar.max_bytes()},
+         {:ok, profile} <- Agents.store_avatar(actor, profile_id, declared, bytes) do
+      ok(%{avatar_url: Avatar.url(profile)})
+    else
+      {:paired, false} -> refusal(403, "agent_not_paired")
+      {:limited, seconds} -> limited(seconds)
+      {:type, false} -> refusal(422, "avatar_mismatch")
+      {:fits, false} -> refusal(413, "request_too_large")
+      {:error, :mismatch} -> refusal(422, "avatar_mismatch")
+      {:error, :unreadable} -> refusal(422, "invalid_avatar")
+      {:error, :profile_not_found} -> refusal(404, "profile_not_found")
+      {:error, _reason} -> refusal(503, "avatar_unavailable")
+    end
+  end
+
+  # The ticket in an upload address on this site, written in full or as its
+  # path, with nothing after it.
+  defp ticket(url) when is_binary(url) do
+    site = URI.parse(Endpoint.url())
+
+    case URI.parse(url) do
+      %URI{path: @uploads <> ticket, query: nil, fragment: nil} = address
+      when ticket != "" ->
+        if address.host == nil or
+             {address.scheme, address.host, address.port} ==
+               {site.scheme, site.host, site.port},
+           do: {:ok, ticket},
+           else: :not_here
+
+      _other ->
+        :not_here
+    end
+  end
+
+  defp ticket(_url), do: :not_here
+
+  defp limited(seconds), do: {429, Refusal.body("avatar_limit_reached"), seconds}
 
   defp ok(body), do: {200, body, nil}
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
