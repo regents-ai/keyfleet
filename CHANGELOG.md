@@ -6304,3 +6304,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   stay off it. Sean chose this on 29 October ("Yes, titles and status
   only").
 - This is step 9 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — The ticker keeps its place
+
+- The line at the foot of the Graph view's stage keeps one line's height:
+  it is there before the first change, the line leaving and the line
+  coming in share its place while they cross, and a long sentence ends in
+  an ellipsis (the Workstream panel has it whole). Nothing below it moves.

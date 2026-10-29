@@ -785,7 +785,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </div>
 
         <ol
-          :if={@board.instruments.workstream != []}
           id="workspace-ticker"
           class="workspace-ticker"
           aria-label="Newest change"

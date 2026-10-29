@@ -239,23 +239,37 @@
 .workspace-step-move:hover { border-color: var(--ash-accent); }
 
 /* The ticker: the newest change, one line along the foot of the stage. */
+/* It keeps one line's height whatever it holds: the line leaving and the
+   line coming in share it while they cross, and a long sentence ends in an
+   ellipsis (the Workstream panel has it whole), so nothing below moves. */
 .workspace-ticker {
+  display: grid;
+  min-height: calc(0.75rem + 1.5em);
   margin: 0;
   padding: 0.75rem 0 0;
   list-style: none;
   border-top: 1px solid var(--color-border);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .workspace-ticker li {
+  grid-area: 1 / 1;
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 1rem;
+  gap: 1rem;
   min-width: 0;
-  font-size: 0.9rem;
-  overflow-wrap: anywhere;
 }
+
+.workspace-ticker li > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-ticker time { flex: none; }
 
 /* The picture keeps its own size and scrolls inside its frame, never the
    page. */

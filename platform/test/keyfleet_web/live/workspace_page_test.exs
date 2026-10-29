@@ -2084,6 +2084,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "#workspace-instruments p", "Nothing pinned yet.")
     end
 
+    test "the foot of the stage keeps its place before the first change", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, "#workspace-stage #workspace-ticker")
+      refute has_element?(view, "#workspace-ticker li")
+    end
+
     test "the foot of the stage shows the newest change, and the next one once it comes",
          %{conn: conn} do
       create(@fleet, "task", %{"title" => "Draft"})
