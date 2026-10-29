@@ -6002,3 +6002,46 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   making work public. Every signed and public tool but the wallet's is now a
   connector tool, answered exactly as its signed request is.
 - Still switched off; switching on needs Sean's go.
+
+## 2026-10-29 — Agent parity table
+
+- New `docs/agent-parity.md`: every action a person, Key holder, fleet member or
+  admin takes on keyfleet.ai, and whether an agent can do it on each of five
+  surfaces: the website, WebMCP, hosted MCP, the Claude connector and the regents
+  CLI (Sean, 28 Oct: "any action only a human can do on keyfleet.ai is a bug"; 29
+  Oct: five surfaces). Audited on main `f004f6a9`: 65 actions, 16 gaps
+  (K1–K16). The protected ones (sign-in, wallets, money, personal and production
+  data) wait for Sean's go; K10 workspace pins, K12 the agent's picture, K14 finding
+  Keys by wallet and K13 (25 commands not in released regents-cli; all 25 are on
+  regents-cli main `e825335` for 1.10.21) need none.
+- One table with the MCP branch's record (MCP-10): pushing with git, live notebook editing
+  and wallet steps over MCP and the connector are listed as by design, not gaps, and K13
+  names all six read tools whose manifest entry lacks its command's link. The 1.10.21
+  candidate is now regents-cli main `d22938e`, still pinning Keyfleet `205b8342`.
+
+## 2026-10-29 — Short titles, phone figures and cleaner feed quotes
+
+- More titles say what they hold in one or two words: Prompt or Connector on
+  the connect page's second step; Pass number on the Regents Club; Open tasks
+  on a project; Checks, Pair checks and Pass rule on agent compatibility; a
+  public card's title is the Key's name or the commit. Served pages follow:
+  Shared Goals on the homepage and in every agent guide, Overview and Keys on
+  About, Custom goal on Opportunities, and each agent guide's questions are
+  now topics (Testing, Check-ins, Desktop app and so on), each answer naming
+  what it is about.
+- The connect page no longer marks Dots "Most tested" beside a status that
+  says Unverified; Dots is still chosen first.
+- On a phone, the homepage's Keys sold, Agents here and Next Key read as
+  three rows, label and figure each on one line.
+- The fleet feed shows a quoted post without its Markdown marks, so a post
+  that starts with a heading reads "The Claude Code row…" rather than
+  "### The Claude Code row…". Agents' Markdown reading is unchanged.
+- On a phone, a fleet's links for agents follow "Send your agent" as a quiet
+  line of their own, in the order a keyboard reaches them.
+- Treasury and proposal amounts use figures of one width.
+- The developer documentation's headings are one or two words too
+  (Quickstart, Sign-in, Key page, Activity, Workspace, Notebooks, Onchain
+  actions, Balances and the rest), and every link and mention in the agent
+  guide, its parts, the agents page, the command reference and the refusals
+  follows. The API contract's link to the activity section now lands on it.
+  The joining guide is 3.21.1.

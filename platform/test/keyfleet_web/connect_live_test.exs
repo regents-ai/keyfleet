@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
 
   # Invariants covered:
   # - smoke: /connect mounts inside the app shell with its four steps
-  # - Dots is chosen until another runtime is, marked as the most tested; the
+  # - Dots is chosen until another runtime is, with no badge beside it; the
   #   choice is the page's address, and the line to copy is the chosen
   #   runtime's own skill, copied exactly as shown
   # - a runtime the guides don't have is no page
@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
        %{conn: conn} do
     {:ok, view, _html} = live(conn, "/connect")
 
-    assert has_element?(view, ~s(#connect-runtime-dots[aria-current="true"]), "Most tested")
+    assert has_element?(view, ~s(#connect-runtime-dots[aria-current="true"]))
 
     assert instruction(view) ==
              "Install the Keyfleet skill from keyfleet.ai/agents/dots/skill.md and follow it."

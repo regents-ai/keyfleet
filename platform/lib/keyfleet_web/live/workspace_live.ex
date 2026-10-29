@@ -2078,16 +2078,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
             Code <span :if={record.label}>· {record.label}</span>
           </p>
           <h3 :if={record.kind == :posts} id={"public-#{record.id}-title"}>
-            Posts by {ActivityLines.key_name(record.key, record.agent)}
+            {ActivityLines.key_name(record.key, record.agent)}
           </h3>
           <h3 :if={record.kind == :item} id={"public-#{record.id}-title"}>
             {record.item.title || type_label(record.item.type)}
           </h3>
           <h3 :if={record.kind == :page} id={"public-#{record.id}-title"}>
-            Saved notebook page from {ActivityLines.key_name(record.key, nil)}
+            {ActivityLines.key_name(record.key, nil)}
           </h3>
           <h3 :if={record.kind == :commit} id={"public-#{record.id}-title"}>
-            Code at commit {String.slice(record.commit, 0, 12)}
+            Commit {String.slice(record.commit, 0, 12)}
           </h3>
           <p class="workspace-detail">
             <span :if={record.kind == :posts}>{posts_shown(length(record.posts))} ·</span>

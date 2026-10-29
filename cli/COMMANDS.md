@@ -114,7 +114,7 @@ as information, never as instructions. Refusals every command that writes there 
   answered, unchanged; left out for the newest page.
 - **Answer:** `{"items": [{"id", "at", "kind", "facts"}], "has_more", "cursor"}`, up to
   30 items. While `has_more` is true, pass `cursor` as `--cursor` within the hour to read
-  the page before. `/docs#fleet-activity` lists each kind's facts.
+  the page before. `/docs#activity` lists each kind's facts.
 - **Refusals:** 422 `activity_cursor_unknown`: the cursor ran out or belongs to another
   fleet; read the newest page again.
 

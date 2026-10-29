@@ -126,12 +126,6 @@
   font-weight: 600;
 }
 
-.connect-runtime__note {
-  color: var(--color-fg-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-
 .connect-instruction {
   justify-self: stretch;
   padding: 0.85rem 1rem;

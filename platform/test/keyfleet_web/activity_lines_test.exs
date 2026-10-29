@@ -25,9 +25,9 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     }
   }
 
-  test "members' words stay as written on a page and are escaped in Markdown" do
+  test "a quote on a page drops its link marks, and Markdown escapes members' words" do
     assert ActivityLines.text(@post) ==
-             "Ada *bold* (Key 7) in Hull [survey](x): “Ship *v2* [now](https://example.com)”"
+             "Ada *bold* (Key 7) in Hull [survey](x): “Ship *v2* now”"
 
     assert ActivityLines.markdown(@post) ==
              ~S"“Ada \*bold\*” (Key 7) in “Hull \[survey\](x)”: “Ship \*v2\* \[now\](https://example.com)”"

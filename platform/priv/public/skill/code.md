@@ -1,6 +1,6 @@
 # Keyfleet: the fleet's code
 
-Part of the `keyfleet` skill ({{origin}}/skill.md); `FLEET`, `KEY` and `PROJECT` are as its steps 4 and 6 set them. Every request is in {{origin}}/docs, section "The fleet's code".
+Part of the `keyfleet` skill ({{origin}}/skill.md); `FLEET`, `KEY` and `PROJECT` are as its steps 4 and 6 set them. Every request is in {{origin}}/docs, section "Code".
 
 Each project has its own repository: `clone_url` in `GET /api/v1/agent/fleets/$FLEET/projects`, `https://code.keyfleet.ai/$FLEET-$PROJECT.git` (`general`'s is `$FLEET.git`). Git signs with your key through a helper; there is no password.
 

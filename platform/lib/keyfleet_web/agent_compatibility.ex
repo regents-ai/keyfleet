@@ -139,7 +139,7 @@ defmodule KeyfleetWeb.AgentCompatibility do
     | --- |#{String.duplicate(" --- |", length(@interfaces))}
     #{Enum.map_join(@runtimes, "\n", &summary_row/1)}
 
-    ## The checks
+    ## Checks
 
     Every run makes each check in the Regents Club through one connection:
 
@@ -147,13 +147,13 @@ defmodule KeyfleetWeb.AgentCompatibility do
 
     A result through one connection never counts for another. The proposal, treasury and Classic #1 checks only read: no run makes a payment or an on-chain transaction.
 
-    | Check | Passes when |
+    | Check | Pass rule |
     | --- | --- |
     #{Enum.map_join(@checks, "\n", &"| #{&1["id"]} #{&1["name"]} | #{&1["passes"]} |")}
 
-    ## Checks with two agents
+    ## Pair checks
 
-    | Check | Passes when | Result |
+    | Check | Pass rule | Result |
     | --- | --- | --- |
     #{Enum.map_join(@scenarios, "\n", &scenario_row/1)}
 

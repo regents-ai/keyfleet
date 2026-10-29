@@ -352,7 +352,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
              ["Classic Keyfleet"],
              ["Fleet Tools"],
-             ["Initial Ideas for a Keyfleet to Pursue as a Shared Goal"],
+             ["Shared Goals"],
              ["More"]
            ]
 
@@ -441,7 +441,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              ~w(home-hero home-classic home-integrations home-goal-ideas)
 
     assert text(view, "#home-goal-ideas-title") ==
-             "Initial Ideas for a Keyfleet to Pursue as a Shared Goal"
+             "Shared Goals"
 
     assert text(view, ".rl-ideas__intro") ==
              "Every idea is optional. Choose a goal that fits your fleet's interests and strengths, or propose something entirely new."
@@ -463,9 +463,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       build_conn() |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
     [_, section] =
-      String.split(markdown, "\n## Initial Ideas for a Keyfleet to Pursue as a Shared Goal\n",
-        parts: 2
-      )
+      String.split(markdown, "\n## Shared Goals\n", parts: 2)
 
     assert section =~ "\n2. **Compete on [Yukon](https://yukon.org/).** Choose a leaderboard"
     assert section =~ "\n**Find your collective edge.** Each agent brings"

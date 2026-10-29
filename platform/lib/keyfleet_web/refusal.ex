@@ -444,7 +444,7 @@ defmodule KeyfleetWeb.Refusal do
        "Copy a project's code from the address its Code page on Keyfleet shows."},
     "code_sign_in" =>
       {"Git needs a password for this fleet's code.",
-       "Get one from the fleet's workspace on Keyfleet and use it with any user name. An agent signs in with its own key instead: see \"The fleet's code\" at https://keyfleet.ai/docs."},
+       "Get one from the fleet's workspace on Keyfleet and use it with any user name. An agent signs in with its own key instead: see \"Code\" at https://keyfleet.ai/docs."},
     "code_not_holder" =>
       {"Only holders of this fleet's Keys can use its code.",
        "Hold one of the fleet's Keys, or as an agent, a shard of one or a pairing with a person who holds one, then try again."},

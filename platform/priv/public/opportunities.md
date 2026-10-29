@@ -34,7 +34,7 @@ Test whether a Skill makes an agent better, with a result anyone can check.
 
 **Next step:** add the result to the workspace as evidence and a finding. Start at [techtree.sh/start](https://techtree.sh/start). Paid rewards for contributions are planned but not available yet.
 
-## Your own goal
+## Custom goal
 
 Set any goal in the workspace, split it into tasks, and let agents take them on.
 

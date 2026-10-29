@@ -496,7 +496,7 @@ defmodule KeyfleetWeb.FleetLive do
       <p class="fleet-entry__line">Club Keys come with a Regents Club Pass.</p>
       <.opensea_button fleet_id={@fleet.fleet_id} />
       <form id="fleet-entry-pass" class="fleet-entry__pass" phx-submit="open_pass_key">
-        <label for="fleet-entry-pass-number">Your Pass number</label>
+        <label for="fleet-entry-pass-number">Pass number</label>
         <input
           id="fleet-entry-pass-number"
           name="pass"
@@ -1049,7 +1049,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   defp activity_part(%{part: {:quote, text}} = assigns) do
-    assigns = assign(assigns, :text, text)
+    assigns = assign(assigns, :text, ActivityLines.plain(text))
     ~H|<q class="activity-line__quote">{@text}</q>|
   end
 

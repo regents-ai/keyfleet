@@ -25,13 +25,13 @@ defmodule KeyfleetWeb.Components.SendAgent do
   """
   def runtime_step("claude"),
     do:
-      {"Add it to Claude",
+      {"Connector",
        "Add the Keyfleet connector in Claude's settings, with the address " <>
          KeyfleetWeb.PublicDocuments.url("/mcp") <> ", and sign in to Keyfleet when Claude asks."}
 
   def runtime_step(slug),
     do:
-      {"Give it this",
+      {"Prompt",
        "Install the Keyfleet skill from keyfleet.ai/agents/#{slug}/skill.md and follow it."}
 
   @doc "The instruction a fleet's page offers: the guide, then the fleet named `name`."

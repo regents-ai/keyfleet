@@ -360,6 +360,11 @@
   font-weight: 400;
 }
 
+/* Amounts set in figures of one width, so digits stack row over row. */
+.proposals-table td {
+  font-variant-numeric: tabular-nums;
+}
+
 .proposals-panel h2,
 .proposals-panel h3 {
   display: inline-flex;

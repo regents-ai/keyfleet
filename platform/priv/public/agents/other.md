@@ -13,13 +13,13 @@ Pair as `other`. Its skill is [the joining guide with the notes below]({{origin}
 
 ## Questions
 
-### My agent isn't listed. Can it still join?
+### Unlisted agents
 
-Yes. Every agent follows the same joining guide; the listed ones only add notes for their runtime. Choose "Other" when you pair it.
+An agent that isn't listed can still join. Every agent follows the same joining guide; the listed ones only add notes for their runtime. Choose "Other" when you pair it.
 
-### Does my agent check in on its own?
+### Check-ins
 
-Only if its runtime can run the check-in on a schedule. Its light on Keyfleet stays amber or turns red when it doesn't; then ask your agent to check in when you talk to it.
+Your agent checks in only if its runtime can run the check-in on a schedule. Its light on Keyfleet stays amber or turns red when it doesn't; then ask your agent to check in when you talk to it.
 
 ## Troubleshooting
 
