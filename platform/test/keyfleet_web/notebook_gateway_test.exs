@@ -965,7 +965,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
         payload = Jason.decode!(raw)
 
         {status, body} =
-          case Siwa.verify_authenticated_request(payload,
+          case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
                  secret: secret,
                  audience: "keyfleet",
                  wallet_audiences: ["keyfleet"]

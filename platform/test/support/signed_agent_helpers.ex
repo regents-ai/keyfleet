@@ -92,6 +92,20 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc """
+  The request in `payload`, the JSON the site sends the sign-in server, as
+  siwa-server hands it to the library: its method, path, headers and the
+  digest of its body.
+  """
+  def siwa_request(payload) do
+    %{
+      method: payload["method"],
+      path: payload["path"],
+      headers: payload["headers"],
+      body_digest: payload["body_digest"]
+    }
+  end
+
+  @doc """
   The sign-in server's answer when asked to verify `payload`, a request signed
   under a receipt made with `secret`: `{200, verdict}` naming the wallet that
   signed it, or `{401, refusal}` when the signature does not hold. The browser
@@ -99,7 +113,7 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   (`Keyfleet.BrowserAgents`).
   """
   def verdict(payload, secret) do
-    case Siwa.verify_authenticated_request(payload,
+    case Siwa.verify_authenticated_request(siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
            wallet_audiences: ["keyfleet"]

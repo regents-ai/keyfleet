@@ -332,8 +332,19 @@
   min-width: 0;
 }
 
-.proposals-form[hidden] {
-  display: none;
+/* Each kind's fields, stacked in one cell: the form is always as tall as the
+   longest kind, and the kinds not chosen keep their place unseen. */
+.proposals-kinds {
+  display: grid;
+}
+
+.proposals-kinds > .proposals-form {
+  grid-area: 1 / 1;
+  align-self: start;
+}
+
+.proposals-kinds > [inert] {
+  visibility: hidden;
 }
 
 /* A table of figures per asset; it scrolls inside its panel on a narrow
