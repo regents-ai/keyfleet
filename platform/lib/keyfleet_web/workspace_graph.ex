@@ -281,6 +281,7 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       shape: shape(node.x, node.y),
       tone: tone,
       standing: Map.get(@standing_names, node.standing),
+      owner_key: node.owner_key,
       owner: node.owner_key && ActivityLines.key_name(node.owner_key, nil),
       project: labels[node.project],
       archived?: node.archived,

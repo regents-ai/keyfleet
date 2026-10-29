@@ -6357,3 +6357,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the goals and steps into the first. "Every goal" goes back to the whole
   picture.
 - This is step 4 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — Four small panels under the Graph view
+
+- Under the Graph view's stage stand four small panels, each a short list:
+  the newest lines of the workstream, each Key's tasks in the picture as a
+  bar split by in progress, awaiting review and done, and what members
+  pinned in the Docs and the Code. Each opens the whole of it. On a phone
+  they stack and show four lines each. They call neither the notebook hub
+  nor the code store.
+- This is step 5 of the Workspace plan drawn from four reference videos.

@@ -796,6 +796,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </li>
       </ul>
 
+      <.instruments board={@board} at_work={at_work(@graph.nodes)} />
+
       <ol :if={@graph.nodes != []} id="workspace-graph-list" class="workspace-graph-list">
         <li :for={row <- @graph.rows} data-row={row.id} data-tone={row.tone}>
           <p class="workspace-kind">
@@ -823,6 +825,108 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </ol>
     </section>
     """
+  end
+
+  attr :board, :map, required: true
+  attr :at_work, :list, required: true
+
+  # Four small panels under the stage, each a short list: the newest of the
+  # workstream, each Key's tasks in the picture by where they stand, and
+  # what members pinned in the Docs and the Code. Each opens the whole of it.
+  defp instruments(assigns) do
+    assigns = assign(assigns, project: assigns.board.filter.project)
+
+    ~H"""
+    <div id="workspace-instruments" class="workspace-instruments">
+      <section class="workspace-instrument" aria-labelledby="workspace-instrument-work-title">
+        <h3 id="workspace-instrument-work-title">Workstream</h3>
+        <p :if={@board.instruments.workstream == []} class="workspace-detail">
+          Nothing has happened yet.
+        </p>
+        <ol :if={@board.instruments.workstream != []} id="workspace-instrument-work">
+          <li :for={line <- @board.instruments.workstream} data-seq={line.seq}>
+            <.line parts={line.parts} fleet_id={@board.fleet_id} />
+          </li>
+        </ol>
+        <.link class="workspace-toggle" patch={view_path(@board, :board)}>More</.link>
+      </section>
+
+      <section class="workspace-instrument" aria-labelledby="workspace-instrument-keys-title">
+        <h3 id="workspace-instrument-keys-title">Keys at work</h3>
+        <p :if={@at_work == []} class="workspace-detail">No Key holds a task here yet.</p>
+        <ol :if={@at_work != []} id="workspace-instrument-keys">
+          <li :for={key <- @at_work} data-key={key.key}>
+            <span>{key.name}</span>
+            <span
+              class="workspace-instrument-bar"
+              role="img"
+              aria-label={"#{key.doing} in progress, #{key.waiting} awaiting review, #{key.done} done"}
+              title={"#{key.doing} in progress, #{key.waiting} awaiting review, #{key.done} done"}
+              style={"width: #{key.share}%"}
+            >
+              <span
+                :for={{tone, count} <- [doing: key.doing, waiting: key.waiting, done: key.done]}
+                :if={count > 0}
+                data-tone={tone}
+                style={"flex-grow: #{count}"}
+              ></span>
+            </span>
+          </li>
+        </ol>
+      </section>
+
+      <section
+        :for={{place, title} <- [docs: "Docs", code: "Code"]}
+        class="workspace-instrument"
+        aria-labelledby={"workspace-instrument-#{place}-title"}
+      >
+        <h3 id={"workspace-instrument-#{place}-title"}>{title}</h3>
+        <p :if={@board.instruments[place] == []} class="workspace-detail">Nothing pinned yet.</p>
+        <ol :if={@board.instruments[place] != []} id={"workspace-instrument-#{place}"}>
+          <li :for={pin <- @board.instruments[place]} data-pin={pin.target}>
+            <a :if={place == :docs and pin.link} href={pin.link}>{pin.title}</a>
+            <span :if={place == :docs and is_nil(pin.link)}>{pin.title}</span>
+            <.link :if={place == :code} patch={pin.link}>{pin.title}</.link>
+            <span :if={pin.label} class="workspace-project-tag" data-project-label>{pin.label}</span>
+          </li>
+        </ol>
+        <.link
+          class="workspace-toggle"
+          patch={WorkspacePage.place_path(@board.fleet_id, place, @project)}
+        >
+          More
+        </.link>
+      </section>
+    </div>
+    """
+  end
+
+  # Each Key holding tasks in the picture, lowest first, with how many of
+  # them are in progress, awaiting review and done, and its share of the
+  # bar, against the Key holding the most.
+  defp at_work(nodes) do
+    held =
+      nodes
+      |> Enum.filter(
+        &(&1.type == "task" and &1.owner_key != nil and &1.tone in [:doing, :waiting, :done])
+      )
+      |> Enum.group_by(& &1.owner_key)
+      |> Enum.sort()
+
+    most = held |> Enum.map(fn {_key, tasks} -> length(tasks) end) |> Enum.max(fn -> 1 end)
+
+    for {key, [first | _] = tasks} <- held do
+      tones = Enum.frequencies_by(tasks, & &1.tone)
+
+      %{
+        key: key,
+        name: first.owner,
+        doing: Map.get(tones, :doing, 0),
+        waiting: Map.get(tones, :waiting, 0),
+        done: Map.get(tones, :done, 0),
+        share: div(length(tasks) * 100, most)
+      }
+    end
   end
 
   # Where the Graph view stands among the goals it steps through: the goal
