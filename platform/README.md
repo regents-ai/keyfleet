@@ -343,15 +343,16 @@ locks, refuses Hex packages that are retired or carry a security advisory
 (`mix hex.audit`), checks formatting, runs Credo in strict mode and Sobelow, holds the
 compile-connected `xref` graph under its limit, runs the test suite with
 warnings as errors, and verifies the Ash codegen and route handoff are current.
-It ends with the TypeScript typecheck, the Vitest unit suite and the browser
-suite, which starts once the ExUnit suite has finished. `npm run test:browser`
-runs the browser suite alone.
+It ends with the TypeScript typecheck, the Vitest unit suite, the browser
+suite, which starts once the ExUnit suite has finished, and the phone walks.
+`npm run test:browser` runs the browser suite alone.
 
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
 | `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
+| `npm run test:devices` | Builds the assets, then walks the main flows signed out at an iPhone 15's and a Pixel 7's screen, and runs the accessibility check of every main page, light and dark, wide and at a phone's width. |
 | `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, and that use the agent tools the pages register as a signed agent would, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
 | `mix test.external` | Runs the tests that need tools outside the hermetic suite: the rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |

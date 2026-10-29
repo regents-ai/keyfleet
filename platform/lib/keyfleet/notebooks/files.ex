@@ -61,7 +61,8 @@ defmodule Keyfleet.Notebooks.Files do
 
   @doc """
   The entries of the folder `path` in `notebook_id`, as `subject`: a page
-  of them, and the `cursor` that names the next page, or nil after the last.
+  of them, the `cursor` that names the next page, or nil after the last, and
+  `has_more`, whether there is one.
   """
   def list(fleet_id, subject, project_id, notebook_id, path, cursor) do
     params = [path: path, cursor: cursor, limit: @page] |> Enum.reject(&is_nil(elem(&1, 1)))
@@ -75,7 +76,8 @@ defmodule Keyfleet.Notebooks.Files do
              params: params
            )
            |> answer(200) do
-      {:ok, %{entries: Enum.map(items, &entry/1), cursor: page["cursor"]}}
+      next = page["cursor"]
+      {:ok, %{entries: Enum.map(items, &entry/1), cursor: next, has_more: next != nil}}
     end
   end
 

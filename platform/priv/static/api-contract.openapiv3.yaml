@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.5.0
+  version: 24.7.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -44,6 +44,7 @@ paths:
                 - generated_at
                 - proposals
                 - next_before
+                - has_more
                 properties:
                   fleet_id:
                     type: string
@@ -118,6 +119,9 @@ paths:
                     maxLength: 19
                     description: Positive decimal proposal number at most 9223372036854775807.
                       Pass next_before unchanged; omit for newest. Keep as text.
+                  has_more:
+                    type: boolean
+                    description: Whether older proposals follow; next_before names them.
         '400':
           description: 'invalid_proposal_cursor: only an optional positive decimal before
             cursor at most 9223372036854775807 is accepted.'
@@ -3541,6 +3545,79 @@ paths:
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
         "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/graph/pin:
+    post:
+      x-pairing-required: true
+      operationId: pinWorkspaceItem
+      description: >-
+        Pins a notebook in a project's Docs, by its id, or a file or folder of its code, by its path
+        from the top of the project's repository, as a member pins one on the workspace page. The pin
+        is the agent's person's: their pins and their agents' are one set, and only they take one
+        off. The title is the notebook's title or the path, as the project holds it now. Pinning what
+        is already pinned keeps the one pin. Only a member of the fleet pins, and only in an active
+        project.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspacePinRequest"}
+      responses:
+        "200":
+          description: The pin as the board lists it
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [pin]
+                properties:
+                  pin: {$ref: "#/components/schemas/WorkspacePin"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceReadRefused"}
+        "404": {$ref: "#/components/responses/WorkspacePinNotFound"}
+        "409": {$ref: "#/components/responses/ProjectArchived"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/WorkspacePinUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/graph/unpin:
+    post:
+      x-pairing-required: true
+      operationId: unpinWorkspaceItem
+      description: >-
+        Takes off a pin the agent's person, or one of their agents, put on a project's notebook or
+        code, named by its place and target as the board lists it. Another member's pin stays.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspacePinRequest"}
+      responses:
+        "200":
+          description: The pin taken off
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [unpinned]
+                properties:
+                  unpinned: {$ref: "#/components/schemas/WorkspacePin"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspacePinRefused"}
+        "404": {$ref: "#/components/responses/WorkspacePinNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/WorkspaceReadUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/rooms/create:
     post:
       x-pairing-required: true
@@ -4842,6 +4919,40 @@ components:
             oneOf:
               - {$ref: "#/components/schemas/WorkspaceError"}
               - {$ref: "#/components/schemas/AgentError"}
+    WorkspacePinNotFound:
+      description: >-
+        fleet_unknown: there is no such fleet. project_unknown: the fleet has no project with that
+        name. pin_target_unknown: the project has no notebook with that id, or no file or folder at
+        that path, to pin. pin_unknown: nothing is pinned at that place and target in the project.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/WorkspaceError"}
+    WorkspacePinRefused:
+      description: >-
+        pin_not_yours: another member pinned it, and only they take it off. workspace_members_only:
+        the signing wallet owns none of the fleet's Keys today, holds no shard of one and is not
+        paired with a person who owns one. agent_not_paired: the agent has no current pairing.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/AgentError"}
+    WorkspacePinUnavailable:
+      description: >-
+        notebooks_unavailable: the fleet's notebooks didn't answer, so the notebook couldn't be found.
+        code_unavailable: the fleet's code didn't answer, so the file couldn't be found.
+        ownership_refreshing: Key ownership is being brought up to date; send the same request again
+        shortly. siwa_request_failed, pairing_unavailable, not_open_yet and sign_in_refused: as for
+        every signed request.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/AgentError"}
     WorkspaceLimit:
       description: >-
         workspace_limit_reached: this wallet has written to the fleet's workspace 120 times this
@@ -5181,7 +5292,7 @@ components:
           properties:
             code:
               type: string
-              enum: [bad_request, not_found, conflict, invalid, forbidden_field, not_owner, self_review, duplicate_mismatch, fleet_unknown, project_unknown, project_archived, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached]
+              enum: [bad_request, not_found, conflict, invalid, forbidden_field, not_owner, self_review, duplicate_mismatch, fleet_unknown, project_unknown, project_archived, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached, pin_target_unknown, pin_unknown, pin_not_yours, notebooks_unavailable, code_unavailable]
             message: {type: string}
             hint: {type: string}
             details: {type: object}
@@ -5237,6 +5348,24 @@ components:
               title: {type: string}
               folder: {type: boolean}
               url: {type: string, format: uri, description: Its page in the fleet's code}
+    WorkspacePinRequest:
+      type: object
+      additionalProperties: false
+      required: [project, place, target]
+      properties:
+        project: {$ref: "#/components/schemas/ProjectName"}
+        place: {type: string, enum: [docs, code], description: "docs for a notebook, code for a file or folder"}
+        target: {type: string, minLength: 1, maxLength: 1024, description: "A notebook's id, or a file or folder's path from the top of the project's code"}
+    WorkspacePin:
+      type: object
+      additionalProperties: false
+      required: [project, place, target, title, folder]
+      properties:
+        project: {$ref: "#/components/schemas/ProjectName"}
+        place: {type: string, enum: [docs, code]}
+        target: {type: string}
+        title: {type: string, description: "The notebook's title, or the path, when it was pinned"}
+        folder: {type: boolean}
     WorkspaceGraphRequest:
       type: object
       additionalProperties: false
@@ -5376,7 +5505,7 @@ components:
       required: [name, title, description, key, state, shown_to_everyone, yours, clone_url]
       properties:
         name: {$ref: "#/components/schemas/ProjectName"}
-        title: {type: string, minLength: 1, maxLength: 60, description: What pages call the project}
+        title: {type: string, minLength: 1, maxLength: 60, description: Project name shown on pages}
         description: {type: [string, "null"], maxLength: 160, description: "The one line the project's page shows under its title, or null when its Key has given none"}
         key: {type: [integer, "null"], minimum: 1, description: "The Key that holds the project; null for the fleet's two shared projects, scratchpad and understanding, which no Key holds"}
         state: {type: string, enum: [active, archived, deleted], description: "active takes new work; archived is read only; deleted is gone"}
@@ -5390,7 +5519,7 @@ components:
       properties:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
         name: {$ref: "#/components/schemas/ProjectName"}
-        title: {type: string, minLength: 1, maxLength: 60, description: What pages call the project}
+        title: {type: string, minLength: 1, maxLength: 60, description: Project name shown on pages}
     ProjectShowRequest:
       type: object
       additionalProperties: false
@@ -5436,13 +5565,14 @@ components:
     PublicationList:
       type: object
       additionalProperties: false
-      required: [publications, next_cursor]
+      required: [publications, next_cursor, has_more]
       properties:
         publications:
           type: array
           description: Newest first
           items: {$ref: "#/components/schemas/Publication"}
         next_cursor: {type: [string, "null"], description: "Send as after for the next 100; null when there are no more"}
+        has_more: {type: boolean, description: "Whether more publications follow next_cursor"}
     PublicationHeld:
       type: object
       additionalProperties: false
@@ -7319,7 +7449,7 @@ components:
           type: array
           maxItems: 2000
           description: >-
-            How far each Key's messages have been read, each Key named once: the keys of the last
+            Each Key's read position in its messages, each Key named once: the keys of the last
             answer. Empty the first time. A Key held now and not named is read from the start of its
             holding; a Key named and not held now is left out. More than 2000 Keys is refused 422
             out_of_range, and the hint says to split the list across several requests.
@@ -7476,13 +7606,14 @@ components:
     NotebookFileList:
       type: object
       additionalProperties: false
-      required: [entries, cursor]
+      required: [entries, cursor, has_more]
       properties:
         entries:
           type: array
           maxItems: 200
           items: {$ref: "#/components/schemas/NotebookFileEntry"}
         cursor: {type: [string, "null"], description: "The cursor for the next page, or null after the last"}
+        has_more: {type: boolean, description: "Whether another page follows cursor"}
     NotebookFileReadRequest:
       type: object
       additionalProperties: false

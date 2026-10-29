@@ -261,8 +261,9 @@ defmodule Keyfleet.MixProject do
         # Fleets record, with that Run. Keys adds two: the Keys record, with
         # that Run. Account and Public add four: the two records, each with that
         # Run. Publications, Code and Notebooks add six: the three records, each
-        # with that Run.
-        "xref graph --label compile-connected --fail-above 126",
+        # with that Run. Agents pinning as their person add one: the Pin record's
+        # ActsForPerson check.
+        "xref graph --label compile-connected --fail-above 127",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
@@ -276,7 +277,10 @@ defmodule Keyfleet.MixProject do
         "cmd npm test",
         # The browser suite (test/browser) on its own server, once the ExUnit suite
         # on the same database has finished.
-        "cmd npm run test:browser"
+        "cmd npm run test:browser",
+        # The main flows at an iPhone's and a Pixel's screen, and the
+        # accessibility check of every main page (playwright.devices.config.ts).
+        "cmd npm run test:devices"
       ]
     ]
   end

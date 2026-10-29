@@ -190,6 +190,14 @@ defmodule KeyfleetWeb.Endpoint do
     if String.ends_with?(path, ".md"), do: Phoenix.Controller.put_format(conn, "md"), else: conn
   end
 
-  defp allow_page_tools(conn, _opts),
-    do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")
+  # Chrome offers a page's tools to a browser's agent only with this origin
+  # trial's token, which names https://keyfleet.ai and runs out on 30 March
+  # 2027. It is public; any other origin ignores it.
+  @webmcp_trial "ApE5dJwldD+NxqoTmRf87JNS8wnauCpxIybfmYu2mCqPCv/vW/9Ox6kYsrn5vxpVrbLvzQF7BJmfElX1/tgDGgoAAABLeyJvcmlnaW4iOiJodHRwczovL2tleWZsZWV0LmFpOjQ0MyIsImZlYXR1cmUiOiJXZWJNQ1AiLCJleHBpcnkiOjE4MDYzNjQ4MDB9"
+
+  defp allow_page_tools(conn, _opts) do
+    conn
+    |> Plug.Conn.put_resp_header("permissions-policy", "tools=(self)")
+    |> Plug.Conn.put_resp_header("origin-trial", @webmcp_trial)
+  end
 end

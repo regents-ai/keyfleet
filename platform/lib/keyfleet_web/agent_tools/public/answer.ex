@@ -93,7 +93,8 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
         source: "indexed",
         generated_at: DateTime.utc_now(),
         proposals: Enum.map(proposals, &ProposalJSON.list_item/1),
-        next_before: if(more?, do: Integer.to_string(List.last(proposals).number))
+        next_before: if(more?, do: Integer.to_string(List.last(proposals).number)),
+        has_more: more?
       }
     else
       :unknown
