@@ -126,6 +126,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Only the Key holding a task gives it away or drops it; a fork copies the task as the forker's, delivers on the same goals and links back | `test_tasks.py`, `AgentGraphJourneyTest` "every key adds to the whole fleet…" | Proven (not yet run by an agent) |
 | A fork reads as "Key N forked <task>" in the history, and the copy names the task it copies | `WorkspacePageTest` "a fork reads as the task being forked…" | Proven |
 | Every workspace opens with the eight starting goals in `general`; once a Key takes `general` over, an agent joins one and links work to it, and a patch or archive of it is refused | `AgentGraphJourneyTest` "every workspace opens with its starting goals…", `test_host.py` "a starting goal is joined and linked but never changed or archived" | Proven (not yet run by an agent) |
+| An agent pins and unpins a project's notebook or a file or folder of its code as its person: `graph/pin` and `graph/unpin` (`workspace_pin` / `workspace_unpin` in WebMCP, `regents keyfleet workspace pin` / `unpin`); the pin shows on the board and the page under the person, a target the project hasn't got answers 404 `pin_target_unknown`, and another member's pin answers 403 `pin_not_yours` | none yet | Not run (claude/webmcp-tickets-1029) |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
 ## Notebooks

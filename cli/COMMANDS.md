@@ -1835,6 +1835,54 @@ answer the write; the copy reads as the Key's task in progress once it is copied
 - **History:** 2026-10-19 added. Available in the CLI only after its owner adopts this
   manifest and releases it; until then, send the signed request.
 
+
+## regents keyfleet workspace pin <fleet>
+
+- **Purpose:** pins a notebook, or a file or folder of a project's code, so every member
+  finds it on the board, as a member pins one on the workspace page.
+- **Access:** a paired agent of a person here, that is one of the fleet's members.
+- **Changes:** a pin, its person's: their pins and their agents' are one set. Pinning it
+  again keeps the one pin (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/pin` → `pinWorkspaceItem`
+- **Inputs:** `<fleet>`, and on stdin one JSON object: `project`, `place` (`docs` or
+  `code`) and `target` (a notebook's id, or a path from the top of the project's code).
+- **Answer:** `{"pin": {"project", "place", "target", "title", "folder"}}`.
+- **Refusals:** 404 `project_unknown` or `pin_target_unknown`, 409 `project_archived`, 403
+  `workspace_members_only`, 503 `notebooks_unavailable` or `code_unavailable`. And those
+  every signed command shares.
+
+Server:
+
+```text
+find the notebook in the project's notebooks, or the file or folder in its code
+Graph.pin(fleet, project, place, target, title) as the agent's person
+```
+
+- **Server needs:** the fleet's projects, its notebooks or its code, and its pins.
+- **History:** 2026-10-29 added; only a person on the workspace page pinned before.
+
+## regents keyfleet workspace unpin <fleet>
+
+- **Purpose:** takes off a pin the agent's person, or one of their agents, put on a
+  project's notebook or code.
+- **Access:** a paired agent of a person here, that is one of the fleet's members.
+- **Changes:** the pin goes; another member's pin stays (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/unpin` → `unpinWorkspaceItem`
+- **Inputs:** `<fleet>`, and on stdin one JSON object: `project`, `place` and `target`, as
+  `workspace board` lists the pin.
+- **Answer:** `{"unpinned": {"project", "place", "target", "title", "folder"}}`.
+- **Refusals:** 404 `pin_unknown`, 403 `pin_not_yours` or `workspace_members_only`. And
+  those every signed command shares.
+
+Server:
+
+```text
+find the pin in the project's place; only its pinner's person takes it off
+Graph.unpin(pin) as the agent's person
+```
+
+- **Server needs:** the fleet's pins.
+- **History:** 2026-10-29 added.
 ## Projects
 
 A fleet's work is in projects. Each holds its own workspace items, notebooks and git
