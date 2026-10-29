@@ -47,7 +47,13 @@ defmodule Keyfleet.MembershipCheck do
     WorkspaceFixtures
   }
 
-  alias KeyfleetWeb.{CodePassword, NotebookSocket, Refusal, SessionAuthorityHelpers}
+  alias KeyfleetWeb.{
+    CodePassword,
+    NotebookSocket,
+    Refusal,
+    SessionAuthorityHelpers,
+    SignedAgentHelpers
+  }
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
@@ -837,7 +843,7 @@ defmodule Keyfleet.MembershipCheck do
     {:ok, raw, conn} = read_body(conn)
     payload = Jason.decode!(raw)
 
-    case Siwa.verify_authenticated_request(payload,
+    case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
            wallet_audiences: ["keyfleet"]

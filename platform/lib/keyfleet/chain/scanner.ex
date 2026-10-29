@@ -195,7 +195,8 @@ defmodule Keyfleet.Chain.Scanner do
   # Reads `from..to` in chain order. A stretch the node will not answer whole
   # is asked for again in halves, and each answered piece goes to `handle`
   # before the next is asked for, so a pass holds one answer at most. The
-  # first piece that fails ends the reading.
+  # first piece that fails ends the reading, and so does a node asking for
+  # fewer requests (HTTP 429): halves would only ask it more.
   defp each_piece(_contracts, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
 
   defp each_piece({fleet, buyer} = contracts, from, to, client, acc, handle) do
@@ -203,6 +204,9 @@ defmodule Keyfleet.Chain.Scanner do
       {:ok, logs} ->
         with {:ok, records} <- Logs.decode(logs, fleet, buyer, from, to),
              do: handle.(from, to, records, acc)
+
+      {:error, {:unavailable, %{status: 429}} = reason} ->
+        {:error, {:block_unanswered, from, reason}}
 
       {:error, _reason} when from < to ->
         middle = div(from + to, 2)

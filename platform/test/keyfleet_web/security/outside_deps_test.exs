@@ -336,7 +336,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
   # the options the local sign-in server and siwa-server verify under.
   defp reason(ctx, payload) do
     assert {:error, reason} =
-             Siwa.verify_authenticated_request(payload,
+             Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
                secret: ctx.secret,
                audience: "keyfleet",
                wallet_audiences: ["keyfleet"]

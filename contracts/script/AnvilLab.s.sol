@@ -106,10 +106,13 @@ contract AnvilLab is Script {
         KeyfleetManager classic = KeyfleetManager(keys.managerOf(1));
 
         uint256 start = classic.START_PRICE();
-        uint256 prices = KeyfleetPresets.classicPrice(1, start) + KeyfleetPresets.classicPrice(2, start)
-            + KeyfleetPresets.classicPrice(3, start);
+        uint256 third = KeyfleetPresets.classicPrice(3, start);
+        uint256 prices = KeyfleetPresets.classicPrice(1, start) + KeyfleetPresets.classicPrice(2, start) + third;
         usdc.mint(sender, prices);
-        usdc.approve(address(classic), prices);
+        // The site asks for a new approval when the allowance is under the most the next Key may
+        // cost: its price plus 5%, rounded up to a cent (platform/lib/keyfleet/wallet_steps/key_steps.ex).
+        uint256 thirdMost = (third * 105 + 999_999) / 1_000_000 * 10_000;
+        usdc.approve(address(classic), prices - third + thirdMost);
         vm.stopBroadcast();
 
         lab = Lab({

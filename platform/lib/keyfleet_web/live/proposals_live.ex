@@ -587,87 +587,91 @@ defmodule KeyfleetWeb.ProposalsLive do
               value={panel.inputs["text"]}
             />
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "pay"}>
-              <.select_field
-                id="propose-asset"
-                name="asset"
-                label="Token"
-                value={panel.inputs["asset"]}
-                options={Enum.map(@page.propose.assets, &{&1.address, &1.name})}
-              />
-              <.text_field
-                id="propose-share"
-                name="share"
-                label="Share of the treasury’s balance, %"
-                inputmode="decimal"
-                value={panel.inputs["share"]}
-              >
-                0.0001 to 99
-              </.text_field>
-              <.text_field
-                id="propose-recipient"
-                name="recipient"
-                label="To wallet"
-                value={panel.inputs["recipient"]}
-              />
-            </div>
+            <%!-- Every kind's fields share one place, so choosing a kind never
+            changes the form's height: the others stay there, unseen. --%>
+            <div class="proposals-kinds">
+              <div class="proposals-form" inert={panel.inputs["kind"] != "pay"}>
+                <.select_field
+                  id="propose-asset"
+                  name="asset"
+                  label="Token"
+                  value={panel.inputs["asset"]}
+                  options={Enum.map(@page.propose.assets, &{&1.address, &1.name})}
+                />
+                <.text_field
+                  id="propose-share"
+                  name="share"
+                  label="Share of the treasury’s balance, %"
+                  inputmode="decimal"
+                  value={panel.inputs["share"]}
+                >
+                  0.0001 to 99
+                </.text_field>
+                <.text_field
+                  id="propose-recipient"
+                  name="recipient"
+                  label="To wallet"
+                  value={panel.inputs["recipient"]}
+                />
+              </div>
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "rate"}>
-              <.text_field
-                id="propose-rate"
-                name="rate"
-                label="Daily Treasury Slice to Keys, %"
-                inputmode="decimal"
-                value={panel.inputs["rate"]}
-              >
-                0.1 to 2
-              </.text_field>
-            </div>
+              <div class="proposals-form" inert={panel.inputs["kind"] != "rate"}>
+                <.text_field
+                  id="propose-rate"
+                  name="rate"
+                  label="Daily Treasury Slice to Keys, %"
+                  inputmode="decimal"
+                  value={panel.inputs["rate"]}
+                >
+                  0.1 to 2
+                </.text_field>
+              </div>
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "edits"}>
-              <.text_field
-                id="propose-target"
-                name="target"
-                label="Key"
-                inputmode="numeric"
-                value={panel.inputs["target"]}
-              />
-              <.select_field
-                id="propose-restricted"
-                name="restricted"
-                label="Edits"
-                value={panel.inputs["restricted"]}
-                options={[{"true", "Restrict"}, {"false", "Allow"}]}
-              />
-            </div>
+              <div class="proposals-form" inert={panel.inputs["kind"] != "edits"}>
+                <.text_field
+                  id="propose-target"
+                  name="target"
+                  label="Key"
+                  inputmode="numeric"
+                  value={panel.inputs["target"]}
+                />
+                <.select_field
+                  id="propose-restricted"
+                  name="restricted"
+                  label="Edits"
+                  value={panel.inputs["restricted"]}
+                  options={[{"true", "Restrict"}, {"false", "Allow"}]}
+                />
+              </div>
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "launch"}>
-              <.text_field id="propose-name" name="name" label="Name" value={panel.inputs["name"]} />
-              <.text_field
-                id="propose-symbol"
-                name="symbol"
-                label="Symbol"
-                value={panel.inputs["symbol"]}
-              />
-              <.text_area
-                id="propose-description"
-                name="description"
-                label="Description"
-                rows="3"
-                value={panel.inputs["description"]}
-              />
-              <.text_field
-                id="propose-website"
-                name="website"
-                label="Website"
-                value={panel.inputs["website"]}
-              />
-              <.text_field
-                id="propose-image"
-                name="image"
-                label="Image link"
-                value={panel.inputs["image"]}
-              />
+              <div class="proposals-form" inert={panel.inputs["kind"] != "launch"}>
+                <.text_field id="propose-name" name="name" label="Name" value={panel.inputs["name"]} />
+                <.text_field
+                  id="propose-symbol"
+                  name="symbol"
+                  label="Symbol"
+                  value={panel.inputs["symbol"]}
+                />
+                <.text_area
+                  id="propose-description"
+                  name="description"
+                  label="Description"
+                  rows="3"
+                  value={panel.inputs["description"]}
+                />
+                <.text_field
+                  id="propose-website"
+                  name="website"
+                  label="Website"
+                  value={panel.inputs["website"]}
+                />
+                <.text_field
+                  id="propose-image"
+                  name="image"
+                  label="Image link"
+                  value={panel.inputs["image"]}
+                />
+              </div>
             </div>
           </div>
         </:fields>

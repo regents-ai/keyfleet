@@ -136,6 +136,12 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   # database.
   test "a post in the Public room reaches every open page of it without any page reading the room",
        %{conn: conn, writer: writer} do
+    # A member's hall rereads its feed, hidden under the room, a moment after
+    # a post: a read of its own, held off here so only a read of the room counts.
+    wait = Application.fetch_env!(:keyfleet, :fleet_feed_wait_ms)
+    Application.put_env(:keyfleet, :fleet_feed_wait_ms, :timer.minutes(1))
+    on_exit(fn -> Application.put_env(:keyfleet, :fleet_feed_wait_ms, wait) end)
+
     {:ok, visitor, _html} = live(conn, @path)
     {:ok, member, _html} = conn |> signed_in_as(@owner) |> live(@path)
     test_pid = self()

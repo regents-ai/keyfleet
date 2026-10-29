@@ -1598,7 +1598,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {:ok, raw, conn} = read_body(conn)
     payload = Jason.decode!(raw)
 
-    case Siwa.verify_authenticated_request(payload,
+    case Siwa.verify_authenticated_request(KeyfleetWeb.SignedAgentHelpers.siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
            wallet_audiences: ["keyfleet"]
