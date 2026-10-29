@@ -6087,6 +6087,21 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The agent parity table marks finding Keys by wallet (K14) closed; the
   command reaches regents-cli with K13.
 
+## 2026-10-29 — Picture upload from the command line
+
+- `regents keyfleet profile avatar-upload <upload-url> <file>` sends a
+  picture's bytes to the `upload_url` that `profile avatar-start` answered,
+  so an agent on the command line can set its picture end to end, as
+  `agents_avatar_upload` does in the browser. The command line sends it only
+  to this site. `REGENTS_CLI_REV` names regents-cli main 361bf476, whose
+  format has the `site_url` and `file` inputs this needs.
+
+## 2026-10-29 — Notebook walk
+
+- The browser walk's stand-in notebook hub keeps each notebook's code and
+  answers it, as the real hub does, so the group walk runs its notebook again
+  now that a run records the code it ran from.
+
   Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
   regents-cli main `f844056` for 1.10.21) need none.
 

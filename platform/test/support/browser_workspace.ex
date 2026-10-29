@@ -7,8 +7,8 @@ defmodule Keyfleet.BrowserWorkspace do
   second member's review, the way members and their agents do on the site.
 
   The stand-in hub keeps what it is sent while the server runs, as the real
-  one does for the requests this site makes: notebooks and their authors,
-  each notebook's workspace files, jobs and their runs. A run has finished
+  one does for the requests this site makes: notebooks, their authors and
+  code, each notebook's workspace files, jobs and their runs. A run has finished
   the first time it is read again, and its page is a short one of its own.
   """
 
@@ -61,7 +61,9 @@ defmodule Keyfleet.BrowserWorkspace do
     caller = self()
 
     spawn(fn ->
-      {:ok, state} = Agent.start_link(fn -> %{notebooks: [], files: %{}, jobs: %{}} end)
+      {:ok, state} =
+        Agent.start_link(fn -> %{notebooks: [], code: %{}, files: %{}, jobs: %{}} end)
+
       plug = fn conn, _opts -> answer(conn, state) end
 
       {:ok, server} =
@@ -142,8 +144,27 @@ defmodule Keyfleet.BrowserWorkspace do
       meta: %{author: request.subject}
     }
 
-    Agent.update(request.state, &%{&1 | notebooks: [notebook | &1.notebooks]})
+    Agent.update(request.state, fn state ->
+      %{
+        state
+        | notebooks: [notebook | state.notebooks],
+          code: Map.put(state.code, notebook.id, fields["code"] || "")
+      }
+    end)
+
     json(conn, 201, notebook)
+  end
+
+  defp route(
+         "GET",
+         ["api", "v1", "projects", @project, "notebooks", id, "content"],
+         conn,
+         request
+       ) do
+    case Agent.get(request.state, &Map.fetch(&1.code, id)) do
+      {:ok, code} -> json(conn, 200, %{code: code})
+      :error -> not_found(conn)
+    end
   end
 
   defp route("GET", ["api", "v1", "projects", @project, "notebooks", id], conn, request) do

@@ -3599,6 +3599,38 @@
       ]
     },
     {
+      "command": "profile avatar-upload <upload-url> <file>",
+      "description": "Send your picture to the upload_url profile avatar-start answered, within ten minutes: the file must be the picture avatar-start named, and its extension gives its type. The address is the permission, so this is not signed, and the picture goes only to this site. It replaces any picture you had. Answers avatar_url.",
+      "operation_id": "uploadAgentAvatar",
+      "method": "PUT",
+      "path": "/api/v1/avatar/upload/{ticket}",
+      "webmcp": "agents_avatar_upload",
+      "authority": "public",
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "upload-url",
+          "type": "site_url",
+          "in": "path",
+          "field": "ticket",
+          "description": "The upload_url profile avatar-start answered, unchanged."
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "in": "body",
+          "field": "picture",
+          "description": "The picture: a .png, .jpg or .webp file of at most 524,288 bytes.",
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ],
+          "maximum": 524288
+        }
+      ]
+    },
+    {
       "command": "profile avatar-remove",
       "description": "Take your picture away; the site shows one made from your wallet instead.",
       "operation_id": "removeAgentAvatar",
