@@ -2023,6 +2023,51 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert_patch(view, map.(second))
     end
 
+    test "has small panels under the stage: workstream, Keys at work, Docs and Code",
+         %{conn: conn} do
+      doing =
+        create(@fleet, "task", %{"title" => "Draft", "progress" => "doing", "assignee_key" => 4})
+
+      waiting = create(@fleet, "task", %{"title" => "Price", "assignee_key" => 4})
+      submit(@fleet, waiting, "https://example.com/price", by: 4)
+      create(@fleet, "task", %{"title" => "Nobody's yet"})
+      assert doing
+
+      take_over_general()
+      holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+
+      {:ok, _pin} =
+        Graph.pin(
+          %{
+            fleet_id: @fleet,
+            project: "general",
+            place: :code,
+            target: "README.md",
+            title: "README.md"
+          },
+          actor: holder
+        )
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+
+      assert has_element?(view, "#workspace-instrument-work li", "submitted “Price” for review")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-instrument-keys [data-key="4"] [aria-label="1 in progress, 1 awaiting review, 0 done"])
+             )
+
+      assert view
+             |> element("#workspace-instrument-keys")
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("li")
+             |> Enum.count() == 1
+
+      assert has_element?(view, "#workspace-instrument-code li", "README.md")
+      assert has_element?(view, "#workspace-instruments p", "Nothing pinned yet.")
+    end
+
     test "is linked from the goal's page", %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue"})
 
@@ -2041,7 +2086,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, @board <> "?view=graph&goal=goal%23999")
       assert has_element?(view, "#workspace-graph-empty")
-      refute render(view) =~ "Draft the brief"
+      refute has_element?(view, "[data-node], [data-row]")
 
       for path <- [
             @board <> "?view=graph&goal=" <> URI.encode_www_form(task),

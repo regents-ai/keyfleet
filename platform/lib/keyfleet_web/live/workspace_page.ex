@@ -180,6 +180,8 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # How many goals the Graph view steps through.
   @step_goals 120
+  # How many lines each small panel under the Graph view's stage shows.
+  @instrument_rows 6
   # How many items of the work around a goal, the most recently changed, its
   # page reads for what they cite.
   @goal_items 100
@@ -339,6 +341,41 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # The small panels under the Graph view's stage, the project's or the whole
+  # fleet's: the newest lines of the workstream, and the newest notebooks and
+  # code the fleet's members pinned, a few of each. None of it calls the
+  # notebook hub or the code store.
+  defp instruments(fleet_id, filter, projects, opts) do
+    activity =
+      fleet_id
+      |> Graph.latest_activity!(%{project: filter.project}, opts)
+      |> Enum.take(@instrument_rows)
+
+    titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
+    agents = agent_names(Enum.map(activity, &actor_wallet/1))
+    hub? = Notebooks.hub?(fleet_id)
+    spaces = Map.new(projects, &{&1.name, hub? && &1.hub_project_id})
+    repositories = Map.new(projects, &{&1.name, &1.repository})
+    labels = if filter.project, do: %{}, else: Map.new(projects, &{&1.name, &1.title})
+
+    %{
+      workstream: Enum.map(activity, &line(&1, titles, agents)),
+      docs:
+        for pin <- Enum.take(Graph.pins!(fleet_id, :docs, filter.project, opts), @instrument_rows),
+            Map.has_key?(spaces, pin.project) do
+          space = spaces[pin.project]
+          link = if is_binary(space), do: notebook_link(fleet_id, space, pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end,
+      code:
+        for pin <- Enum.take(Graph.pins!(fleet_id, :code, filter.project, opts), @instrument_rows),
+            Map.has_key?(repositories, pin.project) do
+          link = Code.files_path(fleet_id, repositories[pin.project], pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end
+    }
+  end
+
   # The goals the Graph view steps through, one goal's map at a time: the
   # project's, or the whole fleet's, the #{@step_goals} most recently changed,
   # in the order they were added.
@@ -387,7 +424,8 @@ defmodule KeyfleetWeb.WorkspacePage do
           filter: filter,
           counts: Graph.tally!(fleet.id, filter.project, opts),
           graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects)),
-          goals: step_goals(fleet.id, filter, opts)
+          goals: step_goals(fleet.id, filter, opts),
+          instruments: instruments(fleet.id, filter, projects, opts)
         }
 
       {:missing, _name} ->
