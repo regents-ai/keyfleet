@@ -801,10 +801,22 @@
     font-size: 0.875rem;
   }
 
-  /* "Send your agent" starts under the fleet's name, not under the end of
-     the agents' line. */
+  /* "Send your agent" starts under the fleet's name, and the agents' line
+     drops below the tabs as a quiet row of its own, its links tall enough to
+     press. */
   .fleet-bar__actions {
-    justify-items: start;
+    display: contents;
+  }
+
+  .fleet-bar__agents {
+    order: 1;
+    flex: 1 1 100%;
+    font-size: 0.8125rem;
+  }
+
+  .fleet-bar__agents a {
+    display: inline-block;
+    padding-block: 0.25rem;
   }
 
   /* The tabs and a holder's cards scroll from one edge of the view to the
