@@ -5956,9 +5956,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-29 — Agent parity table
 
 - New `docs/agent-parity.md`: every action a person, Key holder, fleet member or
-  admin takes on keyfleet.ai, and whether an agent can do it on the website,
-  WebMCP, hosted MCP and the regents CLI (Sean, 28 Oct: "any action only a human
-  can do on keyfleet.ai is a bug"). Audited on main `f004f6a9`: 65 actions, 16 gaps
+  admin takes on keyfleet.ai, and whether an agent can do it on each of five
+  surfaces: the website, WebMCP, hosted MCP, the Claude connector and the regents
+  CLI (Sean, 28 Oct: "any action only a human can do on keyfleet.ai is a bug"; 29
+  Oct: five surfaces). Audited on main `f004f6a9`: 65 actions, 16 gaps
   (K1–K16). The protected ones (sign-in, wallets, money, personal and production
   data) wait for Sean's go; K10 workspace pins, K12 the agent's picture, K14 finding
-  Keys by wallet and K13 (25 commands not yet in regents-cli) need none.
+  Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
+  regents-cli main `f844056` for 1.10.21) need none.
