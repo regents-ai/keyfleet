@@ -5995,3 +5995,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   guide, its parts, the agents page, the command reference and the refusals
   follows. The API contract's link to the activity section now lands on it.
   The joining guide is 3.21.1.
+
+## 2026-10-29 — An opened room comes into view
+
+- A room opened from its fleet's hall takes the keyboard to the room's name,
+  and on a phone, where the hall stacks above the room, scrolls the name into
+  view. Other steps within the page leave the keyboard where it is.
+- `mix precommit`, and with it `make check`, now ends with the phone walks
+  (`npm run test:devices`): the main flows at an iPhone 15's and a Pixel 7's
+  screen and the accessibility check of every main page. The walk that opens
+  the Public room from the hall had been failing on main unnoticed.

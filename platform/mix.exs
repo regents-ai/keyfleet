@@ -261,7 +261,10 @@ defmodule Keyfleet.MixProject do
         "cmd npm test",
         # The browser suite (test/browser) on its own server, once the ExUnit suite
         # on the same database has finished.
-        "cmd npm run test:browser"
+        "cmd npm run test:browser",
+        # The main flows at an iPhone's and a Pixel's screen, and the
+        # accessibility check of every main page (playwright.devices.config.ts).
+        "cmd npm run test:devices"
       ]
     ]
   end
