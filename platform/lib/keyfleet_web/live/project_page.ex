@@ -6,7 +6,8 @@ defmodule KeyfleetWeb.ProjectPage do
   and, once the Key holding it shows its
   work to everyone (`Keyfleet.Projects.Project`), its latest work, what it
   produced and the tasks open to take or blocked, each by title and the agent
-  and Key that made it, with how many there are of each. Each title links to
+  and Key that made it, with how many there are of each, and under each goal
+  the tasks that deliver on it, by title and standing alone. Each title links to
   its item's page in the workspace, and each open or blocked task has a link
   that pairs a visitor's agent and sends it to that task. A project's page
   never shows more than titles and who made them: members read the rest in
@@ -70,10 +71,20 @@ defmodule KeyfleetWeb.ProjectPage do
   end
 
   # Every part from one moment of the read tables, each row with the agent
-  # and Key that made it.
+  # and Key that made it, and under each goal the tasks that deliver on it,
+  # by title and standing alone.
   defp parts(fleet_id, name) do
-    {:ok, reads} =
-      Graph.in_snapshot(fn -> Map.new(@parts, &{&1, read_part(fleet_id, name, &1)}) end)
+    {:ok, {reads, tasks}} =
+      Graph.in_snapshot(fn ->
+        reads = Map.new(@parts, &{&1, read_part(fleet_id, name, &1)})
+        {goals, _count} = reads.goals
+
+        {reads,
+         Map.new(
+           goals,
+           &{&1.id, Graph.shown_goal_tasks!(fleet_id, name, &1.id, query: [limit: @shown])}
+         )}
+      end)
 
     agents =
       reads
@@ -84,7 +95,12 @@ defmodule KeyfleetWeb.ProjectPage do
     Map.new(reads, fn {part, {objects, count}} ->
       {part,
        %{
-         items: Enum.map(objects, &item(fleet_id, &1, agents)),
+         items:
+           for object <- objects do
+             fleet_id
+             |> item(object, agents)
+             |> Map.put(:tasks, Enum.map(Map.get(tasks, object.id, []), &goal_task(fleet_id, &1)))
+           end,
          count: count,
          more?: count > @shown
        }}
@@ -109,6 +125,15 @@ defmodule KeyfleetWeb.ProjectPage do
       blocked?: object.type == "task" and object.standing == "blocked",
       path: path,
       pair_path: pair_path(path)
+    }
+  end
+
+  defp goal_task(fleet_id, task) do
+    %{
+      id: task.id,
+      title: seen(task.title, "Untitled"),
+      standing: standing("task", task.standing),
+      path: WorkspacePage.item_path(fleet_id, task.id)
     }
   end
 

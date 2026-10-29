@@ -6295,3 +6295,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   The plan's other motions (a status that flips, a single pulse of the live
   dot, fitting the picture to the stage) would be new kinds of motion, which
   every Regent site shares, so they wait for the template first.
+
+## 2026-10-29 — Which tasks serve which goal, on a shown project's page
+
+- A project's page, once its Key shows its work to everyone, lists under
+  each open goal the tasks that deliver on it, joined to it by a line, each
+  by title and status alone: no Key, agent, note or output. Archived tasks
+  stay off it. Sean chose this on 29 October ("Yes, titles and status
+  only").
+- This is step 9 of the Workspace plan drawn from four reference videos.

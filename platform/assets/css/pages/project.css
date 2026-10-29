@@ -114,6 +114,31 @@
   min-width: 0;
 }
 
+/* Under a goal, the tasks that deliver on it, each joined to it by a line:
+   title and where it stands, nothing more. */
+.project-items .project-goal-tasks {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.15rem;
+  margin: 0.4rem 0 0 0.35rem;
+  padding: 0 0 0 0.9rem;
+  list-style: none;
+  border-inline-start: 1px solid var(--ash-line-strong);
+  font-size: 0.9rem;
+}
+
+.project-items .project-goal-tasks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding-block: 0.25rem;
+  border: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .project-type {
   color: var(--color-fg-muted);
   font-family: var(--font-family-ui);

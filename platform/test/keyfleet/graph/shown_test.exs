@@ -76,6 +76,44 @@ defmodule Keyfleet.Graph.ShownTest do
     assert [%{title: "Try the new model"}] = shown.parts.goals.items
   end
 
+  # Costly failure: a visitor shown a task under the wrong goal, or a task
+  # of a project its Key never showed, or more of a task than its title and
+  # status.
+  test "a shown project's goals list the tasks that deliver on them, by title and status alone" do
+    project = Workspace.start_project(@fleet, "lab", "Lab")
+    model = goal("Try the new model", project: "lab")
+    other = goal("Measure the speed-up", project: "lab")
+
+    task =
+      Workspace.create(@fleet, "task", %{"title" => "Draft the price", "progress" => "doing"},
+        project: "lab"
+      )
+
+    Workspace.link(@fleet, task, model, "implements")
+    old = Workspace.create(@fleet, "task", %{"title" => "Old try"}, project: "lab")
+    Workspace.link(@fleet, old, model, "implements")
+    Workspace.archive(@fleet, old)
+    aside = Workspace.create(@fleet, "task", %{"title" => "Aside"}, project: "lab")
+    Workspace.link(@fleet, aside, other, "references")
+
+    assert Graph.shown_goal_tasks!(@fleet, "lab", model) == []
+
+    project
+    |> Ash.Changeset.for_update(:shown, %{shown_to_everyone: true, key: 20},
+      actor: %Keyfleet.Actors.System{}
+    )
+    |> Ash.update!()
+
+    goals = KeyfleetWeb.ProjectPage.read(@fleet, "lab").parts.goals.items
+    by_id = Map.new(goals, &{&1.id, &1.tasks})
+
+    assert [%{id: ^task, title: "Draft the price", standing: "In progress"} = shown] =
+             by_id[model]
+
+    assert Map.keys(shown) |> Enum.sort() == [:id, :path, :standing, :title]
+    assert by_id[other] == []
+  end
+
   defp work(project),
     do:
       Ash.Query.for_read(Keyfleet.Graph.Object, :shown, %{

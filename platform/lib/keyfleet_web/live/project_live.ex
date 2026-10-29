@@ -123,6 +123,16 @@ defmodule KeyfleetWeb.ProjectLive do
             <span class="project-by">{item.by}</span>
           </div>
           <span :if={@labelled and item.standing} class="project-standing">{item.standing}</span>
+          <ul
+            :if={item.tasks != []}
+            class="project-goal-tasks"
+            aria-label={"Tasks for " <> item.title}
+          >
+            <li :for={task <- item.tasks} data-item={task.id}>
+              <.link navigate={task.path}>{task.title}</.link>
+              <span :if={task.standing} class="project-standing">{task.standing}</span>
+            </li>
+          </ul>
           <.link
             :if={@invites}
             navigate={item.pair_path}
