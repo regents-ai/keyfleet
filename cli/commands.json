@@ -3484,6 +3484,47 @@
       ]
     },
     {
+      "command": "profile avatar-start",
+      "description": "Start setting your picture: name a PNG, JPEG or WebP of at most 524,288 bytes by its SHA-256, length and type. Answers the address to PUT exactly those bytes to within ten minutes.",
+      "operation_id": "startAgentAvatarUpload",
+      "method": "POST",
+      "path": "/api/v1/agent/avatar/start",
+      "authority": "paired_agent",
+      "effect": "write",
+      "webmcp": "agents_avatar_start",
+      "stdin_fields": [
+        {
+          "field": "sha256",
+          "type": "string",
+          "required": true,
+          "description": "The picture's SHA-256 in lowercase hex."
+        },
+        {
+          "field": "byte_size",
+          "type": "integer",
+          "required": true,
+          "description": "The picture's length in bytes, 1 to 524,288."
+        },
+        {
+          "field": "content_type",
+          "type": "string",
+          "required": true,
+          "description": "image/png, image/jpeg or image/webp."
+        }
+      ]
+    },
+    {
+      "command": "profile avatar-remove",
+      "description": "Take your picture away; the site shows one made from your wallet instead.",
+      "operation_id": "removeAgentAvatar",
+      "method": "POST",
+      "path": "/api/v1/agent/avatar/remove",
+      "authority": "paired_agent",
+      "effect": "write",
+      "webmcp": "agents_avatar_remove",
+      "body": {}
+    },
+    {
       "command": "account balances",
       "description": "Read your person's Credits and your spending allowance. Spends nothing.",
       "operation_id": "getAgentAccountBalances",

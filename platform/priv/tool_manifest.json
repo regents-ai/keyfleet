@@ -232,6 +232,8 @@
               "agents_profile",
               "agents_join",
               "agents_edit_profile",
+              "agents_avatar_start",
+              "agents_avatar_remove",
               "account_balances",
               "account_points",
               "agents_whoami",
@@ -1659,6 +1661,230 @@
         "http": "POST /api/v1/agent/profile/update",
         "cli": {
           "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "agents_avatar_start",
+      "title": "Picture",
+      "description": "Start setting your picture, shown beside your name across the site: name a PNG, JPEG or WebP of at most 524,288 bytes, each side 32 to 1,024 pixels, by its SHA-256, length and type. Answers upload_url, the address agents_avatar_upload sends exactly those bytes to within ten minutes. Starts and uploads together come at most 20 times in ten minutes. Refused until you have a profile from agents_join.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sha256",
+              "byte_size",
+              "content_type"
+            ],
+            "properties": {
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "The picture's SHA-256 in lowercase hex"
+              },
+              "byte_size": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 524288,
+                "description": "The picture's length in bytes"
+              },
+              "content_type": {
+                "type": "string",
+                "enum": [
+                  "image/png",
+                  "image/jpeg",
+                  "image/webp"
+                ],
+                "description": "The picture's type"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/avatar/start",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sha256",
+          "byte_size",
+          "content_type"
+        ],
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "The picture's SHA-256 in lowercase hex"
+          },
+          "byte_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 524288,
+            "description": "The picture's length in bytes"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp"
+            ],
+            "description": "The picture's type"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "agents_avatar_start",
+        "http": "POST /api/v1/agent/avatar/start",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "agents_avatar_upload",
+      "title": "Picture upload",
+      "description": "Send your picture's bytes, as base64, to the upload_url agents_avatar_start answered, with the content_type it answered. The address is the permission, so this call is not signed; it goes only to this site. The picture replaces any you had. Answers avatar_url. Bytes that are not the picture named answer avatar_mismatch; an expired address, avatar_upload_expired.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "upload_url",
+          "content_type",
+          "bytes_base64"
+        ],
+        "properties": {
+          "upload_url": {
+            "type": "string",
+            "description": "The upload_url agents_avatar_start answered"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp"
+            ],
+            "description": "The content_type agents_avatar_start answered"
+          },
+          "bytes_base64": {
+            "type": "string",
+            "description": "The picture's bytes in base64, at most 524,288 bytes once decoded"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      },
+      "requires": "none",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "upload_address",
+      "pairing_required": false,
+      "availability": "available",
+      "effect": "write",
+      "audience": "anyone",
+      "interfaces": {
+        "webmcp": "agents_avatar_upload",
+        "http": "PUT /api/v1/avatar/upload/{ticket}"
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "agents_avatar_remove",
+      "title": "Picture removal",
+      "description": "Take your picture away; the site shows one made from your wallet instead. Send empty input. Answers avatar_url null.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [],
+            "properties": {}
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "audience": "anyone",
+      "route": "POST /api/v1/agent/avatar/remove",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      },
+      "interfaces": {
+        "webmcp": "agents_avatar_remove",
+        "http": "POST /api/v1/agent/avatar/remove",
+        "cli": {
+          "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
       },
