@@ -120,6 +120,9 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
+  # A node asking for fewer requests (HTTP 429) is `:chain_busy`, so a reader
+  # asks it nothing more this pass; any other failure to answer is
+  # `:chain_unavailable`.
   defp request(method, params) do
     case JsonRpc.request(method, params) do
       {:ok, result} ->
@@ -127,6 +130,10 @@ defmodule Keyfleet.Chain.RpcClient do
 
       {:error, {:rpc_error, error}} ->
         refused_or_failed(method, error)
+
+      {:error, {:unavailable, %{status: 429} = detail}} ->
+        Logger.warning("chain read failed #{inspect(Map.put(detail, :method, method))}")
+        {:error, :chain_busy}
 
       {:error, {:unavailable, detail}} ->
         Logger.warning("chain read failed #{inspect(Map.put(detail, :method, method))}")

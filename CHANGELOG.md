@@ -6345,12 +6345,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The Graph view's items are cards of the same kind, cut at two corners, and
   its fork and review links are dashed, on screens with WebGPU too.
 - This is step 3 of the Workspace plan drawn from four reference videos.
+
 ## 2026-10-29 — Busy chain node ends the scan
 
 - When the chain node answers a log request with "too many requests" (HTTP 429),
   the chain scan stops for this pass instead of splitting the range in halves,
   which only asked the busy node more. The next pass starts where this one
-  ended. Other unanswered requests still split as before.
+  ended. Other unanswered requests still split as before. The chain client
+  reports a 429 as `:chain_busy`; any other failure to answer stays
+  `:chain_unavailable`.
 
 ## 2026-10-29 — Practice chain approval
 
