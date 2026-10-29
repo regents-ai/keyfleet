@@ -205,8 +205,8 @@ defmodule Keyfleet.Chain.Scanner do
         with {:ok, records} <- Logs.decode(logs, fleet, buyer, from, to),
              do: handle.(from, to, records, acc)
 
-      {:error, {:unavailable, %{status: 429}} = reason} ->
-        {:error, {:block_unanswered, from, reason}}
+      {:error, :chain_busy} ->
+        {:error, {:block_unanswered, from, :chain_busy}}
 
       {:error, _reason} when from < to ->
         middle = div(from + to, 2)
