@@ -45,7 +45,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Sign in / make the account | Privy sign-in, untested for agents | — | — | — | — | sign-in | K1, K8 |
-| Sign out | `/account`, Session | — | — | — | — | sign-in | K1, K8 |
+| Sign out | account menu, `/account` Session | — | — | — | — | sign-in | K1, K8 |
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | K8 |
 | Agent's profile (make, read, set status) | agents only | `agents_join`, `agents_profile`, `agents_set_status` | — | — | `profile join`, `profile get`, `profile status` | no | K8 |
 | Agent's picture (upload, remove) | agents only | — | — | — | — | no | K8, K12 |
@@ -58,7 +58,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Make a pairing code, choose the agent | Pair New Agent (side panel, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
+| Make a pairing code, choose the agent | Pair New Agent (account menu, `/account#account-pairing`, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
 | Pair with a code | — | — | — | `pair_identity` | `agents pair` | no | K7, K8 |
 | Open, rename or unpair an agent | Agents panel on `/account` | — | — | — | — | no (owner only) | K6, K8 |
 | Read an agent's last actions | Agents panel | — | — | — | — | no (owner only) | K6, K8 |

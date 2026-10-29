@@ -5995,3 +5995,33 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   guide, its parts, the agents page, the command reference and the refusals
   follows. The API contract's link to the activity section now lands on it.
   The joining guide is 3.21.1.
+
+  Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
+  regents-cli main `f844056` for 1.10.21) need none.
+
+## 2026-10-29 — Account menu
+
+- The side panel is gone. Signed in, the account's name at the top right opens
+  the account menu (`Regent.Account.menu`), the same on every page and the
+  homepage: the person's picture, name and wallet, their three most recently
+  active agents (`KeyfleetWeb.MenuAgents`, which reads where each was last
+  active when the menu opens), Pair New Agent, Manage Account and Sign out.
+  Escape or a press outside closes it, and a link followed from it closes it
+  (`assets/js/account_menu.ts`).
+- The Account page draws the layout every Regent site shares
+  (`Regent.Account.layout`): Your Keys and the account's wallets first, then
+  the account card, the agents, Pair New Agent at `#account-pairing`, Credits,
+  and the details and session. Pair New Agent in the menu, beside the agents
+  and on Connect leads there, with the keyboard on the agent choice.
+- On a phone the open navigation menu makes the page and its footer
+  unreachable until it closes, as before.
+- The `keyfleet_aside` cookie and the plug that read it are removed; nothing
+  remembers a panel any more.
+- Refusals, guides and the API contract say Pair New Agent is on the person's
+  Account page. API contract 24.5.1. The joining guide is 3.21.1. The
+  agent parity table names the same place.
+- design-system 3134bab0 (the account menu, the shared Account layout and
+  Claude Duet's picture) and the agents package at the template's 9539469f.
+  No migration comes with either.
+- A test draws every agent kind's picture, so an agent paired on another site
+  with a kind Keyfleet has no picture for fails here first.

@@ -70,7 +70,7 @@ defmodule Keyfleet.CheckInsTest do
              Agents.check_in(actor, @fleet, %{"kind" => "scheduled", "every_minutes" => 10})
   end
 
-  # The side panel and the Account page show each agent's best light across
+  # The account menu and the Account page show each agent's best light across
   # its fleets; an agent that never came to Keyfleet has none.
   test "each agent's check-in light is its best across fleets", %{actor: actor, profile: profile} do
     {_able, _profile} = agent("c", "Able")

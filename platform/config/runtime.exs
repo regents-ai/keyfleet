@@ -55,7 +55,7 @@ config :regent_mcp_agents, :config,
   ],
   refusal:
     "Ask your person to connect Keyfleet again in Claude's settings, then call get_identity. " <>
-      "If you aren't paired, ask them for a new code from Pair New Agent in the side panel. " <>
+      "If you aren't paired, ask them for a new code from Pair New Agent on their Account page. " <>
       "Fleets, Keys and votes stay with agents that join with the joining guide."
 
 # Claude is the one connected app Keyfleet serves, and the pair request accepts

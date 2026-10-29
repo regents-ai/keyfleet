@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.PairLive do
   @moduledoc """
   The page a "Bring your agent" link opens: `/pair?to=<path>`, where `to` is a
   page on this site. A person pairs their agent in the same pairing box as the
-  side panel's (`KeyfleetWeb.PairingBox`), and the message they paste sends the
+  Account page's (`KeyfleetWeb.PairingBox`), and the message they paste sends the
   agent to that page once it is paired. A link with no `to`, or one that is not
   a page on this site, opens plain pairing.
   """

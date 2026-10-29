@@ -1,14 +1,14 @@
-defmodule KeyfleetWeb.PanelAgentsTest do
-  # Invariant: the side panel shows at most three of a person's agents, none left
+defmodule KeyfleetWeb.MenuAgentsTest do
+  # Invariant: the account menu shows at most three of a person's agents, none left
   # out more recently active than one shown, every active one before the rest
   # (never active, or not yet read), and the rest in the order given (newest
   # paired first).
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias KeyfleetWeb.PanelAgents
+  alias KeyfleetWeb.MenuAgents
 
-  property "the panel shows the three most recently active agents" do
+  property "the menu shows the three most recently active agents" do
     check all(
             seconds <-
               list_of(one_of([constant(nil), constant(:none), integer(0..50)]), max_length: 8)
@@ -24,7 +24,7 @@ defmodule KeyfleetWeb.PanelAgentsTest do
            )}
         end
 
-      shown = PanelAgents.shown(agents, last_actions)
+      shown = MenuAgents.shown(agents, last_actions)
 
       at = fn agent ->
         case last_actions[agent.id] do

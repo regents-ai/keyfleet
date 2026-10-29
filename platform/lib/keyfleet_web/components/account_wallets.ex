@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.AccountWallets do
   @moduledoc """
-  The signed-in person's wallets, in the side panel and on the Account page:
+  The signed-in person's wallets, on the Account page:
   each one's address with its copy icon and Basescan arrow
   (`Regent.Primitives.address`), what it is, and which one is active.
 

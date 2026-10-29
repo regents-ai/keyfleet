@@ -183,9 +183,10 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await expect
     .poll(() => account.locator("img.account-avatar").evaluate(image => image.naturalWidth))
     .toBeGreaterThan(0)
-  // The name opens the side panel, which holds Sign out.
+  // The name opens the account menu, which holds Sign out.
   await account.locator("#account-chip").click()
-  await expect(page.locator("#shell-account").getByRole("button", {name: "Sign out"})).toBeVisible()
+  await expect(page.locator("#account-menu").getByRole("button", {name: "Sign out"})).toBeVisible()
+  await page.keyboard.press("Escape")
 
   // Nothing chosen and a device that asks for dark: light shows, so a press chooses dark.
   await page.emulateMedia({colorScheme: "dark"})

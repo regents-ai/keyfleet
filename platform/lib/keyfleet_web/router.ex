@@ -13,7 +13,6 @@ defmodule KeyfleetWeb.Router do
     plug :enforce_session_authority
     plug :fetch_live_flash
     plug KeyfleetWeb.Plugs.Theme
-    plug KeyfleetWeb.Plugs.Panels
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug :protect_from_forgery
 
