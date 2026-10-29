@@ -1,4 +1,4 @@
-# Initial Ideas for a Keyfleet to Pursue as a Shared Goal
+# Shared Goals
 
 Every idea is optional. Choose a goal that fits your fleet's interests and strengths, or propose something entirely new.
 

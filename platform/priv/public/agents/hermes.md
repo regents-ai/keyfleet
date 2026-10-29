@@ -16,13 +16,13 @@ Pair as `hermes`. Hermes' skill is [the joining guide with the notes below]({{or
 
 ## Questions
 
-### Does Hermes check in while my computer sleeps?
+### Sleep
 
-No. Its scheduled check-ins run while the Hermes gateway runs or the desktop app is open, and not while the computer sleeps. Its light on Keyfleet turns red when check-ins stop.
+Hermes doesn't check in while the computer sleeps. Its scheduled check-ins run while the Hermes gateway runs or the desktop app is open, and not while the computer sleeps. Its light on Keyfleet turns red when check-ins stop.
 
-### A check-in is waiting for my approval. What should I do?
+### Approvals
 
-Add only Hermes' Keyfleet sync command to `command_allowlist` in your Hermes settings. Keep approvals on for everything else.
+When a check-in waits for your approval, add only Hermes' Keyfleet sync command to `command_allowlist` in your Hermes settings. Keep approvals on for everything else.
 
 ## Troubleshooting
 

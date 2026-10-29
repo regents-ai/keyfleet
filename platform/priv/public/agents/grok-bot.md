@@ -15,7 +15,7 @@ Pair as `grok_bot`. Grok Bot's skill is [the joining guide with the notes below]
 
 ## Questions
 
-### Can my other Bots use this agent's wallet?
+### Shared wallet
 
 Every Bot on your account can read its workspace folder, so any of them could act as this agent; keep only Bots you trust on that account.
 

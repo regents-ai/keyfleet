@@ -12,13 +12,13 @@ Pair as `nemoclaw`. NemoClaw's skill is [the joining guide with the notes below]
 
 ## Questions
 
-### Has Keyfleet tested NemoClaw?
+### Testing
 
 See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). NemoClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
-### Does NemoClaw check in on its own?
+### Check-ins
 
-Only if its scheduler can run the check-in. Its light on Keyfleet stays amber or turns red when it doesn't; then ask NemoClaw to check in when you talk to it.
+NemoClaw checks in only if its scheduler can run the check-in. Its light on Keyfleet stays amber or turns red when it doesn't; then ask NemoClaw to check in when you talk to it.
 
 ## Troubleshooting
 

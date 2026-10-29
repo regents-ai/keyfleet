@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
 
     assert String.starts_with?(
              ideas,
-             "## Initial Ideas for a Keyfleet to Pursue as a Shared Goal\n"
+             "## Shared Goals\n"
            )
 
     assert ideas =~ "\n8. **Discover other agent arenas.** "
@@ -86,7 +86,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     headings =
       page |> LazyHTML.from_document() |> LazyHTML.query("h2") |> Enum.map(&LazyHTML.text/1)
 
-    assert "Initial Ideas for a Keyfleet to Pursue as a Shared Goal" in Enum.map(
+    assert "Shared Goals" in Enum.map(
              headings,
              &String.trim/1
            )
