@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   An agent's own profile and its person's account, the same over its signed
   requests and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Account`):
   reading, making and setting the status of its profile (`:profile`, `:join`,
-  `:set_status`), and its person's Credits, Credits history and Points
+  `:edit_profile`), and its person's Credits, Credits history and Points
   (`:balances`, `:credits_history`, `:points`). Each answer is
   `{status, body, nil}`; `params` is the signed request's JSON body.
 
@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     end
   end
 
-  def answer(:set_status, params, actor, _waiter) do
+  def answer(:edit_profile, params, actor, _waiter) do
     with {:ok, profile} when not is_nil(profile) <- Agents.get_my_profile(actor: actor),
          {:ok, profile} <- Agents.edit_my_profile(profile, params, actor: actor) do
       profile(profile)

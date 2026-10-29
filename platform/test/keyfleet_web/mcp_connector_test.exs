@@ -209,7 +209,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
       if http.status in 200..299 do
         assert %{"isError" => false, "structuredContent" => answer} = over_mcp, name
-        assert same_sign_in(answer) == same_sign_in(http.body), name
+        assert comparable(answer) == comparable(http.body), name
       else
         assert %{"isError" => true, "content" => [%{"text" => text}]} = over_mcp, name
         assert Jason.decode!(text)["error"] == http.body["error"], name
@@ -269,6 +269,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
   # The doctor also says how its caller signed in: a signed request by its
   # wallet's signature, the connector by its connected app, each with its own
   # expiry. Everything else it answers is the same.
+  # Two reads made a moment apart differ only in when they were made and in
+  # the sign-in's own expiry.
+  defp comparable(answer), do: answer |> Map.delete("generated_at") |> same_sign_in()
+
   defp same_sign_in(%{"agent" => %{} = agent} = answer),
     do: %{answer | "agent" => Map.drop(agent, ["sign_in_expires_at", "verification_method"])}
 

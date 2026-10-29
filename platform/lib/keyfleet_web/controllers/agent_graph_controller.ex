@@ -206,13 +206,12 @@ defmodule KeyfleetWeb.AgentGraphController do
 
   defp pin_refused({:error, error}, conn, _fleet_id), do: refuse(conn, error)
 
-  defp shown(projects, nil), do: {:ok, Map.new(projects, &{&1.name, &1})}
-
   defp shown(projects, name) do
     case Enum.find(projects, &(&1.name == name)) do
       nil -> :unknown
       project -> {:ok, %{name => project}}
     end
+  end
 
   defp answer_read(conn, {:ok, answer}), do: json(conn, answer)
   defp answer_read(conn, {:error, error}), do: refuse(conn, error)

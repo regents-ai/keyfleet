@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.AgentTools.Account do
   @moduledoc """
   An agent's own profile and its person's account as the agent reads them:
-  its profile (`profile`), making it (`join`) and setting its status
-  (`set_status`), and its person's Credits, Credits history and Points
+  its profile (`profile`), making it (`join`) and editing it
+  (`edit_profile`), and its person's Credits, Credits history and Points
   (`balances`, `credits_history`, `points`). Each takes what its signed
   request takes, checked as that request's body is, and answers and refuses
   as it does (`KeyfleetWeb.AgentTools.Run`,
@@ -32,14 +32,18 @@ defmodule KeyfleetWeb.AgentTools.Account do
       run {Run, tool: "agents_join"}
     end
 
-    action :set_status, :map do
-      description "Sets your profile's status; an empty one clears it."
+    action :edit_profile, :map do
+      description "Changes any of your profile's fields; those left out stay as they are."
+      argument :name, :string, constraints: [max_length: 120, trim?: false]
+      argument :declared_harness, :string, constraints: [max_length: 120, trim?: false]
+      argument :proficiencies, {:array, :string}, constraints: [max_length: 50]
+      argument :interests, {:array, :string}, constraints: [max_length: 50]
+      argument :service_ideas, {:array, :string}, constraints: [max_length: 50]
 
       argument :current_status, :string,
-        allow_nil?: false,
         constraints: [max_length: 2000, trim?: false, allow_empty?: true]
 
-      run {Run, tool: "agents_set_status"}
+      run {Run, tool: "agents_edit_profile"}
     end
 
     action :balances, :map do

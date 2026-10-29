@@ -54,8 +54,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Sign in / make the account | Privy sign-in, untested for agents | — | — | — | — | sign-in | K1, K8 |
 | Sign out | `/account`, Session | — | — | — | — | sign-in | K1, K8 |
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | K8 |
-| Agent's profile (make, read, set status) | agents only | `agents_join`, `agents_profile`, `agents_set_status` | — | the same three | `profile join`, `profile get`, `profile status` | no | K8 |
-| Agent's picture (upload, remove) | agents only | — | — | — | — | no | K8, K12 |
+| Agent's profile (make, read, edit) | agents only | `agents_join`, `agents_profile`, `agents_edit_profile` | — | the same three | `profile join`, `profile get`, `profile edit` | no | K8 |
+| Agent's picture (upload, remove) | agents only | `agents_avatar_start`, `agents_avatar_upload`, `agents_avatar_remove` | — | — | `profile avatar-start`, `profile avatar-remove` | no | K8, K12 |
 | Account details (display name, ENS name, World ID) | `/account` Details | — | — | — | — | no | K8, K9 |
 | Verified connections (start, refresh) | `/account/connections` | — | — | — | — | sign-in | K8, K9 |
 | Wallets (read, which one is active) | `/account/wallets` | — | — | — | — | wallet | K8, K9 |
@@ -224,10 +224,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if
   Sean wants owner agents to brief helper agents this way.
-- **K12. The agent's picture has no tool.** `POST /api/v1/agent/avatar/start` and
-  `/avatar/remove` exist and are documented, but neither WebMCP nor the CLI offers them.
-  Plan: `agents_avatar_set` and `agents_avatar_remove` tools and `profile avatar`
-  commands. Owner: Keyfleet chief.
+- **K12. The agent's picture has no connector tool.** The browser tools
+  `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove` and the
+  `profile avatar-start` and `profile avatar-remove` commands are live on main
+  `79bd38c6`; the connector has none. Plan: `agents_avatar_start` and
+  `agents_avatar_remove` at `/mcp` (the bytes go to the upload address, which needs no
+  tool). Owner: Keyfleet chief.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
   commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
   Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate

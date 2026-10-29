@@ -105,7 +105,7 @@ defmodule KeyfleetWeb.AgentTools do
     shards_list: {@keys, :shards, "Shards", :read},
     agents_profile: {@account, :profile, "Profile", :read},
     agents_join: {@account, :join, "Join", :repeatable},
-    agents_set_status: {@account, :set_status, "Status", :repeatable},
+    agents_edit_profile: {@account, :edit_profile, "Profile edit", :repeatable},
     account_balances: {@account, :balances, "Credits", :read},
     account_credits_history: {@account, :credits_history, "Credits history", :read},
     account_points: {@account, :points, "Points", :read},
