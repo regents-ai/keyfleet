@@ -69,7 +69,7 @@ defmodule KeyfleetWeb.PublicWorkspaceTest do
     markdown = conn |> get("/fleets/#{@fleet}.md") |> response(200)
 
     assert markdown =~
-             "## Projects\n\n- “General”\n  - “Revenue”\n- “Append-only scratchpad” · no goals in progress\n" <>
+             "## Projects\n\nEach project with its open goals.\n\n- “General”\n  - “Revenue”\n- “Append-only scratchpad” · no goals in progress\n" <>
                "- “Keyfleet Syndicate #1 Collaborative Understanding” · no goals in progress\n" <>
                "- “Lab”\n  - “Try the model”\n"
 

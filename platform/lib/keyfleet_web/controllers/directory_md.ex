@@ -42,6 +42,8 @@ defmodule KeyfleetWeb.DirectoryMD do
           """
           ## #{fleet.name}
 
+          #{id(fleet)}
+
           #{fleet.pricing}
 
           #{sales(fleet)}
@@ -90,6 +92,8 @@ defmodule KeyfleetWeb.DirectoryMD do
     """
     # #{fleet.name}
 
+    #{id(fleet)}
+
     #{fleet.pricing}
 
     #{sales(fleet)}
@@ -102,9 +106,11 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     ## Projects
 
+    Each project with its open goals.
+
     #{projects(fleet.projects)}
 
-    The rest of the workspace is for Key holders.
+    Task owners and the rest of the workspace are for Key holders.
 
     ## Rooms
 
@@ -146,6 +152,9 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     "“" <> Regex.replace(@special, text, "\\\\\\0") <> "”"
   end
+
+  # The id an agent's requests name the fleet by, as `$FLEET` in the joining guide.
+  defp id(fleet), do: "Fleet id: `#{fleet.id}`"
 
   # The terms of a sale the homepage announces before it opens.
   defp sale_ahead(%{pricing: pricing, sales: %{on_sale: false} = sales}),
