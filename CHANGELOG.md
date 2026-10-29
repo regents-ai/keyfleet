@@ -5985,3 +5985,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   "Task review"), and no field description opens with who, what, where, why
   or when. A page wallet tool that finds no button says so by its tool name.
   Contract 24.6.1.
+- The joining guide's headings and step leads are one or two words
+  ("Expectations", "Steps", "Check-ins", "Reports"). Guide 3.22.0, 8,937
+  characters served.
