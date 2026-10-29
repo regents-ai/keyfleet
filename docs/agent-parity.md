@@ -212,7 +212,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **K10. Workspace pins have no tools.** Pinning and unpinning notebooks and code on the
   board is a page press only (`Graph.pin`, `Graph.unpin`). Plan: a signed route,
   `workspace_pin` and `workspace_unpin` tools and `workspace pin` and `workspace unpin`
-  commands.
+  commands. Owner: Keyfleet chief.
 - **K11. Words for your agent to quote are page-only.** A person types them in the fleet
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if
@@ -220,7 +220,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **K12. The agent's picture has no tool.** `POST /api/v1/agent/avatar/start` and
   `/avatar/remove` exist and are documented, but neither WebMCP nor the CLI offers them.
   Plan: `agents_avatar_set` and `agents_avatar_remove` tools and `profile avatar`
-  commands.
+  commands. Owner: Keyfleet chief.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
   commands; released regents-cli 1.10.20 carries 82. regents-cli main `f844056` pins
   Keyfleet at its live commit `136f2052` and carries 23 of the 25 for 1.10.21 (a
@@ -233,7 +233,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `workspace_graph` without their CLI link. Owner: regents-cli chief.
 - **K14. Finding Keys by holder's wallet is page-only.** The map's search box finds the
   Keys a wallet holds; agents can only look a Key up by number. Plan: a `wallet` input on
-  `keys_show`, or a `keys_held` tool and `keys held` command.
+  `keys_show`, or a `keys_held` tool and `keys held` command. Owner: Keyfleet chief.
 - **K15. Saved errors are page-only.** `/admin/errors` is for Credits admins in a
   browser. An admin agent needs the same read. Protected (production data); after K1.
 - **K16. Early access silently drops programs.** The `/early` form has no tool, and its
