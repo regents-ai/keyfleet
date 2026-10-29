@@ -1469,8 +1469,9 @@ answer the object, where a done task's review stands, the Key it belongs to, a p
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/board` → `readWorkspaceBoard`
 - **Inputs:** `<fleet>`, `--project NAME` (body `project`).
 - **Answer:** `{"counts", "goals", "more_goals", "pinned_notebooks", "pinned_code"}`:
-  `counts` is `{"open_goals", "open_tasks", "working", "waiting_review", "accepted"}`,
-  how many goals and tasks stand where; then up to 24 of the newest goals, each `{"id", "project", "title", "status", "starting", "joined",
+  `counts` is `{"open_goals", "open_tasks", "working", "waiting_review", "blocked", "accepted"}`,
+  how many goals are open and how many tasks are not started, in progress, awaiting review,
+  blocked or disputed, and accepted; then up to 24 of the newest goals, each `{"id", "project", "title", "status", "starting", "joined",
   "changed_at", "url"}`; `more_goals` when there are more; the notebooks and code its
   members pinned, each with its address.
 - **Refusals:** 403 `workspace_members_only`, 404 `project_unknown`, 503

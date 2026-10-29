@@ -4,8 +4,8 @@
  * link's curve, fades from where the link leaves to where it arrives, and
  * widens into a soft glow as it lights up. Lit links take the page's link
  * colour; one that contradicts its target takes the error colour; the rest
- * recede while any link is lit. A fork's or a review's link is dashed, as the
- * page draws it.
+ * recede while any link is lit. A fork's, a review's or a contradiction's
+ * link is dashed, as the page draws it.
  */
 export const graphWgsl = /* wgsl */ `
 struct Params {

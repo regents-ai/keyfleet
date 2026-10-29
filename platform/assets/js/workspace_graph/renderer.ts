@@ -17,7 +17,8 @@ type Rgb = readonly [number, number, number]
 
 /**
  * One link: its start, two handles and end, in points of the picture,
- * whether it contradicts, and whether it is dashed, as a fork or a review is.
+ * whether it contradicts, and whether it is dashed, as a fork, a review or a
+ * contradiction is.
  */
 export type Link = {
   readonly points: readonly number[]

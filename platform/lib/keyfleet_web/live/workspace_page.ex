@@ -361,24 +361,27 @@ defmodule KeyfleetWeb.WorkspacePage do
     %{
       workstream: Enum.map(activity, &line(&1, titles, agents)),
       docs:
-        for pin <- Enum.take(Graph.pins!(fleet_id, :docs, filter.project, opts), @instrument_rows),
-            Map.has_key?(spaces, pin.project) do
+        for pin <- shown_pins(Graph.pins!(fleet_id, :docs, filter.project, opts), spaces) do
           space = spaces[pin.project]
           link = if is_binary(space), do: notebook_link(fleet_id, space, pin.target)
           pin_row(pin, link, labels, opts[:actor])
         end,
       code:
-        for pin <- Enum.take(Graph.pins!(fleet_id, :code, filter.project, opts), @instrument_rows),
-            Map.has_key?(repositories, pin.project) do
+        for pin <- shown_pins(Graph.pins!(fleet_id, :code, filter.project, opts), repositories) do
           link = Code.files_path(fleet_id, repositories[pin.project], pin.target)
           pin_row(pin, link, labels, opts[:actor])
         end
     }
   end
 
+  # The newest pins of the projects listed, a few of them.
+  defp shown_pins(pins, projects),
+    do: pins |> Enum.filter(&Map.has_key?(projects, &1.project)) |> Enum.take(@instrument_rows)
+
   # The goals the Graph view steps through, one goal's map at a time: the
   # project's, or the whole fleet's, the #{@step_goals} most recently changed,
-  # in the order they were added.
+  # in the order they were added. A step shows the goal's whole map, so it
+  # leaves the kind and owner filters behind.
   defp step_goals(fleet_id, filter, opts) do
     fleet_id
     |> Graph.graph_objects!(
@@ -387,7 +390,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     )
     |> Enum.sort_by(fn %{id: "goal#" <> number} -> String.to_integer(number) end)
     |> Enum.map(
-      &%{id: &1.id, title: &1.title, path: board_path(fleet_id, %{filter | goal: &1.id})}
+      &%{
+        id: &1.id,
+        title: &1.title,
+        path: board_path(fleet_id, %{filter | goal: &1.id, type: nil, owner: nil})
+      }
     )
   end
 
@@ -1533,9 +1540,13 @@ defmodule KeyfleetWeb.WorkspacePage do
         for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: notebook_in(uri))
       )
 
+    # An archived goal's map holds the archived items around it, as the goal
+    # itself is one.
+    archived? = archived?(goal.sys)
+
     map =
       fleet_id
-      |> Graph.workspace_graph!(%{goal: goal.id}, opts)
+      |> Graph.workspace_graph!(%{goal: goal.id, archived: archived?}, opts)
       |> WorkspaceGraph.draw(fleet_id, %{})
 
     %{
@@ -1548,7 +1559,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           type: nil,
           owner: nil,
           goal: goal.id,
-          archived?: false
+          archived?: archived?
         }),
       results:
         for {object, uri, {:notebook_result, uri}} <- cited do

@@ -6260,3 +6260,21 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   they stack and show four lines each. They call neither the notebook hub
   nor the code store.
 - This is step 5 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — Review fixes for the Workspace's counts, maps and panels
+
+- The counts above the Project follow the Graph's colours, one count per
+  colour, and every task is in exactly one: open tasks are the ones not
+  started (taken or not), in progress the ones being worked, then awaiting
+  review, a new Blocked count (blocked, or disputed by a review), and
+  accepted. All six come from one query. `counts` in `workspace_board`
+  gains `blocked`. API contract 24.11.0, which also lets a graph item's
+  `standing` be `reproduced`.
+- A task accepted with a passed reproduction is coloured done and named
+  Reproduced in the Graph, and counts in Keys at work.
+- A goal is always in its own map, however many newer items are linked to
+  it, and an archived goal's map holds the archived items around it.
+- Stepping to a goal on the stage shows its whole map, leaving the kind and
+  owner filters behind.
+- The Docs and Code panels show the six newest pins of the projects listed.
+- Contradicting links are dashed on the GPU too, as the page draws them.

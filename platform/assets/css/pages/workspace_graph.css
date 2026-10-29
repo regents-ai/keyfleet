@@ -41,9 +41,10 @@
   --kf-tone-open: var(--color-fg-muted);
   --kf-tone-doing: var(--color-info);
   --kf-tone-waiting: var(--color-warning);
+  --kf-tone-held: var(--color-error);
   --kf-tone-done: var(--color-success);
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   margin: 0 0 1rem;
   border-block: 1px solid var(--color-border);
 }
@@ -51,6 +52,7 @@
 .workspace-counts [data-tone="open"] { --kf-tone: var(--kf-tone-open); }
 .workspace-counts [data-tone="doing"] { --kf-tone: var(--kf-tone-doing); }
 .workspace-counts [data-tone="waiting"] { --kf-tone: var(--kf-tone-waiting); }
+.workspace-counts [data-tone="held"] { --kf-tone: var(--kf-tone-held); }
 .workspace-counts [data-tone="done"] { --kf-tone: var(--kf-tone-done); }
 
 .workspace-counts > div {
