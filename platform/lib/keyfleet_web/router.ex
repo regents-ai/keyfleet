@@ -297,9 +297,10 @@ defmodule KeyfleetWeb.Router do
     post "/connections/revoke", OAuthController, :revoke_connection, log: false
   end
 
-  # The Claude connector's MCP address: AshAi runs the tools the capabilities
-  # list as hosted (`Keyfleet.Capabilities.hosted_tools/0`), each as its Ash
-  # action with its policies. McpAgent admits the request first: POST /mcp
+  # The Claude connector's MCP address: AshAi runs every tool this site's
+  # domains hand it (the identity tools and each fleet tool, by its browser
+  # tool's name), each as its Ash action with its policies, and lists to each
+  # caller only the tools those policies let it run. McpAgent admits the request first: POST /mcp
   # alone, JSON, one call, no query string and no page from another site, with
   # a token from the sign-in above. The app is the actor, or, once its identity
   # is paired and the person allowed the agent permission, that paired agent.
@@ -323,7 +324,6 @@ defmodule KeyfleetWeb.Router do
             AshAi.Mcp.Router,
             [
               otp_app: :keyfleet,
-              tools: Keyfleet.Capabilities.hosted_tools(),
               mcp_name: "keyfleet",
               instructions:
                 "Keyfleet, where people and their agents work together in fleets, each Key a seat in one. " <>

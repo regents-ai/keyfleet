@@ -11,7 +11,7 @@ the same commit.
 **Website**: `yes` when a person does it on a page; `agent only` for an
 agent's own tooling (its standing, checkpoint, previews, receipts, profile).
 **MCP**: `yes` when `/mcp` lists it under the same name, as an Ash AI tool running the same action
-(`Keyfleet.Capabilities.hosted_tools/0`); `gap` until its action moves there.
+(a domain's `tools` block); `gap` until its action moves there.
 **CLI**: the manifest's `cli` interface; `gap` where it has none.
 
 ## Gaps
