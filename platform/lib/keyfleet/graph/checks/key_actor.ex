@@ -42,7 +42,16 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
         "its owner, today, while the fleet's ownership is fresh and the key's edits are " <>
         "not restricted"
 
+  # The Claude connector lists an agent's writes, and only an agent's, before
+  # any write names a fleet or a key (`AshAi`); calling one runs the whole check.
   @impl true
+  def match?(
+        actor,
+        %{subject: %Ash.ActionInput{context: %{private: %{ash_ai_pre_check?: true}}}},
+        _opts
+      ),
+      do: is_struct(actor, Agent)
+
   def match?(actor, %{subject: %Ash.ActionInput{arguments: arguments}}, _opts) do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 

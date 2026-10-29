@@ -19,9 +19,9 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   Then the request carries a connected app's token (`Authorization: Bearer`),
   one this site gave for `/mcp` with the identity permission, as `RegentOAuth`
   checks it, and spends its account's budget: 120 requests a minute, after the
-  endpoint's ceiling for the connector's addresses. The budget is spent before
-  anything else is asked, so a request past it never reaches the sign-in
-  server or the pairings.
+  endpoint's ceiling for the connector's addresses. Only the token is read
+  before the budget is spent, since the budget is the token's account's, so a
+  request past it never reaches the sign-in server or the pairings.
 
   While the app's own identity is paired with that same account and the
   person allowed Keyfleet's agent permission (`Keyfleet.OAuth.agent_scope/0`),

@@ -7,7 +7,14 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{Code, Fleets, Graph, Notebooks, Projects, Rooms}
-  alias Keyfleet.Graph.Errors.{MembersOnlyError, UnavailableError, UnknownFleetError}
+
+  alias Keyfleet.Graph.Errors.{
+    ComingSoonFleetError,
+    MembersOnlyError,
+    UnavailableError,
+    UnknownFleetError
+  }
+
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Projects.Errors.UnknownProjectError
   alias KeyfleetWeb.{Endpoint, RoomJSON, WorkspacePage, WorkspaceRefusal}
@@ -116,10 +123,17 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
 
   defp known_fleet(fleet_id) do
     case Fleets.get_fleet(fleet_id, actor: %System{}) do
-      {:ok, %{}} -> :ok
       {:ok, nil} -> {:error, UnknownFleetError.exception(fleet_id: fleet_id)}
+      {:ok, fleet} -> opened(fleet_id, fleet)
       {:error, error} -> {:error, error}
     end
+  end
+
+  # A coming-soon fleet has no workspace until it opens.
+  defp opened(fleet_id, fleet) do
+    if Fleets.coming_soon?(fleet_id, fleet),
+      do: {:error, ComingSoonFleetError.exception(fleet_id: fleet_id)},
+      else: :ok
   end
 
   # Only the fleet's members read its workspace, and who they are can't be

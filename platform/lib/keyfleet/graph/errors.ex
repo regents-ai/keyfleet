@@ -5,6 +5,13 @@ defmodule Keyfleet.Graph.Errors.UnknownFleetError do
   def message(%{fleet_id: fleet_id}), do: "there is no fleet #{fleet_id}"
 end
 
+defmodule Keyfleet.Graph.Errors.ComingSoonFleetError do
+  @moduledoc "Raised when a request names a fleet of the catalog that hasn't opened yet."
+  use Splode.Error, fields: [:fleet_id], class: :invalid
+
+  def message(%{fleet_id: fleet_id}), do: "fleet #{fleet_id} hasn't opened yet"
+end
+
 defmodule Keyfleet.Graph.Errors.NotKeyHolderError do
   @moduledoc """
   Raised when the actor neither owns nor holds a shard of the key it acts as,

@@ -18,8 +18,11 @@ defmodule KeyfleetWeb.ToolErrors do
   (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's in the
   words every Regent site gives it, a fleet tool's with the refusal its signed
   request answers (an unknown fleet as `fleet_unknown`), or else as
-  `invalid_request`. A tool that answers as its signed request also checks
-  its body as that request's is when it runs (`KeyfleetWeb.AgentTools.Run`).
+  `invalid_request`. A workspace write that names a coming-soon fleet is
+  refused once its input has the shape its signed request needs, as every
+  agent request about one is (`KeyfleetWeb.Plugs.FleetComingSoon`). A tool
+  that answers as its signed request also checks its body as that
+  request's is when it runs (`KeyfleetWeb.AgentTools.Run`).
   Input that is not an object, or names an input the action has not, is
   refused too. The check says so in the action's context
   (`input_check`), so it spends no write allowance
@@ -27,6 +30,8 @@ defmodule KeyfleetWeb.ToolErrors do
   """
 
   alias Keyfleet.Agents.Connection
+  alias Keyfleet.Fleets
+  alias Keyfleet.Graph.Errors.ComingSoonFleetError
   alias KeyfleetWeb.WorkspaceRefusal
 
   @doc """
@@ -35,18 +40,35 @@ defmodule KeyfleetWeb.ToolErrors do
   """
   @spec check_input(AshAi.Tool.t(), term(), map()) :: {:ok, term()} | {:error, String.t()}
   def check_input(%AshAi.Tool{resource: resource, action: %{name: action}}, arguments, context) do
-    with %{} <- arguments,
-         %{} = input <- arguments["input"] || %{},
-         %{valid?: true} <-
-           Ash.ActionInput.for_action(resource, action, input,
-             actor: context[:actor],
-             context: Map.put(context[:context] || %{}, :input_check, true)
-           ) do
-      {:ok, arguments}
+    with %{} <- arguments, %{} = input <- arguments["input"] || %{} do
+      resource
+      |> Ash.ActionInput.for_action(action, input,
+        actor: context[:actor],
+        context: Map.put(context[:context] || %{}, :input_check, true)
+      )
+      |> checked(arguments)
     else
-      %Ash.ActionInput{errors: errors} -> {:error, refused(resource, action, errors)}
       _not_an_object -> {:error, refused(resource, action, [])}
     end
+  end
+
+  defp checked(%Ash.ActionInput{resource: resource, action: %{name: action}} = input, arguments) do
+    errors = if shaped?(input), do: opened(input) ++ input.errors, else: input.errors
+    if errors == [], do: {:ok, arguments}, else: {:error, refused(resource, action, errors)}
+  end
+
+  # The input has the shape a signed request needs: every refusal it has is
+  # the workspace's own.
+  defp shaped?(%Ash.ActionInput{errors: errors}),
+    do: Enum.all?(errors, &WorkspaceRefusal.for_error/1)
+
+  defp opened(%Ash.ActionInput{resource: resource} = input) do
+    fleet_id = Ash.ActionInput.get_argument(input, :fleet_id)
+
+    if Ash.Resource.Info.domain(resource) == Keyfleet.Graph and fleet_id in Fleets.catalog_ids() and
+         Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id)),
+       do: [ComingSoonFleetError.exception(fleet_id: fleet_id)],
+       else: []
   end
 
   defp refused(Connection, :pair_identity, _errors),
@@ -91,6 +113,7 @@ defimpl AshAi.ToToolError,
   for: [
     Keyfleet.Graph.Errors.RefusedError,
     Keyfleet.Graph.Errors.UnknownFleetError,
+    Keyfleet.Graph.Errors.ComingSoonFleetError,
     Keyfleet.Graph.Errors.NotKeyHolderError,
     Keyfleet.Graph.Errors.EditsRestrictedError,
     Keyfleet.Graph.Errors.UnavailableError,

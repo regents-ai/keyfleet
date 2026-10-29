@@ -4,10 +4,12 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
   request (`KeyfleetWeb.AgentGraphController`) and at the Claude connector's
   address (`KeyfleetWeb.ToolErrors`): its status, and a body with the
   workspace's own reason and what to do next. Every refusal here carries
-  `details`, empty unless it says more.
+  `details`, empty unless it says more, but a coming-soon fleet's and a
+  closed project's, which answer as every agent request about one does.
   """
 
   alias Keyfleet.Graph.Errors.{
+    ComingSoonFleetError,
     EditsRestrictedError,
     IndeterminateError,
     MembersOnlyError,
@@ -62,6 +64,7 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
   end
 
   def for_error(%UnknownFleetError{}), do: refusal(404, "fleet_unknown")
+  def for_error(%ComingSoonFleetError{}), do: {404, Refusal.body("fleet_coming_soon")}
   def for_error(%UnknownProjectError{}), do: refusal(404, "project_unknown")
   def for_error(%OwnershipRefreshingError{}), do: refusal(503, "ownership_refreshing")
   def for_error(%NotKeyHolderError{}), do: refusal(403, "not_a_key_holder")
