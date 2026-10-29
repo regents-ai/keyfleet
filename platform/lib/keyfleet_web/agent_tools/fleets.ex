@@ -2,10 +2,12 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
   @moduledoc """
   What an agent reads about itself in a fleet, and the fleet's own news: its
   standing (`doctor`), its checkpoint (`checkpoint`, `save_checkpoint`), the
-  fleet's activity (`activity`) and whether a request it sent ran
-  (`receipts`). Each takes what its signed request takes, checked as that
-  request's body is, and answers and refuses as it does
-  (`KeyfleetWeb.AgentTools.Run`, `KeyfleetWeb.AgentTools.Fleets.Answer`).
+  fleet's activity (`activity`), one proposal with its votes (`proposal`),
+  whether a request it sent ran (`receipts`), what a pasted address names
+  (`link`) and what a write would do before it is sent (`preview`). Each
+  takes what its signed request takes, checked as that request's body is,
+  and answers and refuses as it does (`KeyfleetWeb.AgentTools.Run`,
+  `KeyfleetWeb.AgentTools.Fleets.Answer`).
   Only an agent runs them, never a connected app on its own.
   """
   use Ash.Resource,
@@ -15,6 +17,8 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
   alias KeyfleetWeb.AgentTools.Run
 
   @fleet [max_length: 63, trim?: false]
+  # The largest number a browser tool sends exactly.
+  @top 9_007_199_254_740_991
 
   actions do
     action :doctor, :map do
@@ -53,6 +57,27 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
         constraints: [max_length: 128, trim?: false]
 
       run {Run, tool: "receipts_read"}
+    end
+
+    action :proposal, :map do
+      description "One proposal and up to 20 of its votes, after a place in them."
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+      argument :number, :integer, allow_nil?: false, constraints: [min: 1, max: @top]
+      argument :votes_after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @top]
+      run {Run, tool: "proposals_show"}
+    end
+
+    action :link, :map do
+      description "What a pasted Keyfleet address names, and the read to call next."
+      argument :url, :string, allow_nil?: false, constraints: [max_length: 2048, trim?: false]
+      run {Run, tool: "links_resolve"}
+    end
+
+    action :preview, :map do
+      description "What a write tool would do with an input, without sending it."
+      argument :tool, :string, allow_nil?: false, constraints: [max_length: 64, trim?: false]
+      argument :input, :map, allow_nil?: false
+      run {Run, tool: "writes_preview"}
     end
   end
 

@@ -258,8 +258,9 @@ defmodule Keyfleet.MixProject do
         # AgentTools domain's records, Workspace with its Read, and Rooms and
         # Dms, each with the Run their tools share. Polls and projects add four:
         # the Polls and Projects records, each with that Run. Fleets adds two: the
-        # Fleets record, with that Run.
-        "xref graph --label compile-connected --fail-above 114",
+        # Fleets record, with that Run. Keys adds two: the Keys record, with
+        # that Run.
+        "xref graph --label compile-connected --fail-above 116",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

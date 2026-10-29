@@ -25,12 +25,14 @@ defmodule KeyfleetWeb.AgentTools do
     resource KeyfleetWeb.AgentTools.Polls
     resource KeyfleetWeb.AgentTools.Projects
     resource KeyfleetWeb.AgentTools.Fleets
+    resource KeyfleetWeb.AgentTools.Keys
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
   # a post or message sent again with its idempotency key answers as the
   # first did, as a vote cast again does; a sync records a check-in and
-  # nothing else; and deleting a conversation or a project can't be undone.
+  # nothing else; and deleting a conversation or a project, or taking a post
+  # off a wall, can't be undone.
   @browser_tools Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
   @workspace KeyfleetWeb.AgentTools.Workspace
   @rooms KeyfleetWeb.AgentTools.Rooms
@@ -38,6 +40,7 @@ defmodule KeyfleetWeb.AgentTools do
   @polls KeyfleetWeb.AgentTools.Polls
   @projects KeyfleetWeb.AgentTools.Projects
   @fleets KeyfleetWeb.AgentTools.Fleets
+  @keys KeyfleetWeb.AgentTools.Keys
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -79,7 +82,17 @@ defmodule KeyfleetWeb.AgentTools do
     checkpoint_read: {@fleets, :checkpoint, "Checkpoint", :read},
     checkpoint_save: {@fleets, :save_checkpoint, "Save checkpoint", :once},
     fleets_activity: {@fleets, :activity, "Activity", :read},
-    receipts_read: {@fleets, :receipts, "Receipts", :read}
+    receipts_read: {@fleets, :receipts, "Receipts", :read},
+    proposals_show: {@fleets, :proposal, "Proposal", :read},
+    links_resolve: {@fleets, :link, "Link", :read},
+    writes_preview: {@fleets, :preview, "Preview", :read},
+    keys_show: {@keys, :show, "Key", :read},
+    walls_remove: {@keys, :wall_remove, "Remove post", :remove},
+    keys_post_as: {@keys, :post_as, "Posting Key", :repeatable},
+    mutes_list: {@keys, :mutes, "Mutes", :read},
+    mutes_add: {@keys, :mute, "Mute", :repeatable},
+    mutes_remove: {@keys, :unmute, "Unmute", :repeatable},
+    shards_list: {@keys, :shards, "Shards", :read}
   ]
 
   tools do

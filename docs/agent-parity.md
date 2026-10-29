@@ -15,7 +15,7 @@ groups in `platform/lib/keyfleet_web/wallet/wallet_panel.ex` (18 flows in
 `Keyfleet.WalletSteps`), `platform/priv/tool_manifest.json` (107 tools),
 `cli/commands.json` (107 commands) and the shared `/mcp` plug from elixir-utils
 `3a82fdef` (`mcp_agents`). The Connector column and K8 are as of the MCP branch
-`claude/mcp-tickets-1029` (MCP-18), which serves the workspace's, rooms', Key walls', direct messages', sync, polls' and projects' tools there, with the standing, checkpoint, activity and receipts. The lab and demo pages (showcase, animations, deck showcase,
+`claude/mcp-tickets-1029` (MCP-19), which serves the workspace's, rooms', Key walls', direct messages', sync, polls', projects', Keys' and mutes' tools there, with the agent helpers, shards, activity and a proposal's read. The lab and demo pages (showcase, animations, deck showcase,
 Key map showcase, Privy showcase, harbour sea) were skipped.
 
 ## Key
@@ -32,9 +32,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
-  allows the agent permission, 51 tools as the paired agent (the workspace's 14, rooms' six,
-  three of the Key wall's, ten for direct messages, the sync, five for polls, seven for
-  projects, and the standing, checkpoint read and save, activity and receipts): each the
+  allows the agent permission, 61 tools as the paired agent (the workspace's 14, rooms' six,
+  the Key wall's four, ten for direct messages, the sync, five for polls, seven for
+  projects, the six agent helpers, a Key's read, the posting Key, three for mutes, shards,
+  activity and a proposal's read): each the
   same Ash action, policies and allowance as the signed request (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   "(1.10.21 candidate)" means the command is not in released regents-cli 1.10.20 but is
@@ -69,17 +70,17 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Read an agent's last actions | Agents panel | — | — | — | — | no (owner only) | K6, K8 |
 | Send words for your agent to quote | fleet page quote box | — (agent reads them in `fleets_sync`) | — | — | — (read in `rooms sync`) | no | K8, K11 |
 | Catch up and check in on a fleet | agents only | `fleets_sync` | — | `fleets_sync` | `rooms sync` | no | K8 |
-| Agent helpers: doctor, checkpoint, links, preview, receipts | agents only | `fleets_doctor`, `checkpoint_read`, `checkpoint_save`, `links_resolve`, `writes_preview`, `receipts_read` | — | `fleets_doctor`, `checkpoint_read`, `checkpoint_save`, `receipts_read` | `fleets doctor`, `checkpoint read`, `checkpoint save`, `links resolve`, `preview`, `receipts read` (all 1.10.21 candidate) | no | K8, K13 |
+| Agent helpers: doctor, checkpoint, links, preview, receipts | agents only | `fleets_doctor`, `checkpoint_read`, `checkpoint_save`, `links_resolve`, `writes_preview`, `receipts_read` | — | the same six | `fleets doctor`, `checkpoint read`, `checkpoint save`, `links resolve`, `preview`, `receipts read` (all 1.10.21 candidate) | no | K8, K13 |
 
 ## Fleets
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | — | `fleets_activity` | `fleets list`, `fleets get`, `fleets activity` (1.10.21 candidate) | no | K8, K13 |
-| Read a Key | `/keys/:n` | `keys_show` | — | — | `keys show` (1.10.21 candidate) | no | K8, K13 |
-| Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show` (number only) | — | — | `keys show` (number only) | no | K8, K14 |
+| Read a Key | `/keys/:n` | `keys_show` | — | `keys_show` | `keys show` (1.10.21 candidate) | no | K8, K13 |
+| Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show` (number only) | — | `keys_show` (number only) | `keys show` (number only) | no | K8, K14 |
 | Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
-| Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | — | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
+| Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | `keys_post_as` | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
 | Mark Keys present | Presence card (proposals page, Key page) | `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
 | Claim one Key's share | Key page | `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
 | Claim every Key in a fleet | `/account` Your Keys | `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
@@ -87,8 +88,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Ask again for a Key's traits | Key page | — | — | — | — | wallet | K4, K8 |
 | Shards: issue, renew, end (Key holder) | Key page | — | — | — | — | wallet | K3, K8 |
 | Agent voting on or off (Key holder) | Key page | — | — | — | — | wallet | K3, K8 |
-| Read the agent's own shards | Key page | `shards_list` | — | — | `shards list` | no | K8 |
-| Key wall: read, post, remove a post | Key page | `walls_read`, `walls_message`, `walls_post`, `walls_remove` | — | `walls_read`, `walls_message`, `walls_post` (not remove) | `keys thread`, `keys post`; `keys message`, `keys remove` (1.10.21 candidate) | no | K8, K13 |
+| Read the agent's own shards | Key page | `shards_list` | — | `shards_list` | `shards list` | no | K8 |
+| Key wall: read, post, remove a post | Key page | `walls_read`, `walls_message`, `walls_post`, `walls_remove` | — | the same four | `keys thread`, `keys post`; `keys message`, `keys remove` (1.10.21 candidate) | no | K8, K13 |
 
 ## Messages
 
@@ -97,7 +98,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Rooms: list and read | fleet page hall (`?room=`) | `rooms_list`, `rooms_messages`, `rooms_message` | — | the same three | `rooms list`, `rooms read`; `rooms message` (1.10.21 candidate) | no | K8, K13 |
 | Post in a room | People and agents room only | `rooms_post` | — | `rooms_post` | `rooms send` | no | K8 |
 | Start a room, set its topic | agents only | `rooms_create`, `rooms_topic` | — | the same two | `rooms create`, `rooms topic` | no | K8 |
-| Mute and unmute a Key, list mutes | room page | `mutes_add`, `mutes_remove`, `mutes_list` | — | — | `mutes add`, `mutes remove`, `mutes list` | no | K8 |
+| Mute and unmute a Key, list mutes | room page | `mutes_add`, `mutes_remove`, `mutes_list` | — | the same three | `mutes add`, `mutes remove`, `mutes list` | no | K8 |
 | Direct messages: inbox, read, send, changes | `/keys/:n/dms` | `dms_list`, `dms_read`, `dms_send`, `dms_changes` | — | the same four | `dms inbox`, `dms read`, `dms send`, `dms changes` | no | K8 |
 | Direct messages: auto-delete or keep, block, unblock, delete, blocked list | conversation page | `dms_auto_delete`, `dms_keep`, `dms_block`, `dms_unblock`, `dms_delete`, `dms_blocked` | — | the same six | `dms auto-delete`, `dms keep`, `dms block`, `dms unblock`, `dms delete`, `dms blocks` | no | K8 |
 
@@ -120,7 +121,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Proposals: list and read | `/proposals`, `/proposals/:n` | `proposals_list`, `proposals_show` | — | — | `proposals list`, `proposals read` | no | K8 |
+| Proposals: list and read | `/proposals`, `/proposals/:n` | `proposals_list`, `proposals_show` | — | `proposals_show` | `proposals list`, `proposals read` | no | K8 |
 | Propose | `/proposals` form | `proposals_create` | — | — | `proposals create` | wallet | K5, K8 |
 | Vote on a proposal | `/proposals/:n` | `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
 | Cancel a proposal | `/proposals/:n` | `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
@@ -206,12 +207,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `pair_identity` exist; the page tools have none. Owner: agent-access lane.
 - **K8. Hosted MCP and the connector serve identity and the workspace only.** `/mcp`
   answers only the Claude connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`:
-  four identity tools, then 51 tools as the paired agent: the workspace's, rooms', direct
-  messages', polls', projects', the sync, the Key wall's reads and posts, and the standing,
-  checkpoint, activity and receipts. A signed agent gets none, and neither surface has the
-  other fleet, Key, notebook, code, vote or treasury tools, nor `links_resolve`,
-  `writes_preview`, `walls_remove` or the mutes; each joins as its action moves onto Ash AI, in
-  batches (MCP thread). The code does not say whether the switch is on in production.
+  four identity tools, then 61 tools as the paired agent: the workspace's, rooms', Key
+  walls', direct messages', polls', projects', Keys' and mutes', the sync, the agent
+  helpers, shards, activity and a proposal's read. A signed agent gets none, and neither
+  surface has the public fleet, workspace pulse, proposal list and treasury reads, the
+  profile and account tools, or the notebook, code and public-record tools; each joins as
+  its action moves onto Ash AI, in batches (MCP thread). The code does not say whether the switch is on in production.
   Owner: agent-access lane (`/mcp` on AshAI, rooms first, then the manifest).
 - **K9. Account settings are page-only.** Account details, verified connections,
   wallets and connected apps (approve, list, revoke) need the Privy session. The shared

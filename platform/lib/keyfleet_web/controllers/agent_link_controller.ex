@@ -1,17 +1,14 @@
 defmodule KeyfleetWeb.AgentLinkController do
   @moduledoc """
-  What a pasted Keyfleet address names, and the read to call next
-  (`KeyfleetWeb.Links`). Nothing is read from the thing itself and nothing
-  is written.
+  What a pasted Keyfleet address names, and the read to call next. It
+  answers what the Claude connector's `links_resolve` answers
+  (`KeyfleetWeb.AgentTools.Fleets.Answer`). Nothing is written.
   """
   use KeyfleetWeb, :controller
 
-  alias KeyfleetWeb.{Links, Refusal}
+  alias KeyfleetWeb.AgentReply
+  alias KeyfleetWeb.AgentTools.Fleets.Answer
 
-  def resolve(conn, %{"url" => url}) do
-    case Links.resolve(url, conn.assigns.agent_actor) do
-      {:ok, link} -> json(conn, Map.put(link, :url, url))
-      :unknown -> Refusal.json(conn, 422, "link_unknown")
-    end
-  end
+  def resolve(conn, params),
+    do: AgentReply.answer(conn, Answer.answer(:link, params, conn.assigns.agent_actor, nil))
 end

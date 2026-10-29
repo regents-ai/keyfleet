@@ -81,7 +81,7 @@ Follow regent-workflow's "Live checks". On Keyfleet:
   (`KEYFLEET_CLAUDE_CONNECTOR_ENABLED`). Once it is on and added as a custom connector,
   a Claude thread pairs as harness `claude` with a code from Sean and uses keyfleet.ai
   like any other paired agent: pairing, check-in, and the room, wall, sync, direct
-  message, poll, project, workspace, standing, checkpoint, activity and receipt tools
+  message, poll, project, workspace, Key, mute, shard, proposal and helper tools
   under the same names (the AgentTools domain's Ash AI `tools` block). The other fleet
   tools join as their actions move onto Ash AI (`docs/agent-parity.md`).
 

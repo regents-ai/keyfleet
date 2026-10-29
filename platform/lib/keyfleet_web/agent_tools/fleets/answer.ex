@@ -3,9 +3,13 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   What an agent reads about itself and a fleet, the same over its signed
   requests and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Fleets`):
   its standing (`:doctor`), its checkpoint (`:checkpoint`,
-  `:save_checkpoint`), what has been happening (`:activity`) and whether a
-  request it sent ran (`:receipts`). Each answer is `{status, body, nil}`;
-  `params` is the signed request's JSON, its body with the fleet's id.
+  `:save_checkpoint`), what has been happening (`:activity`), one proposal
+  with its votes (`:proposal`), whether a request it sent ran (`:receipts`),
+  what a pasted address names (`:link`, `KeyfleetWeb.Links`) and what a write
+  would do before it is sent (`:preview`, `KeyfleetWeb.Preview`). Each answer
+  is `{status, body, nil}`; `params` is the signed request's JSON, its body
+  with the fleet's id. A link and a preview read nothing from the thing
+  itself and write nothing.
 
   The standing is read in one go, so the agent learns what it may do and
   what is still missing before it tries: who it signed in as, its pairing and
@@ -45,13 +49,14 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   again with its command id never runs twice.
   """
 
-  alias Keyfleet.{Access, Activity, Agents, Capabilities, Fleets, Graph, Rooms}
+  alias Keyfleet.{Access, Activity, Agents, Capabilities, Fleets, Graph, Proposals, Rooms}
   alias Keyfleet.Actors.{Agent, Human}
   alias Keyfleet.Graph.Event
-  alias KeyfleetWeb.{Refusal, RoomJSON, Standing}
+  alias KeyfleetWeb.{Links, Preview, ProposalJSON, Refusal, RoomJSON, Standing}
 
   @salt "agent activity cursor"
   @cursor_seconds 3600
+  @votes_page 20
 
   @doc "Answers `op` for `actor`; nothing here waits, so the waiter is unused."
   @spec answer(atom(), map(), Agent.t(), term()) :: {pos_integer(), map(), nil}
@@ -136,8 +141,58 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     end
   end
 
+  def answer(:proposal, %{"fleet_id" => fleet_id} = params, _actor, _waiter) do
+    %{"number" => number, "votes_after_seq" => after_seq} = params
+
+    case Fleets.get_fleet!(fleet_id) do
+      nil -> refusal(404, "fleet_unknown")
+      _fleet -> proposal(fleet_id, number, after_seq)
+    end
+  end
+
+  def answer(:link, %{"url" => url}, actor, _waiter) do
+    case Links.resolve(url, actor) do
+      {:ok, link} -> ok(Map.put(link, :url, url))
+      :unknown -> refusal(422, "link_unknown")
+    end
+  end
+
+  def answer(:preview, %{"tool" => tool, "input" => input}, actor, _waiter) do
+    case Preview.preview(tool, input, actor) do
+      {:ok, preview} ->
+        ok(preview)
+
+      :tool_unknown ->
+        refusal(422, "preview_tool_unknown")
+
+      {:missing, names} ->
+        hint =
+          "This tool's input names #{Enum.join(names, ", ")}. Add them, then preview it again."
+
+        {422, Refusal.body("invalid_request", hint), nil}
+    end
+  end
+
   defp ok(body), do: {200, body, nil}
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
+
+  defp proposal(fleet_id, number, after_seq) do
+    case Proposals.get_by_number(fleet_id, number) do
+      nil ->
+        refusal(404, "proposal_unknown")
+
+      proposal ->
+        {votes, more?} = Proposals.votes_after(proposal.id, after_seq, @votes_page)
+
+        ok(%{
+          proposal: ProposalJSON.detail(proposal, Proposals.status(proposal)),
+          votes: Enum.map(votes, &ProposalJSON.vote/1),
+          votes_next_cursor:
+            votes |> List.last(%{record_seq: after_seq}) |> Map.fetch!(:record_seq),
+          votes_has_more: more?
+        })
+    end
+  end
 
   defp pairing(%Human{}), do: "paired"
   defp pairing(:person_not_here), do: "person_not_here"
