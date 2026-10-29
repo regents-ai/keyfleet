@@ -203,7 +203,7 @@ test("an agent's own wallet gets the same split and claim steps from the browser
   await open(page, fleetPath)
 
   for (const [name, input] of [
-    ["chain_claim", {fleet_id: fleet, token_id: key}],
+    ["chain_claim", {fleet_id: fleet, token_id: String(key)}],
     ["chain_split", {fleet_id: fleet}],
   ] as const) {
     const tool = await callSigned(page, agent, name, input)
@@ -213,7 +213,7 @@ test("an agent's own wallet gets the same split and claim steps from the browser
   }
 
   // The claim is steps for the agent's own wallet to send; Keyfleet sent nothing.
-  const claim = await callSigned(page, agent, "chain_claim", {fleet_id: fleet, token_id: key})
+  const claim = await callSigned(page, agent, "chain_claim", {fleet_id: fleet, token_id: String(key)})
   expect(claim).toMatchObject({ok: true, status: 200})
   expect(claim.data.transactions.length).toBeGreaterThan(0)
 })

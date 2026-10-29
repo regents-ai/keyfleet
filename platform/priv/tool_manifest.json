@@ -12190,9 +12190,11 @@
                 "minLength": 1
               },
               "token_id": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "The Key to claim"
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "The Key to claim: its exact decimal token id, as a string"
               }
             }
           },
@@ -12238,9 +12240,11 @@
             "minLength": 1
           },
           "token_id": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "The Key to claim"
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The Key to claim: its exact decimal token id, as a string"
           }
         }
       },
