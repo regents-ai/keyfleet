@@ -366,10 +366,10 @@ defmodule KeyfleetWeb.PublicDocuments do
   defp hosted_mcp do
     if Keyfleet.OAuth.enabled?(),
       do:
-        "Connected apps, such as Claude, use the hosted MCP address at {{origin}}/mcp, which only " <>
-          "pairs and checks in: the person signs in to Keyfleet from the app and allows it. " <>
-          "Everything else is the WebMCP tools and signed requests. " <>
-          "[Claude]({{origin}}/agents/claude) has the setup.",
+        "Connected apps, such as Claude, use the hosted MCP address at {{origin}}/mcp: the " <>
+          "person signs in to Keyfleet from the app and allows it, the app pairs like any agent, " <>
+          "and the address offers the tools above that need no wallet, under the same names, " <>
+          "signing each request for the app. [Claude]({{origin}}/agents/claude) has the setup.",
       else: "Keyfleet does not offer a hosted MCP endpoint."
   end
 

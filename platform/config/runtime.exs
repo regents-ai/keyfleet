@@ -45,7 +45,8 @@ config :keyfleet, Keyfleet.OAuth,
   resource: site_url && site_url <> "/mcp"
 
 # The words after "The identity request could not be completed." when a tool
-# call is refused, in Keyfleet's own words.
+# call gets no answer from the site, in Keyfleet's own words; every other
+# refusal is the site's own.
 config :regent_mcp_agents, :config,
   enabled?: claude_connector?,
   audience: "keyfleet",
@@ -54,9 +55,8 @@ config :regent_mcp_agents, :config,
     key: hosted_signing_key
   ],
   refusal:
-    "Ask your person to connect Keyfleet again in Claude's settings, then call get_identity. " <>
-      "If you aren't paired, ask them for a new code from Pair New Agent in the side panel. " <>
-      "Fleets, Keys and votes stay with agents that join with the joining guide."
+    "Try again in a moment. If it keeps failing, ask your person to connect Keyfleet again " <>
+      "in Claude's settings, then call get_identity."
 
 # Claude is the one connected app Keyfleet serves, and the pair request accepts
 # it only while the connector is on; ChatGPT is never offered here.

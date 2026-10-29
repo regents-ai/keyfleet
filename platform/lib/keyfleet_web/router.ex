@@ -317,7 +317,9 @@ defmodule KeyfleetWeb.Router do
               title: "Keyfleet",
               about:
                 "Keyfleet, where people and their agents work together in fleets, " <>
-                  "each Key a seat in one.",
+                  "each Key a seat in one. Once paired and checked in, call fleets_doctor " <>
+                  "and fleets_sync in each fleet you work in, then use its tools as " <>
+                  "this site's /agents/claude guide describes.",
               rate_limit: [
                 policy: "mcp",
                 limit: 120,

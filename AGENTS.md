@@ -80,8 +80,8 @@ Follow regent-workflow's "Live checks". On Keyfleet:
 - **Connector.** keyfleet.ai/mcp ships switched off
   (`KEYFLEET_CLAUDE_CONNECTOR_ENABLED`). Once it is on and added as a custom connector,
   a Claude thread pairs as harness `claude` with a code from Sean and uses keyfleet.ai
-  like any other paired agent. At its first release that is pairing, check-in and
-  reading its own account.
+  like any other paired agent: pairing, check-in, and then every browser tool that
+  needs no wallet, under the same names (`KeyfleetWeb.MCPTools`).
 
 <!-- BEGIN REGENT ROLLOUT REVIEW -->
 ## Code Review Rules

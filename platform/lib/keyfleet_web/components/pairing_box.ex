@@ -177,7 +177,7 @@ defmodule KeyfleetWeb.PairingBox do
       setup:
         Enum.join(
           [setup(harness), "Your full setup: " <> origin <> AgentGuides.path(harness)] ++
-            List.wrap(if harness not in Harness.hosted(), do: first_read(start)),
+            List.wrap(first_read(start, harness in Harness.hosted())),
           "\n"
         ),
       start: start
@@ -191,33 +191,47 @@ defmodule KeyfleetWeb.PairingBox do
 
   # A link to a workspace item or a project's page names the work, so the
   # agent's first read once paired is that work itself, as its page shows it
-  # to a person, rather than the whole fleet. A hosted agent, such as Claude
-  # through its connector, only pairs and checks in, so it gets no such read.
-  defp first_read(nil), do: nil
+  # to a person, rather than the whole fleet. Claude, through its connector,
+  # reads it with the connector's tool of the same name.
+  defp first_read(nil, _hosted?), do: nil
 
-  defp first_read(start) do
+  defp first_read(start, hosted?) do
     path = URI.parse(start).path || ""
 
     with %{id: fleet_id, path: fleet_path} <- Keyfleet.Fleets.at_path(path) do
-      path |> String.replace_prefix(fleet_path, "") |> String.split("/") |> work(fleet_id)
+      path
+      |> String.replace_prefix(fleet_path, "")
+      |> String.split("/")
+      |> work(fleet_id, hosted?)
     end
   end
 
-  defp work(["", "workspace", item], fleet_id) do
+  defp work(["", "workspace", item], fleet_id, hosted?) do
     id = URI.decode(item)
 
     if id =~ @item,
       do:
-        "Start with #{id} in the fleet #{fleet_id}. Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: regents keyfleet workspace get #{fleet_id} '#{id}', or a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/get with {\"id\":\"#{id}\"}."
+        "Start with #{id} in the fleet #{fleet_id}. Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: " <>
+          if(hosted?,
+            do: "call workspace_show with {\"fleet_id\":\"#{fleet_id}\",\"id\":\"#{id}\"}.",
+            else:
+              "regents keyfleet workspace get #{fleet_id} '#{id}', or a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/get with {\"id\":\"#{id}\"}."
+          )
   end
 
-  defp work(["", "projects", project], fleet_id) do
+  defp work(["", "projects", project], fleet_id, hosted?) do
     if project =~ @project,
       do:
-        "Start with the project #{project} in the fleet #{fleet_id}. Once paired, read its goals and pinned work with a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/board with {\"project\":\"#{project}\"}, then read any task in it with graph/get."
+        "Start with the project #{project} in the fleet #{fleet_id}. Once paired, read its goals and pinned work " <>
+          if(hosted?,
+            do:
+              "with workspace_board and {\"fleet_id\":\"#{fleet_id}\",\"project\":\"#{project}\"}, then read any task in it with workspace_show.",
+            else:
+              "with a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/board with {\"project\":\"#{project}\"}, then read any task in it with graph/get."
+          )
   end
 
-  defp work(_path, _fleet_id), do: nil
+  defp work(_path, _fleet_id, _hosted?), do: nil
 
   @check_in "Check in on Keyfleet as your keyfleet skill says."
 
@@ -274,7 +288,7 @@ defmodule KeyfleetWeb.PairingBox do
   defp setup(:claude),
     do: """
     If the Keyfleet connector isn't in your tools yet, ask me to add it in Claude's settings under Connectors, with the address #{KeyfleetWeb.Endpoint.url()}/mcp.
-    After pairing, call check_in each time you start on Keyfleet.\
+    After pairing, call check_in each time you start on Keyfleet, then fleets_sync for each fleet you work in.\
     """
 
   defp setup(:other),
