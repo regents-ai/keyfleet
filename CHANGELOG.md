@@ -6483,3 +6483,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   link in step with the command list.
 - Parity gap K13 (`docs/agent-parity.md`) now lists the 32 commands the release
   lacks, read from its published package.
+
+## 2026-10-29 — Pairing from the browser tools
+
+- A new browser tool, `agents_pair`, pairs an agent with its person's
+  single-use code from Pair New Agent, with its name and what it runs on. It
+  sends the same signed `POST /api/agents/v1/pair` as `regents keyfleet agents
+  pair`, prepared and signed as every signed tool is.
+- Closes parity gap K7 (`docs/agent-parity.md`).

@@ -74,6 +74,23 @@ defmodule Keyfleet.BrowserAgents do
     headers |> Map.take(Capabilities.manifest()["proof_headers"]) |> Jason.encode!()
   end
 
+  @doc """
+  A pairing code from the person whose wallet is `person`, as Pair New Agent
+  shows one, making their account first.
+  """
+  def pairing_code!(person) do
+    subject = "did:privy:test-" <> person
+
+    Keyfleet.Accounts.register_verified!(subject, person, [person],
+      actor: %Keyfleet.Actors.System{}
+    )
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(actor: %RegentAgents.Person{privy_user_id: subject})
+
+    code
+  end
+
   @doc "Pairs `agent`, called `name`, with the person signed in to Privy as `person`."
   def pair_person!(agent, person, name) do
     %{code: code} =

@@ -36,7 +36,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   allows the agent permission, 98 tools as the paired agent: every signed and public tool
   in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),
   which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
-  wallet signs, and five it has no use for: `prepare_agent_request`,
+  wallet signs, and six it has no use for: `prepare_agent_request`, `agents_pair`,
   `about`, `docs`, `agents_whoami` and `agents_status`, whose answers the identity tools
   give. Each is the
   same Ash action, policies and allowance as the signed request (K8).
@@ -68,7 +68,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Make a pairing code, choose the agent | Pair New Agent (account menu, `/account#account-pairing`, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
-| Pair with a code | — | — | — | `pair_identity` | `agents pair` | no | K7, K8 |
+| Pair with a code | — | `agents_pair` | — | `pair_identity` | `agents pair` | no | K8 |
 | Open, rename or unpair an agent | Agents panel on `/account` | — | — | — | — | no (owner only) | K6, K8 |
 | Read an agent's last actions | Agents panel | — | — | — | — | no (owner only) | K6, K8 |
 | Send words for your agent to quote | fleet page quote box | — (agent reads them in `fleets_sync`) | — | — | — (read in `rooms sync`) | no | K8, K11 |
@@ -206,8 +206,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   agent, opening, renaming and unpairing an agent, and reading its last actions run only
   on the page. They stay out of reach of a paired helper agent and open only to the
   owner from K1.
-- **K7. Pairing with a code has no WebMCP tool.** `agents pair` and the connector's
-  `pair_identity` exist; the page tools have none. Owner: agent-access lane.
+- **K7. Pairing with a code had no WebMCP tool. Closed** (29 Oct): `agents_pair` sends the
+  signed `POST /api/agents/v1/pair` with `{"code","name","harness"}`, prepared and signed
+  as every signed tool is, the same request `agents pair` sends.
 - **K8. Hosted MCP serves the connector only.** `/mcp` answers only the Claude
   connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: four identity tools,
   then 98 tools as the paired agent: every signed and public tool in the manifest but the

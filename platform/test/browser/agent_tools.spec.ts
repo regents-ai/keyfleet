@@ -1,7 +1,7 @@
 import {randomBytes, randomUUID} from "node:crypto"
 import {readFileSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
-import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent, sendSigned} from "./support/agent_tools"
+import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent, pairingCode, sendSigned} from "./support/agent_tools"
 import {offerRewards, prepareFleet, readTreasury, sayInPublic, sellKey} from "./support/fleet_chain"
 
 // An agent in a person's browser uses Keyfleet through the tools its pages
@@ -126,14 +126,23 @@ test("a paired agent learns who it is and who it acts for, and reading Credits s
   expect(again.data.credits).toEqual(first.data.credits)
 })
 
-test("a tool that needs a pairing refuses an unpaired agent, and answers once it is paired", async ({page}) => {
+test("a tool that needs a pairing refuses an unpaired agent, and answers once it pairs with its person's code", async ({page}) => {
   const agent = newAgent()
   await open(page, "/")
 
   const refused = await callSigned(page, agent, "account_balances", {})
   expect(refused).toMatchObject({ok: false, status: 403, error: {code: "agent_not_paired"}})
 
-  pairAgent(agent, wallet())
+  const code = pairingCode(wallet())
+  const pairing = {code, name: "Walker", harness: "codex"}
+  const paired = await callSigned(page, agent, "agents_pair", pairing)
+  expect(paired).toMatchObject({ok: true, status: 201, data: {data: {name: "Walker", harness: "codex"}}})
+  expect(paired.data.data.wallet).toBe(agent)
+
+  // A code works once.
+  const again = await callSigned(page, agent, "agents_pair", pairing)
+  expect(again).toMatchObject({ok: false, status: 400, error: {code: "pairing_failed"}})
+
   expect(await callSigned(page, agent, "account_balances", {})).toMatchObject({ok: true, status: 200})
 })
 

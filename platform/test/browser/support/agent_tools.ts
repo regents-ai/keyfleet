@@ -103,6 +103,9 @@ export const newAgent = () => call("new_agent!", [], agents)
 /** Pairs `agent` with the person whose wallet is `person`. */
 export const pairAgent = (agent: string, person: string) => void call("pair!", [agent, person], agents)
 
+/** A pairing code from the person whose wallet is `person`, as Pair New Agent shows one. */
+export const pairingCode = (person: string) => call("pairing_code!", [person], agents)
+
 /** Pairs `agent`, called `name`, with the person signed in to Privy as `person`. */
 export const pairPerson = (agent: string, person: string, name: string) =>
   void call("pair_person!", [agent, person, name], agents)

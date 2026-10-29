@@ -3508,6 +3508,7 @@
       "operation_id": "pairSharedAgent",
       "method": "POST",
       "path": "/api/agents/v1/pair",
+      "webmcp": "agents_pair",
       "authority": "signed_agent",
       "effect": "write",
       "stdin_fields": [

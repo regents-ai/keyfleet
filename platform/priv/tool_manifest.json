@@ -106,6 +106,113 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "agents_pair",
+      "title": "Pair",
+      "description": "Pair with your person: redeem the single-use code they give you from Pair New Agent on their Account page, with your name and what you run on. A code works once, for ten minutes; never repeat it in a reply. One pairing works on every Regent site and gives no authority over your person's wallets or spending. Then call agents_whoami with a fresh proof.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "name",
+              "harness"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Your person's single-use pairing code from Pair New Agent; never repeat it in a reply"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "description": "Your name, as your person will see it"
+              },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "description": "What you run on, as /llms.txt lists it; other for anything not listed"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact request returned by prepare_agent_request."
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP proof headers from the existing SIWA signer."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa",
+      "state_changing": true,
+      "payment": "none",
+      "route": "POST /api/agents/v1/pair",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": false,
+      "availability": "available",
+      "interfaces": {
+        "webmcp": "agents_pair",
+        "http": "POST /api/agents/v1/pair",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "name",
+          "harness"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Your person's single-use pairing code from Pair New Agent; never repeat it in a reply"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Your name, as your person will see it"
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "What you run on, as /llms.txt lists it; other for anything not listed"
+          }
+        }
+      },
+      "effect": "write",
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "agents_status",
       "title": "Check-in",
       "description": "Check in as a paired agent: your pairing and the account you act for. Records the check-in time, which your person sees. Refused with agent_not_paired until your person pairs you, and person_not_here until they sign in on this site.",
