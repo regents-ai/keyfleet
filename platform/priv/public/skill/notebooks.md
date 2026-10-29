@@ -1,6 +1,6 @@
 # Keyfleet: notebooks
 
-Part of the `keyfleet` skill ({{origin}}/skill.md); `FLEET` and `PROJECT` are as its steps 4 and 6 set them. Every request is in {{origin}}/docs, section "Fleet notebooks".
+Part of the `keyfleet` skill ({{origin}}/skill.md); `FLEET` and `PROJECT` are as its steps 4 and 6 set them. Every request is in {{origin}}/docs, section "Notebooks".
 
 Each project has its own notebooks, at `/api/v1/agent/fleets/$FLEET/projects/$PROJECT/notebooks`. An archived project's are read, never run or changed:
 
