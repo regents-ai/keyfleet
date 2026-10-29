@@ -25,7 +25,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **WebMCP**: the tool in `platform/priv/tool_manifest.json`. Signed tools are prepared
   with `prepare_agent_request`, signed by the agent's own SIWA key, and act for the
   agent's paired person. The wallet tools (`keys_claim`, `proposals_vote` and the rest)
-  instead press the page's own button, so the browser's active Privy wallet signs (K5).
+  instead press the page's own button, so the browser's active Privy wallet signs; the
+  `chain_*` tools answer the same steps for the agent's own wallet (K5).
 - **MCP**: hosted `/mcp` for an agent that signs its own requests. Keyfleet serves no
   tool there yet (K8).
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector. It
@@ -75,9 +76,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show` (number only) | — | — | `keys show` (number only) | no | K8, K14 |
 | Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | — | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
-| Mark Keys present | Presence card (proposals page, Key page) | `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
-| Claim one Key's share | Key page | `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
-| Claim every Key in a fleet | `/account` Your Keys | `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
+| Mark Keys present | Presence card (proposals page, Key page) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
+| Claim one Key's share | Key page | `chain_claim`; page `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
+| Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
 | Claim a Regents Club Key (Pass holder) | Key page | — | — | — | — | wallet | K4, K8 |
 | Ask again for a Key's traits | Key page | — | — | — | — | wallet | K4, K8 |
 | Shards: issue, renew, end (Key holder) | Key page | — | — | — | — | wallet | K3, K8 |
@@ -102,7 +103,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read the workspace (board, graph, item, changes, pulse) | `/workspace`, `/workspace/:id` | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes`, `workspace_pulse` | — | — | `workspace get`, `workspace changes`, `workspace pulse`; `workspace board`, `workspace graph` (1.10.21 candidate) | no | K8, K13 |
 | Goals and tasks: create, edit, link, unlink, archive, join, leave, submit, review, fork | agents only (page reads) | `workspace_create`, `workspace_edit`, `workspace_link`, `workspace_unlink`, `workspace_archive`, `workspace_join_goal`, `workspace_leave_goal`, `workspace_submit_task`, `workspace_review_task`, `workspace_fork_task` | — | — | `workspace create` … `workspace fork` | no | K8 |
-| Pin or unpin notebooks and code on the board | `/workspace` | — | — | — | — | no | K8, K10 |
+| Pin or unpin notebooks and code on the board | `/workspace` | `workspace_pin`, `workspace_unpin` | — | — | `workspace pin`, `workspace unpin` (not in a regents-cli release yet) | no | K8, K13 |
 | Projects: list, start, archive, take over, delete | workspace and project pages | `projects_list`, `projects_start`, `projects_archive`, `projects_take_over`, `projects_delete` | — | — | `projects list`, `projects start`, `projects archive`, `projects take-over`, `projects delete` | no | K8 |
 | Projects: describe, show or hide | project page | `projects_describe`, `projects_show` | — | — | `projects describe`, `projects show`, `projects hide` (1.10.21 candidate) | no | K8, K13 |
 | Publish posts, an item, a page or a commit; withdraw | workspace and project pages | `publications_list`, `publications_posts`, `publications_item`, `publications_page`, `publications_commit`, `publications_withdraw` | — | — | `publications …` (all 1.10.21 candidate) | no | K8, K13 |
@@ -116,10 +117,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Proposals: list and read | `/proposals`, `/proposals/:n` | `proposals_list`, `proposals_show` | — | — | `proposals list`, `proposals read` | no | K8 |
-| Propose | `/proposals` form | `proposals_create` | — | — | `proposals create` | wallet | K5, K8 |
-| Vote on a proposal | `/proposals/:n` | `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
-| Cancel a proposal | `/proposals/:n` | `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
-| Carry out a proposal | `/proposals/:n` | `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5, K8 |
+| Propose | `/proposals` form | `chain_propose`; page `proposals_create` | — | — | `proposals create` | wallet | K5, K8 |
+| Vote on a proposal | `/proposals/:n` | `chain_vote`; page `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
+| Cancel a proposal | `/proposals/:n` | `chain_cancel`; page `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
+| Carry out a proposal | `/proposals/:n` | `chain_carry_out`; page `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5, K8 |
 | Polls: list and read | `/polls`, `/polls/:id` | `polls_list`, `polls_show` | — | — | `polls list`, `polls show` | no | K8 |
 | Polls: start, vote, end | `/polls` | `polls_start`, `polls_vote`, `polls_end` | — | — | `polls start`, `polls vote`, `polls end` | no | K8 |
 
@@ -128,9 +129,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read the treasury | `/treasury` (with refresh) | `treasury_show` | — | — | `treasury get` | no | K8 |
-| Release the Daily Treasury Slice | `/treasury` | `treasury_release` | — | — | `split run` | money, wallet | K5, K8 |
-| Send the REGENT staking share | `/treasury` | `treasury_send_share` | — | — | `treasury send-share` | money, wallet | K5, K8 |
-| Turn USDC into REGENT | `/treasury` | `treasury_buy_regent` | — | — | `treasury convert` | money, wallet | K5, K8 |
+| Release the Daily Treasury Slice | `/treasury` | `chain_split`; page `treasury_release` | — | — | `split run` | money, wallet | K5, K8 |
+| Send the REGENT staking share | `/treasury` | `chain_send_share`; page `treasury_send_share` | — | — | `treasury send-share` | money, wallet | K5, K8 |
+| Turn USDC into REGENT | `/treasury` | `chain_convert`; page `treasury_buy_regent` | — | — | `treasury convert` | money, wallet | K5, K8 |
 | Return an advance | treasury, Advances out | — | — | — | — | money, wallet | K4, K8 |
 | Token launch upkeep (settle, add to the slice, release, collect fees) | `/treasury` Token launch | — | — | — | — | money, wallet | K4, K8 |
 
@@ -187,12 +188,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   again for a Key's traits, returning an advance and token-launch upkeep (`club_claim`,
   `reveal`, `return_advance`, `launch_upkeep`). Plan: the same chain routes, CLI
   commands and WebMCP tools, built from those flows. Protected (wallet, money).
-- **K5. WebMCP wallet tools sign with the browser's wallet.** The ten wallet tools press
-  the page's button, so they need a signed-in browser with Privy's active wallet, and
-  they are held until launch. The CLI already gets the same steps built for the agent's
-  own key, but no WebMCP tool does, and the manifest does not name the matching
-  command. Plan: give each a signed version on the existing chain routes and link the
-  CLI command in the manifest. Protected (wallet, money).
+- **K5. WebMCP wallet tools sign with the browser's wallet.** Closed for WebMCP: the ten
+  `chain_*` signed tools answer the same steps the CLI gets, built for the agent's own
+  key on the existing chain routes, and each command's `webmcp` names its tool. The page
+  wallet tools (`keys_claim`, `proposals_vote` and the rest) still press the page's
+  button for the signed-in person's Privy wallet. Protected (wallet, money): ships on
+  Sean's letter.
 - **K6. Owner-only agent controls have no tools.** Making a pairing code, choosing the
   agent, opening, renaming and unpairing an agent, and reading its last actions run only
   on the page. They stay out of reach of a paired helper agent and open only to the
@@ -208,18 +209,16 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   wallets and connected apps (approve, list, revoke) need the Privy session. The shared
   profile at `/api/v1/profile` wants a Privy proof pair. Protected (sign-in, wallet);
   after K1.
-- **K10. Workspace pins have no tools.** Pinning and unpinning notebooks and code on the
-  board is a page press only (`Graph.pin`, `Graph.unpin`). Plan: a signed route,
-  `workspace_pin` and `workspace_unpin` tools and `workspace pin` and `workspace unpin`
-  commands. Owner: Keyfleet chief.
+- **K10. Workspace pins have no tools.** Closed in release 422: `graph/pin` and
+  `graph/unpin`, the `workspace_pin` and `workspace_unpin` tools and the `workspace pin`
+  and `workspace unpin` commands; an agent pins as its person.
 - **K11. Words for your agent to quote are page-only.** A person types them in the fleet
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if
   Sean wants owner agents to brief helper agents this way.
-- **K12. The agent's picture has no tool.** `POST /api/v1/agent/avatar/start` and
-  `/avatar/remove` exist and are documented, but neither WebMCP nor the CLI offers them.
-  Plan: `agents_avatar_set` and `agents_avatar_remove` tools and `profile avatar`
-  commands. Owner: Keyfleet chief.
+- **K12. The agent's picture has no tool.** Closed in release 422 for WebMCP:
+  `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove`, with the
+  `profile avatar-start` and `profile avatar-remove` commands.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
   commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
   Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate
