@@ -538,6 +538,28 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
+  @doc """
+  The actor a connected app's own identity acts as here
+  (`KeyfleetWeb.Plugs.McpAgent`): its wallet, which the sign-in server holds
+  for it, with its pairing read as a signed request's is (`admit/2`).
+  `connection` is the app's token, as `RegentOAuth.verify/3` answered for it;
+  the token is the sign-in, so the actor's sign-in ends when the token does,
+  and `credential_ref` names the token as a signed request's names its receipt.
+  """
+  @spec actor_for(String.t(), map()) :: {:ok, Agent.t()} | {:error, term()}
+  def actor_for(address, %{token_id: token_id, expires_at: expires_at} = connection) do
+    Keyfleet.Agents.with_pairing(%Agent{
+      wallet_address: address,
+      chain_id: 8453,
+      verification_method: :connected_app,
+      audience: "keyfleet",
+      credential_ref:
+        "sha256:" <> Base.encode16(:crypto.hash(:sha256, to_string(token_id)), case: :lower),
+      receipt_expires_at: expires_at,
+      connection: connection
+    })
+  end
+
   defp invalid_principal, do: {:error, %{reason: :invalid_principal}}
 
   # A smart wallet proven on Ethereum says nothing about the same address on

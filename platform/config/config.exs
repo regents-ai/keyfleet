@@ -48,7 +48,7 @@ config :regent_agents,
 # The Claude connector signs in with the person's verified Keyfleet account
 # (`Keyfleet.OAuth`). One permission keeps a Regents identity for the app,
 # pairs it and checks it in; the other lets it work in the person's fleets as
-# that paired agent, with Keyfleet's own tools at /mcp (`KeyfleetWeb.MCPTools`).
+# that paired agent, with its tools at /mcp (`KeyfleetWeb.Plugs.McpAgent`).
 # config/runtime.exs switches it on and sets its issuer and resource from the
 # site's own address.
 config :keyfleet, Keyfleet.OAuth,

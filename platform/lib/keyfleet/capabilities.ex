@@ -38,6 +38,21 @@ defmodule Keyfleet.Capabilities do
   def manifest, do: @manifest
 
   @doc """
+  The tools at the Claude connector's address (`/mcp`), by the name AshAi gives
+  each: the identity tools (`Keyfleet.Agents`) and every fleet tool a domain
+  hands AshAi, each its browser tool's name and the same action its signed
+  request runs.
+  """
+  @spec hosted_tools() :: [atom()]
+  def hosted_tools,
+    do:
+      for(
+        domain <- [Keyfleet.Agents, Keyfleet.Graph],
+        tool <- AshAi.Info.tools(domain),
+        do: tool.name
+      )
+
+  @doc """
   What this site speaks to agents, by version: the agent contract
   (`/api-contract.openapiv3.yaml`) and the agent guide (`/skill.md`). A
   client compares them with the ones it was made for; a tool or route it

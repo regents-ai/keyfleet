@@ -67,6 +67,8 @@ defmodule Keyfleet.MixProject do
       {:phoenix_live_view, "~> 1.2.6", override: true},
       {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3.26"},
+      # The Claude connector's MCP address (/mcp), as ash-template serves its own.
+      {:ash_ai, "~> 1.4.1"},
       # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
       # use the repo's prefix, which picks each site's schema on the shared
       # database. It stands in for the Hex release that ash_money and

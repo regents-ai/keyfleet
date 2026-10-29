@@ -12,6 +12,9 @@ defmodule Keyfleet.OAuth do
   alias Keyfleet.Accounts.VerifiedSession
 
   def config, do: Application.fetch_env!(:keyfleet, __MODULE__)
+
+  @doc "The permission to work in the person's fleets as the paired agent, beside the identity one."
+  def agent_scope, do: "keyfleet.agent"
   def repo, do: Keyfleet.Repo
 
   @doc """

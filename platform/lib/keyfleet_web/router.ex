@@ -297,33 +297,47 @@ defmodule KeyfleetWeb.Router do
     post "/connections/revoke", OAuthController, :revoke_connection, log: false
   end
 
-  # The Claude connector's MCP address, the shared one (`RegentMCPAgents.Plug`):
-  # Claude's handshake, the 401 challenge that starts sign-in, and the identity
-  # tools. Each connected account gets 120 requests a minute. Before that the
-  # endpoint counts a request without a token against the /api per-address
-  # budget, and one with a token against the connector's own per-address
-  # ceiling (`KeyfleetWeb.Endpoint.connector_rate_limit/0`), since every
-  # person's Claude calls from the same servers. It answers 404 while the
-  # connector is off. No `:api` pipeline: the endpoint has parsed the JSON, and
-  # a GET for an event stream must be answered 405 by the plug, not 406 here.
-  # Tool calls carry pairing codes, so it is not logged.
+  # The Claude connector's MCP address: AshAi runs the tools the capabilities
+  # list as hosted (`Keyfleet.Capabilities.hosted_tools/0`), each as its Ash
+  # action with its policies. McpAgent admits the request first: POST /mcp
+  # alone, JSON, one call, no query string and no page from another site, with
+  # a token from the sign-in above. The app is the actor, or, once its identity
+  # is paired and the person allowed the agent permission, that paired agent.
+  # So AshAi's own origin check takes whatever McpAgent let through. Each
+  # connected account gets 120 requests a minute; before that the endpoint
+  # counts a request without a token against the /api per-address budget, and
+  # one with a token against the connector's own per-address ceiling
+  # (`KeyfleetWeb.Endpoint.connector_rate_limit/0`), since every person's
+  # Claude calls from the same servers. It answers 404 while the connector is
+  # off. Nothing is kept between requests. Tool calls carry pairing codes, so
+  # nothing is logged. No `:accepts`: the endpoint has parsed the JSON, and a
+  # GET for an event stream must be answered 405 by McpAgent, not 406 here.
+  pipeline :mcp do
+    plug KeyfleetWeb.Plugs.McpAgent
+  end
+
   scope "/" do
+    pipe_through :mcp
+
     forward "/mcp",
-            RegentMCPAgents.Plug,
+            AshAi.Mcp.Router,
             [
-              app: :keyfleet,
-              title: "Keyfleet",
-              about:
-                "Keyfleet, where people and their agents work together in fleets, " <>
-                  "each Key a seat in one. Once paired and checked in, call fleets_doctor " <>
-                  "and fleets_sync in each fleet you work in, then use its tools as " <>
-                  "this site's /agents/claude guide describes.",
-              rate_limit: [
-                policy: "mcp",
-                limit: 120,
-                window: 60,
-                admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3
-              ]
+              otp_app: :keyfleet,
+              tools: Keyfleet.Capabilities.hosted_tools(),
+              mcp_name: "keyfleet",
+              instructions:
+                "Keyfleet, where people and their agents work together in fleets, each Key a seat in one. " <>
+                  "Your connection keeps one Regents identity: call register_identity, then get_identity. " <>
+                  "If it is not paired, call pair_identity with the one-use code your person gives you, " <>
+                  "your name and your harness, and call check_in so your person sees you are active. " <>
+                  "Once paired, with both permissions allowed, the fleet tools work as the agent you are, " <>
+                  "as this site's /agents/claude guide describes. " <>
+                  "Never ask for a password, a private key or a wallet signature.",
+              list_ttl_ms: 0,
+              read_ttl_ms: 0,
+              cache_scope: "private",
+              allowed_origins: &is_binary/1,
+              tool_argument_transformer: &KeyfleetWeb.ToolErrors.check_input/3
             ],
             log: false
   end

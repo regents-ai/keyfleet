@@ -1,9 +1,10 @@
 defmodule Keyfleet.Agents do
   @moduledoc """
   Wallet-owned agent profiles, independent of NFT authority, and when each
-  agent checks in with each fleet.
+  agent checks in with each fleet. The Claude connector's identity tools at
+  `/mcp` are this domain's (`Keyfleet.Agents.Connection`, `tools`).
   """
-  use Ash.Domain
+  use Ash.Domain, extensions: [AshAi]
 
   import Ash.Expr, only: [expr: 1]
   require Ash.Query
@@ -40,6 +41,31 @@ defmodule Keyfleet.Agents do
     resource Keyfleet.Agents.Checkpoint do
       define :checkpoint, action: :mine, args: [:fleet_id], not_found_error?: false
       define :start_checkpoint, action: :start, args: [:fleet_id, :state]
+    end
+
+    resource Keyfleet.Agents.Connection
+  end
+
+  # The connector's identity tools, for an app a person connected to their
+  # account here, with the titles, words and hints every Regent site gives them.
+  @identity Map.new(RegentMCPAgents.Tools.list(), &{&1.name, &1})
+
+  tools do
+    for name <- RegentMCPAgents.Tools.names() do
+      %{title: title, description: description, annotations: hints} = @identity[name]
+      name = String.to_atom(name)
+
+      tool name, Keyfleet.Agents.Connection, name do
+        title(title)
+        description description
+
+        annotations(
+          read_only_hint: hints.readOnlyHint,
+          idempotent_hint: hints.idempotentHint,
+          destructive_hint: hints.destructiveHint,
+          open_world_hint: hints.openWorldHint
+        )
+      end
     end
   end
 
