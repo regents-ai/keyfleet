@@ -60,6 +60,38 @@ function client(tool: string): Record<string, string> {
   return {"x-regent-client": `webmcp/${tool}`, ...(visit && {"x-regent-visit": visit})}
 }
 
+// An answer that came back but isn't JSON, such as a proxy's error page or
+// a body cut off on its way.
+const unreadable = Symbol("unreadable")
+
+async function answerOf(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  } catch (_error) {
+    return unreadable
+  }
+}
+
+// The writes receipts_read answers for, by the key they were sent with.
+const receipted = (entry: Entry) => ["rooms_post", "walls_post"].includes(entry.name) || entry.name.startsWith("workspace_")
+
+// A signed call that may have reached the site without its answer reaching
+// the agent. A read is simply read again; a change may already have been
+// made, so the agent is told how to find out before sending it again.
+function lost(entry: Entry, input: unknown, status: number | undefined, error: {code: string; message: string}) {
+  const at = status === undefined ? {} : {status}
+  if (!entry.state_changing) return {ok: false, ...at, error: {...error, hint: "Try again in a moment."}}
+
+  const field = entry.operation_id_field
+  const sent = field && (input as {input?: Record<string, unknown>} | null)?.input?.[field]
+  const hint = typeof sent !== "string"
+    ? "Check what happened before you send it again. Read back what it changes first."
+    : receipted(entry)
+      ? `Check what happened before you send it again. receipts_read with this ${field} says whether it ran; to send it again, keep the same ${field} and sign the request again.`
+      : `Check what happened before you send it again. Sent again with the same ${field} and a fresh signature, it runs once.`
+  return {ok: false, ...at, outcome: "unknown", error: {...error, hint}}
+}
+
 // Public JSON without session authority. Every refusal it sends is
 // {"error": {"code", "message", "hint"}}, handed on as it came.
 async function read(tool: string, path: string, signal: AbortSignal | undefined): Promise<Reply> {
@@ -70,13 +102,18 @@ async function read(tool: string, path: string, signal: AbortSignal | undefined)
     redirect: "error",
     signal,
   })
-  const answer = await response.json()
+  const answer = await answerOf(response)
+  if (answer === unreadable) {
+    return {ok: false, status: response.status, error: {code: "unreadable_answer",
+      message: `The site answered ${response.status}, but not with a reply this tool can read.`, hint: "Try again in a moment."}}
+  }
   if (response.ok) return {ok: true, status: response.status, data: answer}
+  const {error} = answer as {error: Refusal}
   // Past a rate limit the agent is told how many seconds to wait.
   const retryAfter = Number(response.headers.get("retry-after"))
   return response.status === 429 && retryAfter > 0
-    ? {ok: false, status: response.status, retry_after: retryAfter, error: answer.error}
-    : {ok: false, status: response.status, error: answer.error}
+    ? {ok: false, status: response.status, retry_after: retryAfter, error}
+    : {ok: false, status: response.status, error}
 }
 
 // A call that ended without an answer. Anything but a read may already have
@@ -141,10 +178,9 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
       }
     }
     if (entry.authentication === "siwa_per_request") {
+      let response: Response
       try {
-        const response = await signedTransport().execute(entry.name, input as SignedInput, signal)
-        const data = await response.json()
-        return response.ok ? {ok: true, status: response.status, data} : {ok: false, status: response.status, error: data.error}
+        response = await signedTransport().execute(entry.name, input as SignedInput, signal)
       } catch (error) {
         // fetch fails with a TypeError, or an AbortError when cancelled; every
         // other error is the transport refusing the call before anything is sent.
@@ -152,10 +188,15 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
         if (!sent) return refused("signed_call_refused", entry.name, error,
           "Nothing was sent. Prepare this exact request with prepare_agent_request, sign it with your SIWA signer, then call again with input, request and proof. If you have no signer, report that as a blocker.")
         unsent(entry, signal)
-        return {ok: false, error: {code: "signed_request_failed", message: String(error),
-          hint: entry.state_changing ? "Check what happened before you send it again. Keep the same idempotency_key or command_id, and sign the request again."
-            : "Try again in a moment."}}
+        return lost(entry, input, undefined, {code: "signed_request_failed", message: String(error)})
       }
+      const data = await answerOf(response)
+      if (data === unreadable) {
+        return lost(entry, input, response.status, {code: "unreadable_answer",
+          message: `The site answered ${response.status}, but not with a reply this tool can read.`})
+      }
+      return response.ok ? {ok: true, status: response.status, data}
+        : {ok: false, status: response.status, error: (data as {error: Refusal}).error}
     }
     const problem = inputProblem(input, entry.input_schema)
     if (problem) return {ok: false, error: {code: "invalid_input", message: problem, hint: "Fix the call, then call again."}}

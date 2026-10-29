@@ -5952,3 +5952,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Nothing changes for people or agents: the code is still at
   `https://code.keyfleet.ai/<repository>.git` and still called Code.
 - Earlier entries in this file keep the name they were written with.
+
+## 2026-10-29 — Browser tools say what they know
+
+- A browser tool whose answer came back but couldn't be read answers
+  `unreadable_answer` with the status, where before a signed one said nothing
+  was sent and a public read said the page couldn't be reached. A change
+  whose answer was lost or unreadable adds `"outcome": "unknown"`, and its
+  hint names `receipts_read` with its `idempotency_key` or `command_id` for a
+  post or a workspace write, or says a resend with the same key runs once.
