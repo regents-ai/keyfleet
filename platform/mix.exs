@@ -4,8 +4,10 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  # The Claude connector's packages: oauth, mcp_agents and agent_access.
+  # The Claude connector's packages: oauth and agent_access.
   @elixir_utils_ref "3a82fdeffc3bae997b5501045d5d0d6cb6c8fb94"
+  # mcp_agents with Keyfleet's own tools at /mcp (claude/mcp-site-tools-1029).
+  @elixir_utils_mcp_ref "d4b5e9a8f290a882b88d321bb9a9b97b10867a51"
   # agents: the held release plus Claude as a hosted runtime, so the connector
   # changes nothing for any other agent.
   @elixir_utils_agents_ref "edfc6f10f78c3556b076a104bcb964204d7ce477"
@@ -113,7 +115,7 @@ defmodule Keyfleet.MixProject do
       # it calls. regent_mcp_agents names regent_oauth by path; this pin replaces it.
       {:regent_oauth,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "oauth", override: true},
-      {:regent_mcp_agents, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "mcp_agents"},
+      {:regent_mcp_agents, git: @elixir_utils, ref: @elixir_utils_mcp_ref, sparse: "mcp_agents"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
