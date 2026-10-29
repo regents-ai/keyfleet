@@ -9,38 +9,53 @@ defmodule KeyfleetWeb.ToolErrors do
   identity refusal takes this site's own code and words, or, when no answer
   came, the words every Regent site gives it.
 
-  Input an identity tool's action cannot take is refused before AshAi runs it
-  (`check_input/3`, the router's `tool_argument_transformer`): a pairing's as
-  `invalid_request` in the library's words
-  (`RegentMCPAgents.pairing_input_refusal/0`), and another identity tool's in
-  the words every Regent site gives it. The fleet tools' input goes to their
-  actions as it came, which refuse it as they do over HTTP.
+  Input a tool's action cannot take is refused before AshAi runs it
+  (`check_input/3`, the router's `tool_argument_transformer`), as the action
+  itself would refuse it, with the actor and context it would run with: a
+  pairing's as `invalid_request` in the library's words
+  (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's in the
+  words every Regent site gives it, a fleet tool's with the refusal its signed
+  request answers (an unknown fleet as `fleet_unknown`, say), or else as
+  `invalid_request`. Input that is not an object, or names an input the
+  action has not, is refused too. A write's allowance is spent only when it
+  runs (`Keyfleet.Graph.Validations.WriteAllowance`), so checking spends none.
   """
 
   alias Keyfleet.Agents.Connection
+  alias KeyfleetWeb.WorkspaceRefusal
 
   @doc """
-  Casts an identity tool's `input` as its action takes it. Input it takes, and
-  any fleet tool's, goes on to AshAi unchanged; other input is refused as
-  `{:error, text}`.
+  Casts a tool's `input` as its action takes it. Input it takes goes on to
+  AshAi unchanged; other input is refused as `{:error, text}`.
   """
   @spec check_input(AshAi.Tool.t(), term(), map()) :: {:ok, term()} | {:error, String.t()}
-  def check_input(%AshAi.Tool{resource: Connection, action: %{name: action}}, arguments, _context) do
+  def check_input(%AshAi.Tool{resource: resource, action: %{name: action}}, arguments, context) do
     with %{} <- arguments,
          %{} = input <- arguments["input"] || %{},
-         %{valid?: true} <- Ash.ActionInput.for_action(Connection, action, input) do
+         %{valid?: true} <-
+           Ash.ActionInput.for_action(resource, action, input,
+             actor: context[:actor],
+             context: context[:context] || %{}
+           ) do
       {:ok, arguments}
     else
-      _refused -> {:error, refused(action)}
+      %Ash.ActionInput{errors: errors} -> {:error, refused(resource, action, errors)}
+      _not_an_object -> {:error, refused(resource, action, [])}
     end
   end
 
-  def check_input(_fleet_tool, arguments, _context), do: {:ok, arguments}
-
-  defp refused(:pair_identity),
+  defp refused(Connection, :pair_identity, _errors),
     do: Jason.encode!(%{error: RegentMCPAgents.pairing_input_refusal()})
 
-  defp refused(_identity), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
+  defp refused(Connection, _identity, _errors), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
+
+  defp refused(_resource, _action, errors) do
+    {_status, body} =
+      Enum.find_value(errors, &WorkspaceRefusal.for_error/1) ||
+        WorkspaceRefusal.refusal(422, "invalid_request")
+
+    text(body)
+  end
 
   @doc "`body` as a tool error's text, with `retry_after` in seconds when there is one."
   @spec text(map(), String.t() | integer() | nil) :: String.t()

@@ -3,7 +3,9 @@ defmodule Keyfleet.Graph.Validations.WriteAllowance do
   Each agent wallet's allowance of workspace writes in each fleet
   (`Keyfleet.Limits`, `:graph_writes`), spent before the write takes the
   fleet's one writer, whichever way the agent called: its own signed request
-  or the Claude connector. It is kept by wallet, not by the Key a write names:
+  or the Claude connector. It runs just before the write (`before_action?`),
+  so input checked before a tool runs (`KeyfleetWeb.ToolErrors.check_input/3`)
+  spends nothing. It is kept by wallet, not by the Key a write names:
   that Key is checked only later, so anyone could spend another Key's
   allowance by naming it.
   """

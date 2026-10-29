@@ -19,19 +19,30 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   Then the request carries a connected app's token (`Authorization: Bearer`),
   one this site gave for `/mcp` with the identity permission, as `RegentOAuth`
   checks it, and spends its account's budget: 120 requests a minute, after the
-  endpoint's ceiling for the connector's addresses. While the app's own
-  identity is paired with that same account and the person allowed Keyfleet's
-  agent permission (`Keyfleet.OAuth.agent_scope/0`), the actor is that paired
-  agent, as an agent signing its own requests would be
-  (`KeyfleetWeb.Plugs.SignedAgent.actor_for/2`, with the token as its
+  endpoint's ceiling for the connector's addresses. The budget is spent before
+  anything else is asked, so a request past it never reaches the sign-in
+  server or the pairings.
+
+  While the app's own identity is paired with that same account and the
+  person allowed Keyfleet's agent permission (`Keyfleet.OAuth.agent_scope/0`),
+  the actor is that paired agent, as an agent signing its own requests would
+  be (`KeyfleetWeb.Plugs.SignedAgent.actor_for/2`, with the token as its
   `connection`), so AshAi lists and runs the agent's tools under the same
-  policies, and its identity tools besides. Otherwise the app is the actor
-  (`Keyfleet.Actors.ConnectedApp`), with its identity tools only. The
-  identity's wallet is read once per account (`Keyfleet.Agents.HostedAddress`),
-  so a call never waits on the sign-in server. A request without a token, or
-  with one this site didn't give, is asked to connect (`connection_required`),
-  with the `WWW-Authenticate` challenge naming this site's sign-in and both
-  permissions, so an app such as Claude starts its sign-in on its first request.
+  policies, and its identity tools besides. Its pairing is read again just
+  before the answer leaves, and an answer whose pairing ended or changed hands
+  meanwhile is replaced (`agent_not_paired`), so it never carries the former
+  person's data. An identity paired with no one, or with someone else, leaves
+  the app itself the actor (`Keyfleet.Actors.ConnectedApp`), with its
+  identity tools only. The identity's wallet is read once per account
+  (`Keyfleet.Agents.HostedAddress`), so a call seldom waits on the sign-in
+  server; while that server or the pairings can't be read, the request is
+  refused with that reason (`siwa_request_failed`, `pairing_unavailable`)
+  rather than served as someone it may not be.
+
+  A request without a token, or with one this site didn't give, is asked to
+  connect (`connection_required`), with the `WWW-Authenticate` challenge
+  naming this site's sign-in and both permissions, so an app such as Claude
+  starts its sign-in on its first request.
 
   Each answer is private and never kept (`cache-control: private, no-store`).
   Refusals answer `{"error": {"code", "message", "hint"}}`, the site's one
@@ -93,12 +104,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   end
 
   @doc false
-  def account(conn) do
-    case Ash.PlugHelpers.get_actor(conn) do
-      %ConnectedApp{principal: principal} -> principal.subject
-      %Agent{connection: principal} -> principal.subject
-    end
-  end
+  def account(conn), do: conn.private.mcp_principal.subject
 
   defp own_origin?(conn) do
     case get_req_header(conn, "origin") do
@@ -120,8 +126,9 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
          {:ok, principal} <-
            RegentOAuth.verify(bearer, RegentOAuth.resource(), RegentMCPAgents.identity_scope()) do
       conn
-      |> as_connected_app(principal)
+      |> put_private(:mcp_principal, principal)
       |> RegentAgentAccess.RateLimit.call(@budget)
+      |> as_connected_app(principal)
     else
       _no_token_of_ours -> connect(conn)
     end
@@ -131,15 +138,80 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   # agent; the app itself otherwise. Only the token's own account chooses the
   # identity, and only a pairing with that same account, whose person is
   # here, counts.
-  defp as_connected_app(conn, %{subject: subject} = principal) do
-    with true <- Keyfleet.OAuth.agent_scope() in principal.scopes,
-         {:ok, address} <- HostedAddress.fetch(principal),
-         {:ok, %Agent{privy_user_id: ^subject, pairing: %Human{}} = agent} <-
-           SignedAgent.actor_for(address, principal) do
-      Ash.PlugHelpers.set_actor(conn, agent)
-    else
-      _not_paired_here -> Ash.PlugHelpers.set_actor(conn, %ConnectedApp{principal: principal})
+  defp as_connected_app(%{halted: true} = conn, _principal), do: conn
+
+  defp as_connected_app(conn, principal) do
+    if Keyfleet.OAuth.agent_scope() in principal.scopes,
+      do: as_agent(conn, principal),
+      else: Ash.PlugHelpers.set_actor(conn, %ConnectedApp{principal: principal})
+  end
+
+  defp as_agent(conn, %{subject: subject} = principal) do
+    case hosted_agent(principal) do
+      {:ok, %Agent{privy_user_id: ^subject, pairing: %Human{}} = agent} ->
+        conn
+        |> Ash.PlugHelpers.set_actor(agent)
+        |> register_before_send(&recheck(&1, agent))
+
+      # Paired with no one, with someone else, or with a person not here yet.
+      {:ok, _not_this_persons} ->
+        Ash.PlugHelpers.set_actor(conn, %ConnectedApp{principal: principal})
+
+      {:error, code} ->
+        refuse(conn, code)
     end
+  end
+
+  defp hosted_agent(principal) do
+    case HostedAddress.fetch(principal) do
+      {:ok, address} -> paired(address, principal)
+      {:error, _refused} -> {:error, "siwa_request_failed"}
+    end
+  end
+
+  defp paired(address, principal) do
+    case SignedAgent.actor_for(address, principal) do
+      {:ok, agent} -> {:ok, agent}
+      {:error, :not_paired} -> {:ok, :not_paired}
+      {:error, _unread} -> {:error, "pairing_unavailable"}
+    end
+  end
+
+  # The tool ran after the pairing was read. Before its answer leaves, the
+  # identity's pairing must still be this one, with the same person;
+  # otherwise the answer is replaced. A stream, which has already begun, is
+  # left as it is.
+  defp recheck(%{state: :set} = conn, %Agent{} = agent) do
+    case RegentAgents.Authority.resolve(Keyfleet.Repo, agent.wallet_address) do
+      {:ok, %{id: id, privy_user_id: person}}
+      when id == agent.pairing_id and person == agent.privy_user_id ->
+        conn
+
+      {:ok, _other_pairing} ->
+        replace(conn, "agent_not_paired")
+
+      {:error, :not_paired} ->
+        replace(conn, "agent_not_paired")
+
+      {:error, _unread} when conn.status in 200..299 ->
+        replace(conn, "pairing_unavailable")
+
+      {:error, _unread} ->
+        conn
+    end
+  end
+
+  defp recheck(conn, _agent), do: conn
+
+  defp replace(conn, code) do
+    {status, message, hint} = words(code)
+
+    %{
+      conn
+      | status: status,
+        resp_body: Jason.encode_to_iodata!(%{error: %{code: code, message: message, hint: hint}})
+    }
+    |> put_resp_content_type("application/json")
   end
 
   defp connect(conn) do
@@ -186,10 +258,20 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   defp words("batch_not_supported"),
     do: {400, "Send one call a request.", "Send each call in its own request."}
 
+  defp words("siwa_request_failed"), do: site_words(503, "siwa_request_failed")
+  defp words("pairing_unavailable"), do: site_words(503, "pairing_unavailable")
+  defp words("agent_not_paired"), do: site_words(403, "agent_not_paired")
+
   defp words("connection_required"),
     do:
       {401, "Connect Keyfleet to use this address.",
        "Add #{url()} to your app's connectors, such as Claude's, sign in to Keyfleet and allow both permissions."}
+
+  # The words the site's signed requests give the same refusal.
+  defp site_words(status, code) do
+    %{error: %{message: message, hint: hint}} = KeyfleetWeb.Refusal.body(code)
+    {status, message, hint}
+  end
 
   defp url, do: PublicDocuments.url("/mcp")
 end

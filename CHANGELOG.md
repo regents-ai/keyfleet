@@ -5973,4 +5973,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Claude's guide, the agent guides' hosted MCP line and Claude's Bring your
   agent message say so; `docs/agent-parity.md` lists each tool's website,
   WebMCP, MCP and CLI surface, with the fleet tools still to move as gaps.
+- A connector request spends its account's budget before anything else is
+  asked; a sign-in server or pairing that can't be read refuses the request
+  with that reason; a pairing that ends or changes hands mid-call replaces
+  the answer; and every tool's input is checked as its action takes it
+  before it runs, without spending a write's allowance.
 - Still switched off; switching on needs Sean's go.
