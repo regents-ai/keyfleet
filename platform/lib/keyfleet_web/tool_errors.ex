@@ -4,8 +4,10 @@ defmodule KeyfleetWeb.ToolErrors do
   refuses: the JSON the same refusal answers over HTTP,
   `{"error": {"code", "message", "hint"}}`, as the tool error's text
   (`AshAi.ToToolError`), with `retry_after` in seconds where HTTP sends
-  `Retry-After`. A connected app's identity refusal takes this site's own code
-  and words, or, when no answer came, the words every Regent site gives it.
+  `Retry-After`. A workspace refusal takes the workspace's words
+  (`KeyfleetWeb.WorkspaceRefusal`), with its `details`. A connected app's
+  identity refusal takes this site's own code and words, or, when no answer
+  came, the words every Regent site gives it.
 
   Input an identity tool's action cannot take is refused before AshAi runs it
   (`check_input/3`, the router's `tool_argument_transformer`): a pairing's as
@@ -63,4 +65,22 @@ defimpl AshAi.ToToolError, for: Keyfleet.Agents.Connection.Refused do
     do: KeyfleetWeb.ToolErrors.text(%{error: error}, retry_after)
 
   def to_tool_error(_no_answer), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
+end
+
+defimpl AshAi.ToToolError,
+  for: [
+    Keyfleet.Graph.Errors.RefusedError,
+    Keyfleet.Graph.Errors.UnknownFleetError,
+    Keyfleet.Graph.Errors.NotKeyHolderError,
+    Keyfleet.Graph.Errors.EditsRestrictedError,
+    Keyfleet.Graph.Errors.UnavailableError,
+    Keyfleet.Graph.Errors.IndeterminateError,
+    Keyfleet.Graph.Errors.WriteLimitError,
+    Keyfleet.Keys.Errors.OwnershipRefreshingError,
+    Keyfleet.Projects.Errors.UnknownProjectError
+  ] do
+  def to_tool_error(error) do
+    {_status, body} = KeyfleetWeb.WorkspaceRefusal.for_error(error)
+    KeyfleetWeb.ToolErrors.text(body, Map.get(error, :retry_after))
+  end
 end

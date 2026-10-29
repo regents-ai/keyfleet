@@ -3,44 +3,8 @@ defmodule KeyfleetWeb.AgentGraphController do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{Code, Fleets, Graph, Notebooks, Projects, Rooms}
-  alias Keyfleet.Graph.Errors.EditsRestrictedError
-  alias Keyfleet.Graph.Errors.IndeterminateError
-  alias Keyfleet.Graph.Errors.NotKeyHolderError
-  alias Keyfleet.Graph.Errors.RefusedError
-  alias Keyfleet.Graph.Errors.UnavailableError
-  alias Keyfleet.Graph.Errors.UnknownFleetError
-  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
-  alias Keyfleet.Limits
-  alias Keyfleet.Projects.Errors.UnknownProjectError
-  alias KeyfleetWeb.{Endpoint, Refusal, RoomJSON, WorkspacePage}
-
-  # The workspace's own refusals: the status each is answered with, and what
-  # to do next. The workspace's reason is the message.
-  @workspace_refusals %{
-    "bad_request" =>
-      {400, "The body doesn't fit this operation. Check it against the docs, then send it again."},
-    "not_found" =>
-      {404,
-       "Check the id: an item's id is its type, `#` and its number, such as `task#27`. The workspace's changes (`workspace changes` on the command line) list everything it holds."},
-    "conflict" =>
-      {409,
-       "details.object is the item as it is now. Merge your change into it, then send it with its version and a new command_id."},
-    "invalid" => {422, "Correct the value the message names, then send the request again."},
-    "forbidden_field" =>
-      {422,
-       "Leave out the fields details.fields names. details.allowed, when present, lists the fields this kind of item takes; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
-    "not_owner" =>
-      {403,
-       "Fork a task to work on it as your own, or link your own item to this one. details.owner_key names the Key it belongs to."},
-    "self_review" =>
-      {403,
-       "Ask a member who did not submit the task, from another Key and wallet, to review it."},
-    "duplicate_mismatch" =>
-      {422, "This command_id was used for a different change. Use a new command_id."},
-    "over_budget" =>
-      {422,
-       "details.bytes is the size of the change at details.seq. Send max_bytes of at least that, or leave it out."}
-  }
+  alias Keyfleet.Graph.Errors.WriteLimitError
+  alias KeyfleetWeb.{Endpoint, RoomJSON, WorkspacePage, WorkspaceRefusal}
 
   @command ~w(as_key command_id)
 
@@ -216,7 +180,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   end
 
   defp read({:error, %Ash.Error.Unknown{errors: errors} = error}, conn, _fleet_id),
-    do: answer(conn, Enum.find_value(errors, &answer/1) || unreadable(error))
+    do: answer(conn, Enum.find_value(errors, &WorkspaceRefusal.for_error/1) || unreadable(error))
 
   defp read({:error, error}, conn, _fleet_id), do: refuse(conn, error)
 
@@ -305,62 +269,35 @@ defmodule KeyfleetWeb.AgentGraphController do
     end
   end
 
-  # Each wallet has its own allowance of writes in each fleet, spent before
-  # the write takes the fleet's one writer. It is kept by wallet, not by the
-  # Key a write names: that Key is checked only later, so anyone could spend
-  # another Key's allowance by naming it.
+  # A write past its wallet's allowance in the fleet
+  # (`Keyfleet.Graph.Validations.WriteAllowance`) says when to try again.
   defp write(conn, action, %{"fleet_id" => fleet_id} = params, fields) do
-    actor = conn.assigns.agent_actor
     input = Map.take(params, @command ++ fields)
 
-    with :ok <- Limits.admit(:graph_writes, {fleet_id, actor.wallet_address}),
-         {:ok, written} <- action.(fleet_id, input, actor: actor) do
-      json(conn, written)
-    else
-      {:limited, seconds} ->
-        conn
-        |> put_resp_header("retry-after", Integer.to_string(seconds))
-        |> answer(refusal(429, "workspace_limit_reached"))
-
-      {:error, error} ->
-        refuse(conn, error)
+    case action.(fleet_id, input, actor: conn.assigns.agent_actor) do
+      {:ok, written} -> json(conn, written)
+      {:error, error} -> conn |> retry_after(error) |> refuse(error)
     end
   end
 
-  # Every refusal here carries `details`, empty unless it says more.
-  defp refuse(conn, %{errors: errors} = error),
-    do: answer(conn, Enum.find_value(errors, &answer/1) || fallback(error))
+  defp retry_after(conn, %{errors: errors}) do
+    case Enum.find(errors, &match?(%WriteLimitError{}, &1)) do
+      %WriteLimitError{retry_after: seconds} ->
+        put_resp_header(conn, "retry-after", Integer.to_string(seconds))
 
-  defp answer(conn, {status, body}), do: conn |> put_status(status) |> json(body)
-
-  defp answer(%RefusedError{code: code, reason: reason, details: details})
-       when code in ~w(project_archived project_unknown),
-       do: {project_status(code), Refusal.closed(code, reason, details)}
-
-  defp answer(%RefusedError{code: code, reason: reason, details: details}) do
-    {status, hint} = Map.fetch!(@workspace_refusals, code)
-    {status, %{error: %{code: code, message: reason, hint: hint, details: details}}}
+      nil ->
+        conn
+    end
   end
 
-  defp answer(%UnknownFleetError{}), do: refusal(404, "fleet_unknown")
-  defp answer(%UnknownProjectError{}), do: refusal(404, "project_unknown")
-  defp answer(%OwnershipRefreshingError{}), do: refusal(503, "ownership_refreshing")
-  defp answer(%NotKeyHolderError{}), do: refusal(403, "not_a_key_holder")
-  defp answer(%EditsRestrictedError{}), do: refusal(403, "edits_restricted")
-  defp answer(%UnavailableError{}), do: refusal(503, "graph_unavailable")
+  defp refuse(conn, %{errors: errors} = error),
+    do: answer(conn, Enum.find_value(errors, &WorkspaceRefusal.for_error/1) || fallback(error))
 
-  defp answer(%IndeterminateError{}),
-    do: refusal(503, "indeterminate", %{retry_same_command_id: true})
-
-  defp answer(_error), do: nil
-
-  defp project_status("project_archived"), do: 409
-  defp project_status("project_unknown"), do: 404
+  defp answer(conn, {status, body}), do: conn |> put_status(status) |> json(body)
 
   # The policy's own refusal, before the write took its turn.
   defp fallback(%Ash.Error.Forbidden{}), do: refusal(403, "not_a_key_holder")
   defp fallback(%Ash.Error.Invalid{}), do: refusal(422, "invalid_request")
 
-  defp refusal(status, code, details \\ %{}),
-    do: {status, put_in(Refusal.body(code), [:error, :details], details)}
+  defp refusal(status, code, details \\ %{}), do: WorkspaceRefusal.refusal(status, code, details)
 end

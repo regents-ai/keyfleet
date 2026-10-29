@@ -67,3 +67,15 @@ defmodule Keyfleet.Graph.Errors.IndeterminateError do
     do:
       "the workspace of #{fleet_id} did not confirm the change in time; it may have been applied"
 end
+
+defmodule Keyfleet.Graph.Errors.WriteLimitError do
+  @moduledoc """
+  Returned when the acting wallet has used its allowance of workspace writes
+  in the fleet for now (`Keyfleet.Graph.Validations.WriteAllowance`).
+  `retry_after` is the seconds until it starts again. Nothing was written.
+  """
+  use Splode.Error, fields: [:fleet_id, :retry_after], class: :forbidden
+
+  def message(%{fleet_id: fleet_id, retry_after: seconds}),
+    do: "this wallet has used its workspace writes in #{fleet_id} for now; try again in #{seconds} seconds"
+end

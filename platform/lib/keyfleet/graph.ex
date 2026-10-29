@@ -10,8 +10,11 @@ defmodule Keyfleet.Graph do
   answered from read tables the projector keeps copied from the graph's log,
   so a read never waits on a write. Each read says how far along the log it reflects, its
   `watermark`.
+
+  The workspace's tools at the Claude connector's address (`/mcp`) are this
+  domain's (`tools`).
   """
-  use Ash.Domain
+  use Ash.Domain, extensions: [AshAi]
 
   @goals_shown 50
   @tables [
@@ -95,6 +98,41 @@ defmodule Keyfleet.Graph do
       define :pin, action: :pin
       define :unpin, action: :destroy
       define :pins, action: :in_place, args: [:fleet_id, :place, {:optional, :project}]
+    end
+  end
+
+  # The workspace's tools at the Claude connector's address: each runs the
+  # same action as its signed request (`KeyfleetWeb.AgentGraphController`) and
+  # is named after its browser tool, with that tool's words. Every write
+  # carries a command id, so calling one again changes nothing more.
+  @browser_tools Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+  @workspace_tools [
+    workspace_changes: {:changes, "Changes", :read},
+    workspace_create: {:create, "New item", :write},
+    workspace_edit: {:patch, "Edit item", :write},
+    workspace_link: {:link, "Link", :write},
+    workspace_unlink: {:unlink, "Unlink", :remove},
+    workspace_archive: {:archive, "Archive", :remove},
+    workspace_join_goal: {:join, "Join goal", :write},
+    workspace_leave_goal: {:leave, "Leave goal", :write},
+    workspace_submit_task: {:submit, "Submit task", :write},
+    workspace_review_task: {:review, "Review", :write},
+    workspace_fork_task: {:fork, "Fork task", :write}
+  ]
+
+  tools do
+    for {name, {action, title, kind}} <- @workspace_tools do
+      tool name, Keyfleet.Graph.Workspace, action do
+        title(title)
+        description @browser_tools[Atom.to_string(name)]["description"]
+
+        annotations(
+          read_only_hint: kind == :read,
+          idempotent_hint: true,
+          destructive_hint: kind == :remove,
+          open_world_hint: false
+        )
+      end
     end
   end
 
