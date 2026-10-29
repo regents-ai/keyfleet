@@ -11,7 +11,8 @@ defmodule KeyfleetWeb.MCPTools do
   public tools read.
 
   Left out: the wallet tools, which press a page's button and need a wallet the
-  connector's identity doesn't have; `prepare_agent_request`, since the
+  connector's identity doesn't have, and any tool that pays or whose address
+  prepares a wallet's transaction, which the hosted signer must never sign; `prepare_agent_request`, since the
   connector signs for itself; and `agents_whoami` and `agents_status`, which
   the identity tools `get_identity` and `check_in` already are.
   """
@@ -23,6 +24,11 @@ defmodule KeyfleetWeb.MCPTools do
   @signed "/api/v1/agent/"
   @public "/api/v1/"
   @identity ~w(agents_whoami agents_status)
+
+  # The addresses that prepare a transaction for an agent's own wallet
+  # (presence, proposals, the Daily Treasury Slice, claims): never offered
+  # here, whatever the manifest says of them.
+  @wallet_step ~r{/(presence|proposals/(create|vote|cancel|carry_out)|split|claim)\z}
 
   # The page's public reads (public_tool_list.ts), by the address each reads.
   @public_paths %{
@@ -63,9 +69,12 @@ defmodule KeyfleetWeb.MCPTools do
   defp offered?(%{"name" => name}) when name in @identity, do: false
   defp offered?(%{"requires" => "none", "name" => name}), do: Map.has_key?(@public_paths, name)
   defp offered?(%{"requires" => "wallet"}), do: false
+  defp offered?(%{"payment" => payment}) when payment != "none", do: false
 
   defp offered?(%{"route" => route}) when is_binary(route),
-    do: String.starts_with?(route, ["GET " <> @signed, "POST " <> @signed])
+    do:
+      String.starts_with?(route, ["GET " <> @signed, "POST " <> @signed]) and
+        not Regex.match?(@wallet_step, route)
 
   defp offered?(_tool), do: false
 

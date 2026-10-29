@@ -327,7 +327,11 @@ defmodule KeyfleetWeb.Router do
                 admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3
               ],
               tools: KeyfleetWeb.MCPTools,
-              endpoint: KeyfleetWeb.Endpoint
+              endpoint: KeyfleetWeb.Endpoint,
+              # Each of Keyfleet's own tool calls is a hosted sign-in at the
+              # sign-in server; 30 a minute leaves room for ten busy
+              # connections in one machine's share there.
+              tool_limit: [policy: "mcp_tools", limit: 30, window: 60]
             ],
             log: false
   end
