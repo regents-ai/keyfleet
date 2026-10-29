@@ -77,7 +77,8 @@ defmodule Keyfleet.Graph.Errors.WriteLimitError do
   use Splode.Error, fields: [:fleet_id, :retry_after], class: :forbidden
 
   def message(%{fleet_id: fleet_id, retry_after: seconds}),
-    do: "this wallet has used its workspace writes in #{fleet_id} for now; try again in #{seconds} seconds"
+    do:
+      "this wallet has used its workspace writes in #{fleet_id} for now; try again in #{seconds} seconds"
 end
 
 defmodule Keyfleet.Graph.Errors.MembersOnlyError do

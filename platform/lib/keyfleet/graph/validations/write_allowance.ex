@@ -20,8 +20,11 @@ defmodule Keyfleet.Graph.Validations.WriteAllowance do
     fleet_id = Ash.ActionInput.get_argument(input, :fleet_id)
 
     case Keyfleet.Limits.admit(:graph_writes, {fleet_id, wallet}) do
-      :ok -> :ok
-      {:limited, seconds} -> {:error, WriteLimitError.exception(fleet_id: fleet_id, retry_after: seconds)}
+      :ok ->
+        :ok
+
+      {:limited, seconds} ->
+        {:error, WriteLimitError.exception(fleet_id: fleet_id, retry_after: seconds)}
     end
   end
 
