@@ -75,13 +75,19 @@ defimpl AshAi.ToToolError,
     Keyfleet.Graph.Errors.EditsRestrictedError,
     Keyfleet.Graph.Errors.UnavailableError,
     Keyfleet.Graph.Errors.IndeterminateError,
-    Keyfleet.Graph.Errors.WriteLimitError,
     Keyfleet.Graph.Errors.MembersOnlyError,
     Keyfleet.Keys.Errors.OwnershipRefreshingError,
     Keyfleet.Projects.Errors.UnknownProjectError
   ] do
   def to_tool_error(error) do
     {_status, body} = KeyfleetWeb.WorkspaceRefusal.for_error(error)
-    KeyfleetWeb.ToolErrors.text(body, Map.get(error, :retry_after))
+    KeyfleetWeb.ToolErrors.text(body)
+  end
+end
+
+defimpl AshAi.ToToolError, for: Keyfleet.Graph.Errors.WriteLimitError do
+  def to_tool_error(%{retry_after: seconds} = error) do
+    {_status, body} = KeyfleetWeb.WorkspaceRefusal.for_error(error)
+    KeyfleetWeb.ToolErrors.text(body, seconds)
   end
 end
