@@ -6219,3 +6219,20 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Keyfleet's gateway; no route Keyfleet opens changed.
 - Why: Sean, 29 October 18:29Z: "they must continue tracking latest marimo and
   marimohub version . update all 5".
+
+## 2026-10-29 — Help links, privacy signal, chain numbers
+
+- Three shared changes from ash-template, signed off by Sean (rollouts
+  2026-10-28 help links, 2026-10-28 GPC, 2026-10-29 chain numbers).
+- The not-paired and person-not-here refusals, and the code's unsigned-push
+  refusal, end with their Help link at patchbay.help; the API contract shows
+  them as examples and the agent guides name the links.
+- A browser that sends Global Privacy Control starts no visit: no visit cookie,
+  no visit line, and one left from before is removed.
+- Each chain pass reports how far the record trails the chain head
+  (`health_indexer_lag_blocks`, `health_indexer_passes_total`, indexer
+  `fleet`), and the metrics poller counts the fleets stopped at a disagreement
+  (`keyfleet_fleets_stopped`), for Sentinel.
+- The shared library pins stay where they are: they already hold the help-link
+  and Claude Duet commits, and a newer pin would bring wallet and payment
+  changes this release does not take.

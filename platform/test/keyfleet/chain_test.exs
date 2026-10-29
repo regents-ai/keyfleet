@@ -172,6 +172,31 @@ defmodule Keyfleet.ChainTest do
              end) =~ "tried again"
     end
 
+    # Each finished pass reports the head less the last block it read, so a
+    # long history shows its lag shrinking pass by pass down to 0.
+    test "each pass reports how far the record trails the head" do
+      handler = "lag-#{inspect(self())}"
+      test = self()
+
+      :telemetry.attach(
+        handler,
+        [:keyfleet, :indexer, :lag],
+        fn _event, blocks, labels, nil ->
+          send(test, {blocks, labels})
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+
+      StubClient.put_chain(head(@deployed + 25_000), [])
+
+      for lag <- [15_001, 5_001, 0] do
+        assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 300}
+        assert_received {%{blocks: ^lag}, %{indexer: "fleet", chain_id: 8453}}
+      end
+    end
+
     # One log the reader cannot make sense of holds the whole range back.
     # A person's on-chain press that lands brings the fleet's next history read
     # forward to ten seconds from now and reads its balances at once; a press

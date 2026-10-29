@@ -4395,6 +4395,11 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/SharedAgentError"}
+          examples:
+            agentNotPaired:
+              value: {error: {code: agent_not_paired, message: "This agent is not paired with an account.", hint: "Ask your person to sign in on this site and pair you with Pair New Agent on their Account page, then check in again. Help: https://patchbay.help/errors/agent_not_paired"}}
+            personNotHere:
+              value: {error: {code: person_not_here, message: "The person this agent is paired with hasn't signed in on this site yet.", hint: "Ask your person to sign in on this site once, then check in again. Help: https://patchbay.help/errors/person_not_here"}}
     SharedAgentSignInUnavailable:
       description: >-
         siwa_request_failed: the sign-in server could not be reached; try again in a minute.
@@ -5013,6 +5018,9 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentNotPairedError"}
+          examples:
+            agentNotPaired:
+              value: {error: {code: agent_not_paired, message: "This agent is not paired with an account.", hint: "Ask your person to sign in on this site and pair you with Pair New Agent on their Account page, then send the request again. Help: https://patchbay.help/errors/agent_not_paired"}}
   schemas:
     AgentAccountBalances:
       type: object

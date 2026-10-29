@@ -14,7 +14,8 @@ defmodule Keyfleet.Chain.ReadFleet do
   next turn. A pass that fails is logged and retried a minute later, so one
   failure does not leave key ownership too old to act on
   (`Keyfleet.Chain.Cursor`'s seven minutes). A job that has failed 20 times
-  is given up, and the watch starts a fresh one.
+  is given up, and the watch starts a fresh one. A finished pass reports
+  `[:keyfleet, :indexer, :lag]` with `blocks`, the head less the last block read.
   """
   use Oban.Worker,
     queue: :chain,
@@ -23,6 +24,7 @@ defmodule Keyfleet.Chain.ReadFleet do
 
   require Logger
 
+  alias Keyfleet.Chain
   alias Keyfleet.Chain.Client
   alias Keyfleet.Chain.ReadingStoppedError
   alias Keyfleet.Chain.Scanner
@@ -50,10 +52,24 @@ defmodule Keyfleet.Chain.ReadFleet do
          {:error, reason} <- Scanner.step(fleet, client) do
       failed(fleet, reason)
     else
+      :ok -> passed(fleet)
       {:error, reason} -> failed(fleet, reason)
       {:cancel, reason} -> {:cancel, reason}
       _read -> {:snooze, pass_interval()}
     end
+  end
+
+  # A finished pass reports how far the record trails the head it read
+  # (`KeyfleetWeb.Telemetry`), always under the one indexer name "fleet".
+  defp passed(fleet) do
+    %{head_block: head, next_block: next} = Chain.get_cursor!(fleet.id)
+
+    :telemetry.execute([:keyfleet, :indexer, :lag], %{blocks: max(head - (next - 1), 0)}, %{
+      indexer: "fleet",
+      chain_id: fleet.chain_id
+    })
+
+    {:snooze, pass_interval()}
   end
 
   defp same_chain(%{chain_id: chain_id}, chain_id), do: :ok

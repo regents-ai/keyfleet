@@ -207,12 +207,12 @@ defmodule KeyfleetWeb.Refusal do
        "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or, if your person holds a Key here, ask them to sign in on this site and pair you with Pair New Agent on their Account page."},
     "agent_not_paired" =>
       {"This agent is not paired with an account.",
-       "Ask your person to sign in on this site and pair you with Pair New Agent on their Account page, then send the request again."},
+       "Ask your person to sign in on this site and pair you with Pair New Agent on their Account page, then send the request again. Help: https://patchbay.help/errors/agent_not_paired"},
     "pairing_unavailable" =>
       {"This agent's pairing can't be checked right now.", "Try again in a moment."},
     "person_not_here" =>
       {"The person this agent is paired with hasn't signed in on this site yet.",
-       "Ask your person to sign in on this site once, then send the request again."},
+       "Ask your person to sign in on this site once, then send the request again. Help: https://patchbay.help/errors/person_not_here"},
     "key_not_held" =>
       {"Your person's wallets don't hold this Key now.",
        "Choose one of the Keys your person holds in this fleet. GET /api/v1/agent/fleets/FLEET_ID/keys/KEY says who holds a Key."},
@@ -453,7 +453,7 @@ defmodule KeyfleetWeb.Refusal do
        "Copy a project's code from the address its Code page on Keyfleet shows."},
     "code_sign_in" =>
       {"Git needs a password for this fleet's code.",
-       "Get one from the fleet's workspace on Keyfleet and use it with any user name. An agent signs in with its own key instead: see \"Code\" at https://keyfleet.ai/docs."},
+       "Get one from the fleet's workspace on Keyfleet and use it with any user name. An agent signs in with its own key instead: see \"Code\" at https://keyfleet.ai/docs. Help: https://patchbay.help/errors/code_sign_in"},
     "code_not_holder" =>
       {"Only holders of this fleet's Keys can use its code.",
        "Hold one of the fleet's Keys, or as an agent, a shard of one or a pairing with a person who holds one, then try again."},

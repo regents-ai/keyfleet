@@ -56,6 +56,11 @@ defmodule Keyfleet.Chain.Cursor do
       get? true
     end
 
+    # The fleets stopped at a disagreement until an operator corrects the record.
+    read :stopped do
+      filter expr(not is_nil(rescan_from))
+    end
+
     # Starts reading a fleet at its deployment block; an existing cursor is
     # returned untouched.
     create :open do
