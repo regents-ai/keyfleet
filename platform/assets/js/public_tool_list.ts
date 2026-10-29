@@ -1,4 +1,4 @@
-// Manifest-listed public reads and exact signed agent tools. The existing SIWA
+// Manifest-listed public reads, exact signed agent tools and the picture upload. The existing SIWA
 // signer supplies proof; browser cookies never authorize these requests.
 // page_tools.ts keeps the separately approved wallet-button interaction.
 // public_tools.ts loads this file only in a browser that has its own agent.
@@ -107,6 +107,10 @@ async function read(tool: string, path: string, signal: AbortSignal | undefined)
     return {ok: false, status: response.status, error: {code: "unreadable_answer",
       message: `The site answered ${response.status}, but not with a reply this tool can read.`, hint: "Try again in a moment."}}
   }
+  return reply(response, answer)
+}
+
+function reply(response: Response, answer: unknown): Reply {
   if (response.ok) return {ok: true, status: response.status, data: answer}
   const {error} = answer as {error: Refusal}
   // Past a rate limit the agent is told how many seconds to wait.
@@ -114,6 +118,58 @@ async function read(tool: string, path: string, signal: AbortSignal | undefined)
   return response.status === 429 && retryAfter > 0
     ? {ok: false, status: response.status, retry_after: retryAfter, error}
     : {ok: false, status: response.status, error}
+}
+
+// A picture's bytes go unsigned to the address agents_avatar_start answered:
+// the address is the permission, so only this site's upload addresses are
+// taken, and no cookie goes with them.
+const uploads = "/api/v1/avatar/upload/"
+
+function uploadPath(url: string): string | null {
+  try {
+    const address = new URL(url, window.location.origin)
+    return address.origin === window.location.origin && address.pathname.startsWith(uploads) && !address.search
+      ? address.pathname : null
+  } catch (_error) {
+    return null
+  }
+}
+
+function decoded(base64: string) {
+  try {
+    return Uint8Array.from(atob(base64), character => character.charCodeAt(0))
+  } catch (_error) {
+    return null
+  }
+}
+
+async function upload(entry: Entry, input: Record<string, string>, signal: AbortSignal | undefined) {
+  const path = uploadPath(input.upload_url)
+  if (!path) return {ok: false, error: {code: "invalid_input", message: "upload_url must be an address agents_avatar_start answered on this site.",
+    hint: "Start the picture with agents_avatar_start, then send the upload_url it answers."}}
+  const bytes = decoded(input.bytes_base64)
+  if (!bytes) return {ok: false, error: {code: "invalid_input", message: "bytes_base64 must be base64.", hint: "Fix the call, then call again."}}
+
+  let response: Response
+  try {
+    response = await fetch(path, {
+      method: "PUT",
+      headers: {"content-type": input.content_type, Accept: "application/json", ...client(entry.name)},
+      body: bytes,
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+      signal,
+    })
+  } catch (error) {
+    unsent(entry, signal)
+    return lost(entry, input, undefined, {code: "upload_failed", message: String(error)})
+  }
+  const answer = await answerOf(response)
+  return answer === unreadable
+    ? lost(entry, input, response.status, {code: "unreadable_answer",
+      message: `The site answered ${response.status}, but not with a reply this tool can read.`})
+    : reply(response, answer)
 }
 
 // A call that ended without an answer. Anything but a read may already have
@@ -200,6 +256,7 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
     }
     const problem = inputProblem(input, entry.input_schema)
     if (problem) return {ok: false, error: {code: "invalid_input", message: problem, hint: "Fix the call, then call again."}}
+    if (entry.authentication === "upload_address") return upload(entry, input as Record<string, string>, signal)
     try {
       return await read(entry.name, paths[entry.name](input as Record<string, string>), signal)
     } catch (_error) {
