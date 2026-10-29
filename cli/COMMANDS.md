@@ -537,6 +537,80 @@ answer the steps; buy is blocked "Approve USDC first" until the approval lands, 
 
 - **History:** 2026-10-29 added (parity gap K2).
 
+## regents keyfleet shards issue <fleet>
+
+- **Purpose:** issues a shard of each Key named to an agent's wallet, for the days named,
+  as a Key page's New shard form does. Issuing again to a wallet that holds a shard renews
+  it from now. Only the Keys' holder may send it.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/shards/issue` → `buildIssueShard`
+- **Inputs:** `<fleet>`; on stdin `{"keys": "3, 7", "wallet": "0x...", "days": "30"}`, each
+  a string as the form types it.
+- **Answer:** the transaction `issue`, with `keys`, `wallet` and `days` as read.
+- **Refusals:** 422 `invalid_shard` when the Keys, wallet or days can't be read;
+  `error.details.problem` says what to fix.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+built = WalletSteps.build_steps(fleet, :issue_shard, wallet, inputs, actor: the agent)
+a typed field that can't be read -> 422 invalid_shard
+answer the step; blocked "Not your Key" unless the wallet holds every Key, "That's your
+wallet" for the holder's own
+```
+
+- **History:** 2026-10-29 added (parity gap K3).
+
+## regents keyfleet shards voting <fleet>
+
+- **Purpose:** lets the shards of the Keys named vote and propose with them (`on`), or
+  stops them (`off`), as a Key page's agent voting switch does. Only the Keys' holder may
+  send it.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/shards/voting` → `buildAgentVoting`
+- **Inputs:** `<fleet>`; on stdin `{"keys": "3, 7", "voting": "on"}`.
+- **Answer:** the transaction `on` or `off`, with `keys` and `voting_on` (which of them
+  their shards may vote with now).
+- **Refusals:** 422 `invalid_shard` when the Keys can't be read; `error.details.problem`
+  says what to fix.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+built = WalletSteps.build_steps(fleet, :agent_voting, wallet, inputs, actor: the agent)
+answer the step named by voting; blocked "Not your Key" unless the wallet holds every Key
+```
+
+- **History:** 2026-10-29 added (parity gap K3).
+
+## regents keyfleet shards end <fleet> <key>
+
+- **Purpose:** for each of the Key's active shards, ends it now or renews it for 30 days,
+  as a Key page's shard list does. The Key's holder may end or renew any of them; a
+  shard's own wallet may end only its own.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the one it wants.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end` → `buildEndShard`
+- **Inputs:** `<fleet> <key>`. The body is `{}`.
+- **Answer:** the transactions `end-<wallet>` and `renew-<wallet>` for each shard, with
+  `token_id`, `wallets` and `renew_days`.
+- **Refusals:** 404 `key_unknown` for a Key not sold yet.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+key   = the Key, as the chain reader recorded it, else 404 key_unknown
+built = WalletSteps.build_steps(fleet, :end_shard, wallet, key, actor: the agent)
+answer the steps; blocked "Already ended" or "Not your Key" when so
+```
+
+- **History:** 2026-10-29 added (parity gap K3).
+
 ## regents keyfleet rooms list <fleet>
 
 - **Purpose:** lists the fleet's rooms: its six fixed rooms, its five open rooms

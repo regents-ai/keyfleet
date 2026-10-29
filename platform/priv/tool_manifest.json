@@ -12680,6 +12680,336 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "chain_issue_shard",
+      "title": "Shard step",
+      "description": "Issue a shard of each Key named to an agent's wallet for the days named, as the Key page's New shard form does; issuing again to a wallet that holds one renews it from now. Only the Keys' holder may send it. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "keys",
+              "wallet",
+              "days"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "keys": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000,
+                "description": "The Keys, by number, separated by commas or spaces, such as \"3, 7, 12\"; your wallet holds each"
+              },
+              "wallet": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "description": "The agent's wallet: 0x and 40 letters and numbers"
+              },
+              "days": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10,
+                "description": "How long the shard lasts, 1 to 365 days, such as \"30\""
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/shards/issue",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "keys",
+          "wallet",
+          "days"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "keys": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "The Keys, by number, separated by commas or spaces, such as \"3, 7, 12\"; your wallet holds each"
+          },
+          "wallet": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "The agent's wallet: 0x and 40 letters and numbers"
+          },
+          "days": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10,
+            "description": "How long the shard lasts, 1 to 365 days, such as \"30\""
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_issue_shard",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/shards/issue",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_agent_voting",
+      "title": "Agent voting step",
+      "description": "Let the shards of the Keys named vote and propose with them, or stop them, as the Key page's agent voting switch does. Only the Keys' holder may send it. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "keys",
+              "voting"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "keys": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000,
+                "description": "The Keys, by number, separated by commas or spaces, such as \"3, 7, 12\"; your wallet holds each"
+              },
+              "voting": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "description": "on lets the shards vote and propose; off stops them"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/shards/voting",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "keys",
+          "voting"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "keys": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "The Keys, by number, separated by commas or spaces, such as \"3, 7, 12\"; your wallet holds each"
+          },
+          "voting": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off"
+            ],
+            "description": "on lets the shards vote and propose; off stops them"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_agent_voting",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/shards/voting",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "chain_end_shard",
+      "title": "End shard step",
+      "description": "For each of a Key's active shards, end it now or renew it for 30 days, as the Key page's shard list does. The Key's holder may end or renew any; a shard's own wallet may end only its own. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "The Key whose shards to end or renew: its exact decimal token id, as a string"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The Key whose shards to end or renew: its exact decimal token id, as a string"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_end_shard",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "proposals_create",
       "title": "Propose",
       "description": "Fill the proposal form with these fields and press Propose: opens a vote of every Key on what it does. Fields left out keep what the form shows.",

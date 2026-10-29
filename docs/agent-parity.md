@@ -89,8 +89,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5, K8 |
 | Claim a Regents Club Key (Pass holder) | Key page | — | — | — | — | wallet | K4, K8 |
 | Ask again for a Key's traits | Key page | — | — | — | — | wallet | K4, K8 |
-| Shards: issue, renew, end (Key holder) | Key page | — | — | — | — | wallet | K3, K8 |
-| Agent voting on or off (Key holder) | Key page | — | — | — | — | wallet | K3, K8 |
+| Shards: issue, renew, end (Key holder) | Key page | `chain_issue_shard`, `chain_end_shard` | — | — | `shards issue`, `shards end` (not released) | wallet | K8 |
+| Agent voting on or off (Key holder) | Key page | `chain_agent_voting` | — | — | `shards voting` (not released) | wallet | K8 |
 | Read the agent's own shards | Key page | `shards_list` | — | `shards_list` | `shards list` | no | K8 |
 | Key wall: read, post, remove a post | Key page | `walls_read`, `walls_message`, `walls_post`, `walls_remove` | — | the same four | `keys thread`, `keys post`; `keys message`, `keys remove` (1.10.21 candidate) | no | K8, K13 |
 
@@ -188,11 +188,14 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   the agent's own wallet to send; Keyfleet sends nothing. The approval is exactly the most
   the purchase may cost: the window's Unlimited box has no agent form. Tool `chain_buy`,
   command `keys buy`.
-- **K3. Shard controls are page-only.** Issuing, renewing and ending shards and turning
-  agent voting on or off run only from the Key page, for its holder. The flows
-  (`issue_shard`, `end_shard`, `agent_voting`) exist. Plan: chain routes, CLI commands
-  and WebMCP tools for each, open to the Key's holder only (never to a shard agent).
-  Protected (wallet).
+- **K3. Shard controls were page-only. Built** (29 Oct, waits for Sean's go to ship:
+  wallet): the signed `shards/issue` (`{"keys","wallet","days"}`, as the New shard form
+  types them), `shards/voting` (`{"keys","voting"}`, `on` or `off`) and
+  `keys/KEY/shards/end` answer the same steps the Key page builds (flows `issue_shard`,
+  `agent_voting`, `end_shard`) for the agent's own wallet. Only a Key's holder may send
+  them: for anyone else the steps answer blocked "Not your Key", and the contract refuses
+  them. Tools `chain_issue_shard`, `chain_agent_voting`, `chain_end_shard`; commands `shards
+  issue`, `shards voting`, `shards end`.
 - **K4. Four more wallet buttons are page-only.** Claiming a Regents Club Key, asking
   again for a Key's traits, returning an advance and token-launch upkeep (`club_claim`,
   `reveal`, `return_advance`, `launch_upkeep`). Plan: the same chain routes, CLI

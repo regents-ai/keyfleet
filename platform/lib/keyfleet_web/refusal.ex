@@ -269,6 +269,9 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_proposal" =>
       {"This proposal can't be built as written.",
        "error.details.problem says what to fix. Correct it, then send the request again."},
+    "invalid_shard" =>
+      {"These shards can't be built as written.",
+       "error.details.problem says what to fix. Correct it, then send the request again."},
     "invalid_amount" =>
       {"This amount can't be read as USDC.",
        "error.details.problem says how to write it. Correct it, then send the request again."},

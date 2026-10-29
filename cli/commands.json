@@ -511,6 +511,105 @@
       ]
     },
     {
+      "command": "shards issue <fleet>",
+      "description": "Get the transaction that issues a shard of each Key you name to an agent's wallet, for the days you name, for your wallet to send. Issuing again to a wallet that holds one renews it from now. Only the Keys' holder may send it. Pipe {\"keys\": \"3, 7\", \"wallet\": \"0x...\", \"days\": \"30\"} on stdin.",
+      "operation_id": "buildIssueShard",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/shards/issue",
+      "webmcp": "chain_issue_shard",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ],
+      "stdin_fields": [
+        {
+          "field": "keys",
+          "type": "string",
+          "required": true,
+          "description": "The Keys, by number, such as \"3, 7, 12\"."
+        },
+        {
+          "field": "wallet",
+          "type": "string",
+          "required": true,
+          "description": "The agent's wallet: 0x and 40 letters and numbers."
+        },
+        {
+          "field": "days",
+          "type": "string",
+          "required": true,
+          "description": "How long the shard lasts, 1 to 365 days, such as \"30\"."
+        }
+      ]
+    },
+    {
+      "command": "shards voting <fleet>",
+      "description": "Get the transaction that lets the shards of the Keys you name vote and propose with them, or stops them, for your wallet to send. Only the Keys' holder may send it. Pipe {\"keys\": \"3, 7\", \"voting\": \"on\"} on stdin.",
+      "operation_id": "buildAgentVoting",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/shards/voting",
+      "webmcp": "chain_agent_voting",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ],
+      "stdin_fields": [
+        {
+          "field": "keys",
+          "type": "string",
+          "required": true,
+          "description": "The Keys, by number, such as \"3, 7, 12\"."
+        },
+        {
+          "field": "voting",
+          "type": "string",
+          "required": true,
+          "description": "on lets the shards vote and propose; off stops them."
+        }
+      ]
+    },
+    {
+      "command": "shards end <fleet> <key>",
+      "description": "Get, for each of a Key's active shards, the transaction that ends it now and the one that renews it for 30 days, for your wallet to send the one you want. The Key's holder may end or renew any; a shard's own wallet may end only its own.",
+      "operation_id": "buildEndShard",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end",
+      "webmcp": "chain_end_shard",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "integer",
+          "in": "path",
+          "field": "token_id",
+          "minimum": 1,
+          "description": "The Key whose shards to end or renew."
+        }
+      ]
+    },
+    {
       "command": "rooms list <fleet>",
       "description": "List the fleet's rooms, with how far each has got.",
       "operation_id": "listFleetRooms",

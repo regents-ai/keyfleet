@@ -4,7 +4,8 @@ defmodule KeyfleetWeb.AgentChainController do
   marking its keys present, proposing, voting, cancelling, carrying a
   proposal out, running the daily split, sending the REGENT staking share,
   turning waiting USDC into REGENT, claiming one key's money or every key's
-  at once, and buying the next Key. Each is built by `Keyfleet.WalletSteps` for the signing
+  at once, buying the next Key, and, as a Key's holder, issuing, renewing
+  and ending its shards and turning its shards' voting on or off. Each is built by `Keyfleet.WalletSteps` for the signing
   agent's wallet, as the site's buttons are built for a person's, from the
   chain read at the latest block.
 
@@ -73,6 +74,26 @@ defmodule KeyfleetWeb.AgentChainController do
   # The next Key at its price, approving exactly the most the purchase may
   # cost, as the Buy Key window does with Unlimited unticked.
   def buy(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :buy, %{})
+
+  # Shards of the Keys named, for the wallet and days named, as the Key
+  # page's New shard form types them.
+  def issue_shard(conn, %{"fleet_id" => fleet_id}),
+    do:
+      answer(conn, fleet_id, :issue_shard, %{
+        inputs: Map.take(conn.body_params, ~w(keys wallet days))
+      })
+
+  # Ending each of the Key's active shards now, and renewing it.
+  def end_shard(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
+    do: answer(conn, fleet_id, :end_shard, %{token_id: String.to_integer(token_id)})
+
+  # Whether the shards of the Keys named may vote and propose with them: the
+  # one step that turns it on or off.
+  def agent_voting(conn, %{"fleet_id" => fleet_id, "keys" => keys, "voting" => voting}) do
+    answer(conn, fleet_id, :agent_voting, %{inputs: %{"keys" => keys}}, fn built ->
+      update_in(built.review.steps, fn steps -> Enum.filter(steps, &(&1.step == voting)) end)
+    end)
+  end
 
   defp answer(conn, fleet_id, flow, params, shape \\ &Function.identity/1) do
     agent = conn.assigns.agent_actor
@@ -143,10 +164,13 @@ defmodule KeyfleetWeb.AgentChainController do
   defp refuse(conn, :buy, _built, :sold_out, _inputs),
     do: Refusal.json(conn, 409, "keys_sold_out")
 
-  # Only a proposal's own fields, and the amount to turn into REGENT, can be
-  # written wrong.
+  # Only a proposal's own fields, the amount to turn into REGENT, and the Keys,
+  # wallet and days of shards can be written wrong.
   defp refuse(conn, :propose, built, _problem, inputs),
     do: unreadable(conn, "invalid_proposal", WalletWords.line(:propose, built, inputs))
+
+  defp refuse(conn, flow, built, _problem, inputs) when flow in [:issue_shard, :agent_voting],
+    do: unreadable(conn, "invalid_shard", WalletWords.line(flow, built, inputs))
 
   defp refuse(conn, :convert, built, _problem, inputs),
     do: unreadable(conn, "invalid_amount", WalletWords.line(:convert, built, inputs))

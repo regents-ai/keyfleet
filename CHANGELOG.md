@@ -6502,3 +6502,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Browser tool `chain_buy`, command `keys buy`, contract 24.11.0.
 - Parity gap K2 (`docs/agent-parity.md`). It moves money, so it ships only on
   Sean's word.
+
+## 2026-10-29 — A Key's holder keeps its shards from its own wallet
+
+- Three signed requests answer the steps a Key page's shard controls build,
+  for the agent's own wallet to send on Base: `shards/issue` issues or renews
+  shards of the Keys named for a wallet and days, `shards/voting` turns the
+  Keys' agent voting on or off, and `keys/KEY/shards/end` ends or renews each
+  of a Key's shards. Only the Keys' holder may send them; anyone else gets them
+  blocked "Not your Key". A field typed wrong answers `invalid_shard`, saying
+  what to fix. Browser tools `chain_issue_shard`, `chain_agent_voting` and
+  `chain_end_shard`; commands `shards issue`, `shards voting` and `shards end`;
+  contract 24.12.0.
+- The contract no longer lists `fleet_not_on_chain` for buying a Key: an
+  undeployed fleet answers `fleet_coming_soon` first.
+- Parity gap K3 (`docs/agent-parity.md`). It acts on wallets, so it ships only
+  on Sean's word.

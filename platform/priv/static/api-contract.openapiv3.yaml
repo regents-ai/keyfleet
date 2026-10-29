@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.13.0
+  version: 24.14.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -3199,6 +3199,138 @@ paths:
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/shards/issue:
+    post:
+      x-pairing-required: true
+      operationId: buildIssueShard
+      description: >-
+        The transaction that issues a shard of each Key named to the wallet named, for the days
+        named, as a Key page's New shard form does. A shard lets that wallet's agent act as the
+        Key: post, vote and propose with it while the Key's agent voting is on. Issuing again to a
+        wallet that holds a shard renews it from now. Only the Keys' holder may send it: blocked
+        "Not your Key" otherwise, and "That's your wallet" for the holder's own wallet. Nothing is
+        sent here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [keys, wallet, days]
+              properties:
+                keys:
+                  type: string
+                  maxLength: 1000
+                  description: The Keys, by number, separated by commas or spaces, such as "3, 7, 12"; the signing wallet holds each
+                wallet: {type: string, maxLength: 100, description: "The agent's wallet: 0x and 40 letters and numbers"}
+                days: {type: string, maxLength: 10, description: "How long the shard lasts, 1 to 365 days, such as \"30\""}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction, the Keys, the wallet and the days
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainIssueShard"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422":
+          description: >-
+            invalid_shard: the Keys, wallet or days can't be read as typed; error.details.problem
+            says what to fix, in a line. Nothing was built. invalid_request: the body doesn't fit
+            the operation; the hint names the fields it takes.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/ShardInvalidError"}
+                  - {$ref: "#/components/schemas/AgentError"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/shards/voting:
+    post:
+      x-pairing-required: true
+      operationId: buildAgentVoting
+      description: >-
+        The transaction that lets the shards of the Keys named vote and propose with them, or stops
+        them, as a Key page's agent voting switch does. Only the Keys' holder may send it: blocked
+        "Not your Key" otherwise. Nothing is sent here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [keys, voting]
+              properties:
+                keys:
+                  type: string
+                  maxLength: 1000
+                  description: The Keys, by number, separated by commas or spaces, such as "3, 7, 12"; the signing wallet holds each
+                voting: {type: string, enum: ["on", "off"], description: "on lets the shards vote and propose; off stops them"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction, the Keys and which of them their shards may vote now
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainAgentVoting"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422":
+          description: >-
+            invalid_shard: the Keys, wallet or days can't be read as typed; error.details.problem
+            says what to fix, in a line. Nothing was built. invalid_request: the body doesn't fit
+            the operation; the hint names the fields it takes.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/ShardInvalidError"}
+                  - {$ref: "#/components/schemas/AgentError"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end:
+    post:
+      x-pairing-required: true
+      operationId: buildEndShard
+      description: >-
+        For each of the Key's active shards, the transaction that ends it now and the one that
+        renews it for 30 days, as a Key page's shard list does: end-WALLET and renew-WALLET. The
+        Key's holder may end or renew any of them; a shard's own wallet may end only its own.
+        Blocked "Already ended" for a shard the chain has ended, and "Not your Key" for a step the
+        signing wallet may not send. Nothing is sent here: the signing wallet sends them itself, on
+        Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/TokenId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transactions, the Key and its shards' wallets
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainEndShard"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/KeyNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/board:
     post:
       x-pairing-required: true
@@ -4673,15 +4805,13 @@ components:
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentBuyRefused:
       description: >-
-        fleet_not_on_chain: the fleet's contracts aren't on the chain yet, so there is nothing to
-        send. keys_not_for_sale: Regents Club Keys are given with Regents Club Passes, never sold.
+        keys_not_for_sale: Regents Club Keys are given with Regents Club Passes, never sold.
         keys_sold_out: every Key of the fleet is sold. request_replayed: the sign-in service has
         seen this signed request before; sign it again and send it.
       content:
         application/json:
           schema:
             anyOf:
-              - {$ref: "#/components/schemas/FleetNotOnChainError"}
               - {$ref: "#/components/schemas/BuyRefusedError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentProposalNotFound:
@@ -9150,7 +9280,7 @@ components:
         chain_id: {$ref: "#/components/schemas/ChainId"}
         says: {$ref: "#/components/schemas/ChainSays"}
         transactions: {$ref: "#/components/schemas/ChainTransactions"}
-        token_id: {type: integer, minimum: 1, description: The Key on offer now}
+        token_id: {type: integer, minimum: 1, description: "The Key on offer now"}
         price:
           $ref: "#/components/schemas/UintString"
           description: The Key's price, in USDC's smallest units
@@ -9160,6 +9290,57 @@ components:
         approve_first:
           type: boolean
           description: Whether the wallet's USDC allowance is below max_price, so the approve transaction comes first
+    ChainIssueShard:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, keys, wallet, days]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        keys: {type: array, items: {type: integer, minimum: 1}, description: "The Keys the shards are of, lowest first"}
+        wallet: {$ref: "#/components/schemas/ChainAddress"}
+        days: {type: integer, minimum: 1, maximum: 365}
+    ChainAgentVoting:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, keys, voting_on]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        keys: {type: array, items: {type: integer, minimum: 1}, description: "The Keys named, lowest first"}
+        voting_on: {type: array, items: {type: integer, minimum: 1}, description: "Which of them their shards may vote with now"}
+    ChainEndShard:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, token_id, wallets, renew_days]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        token_id: {type: integer, minimum: 1}
+        wallets: {type: array, items: {$ref: "#/components/schemas/ChainAddress"}, description: "The wallets holding an active shard of the Key, as the chain reader recorded them"}
+        renew_days: {type: integer, description: "How long a renewed shard lasts, in days"}
+    ShardInvalidError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint, details]
+          properties:
+            code: {type: string, const: invalid_shard}
+            message: {type: string}
+            hint: {type: string}
+            details:
+              type: object
+              additionalProperties: false
+              required: [problem]
+              properties:
+                problem: {type: string, description: "What to fix, in a line"}
     BuyRefusedError:
       type: object
       additionalProperties: false

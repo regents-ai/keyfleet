@@ -498,6 +498,9 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/keys/:token_id/claim", AgentChainController, :claim
     post "/fleets/:fleet_id/keys/claim", AgentChainController, :claim_all
     post "/fleets/:fleet_id/keys/buy", AgentChainController, :buy
+    post "/fleets/:fleet_id/shards/issue", AgentChainController, :issue_shard
+    post "/fleets/:fleet_id/shards/voting", AgentChainController, :agent_voting
+    post "/fleets/:fleet_id/keys/:token_id/shards/end", AgentChainController, :end_shard
     post "/fleets/:fleet_id/graph/board", AgentGraphController, :board
     post "/fleets/:fleet_id/graph/view", AgentGraphController, :view
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
