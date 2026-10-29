@@ -2078,6 +2078,34 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "#workspace-instruments p", "Nothing pinned yet.")
     end
 
+    test "the foot of the stage shows the newest change, and the next one once it comes",
+         %{conn: conn} do
+      create(@fleet, "task", %{"title" => "Draft"})
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      board = watch_reads(view)
+
+      assert has_element?(view, "#workspace-ticker li", "Key 17 added the task “Draft”.")
+
+      assert view
+             |> element("#workspace-ticker")
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("li")
+             |> Enum.count() == 1
+
+      create(@fleet, "note", %{"title" => "Call notes", "body" => "b"})
+
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        Graph.head_topic(@fleet),
+        {:graph_head, @fleet, "log_fixture", 3}
+      )
+
+      assert_receive {:workspace_read, ^board}, 2_000
+      assert has_element?(view, "#workspace-ticker li", "Key 17 added the note “Call notes”.")
+      refute has_element?(view, "#workspace-ticker li", "Draft")
+    end
+
     test "an archived goal's page still hangs its work from it", %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Old plan"})
       task = create(@fleet, "task", %{"title" => "Draft"})
