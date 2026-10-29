@@ -1,0 +1,119 @@
+diff --git a/packages/core/src/services/content/NotebookService.test.ts b/packages/core/src/services/content/NotebookService.test.ts
+index 56d5cde2..0778520d 100644
+--- a/packages/core/src/services/content/NotebookService.test.ts
++++ b/packages/core/src/services/content/NotebookService.test.ts
+@@ -21,6 +21,7 @@ import { AppPoolStore } from '../runtime/AppPoolStore';
+ import { AppPoolService } from '../runtime/AppPoolService';
+ import { DEFAULT_APP_POOL_POLICY } from '../runtime/AppPoolRouter';
+ import { listAllKeys, listAllPrefixes } from '../catalog/storage';
++import { BUCKET_SCAN_CONCURRENCY } from '../../constants';
+ 
+ const enc = (s: string) => new TextEncoder().encode(s);
+ 
+@@ -2546,6 +2547,40 @@ describe('NotebookService', () => {
+ 			expect(await notebooks.getNotebookContent(projectId, sibling.id)).toBe('s1');
+ 		});
+ 
++		it('cleans up notebooks across projects in parallel, at most BUCKET_SCAN_CONCURRENCY at a time', async () => {
++			// One notebook per project, so only cleanup that spans projects runs in parallel.
++			const thumbnailPrefixes = new Set<string>();
++			for (let i = 0; i < 3 * BUCKET_SCAN_CONCURRENCY; i++) {
++				const pid =
++					i === 0
++						? projectId
++						: (await projects.createProject({ name: `P${i}`, description: '' }, ACTOR)).id;
++				const nb = await notebooks.createNotebook(
++					pid,
++					{ title: `N${i}`, description: '', code: '' },
++					ACTOR,
++				);
++				thumbnailPrefixes.add(paths.project(pid).notebook(nb.id).thumbnailImages);
++			}
++			const listed = new Set<string>();
++			let inFlight = 0;
++			let peak = 0;
++			const list = bucket.list.bind(bucket);
++			vi.spyOn(bucket, 'list').mockImplementation(async (options) => {
++				if (!options?.prefix || !thumbnailPrefixes.has(options.prefix)) return list(options);
++				listed.add(options.prefix);
++				peak = Math.max(peak, ++inFlight);
++				await new Promise((resolve) => setTimeout(resolve, 5));
++				inFlight--;
++				return list(options);
++			});
++
++			expect((await notebooks.sweepDeletedNotebooks()).purged).toBe(0);
++			expect(listed).toEqual(thumbnailPrefixes);
++			expect(peak).toBeGreaterThan(1);
++			expect(peak).toBeLessThanOrEqual(BUCKET_SCAN_CONCURRENCY);
++		});
++
+ 		it('skips notebooks under a soft-deleted project (the project sweep owns them)', async () => {
+ 			const nb = await notebooks.createNotebook(
+ 				projectId,
+diff --git a/packages/core/src/services/content/NotebookService.ts b/packages/core/src/services/content/NotebookService.ts
+index a7fe2df9..c3bb0f99 100644
+--- a/packages/core/src/services/content/NotebookService.ts
++++ b/packages/core/src/services/content/NotebookService.ts
+@@ -1516,9 +1516,10 @@ export class NotebookService {
+ 		const snapshot = await this.catalog.getCurrentSnapshot();
+ 		const now = Date.now();
+ 
+-		const stale: { projectId: ProjectId; notebookId: NotebookId }[] = [];
+-		for (const project of snapshot.projects) {
+-			if (project.status === 'deleted') continue; // owned by sweepDeletedProjects
++		// Each project and notebook cleanup is a few bucket round trips; an account
++		// with thousands of them would outlast the maintenance deadline one by one.
++		const live = snapshot.projects.filter((p) => p.status !== 'deleted'); // deleted ones are owned by sweepDeletedProjects
++		await mapWithConcurrency(live, BUCKET_SCAN_CONCURRENCY, async (project) => {
+ 			await new ResumableUploads(this.bucket, paths.project(project.id).objectUploadsPrefix)
+ 				.sweep()
+ 				.catch((error) =>
+@@ -1535,26 +1536,27 @@ export class NotebookService {
+ 					error,
+ 				);
+ 			});
+-			for (const nb of project.notebooks) {
+-				await this.workspace.sweepUploads(project.id, nb.id).catch((error) => {
+-					logOperationalError(
+-						'workspace_uploads.cleanup_failed',
+-						{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
+-						error,
+-					);
+-				});
+-				await this.thumbnails.prune(project.id, nb.id).catch((error) => {
+-					logOperationalError(
+-						'thumbnails.cleanup_failed',
+-						{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
+-						error,
+-					);
+-				});
+-				if (nb.status === 'deleted' && now - Date.parse(nb.updated_at) >= retentionMs) {
+-					stale.push({ projectId: project.id, notebookId: nb.id });
+-				}
+-			}
+-		}
++		});
++		const notebooks = live.flatMap((project) => project.notebooks.map((nb) => ({ project, nb })));
++		await mapWithConcurrency(notebooks, BUCKET_SCAN_CONCURRENCY, async ({ project, nb }) => {
++			await this.workspace.sweepUploads(project.id, nb.id).catch((error) => {
++				logOperationalError(
++					'workspace_uploads.cleanup_failed',
++					{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
++					error,
++				);
++			});
++			await this.thumbnails.prune(project.id, nb.id).catch((error) => {
++				logOperationalError(
++					'thumbnails.cleanup_failed',
++					{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
++					error,
++				);
++			});
++		});
++		const stale = notebooks
++			.filter(({ nb }) => nb.status === 'deleted' && now - Date.parse(nb.updated_at) >= retentionMs)
++			.map(({ project, nb }) => ({ projectId: project.id, notebookId: nb.id }));
+ 		if (stale.length === 0) return { purged: 0, orphanedSnapshots: [] };
+ 
+ 		const orphanedSnapshots: FsSnapshot[] = [];

@@ -6255,3 +6255,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - `make check-change` prints each Elixir part's result again ("273 passed (4
   properties, 269 tests), 1 excluded"; "1/2 passed" when one fails). Since
   Elixir 1.20 ExUnit ends with a "Result:" line, which the summary now reads.
+
+## 2026-10-29 — Notebook hub cleanup on time
+
+- The notebook hub's regular cleanup now works on 16 projects or notebooks at a
+  time instead of one after another. Regents Club's cleanup had grown past its
+  15-minute limit, so it stopped before finishing.
+- A storage read that Tigris cancels with 408 RequestCanceled is now tried
+  again. Writes are not, so a write that already landed is never repeated.
+- Both are Keyfleet patches on marimohub (`notebook-hub/marimohub/`), tested in
+  the hub image build. The hub image is now `626ec14-58179fa`.

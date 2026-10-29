@@ -28,11 +28,23 @@ RUN git apply /tmp/catalog-commit.patch
 # tries, so a refused write can be traced with the store.
 COPY marimohub/storage-errors.patch /tmp/storage-errors.patch
 RUN git apply /tmp/storage-errors.patch
+# Deleted-notebook cleanup works on 16 notebooks at a time, so a project with
+# thousands of notebooks finishes inside the maintenance deadline.
+COPY marimohub/sweep-concurrency.patch /tmp/sweep-concurrency.patch
+RUN git apply /tmp/sweep-concurrency.patch
+# A read the store cancels with 408 (Tigris RequestCanceled) is retried like any
+# other brief store failure; writes are not, so a landed write is never retried.
+COPY marimohub/storage-read-retry.patch /tmp/storage-read-retry.patch
+RUN git apply /tmp/storage-read-retry.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
 # marimohub's catalog tests, with the three catalog-commit.patch adds.
 RUN cd packages/core && pnpm exec vp test run src/services/catalog/
+# The notebook service's tests, with the sweep-concurrency.patch add, and the
+# storage client's tests, with the storage-read-retry.patch adds.
+RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts
+RUN cd packages/storage-s3 && pnpm exec vp test run
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---
