@@ -80,9 +80,12 @@ tooled = {
     for tool in manifest["tools"]
     if tool.get("authentication") == "siwa_per_request" and "route" in tool
 }
+contracted = set(agent_routes(contract))
+if not contracted:
+    raise SystemExit("Found no signed agent routes in the contract; its layout has changed.")
 problems += [
     f"{agent_route} has no signed browser tool"
-    for agent_route in sorted(set(agent_routes(contract)) - tooled - untooled)
+    for agent_route in sorted(contracted - tooled - untooled)
 ]
 if problems:
     raise SystemExit("\n".join(problems))
