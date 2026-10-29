@@ -1,8 +1,10 @@
 defmodule Keyfleet.OAuth do
   @moduledoc """
   Consent for connected apps, such as a Claude connector, through the person's
-  verified Keyfleet account. The one permission lets the app keep a Regents
-  identity, pair it with this account and check it in; nothing else.
+  verified Keyfleet account. One permission lets the app keep a Regents
+  identity, pair it with this account and check it in; the other,
+  `keyfleet.agent`, lets it work in the person's fleets as that paired agent.
+  Neither signs with the person's wallets or moves money.
   """
   @behaviour RegentOAuth
 

@@ -46,15 +46,22 @@ config :regent_agents,
   ash_domains: [RegentAgents]
 
 # The Claude connector signs in with the person's verified Keyfleet account
-# (`Keyfleet.OAuth`). Its one permission keeps a Regents identity for the app,
-# pairs it and checks it in. config/runtime.exs switches it on and sets its
-# issuer and resource from the site's own address.
+# (`Keyfleet.OAuth`). One permission keeps a Regents identity for the app,
+# pairs it and checks it in; the other lets it work in the person's fleets as
+# that paired agent, with Keyfleet's own tools at /mcp (`KeyfleetWeb.MCPTools`).
+# config/runtime.exs switches it on and sets its issuer and resource from the
+# site's own address.
 config :keyfleet, Keyfleet.OAuth,
   brand: "platform",
   scope: "regent.identity.manage",
   permission_description:
     "keep a Regents identity for this app, pair it with your account using your one-use code, and check it in",
-  consent_note: "Through Keyfleet, this app can only pair with your account and check in."
+  additional_scopes: %{
+    "keyfleet.agent" =>
+      "work in your fleets as the agent you pair it with: rooms, Key walls, direct messages, the workspace, polls, projects, code and notebooks, as your Keys"
+  },
+  consent_note:
+    "Through Keyfleet, this app works as any agent you pair works. It never signs with your wallets or moves money."
 
 # Codes, verifiers and tokens never reach the logs.
 config :phoenix, :filter_parameters, [
