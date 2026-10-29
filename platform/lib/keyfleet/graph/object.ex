@@ -171,6 +171,39 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The tasks that deliver on one of a shown project's goals (`implements`),
+    # as its page shows anyone beside the goal, once the Key holding the
+    # project shows it to everyone: the most recently changed first, not
+    # archived, each with its title and standing alone. Callers bound it with
+    # a limit.
+    read :shown_goal_tasks do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+      argument :goal, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and type == "task" and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
+                 fragment(
+                   "EXISTS (SELECT 1 FROM keyfleet_app.projects AS shown WHERE shown.fleet_id = ? AND shown.name = ? AND shown.state <> 'deleted' AND shown.shown_to_everyone)",
+                   fleet_id,
+                   project
+                 ) and
+                 fragment(
+                   "? IN (SELECT link.source FROM keyfleet_app.graph_relations AS link WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'implements')",
+                   id,
+                   ^arg(:fleet_id),
+                   ^arg(:goal)
+                 )
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                select: [:fleet_id, :id, :type, :project, :changed_seq],
+                load: [:title, :standing]
+              )
+    end
+
     # The fleet's items as its workspace's graph draws them, the most
     # recently changed first: optionally one project's, one type's or one
     # Key's (`owner_key`), or one goal's map (`goal`), and the archived ones
@@ -503,8 +536,8 @@ defmodule Keyfleet.Graph.Object do
 
   policies do
     # The open goals a fleet shows anyone, and the work of the projects shown
-    # to everyone.
-    policy action([:open_goals, :shown]) do
+    # to everyone, with the tasks that deliver on their goals.
+    policy action([:open_goals, :shown, :shown_goal_tasks]) do
       authorize_if always()
     end
 
