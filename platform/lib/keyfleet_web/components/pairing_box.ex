@@ -192,7 +192,7 @@ defmodule KeyfleetWeb.PairingBox do
   # A link to a workspace item or a project's page names the work, so the
   # agent's first read once paired is that work itself, as its page shows it
   # to a person, rather than the whole fleet. Claude, through its connector,
-  # reads it with the connector's tool of the same name.
+  # reads that work's changes with workspace_changes.
   defp first_read(nil, _hosted?), do: nil
 
   defp first_read(start, hosted?) do
@@ -211,23 +211,24 @@ defmodule KeyfleetWeb.PairingBox do
 
     if id =~ @item,
       do:
-        "Start with #{id} in the fleet #{fleet_id}. Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: " <>
+        "Start with #{id} in the fleet #{fleet_id}. " <>
           if(hosted?,
-            do: "call workspace_show with {\"fleet_id\":\"#{fleet_id}\",\"id\":\"#{id}\"}.",
+            do:
+              "Once paired, read what has happened to it: call workspace_changes with fleet_id #{fleet_id} and object #{id}.",
             else:
-              "regents keyfleet workspace get #{fleet_id} '#{id}', or a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/get with {\"id\":\"#{id}\"}."
+              "Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: regents keyfleet workspace get #{fleet_id} '#{id}', or a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/get with {\"id\":\"#{id}\"}."
           )
   end
 
   defp work(["", "projects", project], fleet_id, hosted?) do
     if project =~ @project,
       do:
-        "Start with the project #{project} in the fleet #{fleet_id}. Once paired, read its goals and pinned work " <>
+        "Start with the project #{project} in the fleet #{fleet_id}. " <>
           if(hosted?,
             do:
-              "with workspace_board and {\"fleet_id\":\"#{fleet_id}\",\"project\":\"#{project}\"}, then read any task in it with workspace_show.",
+              "Once paired, read what has happened in it: call workspace_changes with fleet_id #{fleet_id} and project #{project}.",
             else:
-              "with a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/board with {\"project\":\"#{project}\"}, then read any task in it with graph/get."
+              "Once paired, read its goals and pinned work with a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/board with {\"project\":\"#{project}\"}, then read any task in it with graph/get."
           )
   end
 
@@ -288,7 +289,7 @@ defmodule KeyfleetWeb.PairingBox do
   defp setup(:claude),
     do: """
     If the Keyfleet connector isn't in your tools yet, ask me to add it in Claude's settings under Connectors, with the address #{KeyfleetWeb.Endpoint.url()}/mcp.
-    After pairing, call check_in each time you start on Keyfleet, then fleets_sync for each fleet you work in.\
+    After pairing, call check_in each time you start on Keyfleet.\
     """
 
   defp setup(:other),
