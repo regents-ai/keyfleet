@@ -5985,3 +5985,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - On a phone, a fleet's links for agents sit under the tabs, with links tall
   enough to press.
 - Treasury and proposal amounts use figures of one width.
+- The developer documentation's headings are one or two words too
+  (Quickstart, Sign-in, Key page, Activity, Workspace, Notebooks, Onchain
+  actions, Balances and the rest), and every link and mention in the agent
+  guide, its parts, the agents page, the command reference and the refusals
+  follows. The API contract's link to the activity section now lands on it.
+  The joining guide is 3.21.1.
