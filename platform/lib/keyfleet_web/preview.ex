@@ -33,8 +33,8 @@ defmodule KeyfleetWeb.Preview do
   """
   def preview(name, input, actor) do
     with {:ok, tool} <- tool(name),
-         [method, route] = String.split(tool["route"], " ", parts: 2),
-         {:ok, path, body} <- request(route, input) do
+         [_method, route] = String.split(tool["route"], " ", parts: 2),
+         {:ok, method, path, body} <- Capabilities.request(tool, input) do
       fleet_id = input["fleet_id"]
       standing = standing(actor, fleet_id)
       as_key = as_key(route, input, standing)
@@ -67,25 +67,6 @@ defmodule KeyfleetWeb.Preview do
 
       _read_or_unknown ->
         :tool_unknown
-    end
-  end
-
-  # The address the tool would send to, from the input's names for the
-  # path's parts, and the body, the rest of the input.
-  defp request(route, input) do
-    names = ~r/\{(\w+)\}/ |> Regex.scan(route) |> Enum.map(&List.last/1)
-
-    case Enum.reject(names, &(is_binary(input[&1]) or is_integer(input[&1]))) do
-      [] ->
-        path =
-          Regex.replace(~r/\{(\w+)\}/, route, fn _whole, name ->
-            input[name] |> to_string() |> URI.encode(&URI.char_unreserved?/1)
-          end)
-
-        {:ok, path, Map.drop(input, names)}
-
-      missing ->
-        {:missing, missing}
     end
   end
 

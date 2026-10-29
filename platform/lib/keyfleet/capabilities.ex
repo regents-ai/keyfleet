@@ -50,6 +50,40 @@ defmodule Keyfleet.Capabilities do
   @spec tools() :: [map()]
   def tools, do: @manifest["tools"]
 
+  @doc """
+  The request a signed tool sends for `input`, as its browser tool, a write's
+  preview and the hosted MCP address all build it: `{:ok, method, path, body}`,
+  the route's `{names}` filled from the input, each encoded as one path
+  segment, and the rest of the input as the body. A GET carries no body, so a
+  GET answers `{:extra, names}` for input past its route's names;
+  `{:missing, names}` lists the route's names the input leaves out.
+  """
+  @spec request(map(), map()) ::
+          {:ok, String.t(), String.t(), map() | nil}
+          | {:missing, [String.t()]}
+          | {:extra, [String.t()]}
+  def request(%{"route" => route}, input) when is_map(input) do
+    [method, template] = String.split(route, " ", parts: 2)
+    names = ~r/\{(\w+)\}/ |> Regex.scan(template) |> Enum.map(&List.last/1)
+    body = Map.drop(input, names)
+
+    case Enum.reject(names, &(is_binary(input[&1]) or is_integer(input[&1]))) do
+      [] when method == "GET" and body != %{} ->
+        {:extra, Enum.sort(Map.keys(body))}
+
+      [] ->
+        path =
+          Regex.replace(~r/\{(\w+)\}/, template, fn _whole, name ->
+            input[name] |> to_string() |> URI.encode(&URI.char_unreserved?/1)
+          end)
+
+        {:ok, method, path, if(method == "GET", do: nil, else: body)}
+
+      missing ->
+        {:missing, missing}
+    end
+  end
+
   @doc "Every tool as a Markdown table, after a line saying what its Needs words mean."
   @spec markdown_table() :: String.t()
   def markdown_table do
