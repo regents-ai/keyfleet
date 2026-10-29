@@ -576,6 +576,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
         graph: assigns.board.graph,
         filter: assigns.board.filter,
         goal: Enum.find(assigns.board.graph.rows, &(&1.id == assigns.board.filter.goal)),
+        step: step(assigns.board.goals, assigns.board.filter.goal),
+        tasks: Enum.filter(assigns.board.graph.nodes, &(&1.type == "task")),
         filtered?:
           assigns.board.filter.type != nil or assigns.board.filter.owner != nil or
             assigns.board.filter.goal != nil or assigns.board.filter.archived?
@@ -598,20 +600,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <span :if={@graph.more_edges?}>The first {length(@graph.edges)} links</span>
         </p>
       </header>
-
-      <p :if={@filter.goal} id="workspace-graph-goal" class="workspace-graph-goal">
-        <span>
-          Around <.link :if={@goal} patch={@goal.path}>{@goal.title}</.link>
-          <span :if={is_nil(@goal)}>{@filter.goal}</span>
-        </span>
-        <.link
-          id="workspace-graph-every-goal"
-          class="workspace-toggle"
-          patch={WorkspacePage.board_path(@board.fleet_id, %{@filter | goal: nil})}
-        >
-          Every goal
-        </.link>
-      </p>
 
       <div class="workspace-graph-filters">
         <nav class="workspace-filters" aria-label="Kinds of item">
@@ -645,80 +633,154 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </.link>
       </div>
 
-      <Regent.Primitives.empty_state
-        :if={@graph.nodes == []}
-        id="workspace-graph-empty"
-        class="kf-empty"
-        title={if @filtered?, do: "No items match these filters.", else: "Nothing here yet."}
-      >
-        <:action :if={@filtered?}>
-          <.link
-            class="rg-button rg-button--secondary"
-            patch={WorkspacePage.board_path(@board.fleet_id, graph_filter(@filter))}
-          >
-            <span class="rg-button__label">Show everything</span>
-          </.link>
-        </:action>
-      </Regent.Primitives.empty_state>
+      <div id="workspace-stage" class="workspace-stage">
+        <header class="workspace-stage-head">
+          <p class="workspace-stage-live">
+            <span class="workspace-stage-dot" aria-hidden="true"></span>
+            <span>Live</span>
+            <span>{@board.fleet_name}</span>
+            <span :if={@filter.project}>{title(@board.projects, @filter.project)}</span>
+          </p>
+          <KeyfleetWeb.Time.local
+            :if={@graph.newest}
+            id="workspace-stage-newest"
+            at={@graph.newest}
+            as={:stamp}
+          />
+        </header>
 
-      <div :if={@graph.nodes != []} id="workspace-graph-frame" class="workspace-graph-frame">
-        <div class="workspace-graph-stage">
-          <canvas
-            id="workspace-graph-canvas"
-            data-graph-canvas
-            phx-update="ignore"
-            aria-hidden="true"
-          ></canvas>
-          <svg
-            id="workspace-graph-picture"
-            class="workspace-graph-picture"
-            width={@graph.width}
-            height={@graph.height}
-            viewBox={"0 0 #{@graph.width} #{@graph.height}"}
-            aria-hidden="true"
-            focusable="false"
-          >
-            <g class="workspace-graph-edges">
-              <path
-                :for={edge <- @graph.edges}
-                d={edge.path}
-                data-edge={edge.id}
-                data-type={edge.type}
-                data-source={edge.source}
-                data-target={edge.target}
-                data-curve={edge.curve}
-              />
-            </g>
-            <g class="workspace-graph-nodes">
-              <.link
-                :for={node <- @graph.nodes}
-                patch={node.path}
-                tabindex="-1"
-                data-node={node.id}
-                data-tone={node.tone}
-                data-archived={node.archived?}
-              >
-                <title>{node.title}</title>
-                <path class="workspace-graph-card" d={node.shape} />
-                <text class="workspace-graph-kind" x={node.x + 14} y={node.y + 21}>
-                  {node.kind}{if node.owner, do: " · #{node.owner}"}
-                </text>
-                <text
-                  :if={node.standing}
-                  class="workspace-graph-standing"
-                  x={node.x + node.width - 14}
-                  y={node.y + 21}
-                  text-anchor="end"
+        <nav
+          :if={@board.goals != [] or @filter.goal}
+          id="workspace-step"
+          class="workspace-map-card workspace-step"
+          data-tone={if @goal, do: @goal.tone, else: "plain"}
+          aria-label="Goals"
+        >
+          <p class="workspace-kind">
+            {cond do
+              is_nil(@filter.goal) -> "Every goal"
+              @step.at -> "Goal #{@step.at} of #{length(@board.goals)}"
+              true -> "Goal"
+            end}
+          </p>
+          <p :if={is_nil(@filter.goal)} class="workspace-step-title">
+            {count(length(@board.goals), "goal", "goals")}
+          </p>
+          <p :if={@filter.goal} id="workspace-graph-goal" class="workspace-step-title">
+            <.link :if={@goal} patch={@goal.path}>{@goal.title}</.link>
+            <span :if={is_nil(@goal)}>{@filter.goal}</span>
+          </p>
+          <p :if={@filter.goal} class="workspace-detail">
+            <span>{count(length(@tasks), "task", "tasks")}</span>
+            <span>{Enum.count(@tasks, &(&1.tone == :waiting))} awaiting review</span>
+          </p>
+          <p class="workspace-step-moves">
+            <.link
+              :if={@step.back}
+              id="workspace-step-back"
+              class="workspace-step-move"
+              patch={@step.back.path}
+              title={@step.back.title}
+              aria-label={"Goal before: #{@step.back.title}"}
+            >
+              ‹
+            </.link>
+            <.link
+              :if={@step.on}
+              id="workspace-step-on"
+              class="workspace-step-move"
+              patch={@step.on.path}
+              title={@step.on.title}
+              aria-label={"Next goal: #{@step.on.title}"}
+            >
+              ›
+            </.link>
+            <.link
+              :if={@filter.goal}
+              id="workspace-graph-every-goal"
+              class="workspace-toggle"
+              patch={WorkspacePage.board_path(@board.fleet_id, %{@filter | goal: nil})}
+            >
+              Every goal
+            </.link>
+          </p>
+        </nav>
+
+        <Regent.Primitives.empty_state
+          :if={@graph.nodes == []}
+          id="workspace-graph-empty"
+          class="kf-empty"
+          title={if @filtered?, do: "No items match these filters.", else: "Nothing here yet."}
+        >
+          <:action :if={@filtered?}>
+            <.link
+              class="rg-button rg-button--secondary"
+              patch={WorkspacePage.board_path(@board.fleet_id, graph_filter(@filter))}
+            >
+              <span class="rg-button__label">Show everything</span>
+            </.link>
+          </:action>
+        </Regent.Primitives.empty_state>
+
+        <div :if={@graph.nodes != []} id="workspace-graph-frame" class="workspace-graph-frame">
+          <div class="workspace-graph-stage">
+            <canvas
+              id="workspace-graph-canvas"
+              data-graph-canvas
+              phx-update="ignore"
+              aria-hidden="true"
+            ></canvas>
+            <svg
+              id="workspace-graph-picture"
+              class="workspace-graph-picture"
+              width={@graph.width}
+              height={@graph.height}
+              viewBox={"0 0 #{@graph.width} #{@graph.height}"}
+              aria-hidden="true"
+              focusable="false"
+            >
+              <g class="workspace-graph-edges">
+                <path
+                  :for={edge <- @graph.edges}
+                  d={edge.path}
+                  data-edge={edge.id}
+                  data-type={edge.type}
+                  data-source={edge.source}
+                  data-target={edge.target}
+                  data-curve={edge.curve}
+                />
+              </g>
+              <g class="workspace-graph-nodes">
+                <.link
+                  :for={node <- @graph.nodes}
+                  patch={node.path}
+                  tabindex="-1"
+                  data-node={node.id}
+                  data-tone={node.tone}
+                  data-archived={node.archived?}
                 >
-                  <tspan class="workspace-graph-dot">●</tspan>
-                  {node.standing}
-                </text>
-                <text class="workspace-graph-title" x={node.x + 14} y={node.y + 41}>
-                  {node.shown_title}
-                </text>
-              </.link>
-            </g>
-          </svg>
+                  <title>{node.title}</title>
+                  <path class="workspace-graph-card" d={node.shape} />
+                  <text class="workspace-graph-kind" x={node.x + 14} y={node.y + 21}>
+                    {node.kind}{if node.owner, do: " · #{node.owner}"}
+                  </text>
+                  <text
+                    :if={node.standing}
+                    class="workspace-graph-standing"
+                    x={node.x + node.width - 14}
+                    y={node.y + 21}
+                    text-anchor="end"
+                  >
+                    <tspan class="workspace-graph-dot">●</tspan>
+                    {node.standing}
+                  </text>
+                  <text class="workspace-graph-title" x={node.x + 14} y={node.y + 41}>
+                    {node.shown_title}
+                  </text>
+                </.link>
+              </g>
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -761,6 +823,25 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </ol>
     </section>
     """
+  end
+
+  # Where the Graph view stands among the goals it steps through: the goal
+  # shown, counted from 1, and the goals before and after it. With no goal
+  # shown, the step on is to the first.
+  defp step(goals, nil), do: %{at: nil, back: nil, on: List.first(goals)}
+
+  defp step(goals, goal) do
+    case Enum.find_index(goals, &(&1.id == goal)) do
+      nil ->
+        %{at: nil, back: nil, on: nil}
+
+      index ->
+        %{
+          at: index + 1,
+          back: index > 0 && Enum.at(goals, index - 1),
+          on: Enum.at(goals, index + 1)
+        }
+    end
   end
 
   defp count(1, one, _many), do: "1 #{one}"

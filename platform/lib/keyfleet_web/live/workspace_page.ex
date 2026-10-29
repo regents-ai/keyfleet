@@ -178,6 +178,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   @docs_shown 24
   @section_shown 6
 
+  # How many goals the Graph view steps through.
+  @step_goals 120
   # How many items of the work around a goal, the most recently changed, its
   # page reads for what they cite.
   @goal_items 100
@@ -337,6 +339,21 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # The goals the Graph view steps through, one goal's map at a time: the
+  # project's, or the whole fleet's, the #{@step_goals} most recently changed,
+  # in the order they were added.
+  defp step_goals(fleet_id, filter, opts) do
+    fleet_id
+    |> Graph.graph_objects!(
+      %{project: filter.project, type: "goal", archived: filter.archived?},
+      [query: [limit: @step_goals]] ++ opts
+    )
+    |> Enum.sort_by(fn %{id: "goal#" <> number} -> String.to_integer(number) end)
+    |> Enum.map(
+      &%{id: &1.id, title: &1.title, path: board_path(fleet_id, %{filter | goal: &1.id})}
+    )
+  end
+
   # Each project's title by its name, to label what the whole fleet's view
   # lists; none in one project's.
   defp labels(nil, projects), do: Map.new(projects, &{&1.name, &1.title})
@@ -369,7 +386,8 @@ defmodule KeyfleetWeb.WorkspacePage do
           seen: seen(cursor),
           filter: filter,
           counts: Graph.tally!(fleet.id, filter.project, opts),
-          graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects))
+          graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects)),
+          goals: step_goals(fleet.id, filter, opts)
         }
 
       {:missing, _name} ->
