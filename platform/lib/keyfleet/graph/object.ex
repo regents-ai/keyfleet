@@ -177,8 +177,8 @@ defmodule Keyfleet.Graph.Object do
     # only when asked for. A goal's map is the goal, everything linked to it
     # either way, and around each task that delivers on it (`implements`)
     # what it produced, its reviews and its forks; an id that names no goal
-    # has no map. Each comes with its title,
-    # standing and owner alone. Callers bound it with a limit.
+    # has no map, and the goal comes first in its own map. Each comes with its
+    # title, standing and owner alone. Callers bound it with a limit.
     read :graph do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, constraints: @text
@@ -240,42 +240,33 @@ defmodule Keyfleet.Graph.Object do
                 select: [:fleet_id, :id, :type, :project, :sys, :changed_seq, :changed_at],
                 load: [:title, :standing, :owner_key]
               )
+
+      # A goal's map always holds the goal, however much around it changed
+      # since.
+      prepare fn query, _context ->
+        case Ash.Query.get_argument(query, :goal) do
+          nil ->
+            query
+
+          goal ->
+            Ash.Query.sort(query, [{Ash.Expr.calc(id == ^goal, type: :boolean), :desc}],
+              prepend?: true
+            )
+        end
+      end
     end
 
-    # The fleet's goals or tasks in one standing, or one project's, archived
-    # ones left out, for the workspace to count (`Keyfleet.Graph.tally/3`):
-    # its open goals, as `open_goals` reads them; the tasks nobody has taken;
-    # the taken tasks not yet submitted; the submitted tasks waiting for a
-    # review of their current version; and the ones a review accepted.
-    read :in_standing do
+    # The fleet's goals and tasks, or one project's, archived ones left out,
+    # for the workspace to count by where they stand
+    # (`Keyfleet.Graph.tally/3`).
+    read :tallied do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, constraints: @text
 
-      argument :standing, :atom,
-        allow_nil?: false,
-        constraints: [one_of: [:open_goals, :open_tasks, :working, :waiting_review, :accepted]]
-
       filter expr(
-               fleet_id == ^arg(:fleet_id) and
+               fleet_id == ^arg(:fleet_id) and type in ["goal", "task"] and
                  (is_nil(^arg(:project)) or project == ^arg(:project)) and
-                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
-                 ((^arg(:standing) == :open_goals and type == "goal" and
-                     fragment("(? ->> 'status') = 'open'", data) and
-                     fragment(
-                       "(? ->> 'starting' IS NULL OR jsonb_array_length(? -> 'joined') > 0)",
-                       sys,
-                       sys
-                     )) or
-                    (^arg(:standing) == :open_tasks and type == "task" and
-                       fragment("(? ->> 'progress') = 'todo'", data) and
-                       fragment("(? ->> 'assignee_key') IS NULL", data)) or
-                    (^arg(:standing) == :working and type == "task" and
-                       fragment("(? ->> 'progress') <> 'done'", data) and
-                       fragment("(? ->> 'assignee_key') IS NOT NULL", data)) or
-                    (^arg(:standing) == :waiting_review and type == "task" and
-                       review == "awaiting_review") or
-                    (^arg(:standing) == :accepted and type == "task" and
-                       review in ["accepted", "reproduced"]))
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
              )
     end
 
@@ -522,7 +513,7 @@ defmodule Keyfleet.Graph.Object do
              :titled,
              :cards,
              :graph,
-             :in_standing,
+             :tallied,
              :around_goal,
              :assigned_to_keys,
              :review_asked_of,

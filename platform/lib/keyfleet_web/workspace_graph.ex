@@ -15,8 +15,8 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   the right side when both stand in one column.
 
   Each item is coloured by its standing (`tone/1`): open, in progress,
-  submitted or awaiting review, held up (blocked or disputed), done (accepted or
-  achieved) or dropped. Items with no standing, such as findings, are
+  submitted or awaiting review, held up (blocked or disputed), done (accepted,
+  reproduced or achieved) or dropped. Items with no standing, such as findings, are
   drawn plain.
   """
 
@@ -47,6 +47,7 @@ defmodule KeyfleetWeb.WorkspaceGraph do
     "blocked" => :held,
     "disputed" => :held,
     "accepted" => :done,
+    "reproduced" => :done,
     "achieved" => :done,
     "dropped" => :dropped
   }
@@ -70,6 +71,7 @@ defmodule KeyfleetWeb.WorkspaceGraph do
     "blocked" => "Blocked",
     "disputed" => "Disputed",
     "accepted" => "Accepted",
+    "reproduced" => "Reproduced",
     "achieved" => "Achieved",
     "dropped" => "Dropped"
   }

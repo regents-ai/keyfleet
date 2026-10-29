@@ -691,7 +691,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       refute has_element?(view, "#workspace-goal-folder")
     end
 
-    test "a goal's map holds the 120 most recently changed items around it",
+    test "a goal's map holds the goal and the 119 most recently changed items around it",
          %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
 
@@ -704,10 +704,15 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
-      # The goal changed longest ago, so it is the one left out; its page
-      # stands for it, and every note still shows.
-      assert Enum.sort(work(view)) == Enum.sort(notes)
+      # The goal changed longest ago, yet it stays in its own map, so the
+      # oldest note is the one left out and the notes hang from the goal.
+      assert Enum.sort(work(view)) == notes |> Enum.drop(1) |> Enum.sort()
       assert has_element?(view, "#workspace-goal-map-more", "The 120 most recently changed.")
+
+      {:ok, graph, _html} =
+        live(conn, @board <> "?view=graph&goal=" <> URI.encode_www_form(goal))
+
+      assert has_element?(graph, "#workspace-graph-goal", "Hub")
     end
 
     test "a review is told once, as its decision on the task", %{conn: conn} do
@@ -1831,12 +1836,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
         assert counts(view) == %{
                  open_goals: "2",
-                 open_tasks: "1",
-                 working: "3",
+                 open_tasks: "2",
+                 working: "1",
                  waiting_review: "1",
+                 blocked: "2",
                  accepted: "2"
                }
       end
+
+      # The Graph colours a reproduced task as done, as the count does.
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, ~s([data-node="#{reproduced}"][data-tone="done"]), "Reproduced")
     end
 
     test "one project's counts leave out the others' work", %{conn: conn} do
@@ -1861,7 +1871,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
 
     defp counts(view) do
-      for standing <- [:open_goals, :open_tasks, :working, :waiting_review, :accepted],
+      for standing <- [:open_goals, :open_tasks, :working, :waiting_review, :blocked, :accepted],
           into: %{} do
         figure =
           view
@@ -2066,6 +2076,29 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(view, "#workspace-instrument-code li", "README.md")
       assert has_element?(view, "#workspace-instruments p", "Nothing pinned yet.")
+    end
+
+    test "an archived goal's page still hangs its work from it", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Old plan"})
+      task = create(@fleet, "task", %{"title" => "Draft"})
+      link(@fleet, task, goal, "implements")
+      archive(@fleet, goal)
+
+      {:ok, view, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, goal))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-map-items > li[data-item="#{task}"][data-via="implements"])
+             )
+    end
+
+    test "a step to a goal shows its whole map, whatever kind was picked", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph&type=task")
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, @board <> "?view=graph&goal=" <> URI.encode_www_form(goal))
+      assert has_element?(view, "#workspace-graph-goal", "Revenue")
     end
 
     test "is linked from the goal's page", %{conn: conn} do

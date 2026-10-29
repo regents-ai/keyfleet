@@ -410,6 +410,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       {:open_tasks, "Open tasks", "open"},
       {:working, "In progress", "doing"},
       {:waiting_review, "Awaiting review", "waiting"},
+      {:blocked, "Blocked", "held"},
       {:accepted, "Accepted", "done"}
     ]
   end

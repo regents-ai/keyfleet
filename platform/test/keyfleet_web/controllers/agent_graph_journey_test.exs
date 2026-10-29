@@ -268,6 +268,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
              "open_tasks" => 0,
              "working" => 0,
              "waiting_review" => 0,
+             "blocked" => 0,
              "accepted" => 0
            }
 

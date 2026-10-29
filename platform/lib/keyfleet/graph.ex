@@ -17,8 +17,6 @@ defmodule Keyfleet.Graph do
   use Ash.Domain, extensions: [AshAi]
 
   @goals_shown 50
-  # Where a goal or task stands, as `tally/3` counts them.
-  @standings [:open_goals, :open_tasks, :working, :waiting_review, :accepted]
   @tables [
     Keyfleet.Graph.Cursor,
     Keyfleet.Graph.Event,
@@ -176,28 +174,59 @@ defmodule Keyfleet.Graph do
 
   @doc """
   How many of a fleet's goals and tasks stand where, or one project's,
-  archived ones left out: its open goals, the tasks nobody has taken, the
-  taken ones not yet submitted (`working`), the submitted ones waiting for
-  a review and the ones a review accepted (the `:in_standing` read of
-  objects). Each is counted on its own, so a write between two counts shows
-  in one of them only. Only the fleet's members read it.
+  archived ones left out, counted in one query of the `:tallied` read of
+  objects: its open goals (a starting goal once someone joined it), and its
+  tasks by the standing the Graph colours them by: not started
+  (`open_tasks`), in progress (`working`), submitted and waiting for a
+  review (`waiting_review`), blocked or disputed (`blocked`), and accepted,
+  reproduced or not (`accepted`). Each task stands in one of them. Only the
+  fleet's members read it.
   """
   @spec tally(String.t(), String.t() | nil, keyword()) ::
           {:ok, %{atom() => non_neg_integer()}} | {:error, term()}
   def tally(fleet_id, project, opts) do
-    Enum.reduce_while(@standings, {:ok, %{}}, fn standing, {:ok, counts} ->
-      Keyfleet.Graph.Object
-      |> Ash.Query.for_read(
-        :in_standing,
-        %{fleet_id: fleet_id, project: project, standing: standing},
-        opts
-      )
-      |> Ash.count()
-      |> case do
-        {:ok, count} -> {:cont, {:ok, Map.put(counts, standing, count)}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
+    require Ash.Expr
+
+    Keyfleet.Graph.Object
+    |> Ash.Query.for_read(:tallied, %{fleet_id: fleet_id, project: project}, opts)
+    |> Ash.aggregate(
+      [
+        {:open_goals, :count,
+         query: [
+           filter:
+             Ash.Expr.expr(
+               type == "goal" and fragment("(? ->> 'status') = 'open'", data) and
+                 fragment(
+                   "(? ->> 'starting' IS NULL OR jsonb_array_length(? -> 'joined') > 0)",
+                   sys,
+                   sys
+                 )
+             )
+         ]},
+        {:open_tasks, :count,
+         query: [
+           filter: Ash.Expr.expr(type == "task" and fragment("(? ->> 'progress') = 'todo'", data))
+         ]},
+        {:working, :count,
+         query: [
+           filter:
+             Ash.Expr.expr(type == "task" and fragment("(? ->> 'progress') = 'doing'", data))
+         ]},
+        {:waiting_review, :count,
+         query: [filter: Ash.Expr.expr(type == "task" and review == "awaiting_review")]},
+        {:blocked, :count,
+         query: [
+           filter:
+             Ash.Expr.expr(
+               type == "task" and
+                 (fragment("(? ->> 'progress') = 'blocked'", data) or review == "disputed")
+             )
+         ]},
+        {:accepted, :count,
+         query: [filter: Ash.Expr.expr(type == "task" and review in ["accepted", "reproduced"])]}
+      ],
+      opts
+    )
   end
 
   @doc "`tally/3`, raising what it can't count."
