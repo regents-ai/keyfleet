@@ -5962,5 +5962,5 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Oct: five surfaces). Audited on main `f004f6a9`: 65 actions, 16 gaps
   (K1–K16). The protected ones (sign-in, wallets, money, personal and production
   data) wait for Sean's go; K10 workspace pins, K12 the agent's picture, K14 finding
-  Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
-  regents-cli main `f844056` for 1.10.21) need none.
+  Keys by wallet and K13 (25 commands not in released regents-cli; all 25 are on
+  regents-cli main `e825335` for 1.10.21) need none.

@@ -33,8 +33,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `check_in`) and only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   "(1.10.21 candidate)" means the command is not in released regents-cli 1.10.20 but is
-  on regents-cli main `f844056`, waiting for the 1.10.21 release; "(1.10.21 candidate)"
-  means it is in Keyfleet's descriptor but not yet in regents-cli at all (K13). Wallet commands answer the steps the
+  on regents-cli main `e825335`, waiting for the 1.10.21 release (K13). Wallet commands answer the steps the
   agent's own wallet sends, built by the same `Keyfleet.WalletSteps` flow as the page's
   button; Keyfleet sends nothing.
 - **Protected**: needs Sean's go (sign-in, wallets, money, secrets, production data).
@@ -109,7 +108,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Publish posts, an item, a page or a commit; withdraw | workspace and project pages | `publications_list`, `publications_posts`, `publications_item`, `publications_page`, `publications_commit`, `publications_withdraw` | — | — | `publications …` (all 1.10.21 candidate) | no | K8, K13 |
 | Notebooks: list, create, files, run, results | notebook hub (one-time sign-in from the page) | `notebooks_list`, `notebooks_create`, `notebooks_files`, `notebooks_read_file`, `notebooks_add_file`, `notebooks_write_file`, `notebooks_run`, `notebooks_result` | — | — | `notebooks list`, `notebooks create`, `notebooks files …`, `notebooks run`, `notebooks result` | no | K8 |
 | Notebooks: lock or unlock, restore a copy | workspace page | `notebooks_lock`, `notebooks_copies`, `notebooks_restore` | — | — | `notebooks lock`, `notebooks unlock`, `notebooks copies`, `notebooks restore` | no | K8 |
-| Code: pushes, history, one commit | `/code/:repo/commits` | `code_pushes`, `code_commits`, `code_commit` | — | — | `code pushes`; `code commits`, `code commit` (next release) | no | K8, K13 |
+| Code: pushes, history, one commit | `/code/:repo/commits` | `code_pushes`, `code_commits`, `code_commit` | — | — | `code pushes`; `code commits`, `code commit` (1.10.21 candidate) | no | K8, K13 |
 | Code: read files, clone, push | `/code/:repo/files`, git password | n/a (git) | — | — | git with `git-remote-siwa` (signs with the agent's key) | no | K8 |
 
 ## Votes
@@ -222,14 +221,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   Plan: `agents_avatar_set` and `agents_avatar_remove` tools and `profile avatar`
   commands. Owner: Keyfleet chief.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
-  commands; released regents-cli 1.10.20 carries 82. regents-cli main `f844056` pins
-  Keyfleet at its live commit `136f2052` and carries 23 of the 25 for 1.10.21 (a
-  candidate until it is on PyPI): checkpoint read and save, fleets activity and
+  commands; released regents-cli 1.10.20 carries 82. regents-cli main `e825335` pins
+  Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate
+  until it is on PyPI): code commit and code commits, checkpoint read and save, fleets activity and
   doctor, keys message, post-as, remove and show, links resolve, preview, projects
   describe, hide and show, the five publications commands and publications list,
-  receipts read, rooms message, workspace board and graph. `code commit` and
-  `code commits` are on Keyfleet main but not live, so the CLI takes them at its first
-  pin after Keyfleet ships them. The manifest also leaves `workspace_board` and
+  receipts read, rooms message, workspace board and graph. The manifest also leaves `workspace_board` and
   `workspace_graph` without their CLI link. Owner: regents-cli chief.
 - **K14. Finding Keys by holder's wallet is page-only.** The map's search box finds the
   Keys a wallet holds; agents can only look a Key up by number. Plan: a `wallet` input on
