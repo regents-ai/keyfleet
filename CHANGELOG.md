@@ -6385,3 +6385,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   owner filters behind.
 - The Docs and Code panels show the six newest pins of the projects listed.
 - Contradicting links are dashed on the GPU too, as the page draws them.
+
+## 2026-10-29 — The newest change along the foot of the stage
+
+- The Graph view's stage ends with one line: the newest change, in the
+  workstream's words, with its time. When a newer change comes, the old
+  line fades out and the new one in.
+- This is step 6 of the Workspace plan drawn from four reference videos.

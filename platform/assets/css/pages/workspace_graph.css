@@ -238,6 +238,25 @@
 
 .workspace-step-move:hover { border-color: var(--ash-accent); }
 
+/* The ticker: the newest change, one line along the foot of the stage. */
+.workspace-ticker {
+  margin: 0;
+  padding: 0.75rem 0 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.workspace-ticker li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  min-width: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
 /* The picture keeps its own size and scrolls inside its frame, never the
    page. */
 .workspace-graph-frame {

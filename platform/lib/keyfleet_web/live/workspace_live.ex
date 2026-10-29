@@ -783,6 +783,33 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </svg>
           </div>
         </div>
+
+        <ol
+          :if={@board.instruments.workstream != []}
+          id="workspace-ticker"
+          class="workspace-ticker"
+          aria-label="Newest change"
+          phx-hook="MotionList"
+          data-variant={KeyfleetWeb.Motion.standard("list")}
+          data-layout-id="workspace-ticker"
+          data-children="[data-tick]"
+        >
+          <li
+            :for={line <- Enum.take(@board.instruments.workstream, 1)}
+            id={"workspace-ticker-#{line.seq}"}
+            data-tick
+            data-layout-id={"workspace-ticker-#{line.seq}"}
+          >
+            <span><.line parts={line.parts} fleet_id={@board.fleet_id} /></span>
+            <KeyfleetWeb.Time.local
+              id={"workspace-ticker-#{line.seq}-at"}
+              class="workspace-detail"
+              at={line.at}
+              as={:clock}
+              title_as={:moment}
+            />
+          </li>
+        </ol>
       </div>
 
       <ul
