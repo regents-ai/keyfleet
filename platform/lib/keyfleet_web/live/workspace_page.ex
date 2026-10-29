@@ -896,7 +896,10 @@ defmodule KeyfleetWeb.WorkspacePage do
           head: head,
           more?: more?,
           newer: if(page > 1, do: Code.history_path(fleet_id, repository, head, page - 1)),
-          older: if(more?, do: Code.history_path(fleet_id, repository, head, page + 1)),
+          older:
+            if(more? and page < @history_pages,
+              do: Code.history_path(fleet_id, repository, head, page + 1)
+            ),
           latest: if(from, do: Code.history_path(fleet_id, repository))
         }
 
