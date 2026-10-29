@@ -1988,6 +1988,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert top == [task, note]
       assert branch.(task) == [finding, fork]
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-map-items[phx-hook="MotionCascade"][data-variant="cascade"])
+             )
+
       assert has_element?(view, ~s([data-item="#{fork}"][data-via="forks"]))
       assert has_element?(view, ~s([data-item="#{finding}"][data-via="produces"]))
 

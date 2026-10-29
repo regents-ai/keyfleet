@@ -6285,3 +6285,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   workstream's words, with its time. When a newer change comes, the old
   line fades out and the new one in.
 - This is step 6 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — A goal's map cascades in
+
+- A goal's map on its page cascades its cards in the first time it scrolls
+  into view, with the site's standard card-list motion. It keeps still for
+  anyone who asked for less motion.
+- This is step 7 of the Workspace plan drawn from four reference videos.
+  The plan's other motions (a status that flips, a single pulse of the live
+  dot, fitting the picture to the stage) would be new kinds of motion, which
+  every Regent site shares, so they wait for the template first.
