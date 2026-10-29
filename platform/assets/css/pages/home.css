@@ -323,11 +323,6 @@
   @media (max-width: 39.99rem) {
     .rl-buy { inline-size: min(100%, 17rem); }
   }
-  /* The narrowest phones let a figure take a second line rather than run
-     into the next one. */
-  @media (max-width: 25.99rem) {
-    .rl-facts dd { white-space: normal; }
-  }
 
   @media (max-width: 47.99rem) {
     /* The hero opens the same distance under its rule as every other section. */
@@ -337,6 +332,16 @@
     .rl-facts dd { font-size: 1rem; }
     .rl-give__command { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: var(--space-2); }
     .rl-give__text { font-size: .8125rem; }
+  }
+
+  /* On a phone the three figures become rows, label left and figure right,
+     so no figure breaks across lines. It follows the rule above, whose cell
+     padding it replaces. */
+  @media (max-width: 25.99rem) {
+    .rl-facts { grid-template-columns: minmax(0, 1fr); }
+    .rl-facts > div { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2); padding: var(--space-1) 0; }
+    .rl-facts > div + div { padding-inline-start: 0; border-inline-start: 0; border-block-start: 1px solid var(--rl-line); }
+    .rl-facts dd { text-align: end; }
   }
 }
 
