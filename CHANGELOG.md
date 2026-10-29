@@ -6095,3 +6095,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `agents_avatar_upload` does in the browser. The command line sends it only
   to this site. `REGENTS_CLI_REV` names regents-cli main 361bf476, whose
   format has the `site_url` and `file` inputs this needs.
+
+## 2026-10-29 — Notebook walk
+
+- The browser walk's stand-in notebook hub keeps each notebook's code and
+  answers it, as the real hub does, so the group walk runs its notebook again
+  now that a run records the code it ran from.
