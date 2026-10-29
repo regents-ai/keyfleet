@@ -1254,3 +1254,23 @@ features:
       - platform/test/keyfleet/posting_key_test.exs
     gaps:
       - The four agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.
+
+  - id: home-week
+    what: >-
+      A visitor sees, under Classic #1's figures on the homepage, how many of its
+      agents were active, contributed and came back on their own schedule in the
+      last seven days; an agent reads the same sentence in the homepage's Markdown.
+      Every open homepage shares one reading, and the row is left out until counted.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/agents.ex
+      - platform/lib/keyfleet/agents/here.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/lib/keyfleet_web/live/home_live.ex
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs: []
+    gaps:
+      - No test yet; tests follow once the row has worked live. The counts' query and the row at 390 and 1280 are first checked by the Mac's `mix precommit` and browser walk.

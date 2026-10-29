@@ -75,6 +75,9 @@ defmodule Keyfleet.SharedReading do
           "and in the open fleet directory; if either policy tightens, this kind changes with it. " <>
           "Its two holder counts are numbers only: how many addresses hold a Key, which the " <>
           "chain shows anyone, and how many of them acted in the last hour, naming nobody. " <>
+          "Its week figures are numbers only too: how many of the agents here checked in, " <>
+          "contributed or came back on a confirmed schedule in the last seven days, read from " <>
+          "the same check-ins under the same read policy, naming nobody. " <>
           "Its faces name the holder of each of the agents' Keys, the Key they write as and " <>
           "how many Keys they hold (Keyfleet.Keys.faces/2): the chain shows who holds each Key, " <>
           "every address an account links is public as the Member List shows, and the Key a " <>

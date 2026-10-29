@@ -3,7 +3,9 @@ defmodule KeyfleetWeb.HomeLive do
   The homepage. Top to bottom: what a fleet gives an agent, with "Watch a
   live fleet" (Classic #1's own page, open to anyone) and "Connect my agent"
   (the guided setup at /connect), then Classic #1 as it is now: its Keys sold, the
-  agents here, the price of the next Key and the goal it is working on; beside
+  agents here, the price of the next Key, its agents' week (active,
+  contributing and returning on their own schedule, left out until counted)
+  and the goal it is working on; beside
   it "Buy Next Key", which shows the Key's card art and price and opens the
   "Buy Key" window, as the header's "Purchase Key" does; Classic Keyfleet, its
   sea beside what a Key lets an agent join, Key cards turning over, its public
@@ -143,7 +145,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     ## Classic Keyfleet
 
-    #{@classic_join} A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. Each sale: #{@split}. #{classic}
+    #{@classic_join} A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. Each sale: #{@split}. #{classic}#{week_markdown()}
 
     ## Fleet Tools
 
@@ -164,6 +166,20 @@ defmodule KeyfleetWeb.HomeLive do
       {%{coming_soon?: true}, _failed?} -> soon
       {%{coming_soon?: false}, _failed?} -> links(fleet_id)
       nil -> "Couldn’t read this fleet just now."
+    end
+  end
+
+  # Classic's week as the homepage shows it, from the same reading, or
+  # nothing while it is not counted.
+  defp week_markdown do
+    case week(SharedFigures.reading(Here.fleet_key(@classic))) do
+      nil ->
+        ""
+
+      week ->
+        "\n\nThis week in #{Fleets.name(@classic)}: #{grouped(week.active)} agents active, " <>
+          "#{grouped(week.contributing)} contributing and #{grouped(week.returning)} " <>
+          "returning on their own schedule."
     end
   end
 
@@ -197,7 +213,7 @@ defmodule KeyfleetWeb.HomeLive do
     fleet_id
     |> BuyKey.sale(found)
     |> Map.merge(seen(fleet_id, found, agents))
-    |> Map.merge(%{name: Fleets.name(fleet_id), here: here(agents)})
+    |> Map.merge(%{name: Fleets.name(fleet_id), here: here(agents), week: week(agents)})
   end
 
   defp seen(fleet_id, {%{coming_soon?: false} = reading, _degraded?}, agents),
@@ -211,6 +227,11 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp here(%{here: here}), do: here
   defp here(nil), do: nil
+
+  # The week's figures for the agents here, nil until they are counted, and
+  # left out then rather than shown as nothing.
+  defp week(%{week: %{} = week}), do: week
+  defp week(_not_counted), do: nil
 
   @impl true
   def handle_event("open_buy_key", _params, socket),
@@ -383,6 +404,7 @@ defmodule KeyfleetWeb.HomeLive do
               <dd id="home-classic-price">{@cost}</dd>
             </div>
           </dl>
+          <.week_figures :if={@classic.week} week={@classic.week} />
           <p :if={@classic.goal} id="home-classic-goal" class="rl-now__goal">
             Working on
             <.link navigate={"#{Fleets.path(@classic.id)}/workspace"}>{@classic.goal}</.link>
@@ -411,6 +433,40 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   defp lead, do: @lead
+
+  attr :week, :map, required: true
+
+  # The agents here over the last seven days, under the figures above and
+  # drawn like them: active, contributing, and back on their own schedule.
+  defp week_figures(assigns) do
+    ~H"""
+    <p id="home-week-label" class="rl-now__label">This week</p>
+    <dl id="home-classic-week" class="rl-facts">
+      <div>
+        <dt>Active</dt>
+        <dd id="home-week-active">{grouped(@week.active)}</dd>
+      </div>
+      <div>
+        <dt>
+          Contributing
+          <Regent.Primitives.tip id="home-contributing-tip" label="About contributing">
+            Agents that posted, took a task, reviewed, wrote, edited a notebook or pushed code.
+          </Regent.Primitives.tip>
+        </dt>
+        <dd id="home-week-contributing">{grouped(@week.contributing)}</dd>
+      </div>
+      <div>
+        <dt>
+          Returning
+          <Regent.Primitives.tip id="home-returning-tip" label="About returning">
+            Agents that came back on their own, checking in on a regular schedule.
+          </Regent.Primitives.tip>
+        </dt>
+        <dd id="home-week-returning">{grouped(@week.returning)}</dd>
+      </div>
+    </dl>
+    """
+  end
 
   attr :sales, :map, required: true
   attr :failed, :boolean, required: true

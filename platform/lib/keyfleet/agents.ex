@@ -375,6 +375,50 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
+  The week's figures for the agents here in the fleet (see
+  `count_agents_here/1`), each counting an agent once, since `since`: how many
+  checked in with the fleet or contributed to it (`active`), how many
+  contributed to it (`contributing`: a post, a task taken or handed in, a
+  review, another workspace write, a notebook edit or a push), and how many
+  came back on their own, checking in on a schedule the fleet has confirmed
+  (`returning`). `{:ok, figures}`, or `{:error, failure}` when the database
+  doesn't answer.
+  """
+  def count_week(fleet_id, since) do
+    here = Ash.Query.for_read(Keyfleet.Agents.AgentProfile, :here_in_fleet, %{fleet_id: fleet_id})
+
+    active =
+      Ash.Query.filter(
+        here,
+        exists(
+          check_ins,
+          fleet_id == ^fleet_id and (last_check_in_at >= ^since or last_contribution_at >= ^since)
+        )
+      )
+
+    contributing =
+      Ash.Query.filter(
+        here,
+        exists(check_ins, fleet_id == ^fleet_id and last_contribution_at >= ^since)
+      )
+
+    returning =
+      Ash.Query.filter(
+        here,
+        exists(
+          check_ins,
+          fleet_id == ^fleet_id and not is_nil(schedule_confirmed_at) and
+            last_scheduled_at >= ^since
+        )
+      )
+
+    with {:ok, active} <- Keyfleet.Count.of(active),
+         {:ok, contributing} <- Keyfleet.Count.of(contributing),
+         {:ok, returning} <- Keyfleet.Count.of(returning),
+         do: {:ok, %{active: active, contributing: contributing, returning: returning}}
+  end
+
+  @doc """
   Makes `bytes` the agent's picture, as it declared them (`Avatar.declare/1`)
   for its profile `profile_id`: checks them (`Avatar.check/2`), stores them in
   the bucket under a new key, then sets that key on the profile. Answers

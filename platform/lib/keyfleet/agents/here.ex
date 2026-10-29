@@ -8,7 +8,9 @@ defmodule Keyfleet.Agents.Here do
 
     * `fleet_key/1`: "Here now", the count of agents, the bar's count of
       the addresses holding a Key and of those online now
-      (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
+      (`Keyfleet.Keys.count_holders/2`, over the last hour), the week's
+      figures for the agents here (`Keyfleet.Agents.count_week/2`, over the
+      last seven days, nil when they could not be counted), and as many of
       the agents as the fleet's directory lists, each with what its check-ins
       say (its light, the light's meaning and its two lines, `seen_by/2`), the id
       that names its row and the address of its own picture, or nil when it
@@ -138,6 +140,12 @@ defmodule Keyfleet.Agents.Here do
         {:error, _failure} -> nil
       end
 
+    week =
+      case Agents.count_week(fleet_id, DateTime.add(now, -7, :day)) do
+        {:ok, week} -> week
+        {:error, _failure} -> nil
+      end
+
     keys = for %{key: token_id} <- agents, is_integer(token_id), uniq: true, do: token_id
 
     {:ok,
@@ -145,6 +153,7 @@ defmodule Keyfleet.Agents.Here do
        here: count,
        agents: agents,
        holders: holders,
+       week: week,
        faces: Keys.faces(fleet_id, keys)
      }}
   rescue
