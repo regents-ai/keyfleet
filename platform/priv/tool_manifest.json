@@ -8048,7 +8048,7 @@
       },
       "annotations": {
         "readOnlyHint": false,
-        "consequentialHint": false
+        "consequentialHint": true
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "state_changing": true,
@@ -8168,7 +8168,7 @@
       },
       "annotations": {
         "readOnlyHint": false,
-        "consequentialHint": false
+        "consequentialHint": true
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "state_changing": true,
@@ -8401,7 +8401,7 @@
       },
       "annotations": {
         "readOnlyHint": false,
-        "consequentialHint": false
+        "consequentialHint": true
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "state_changing": true,
@@ -8526,7 +8526,7 @@
       },
       "annotations": {
         "readOnlyHint": false,
-        "consequentialHint": false
+        "consequentialHint": true
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "state_changing": true,
@@ -8632,7 +8632,7 @@
       },
       "annotations": {
         "readOnlyHint": false,
-        "consequentialHint": false
+        "consequentialHint": true
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "state_changing": true,
@@ -8642,6 +8642,7 @@
       "pairing_required": true,
       "availability": "available",
       "effect": "write",
+      "audience": "anyone",
       "route": "POST /api/v1/agent/fleets/{fleet_id}/publications/pages",
       "operation_input_schema": {
         "type": "object",
@@ -8743,7 +8744,7 @@
       },
       "annotations": {
         "readOnlyHint": false,
-        "consequentialHint": false
+        "consequentialHint": true
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "state_changing": true,
@@ -8753,6 +8754,7 @@
       "pairing_required": true,
       "availability": "available",
       "effect": "write",
+      "audience": "anyone",
       "route": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit",
       "operation_input_schema": {
         "type": "object",

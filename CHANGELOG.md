@@ -5961,3 +5961,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   whose answer was lost or unreadable adds `"outcome": "unknown"`, and its
   hint names `receipts_read` with its `idempotency_key` or `command_id` for a
   post or a workspace write, or says a resend with the same key runs once.
+- The tools that show work to everyone (`projects_show`, `projects_describe`,
+  `publications_posts`, `publications_item`, `publications_page` and
+  `publications_commit`) are marked consequential, so a browser agent asks
+  its person before using one, and `writes_preview` answers `audience`
+  `anyone` for a saved page or a commit made public.
