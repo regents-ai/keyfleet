@@ -290,6 +290,23 @@ defmodule KeyfleetWeb.McpConnectorTest do
     assert is_binary(avatar)
     assert_received {:bucket, "PUT"}
 
+    # So is the address as a browser resolves it: any case of host, dot
+    # segments, an empty question, and base64 broken into lines.
+    %URI{host: host} = URI.parse(url)
+
+    written =
+      String.replace(url, host, String.upcase(host))
+      |> String.replace("/avatar/", "/x/../avatar/")
+
+    wrapped =
+      picture |> Base.encode64() |> String.graphemes() |> Enum.chunk_every(20) |> Enum.join("\n")
+
+    assert %{"isError" => false, "structuredContent" => %{"avatar_url" => avatar}} =
+             upload.(
+               %{bytes | "upload_url" => written <> "?"}
+               |> Map.put("bytes_base64", wrapped)
+             )
+
     assert %{"structuredContent" => %{"profile" => %{"avatar_url" => ^avatar}}} =
              result(call(token, "agents_profile", %{}, c))
 

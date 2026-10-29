@@ -24,7 +24,8 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
   # Ids, names and text are passed on exactly as written; the graph checks them.
   @text [trim?: false, allow_empty?: true]
   @part "owner_key|relations|linked|url|discussion|commit|rerun_check|agents"
-  @place [match: ~r/\A(docs|code)\z/]
+  @fleet [max_length: 63, trim?: false]
+  @place [match: ~r/\A(docs|code)\z/, trim?: false]
 
   actions do
     action :show, :map do
@@ -83,7 +84,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
 
     action :pin, :map do
       description "Pins a notebook or a code file or folder in an active project, for every member to find on the board."
-      argument :fleet_id, :string, allow_nil?: false
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @text
       argument :place, :string, allow_nil?: false, constraints: @place
       argument :target, :string, allow_nil?: false, constraints: @text
@@ -92,7 +93,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
 
     action :unpin, :map do
       description "Takes off a pin your person or one of their agents put on a project's notebook or code."
-      argument :fleet_id, :string, allow_nil?: false
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @text
       argument :place, :string, allow_nil?: false, constraints: @place
       argument :target, :string, allow_nil?: false, constraints: @text

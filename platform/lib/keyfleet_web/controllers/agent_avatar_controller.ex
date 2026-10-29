@@ -15,25 +15,29 @@ defmodule KeyfleetWeb.AgentAvatarController do
   def start(conn, params), do: reply(conn, :avatar_start, params)
   def remove(conn, params), do: reply(conn, :avatar_remove, params)
 
-  # A body longer than a picture may be is refused before it is read in full.
+  # The ticket, the agent it names and the type are checked before the body
+  # is read, and a body longer than a picture may be is refused before it is
+  # read in full.
   def upload(conn, %{"ticket" => ticket}) do
-    cap = Avatar.max_bytes()
-
-    {bytes, conn} =
-      case read_body(conn, length: cap, read_length: cap + 1) do
-        {:ok, bytes, conn} -> {bytes, conn}
-        {:more, _partial, conn} -> {:too_large, conn}
-        # A body that stopped coming is none of the picture's bytes.
-        {:error, _reason} -> {"", conn}
-      end
-
     type =
       case get_req_header(conn, "content-type") do
         [type] -> type
         _none_or_more -> nil
       end
 
-    AgentReply.answer(conn, Answer.upload(ticket, type, bytes))
+    case Answer.upload(ticket, type) do
+      {:ok, upload} ->
+        cap = Avatar.max_bytes()
+
+        case read_body(conn, length: cap, read_length: cap + 1) do
+          {:ok, bytes, conn} -> AgentReply.answer(conn, Answer.keep(upload, bytes))
+          {:more, _partial, conn} -> AgentReply.answer(conn, Answer.keep(upload, :too_large))
+          {:error, _reason} -> AgentReply.answer(conn, Answer.keep(upload, :unreadable))
+        end
+
+      refused ->
+        AgentReply.answer(conn, refused)
+    end
   end
 
   defp reply(conn, op, params),

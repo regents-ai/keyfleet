@@ -37,6 +37,7 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   @spending_off "Approving agent spending is off on this site."
 
   @salt "agent avatar upload"
+  @max_bytes Avatar.max_bytes()
   @ticket_seconds 10 * 60
   @uploads "/api/v1/avatar/upload/"
   # The ticket is signed, not sealed, so it names the agent and nothing the
@@ -184,11 +185,14 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   # the browser tool sends them.
   def answer(:avatar_upload, %{"upload_url" => url} = params, _actor, _waiter) do
     with {:ok, ticket} <- ticket(url),
-         {:ok, bytes} <- Base.decode64(params["bytes_base64"]) do
-      upload(ticket, params["content_type"], bytes)
+         {:ok, upload} <- upload(ticket, params["content_type"]) do
+      case Base.decode64(params["bytes_base64"], ignore: :whitespace, padding: false) do
+        {:ok, bytes} -> keep(upload, bytes)
+        :error -> refusal(422, "invalid_request")
+      end
     else
       :not_here -> refusal(401, "avatar_upload_expired")
-      :error -> refusal(422, "invalid_request")
+      refused -> refused
     end
   end
 
@@ -206,34 +210,45 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   end
 
   @doc """
-  Keeps `bytes`, sent as `content_type`, as the picture the upload `ticket`
-  was started for, as the agent the ticket names: its new `avatar_url`, or
-  the refusal. Bytes longer than a picture may be are refused unread.
+  The upload the `ticket` was started for, sent as `content_type`, before its
+  bytes are read: `{:ok, upload}`, for `keep/2`, or the refusal. The ticket is
+  the permission; the agent it names is checked as it stands now, and the
+  upload spends its allowance.
   """
-  @spec upload(String.t(), term(), binary() | :too_large) ::
-          {pos_integer(), map(), pos_integer() | nil}
-  def upload(ticket, content_type, bytes) do
-    case Phoenix.Token.verify(Endpoint, @salt, ticket, max_age: @ticket_seconds) do
-      {:ok, %{profile_id: profile_id, declared: declared, agent: agent}} ->
-        store(struct!(Agent, agent), profile_id, declared, content_type, bytes)
-
-      {:error, _reason} ->
-        refusal(401, "avatar_upload_expired")
-    end
-  end
-
-  defp store(actor, profile_id, declared, content_type, bytes) do
-    with {:paired, true} <- {:paired, Agent.valid?(actor)},
+  @spec upload(String.t(), term()) ::
+          {:ok, map()} | {pos_integer(), map(), pos_integer() | nil}
+  def upload(ticket, content_type) do
+    with {:ok, %{profile_id: profile_id, declared: declared, agent: agent}} <-
+           Phoenix.Token.verify(Endpoint, @salt, ticket, max_age: @ticket_seconds),
+         actor = struct!(Agent, agent),
+         {:paired, true} <- {:paired, Agent.valid?(actor)},
          :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
-         {:type, true} <- {:type, content_type == declared.content_type},
-         {:fits, true} <- {:fits, is_binary(bytes) and byte_size(bytes) <= Avatar.max_bytes()},
-         {:ok, profile} <- Agents.store_avatar(actor, profile_id, declared, bytes) do
-      ok(%{avatar_url: Avatar.url(profile)})
+         {:type, true} <- {:type, content_type == declared.content_type} do
+      {:ok, %{actor: actor, profile_id: profile_id, declared: declared}}
     else
+      {:error, _reason} -> refusal(401, "avatar_upload_expired")
       {:paired, false} -> refusal(403, "agent_not_paired")
       {:limited, seconds} -> limited(seconds)
       {:type, false} -> refusal(422, "avatar_mismatch")
-      {:fits, false} -> refusal(413, "request_too_large")
+    end
+  end
+
+  @doc """
+  Keeps `bytes` as the picture of an `upload/2`: its new `avatar_url`, or the
+  refusal. `:too_large` is a body longer than a picture may be, refused
+  unread, and `:unreadable` one that stopped coming.
+  """
+  @spec keep(map(), binary() | :too_large | :unreadable) ::
+          {pos_integer(), map(), pos_integer() | nil}
+  def keep(_upload, :too_large), do: refusal(413, "request_too_large")
+  def keep(_upload, :unreadable), do: refusal(503, "avatar_unavailable")
+
+  def keep(_upload, bytes) when byte_size(bytes) > @max_bytes,
+    do: refusal(413, "request_too_large")
+
+  def keep(%{actor: actor, profile_id: profile_id, declared: declared}, bytes) do
+    case Agents.store_avatar(actor, profile_id, declared, bytes) do
+      {:ok, profile} -> ok(%{avatar_url: Avatar.url(profile)})
       {:error, :mismatch} -> refusal(422, "avatar_mismatch")
       {:error, :unreadable} -> refusal(422, "invalid_avatar")
       {:error, :profile_not_found} -> refusal(404, "profile_not_found")
@@ -241,23 +256,23 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     end
   end
 
-  # The ticket in an upload address on this site, written in full or as its
-  # path, with nothing after it.
+  # The ticket in an upload address on this site, resolved against the site's
+  # own address as a browser resolves it, with nothing asked after it.
   defp ticket(url) when is_binary(url) do
     site = URI.parse(Endpoint.url())
+    address = URI.merge(site, url)
 
-    case URI.parse(url) do
-      %URI{path: @uploads <> ticket, query: nil, fragment: nil} = address
-      when ticket != "" ->
-        if address.host == nil or
-             {address.scheme, address.host, address.port} ==
-               {site.scheme, site.host, site.port},
-           do: {:ok, ticket},
-           else: :not_here
-
-      _other ->
-        :not_here
+    with true <- {address.scheme, address.port} == {site.scheme, site.port},
+         true <- String.downcase(address.host || "") == site.host,
+         true <- address.query in [nil, ""],
+         @uploads <> ticket when ticket != "" <- address.path do
+      {:ok, URI.decode(ticket)}
+    else
+      _elsewhere -> :not_here
     end
+  rescue
+    # A ticket whose escapes are not ones.
+    ArgumentError -> :not_here
   end
 
   defp ticket(_url), do: :not_here
