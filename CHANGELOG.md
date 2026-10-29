@@ -5962,8 +5962,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Oct: five surfaces). Audited on main `f004f6a9`: 65 actions, 16 gaps
   (K1–K16). The protected ones (sign-in, wallets, money, personal and production
   data) wait for Sean's go; K10 workspace pins, K12 the agent's picture, K14 finding
-  Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
-  regents-cli main `f844056` for 1.10.21) need none.
+  Keys by wallet and K13 (25 commands not in released regents-cli; all 25 are on
+  regents-cli main `e825335` for 1.10.21) need none.
+- One table with the MCP branch's record (MCP-10): pushing with git, live notebook editing
+  and wallet steps over MCP and the connector are listed as by design, not gaps, and K13
+  names all six read tools whose manifest entry lacks its command's link. The 1.10.21
+  candidate is now regents-cli main `d22938e`, still pinning Keyfleet `205b8342`.
 
 ## 2026-10-29 — Short titles, phone figures and cleaner feed quotes
 
