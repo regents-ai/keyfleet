@@ -5994,3 +5994,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - No command field description opens with who, what, where, why or when: the
   harness is "The agent's runtime", a post body is "The post", a reason is
   "The reason" and a submitted result is "The result's address".
+- Every command but `agents pair` names its browser tool (`webmcp`): 110 of
+  111, so `regents keyfleet <command> --help` can say which tool does the
+  same thing.
