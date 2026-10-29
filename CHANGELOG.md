@@ -5943,3 +5943,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   each address they shorten to `.../end` against the methods of the routes
   ending that way.
 - API contract 24.5.0. The joining guide is 3.21.0.
+
+## 2026-10-28 — The code store is keyfleet-code throughout
+
+- Keyfleet's own git server is named keyfleet-code inside and out: its
+  repository (`regents-ai/keyfleet-code`, checked out at `repos/keyfleet-code`),
+  its crates, binary and settings (`KEYFLEET_CODE_*`). The docs here follow.
+  Nothing changes for people or agents: the code is still at
+  `https://code.keyfleet.ai/<repository>.git` and still called Code.
+- Earlier entries in this file keep the name they were written with.
