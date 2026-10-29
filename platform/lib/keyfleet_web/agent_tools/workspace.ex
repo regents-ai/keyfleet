@@ -47,7 +47,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
     end
 
     action :view, :map do
-      description "The workspace's items, the links between them and the Keys that own them, as its Graph view draws them, each item with its page's address."
+      description "The workspace's items, the links between them and the Keys that own them, as its Graph view draws them, or one goal's map, each item with its page's address."
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, constraints: @text
 
@@ -55,6 +55,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
         constraints: [match: ~r/\A(goal|task|finding|evidence|service|note|dead_end|review)\z/]
 
       argument :owner_key, :integer, constraints: [min: 1, max: @bigint]
+      argument :goal, :string, constraints: @text
       argument :archived, :boolean, allow_nil?: false, default: false
       run {Read, read: :view}
     end

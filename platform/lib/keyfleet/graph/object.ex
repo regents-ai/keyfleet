@@ -173,14 +173,18 @@ defmodule Keyfleet.Graph.Object do
 
     # The fleet's items as its workspace's graph draws them, the most
     # recently changed first: optionally one project's, one type's or one
-    # Key's (`owner_key`), and the archived ones only when asked for. Each
-    # comes with its title, standing and owner alone. Callers bound it with a
-    # limit.
+    # Key's (`owner_key`), or one goal's map (`goal`), and the archived ones
+    # only when asked for. A goal's map is the goal, everything linked to it
+    # either way, and around each task that delivers on it (`implements`)
+    # what it produced, its reviews and its forks; an id that names no goal
+    # has no map. Each comes with its title,
+    # standing and owner alone. Callers bound it with a limit.
     read :graph do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, constraints: @text
       argument :type, :string, constraints: @text
       argument :owner_key, :integer, constraints: [min: 1]
+      argument :goal, :string, constraints: @text
       argument :archived, :boolean, allow_nil?: false, default: false
 
       filter expr(
@@ -188,6 +192,45 @@ defmodule Keyfleet.Graph.Object do
                  (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  (is_nil(^arg(:type)) or type == ^arg(:type)) and
                  (is_nil(^arg(:owner_key)) or owner_key == ^arg(:owner_key)) and
+                 (is_nil(^arg(:goal)) or
+                    (fragment(
+                       "EXISTS (SELECT 1 FROM keyfleet_app.graph_objects AS goal WHERE goal.fleet_id = ? AND goal.id = ? AND goal.type = 'goal')",
+                       ^arg(:fleet_id),
+                       ^arg(:goal)
+                     ) and
+                       (id == ^arg(:goal) or
+                          fragment(
+                            """
+                            ? IN (
+                              SELECT link.source FROM keyfleet_app.graph_relations AS link
+                              WHERE link.fleet_id = ? AND link.target = ?
+                              UNION
+                              SELECT link.target FROM keyfleet_app.graph_relations AS link
+                              WHERE link.fleet_id = ? AND link.source = ?
+                              UNION
+                              SELECT made.target FROM keyfleet_app.graph_relations AS link
+                              JOIN keyfleet_app.graph_relations AS made
+                                ON made.fleet_id = link.fleet_id AND made.source = link.source
+                                  AND made.type = 'produces'
+                              WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'implements'
+                              UNION
+                              SELECT around.source FROM keyfleet_app.graph_relations AS link
+                              JOIN keyfleet_app.graph_relations AS around
+                                ON around.fleet_id = link.fleet_id AND around.target = link.source
+                                  AND around.type IN ('reviews', 'forks')
+                              WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'implements'
+                            )
+                            """,
+                            id,
+                            ^arg(:fleet_id),
+                            ^arg(:goal),
+                            ^arg(:fleet_id),
+                            ^arg(:goal),
+                            ^arg(:fleet_id),
+                            ^arg(:goal),
+                            ^arg(:fleet_id),
+                            ^arg(:goal)
+                          )))) and
                  (^arg(:archived) or
                     fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys))
              )

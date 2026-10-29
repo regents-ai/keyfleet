@@ -26,8 +26,8 @@ defmodule Keyfleet.Graph.Workspace.Read do
   `max_bytes`, a page holds no more than that, and a change larger than it
   alone is refused with its size rather than answered past the budget.
   `graph` answers the items its graph draws, the 120 most recently changed,
-  the whole fleet's or one project's, type's or owner's, with the archived
-  ones only when asked for: each with its type, title, project, standing,
+  the whole fleet's or one project's, type's or owner's, or one goal's map
+  (the `:graph` read of objects), with the archived ones only when asked for: each with its type, title, project, standing,
   owner and when it last changed. Beside them the links between them, oldest
   first, at most 600; `more_nodes` and `more_edges` say whether any were left
   out, and `owners` counts the items each Key owns among them.
@@ -101,7 +101,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
 
   defp read(:graph, %{fleet_id: fleet_id} = args, opts) do
     {_run_id, watermark} = standing(fleet_id, opts)
-    filter = Map.take(args, [:project, :type, :owner_key, :archived])
+    filter = Map.take(args, [:project, :type, :owner_key, :goal, :archived])
 
     {nodes, more_nodes} =
       fleet_id

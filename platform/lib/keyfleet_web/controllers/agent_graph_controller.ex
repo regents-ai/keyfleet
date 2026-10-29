@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.AgentGraphController do
         conn,
         AgentTools.workspace_view(
           fleet_id,
-          Map.take(params, ~w(project type owner_key archived)),
+          Map.take(params, ~w(project type owner_key goal archived)),
           actor: conn.assigns.agent_actor
         )
       )

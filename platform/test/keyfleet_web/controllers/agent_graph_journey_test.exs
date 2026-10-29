@@ -271,6 +271,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
              "accepted" => 0
            }
 
+    # The graph drawn around the goal holds the goal alone, as nothing is
+    # linked to it yet; an id that names no goal has no map.
+    around = graph(c, bea, "view", %{goal: goal["id"]}).body
+    assert ContractSchema.errors(around, "WorkspaceGraph") == []
+    assert Enum.map(around["nodes"], & &1["id"]) == [goal["id"]]
+    assert graph(c, bea, "view", %{goal: "goal#999999"}).body["nodes"] == []
+
     # The newest first: the goal just made, then the starting goals.
     assert [newest | starting] = board["goals"]
     assert %{"title" => "First paying customer", "status" => "open", "joined" => 1} = newest

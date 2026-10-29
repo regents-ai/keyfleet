@@ -237,7 +237,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @graph_bodies %{
     "board" => {%{}, %{"project" => :text}},
     "view" =>
-      {%{}, %{"project" => :text, "type" => :text, "owner_key" => :key, "archived" => :flag}},
+      {%{},
+       %{
+         "project" => :text,
+         "type" => :text,
+         "owner_key" => :key,
+         "goal" => :text,
+         "archived" => :flag
+       }},
     "get" => {%{"id" => :text}, %{"relations_after" => :seq, "fields" => :get_parts}},
     "changes" =>
       {%{},

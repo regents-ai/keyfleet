@@ -1556,7 +1556,7 @@
       },
       {
         "command": "workspace graph <fleet>",
-        "description": "Read the workspace's graph as its Graph view draws it, every project's or, with --project, one project's: its 120 most recently changed items that aren't archived, or only one type's or one Key's, each with its type, title, standing, the Key it belongs to and its page; the links between them, at most 600; and each Key that owns any of them, with how many. more_nodes and more_edges say whether any were left out.",
+        "description": "Read the workspace's graph as its Graph view draws it, every project's or, with --project, one project's: its 120 most recently changed items that aren't archived, or only one type's, one Key's or one goal's map, each with its type, title, standing, the Key it belongs to and its page; the links between them, at most 600; and each Key that owns any of them, with how many. more_nodes and more_edges say whether any were left out.",
         "operation_id": "readWorkspaceGraph",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/view",
@@ -1605,6 +1605,13 @@
             "field": "owner_key",
             "minimum": 1,
             "description": "Read only the items this Key owns: the tasks it holds and the rest it created."
+          },
+          {
+            "name": "goal",
+            "type": "string",
+            "in": "body",
+            "field": "goal",
+            "description": "Read one goal's map: the goal, everything linked to it, and what each task that implements it produced, its reviews and its forks. An id that names no goal answers no items."
           }
         ],
         "body": {

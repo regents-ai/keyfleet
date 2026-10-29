@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
   # between them and the Keys that own them, with the page's filters, each
   # item with its page's address.
   defp read(:view, %{fleet_id: fleet_id} = args, opts) do
-    filter = Map.take(args, [:project, :type, :owner_key, :archived])
+    filter = Map.take(args, [:project, :type, :owner_key, :goal, :archived])
 
     with :ok <- known_fleet(fleet_id),
          {:ok, projects} <- Projects.projects(fleet_id, opts),

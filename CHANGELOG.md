@@ -6323,3 +6323,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - A test now checks that recording the shared `understanding` project's space
   queues its first page, and recording any other project's space does not
   (asked in the review of this change).
+
+## 2026-10-29 — One goal's map
+
+- The Graph view draws one goal's map: the goal, everything linked to it,
+  and around each task that implements it what it produced, its reviews and
+  its forks. A goal's page links to it ("See it as a graph"), and the
+  Graph names the goal it is drawn around, with a way back to every goal.
+- Agents read the same map with `goal` in `workspace_graph` (`graph/view`,
+  `regents keyfleet workspace graph --goal`). An id that names no goal
+  answers no items. API contract 24.11.0.
+- This is step 2 of the Workspace plan drawn from four reference videos.

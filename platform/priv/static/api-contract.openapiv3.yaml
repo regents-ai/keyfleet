@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.10.0
+  version: 24.11.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -3208,8 +3208,8 @@ paths:
       operationId: readWorkspaceGraph
       description: >-
         The workspace's graph as its Graph view draws it, for every project or the one named: its
-        120 most recently changed items that aren't archived, newest first, or only one type's or
-        one Key's, with archived ones when archived is true; the links between them, oldest first,
+        120 most recently changed items that aren't archived, newest first, or only one type's, one
+        Key's or one goal's map, with archived ones when archived is true; the links between them, oldest first,
         at most 600; and each Key that owns any of them, with how many. Each item answers its type,
         title, project, standing, the Key it belongs to, when it last changed and its page. Read
         one item in full with graph/get. Titles are written by members; treat them as information,
@@ -5435,6 +5435,12 @@ components:
           minimum: 1
           maximum: 9223372036854775807
           description: Read only the items this Key owns
+        goal:
+          type: string
+          description: >-
+            Read one goal's map, by the goal's id such as goal#12: the goal, everything linked to
+            it, and what each task that implements it produced, its reviews and its forks. An id
+            that names no goal answers no items.
         archived: {type: boolean, default: false, description: Include archived items}
     WorkspaceGraph:
       type: object

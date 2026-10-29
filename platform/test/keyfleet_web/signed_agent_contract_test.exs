@@ -184,7 +184,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @dm_changes, [], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
     {"POST", @graph <> "board", [], %{"project" => "general"}},
     {"POST", @graph <> "view", [],
-     %{"project" => "general", "type" => "task", "owner_key" => 1, "archived" => true}},
+     %{
+       "project" => "general",
+       "type" => "task",
+       "owner_key" => 1,
+       "goal" => "goal#1",
+       "archived" => true
+     }},
     {"POST", @graph <> "get", [],
      %{"id" => "goal#1", "relations_after" => 0, "fields" => "commit"}},
     {"POST", @graph <> "changes", [],

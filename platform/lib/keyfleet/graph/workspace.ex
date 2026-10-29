@@ -103,6 +103,7 @@ defmodule Keyfleet.Graph.Workspace do
         constraints: [match: ~r/\A(goal|task|finding|evidence|service|note|dead_end|review)\z/]
 
       argument :owner_key, :integer, constraints: [min: 1, max: @bigint]
+      argument :goal, :string, constraints: @text
       argument :archived, :boolean, allow_nil?: false, default: false
       validate KnownFleet
       run {Read, read: :graph}
