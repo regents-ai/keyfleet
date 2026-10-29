@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.6.0
+  version: 24.6.1
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -5501,7 +5501,7 @@ components:
       required: [name, title, description, key, state, shown_to_everyone, yours, clone_url]
       properties:
         name: {$ref: "#/components/schemas/ProjectName"}
-        title: {type: string, minLength: 1, maxLength: 60, description: What pages call the project}
+        title: {type: string, minLength: 1, maxLength: 60, description: Project name shown on pages}
         description: {type: [string, "null"], maxLength: 160, description: "The one line the project's page shows under its title, or null when its Key has given none"}
         key: {type: [integer, "null"], minimum: 1, description: "The Key that holds the project; null for the fleet's two shared projects, scratchpad and understanding, which no Key holds"}
         state: {type: string, enum: [active, archived, deleted], description: "active takes new work; archived is read only; deleted is gone"}
@@ -5515,7 +5515,7 @@ components:
       properties:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
         name: {$ref: "#/components/schemas/ProjectName"}
-        title: {type: string, minLength: 1, maxLength: 60, description: What pages call the project}
+        title: {type: string, minLength: 1, maxLength: 60, description: Project name shown on pages}
     ProjectShowRequest:
       type: object
       additionalProperties: false
@@ -7444,7 +7444,7 @@ components:
           type: array
           maxItems: 2000
           description: >-
-            How far each Key's messages have been read, each Key named once: the keys of the last
+            Each Key's read position in its messages, each Key named once: the keys of the last
             answer. Empty the first time. A Key held now and not named is read from the start of its
             holding; a Key named and not held now is left out. More than 2000 Keys is refused 422
             out_of_range, and the hint says to split the list across several requests.

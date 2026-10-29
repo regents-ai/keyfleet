@@ -5981,3 +5981,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   bytes, given as base64, to an upload address on this site only and with no
   cookie, and `agents_avatar_remove`; `profile avatar-start` and
   `profile avatar-remove` describe the same requests for the command line.
+- Every browser tool's title is one or two words ("Project visibility",
+  "Task review"), and no field description opens with who, what, where, why
+  or when. A page wallet tool that finds no button says so by its tool name.
+  Contract 24.6.1.
