@@ -508,6 +508,35 @@ answer the steps; blocked "Nothing to claim" when so
 
 - **History:** 2026-10-22 added.
 
+## regents keyfleet keys buy <fleet>
+
+- **Purpose:** buys the fleet's next Key for the wallet, at its price read from the
+  chain at the latest block. If another buyer gets that Key first, the purchase gets the
+  next one left for up to `max_price`, the price plus 5% rounded up to a cent, or is
+  refused and takes no USDC. The steps stay good for ten minutes. The wallet becomes the
+  Key's holder.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transactions.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/buy` → `buildBuy`
+- **Inputs:** `<fleet>`. The body is `{}`.
+- **Answer:** the transactions `approve` (only when the wallet's USDC allowance to the
+  fleet's manager is below `max_price`; it approves exactly `max_price`) and `buy`, with
+  `token_id` (the Key on offer now), `price`, `max_price` and `approve_first`.
+- **Refusals:** 409 `keys_not_for_sale` for the Regents Club, whose Keys come with its
+  Passes; 409 `keys_sold_out` once every Key is sold.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+Regents Club -> 409 keys_not_for_sale; the manager prices no next Key -> 409 keys_sold_out
+built = WalletSteps.build_steps(fleet, :buy, wallet, actor: the agent)
+answer the steps; buy is blocked "Approve USDC first" until the approval lands, and
+"Sales aren't open yet" or "Opens <when>" before the fleet's sales open
+```
+
+- **History:** 2026-10-29 added (parity gap K2).
+
 ## regents keyfleet rooms list <fleet>
 
 - **Purpose:** lists the fleet's rooms: its six fixed rooms, its five open rooms

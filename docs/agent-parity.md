@@ -82,7 +82,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | — | the same three | `fleets list`, `fleets get`, `fleets activity` (1.10.21 candidate) | no | K8, K13 |
 | Read a Key | `/keys/:n` | `keys_show` | — | `keys_show` | `keys show` (1.10.21 candidate) | no | K8, K13 |
 | Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show`, `keys_held` | — | `keys_show`, `keys_held` | `keys show`, `keys held` (1.10.21 candidate) | no | K8, K13 |
-| Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
+| Buy a Key | Buy Key window (approve, buy) | `chain_buy` | — | — | `keys buy` (not released) | money, wallet | K8 |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | `keys_post_as` | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
 | Mark Keys present | Presence card (proposals page, Key page) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
 | Claim one Key's share | Key page | `chain_claim`; page `keys_claim` | — | — | `keys claim` | money, wallet | K5, K8 |
@@ -182,11 +182,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   Privy account whose login wallet is the agent's SIWA wallet is the agent's own account;
   a request signed by that wallet acts as its owner, as in ash-template's G1. Protected
   (sign-in): waits for Sean's go. Owner: agent-access lane with Keyfleet.
-- **K2. Buying a Key has no agent path.** Only the Buy Key window builds the approve and
-  buy steps, for the browser's Privy wallet. `Keyfleet.WalletSteps` already has the
-  `buy` flow, so the site can prepare the same steps for an agent's own key. Plan: add
-  `POST /api/v1/agent/fleets/:fleet_id/keys/buy` on `AgentChainController`, `keys buy`
-  in the CLI and a `keys_buy` WebMCP tool. Protected (money, wallet).
+- **K2. Buying a Key had no agent path. Built** (29 Oct, waits for Sean's go to ship:
+  money, wallet): the signed `POST /api/v1/agent/fleets/FLEET_ID/keys/buy` answers the same
+  approve and buy steps the Buy Key window builds (`Keyfleet.WalletSteps`, flow `buy`), for
+  the agent's own wallet to send; Keyfleet sends nothing. The approval is exactly the most
+  the purchase may cost: the window's Unlimited box has no agent form. Tool `chain_buy`,
+  command `keys buy`.
 - **K3. Shard controls are page-only.** Issuing, renewing and ending shards and turning
   agent voting on or off run only from the Key page, for its holder. The flows
   (`issue_shard`, `end_shard`, `agent_voting`) exist. Plan: chain routes, CLI commands

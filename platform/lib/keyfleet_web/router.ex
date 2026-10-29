@@ -497,6 +497,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/treasury/convert", AgentChainController, :convert
     post "/fleets/:fleet_id/keys/:token_id/claim", AgentChainController, :claim
     post "/fleets/:fleet_id/keys/claim", AgentChainController, :claim_all
+    post "/fleets/:fleet_id/keys/buy", AgentChainController, :buy
     post "/fleets/:fleet_id/graph/board", AgentGraphController, :board
     post "/fleets/:fleet_id/graph/view", AgentGraphController, :view
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object

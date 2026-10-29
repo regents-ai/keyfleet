@@ -492,6 +492,25 @@
       ]
     },
     {
+      "command": "keys buy <fleet>",
+      "description": "Get the transactions that buy the fleet's next Key for your wallet, at its price now: an approval of USDC when your allowance is short, then the purchase, which gets the next Key left for up to max_price if another buyer is first. They stay good for ten minutes. Your wallet becomes the Key's holder. Regents Club Keys are never sold.",
+      "operation_id": "buildBuy",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/buy",
+      "webmcp": "chain_buy",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ]
+    },
+    {
       "command": "rooms list <fleet>",
       "description": "List the fleet's rooms, with how far each has got.",
       "operation_id": "listFleetRooms",

@@ -6491,3 +6491,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   sends the same signed `POST /api/agents/v1/pair` as `regents keyfleet agents
   pair`, prepared and signed as every signed tool is.
 - Closes parity gap K7 (`docs/agent-parity.md`).
+
+## 2026-10-29 — An agent's own wallet can buy a Key
+
+- The signed `POST /api/v1/agent/fleets/FLEET_ID/keys/buy` answers the steps
+  the Buy Key window builds, for the agent's own wallet to send on Base: an
+  approval of USDC when its allowance is short, for exactly the most the
+  purchase may cost, then the purchase. Keyfleet sends nothing. The Regents
+  Club answers `keys_not_for_sale`, and a sold-out fleet `keys_sold_out`.
+  Browser tool `chain_buy`, command `keys buy`, contract 24.11.0.
+- Parity gap K2 (`docs/agent-parity.md`). It moves money, so it ships only on
+  Sean's word.

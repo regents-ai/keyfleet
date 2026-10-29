@@ -54,6 +54,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @split "/api/v1/agent/fleets/{fleet_id}/split"
   @claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim"
   @claim_all "/api/v1/agent/fleets/{fleet_id}/keys/claim"
+  @buy "/api/v1/agent/fleets/{fleet_id}/keys/buy"
   @polls "/api/v1/agent/fleets/{fleet_id}/polls"
   @poll_start "/api/v1/agent/fleets/{fleet_id}/polls/start"
   @poll "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}"
@@ -168,6 +169,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @split, [], %{}},
     {"POST", @claim, [], %{}},
     {"POST", @claim_all, [], %{}},
+    {"POST", @buy, [], %{}},
     {"GET", @dm_inbox, [], nil},
     {"GET", @dm_blocks, [], nil},
     {"POST", @dm <> "read", [], %{"after_seq" => 0, "limit" => 1}},
@@ -1048,7 +1050,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           {@carry_out, %{"number" => 1}},
           {@split, %{}},
           {@claim, %{}},
-          {@claim_all, %{}}
+          {@claim_all, %{}},
+          {@buy, %{}}
         ] do
       assert answer(c, c.signer, "POST", template, offchain, body, 404).body ==
                refused("fleet_coming_soon")
@@ -1150,6 +1153,64 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     assert %{"token_ids" => [2], "waiting" => [%{"amount" => "2000000", "symbol" => "USDC"}]} =
              answer(c, c.signer, "POST", @claim_all, @address, %{}, 200).body
+
+    buy_routes(c, fleet, wallet, uint)
+  end
+
+  # Two Keys are sold and the third costs 100 USDC; the wallet has approved
+  # none, so the approval comes first, for the price plus 5%, and the purchase
+  # waits on it. Once every Key is sold nothing is priced, and Regents Club
+  # Keys are never sold.
+  defp buy_routes(c, fleet, wallet, uint) do
+    manager = fleet.manager_address
+
+    on_sale = [
+      uint.(manager, "totalMinted()", [], 2),
+      uint.(manager, "nextPrice()", [], 100_000_000),
+      uint.(fleet.keys_address, "salesOpenAt(uint256)", [fleet.chain_fleet_id], 1),
+      uint.(fleet.usdc_address, "allowance(address,address)", [wallet, manager], 0)
+    ]
+
+    ChainViews.put!(on_sale)
+
+    assert %{
+             "token_id" => 3,
+             "price" => "100000000",
+             "max_price" => "105000000",
+             "approve_first" => true,
+             "transactions" => [approve, buy]
+           } = answer(c, c.signer, "POST", @buy, @address, %{}, 200).body
+
+    assert {approve["name"], approve["blocked"]} == {"approve", nil}
+    assert {buy["name"], buy["blocked"]} == {"buy", "Approve USDC first"}
+
+    assert approve["data"] ==
+             RegentChain.Call.encode("approve(address,uint256)", [manager, 105_000_000])
+
+    ChainViews.put!(
+      List.replace_at(
+        on_sale,
+        3,
+        uint.(fleet.usdc_address, "allowance(address,address)", [wallet, manager], 105_000_000)
+      )
+    )
+
+    assert %{"approve_first" => false, "transactions" => [%{"name" => "buy", "blocked" => nil}]} =
+             answer(c, c.signer, "POST", @buy, @address, %{}, 200).body
+
+    ChainViews.put!([
+      uint.(manager, "totalMinted()", [], 7),
+      {manager, "nextPrice()", [], :revert}
+    ])
+
+    assert answer(c, c.signer, "POST", @buy, @address, %{}, 409).body ==
+             refused("keys_sold_out")
+
+    ChainHelpers.deploy!("regents_club")
+    club = Map.put(@address, "fleet_id", "regents_club")
+
+    assert answer(c, c.signer, "POST", @buy, club, %{}, 409).body ==
+             refused("keys_not_for_sale")
   end
 
   # The agent holds Key 2 and starts a poll. Another agent holds Key 3, and a
@@ -1367,6 +1428,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @split},
       {"POST", @claim},
       {"POST", @claim_all},
+      {"POST", @buy},
       {"GET", @polls},
       {"POST", @poll_start},
       {"GET", @poll},

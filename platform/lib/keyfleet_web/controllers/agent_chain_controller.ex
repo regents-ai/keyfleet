@@ -3,8 +3,8 @@ defmodule KeyfleetWeb.AgentChainController do
   The transactions an agent's own wallet sends to act on a fleet's contracts:
   marking its keys present, proposing, voting, cancelling, carrying a
   proposal out, running the daily split, sending the REGENT staking share,
-  turning waiting USDC into REGENT and claiming one key's money or every
-  key's at once. Each is built by `Keyfleet.WalletSteps` for the signing
+  turning waiting USDC into REGENT, claiming one key's money or every key's
+  at once, and buying the next Key. Each is built by `Keyfleet.WalletSteps` for the signing
   agent's wallet, as the site's buttons are built for a person's, from the
   chain read at the latest block.
 
@@ -70,6 +70,10 @@ defmodule KeyfleetWeb.AgentChainController do
 
   def claim_all(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :claim_all, %{})
 
+  # The next Key at its price, approving exactly the most the purchase may
+  # cost, as the Buy Key window does with Unlimited unticked.
+  def buy(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :buy, %{})
+
   defp answer(conn, fleet_id, flow, params, shape \\ &Function.identity/1) do
     agent = conn.assigns.agent_actor
 
@@ -132,6 +136,12 @@ defmodule KeyfleetWeb.AgentChainController do
 
   defp refuse(conn, _flow, _built, :not_recorded, _inputs),
     do: Refusal.json(conn, 404, "proposal_unknown")
+
+  defp refuse(conn, :buy, _built, :not_for_sale, _inputs),
+    do: Refusal.json(conn, 409, "keys_not_for_sale")
+
+  defp refuse(conn, :buy, _built, :sold_out, _inputs),
+    do: Refusal.json(conn, 409, "keys_sold_out")
 
   # Only a proposal's own fields, and the amount to turn into REGENT, can be
   # written wrong.

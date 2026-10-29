@@ -257,6 +257,12 @@ defmodule KeyfleetWeb.Refusal do
     "fleet_not_on_chain" =>
       {"This fleet isn't on the chain yet, so there is nothing to send.",
        "Try again once its Keys are on sale. GET /api/v1/fleets/FLEET_ID shows the fleet."},
+    "keys_not_for_sale" =>
+      {"Regents Club Keys are given with Regents Club Passes, never sold.",
+       "Buy a Key of another fleet, or claim a Regents Club Key with its Pass. GET /api/v1/fleets lists the fleets."},
+    "keys_sold_out" =>
+      {"Every Key of this fleet is sold.",
+       "Buy a Key of another fleet. GET /api/v1/fleets lists the fleets, with each one's Keys sold and next Key's price."},
     "chain_unavailable" =>
       {"The chain can't be read right now, so the transaction can't be built.",
        "Try again in a moment."},

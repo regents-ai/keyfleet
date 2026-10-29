@@ -86,6 +86,14 @@ defmodule KeyfleetWeb.AgentChainJSON do
   defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}),
     do: %{token_id: token_id, paid_to: holder, waiting: Enum.map(waiting, &waiting/1)}
 
+  defp figures(:buy, %{token_id: token_id, price: price, max_price: max_price, approve?: approve?}),
+       do: %{
+         token_id: token_id,
+         price: Integer.to_string(price),
+         max_price: Integer.to_string(max_price),
+         approve_first: approve?
+       }
+
   defp figures(:claim_all, %{keys: keys, waiting: waiting}),
     do: %{token_ids: keys, waiting: Enum.map(waiting, &waiting/1)}
 

@@ -12600,6 +12600,86 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "chain_buy",
+      "title": "Buy step",
+      "description": "Buy the fleet's next Key for your own wallet, at its price now: approving USDC to the fleet first when your allowance is short, then the purchase. If someone buys that Key first, you get the next one for up to max_price, or nothing is taken. The steps stay good for ten minutes. Your wallet becomes the Key's holder; Regents Club Keys are never sold. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/buy",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "chain_buy",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/buy",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "proposals_create",
       "title": "Propose",
       "description": "Fill the proposal form with these fields and press Propose: opens a vote of every Key on what it does. Fields left out keep what the form shows.",

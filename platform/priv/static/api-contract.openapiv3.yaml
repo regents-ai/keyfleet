@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.12.0
+  version: 24.13.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -3168,6 +3168,37 @@ paths:
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/buy:
+    post:
+      x-pairing-required: true
+      operationId: buildBuy
+      description: >-
+        The transactions that buy the fleet's next Key for the signing wallet, at its price read
+        from the chain at the latest block: approving USDC to the fleet's manager when the wallet's
+        allowance is below the most the purchase may cost, then the purchase. If another buyer
+        gets that Key first, the purchase gets the next one left for up to max_price, or is refused
+        and takes no USDC. It stays good for ten minutes. The approval is exactly max_price.
+        Nothing is sent here: the signing wallet sends them itself, on Base, and becomes the Key's
+        holder.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transactions, the Key on offer and its price
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainBuy"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentBuyRefused"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/board:
     post:
       x-pairing-required: true
@@ -4639,6 +4670,19 @@ components:
           schema:
             anyOf:
               - {$ref: "#/components/schemas/FleetNotOnChainError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
+    AgentBuyRefused:
+      description: >-
+        fleet_not_on_chain: the fleet's contracts aren't on the chain yet, so there is nothing to
+        send. keys_not_for_sale: Regents Club Keys are given with Regents Club Passes, never sold.
+        keys_sold_out: every Key of the fleet is sold. request_replayed: the sign-in service has
+        seen this signed request before; sign it again and send it.
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - {$ref: "#/components/schemas/FleetNotOnChainError"}
+              - {$ref: "#/components/schemas/BuyRefusedError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentProposalNotFound:
       description: >-
@@ -9098,6 +9142,37 @@ components:
               symbol: {$ref: "#/components/schemas/ChainAssetSymbol"}
               decimals: {$ref: "#/components/schemas/ChainAssetDecimals"}
               amount: {$ref: "#/components/schemas/UintString"}
+    ChainBuy:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, token_id, price, max_price, approve_first]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        token_id: {type: integer, minimum: 1, description: The Key on offer now}
+        price:
+          $ref: "#/components/schemas/UintString"
+          description: The Key's price, in USDC's smallest units
+        max_price:
+          $ref: "#/components/schemas/UintString"
+          description: The most the purchase may cost, in USDC's smallest units, the price plus 5% rounded up to a cent
+        approve_first:
+          type: boolean
+          description: Whether the wallet's USDC allowance is below max_price, so the approve transaction comes first
+    BuyRefusedError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [keys_not_for_sale, keys_sold_out]}
+            message: {type: string}
+            hint: {type: string}
     FleetNotOnChainError:
       type: object
       additionalProperties: false
