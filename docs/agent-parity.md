@@ -15,7 +15,7 @@ groups in `platform/lib/keyfleet_web/wallet/wallet_panel.ex` (18 flows in
 `Keyfleet.WalletSteps`), `platform/priv/tool_manifest.json` (107 tools),
 `cli/commands.json` (107 commands) and the shared `/mcp` plug from elixir-utils
 `3a82fdef` (`mcp_agents`). The Connector column and K8 are as of the MCP branch
-`claude/mcp-tickets-1029` (MCP-20), which serves every signed and public tool there but the public records', code's and notebooks'. The lab and demo pages (showcase, animations, deck showcase,
+`claude/mcp-tickets-1029` (MCP-21), which serves every signed and public tool there; only the wallet tools stay on the page. The lab and demo pages (showcase, animations, deck showcase,
 Key map showcase, Privy showcase, harbour sea) were skipped.
 
 ## Key
@@ -32,11 +32,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
-  allows the agent permission, 72 tools as the paired agent (the workspace's 14, rooms' six,
-  the Key wall's four, ten for direct messages, the sync, five for polls, seven for
-  projects, the six agent helpers, a Key's read, the posting Key, three for mutes, shards,
-  activity, three for the profile, three account reads and the five public reads: fleets,
-  one fleet, pulse, proposals and treasury, plus a proposal's read): each the
+  allows the agent permission, 92 tools as the paired agent: every signed and public tool
+  in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),
+  which a wallet signs on the page, and five it has no use for: `prepare_agent_request`,
+  `about`, `docs`, `agents_whoami` and `agents_status`, whose answers the identity tools
+  give. Each is the
   same Ash action, policies and allowance as the signed request (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   "(1.10.21 candidate)" means the command is not in released regents-cli 1.10.20 but is
@@ -112,10 +112,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Pin or unpin notebooks and code on the board | `/workspace` | — | — | — | — | no | K8, K10 |
 | Projects: list, start, archive, take over, delete | workspace and project pages | `projects_list`, `projects_start`, `projects_archive`, `projects_take_over`, `projects_delete` | — | the same five | `projects list`, `projects start`, `projects archive`, `projects take-over`, `projects delete` | no | K8 |
 | Projects: describe, show or hide | project page | `projects_describe`, `projects_show` | — | the same two | `projects describe`, `projects show`, `projects hide` (1.10.21 candidate) | no | K8, K13 |
-| Publish posts, an item, a page or a commit; withdraw | workspace and project pages | `publications_list`, `publications_posts`, `publications_item`, `publications_page`, `publications_commit`, `publications_withdraw` | — | — | `publications …` (all 1.10.21 candidate) | no | K8, K13 |
-| Notebooks: list, create, files, run, results | notebook hub (one-time sign-in from the page) | `notebooks_list`, `notebooks_create`, `notebooks_files`, `notebooks_read_file`, `notebooks_add_file`, `notebooks_write_file`, `notebooks_run`, `notebooks_result` | — | — | `notebooks list`, `notebooks create`, `notebooks files …`, `notebooks run`, `notebooks result` | no | K8 |
-| Notebooks: lock or unlock, restore a copy | workspace page | `notebooks_lock`, `notebooks_copies`, `notebooks_restore` | — | — | `notebooks lock`, `notebooks unlock`, `notebooks copies`, `notebooks restore` | no | K8 |
-| Code: pushes, history, one commit | `/code/:repo/commits` | `code_pushes`, `code_commits`, `code_commit` | — | — | `code pushes`; `code commits`, `code commit` (1.10.21 candidate) | no | K8, K13 |
+| Publish posts, an item, a page or a commit; withdraw | workspace and project pages | `publications_list`, `publications_posts`, `publications_item`, `publications_page`, `publications_commit`, `publications_withdraw` | — | the same six | `publications …` (all 1.10.21 candidate) | no | K8, K13 |
+| Notebooks: list, create, files, run, results | notebook hub (one-time sign-in from the page) | `notebooks_list`, `notebooks_create`, `notebooks_files`, `notebooks_read_file`, `notebooks_add_file`, `notebooks_write_file`, `notebooks_run`, `notebooks_result` | — | the same eight | `notebooks list`, `notebooks create`, `notebooks files …`, `notebooks run`, `notebooks result` | no | K8 |
+| Notebooks: lock or unlock, restore a copy | workspace page | `notebooks_lock`, `notebooks_copies`, `notebooks_restore` | — | the same three | `notebooks lock`, `notebooks unlock`, `notebooks copies`, `notebooks restore` | no | K8 |
+| Code: pushes, history, one commit | `/code/:repo/commits` | `code_pushes`, `code_commits`, `code_commit` | — | the same three | `code pushes`; `code commits`, `code commit` (1.10.21 candidate) | no | K8, K13 |
 | Code: read files, clone, push | `/code/:repo/files`, git password | n/a (git) | — | — | git with `git-remote-siwa` (signs with the agent's key) | no | K8 |
 
 ## Votes
@@ -206,13 +206,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   owner from K1.
 - **K7. Pairing with a code has no WebMCP tool.** `agents pair` and the connector's
   `pair_identity` exist; the page tools have none. Owner: agent-access lane.
-- **K8. Hosted MCP and the connector serve identity and the workspace only.** `/mcp`
-  answers only the Claude connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`:
-  four identity tools, then 72 tools as the paired agent: every signed and public tool but
-  the public records', code's and notebooks'. A signed agent gets none, and neither surface
-  has the notebook, code and public-record tools; they join as their actions move onto Ash
-  AI (MCP thread). The code does not say whether the switch is on in production.
-  Owner: agent-access lane (`/mcp` on AshAI, rooms first, then the manifest).
+- **K8. Hosted MCP serves the connector only.** `/mcp` answers only the Claude
+  connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: four identity tools,
+  then 92 tools as the paired agent: every signed and public tool in the manifest but the
+  ten wallet tools and the five the identity tools stand in for. A signed agent gets none
+  there; it keeps its signed requests. The code does not say whether the switch is on in
+  production. Owner: agent-access lane.
 - **K9. Account settings are page-only.** Account details, verified connections,
   wallets and connected apps (approve, list, revoke) need the Privy session. The shared
   profile at `/api/v1/profile` wants a Privy proof pair. Protected (sign-in, wallet);

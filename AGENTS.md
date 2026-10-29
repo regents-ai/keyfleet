@@ -80,9 +80,8 @@ Follow regent-workflow's "Live checks". On Keyfleet:
 - **Connector.** keyfleet.ai/mcp ships switched off
   (`KEYFLEET_CLAUDE_CONNECTOR_ENABLED`). Once it is on and added as a custom connector,
   a Claude thread pairs as harness `claude` with a code from Sean and uses keyfleet.ai
-  like any other paired agent: pairing, check-in, and every signed and public tool but
-  the public records', code's and notebooks', under the same names (the AgentTools
-  domain's Ash AI `tools` block). Those join as their actions move onto Ash AI
+  like any other paired agent: pairing, check-in, and every signed and public tool under
+  the same names (the AgentTools domain's Ash AI `tools` block), all but the wallet tools
   (`docs/agent-parity.md`).
 
 <!-- BEGIN REGENT ROLLOUT REVIEW -->

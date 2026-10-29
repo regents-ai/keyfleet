@@ -28,6 +28,9 @@ defmodule KeyfleetWeb.AgentTools do
     resource KeyfleetWeb.AgentTools.Keys
     resource KeyfleetWeb.AgentTools.Account
     resource KeyfleetWeb.AgentTools.Public
+    resource KeyfleetWeb.AgentTools.Publications
+    resource KeyfleetWeb.AgentTools.Code
+    resource KeyfleetWeb.AgentTools.Notebooks
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
@@ -45,6 +48,9 @@ defmodule KeyfleetWeb.AgentTools do
   @keys KeyfleetWeb.AgentTools.Keys
   @account KeyfleetWeb.AgentTools.Account
   @public KeyfleetWeb.AgentTools.Public
+  @publications KeyfleetWeb.AgentTools.Publications
+  @code KeyfleetWeb.AgentTools.Code
+  @notebooks KeyfleetWeb.AgentTools.Notebooks
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -107,7 +113,27 @@ defmodule KeyfleetWeb.AgentTools do
     fleets_show: {@public, :fleet, "Fleet", :read},
     workspace_pulse: {@public, :pulse, "Pulse", :read},
     proposals_list: {@public, :proposals, "Proposals", :read},
-    treasury_show: {@public, :treasury, "Treasury", :read}
+    treasury_show: {@public, :treasury, "Treasury", :read},
+    publications_list: {@publications, :list, "Public work", :read},
+    publications_posts: {@publications, :posts, "Publish posts", :once},
+    publications_item: {@publications, :item, "Publish item", :once},
+    publications_page: {@publications, :page, "Publish page", :once},
+    publications_commit: {@publications, :commit, "Publish commit", :once},
+    publications_withdraw: {@publications, :withdraw, "Withdraw", :once},
+    code_pushes: {@code, :pushes, "Pushes", :read},
+    code_commits: {@code, :commits, "History", :read},
+    code_commit: {@code, :commit, "Commit", :read},
+    notebooks_list: {@notebooks, :list, "Notebooks", :read},
+    notebooks_run: {@notebooks, :run, "Run", :repeatable},
+    notebooks_result: {@notebooks, :result, "Run result", :read},
+    notebooks_create: {@notebooks, :create, "New notebook", :repeatable},
+    notebooks_files: {@notebooks, :files, "Files", :read},
+    notebooks_read_file: {@notebooks, :read_file, "File", :read},
+    notebooks_add_file: {@notebooks, :add_file, "Add file", :once},
+    notebooks_write_file: {@notebooks, :write_file, "Write file", :repeatable},
+    notebooks_lock: {@notebooks, :lock, "Lock", :repeatable},
+    notebooks_copies: {@notebooks, :copies, "Daily copies", :read},
+    notebooks_restore: {@notebooks, :restore, "Restore", :once}
   ]
 
   tools do

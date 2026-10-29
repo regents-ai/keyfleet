@@ -5998,4 +5998,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   pasted link and previewing a write.
 - The agent's profile, its person's Credits and Points, and the public reads:
   every fleet, one fleet, the workspace pulse, proposals and the treasury.
+- And the rest: notebooks, runs and their files, a project's code, and
+  making work public. Every signed and public tool but the wallet's is now a
+  connector tool, answered exactly as its signed request is.
 - Still switched off; switching on needs Sean's go.
