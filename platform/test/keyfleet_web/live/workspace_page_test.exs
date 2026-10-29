@@ -2067,6 +2067,43 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
     end
 
+    # Page 300 of a long history offered Older, which led to a page that
+    # doesn't exist.
+    test "the last History page a reader can open offers no Older page, and says where the rest is",
+         %{conn: conn} do
+      commits = Enum.map(9_001..1//-1, &CodeHistory.commit/1)
+      store!(%{}, commits)
+      newest = CodeHistory.hash(9_001)
+
+      {:ok, before_last, _html} =
+        live(conn, Keyfleet.Code.history_path(@fleet, @repository, newest, 299))
+
+      last = Keyfleet.Code.history_path(@fleet, @repository, newest, 300)
+      assert has_element?(before_last, ~s(#workspace-history-older[href="#{last}"]))
+      refute has_element?(before_last, "#workspace-history-end")
+
+      {:ok, history, _html} = live(conn, last)
+      assert length(rows(history)) == 30
+      assert has_element?(history, "#code-history-#{CodeHistory.hash(2)}")
+      refute has_element?(history, "#workspace-history-older")
+      assert has_element?(history, "#workspace-history-end")
+      assert has_element?(history, "#workspace-history-newer")
+    end
+
+    test "a commit written with no message still has words to open it by", %{conn: conn} do
+      commit = %{CodeHistory.commit(1) | "message" => "\n"}
+      store!(%{}, [commit])
+
+      {:ok, history, _html} = live(conn, Keyfleet.Code.history_path(@fleet, @repository))
+      link = text(history, "#code-history-#{commit["hash"]} .code-history-subject")
+      assert String.trim(link) != ""
+
+      {:ok, page, _html} =
+        live(conn, Keyfleet.Code.commit_path(@fleet, @repository, commit["hash"]))
+
+      assert String.trim(text(page, "#workspace-commit-subject")) != ""
+    end
+
     test "a commit the repository doesn't have says so", %{conn: conn} do
       store!(%{}, [CodeHistory.commit(1)])
 

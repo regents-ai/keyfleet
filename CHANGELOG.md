@@ -5964,3 +5964,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   data) wait for Sean's go; K10 workspace pins, K12 the agent's picture, K14 finding
   Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
   regents-cli main `f844056` for 1.10.21) need none.
+
+## 2026-10-29 — Code history holds up under long and odd commits
+
+- The last History page a reader can open (page 300) no longer offers
+  Older, which led to a page that doesn't exist; it says the older commits
+  are in the repository, for git to read.
+- A commit written with no message reads "No message" in the History and
+  as its page's title, so its row has something to open it by.
+- A commit's first line on its page is set at a sentence's size, so a long
+  one no longer fills the screen in title type.
+- A citing task's or evidence's kind ("Task") stays on one line beside a
+  long title in the History, instead of stacking a letter to a line.
+- Parent and Fetch in a commit's Details no longer leave blank lines.
+- Line counts read with thousands separators (+12,345).

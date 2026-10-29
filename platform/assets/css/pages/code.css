@@ -8,6 +8,14 @@
   gap: 0.75rem;
 }
 
+/* A commit's first line is a sentence, often a long one, so it reads at a
+   sentence's size and measure rather than a title's. */
+.code-commit-heading h2 {
+  max-width: 60ch;
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  line-height: 1.25;
+}
+
 .code-commit-main {
   display: grid;
   gap: 1.5rem;
@@ -254,6 +262,10 @@
   border: 1px solid var(--color-border);
   font-size: 0.8rem;
   text-decoration: none;
+}
+
+.code-chip .workspace-kind {
+  flex: none;
 }
 
 .code-chip:hover,
