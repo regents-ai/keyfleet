@@ -340,7 +340,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp shown({:room, _slug, name}), do: name
   defp shown({:agent, name}), do: name
   defp shown({:address, wallet}), do: RegentFormat.short_address(wallet)
-  defp shown({:quote, text}), do: "“#{text}”"
+  defp shown({:quote, text}), do: "“#{plain(text)}”"
   defp shown({:proposal, number}), do: proposal_name(number)
 
   defp marked(text) when is_binary(text), do: text
@@ -357,4 +357,19 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:proposal, number}), do: proposal_name(number)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
+
+  @doc """
+  A member's quoted words as a web page shows them: Markdown's heading
+  hashes, bold and code marks dropped, and a link as its words. Posts are
+  written in Markdown and quoted from their start, so a quote can carry marks
+  that only mean something in the full post. The Markdown reading keeps them,
+  escaped.
+  """
+  def plain(text) do
+    text
+    |> String.replace(~r/\[([^\]]+)\]\([^)\s]*\)/u, "\\1")
+    |> String.replace(~R/(^|\s)#{1,6}\s+/u, "\\1")
+    |> String.replace(["**", "__", "`"], "")
+    |> String.trim()
+  end
 end

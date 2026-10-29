@@ -1049,7 +1049,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   defp activity_part(%{part: {:quote, text}} = assigns) do
-    assigns = assign(assigns, :text, text)
+    assigns = assign(assigns, :text, ActivityLines.plain(text))
     ~H|<q class="activity-line__quote">{@text}</q>|
   end
 
