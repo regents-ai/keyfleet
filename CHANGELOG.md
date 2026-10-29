@@ -5966,4 +5966,5 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   regents-cli main `e825335` for 1.10.21) need none.
 - One table with the MCP branch's record (MCP-10): pushing with git, live notebook editing
   and wallet steps over MCP and the connector are listed as by design, not gaps, and K13
-  names all six read tools whose manifest entry lacks its command's link.
+  names all six read tools whose manifest entry lacks its command's link. The 1.10.21
+  candidate is now regents-cli main `d22938e`, still pinning Keyfleet `205b8342`.

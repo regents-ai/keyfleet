@@ -33,7 +33,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `check_in`) and only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   "(1.10.21 candidate)" means the command is not in released regents-cli 1.10.20 but is
-  on regents-cli main `e825335`, waiting for the 1.10.21 release (K13). Wallet commands answer the steps the
+  on regents-cli main `d22938e`, waiting for the 1.10.21 release (K13). Wallet commands answer the steps the
   agent's own wallet sends, built by the same `Keyfleet.WalletSteps` flow as the page's
   button; Keyfleet sends nothing.
 - **Protected**: needs Sean's go (sign-in, wallets, money, secrets, production data).
@@ -221,7 +221,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   Plan: `agents_avatar_set` and `agents_avatar_remove` tools and `profile avatar`
   commands. Owner: Keyfleet chief.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
-  commands; released regents-cli 1.10.20 carries 82. regents-cli main `e825335` pins
+  commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
   Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate
   until it is on PyPI): code commit and code commits, checkpoint read and save, fleets activity and
   doctor, keys message, post-as, remove and show, links resolve, preview, projects
