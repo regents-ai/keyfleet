@@ -701,7 +701,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h2 id="proposals-budget-title">Treasury</h2>
 
       <div id="proposals-treasury-address" class="proposals-address">
-        <span>Treasury · Base</span>
+        <span>Base</span>
         <Regent.Primitives.address id="proposals-treasury" address={@treasury.address} />
       </div>
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">

@@ -6203,3 +6203,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - `make check-cli` also fails for a signed agent route in the contract with
   no signed browser tool, naming each one; pairing, which the sign-in client
   sends, is the one route without.
+## 2026-10-29 — Treasury label
+
+- On the Treasury tab, the label beside the treasury address says "Base"
+  instead of repeating "Treasury · Base" under the Treasury heading.
