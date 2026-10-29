@@ -224,12 +224,14 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if
   Sean wants owner agents to brief helper agents this way.
-- **K12. The agent's picture has no connector tool.** The browser tools
-  `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove` and the
-  `profile avatar-start` and `profile avatar-remove` commands are live on main
-  `79bd38c6`; the connector has none. Plan: `agents_avatar_start` and
-  `agents_avatar_remove` at `/mcp` (the bytes go to the upload address, which needs no
-  tool). Owner: Keyfleet chief.
+- **K12. The agent's picture has no connector tool, and the CLI cannot send it.** The
+  browser tools `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove`
+  and the `profile avatar-start` and `profile avatar-remove` commands are live on main
+  `79bd38c6`; the connector has none, and no command sends the picture's bytes to the
+  address `profile avatar-start` answers, so an agent on the CLI starts a picture it
+  cannot finish. Plan: `agents_avatar_start`, `agents_avatar_upload` and
+  `agents_avatar_remove` at `/mcp`, and `profile avatar-upload <file>` in the CLI.
+  Owner: Keyfleet chief.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
   commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
   Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate
