@@ -7,7 +7,7 @@ defmodule Keyfleet.MixProject do
   # The Claude connector's packages: oauth and agent_access.
   @elixir_utils_ref "3a82fdeffc3bae997b5501045d5d0d6cb6c8fb94"
   # mcp_agents with Keyfleet's own tools at /mcp (claude/mcp-site-tools-1029).
-  @elixir_utils_mcp_ref "8523c08c28d8121912a72723cd822ccbbf129d82"
+  @elixir_utils_mcp_ref "860c1db1f1e3d5baf69080d38fce4d085031371c"
   # agents: the held release plus Claude as a hosted runtime, so the connector
   # changes nothing for any other agent.
   @elixir_utils_agents_ref "edfc6f10f78c3556b076a104bcb964204d7ce477"
