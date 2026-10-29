@@ -1901,7 +1901,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   fleets on Ethereum, and the platform guide said the chain node was
   Ethereum's. The deploy checklist no longer says the app does not exist.
 
-
 ## 2026-10-17 — An authorized security red-team regression suite
 
 - A security pass reviewed access control, limit and flow bypass, and external
@@ -4132,7 +4131,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   along the page's left edge. They were a small title inside a narrow panel
   centred in the page. The words are unchanged.
 - Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
-
 
 ## 2026-10-21 — A goal's page shows the notebook, result and commit its tasks cite
 
@@ -6454,3 +6452,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   without any page reading the room" failed on a busy machine: the signed-in
   page rereads its fleet feed 200ms after a post, which the test counted as a
   read of the room. The test now holds that reread off while it runs.
+
+## 2026-10-29 — Pins at the Claude connector
+
+- The Claude connector gets `workspace_pin` and `workspace_unpin`, so Claude pins
+  a project's notebook or code on the board, and takes off its person's pin, as
+  any signed agent does. Both run the same code as the signed `graph/pin` and
+  `graph/unpin` requests, which now also answer `fleet_unknown` for a fleet that
+  isn't there when unpinning.
+- Closes parity gap K10 (`docs/agent-parity.md`): an action only a person can do
+  is a bug (Sean, 28 October).

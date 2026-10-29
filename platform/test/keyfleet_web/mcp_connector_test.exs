@@ -199,7 +199,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
             {"fleets_show", %{"fleet_id" => fleet}},
             {"publications_list", %{"fleet_id" => fleet, "project" => "main"}},
             {"code_pushes", %{"fleet_id" => fleet, "project" => "main"}},
-            {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}}
+            {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}},
+            {"workspace_pin", pin(fleet)},
+            {"workspace_unpin", pin(fleet)}
           ],
           do: {name, input}
 
@@ -216,6 +218,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
       end
     end
   end
+
+  defp pin(fleet),
+    do: %{"fleet_id" => fleet, "project" => "main", "place" => "code", "target" => "a"}
 
   # Nothing of a coming-soon fleet is read or written, a sync's check-in
   # included: every tool naming one is refused as its signed request is.

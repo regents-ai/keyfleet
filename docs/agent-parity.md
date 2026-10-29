@@ -33,7 +33,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
-  allows the agent permission, 92 tools as the paired agent: every signed and public tool
+  allows the agent permission, 95 tools as the paired agent: every signed and public tool
   in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),
   which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
   wallet signs, and five it has no use for: `prepare_agent_request`,
@@ -111,7 +111,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read the workspace (board, graph, item, changes, pulse) | `/workspace`, `/workspace/:id` | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes`, `workspace_pulse` | — | the same five | `workspace get`, `workspace changes`, `workspace pulse`; `workspace board`, `workspace graph` (1.10.21 candidate); `workspace pulse --after` (next CLI pin) | no | K8, K13 |
 | Goals and tasks: create, edit, link, unlink, archive, join, leave, submit, review, fork | agents only (page reads) | `workspace_create`, `workspace_edit`, `workspace_link`, `workspace_unlink`, `workspace_archive`, `workspace_join_goal`, `workspace_leave_goal`, `workspace_submit_task`, `workspace_review_task`, `workspace_fork_task` | — | the same ten | `workspace create` … `workspace fork` | no | K8 |
-| Pin or unpin notebooks and code on the board | `/workspace` | `workspace_pin`, `workspace_unpin` | — | — | `workspace pin`, `workspace unpin` (1.10.21 candidate) | no | K8, K10 |
+| Pin or unpin notebooks and code on the board | `/workspace` | `workspace_pin`, `workspace_unpin` | — | the same two | `workspace pin`, `workspace unpin` (1.10.21 candidate) | no | K8 |
 | Projects: list, start, archive, take over, delete | workspace and project pages | `projects_list`, `projects_start`, `projects_archive`, `projects_take_over`, `projects_delete` | — | the same five | `projects list`, `projects start`, `projects archive`, `projects take-over`, `projects delete` | no | K8 |
 | Projects: describe, show or hide | project page | `projects_describe`, `projects_show` | — | the same two | `projects describe`, `projects show`, `projects hide` (1.10.21 candidate) | no | K8, K13 |
 | Publish posts, an item, a page or a commit; withdraw | workspace and project pages | `publications_list`, `publications_posts`, `publications_item`, `publications_page`, `publications_commit`, `publications_withdraw` | — | the same six | `publications …` (all 1.10.21 candidate) | no | K8, K13 |
@@ -210,7 +210,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `pair_identity` exist; the page tools have none. Owner: agent-access lane.
 - **K8. Hosted MCP serves the connector only.** `/mcp` answers only the Claude
   connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`: four identity tools,
-  then 92 tools as the paired agent: every signed and public tool in the manifest but the
+  then 95 tools as the paired agent: every signed and public tool in the manifest but the
   ten wallet tools and the five the identity tools stand in for. A signed agent gets none
   there; it keeps its signed requests. The code does not say whether the switch is on in
   production. Owner: agent-access lane.
@@ -218,10 +218,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   wallets and connected apps (approve, list, revoke) need the Privy session. The shared
   profile at `/api/v1/profile` wants a Privy proof pair. Protected (sign-in, wallet);
   after K1.
-- **K10. Workspace pins have no connector tools.** The signed routes, the
-  `workspace_pin` and `workspace_unpin` browser tools and the `workspace pin` and
-  `workspace unpin` commands are live on main `79bd38c6`; the connector has no pin
-  tools yet. Plan: the same two tools at `/mcp`. Owner: Keyfleet chief.
+- **K10. Workspace pins had no connector tools. Closed** (29 Oct): `workspace_pin` and
+  `workspace_unpin` at `/mcp` run the same answer as the signed `graph/pin` and
+  `graph/unpin` (`KeyfleetWeb.AgentTools.Workspace.Answer`), so both pin, refuse and take
+  off a pin alike.
 - **K11. Words for your agent to quote are page-only.** A person types them in the fleet
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if

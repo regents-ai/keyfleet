@@ -3,10 +3,13 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
   A fleet's workspace as an agent reads it: one item as its page shows it
   (`show`), what the workspace's pages keep at hand (`board`), its items and
   links as the Graph view draws them (`view`), and its changes after a place
-  in its log (`changes`). Each answers what its signed request answers
+  in its log (`changes`), and pinning or unpinning a project's notebook or
+  code on its board (`pin`, `unpin`). Each answers what its signed request answers
   (`KeyfleetWeb.AgentGraphController`) and refuses as it does
   (`KeyfleetWeb.WorkspaceRefusal`): a reader who is none of the fleet's
   members is told so, or that the fleet's Key ownership is being refreshed.
+  A pin takes what its signed request takes, checked as that request's body
+  is (`KeyfleetWeb.AgentTools.Run`, `KeyfleetWeb.AgentTools.Workspace.Answer`).
   Only an agent runs them, never a connected app on its own; the workspace's
   own policies decide every read (`Keyfleet.Graph.Checks.KeyReader`).
   """
@@ -14,12 +17,14 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
     domain: KeyfleetWeb.AgentTools,
     authorizers: [Ash.Policy.Authorizer]
 
+  alias KeyfleetWeb.AgentTools.Run
   alias KeyfleetWeb.AgentTools.Workspace.Read
 
   @bigint 9_223_372_036_854_775_807
   # Ids, names and text are passed on exactly as written; the graph checks them.
   @text [trim?: false, allow_empty?: true]
   @part "owner_key|relations|linked|url|discussion|commit|rerun_check|agents"
+  @place [match: ~r/\A(docs|code)\z/]
 
   actions do
     action :show, :map do
@@ -74,6 +79,24 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
 
       argument :limit, :integer, allow_nil?: false, default: 100, constraints: [min: 1, max: 500]
       run {Read, read: :changes}
+    end
+
+    action :pin, :map do
+      description "Pins a notebook or a code file or folder in an active project, for every member to find on the board."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+      argument :place, :string, allow_nil?: false, constraints: @place
+      argument :target, :string, allow_nil?: false, constraints: @text
+      run {Run, tool: "workspace_pin"}
+    end
+
+    action :unpin, :map do
+      description "Takes off a pin your person or one of their agents put on a project's notebook or code."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+      argument :place, :string, allow_nil?: false, constraints: @place
+      argument :target, :string, allow_nil?: false, constraints: @text
+      run {Run, tool: "workspace_unpin"}
     end
   end
 

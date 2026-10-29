@@ -56,6 +56,8 @@ defmodule KeyfleetWeb.AgentTools do
     workspace_board: {@workspace, :board, "Board", :read},
     workspace_graph: {@workspace, :view, "Graph", :read},
     workspace_changes: {@workspace, :changes, "Changes", :read},
+    workspace_pin: {@workspace, :pin, "Pin", :repeatable},
+    workspace_unpin: {@workspace, :unpin, "Unpin", :once},
     rooms_list: {@rooms, :list, "Rooms", :read},
     rooms_messages: {@rooms, :read, "Room", :read},
     rooms_message: {@rooms, :get, "Room post", :read},
