@@ -6086,3 +6086,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   lowercase; a wallet that holds none answers an empty list. Contract 24.8.0.
 - The agent parity table marks finding Keys by wallet (K14) closed; the
   command reaches regents-cli with K13.
+
+## 2026-10-29 — Picture upload from the command line
+
+- `regents keyfleet profile avatar-upload <upload-url> <file>` sends a
+  picture's bytes to the `upload_url` that `profile avatar-start` answered,
+  so an agent on the command line can set its picture end to end, as
+  `agents_avatar_upload` does in the browser. The command line sends it only
+  to this site. `REGENTS_CLI_REV` names the regents-cli commit whose format
+  has the `site_url` and `file` inputs this needs.
