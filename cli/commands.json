@@ -36,7 +36,12 @@
           "field": "before",
           "description": "Pass next_before unchanged to read older proposals; omit for newest."
         }
-      ]
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "next_before",
+        "flag": "before"
+      }
     },
     {
       "command": "fleets list",
@@ -2578,7 +2583,12 @@
             "field": "after",
             "description": "Pass next_cursor unchanged to read the next 100; omit for the newest."
           }
-        ]
+        ],
+        "pagination": {
+          "has_more": "has_more",
+          "cursor": "next_cursor",
+          "flag": "after"
+        }
       },
       {
         "command": "publications posts <fleet> <key> <project> <room> <from> <to>",
@@ -3114,7 +3124,12 @@
             "field": "cursor",
             "description": "Pass the last page's cursor unchanged to read the next page; omit for the first."
           }
-        ]
+        ],
+        "pagination": {
+          "has_more": "has_more",
+          "cursor": "cursor",
+          "flag": "cursor"
+        }
       },
       {
         "command": "notebooks files read <fleet> <project> <notebook> <path>",
