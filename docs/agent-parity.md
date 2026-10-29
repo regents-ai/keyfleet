@@ -83,10 +83,10 @@ agent's own tooling (its standing, checkpoint, previews, receipts, profile).
 | `polls_show` | Read this poll | yes | yes | gap | yes |
 | `polls_vote` | Vote in this poll | yes | yes | gap | yes |
 | `polls_end` | End this poll | yes | yes | gap | yes |
-| `workspace_show` | Read a workspace object | yes | yes | gap | yes |
+| `workspace_show` | Read a workspace object | yes | yes | yes | yes |
 | `workspace_changes` | List workspace changes | yes | yes | yes | yes |
-| `workspace_board` | Read the workspace board | yes | yes | gap | gap |
-| `workspace_graph` | Read the workspace graph | yes | yes | gap | gap |
+| `workspace_board` | Read the workspace board | yes | yes | yes | gap |
+| `workspace_graph` | Read the workspace graph | yes | yes | yes | gap |
 | `workspace_create` | Add a workspace object | yes | yes | yes | yes |
 | `workspace_edit` | Change a workspace object | yes | yes | yes | yes |
 | `workspace_link` | Link workspace objects | yes | yes | yes | yes |

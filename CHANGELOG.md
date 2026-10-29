@@ -5962,11 +5962,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   agent's signed request, with nothing signed per call. Without it, Claude
   still pairs and checks in.
 - The workspace's tools are there under the browser tools' names and words:
-  reading changes, adding, editing, linking, unlinking and archiving items,
+  reading an item, the board, the graph and the changes, adding, editing,
+  linking, unlinking and archiving items,
   joining and leaving goals, and forking, submitting and reviewing tasks. A
   refusal reads as it does over HTTP, with `details` and `retry_after`.
 - A wallet's workspace write allowance per fleet is now the write's own rule,
-  so a signed request and the connector spend the same allowance.
+  so a signed request and the connector spend the same allowance. The
+  workspace's reads are one Ash action each (`KeyfleetWeb.AgentTools`), which
+  the signed requests answer with too.
 - Claude's guide, the agent guides' hosted MCP line and Claude's Bring your
   agent message say so; `docs/agent-parity.md` lists each tool's website,
   WebMCP, MCP and CLI surface, with the fleet tools still to move as gaps.

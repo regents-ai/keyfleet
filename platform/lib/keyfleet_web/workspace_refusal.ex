@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
   alias Keyfleet.Graph.Errors.{
     EditsRestrictedError,
     IndeterminateError,
+    MembersOnlyError,
     NotKeyHolderError,
     RefusedError,
     UnavailableError,
@@ -67,6 +68,7 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
   def for_error(%EditsRestrictedError{}), do: refusal(403, "edits_restricted")
   def for_error(%UnavailableError{}), do: refusal(503, "graph_unavailable")
   def for_error(%WriteLimitError{}), do: refusal(429, "workspace_limit_reached")
+  def for_error(%MembersOnlyError{}), do: refusal(403, "workspace_members_only")
 
   def for_error(%IndeterminateError{}),
     do: refusal(503, "indeterminate", %{retry_same_command_id: true})

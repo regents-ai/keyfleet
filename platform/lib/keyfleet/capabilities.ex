@@ -47,7 +47,7 @@ defmodule Keyfleet.Capabilities do
   def hosted_tools,
     do:
       for(
-        domain <- [Keyfleet.Agents, Keyfleet.Graph],
+        domain <- [Keyfleet.Agents, KeyfleetWeb.AgentTools, Keyfleet.Graph],
         tool <- AshAi.Info.tools(domain),
         do: tool.name
       )

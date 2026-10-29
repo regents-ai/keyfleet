@@ -101,13 +101,13 @@ defmodule Keyfleet.Graph do
     end
   end
 
-  # The workspace's tools at the Claude connector's address: each runs the
+  # The workspace's writes at the Claude connector's address: each runs the
   # same action as its signed request (`KeyfleetWeb.AgentGraphController`) and
   # is named after its browser tool, with that tool's words. Every write
-  # carries a command id, so calling one again changes nothing more.
+  # carries a command id, so calling one again changes nothing more. Its reads
+  # are in `KeyfleetWeb.AgentTools`.
   @browser_tools Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
-  @workspace_tools [
-    workspace_changes: {:changes, "Changes", :read},
+  @workspace_writes [
     workspace_create: {:create, "New item", :write},
     workspace_edit: {:patch, "Edit item", :write},
     workspace_link: {:link, "Link", :write},
@@ -121,13 +121,13 @@ defmodule Keyfleet.Graph do
   ]
 
   tools do
-    for {name, {action, title, kind}} <- @workspace_tools do
+    for {name, {action, title, kind}} <- @workspace_writes do
       tool name, Keyfleet.Graph.Workspace, action do
         title(title)
         description @browser_tools[Atom.to_string(name)]["description"]
 
         annotations(
-          read_only_hint: kind == :read,
+          read_only_hint: false,
           idempotent_hint: true,
           destructive_hint: kind == :remove,
           open_world_hint: false

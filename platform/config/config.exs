@@ -198,7 +198,8 @@ config :keyfleet,
     Keyfleet.Early,
     Keyfleet.Notebooks,
     Keyfleet.Code,
-    Keyfleet.Projects
+    Keyfleet.Projects,
+    KeyfleetWeb.AgentTools
   ],
   generators: [timestamp_type: :utc_datetime]
 

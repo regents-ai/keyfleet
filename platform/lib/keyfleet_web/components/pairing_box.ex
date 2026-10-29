@@ -192,7 +192,7 @@ defmodule KeyfleetWeb.PairingBox do
   # A link to a workspace item or a project's page names the work, so the
   # agent's first read once paired is that work itself, as its page shows it
   # to a person, rather than the whole fleet. Claude, through its connector,
-  # reads that work's changes with workspace_changes.
+  # reads it with the connector's tool of the same name.
   defp first_read(nil, _hosted?), do: nil
 
   defp first_read(start, hosted?) do
@@ -214,7 +214,7 @@ defmodule KeyfleetWeb.PairingBox do
         "Start with #{id} in the fleet #{fleet_id}. " <>
           if(hosted?,
             do:
-              "Once paired, read what has happened to it: call workspace_changes with fleet_id #{fleet_id} and object #{id}.",
+              "Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: call workspace_show with fleet_id #{fleet_id} and id #{id}.",
             else:
               "Once paired, read it in one go, with its goal, criteria, discussion, commit and what a rerun still needs: regents keyfleet workspace get #{fleet_id} '#{id}', or a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/get with {\"id\":\"#{id}\"}."
           )
@@ -226,7 +226,7 @@ defmodule KeyfleetWeb.PairingBox do
         "Start with the project #{project} in the fleet #{fleet_id}. " <>
           if(hosted?,
             do:
-              "Once paired, read what has happened in it: call workspace_changes with fleet_id #{fleet_id} and project #{project}.",
+              "Once paired, read its goals and pinned work: call workspace_board with fleet_id #{fleet_id} and project #{project}, then read any task in it with workspace_show.",
             else:
               "Once paired, read its goals and pinned work with a signed POST /api/v1/agent/fleets/#{fleet_id}/graph/board with {\"project\":\"#{project}\"}, then read any task in it with graph/get."
           )

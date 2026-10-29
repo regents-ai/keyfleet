@@ -76,6 +76,7 @@ defimpl AshAi.ToToolError,
     Keyfleet.Graph.Errors.UnavailableError,
     Keyfleet.Graph.Errors.IndeterminateError,
     Keyfleet.Graph.Errors.WriteLimitError,
+    Keyfleet.Graph.Errors.MembersOnlyError,
     Keyfleet.Keys.Errors.OwnershipRefreshingError,
     Keyfleet.Projects.Errors.UnknownProjectError
   ] do
