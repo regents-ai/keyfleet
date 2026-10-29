@@ -25,6 +25,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   import KeyfleetWeb.Components.LoadFailed
 
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Fleets.Rules
   alias Keyfleet.{Graph, Keys, Notebooks, Projects}
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
@@ -1411,7 +1412,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </p>
         <h2 id="workspace-commit-subject">
           {if is_map(@commit.change),
-            do: @commit.change.subject,
+            do: subject(@commit.change.subject),
             else: "Commit #{String.slice(@commit.hash, 0, 12)}"}
         </h2>
         <.byline
@@ -1626,8 +1627,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H"""
     <p id="workspace-commit-summary" class="workspace-detail code-summary">
       {files_changed(length(@change.files))}
-      <span class="code-added">+{@change.additions}</span>
-      <span class="code-removed">−{@change.deletions}</span>
+      <span class="code-added">+{Rules.grouped(@change.additions)}</span>
+      <span class="code-removed">−{Rules.grouped(@change.deletions)}</span>
     </p>
     <div id="workspace-commit-file-list" class="code-files">
       <details
@@ -1643,8 +1644,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
             {file.path}
           </span>
           <span :if={not file.binary?} class="code-file-counts">
-            <span class="code-added">+{file.additions}</span>
-            <span class="code-removed">−{file.deletions}</span>
+            <span class="code-added">+{Rules.grouped(file.additions)}</span>
+            <span class="code-removed">−{Rules.grouped(file.deletions)}</span>
           </span>
         </summary>
         <p :if={file.binary?} class="workspace-detail code-file-note">
@@ -1692,6 +1693,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
     </div>
     """
   end
+
+  # A commit written with no message still needs words to open it by.
+  defp subject(subject), do: if(String.trim(subject) == "", do: "No message", else: subject)
 
   defp files_changed(1), do: "1 file changed"
   defp files_changed(count), do: "#{count} files changed"
@@ -1782,7 +1786,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             data-layout-id={"code-history-#{commit.hash}"}
           >
             <div class="code-history-main">
-              <.link class="code-history-subject" patch={commit.link}>{commit.subject}</.link>
+              <.link class="code-history-subject" patch={commit.link}>{subject(commit.subject)}</.link>
               <p class="code-history-meta">
                 <span :if={commit.sent}>
                   <.key
@@ -1831,6 +1835,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
             Older
           </.link>
         </nav>
+        <p
+          :if={@history.more? and is_nil(@history.older)}
+          id="workspace-history-end"
+          class="workspace-detail"
+        >
+          Older commits are in the repository. Fetch it with git to read them.
+        </p>
       </section>
     </article>
     """

@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.AgentKeyController do
   @moduledoc """
-  A Key as its page shows it, for a signed-in agent, taking a post off the
-  wall of a Key the agent acts as, and choosing the Key its person writes as.
+  A Key as its page shows it, for a signed-in agent, the Keys a wallet holds,
+  taking a post off the wall of a Key the agent acts as, and choosing the Key
+  its person writes as.
 
   The page is what anyone reads on the site: who holds the Key and since when,
   the Key its holder writes as, the other Keys they hold, its card's traits,
@@ -31,6 +32,24 @@ defmodule KeyfleetWeb.AgentKeyController do
       nil -> Refusal.json(conn, 404, "fleet_unknown")
       {:error, :invalid_token_id} -> Refusal.json(conn, 422, "invalid_request")
       %{issued?: false, token_id: token_id} -> Refusal.key_unknown(conn, fleet_id, token_id)
+    end
+  end
+
+  # The Keys a wallet holds in the fleet now, as the Key map's search finds them.
+  def held(conn, %{"fleet_id" => fleet_id, "wallet" => wallet}) do
+    actor = conn.assigns.agent_actor
+    wallet = String.downcase(wallet)
+
+    case Fleets.get_fleet!(fleet_id) do
+      nil ->
+        Refusal.json(conn, 404, "fleet_unknown")
+
+      %{} ->
+        keys = Keys.keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
+
+        json(conn, %{
+          held: %{fleet_id: fleet_id, wallet: wallet, token_ids: Enum.map(keys, & &1.token_id)}
+        })
     end
   end
 

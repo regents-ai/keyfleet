@@ -350,6 +350,7 @@ defmodule KeyfleetWeb.Router do
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall
     post "/keys/:fleet_id/:token_id/messages/get", AgentRoomController, :get_key_message
+    post "/fleets/:fleet_id/keys/held", AgentKeyController, :held
     get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
     post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
     post "/fleets/:fleet_id/receipts", AgentReceiptController, :show
@@ -494,6 +495,8 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/submit", AgentGraphController, :submit
     post "/fleets/:fleet_id/graph/review", AgentGraphController, :review
     post "/fleets/:fleet_id/graph/fork", AgentGraphController, :fork
+    post "/fleets/:fleet_id/graph/pin", AgentGraphController, :pin
+    post "/fleets/:fleet_id/graph/unpin", AgentGraphController, :unpin
   end
 
   scope "/", KeyfleetWeb do

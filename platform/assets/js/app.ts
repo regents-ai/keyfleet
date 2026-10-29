@@ -98,7 +98,26 @@ document.addEventListener("click", event => {
   syncTheme()
 })
 
+// A room opened from its fleet's hall takes the keyboard to its name, and on
+// a phone, where the hall stacks above the room, brings the name into view.
+// Any other step within the page leaves the keyboard where it is.
+let shownRoom = new URLSearchParams(window.location.search).get("room")
+
+function revealRoom(event: Event) {
+  const room = new URLSearchParams(window.location.search).get("room")
+  const opened = room !== null && room !== shownRoom
+  shownRoom = room
+  if (!opened || (event as CustomEvent<{kind?: string}>).detail?.kind !== "patch") return
+  const title = document.getElementById("rooms-thread-title")
+  if (!title) return
+  const {top, bottom} = title.getBoundingClientRect()
+  const inView = top >= 0 && bottom <= window.innerHeight
+  title.focus({preventScroll: inView})
+  if (!inView) title.scrollIntoView({block: "start"})
+}
+
 window.addEventListener("phx:page-loading-stop", syncTheme)
+window.addEventListener("phx:page-loading-stop", revealRoom)
 window.addEventListener("popstate", syncTheme)
 window.addEventListener("pageshow", syncTheme)
 

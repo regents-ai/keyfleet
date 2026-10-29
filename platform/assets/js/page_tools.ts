@@ -131,7 +131,7 @@ function tool(entry: Entry, held: Offered): ModelContextTool {
       if (!button) {
         return refusal(
           "not_on_page",
-          `This page shows no ${entry.title} button for that now.`,
+          `This page shows no button for ${entry.name} now.`,
           "Sign in, and check what the page offers, then call again.",
         )
       }

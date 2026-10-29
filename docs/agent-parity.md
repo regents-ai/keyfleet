@@ -72,7 +72,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | — | — | `fleets list`, `fleets get`, `fleets activity` (1.10.21 candidate) | no | K8, K13 |
 | Read a Key | `/keys/:n` | `keys_show` | — | — | `keys show` (1.10.21 candidate) | no | K8, K13 |
-| Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show` (number only) | — | — | `keys show` (number only) | no | K8, K14 |
+| Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show`, `keys_held` | — | — | `keys show` (1.10.21 candidate), `keys held` (not in regents-cli yet) | no | K8, K13 |
 | Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | — | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
 | Mark Keys present | Presence card (proposals page, Key page) | `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
@@ -231,9 +231,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `workspace_pulse`, `treasury_show`, `workspace_board` and `workspace_graph` (the wallet
   tools are K5; `about` and `docs` are plain reads with no command). Owner: regents-cli
   chief for the commands; the manifest's links are Keyfleet's.
-- **K14. Finding Keys by holder's wallet is page-only.** The map's search box finds the
-  Keys a wallet holds; agents can only look a Key up by number. Plan: a `wallet` input on
-  `keys_show`, or a `keys_held` tool and `keys held` command. Owner: Keyfleet chief.
+- **K14. Finding Keys by holder's wallet was page-only. Closed** (29 Oct): the signed
+  `POST /api/v1/agent/fleets/FLEET_ID/keys/held` with `{"wallet"}` answers the Keys that
+  wallet holds in the fleet now, from the same `Keys.keys_held_in_fleet` read the Key map's
+  search makes, as the `keys_held` tool and `keys held` command. The command reaches
+  regents-cli with K13.
 - **K15. Saved errors are page-only.** `/admin/errors` is for Credits admins in a
   browser. An admin agent needs the same read. Protected (production data); after K1.
 - **K16. Early access silently drops programs.** The `/early` form has no tool, and its
