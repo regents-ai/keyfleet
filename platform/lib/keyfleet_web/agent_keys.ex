@@ -32,13 +32,15 @@ defmodule KeyfleetWeb.AgentKeys do
       actor = Human.for_account(account)
       give_from = give_from(actor.wallet_addresses)
 
-      Map.new(wallets, fn wallet ->
-        case Keys.active_shards_held_by!(wallet, actor: actor) do
-          [] -> {wallet, give(give_from, wallet)}
-          shards -> {wallet, {:shards, Enum.map(shards, &key/1)}}
-        end
-      end)
+      Map.new(wallets, &{&1, keys(&1, actor, give_from)})
     end)
+  end
+
+  defp keys(wallet, actor, give_from) do
+    case Keys.active_shards_held_by!(wallet, actor: actor) do
+      [] -> give(give_from, wallet)
+      shards -> {:shards, Enum.map(shards, &key/1)}
+    end
   end
 
   defp key(%{fleet_id: fleet_id, token_id: token_id}),
