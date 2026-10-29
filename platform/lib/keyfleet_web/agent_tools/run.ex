@@ -17,15 +17,10 @@ defmodule KeyfleetWeb.AgentTools.Run do
     params = SignedRequest.params(input.arguments, Keyword.get(opts, :fixed, %{}))
 
     with :ok <- SignedRequest.check(opts[:tool], params) do
-      input.resource
-      |> Module.concat("Answer")
-      |> apply(:answer, [
-        input.action.name,
-        params,
-        context.actor,
-        Map.fetch!(context.source_context, :waiter)
-      ])
-      |> SignedRequest.result()
+      answer = Module.concat(input.resource, "Answer")
+      waiter = Map.fetch!(context.source_context, :waiter)
+
+      SignedRequest.result(answer.answer(input.action.name, params, context.actor, waiter))
     end
   end
 end
