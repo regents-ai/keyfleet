@@ -5988,4 +5988,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Direct messages too: a Key's inbox, one conversation, sending, catching up,
   blocking, deleting and automatic removal, answered exactly as their signed
   requests are.
+- Polls and projects too: listing and reading polls, starting one, voting
+  and ending it; listing projects and, as a Key, starting, archiving, taking
+  over, deleting, describing and showing one.
 - Still switched off; switching on needs Sean's go.

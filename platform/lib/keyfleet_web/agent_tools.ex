@@ -6,9 +6,8 @@ defmodule KeyfleetWeb.AgentTools do
   Claude connector's address (`/mcp`) offers them as tools named after their
   browser tools (`tools`), and the signed requests answer with the same code,
   so both answer and refuse alike: the workspace's reads with these actions,
-  the rooms', walls' and direct messages' requests and the sync with their
-  answers (`KeyfleetWeb.AgentTools.Rooms.Answer`,
-  `KeyfleetWeb.AgentTools.Dms.Answer`). Each runs as the calling agent,
+  the other requests with their answers (`Answer` beside each record, such
+  as `KeyfleetWeb.AgentTools.Rooms.Answer`). Each runs as the calling agent,
   and the domains' own policies decide what it may read and write.
   """
   use Ash.Domain, extensions: [AshAi]
@@ -23,16 +22,20 @@ defmodule KeyfleetWeb.AgentTools do
 
     resource KeyfleetWeb.AgentTools.Rooms
     resource KeyfleetWeb.AgentTools.Dms
+    resource KeyfleetWeb.AgentTools.Polls
+    resource KeyfleetWeb.AgentTools.Projects
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
   # a post or message sent again with its idempotency key answers as the
-  # first did, a sync records a check-in and nothing else, and deleting a
-  # conversation can't be undone.
+  # first did, as a vote cast again does; a sync records a check-in and
+  # nothing else; and deleting a conversation or a project can't be undone.
   @browser_tools Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
   @workspace KeyfleetWeb.AgentTools.Workspace
   @rooms KeyfleetWeb.AgentTools.Rooms
   @dms KeyfleetWeb.AgentTools.Dms
+  @polls KeyfleetWeb.AgentTools.Polls
+  @projects KeyfleetWeb.AgentTools.Projects
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -57,7 +60,19 @@ defmodule KeyfleetWeb.AgentTools do
     dms_auto_delete: {@dms, :auto_delete, "Auto delete", :repeatable},
     dms_keep: {@dms, :keep, "Keep messages", :repeatable},
     dms_block: {@dms, :block, "Block", :repeatable},
-    dms_unblock: {@dms, :unblock, "Unblock", :repeatable}
+    dms_unblock: {@dms, :unblock, "Unblock", :repeatable},
+    polls_list: {@polls, :list, "Polls", :read},
+    polls_show: {@polls, :show, "Poll", :read},
+    polls_start: {@polls, :start, "New poll", :once},
+    polls_vote: {@polls, :vote, "Vote", :repeatable},
+    polls_end: {@polls, :end, "End poll", :once},
+    projects_list: {@projects, :list, "Projects", :read},
+    projects_start: {@projects, :start, "New project", :once},
+    projects_archive: {@projects, :archive, "Archive project", :once},
+    projects_take_over: {@projects, :take_over, "Take over", :once},
+    projects_delete: {@projects, :delete, "Delete project", :remove},
+    projects_describe: {@projects, :describe, "Describe", :repeatable},
+    projects_show: {@projects, :show, "Show work", :repeatable}
   ]
 
   tools do

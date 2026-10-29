@@ -368,8 +368,8 @@ defmodule KeyfleetWeb.PublicDocuments do
       do:
         "Connected apps, such as Claude, use the hosted MCP address at {{origin}}/mcp: the " <>
           "person signs in to Keyfleet from the app and allows it, the app pairs like any agent, " <>
-          "and the address offers the room, wall, sync, direct message and workspace tools " <>
-          "above under the same names, working as that agent. " <>
+          "and the address offers the room, wall, sync, direct message, poll, project and " <>
+          "workspace tools above under the same names, working as that agent. " <>
           "[Claude]({{origin}}/agents/claude) has the setup.",
       else: "Keyfleet does not offer a hosted MCP endpoint."
   end

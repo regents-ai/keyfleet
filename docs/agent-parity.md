@@ -15,7 +15,7 @@ groups in `platform/lib/keyfleet_web/wallet/wallet_panel.ex` (18 flows in
 `Keyfleet.WalletSteps`), `platform/priv/tool_manifest.json` (107 tools),
 `cli/commands.json` (107 commands) and the shared `/mcp` plug from elixir-utils
 `3a82fdef` (`mcp_agents`). The Connector column and K8 are as of the MCP branch
-`claude/mcp-tickets-1029` (`43c133b2`), which serves the workspace's, rooms', Key walls', direct messages' and sync tools there. The lab and demo pages (showcase, animations, deck showcase,
+`claude/mcp-tickets-1029` (MCP-17), which serves the workspace's, rooms', Key walls', direct messages', sync, polls' and projects' tools there. The lab and demo pages (showcase, animations, deck showcase,
 Key map showcase, Privy showcase, harbour sea) were skipped.
 
 ## Key
@@ -32,8 +32,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
-  allows the agent permission, 34 tools as the paired agent (the workspace's 14, rooms' six,
-  three of the Key wall's, ten for direct messages and the sync): each the
+  allows the agent permission, 46 tools as the paired agent (the workspace's 14, rooms' six,
+  three of the Key wall's, ten for direct messages, the sync, five for polls and seven for
+  projects): each the
   same Ash action, policies and allowance as the signed request (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   "(1.10.21 candidate)" means the command is not in released regents-cli 1.10.20 but is
@@ -107,8 +108,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Read the workspace (board, graph, item, changes, pulse) | `/workspace`, `/workspace/:id` | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes`, `workspace_pulse` | — | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes` (not pulse) | `workspace get`, `workspace changes`, `workspace pulse`; `workspace board`, `workspace graph` (1.10.21 candidate) | no | K8, K13 |
 | Goals and tasks: create, edit, link, unlink, archive, join, leave, submit, review, fork | agents only (page reads) | `workspace_create`, `workspace_edit`, `workspace_link`, `workspace_unlink`, `workspace_archive`, `workspace_join_goal`, `workspace_leave_goal`, `workspace_submit_task`, `workspace_review_task`, `workspace_fork_task` | — | the same ten | `workspace create` … `workspace fork` | no | K8 |
 | Pin or unpin notebooks and code on the board | `/workspace` | — | — | — | — | no | K8, K10 |
-| Projects: list, start, archive, take over, delete | workspace and project pages | `projects_list`, `projects_start`, `projects_archive`, `projects_take_over`, `projects_delete` | — | — | `projects list`, `projects start`, `projects archive`, `projects take-over`, `projects delete` | no | K8 |
-| Projects: describe, show or hide | project page | `projects_describe`, `projects_show` | — | — | `projects describe`, `projects show`, `projects hide` (1.10.21 candidate) | no | K8, K13 |
+| Projects: list, start, archive, take over, delete | workspace and project pages | `projects_list`, `projects_start`, `projects_archive`, `projects_take_over`, `projects_delete` | — | the same five | `projects list`, `projects start`, `projects archive`, `projects take-over`, `projects delete` | no | K8 |
+| Projects: describe, show or hide | project page | `projects_describe`, `projects_show` | — | the same two | `projects describe`, `projects show`, `projects hide` (1.10.21 candidate) | no | K8, K13 |
 | Publish posts, an item, a page or a commit; withdraw | workspace and project pages | `publications_list`, `publications_posts`, `publications_item`, `publications_page`, `publications_commit`, `publications_withdraw` | — | — | `publications …` (all 1.10.21 candidate) | no | K8, K13 |
 | Notebooks: list, create, files, run, results | notebook hub (one-time sign-in from the page) | `notebooks_list`, `notebooks_create`, `notebooks_files`, `notebooks_read_file`, `notebooks_add_file`, `notebooks_write_file`, `notebooks_run`, `notebooks_result` | — | — | `notebooks list`, `notebooks create`, `notebooks files …`, `notebooks run`, `notebooks result` | no | K8 |
 | Notebooks: lock or unlock, restore a copy | workspace page | `notebooks_lock`, `notebooks_copies`, `notebooks_restore` | — | — | `notebooks lock`, `notebooks unlock`, `notebooks copies`, `notebooks restore` | no | K8 |
@@ -124,8 +125,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Vote on a proposal | `/proposals/:n` | `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
 | Cancel a proposal | `/proposals/:n` | `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
 | Carry out a proposal | `/proposals/:n` | `proposals_carry_out` | — | — | `proposals carry-out` | wallet, money | K5, K8 |
-| Polls: list and read | `/polls`, `/polls/:id` | `polls_list`, `polls_show` | — | — | `polls list`, `polls show` | no | K8 |
-| Polls: start, vote, end | `/polls` | `polls_start`, `polls_vote`, `polls_end` | — | — | `polls start`, `polls vote`, `polls end` | no | K8 |
+| Polls: list and read | `/polls`, `/polls/:id` | `polls_list`, `polls_show` | — | the same two | `polls list`, `polls show` | no | K8 |
+| Polls: start, vote, end | `/polls` | `polls_start`, `polls_vote`, `polls_end` | — | the same three | `polls start`, `polls vote`, `polls end` | no | K8 |
 
 ## Treasury
 
@@ -205,9 +206,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `pair_identity` exist; the page tools have none. Owner: agent-access lane.
 - **K8. Hosted MCP and the connector serve identity and the workspace only.** `/mcp`
   answers only the Claude connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`:
-  four identity tools, then 34 tools as the paired agent: the workspace's, rooms', direct
-  messages', the sync and the Key wall's reads and posts. A signed agent gets none, and
-  neither surface has the other fleet, Key, project, notebook, code, vote or treasury
+  four identity tools, then 46 tools as the paired agent: the workspace's, rooms', direct
+  messages', polls', projects', the sync and the Key wall's reads and posts. A signed agent
+  gets none, and neither surface has the other fleet, Key, notebook, code, vote or treasury
   tools, nor `walls_remove` or the mutes; each joins as its action moves onto Ash AI, in
   batches (MCP thread). The code does not say whether the switch is on in production.
   Owner: agent-access lane (`/mcp` on AshAI, rooms first, then the manifest).
