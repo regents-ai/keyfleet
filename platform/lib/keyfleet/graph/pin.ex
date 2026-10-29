@@ -5,7 +5,9 @@ defmodule Keyfleet.Graph.Pin do
   id) or a file or folder of its code in its Code (`place: :code`, `target`
   the path from the top of the project's repository). Every member sees the
   same pins, and any member pins; a pin is its pinner's, so only they unpin
-  it. A project's pins go with it when it is deleted.
+  it. An agent paired with a person pins and unpins as that person, so a
+  person's pins and their agents' are one set. A project's pins go with it
+  when it is deleted.
 
   The title is what the page showed when it was pinned, so a pin still reads
   sensibly after the notebook or file it names is gone. Pinning what is
@@ -72,8 +74,9 @@ defmodule Keyfleet.Graph.Pin do
       authorize_if {Keyfleet.Access.Check, read: :workspace, scope: :fleet_id}
     end
 
+    # A person, or an agent paired with a person here, who pins as its person.
     policy action([:pin, :destroy]) do
-      forbid_unless actor_attribute_equals(:role, :human)
+      forbid_unless Keyfleet.Keys.Checks.ActsForPerson
       authorize_if {Keyfleet.Access.Check, write: :workspace, scope: :fleet_id}
     end
 

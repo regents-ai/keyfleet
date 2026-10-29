@@ -112,7 +112,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim)\z"
-  @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork)
+  @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork pin unpin)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
   @outside_projects_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(notebooks|code)(/|\z)"
@@ -268,7 +268,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          "decision" => :text,
          "rationale" => :text,
          "conflicts_of_interest" => :text
-       }), %{"reproduction" => :text}}
+       }), %{"reproduction" => :text}},
+    # A pin is its person's, as on the page, so it names no Key or command.
+    "pin" => {%{"project" => :text, "place" => :pin_place, "target" => :pin_target}, %{}},
+    "unpin" => {%{"project" => :text, "place" => :pin_place, "target" => :pin_target}, %{}}
   }
   @verification_methods %{
     "eoa_recovery" => :eoa_recovery,
@@ -1104,6 +1107,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp shaped?(:object, value), do: is_map(value)
   defp shaped?(:texts, value), do: is_list(value) and Enum.all?(value, &is_binary/1)
   defp shaped?(:flag, value), do: is_boolean(value)
+  defp shaped?(:pin_place, value), do: value in ~w(docs code)
+  defp shaped?(:pin_target, value), do: is_binary(value)
 
   # Parts named once each, joined by commas, as a command line flag sends them.
   defp shaped?(:get_parts, value) when is_binary(value) do
@@ -1122,6 +1127,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp in_bounds?(:seq, value), do: value in 0..@max_seq
   defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
   defp in_bounds?(:change_budget, value), do: value in @min_change_budget..@max_change_budget
+  # As long as a pin's target is kept (`Keyfleet.Graph.Pin`).
+  defp in_bounds?(:pin_target, value), do: byte_size(value) in 1..1024
   defp in_bounds?(_kind, _value), do: true
 
   # A read names how far it has already read and how much it wants; a post names
