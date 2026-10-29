@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
     end
 
     action :board, :map do
-      description "What the workspace's pages keep at hand, the whole fleet's or one project's: its newest goals and what its members pinned in its Docs and its Code."
+      description "What the workspace's pages keep at hand, the whole fleet's or one project's: how many goals and tasks stand where, its newest goals and what its members pinned in its Docs and its Code."
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, constraints: @text
       run {Read, read: :board}

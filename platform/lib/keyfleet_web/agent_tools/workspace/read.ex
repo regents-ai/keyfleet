@@ -74,8 +74,9 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
       )
 
   # What the workspace's pages keep at hand, the whole fleet's or one
-  # project's: its newest goals, as its Project lists them, and what its
-  # members pinned in its Docs and its Code.
+  # project's: how many goals and tasks stand where and its newest goals, as
+  # its Project shows them, and what its members pinned in its Docs and its
+  # Code.
   defp read(:board, %{fleet_id: fleet_id} = args, opts) do
     project = args[:project]
 
@@ -88,10 +89,12 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
              %{type: "goal", project: project},
              Keyword.put(opts, :page, limit: @board_goals)
            ),
+         {:ok, counts} <- Graph.tally(fleet_id, project, opts),
          {:ok, notebooks} <- Graph.pins(fleet_id, :docs, project, opts),
          {:ok, code} <- Graph.pins(fleet_id, :code, project, opts) do
       {:ok,
        %{
+         counts: counts,
          goals: Enum.map(goals.results, &goal(&1, fleet_id)),
          more_goals: goals.more?,
          pinned_notebooks:

@@ -6294,3 +6294,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Key as soon as the shard is recorded, without reopening the page.
 - Why: the coordinator's review of the shard links release (29 October 20:15Z),
   asked to be fixed with tests and released.
+
+## 2026-10-29 — How the work stands, above the Project
+
+- The Project's Board and Graph open under one line of five numbers: open
+  goals, open tasks, tasks in progress, tasks awaiting review and accepted
+  tasks. Each is marked in the colour the Graph draws that standing in, and
+  rolls to its new value when the work moves. They count the project picked,
+  or the whole fleet, and leave out archived items, achieved or dropped goals
+  and starting goals nobody joined. On a phone they wrap into two columns.
+  Members only, as the rest of the Project.
+- Agents read the same five numbers as `counts` in `workspace_board`
+  (`graph/board`, `regents keyfleet workspace board`). API contract 24.10.0.
+- This is step 1 of the Workspace plan drawn from four reference videos.

@@ -1473,8 +1473,9 @@ answer the object, where a done task's review stands, the Key it belongs to, a p
 - **Changes:** nothing (read).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/board` → `readWorkspaceBoard`
 - **Inputs:** `<fleet>`, `--project NAME` (body `project`).
-- **Answer:** `{"goals", "more_goals", "pinned_notebooks", "pinned_code"}`: up to 24 of
-  the newest goals, each `{"id", "project", "title", "status", "starting", "joined",
+- **Answer:** `{"counts", "goals", "more_goals", "pinned_notebooks", "pinned_code"}`:
+  `counts` is `{"open_goals", "open_tasks", "working", "waiting_review", "accepted"}`,
+  how many goals and tasks stand where; then up to 24 of the newest goals, each `{"id", "project", "title", "status", "starting", "joined",
   "changed_at", "url"}`; `more_goals` when there are more; the notebooks and code its
   members pinned, each with its address.
 - **Refusals:** 403 `workspace_members_only`, 404 `project_unknown`, 503
@@ -1484,11 +1485,12 @@ Server:
 
 ```text
 the project asked for, or every project
-newest 24 goals, then the pinned notebooks and code
+the counts, the newest 24 goals, then the pinned notebooks and code
 ```
 
 - **Server needs:** the fleet's workspace and its pins.
 - **History:** 2026-10-28 added; the browser tool `workspace_board` had no command before.
+  2026-10-29 answers `counts`.
 
 ## regents keyfleet workspace graph <fleet>
 
