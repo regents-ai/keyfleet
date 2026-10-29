@@ -142,6 +142,7 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:not_pass_holder), do: "Only its Pass’s holder can claim"
   def blocked(:pass_burned), do: "Its Pass was burned"
   def blocked(:reveal_requested), do: "Draw on its way"
+  def blocked(:dealt_by_number), do: "Its number gives its traits"
   def blocked(:voting_closed), do: "Voting closed"
   def blocked(:only_no), do: "Only No while it waits"
   def blocked(:open), do: "Voting still open"

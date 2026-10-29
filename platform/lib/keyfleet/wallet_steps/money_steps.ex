@@ -70,7 +70,7 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
 
     with {:ok, reads} <- reads(figures),
          {:ok, [operator, asset, outstanding, _purpose]} <- advance(reads, fleet, id, figures),
-         asset = named_asset(fleet, asset),
+         asset = advanced_asset(fleet, asset),
          figures =
            Map.merge(figures, %{operator: operator, asset: asset, outstanding: outstanding}),
          {:ok, amount} <-
@@ -288,6 +288,14 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
           [signer, fleet.treasury_address],
           {:uint, 256}
         )
+  end
+
+  # The advance's asset, with the symbol and decimals it reported, as the
+  # treasury page types a return of all of it: any token the fleet recorded,
+  # held now or not.
+  defp advanced_asset(fleet, asset) do
+    {symbol, decimals} = Map.get(Treasury.assets(fleet).details, asset, {nil, nil})
+    %{address: asset, symbol: symbol, decimals: decimals}
   end
 
   defp named(fleet, preview), do: Enum.map(preview, &Map.merge(named_asset(fleet, &1.asset), &1))

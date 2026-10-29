@@ -5,6 +5,7 @@ defmodule Keyfleet.WalletSteps.Typed do
   Anything the call can carry is carried, and the contract decides the rest.
   """
 
+  alias Keyfleet.Fleets.Fleet
   alias RegentChain.Address
 
   @largest_uint256 Integer.pow(2, 256) - 1
@@ -68,8 +69,9 @@ defmodule Keyfleet.WalletSteps.Typed do
     end
   end
 
+  # Key 0 and numbers past the fleet's last token id name no Key.
   defp in_range(keys) do
-    if Enum.all?(keys, &(&1 <= @largest_uint256)), do: {:ok, keys}, else: {:error, :key_too_large}
+    if Enum.all?(keys, &Fleet.key_number?/1), do: {:ok, keys}, else: {:error, :key_too_large}
   end
 
   @doc """

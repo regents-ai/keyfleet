@@ -47,7 +47,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   end
 
   # Asking again for a key's random draw, which anyone may do while its
-  # request was refused: it has no seed, and no request was ever accepted.
+  # request was refused: it has no seed, and no request was ever accepted. A
+  # key dealt its card by number never draws, and the contract refuses it.
   def steps(:reveal, %{fleet: fleet, token_id: token_id}) do
     figures = %{token_id: token_id}
     onchain = Fleet.onchain_token_id(fleet, token_id)
@@ -59,28 +60,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         Call.encode("requestReveal(uint256)", [onchain])
       )
 
-    with {:ok, reads} <- Reads.at_head(),
-         {:ok, seed} <-
-           Reads.one(reads, fleet.keys_address, "revealSeed(uint256)", [onchain], :bytes32),
-         {:ok, requested_at} <-
-           Reads.one(
-             reads,
-             fleet.keys_address,
-             "revealRequestedAt(uint256)",
-             [onchain],
-             {:uint, 64}
-           ) do
-      blocked =
-        cond do
-          seed != @no_seed -> %{"reveal" => :revealed}
-          requested_at != 0 -> %{"reveal" => :reveal_requested}
-          true -> %{}
-        end
-
-      {:ok, [step], Map.put(figures, :blocked, blocked)}
-    else
-      _unread -> {:problem, :unread, figures}
-    end
+    if Fleet.dealt?(fleet, token_id),
+      do: {:ok, [step], Map.put(figures, :blocked, %{"reveal" => :dealt_by_number})},
+      else: reveal(fleet, onchain, step, figures)
   end
 
   # One step for each token the ledger pays keys in: it settles the key to
@@ -633,6 +615,32 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
 
   # Who holds Regents Club Pass `pass_id`, or nil once it is burned.
+  # Whether the chain has a seed for the key, or a request on its way.
+  defp reveal(fleet, onchain, step, figures) do
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, seed} <-
+           Reads.one(reads, fleet.keys_address, "revealSeed(uint256)", [onchain], :bytes32),
+         {:ok, requested_at} <-
+           Reads.one(
+             reads,
+             fleet.keys_address,
+             "revealRequestedAt(uint256)",
+             [onchain],
+             {:uint, 64}
+           ) do
+      blocked =
+        cond do
+          seed != @no_seed -> %{"reveal" => :revealed}
+          requested_at != 0 -> %{"reveal" => :reveal_requested}
+          true -> %{}
+        end
+
+      {:ok, [step], Map.put(figures, :blocked, blocked)}
+    else
+      _unread -> {:problem, :unread, figures}
+    end
+  end
+
   defp pass_holder(reads, pass, pass_id) do
     case Reads.one(reads, pass, "ownerOf(uint256)", [pass_id], :address) do
       {:error, :reverted} -> {:ok, nil}

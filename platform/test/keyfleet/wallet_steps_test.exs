@@ -231,6 +231,14 @@ defmodule Keyfleet.WalletStepsTest do
       draw(fleet, "0x" <> String.duplicate("1", 64), @now)
       assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :revealed}
     end
+
+    test "a key dealt its card by number never draws", %{fleet: fleet} do
+      assert fleet.deck_size >= 1
+      ChainViews.put!([])
+      built = build!(:reveal, token_id: 1)
+      assert built.figures.blocked == %{"reveal" => :dealt_by_number}
+      assert steps(built)["reveal"].data == Call.encode("requestReveal(uint256)", [id(1)])
+    end
   end
 
   describe "claiming a key's income" do
@@ -421,8 +429,11 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{problem: :no_keys} = build!(:issue_shard, inputs: %{"keys" => " "})
       assert %{problem: :keys_unreadable} = build!(:issue_shard, inputs: %{"keys" => "3, seven"})
 
-      assert %{problem: :key_too_large} =
-               build!(:issue_shard, inputs: %{"keys" => Integer.to_string(Integer.pow(2, 256))})
+      # Key 0, and a number past any fleet's last token id, name no Key.
+      for typed <- ["0", "3, 10000000000"] do
+        assert %{problem: :key_too_large} = build!(:issue_shard, inputs: %{"keys" => typed})
+        assert %{problem: :key_too_large} = build!(:agent_voting, inputs: %{"keys" => typed})
+      end
     end
 
     test "each active shard of the key can be ended or renewed for 30 days", %{fleet: fleet} do
@@ -726,6 +737,10 @@ defmodule Keyfleet.WalletStepsTest do
                propose(%{"kind" => "edits", "target" => "7", "restricted" => "flase"})
 
       assert %{problem: :no_key} = propose(%{"kind" => "decision", "key" => ""})
+      assert %{problem: :key_too_large} = propose(%{"kind" => "decision", "key" => "0"})
+
+      assert %{problem: :key_too_large} =
+               propose(%{"kind" => "edits", "target" => "10000000000", "restricted" => "true"})
 
       assert %{problem: :asset_unreadable} =
                propose(%{"kind" => "pay", "asset" => @third, "share" => "1"})
@@ -862,6 +877,28 @@ defmodule Keyfleet.WalletStepsTest do
 
       assert steps(built)["return"].value ==
                "0x" <> "3782dace9d90000"
+    end
+
+    # The treasury page types all of it in the token's own decimals, from any
+    # token the fleet recorded, so the return reads it the same way.
+    test "a token the treasury no longer holds keeps its decimals", %{fleet: fleet} do
+      token = "0x" <> String.duplicate("7b", 20)
+      ProposalHelpers.asset_details!(@fleet, token, "PRB", 18)
+      ProposalHelpers.treasury_reading!(@fleet, [%{asset: @usdc, held: 0, backed: 0}])
+
+      ChainViews.put!([
+        {fleet.treasury_address, "advances(uint256)", [7],
+         {"address,address,uint256,bytes32",
+          [@third, token, 3 * 10 ** 18, "0x" <> String.duplicate("9", 64)]}},
+        uint(token, "balanceOf(address)", [@signer], 3 * 10 ** 18),
+        uint(token, "allowance(address,address)", [@signer, fleet.treasury_address], 0)
+      ])
+
+      built = return_advance("2")
+      assert %{amount: 2_000_000_000_000_000_000, asset: %{symbol: "PRB"}} = built.figures
+
+      assert steps(built)["return"].data ==
+               Call.encode("returnAdvance(uint256,uint256)", [7, 2 * 10 ** 18])
     end
 
     test "an advance the treasury never made", %{fleet: fleet} do
