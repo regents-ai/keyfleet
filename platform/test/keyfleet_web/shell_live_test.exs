@@ -835,6 +835,76 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
+  describe "an agent's Keys on the Account page" do
+    @fleet "fleet_tech_classic"
+    @person "0x6767676767676767676767676767676767676767"
+    @agent "0x7878787878787878787878787878787878787878"
+
+    setup do
+      Fleets.bootstrap_catalog!()
+      ChainHelpers.deploy!(@fleet)
+      ChainHelpers.seed_cursor!(@fleet)
+      account = register_account("agent-keys", @person)
+      issue!(@fleet, 1, @person)
+
+      %{code: code} =
+        RegentAgents.issue_pairing_code!(
+          actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
+        )
+
+      RegentAgents.pair_agent!(code, "Astra", :hermes, actor: %RegentAgents.Agent{wallet: @agent})
+      %{account: account}
+    end
+
+    test "a shard issued while the page is open names its Key on the agent's row", c do
+      {view, _html} = open_account(c.conn, c.account)
+
+      assert has_element?(
+               view,
+               ~s(#account-agents li a[href="/classic/1/keys/1?shard_to=#{@agent}#key-issue-shard"]),
+               "Give it a shard"
+             )
+
+      ChainHelpers.issue_shard!(@fleet, 1, @agent)
+      Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
+      # The page hands the change to the agents panel, which reads afresh.
+      render(view)
+
+      assert has_element?(view, ~s(#account-agents li a[href="/classic/1/keys/1"]), "Key 1")
+      refute has_element?(view, "#account-agents li", "Give it a shard")
+    end
+
+    test "Keys that can't be read leave the page up and say so on the agent's row", c do
+      Keyfleet.Repo.query!(
+        "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.shard_events RENAME TO shard_events_gone"
+      )
+
+      {view, _html} = open_account(c.conn, c.account)
+
+      assert has_element?(view, "#account-agents li", "Astra")
+      assert has_element?(view, "#account-agents li", "Couldn’t read Keys")
+    end
+
+    test "the New shard form fills in the person's own agent, by name, and no other wallet", c do
+      StubClient.put_chain(
+        %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
+        [],
+        calls: fn _to, _data, _hash -> {:ok, <<0::256>>} end
+      )
+
+      view = open_key(c.conn, c.account, "/classic/1/keys/1?shard_to=#{@agent}")
+
+      assert has_element?(view, ~s(input#key-shard-wallet[value="#{@agent}"]))
+      assert has_element?(view, "#key-shard-wallet-hint", "Filled in for Astra")
+
+      stranger = "0x8989898989898989898989898989898989898989"
+      view = open_key(c.conn, c.account, "/classic/1/keys/1?shard_to=#{stranger}")
+
+      assert has_element?(view, ~s(input#key-shard-wallet[value=""]))
+      refute has_element?(view, "#key-shard-wallet-hint")
+    end
+  end
+
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()
 
   # What the page's wallet hook reports for the wallet list `list`.
@@ -851,6 +921,16 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> live(path)
 
     {view, render_async(view)}
+  end
+
+  # The Key page's form is drawn as it opens; its wallet steps are read after.
+  defp open_key(conn, account, path) do
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{human_account_id: account.id})
+      |> live(path)
+
+    view
   end
 
   defp keys_listed(html),

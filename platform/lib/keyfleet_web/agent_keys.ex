@@ -8,7 +8,9 @@ defmodule KeyfleetWeb.AgentKeys do
   filled in (`KeyfleetWeb.KeyLinks.give_shard_path/3`). An agent with no shard
   whose person holds no Key has neither.
 
-  Shards and holders are public, as the chain records them.
+  Shards and holders are public, as the chain records them. A failed read
+  comes back as `{:error, failure}` (`KeyfleetWeb.PageRead`), so the page says
+  so rather than crashing.
   """
 
   alias Keyfleet.Actors.Human
@@ -16,22 +18,26 @@ defmodule KeyfleetWeb.AgentKeys do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.PageRead
 
   @doc """
-  For each of `wallets`, `{:shards, keys}`, each key `%{label, path}`;
-  `{:give, path}`; or `nil`, read for the signed-in `account`.
+  `{:ok, keys}`, where for each of `wallets` keys holds `{:shards, keys}`,
+  each key `%{label, path}`; `{:give, path}`; or `nil`, read for the signed-in
+  `account`. `{:error, failure}` when the read fails.
   """
-  def read(_account, []), do: %{}
+  def read(_account, []), do: {:ok, %{}}
 
   def read(account, wallets) do
-    actor = Human.for_account(account)
-    give_from = give_from(actor.wallet_addresses)
+    PageRead.run("account", fn ->
+      actor = Human.for_account(account)
+      give_from = give_from(actor.wallet_addresses)
 
-    Map.new(wallets, fn wallet ->
-      case Keys.active_shards_held_by!(wallet, actor: actor) do
-        [] -> {wallet, give(give_from, wallet)}
-        shards -> {wallet, {:shards, Enum.map(shards, &key/1)}}
-      end
+      Map.new(wallets, fn wallet ->
+        case Keys.active_shards_held_by!(wallet, actor: actor) do
+          [] -> {wallet, give(give_from, wallet)}
+          shards -> {wallet, {:shards, Enum.map(shards, &key/1)}}
+        end
+      end)
     end)
   end
 

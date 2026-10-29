@@ -6280,3 +6280,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: Sean, 29 October 18:28Z, "Fix the gaps a new agent hits in the CLI: no
   project name in the public read, no install line in skill.md, no 'since
   last time' in pulse".
+
+## 2026-10-29 — Shard links: errors, own agents, live rows
+
+- What: three fixes from the review of "Give a new agent a shard". When an
+  agent's Keys can't be read, the Account page stays up: the agent's row says
+  "Couldn’t read Keys" and the pairing box says "Couldn’t read your Keys.
+  Refresh to try again." instead of the page crashing. A Key page opened with
+  `shard_to=<wallet>` fills in the New shard form only when the wallet is one of
+  the signed-in person's own paired agents, and names that agent under the field
+  ("Filled in for Astra"); any other wallet leaves the field empty. The Account
+  page now hears Key changes in every open fleet, so an agent's row names its
+  Key as soon as the shard is recorded, without reopening the page.
+- Why: the coordinator's review of the shard links release (29 October 20:15Z),
+  asked to be fixed with tests and released.

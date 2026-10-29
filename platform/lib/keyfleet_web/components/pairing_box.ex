@@ -83,13 +83,16 @@ defmodule KeyfleetWeb.PairingBox do
       />
       <p id={"#{@id}-next"} class="account-pairing-next">
         <.link
-          :if={@give}
+          :if={is_map(@give)}
           id={"#{@id}-give-shard"}
           navigate={@give.path}
           class="rg-button rg-button--primary"
         >
           <span class="rg-button__label">Give {@give.name} a shard</span>
         </.link>
+        <span :if={@give == :unavailable} class="rg-muted">
+          Couldn’t read your Keys. Refresh to try again.
+        </span>
       </p>
     </div>
     """
@@ -152,7 +155,13 @@ defmodule KeyfleetWeb.PairingBox do
          {:ok, agents} <- RegentAgents.list_my_agents(actor: socket.assigns.person),
          %{} = agent <- Enum.find(agents, &(DateTime.compare(&1.paired_at, issued_at) != :lt)) do
       VisitLog.step("agent_paired", to_string(chosen))
-      give = KeyfleetWeb.AgentKeys.read(socket.assigns.account, [agent.wallet])[agent.wallet]
+
+      give =
+        case KeyfleetWeb.AgentKeys.read(socket.assigns.account, [agent.wallet]) do
+          {:ok, keys} -> keys[agent.wallet]
+          {:error, _failure} -> :unavailable
+        end
+
       assign(socket, codes: Map.put(codes, chosen, {:paired, agent, give}))
     else
       _unchanged -> socket
@@ -160,8 +169,9 @@ defmodule KeyfleetWeb.PairingBox do
   end
 
   # The paired agent and where to give it a shard, when it has none and the
-  # person holds a Key.
+  # person holds a Key, or `:unavailable` when the Keys couldn't be read.
   defp give({:paired, agent, {:give, path}}), do: %{name: agent.name, path: path}
+  defp give({:paired, _agent, :unavailable}), do: :unavailable
   defp give(_code), do: nil
 
   defp issue(socket, harness) do

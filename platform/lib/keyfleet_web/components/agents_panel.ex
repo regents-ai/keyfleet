@@ -45,6 +45,9 @@ defmodule KeyfleetWeb.AgentsPanel do
   @impl true
   def update(%{agents_changed: true}, socket), do: {:ok, read_agents(socket)}
 
+  def update(%{keys_changed: true}, %{assigns: %{agents: agents}} = socket),
+    do: {:ok, assign(socket, :keys, keys(socket.assigns.account, agents))}
+
   def update(%{account: account, id: id, lease: lease}, socket) do
     {:ok,
      socket
@@ -183,7 +186,7 @@ defmodule KeyfleetWeb.AgentsPanel do
       >
         <:about>Once paired, an agent may: {may_words()}.</:about>
         <:actions :let={agent}>
-          <.agent_keys id={"#{@id}-keys-#{agent.id}"} keys={@keys[agent.wallet]} />
+          <.agent_keys id={"#{@id}-keys-#{agent.id}"} keys={agent_keys_of(@keys, agent)} />
           <P.button
             type="button"
             variant="quiet"
@@ -272,7 +275,10 @@ defmodule KeyfleetWeb.AgentsPanel do
   end
 
   attr :id, :string, required: true
-  attr :keys, :any, required: true, doc: "the agent's Keys, as `KeyfleetWeb.AgentKeys.read/2`"
+
+  attr :keys, :any,
+    required: true,
+    doc: "the agent's Keys, as `KeyfleetWeb.AgentKeys.read/2`, or `:unavailable`"
 
   @doc "The Keys an agent holds a shard of, or where to give it one."
   def agent_keys(%{keys: {:shards, _keys}} = assigns) do
@@ -292,6 +298,12 @@ defmodule KeyfleetWeb.AgentsPanel do
     <.link id={@id} navigate={elem(@keys, 1)} class="rg-button rg-button--quiet">
       <span class="rg-button__label">Give it a shard</span>
     </.link>
+    """
+  end
+
+  def agent_keys(%{keys: :unavailable} = assigns) do
+    ~H"""
+    <span id={@id} class="rg-muted">Couldn’t read Keys</span>
     """
   end
 
@@ -375,10 +387,17 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   defp lights(:unavailable, _now), do: %{}
 
-  defp keys(account, agents) when is_list(agents),
-    do: KeyfleetWeb.AgentKeys.read(account, Enum.map(agents, & &1.wallet))
+  defp keys(account, agents) when is_list(agents) do
+    case KeyfleetWeb.AgentKeys.read(account, Enum.map(agents, & &1.wallet)) do
+      {:ok, keys} -> keys
+      {:error, _failure} -> :unavailable
+    end
+  end
 
   defp keys(_account, :unavailable), do: %{}
+
+  defp agent_keys_of(:unavailable, _agent), do: :unavailable
+  defp agent_keys_of(keys, agent), do: keys[agent.wallet]
 
   defp read_agents(socket) do
     agents =

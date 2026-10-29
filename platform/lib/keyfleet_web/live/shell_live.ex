@@ -113,7 +113,7 @@ defmodule KeyfleetWeb.ShellLive do
        fleet_params: nil,
        fleet_place: :fleet,
        fleet_class: nil,
-       keys_topic: nil,
+       keys_topics: [],
        activity: nil,
        activity_refresh: nil,
        key_profile: nil,
@@ -199,7 +199,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_connect(route_spec, params)
        |> load_points(route_spec)
        |> read_class(params)
-       |> follow_keys(keys_fleet(route_spec, params))
+       |> follow_keys(keys_fleets(route_spec, params))
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
        |> load_key(route_spec, params)
@@ -951,6 +951,13 @@ defmodule KeyfleetWeb.ShellLive do
        do: fleet_id
   end
 
+  # Keys changed in an open fleet while the Account page is on show: its
+  # agents' Keys are read afresh, so a shard just issued names its Key.
+  defp keys_changed(%{assigns: %{route_spec: %{route_id: :account}}} = socket, _fleet_id, _ids) do
+    send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", keys_changed: true)
+    {:noreply, socket}
+  end
+
   # Keys changed in the fleet on show: its sales figures and the key on offer
   # are read again, and its Member List when it is on show (the agents here
   # come from the readings every page shares, `Keyfleet.Agents.Here`), the
@@ -1104,7 +1111,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The fleet whose keys the page on show follows: the fleet's own page, one
   # of its keys' pages, its workspace, or its polls.
-  defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
+  defp keys_fleets(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
               :fleet,
               :keys,
@@ -1116,9 +1123,12 @@ defmodule KeyfleetWeb.ShellLive do
               :polls,
               :poll
             ],
-       do: fleet_id
+       do: [fleet_id]
 
-  defp keys_fleet(_route_spec, _params), do: nil
+  # The Account page shows the Keys the person's agents hold shards of, in
+  # every open fleet.
+  defp keys_fleets(%{route_id: :account}, _params), do: Fleets.open_fleet_ids()
+  defp keys_fleets(_route_spec, _params), do: []
 
   # A person signed in hears when their own mutes change, on any of their
   # pages, for as long as the page is open.
@@ -1128,14 +1138,14 @@ defmodule KeyfleetWeb.ShellLive do
     socket
   end
 
-  # One subscription to the keys of the fleet on show, dropped on the way out.
-  defp follow_keys(socket, fleet_id) do
-    topic = fleet_id && Keys.topic(fleet_id)
+  # One subscription to the keys of each fleet on show, dropped on the way out.
+  defp follow_keys(socket, fleet_ids) do
+    topics = Enum.map(fleet_ids, &Keys.topic/1)
 
-    if connected?(socket) and topic != socket.assigns.keys_topic do
-      stop_listening(socket.assigns.keys_topic)
-      start_listening(topic)
-      assign(socket, :keys_topic, topic)
+    if connected?(socket) and topics != socket.assigns.keys_topics do
+      Enum.each(socket.assigns.keys_topics, &stop_listening/1)
+      Enum.each(topics, &start_listening/1)
+      assign(socket, :keys_topics, topics)
     else
       socket
     end

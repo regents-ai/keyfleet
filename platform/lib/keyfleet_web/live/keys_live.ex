@@ -180,7 +180,13 @@ defmodule KeyfleetWeb.KeysLive do
             fleet={@key.fleet}
             actor={@actor}
             lease={@lease}
-            inputs={%{"keys" => "#{@key.token_id}", "wallet" => @key.shard_to, "days" => "30"}}
+            inputs={
+              %{
+                "keys" => "#{@key.token_id}",
+                "wallet" => if(@key.shard_to, do: @key.shard_to.wallet, else: ""),
+                "days" => "30"
+              }
+            }
           >
             <:fields :let={panel}>
               <div class="key-shard-form">
@@ -190,6 +196,7 @@ defmodule KeyfleetWeb.KeysLive do
                   name="wallet"
                   label="Agent’s wallet"
                   value={panel.inputs["wallet"]}
+                  hint={@key.shard_to && "Filled in for #{@key.shard_to.name}"}
                 />
                 <.field
                   id="key-shard-days"
@@ -272,11 +279,13 @@ defmodule KeyfleetWeb.KeysLive do
   attr :label, :string, required: true
   attr :value, :string, required: true
   attr :inputmode, :string, default: nil
+  attr :hint, :string, default: nil
 
   # A field the wallet buttons' steps are built from.
   defp field(assigns) do
     ~H"""
     <Regent.Primitives.field :let={field} id={@id} label={@label}>
+      <:hint :if={@hint}>{@hint}</:hint>
       <input
         id={field.id}
         name={@name}
@@ -350,8 +359,10 @@ defmodule KeyfleetWeb.KeysLive do
 
   @doc """
   What the key's page shows of the key, as the visitor may see it, and the
-  agent wallet its New shard form starts with: `shard_to` from the address
-  (`KeyfleetWeb.KeyLinks.give_shard_path/3`) when it is a wallet address.
+  agent its New shard form starts with: `shard_to` from the address
+  (`KeyfleetWeb.KeyLinks.give_shard_path/3`) when it is the wallet of one of
+  the signed-in person's own paired agents, named beside the field, so a link
+  never fills in a wallet the person doesn't know as their agent's.
   """
   def key_view(socket, fleet_id, token_id, shard_to) do
     actor = ShellLive.human_actor(socket)
@@ -374,14 +385,26 @@ defmodule KeyfleetWeb.KeysLive do
         match?([%{restricted: true}], Keys.latest_edits_restrictions!(fleet_id, [token_id])),
       shards: if(key, do: Profile.shards(fleet_id, token_id), else: []),
       messages: DmsLive.message_link(actor, key && key.owner_wallet, fleet_id, token_id),
-      shard_to: wallet(shard_to)
+      shard_to: own_agent(socket, shard_to)
     }
   end
 
-  defp wallet(address) when is_binary(address),
-    do: if(address =~ ~r/\A0x[0-9a-fA-F]{40}\z/, do: address, else: "")
+  defp own_agent(%{assigns: %{access_context: %{principal: {:human, account}}}}, wallet)
+       when is_binary(wallet) do
+    wallet = String.downcase(wallet)
 
-  defp wallet(_none), do: ""
+    case RegentAgents.list_my_agents(
+           actor: %RegentAgents.Person{privy_user_id: account.privy_user_id}
+         ) do
+      {:ok, agents} ->
+        Enum.find_value(agents, &(&1.wallet == wallet && %{wallet: &1.wallet, name: &1.name}))
+
+      {:error, _failure} ->
+        nil
+    end
+  end
+
+  defp own_agent(_socket, _wallet), do: nil
 
   @doc "The key on show read again when it is among the fleet's changed keys."
   def refresh_key(
@@ -391,7 +414,7 @@ defmodule KeyfleetWeb.KeysLive do
         token_ids
       ) do
     if token_id in token_ids,
-      do: assign(socket, :key, key_view(socket, fleet_id, token_id, shard_to)),
+      do: assign(socket, :key, %{key_view(socket, fleet_id, token_id, nil) | shard_to: shard_to}),
       else: socket
   end
 
