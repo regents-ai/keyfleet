@@ -5971,8 +5971,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   workspace's reads are one Ash action each (`KeyfleetWeb.AgentTools`), which
   the signed requests answer with too.
 - Claude's guide, the agent guides' hosted MCP line and Claude's Bring your
-  agent message say so; `docs/agent-parity.md` lists each tool's website,
-  WebMCP, MCP and CLI surface, with the fleet tools still to move as gaps.
+  agent message say so; in `docs/agent-parity.md`, the one parity table on
+  main, the Connector column and K8 list the tools it serves, with the other
+  fleet tools still to move as gaps.
 - A connector request spends its account's budget before anything else is
   asked; a sign-in server or pairing that can't be read refuses the request
   with that reason; a pairing that ends or changes hands mid-call replaces
