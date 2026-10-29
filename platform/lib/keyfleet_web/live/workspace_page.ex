@@ -227,6 +227,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           project: filter.project,
           type: filter.type,
           owner: filter.owner,
+          goal: filter.goal,
           archived: if(filter.archived?, do: "shown")
         ] ++ position
       )
@@ -356,6 +357,7 @@ defmodule KeyfleetWeb.WorkspacePage do
               project: filter.project,
               type: filter.type,
               owner_key: filter.owner,
+              goal: filter.goal,
               archived: filter.archived?
             },
             opts
@@ -1318,6 +1320,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       project: shown && shown.name,
       type: type!(params["type"]),
       owner: owner!(view, params["owner"]),
+      goal: goal!(view, params["goal"]),
       archived?: archived!(params["archived"])
     }
   end
@@ -1337,6 +1340,11 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp owner!(_view, nil), do: nil
   defp owner!(:graph, owner) when is_binary(owner), do: token_id!(owner)
   defp owner!(_view, _unknown), do: raise(NotFoundError)
+
+  # Only the graph is drawn around one goal.
+  defp goal!(_view, nil), do: nil
+  defp goal!(:graph, "goal#" <> _number = id), do: id
+  defp goal!(_view, _unknown), do: raise(NotFoundError)
 
   defp archived!(nil), do: false
   defp archived!("shown"), do: true
@@ -1444,7 +1452,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   # `goals/goal-N`, and the notebooks tagged `goal-N` in its project's space.
   # `code` and `notebooks` are `:unreadable` when the code store or the
   # notebook hub doesn't answer, and `notebooks` is nil for a fleet without
-  # notebooks.
+  # notebooks. `graph` is the goal's map in its project's Graph view.
   defp goal_work(fleet_id, goal, opts) do
     {objects, more} = fleet_id |> Graph.goal_work!(goal.id, opts) |> Enum.split(@goal_items)
     name = String.replace(goal.id, "#", "-")
@@ -1478,6 +1486,15 @@ defmodule KeyfleetWeb.WorkspacePage do
           }
         end,
       more?: more != [],
+      graph:
+        board_path(fleet_id, %{
+          view: :graph,
+          project: goal.project,
+          type: nil,
+          owner: nil,
+          goal: goal.id,
+          archived?: false
+        }),
       results:
         for {object, uri, {:notebook_result, uri}} <- cited do
           %{

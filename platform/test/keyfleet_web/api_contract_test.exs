@@ -419,7 +419,7 @@ defmodule KeyfleetWeb.ApiContractTest do
 
     for {op, required, optional} <- [
           {"board", [], ~w(project)},
-          {"view", [], ~w(project type owner_key archived)},
+          {"view", [], ~w(project type owner_key goal archived)},
           {"get", ~w(id), ~w(relations_after fields)},
           {"changes", [], ~w(project object after_seq limit max_bytes)},
           {"create", command ++ ~w(project type data), []},

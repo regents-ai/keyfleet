@@ -340,7 +340,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp picker_path(board, project),
     do: WorkspacePage.place_path(board.fleet_id, board.place, project)
 
-  defp graph_filter(filter), do: %{filter | view: :graph, type: nil, owner: nil, archived?: false}
+  defp graph_filter(filter),
+    do: %{filter | view: :graph, type: nil, owner: nil, goal: nil, archived?: false}
 
   # Who holds a project: one Key, or the whole fleet for a shared one.
   defp holder(nil), do: "Shared"
@@ -415,7 +416,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   # Switching keeps the kind of item shown, and the archived ones.
   defp view_path(board, :board),
-    do: WorkspacePage.board_path(board.fleet_id, %{board.filter | view: :board, owner: nil})
+    do:
+      WorkspacePage.board_path(board.fleet_id, %{
+        board.filter
+        | view: :board,
+          owner: nil,
+          goal: nil
+      })
 
   defp view_path(board, :graph),
     do: WorkspacePage.board_path(board.fleet_id, %{board.filter | view: :graph})
@@ -568,9 +575,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
       assign(assigns,
         graph: assigns.board.graph,
         filter: assigns.board.filter,
+        goal: Enum.find(assigns.board.graph.rows, &(&1.id == assigns.board.filter.goal)),
         filtered?:
           assigns.board.filter.type != nil or assigns.board.filter.owner != nil or
-            assigns.board.filter.archived?
+            assigns.board.filter.goal != nil or assigns.board.filter.archived?
       )
 
     ~H"""
@@ -590,6 +598,20 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <span :if={@graph.more_edges?}>The first {length(@graph.edges)} links</span>
         </p>
       </header>
+
+      <p :if={@filter.goal} id="workspace-graph-goal" class="workspace-graph-goal">
+        <span>
+          Around <.link :if={@goal} patch={@goal.path}>{@goal.title}</.link>
+          <span :if={is_nil(@goal)}>{@filter.goal}</span>
+        </span>
+        <.link
+          id="workspace-graph-every-goal"
+          class="workspace-toggle"
+          patch={WorkspacePage.board_path(@board.fleet_id, %{@filter | goal: nil})}
+        >
+          Every goal
+        </.link>
+      </p>
 
       <div class="workspace-graph-filters">
         <nav class="workspace-filters" aria-label="Kinds of item">
@@ -2543,6 +2565,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
       aria-labelledby="workspace-goal-work-title"
     >
       <h2 id="workspace-goal-work-title">Items</h2>
+      <.link id="workspace-goal-graph" class="workspace-toggle" patch={@goal.graph}>
+        See it as a graph
+      </.link>
       <Regent.Primitives.empty_state
         :if={@goal.items == []}
         id="workspace-goal-work-empty"

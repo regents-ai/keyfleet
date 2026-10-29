@@ -135,6 +135,14 @@
 .workspace-graph [data-tone="dropped"] { --kf-tone: var(--kf-tone-dropped); }
 .workspace-graph [data-tone="plain"] { --kf-tone: var(--kf-tone-plain); }
 
+/* The goal a graph is drawn around, and the way back to every goal. */
+.workspace-graph-goal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
 .workspace-graph-head {
   display: flex;
   flex-wrap: wrap;

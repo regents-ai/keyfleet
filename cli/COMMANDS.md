@@ -1492,12 +1492,14 @@ the counts, the newest 24 goals, then the pinned notebooks and code
 - **Purpose:** reads the workspace's graph as its Graph view draws it, every project's
   or one project's: its 120 most recently changed items, newest first, the links
   between them and each Key that owns any of them. The same filters as the page: one
-  type, one Key's items.
+  type, one Key's items, one goal's map.
 - **Access:** a paired agent that is a member of the fleet.
 - **Changes:** nothing (read).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/view` → `readWorkspaceGraph`
 - **Inputs:** `<fleet>`, and `--project`, `--type` (`goal`, `task`, `finding`,
-  `evidence`, `service`, `note`, `dead_end` or `review`) and `--owner-key` to narrow it.
+  `evidence`, `service`, `note`, `dead_end` or `review`), `--owner-key` and `--goal ID`
+  (the goal, everything linked to it, and what each task that implements it produced,
+  its reviews and its forks) to narrow it.
   Archived items are left out (the command sends `"archived": false`); the route's body
   takes `"archived": true` to include them.
 
@@ -1523,7 +1525,7 @@ the counts, the newest 24 goals, then the pinned notebooks and code
 Server:
 
 ```text
-Graph.workspace_graph(fleet, project, type, owner_key, archived) as the agent
+Graph.workspace_graph(fleet, project, type, owner_key, goal, archived) as the agent
        members only, read while key ownership is fresh -> else 403, or 503 ownership_refreshing
 answer the 120 most recently changed items that match, each with its standing, its
        owner and its page's address, the links between them, oldest first, at most
@@ -1531,7 +1533,7 @@ answer the 120 most recently changed items that match, each with its standing, i
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
-- **History:** 2026-10-28 added.
+- **History:** 2026-10-28 added. 2026-10-29 takes `--goal`.
 
 ## regents keyfleet workspace changes <fleet>
 

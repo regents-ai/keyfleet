@@ -1901,6 +1901,77 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "one goal's map" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    # Costly failure: a map that took in work from outside the goal, or left
+    # out a fork or a review, would show a goal's work as other than it is.
+    test "holds the goal, what is linked to it, and its tasks' outputs, reviews and forks",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+      other_goal = create(@fleet, "goal", %{"title" => "Elsewhere"})
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
+      link(@fleet, task, goal, "implements")
+      finding = create(@fleet, "finding", %{"title" => "Funds read briefs", "statement" => "S"})
+      link(@fleet, task, finding, "produces")
+      note = create(@fleet, "note", %{"title" => "Call notes", "body" => "B"})
+      link(@fleet, note, goal, "references")
+      fork = create(@fleet, "task", %{"title" => "Draft it shorter"}, by: 7)
+      link(@fleet, fork, task, "forks")
+      submit(@fleet, task, "https://example.com/brief")
+      review = review(@fleet, task, "accept", by: 6)
+      stray = create(@fleet, "task", %{"title" => "Unrelated"})
+      link(@fleet, stray, other_goal, "implements")
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph&goal=" <> URI.encode_www_form(goal))
+
+      shown =
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#workspace-graph-list > li")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-row"))
+        |> Enum.sort()
+
+      assert shown == Enum.sort([goal, task, finding, note, fork, review])
+      assert view |> element("#workspace-graph-goal") |> render() =~ "Revenue"
+
+      view |> element("#workspace-graph-every-goal") |> render_click()
+      assert render(view) =~ "Unrelated"
+    end
+
+    test "is linked from the goal's page", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+
+      {:ok, view, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, goal))
+      view |> element("#workspace-goal-graph") |> render_click()
+
+      assert_patch(
+        view,
+        @board <> "?view=graph&project=general&goal=" <> URI.encode_www_form(goal)
+      )
+    end
+
+    test "an id that names no goal draws nothing, and the Board has no goal's map",
+         %{conn: conn} do
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph&goal=goal%23999")
+      assert has_element?(view, "#workspace-graph-empty")
+      refute render(view) =~ "Draft the brief"
+
+      for path <- [
+            @board <> "?view=graph&goal=" <> URI.encode_www_form(task),
+            @board <> "?goal=goal%231"
+          ] do
+        assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, path) end
+      end
+    end
+  end
+
   describe "an item with the same id in another fleet" do
     test "is named by this fleet's own item", %{conn: conn} do
       open_log(@fleet)
