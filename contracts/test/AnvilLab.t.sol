@@ -61,6 +61,9 @@ contract AnvilLabTest is Test {
         );
         uint256 third = KeyfleetPresets.classicPrice(3, start);
         assertEq(IERC20(lab.usdc).balanceOf(sender), third, "USDC for a third key");
-        assertEq(IERC20(lab.usdc).allowance(sender, lab.manager), third, "Approved");
+        // The most the third Key may cost: its price plus 5%, rounded up to a cent.
+        assertEq(
+            IERC20(lab.usdc).allowance(sender, lab.manager), (third * 105 + 999_999) / 1_000_000 * 10_000, "Approved"
+        );
     }
 }

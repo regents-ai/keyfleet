@@ -6418,3 +6418,37 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   it is there before the first change, the line leaving and the line
   coming in share its place while they cross, and a long sentence ends in
   an ellipsis (the Workstream panel has it whole). Nothing below it moves.
+
+## 2026-10-29 — Busy chain node ends the scan
+
+- When the chain node answers a log request with "too many requests" (HTTP 429),
+  the chain scan stops for this pass instead of splitting the range in halves,
+  which only asked the busy node more. The next pass starts where this one
+  ended. Other unanswered requests still split as before.
+
+## 2026-10-29 — Practice chain approval
+
+- The practice chain (`contracts/script/AnvilLab.s.sol`) now approves exactly
+  the amount the site asks for: the first two Keys' prices plus the most the
+  third may cost (its price plus 5%, rounded up to a cent). The "an allowance
+  already there leaves only the purchase" walk now runs against that.
+
+## 2026-10-29 — Test sign-in server shape
+
+- The test servers that stand in for siwa-server build the request they hand
+  the library with one helper, `SignedAgentHelpers.siwa_request/1`, instead of
+  seven hand-written copies.
+
+## 2026-10-29 — Proposal form keeps its height
+
+- Choosing a kind on the Propose form no longer makes the form grow or shrink.
+  Every kind's fields share one place; the kinds not chosen keep their space,
+  unseen and out of the keyboard's reach, so the Propose button stays put.
+  Measured at 390 and 1280 wide: 836px for all five kinds.
+
+## 2026-10-29 — Room test holds off the feed reread
+
+- The room page test "a post in the Public room reaches every open page of it
+  without any page reading the room" failed on a busy machine: the signed-in
+  page rereads its fleet feed 200ms after a post, which the test counted as a
+  read of the room. The test now holds that reread off while it runs.
