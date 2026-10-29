@@ -2769,6 +2769,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :id, :string, default: nil
   attr :branch, :list, required: true
+  attr :cascade?, :boolean, default: false, doc: "whether its cards cascade in when first seen"
 
   # One level of a goal's map: each item a card, cut at two corners and
   # edged in the colour of where it stands, with the items that hang from it
@@ -2776,7 +2777,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # line is dashed.
   defp map_branch(assigns) do
     ~H"""
-    <ol id={@id} class="workspace-map-branch">
+    <ol
+      id={@id}
+      class="workspace-map-branch"
+      phx-hook={@cascade? && "MotionCascade"}
+      data-variant={@cascade? && KeyfleetWeb.Motion.standard("grid")}
+    >
       <li
         :for={entry <- @branch}
         data-item={entry.item.id}
@@ -2826,7 +2832,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
         class="kf-empty"
         title="No work is linked to this goal yet."
       />
-      <.map_branch :if={@goal.map != []} id="workspace-goal-map-items" branch={@goal.map} />
+      <.map_branch
+        :if={@goal.map != []}
+        id="workspace-goal-map-items"
+        branch={@goal.map}
+        cascade?={true}
+      />
       <p :if={@goal.more?} id="workspace-goal-map-more" class="workspace-detail">
         The 120 most recently changed.
       </p>
