@@ -6,6 +6,9 @@ defmodule Keyfleet.MixProject do
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
   # The Claude connector's packages: oauth and agent_access.
   @elixir_utils_ref "3a82fdeffc3bae997b5501045d5d0d6cb6c8fb94"
+  # oauth with published identities (Claude's "Use Claude's published identity"),
+  # and the http package it reads them with (claude/cimd-1029).
+  @elixir_utils_oauth_ref "141500e02504a40e50ab8c9516797888510436cc"
   # mcp_agents with address/1, for Claude working as its paired agent at /mcp
   # (claude/mcp-site-tools-1029).
   @elixir_utils_mcp_ref "dea334b0cc9477a26fa9bbd03e4f803359ab420b"
@@ -117,7 +120,10 @@ defmodule Keyfleet.MixProject do
       # The Claude connector: its sign-in, and the MCP address and identity tools
       # it calls. regent_mcp_agents names regent_oauth by path; this pin replaces it.
       {:regent_oauth,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "oauth", override: true},
+       git: @elixir_utils, ref: @elixir_utils_oauth_ref, sparse: "oauth", override: true},
+      # regent_oauth names regent_http by path; this pin replaces it.
+      {:regent_http,
+       git: @elixir_utils, ref: @elixir_utils_oauth_ref, sparse: "http", override: true},
       {:regent_mcp_agents, git: @elixir_utils, ref: @elixir_utils_mcp_ref, sparse: "mcp_agents"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},

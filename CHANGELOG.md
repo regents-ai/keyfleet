@@ -6203,3 +6203,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - `make check-cli` also fails for a signed agent route in the contract with
   no signed browser tool, naming each one; pairing, which the sign-in client
   sends, is the one route without.
+
+## 2026-10-29 — Claude connects with its published identity
+
+- Sean, 29 Oct, of Claude's connector settings: "can we do the CIMD setting instead of
+  the 'register automatically'?", then "1. yes, do this asap". Adding keyfleet.ai/mcp in
+  Claude can now use "Use Claude's published identity": Claude names itself by
+  `https://claude.ai/oauth/mcp-oauth-client-metadata` instead of registering a new app on
+  every connection. Discovery says `client_id_metadata_document_supported`; registration
+  keeps working for other apps. Consent reads Claude's document, checks it and records it
+  as an ordinary connected app, so Connected apps shows "Claude" as before.
+- `regent_oauth` and the new `regent_http` pin move to elixir-utils `claude/cimd-1029`;
+  the other shared packages keep their pins.
+- Migration `20261029160000_oauth_client_documents` (`RegentOAuth.Migration.V3`) adds one
+  empty table and its index; nothing existing changes. Token exchange needs it, so it runs
+  before this release serves.
+- Protected (sign-in): ships on Sean's typed letter naming the final commit.

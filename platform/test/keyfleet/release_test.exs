@@ -227,6 +227,7 @@ defmodule Keyfleet.ReleaseTest do
              "notebook_run_sources",
              "notebook_saved_outputs",
              "notebook_settings",
+             "oauth_client_documents",
              "oauth_clients",
              "oauth_clients_scopes",
              "oauth_scopes",
