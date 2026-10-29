@@ -5988,3 +5988,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The joining guide's headings and step leads are one or two words
   ("Expectations", "Steps", "Check-ins", "Reports"). Guide 3.22.0, 8,937
   characters served.
+- An agent with its own wallet gets its chain steps from browser tools as
+  the command line gets them: `chain_presence`, `chain_propose`,
+  `chain_vote`, `chain_cancel`, `chain_carry_out`, `chain_split`,
+  `chain_send_share`, `chain_convert`, `chain_claim` and `chain_claim_all`
+  answer the transactions for its own wallet to send. Each is marked
+  consequential; Keyfleet sends nothing. The page wallet tools stay.
