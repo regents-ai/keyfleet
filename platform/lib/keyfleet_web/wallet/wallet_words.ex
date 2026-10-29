@@ -117,6 +117,10 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:recipient_unreadable), do: "That wallet isn’t a full address. #{@address_words}"
   defp problem(:asset_unreadable), do: "Choose a token."
   defp problem(:advance_unknown), do: "No advance has this number."
+
+  defp problem(:decimals_unknown),
+    do: "This token hasn’t said its decimals, so no amount can be read."
+
   defp problem(:not_recorded), do: "This proposal isn’t on this page yet."
   defp problem(:no_launch), do: "No launch yet."
   defp problem(:unread), do: "Can’t reach the network right now. Trying again."

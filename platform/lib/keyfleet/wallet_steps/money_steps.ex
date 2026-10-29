@@ -73,11 +73,12 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
          asset = advanced_asset(fleet, asset),
          figures =
            Map.merge(figures, %{operator: operator, asset: asset, outstanding: outstanding}),
+         {:ok, decimals} <- decimals(asset, figures),
          {:ok, amount} <-
            Build.typed(
              inputs,
              "amount",
-             &Typed.amount(&1, asset.decimals || 0, Typed.largest_uint256()),
+             &Typed.amount(&1, decimals, Typed.largest_uint256()),
              figures
            ),
          figures = Map.put(figures, :amount, amount),
@@ -297,6 +298,10 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
     {symbol, decimals} = Map.get(Treasury.assets(fleet).details, asset, {nil, nil})
     %{address: asset, symbol: symbol, decimals: decimals}
   end
+
+  # An amount of a token that never said its decimals can't be read.
+  defp decimals(%{decimals: nil}, figures), do: {:problem, :decimals_unknown, figures}
+  defp decimals(%{decimals: decimals}, _figures), do: {:ok, decimals}
 
   defp named(fleet, preview), do: Enum.map(preview, &Map.merge(named_asset(fleet, &1.asset), &1))
 

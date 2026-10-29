@@ -901,6 +901,19 @@ defmodule Keyfleet.WalletStepsTest do
                Call.encode("returnAdvance(uint256,uint256)", [7, 2 * 10 ** 18])
     end
 
+    test "an amount of a token that never said its decimals can't be read", %{fleet: fleet} do
+      token = "0x" <> String.duplicate("7c", 20)
+      ProposalHelpers.asset_details!(@fleet, token, "QUIET", nil)
+
+      ChainViews.put!([
+        {fleet.treasury_address, "advances(uint256)", [7],
+         {"address,address,uint256,bytes32",
+          [@third, token, 5, "0x" <> String.duplicate("9", 64)]}}
+      ])
+
+      assert %{problem: :decimals_unknown, review: %{steps: []}} = return_advance("2")
+    end
+
     test "an advance the treasury never made", %{fleet: fleet} do
       ChainViews.put!([
         {fleet.treasury_address, "advances(uint256)", [7],

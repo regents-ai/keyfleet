@@ -614,7 +614,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
 
-  # Who holds Regents Club Pass `pass_id`, or nil once it is burned.
   # Whether the chain has a seed for the key, or a request on its way.
   defp reveal(fleet, onchain, step, figures) do
     with {:ok, reads} <- Reads.at_head(),
@@ -641,6 +640,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     end
   end
 
+  # Who holds Regents Club Pass `pass_id`, or nil once it is burned.
   defp pass_holder(reads, pass, pass_id) do
     case Reads.one(reads, pass, "ownerOf(uint256)", [pass_id], :address) do
       {:error, :reverted} -> {:ok, nil}

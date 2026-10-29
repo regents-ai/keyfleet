@@ -1063,8 +1063,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # Key's shards say nothing more than their path. Issuing shards names the
   # Keys, the wallet and the days as typed, and agent voting the Keys and on
   # or off. Turning USDC into REGENT names its amount as a string, and so does
-  # returning an advance; the launch's upkeep names its one step. A proposal names its fields as strings; a vote, a cancellation and
-  # carrying out name the proposal, and a vote its choice.
+  # returning an advance; the launch's upkeep names its one step. A proposal
+  # names its fields as strings; a vote, a cancellation and carrying out name
+  # the proposal, and a vote its choice.
   defp check_chain_body(op, params) when op in ["presence", "split", "treasury/send_share"],
     do: admit(params == %{})
 
