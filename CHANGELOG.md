@@ -6250,3 +6250,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: Sean, 29 October 18:56Z, "1. a" (offer a shard right after pairing), and
   18:57Z: "this work was started to fix how the pair agent and Key assigned to
   your agents works, make sure it continues and gets release".
+## 2026-10-29 — Change check names each part's result
+
+- `make check-change` prints each Elixir part's result again ("273 passed (4
+  properties, 269 tests), 1 excluded"; "1/2 passed" when one fails). Since
+  Elixir 1.20 ExUnit ends with a "Result:" line, which the summary now reads.

@@ -55,7 +55,7 @@ if changed platform/lib platform/test ':(exclude)platform/test/browser' platform
     wait "$(cat "$logs/$n.pid")" || failed="$failed $n"
   done
   for n in 1 2 3 4; do
-    echo "==> Elixir tests, part $n of 4: $(grep -E '^[0-9]+ (tests?|propert)' "$logs/$n.log" | tail -1)"
+    echo "==> Elixir tests, part $n of 4: $(grep '^Result: ' "$logs/$n.log" | tail -1 | cut -d' ' -f2-)"
   done
   if [[ -n "$failed" ]]; then
     for n in $failed; do
