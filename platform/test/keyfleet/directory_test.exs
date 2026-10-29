@@ -39,10 +39,14 @@ defmodule Keyfleet.DirectoryTest do
     {:ok, fleet} = Directory.fleet(@fleet)
 
     assert fleet.projects == [
-             %{title: "General", goals: ["Map the first paid service"]},
-             %{title: "Append-only scratchpad", goals: []},
-             %{title: "Keyfleet Syndicate #1 Collaborative Understanding", goals: []},
-             %{title: "Lab", goals: ["Try the new model"]}
+             %{name: "general", title: "General", goals: ["Map the first paid service"]},
+             %{name: "scratchpad", title: "Append-only scratchpad", goals: []},
+             %{
+               name: "understanding",
+               title: "Keyfleet Syndicate #1 Collaborative Understanding",
+               goals: []
+             },
+             %{name: "lab", title: "Lab", goals: ["Try the new model"]}
            ]
   end
 

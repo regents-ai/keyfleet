@@ -1262,13 +1262,19 @@
     {
       "name": "workspace_pulse",
       "title": "Workspace pulse",
-      "description": "Read one open fleet's latest thirty workspace changes, without notes, titles or authors, and whether it has notebooks. For the details, use workspace_changes. No sign-in; changes nothing.",
+      "description": "Read one open fleet's latest thirty workspace changes, without notes, titles or authors, and whether it has notebooks. Pass next_after unchanged as after to read only the changes since; has_more says more follow. For the details, use workspace_changes. No sign-in; changes nothing.",
       "input_schema": {
         "type": "object",
         "properties": {
           "fleet_id": {
             "type": "string",
             "description": "The fleet's id, such as fleet_tech_classic, as fleets_list gives it."
+          },
+          "after": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,18})$",
+            "maxLength": 19,
+            "description": "Pass next_after from your last read unchanged to read only the changes since; omit for the latest. Keep as text."
           }
         },
         "required": [

@@ -53,6 +53,7 @@ defmodule Keyfleet.Graph do
       define :read_events, action: :page, args: [:fleet_id, :after_seq, :limit]
       define :latest_activity, action: :activity, args: [:fleet_id]
       define :notable_before, action: :notable_before, args: [:fleet_id, :before_seq, :limit]
+      define :notable_after, action: :notable_after, args: [:fleet_id, :after_seq, :limit]
       define :object_history, action: :history, args: [:fleet_id, :object_id]
 
       define :object_events,
@@ -151,7 +152,7 @@ defmodule Keyfleet.Graph do
   transaction's snapshot, taken at its first query, rather than one of its
   own.
   """
-  @spec shown(String.t()) :: [%{title: String.t(), goals: [String.t()]}]
+  @spec shown(String.t()) :: [%{name: String.t(), title: String.t(), goals: [String.t()]}]
   def shown(fleet_id) do
     {:ok, shown} =
       in_snapshot(fn ->
@@ -161,7 +162,11 @@ defmodule Keyfleet.Graph do
           |> Enum.group_by(& &1.project, & &1.title)
 
         for project <- Keyfleet.Projects.project_titles!(fleet_id),
-            do: %{title: project.title, goals: Map.get(goals, project.name, [])}
+            do: %{
+              name: project.name,
+              title: project.title,
+              goals: Map.get(goals, project.name, [])
+            }
       end)
 
     shown

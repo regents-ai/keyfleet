@@ -14,12 +14,16 @@ defmodule Keyfleet.WorkspacePulse do
   parts apart (`agent_name`, `key`, `keys_held`, `project_title`, `at`), so
   a page draws the raised number.
   The workspace's own changes, and changes to a deleted project, are left
-  out. No item, its title or any text an item holds leaves this boundary;
+  out. `next_after` is the newest change read; passed back as `after`, the
+  next read holds only the changes made since, oldest thirty first, and
+  `has_more` says more follow. No item, its title or any text an item holds leaves this boundary;
   members use the signed workspace reads for those.
   """
 
   alias Keyfleet.{Agents, Fleets, Graph, Keys, Notebooks, Projects}
   alias Keyfleet.Fleets.Rules
+
+  @shown 30
 
   @raised %{
     ?0 => "⁰",
@@ -34,23 +38,45 @@ defmodule Keyfleet.WorkspacePulse do
     ?9 => "⁹"
   }
 
-  @doc "The latest thirty notable changes, or an explicit read failure."
-  def read(fleet_id) do
+  @doc """
+  The latest thirty notable changes, or with `after` the next thirty made
+  after it, newest first either way; or an explicit read failure.
+  """
+  def read(fleet_id, after_seq) do
     if fleet_id in Fleets.open_fleet_ids() do
-      with {:ok, events} <- Graph.notable_before(fleet_id, nil, 30),
+      with {:ok, events, more?} <- notable(fleet_id, after_seq),
            {:ok, projects} <- Projects.project_titles(fleet_id) do
         {:ok,
          %{
            fleet_id: fleet_id,
            generated_at: DateTime.utc_now() |> DateTime.to_iso8601(),
            notebooks_configured: Notebooks.hub?(fleet_id),
-           activity: lines(fleet_id, events, Map.new(projects, &{&1.name, &1.title}))
+           activity: lines(fleet_id, events, Map.new(projects, &{&1.name, &1.title})),
+           next_after: next_after(events, after_seq),
+           has_more: more?
          }}
       end
     else
       :unknown
     end
   end
+
+  defp notable(fleet_id, nil) do
+    with {:ok, events} <- Graph.notable_before(fleet_id, nil, @shown),
+         do: {:ok, events, false}
+  end
+
+  defp notable(fleet_id, after_seq) do
+    with {:ok, events} <- Graph.notable_after(fleet_id, after_seq, @shown + 1) do
+      {shown, rest} = Enum.split(events, @shown)
+      {:ok, Enum.reverse(shown), rest != []}
+    end
+  end
+
+  # The newest change read, so the next read starts after it; with none read,
+  # where this one started.
+  defp next_after([newest | _older], _after_seq), do: Integer.to_string(newest.seq)
+  defp next_after([], after_seq), do: Integer.to_string(after_seq || 0)
 
   defp lines(fleet_id, events, titles) do
     worked =

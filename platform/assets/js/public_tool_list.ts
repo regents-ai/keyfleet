@@ -50,7 +50,7 @@ const paths: Record<string, (input: Record<string, string>) => string> = {
   fleets_show: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}`,
   proposals_list: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/proposals${input.before === undefined ? "" : `?before=${encodeURIComponent(input.before)}`}`,
   treasury_show: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`,
-  workspace_pulse: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`,
+  workspace_pulse: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse${input.after === undefined ? "" : `?after=${encodeURIComponent(input.after)}`}`,
 }
 
 // Every call names its tool and this visit, so the site's log can put the call

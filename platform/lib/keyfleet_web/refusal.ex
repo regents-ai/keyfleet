@@ -149,6 +149,9 @@ defmodule KeyfleetWeb.Refusal do
       {"The treasury figures cannot be read right now.", "Try again in a moment."},
     "proposals_unavailable" =>
       {"The proposal list cannot be read right now.", "Try again in a moment."},
+    "invalid_pulse_cursor" =>
+      {"The pulse takes only an optional after cursor.",
+       "Omit it for the latest changes, or pass next_after from the previous read unchanged."},
     "invalid_proposal_cursor" =>
       {"The proposal list takes only an optional before cursor.",
        "Omit it for the newest proposals, or pass next_before from the previous page unchanged."},

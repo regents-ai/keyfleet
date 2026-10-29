@@ -226,6 +226,29 @@ defmodule Keyfleet.Graph.Event do
       prepare build(select: [:projects | @brief_fields], load: [:brief])
     end
 
+    # The fleet's notable changes after `after_seq`, oldest first, `limit` at
+    # most, each with what a line about it needs and not the text it carries.
+    read :notable_after do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+
+      filter expr(fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq))
+
+      prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
+
+      prepare fn query, _context ->
+        Ash.Query.before_action(query, fn query ->
+          query
+          |> Ash.Query.unset([:sort, :limit, :offset])
+          |> Ash.Query.sort(seq: :asc)
+          |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
+        end)
+      end
+
+      prepare build(select: [:projects | @brief_fields], load: [:brief])
+    end
+
     # Every change to one object up to `through_seq`, newest first, one more
     # than a page so the reader knows whether more come before: its creation,
     # its edits and archiving, and the links made to or from it and removed
@@ -355,7 +378,7 @@ defmodule Keyfleet.Graph.Event do
   policies do
     # Which changes are notable, and when, without their words: the
     # workspace pulse shows anyone that much.
-    policy action(:notable_before) do
+    policy action([:notable_before, :notable_after]) do
       authorize_if always()
     end
 

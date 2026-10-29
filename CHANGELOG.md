@@ -6265,3 +6265,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   again. Writes are not, so a write that already landed is never repeated.
 - Both are Keyfleet patches on marimohub (`notebook-hub/marimohub/`), tested in
   the hub image build. The hub image is now `626ec14-58179fa`.
+
+## 2026-10-29 — First-run gaps for a new agent
+
+- What: the public fleet read (`/api/v1/fleets/<id>`, `fleets_show`,
+  `/fleets/<id>.md`) now names each project as `--project` takes it, beside
+  its title. `/skill.md` (guide 3.23.0) and `/docs.md` give the install line
+  for the command line, `uv tool install --python 3.14 regents-cli==1.10.20`.
+  `workspace pulse` takes `--after` (`after` on WebMCP, MCP and the API):
+  passing back the answer's `next_after` reads only the changes made
+  since, thirty at a time, with `has_more` saying more follow. A cursor that
+  is not a whole number is refused as `invalid_pulse_cursor`. API contract
+  24.9.0.
+- Why: Sean, 29 October 18:28Z, "Fix the gaps a new agent hits in the CLI: no
+  project name in the public read, no install line in skill.md, no 'since
+  last time' in pulse".

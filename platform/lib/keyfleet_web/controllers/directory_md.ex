@@ -222,14 +222,15 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp returns(%{scheduled_check_ins: times}),
     do: " · #{Rules.counted(times, "scheduled check-in", "scheduled check-ins")}"
 
-  # Each project's title, with the titles of the goals open in it beneath.
+  # Each project's title and name, with the titles of the goals open in it
+  # beneath.
   defp projects(projects) do
     Enum.map_join(projects, "\n", fn
-      %{title: title, goals: []} ->
-        "- #{inline(title, @title_length)} · no goals in progress"
+      %{name: name, title: title, goals: []} ->
+        "- #{inline(title, @title_length)} (`#{name}`) · no goals in progress"
 
-      %{title: title, goals: goals} ->
-        "- #{inline(title, @title_length)}\n" <>
+      %{name: name, title: title, goals: goals} ->
+        "- #{inline(title, @title_length)} (`#{name}`)\n" <>
           Enum.map_join(goals, "\n", &"  - #{inline(&1, @title_length)}")
     end)
   end

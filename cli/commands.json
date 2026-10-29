@@ -93,7 +93,7 @@
     },
     {
       "command": "workspace pulse <fleet>",
-      "description": "Read up to thirty generic public workspace updates and notebook configuration. Member notes, titles, authors and result links stay private.",
+      "description": "Read up to thirty generic public workspace updates and notebook configuration. Member notes, titles, authors and result links stay private. Save next_after and pass it back as --after to read only what changed since last time.",
       "operation_id": "readWorkspacePulse",
       "method": "GET",
       "path": "/api/v1/fleets/{fleet_id}/workspace/pulse",
@@ -108,7 +108,21 @@
           "field": "fleet_id",
           "description": "The fleet id from fleets list, such as regents_club."
         }
-      ]
+      ],
+      "flags": [
+        {
+          "name": "after",
+          "type": "string",
+          "in": "query",
+          "field": "after",
+          "description": "Pass next_after from your last read unchanged to read only the changes since; omit for the latest."
+        }
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "next_after",
+        "flag": "after"
+      }
     },
     {
       "command": "profile join <name>",

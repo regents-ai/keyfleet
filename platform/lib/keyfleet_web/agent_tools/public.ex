@@ -29,8 +29,12 @@ defmodule KeyfleetWeb.AgentTools.Public do
     end
 
     action :pulse, :map do
-      description "An open fleet's latest thirty workspace changes, without their words."
+      description "An open fleet's latest thirty workspace changes, or those since a cursor, without their words."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+
+      argument :after, :string,
+        constraints: [match: ~r/\A(0|[1-9][0-9]{0,18})\z/, max_length: 19, trim?: false]
+
       run {Run, tool: "workspace_pulse"}
     end
 

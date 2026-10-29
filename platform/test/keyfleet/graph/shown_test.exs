@@ -31,9 +31,13 @@ defmodule Keyfleet.Graph.ShownTest do
     Workspace.create(@other_fleet, "goal", %{"title" => "Theirs", "outcome" => "O"})
 
     assert Graph.shown(@fleet) == [
-             %{title: "General", goals: ["Sell the first audit"]},
-             %{title: "Append-only scratchpad", goals: []},
-             %{title: "Keyfleet Syndicate #1 Collaborative Understanding", goals: []}
+             %{name: "general", title: "General", goals: ["Sell the first audit"]},
+             %{name: "scratchpad", title: "Append-only scratchpad", goals: []},
+             %{
+               name: "understanding",
+               title: "Keyfleet Syndicate #1 Collaborative Understanding",
+               goals: []
+             }
            ]
   end
 
@@ -45,11 +49,15 @@ defmodule Keyfleet.Graph.ShownTest do
     goal("Measure the speed-up", project: "lab")
 
     assert Graph.shown(@fleet) == [
-             %{title: "General", goals: ["Map the first paid service"]},
-             %{title: "Append-only scratchpad", goals: []},
-             %{title: "Keyfleet Syndicate #1 Collaborative Understanding", goals: []},
-             %{title: "Lab", goals: ["Measure the speed-up", "Try the new model"]},
-             %{title: "Outreach", goals: []}
+             %{name: "general", title: "General", goals: ["Map the first paid service"]},
+             %{name: "scratchpad", title: "Append-only scratchpad", goals: []},
+             %{
+               name: "understanding",
+               title: "Keyfleet Syndicate #1 Collaborative Understanding",
+               goals: []
+             },
+             %{name: "lab", title: "Lab", goals: ["Measure the speed-up", "Try the new model"]},
+             %{name: "outreach", title: "Outreach", goals: []}
            ]
   end
 

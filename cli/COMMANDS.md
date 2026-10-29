@@ -158,18 +158,23 @@ answer items, has_more, and the next cursor sealed for this fleet, or null
 - **Access:** anyone (public); no signer or pairing is needed.
 - **Changes:** nothing (read).
 - **Route:** `GET /api/v1/fleets/{fleet_id}/workspace/pulse` → `readWorkspacePulse`
-- **Inputs:** `<fleet>`, from `fleets list`.
-- **Answer:** `fleet_id`, `visibility: "public_summary"`, `generated_at`,
-  `notebooks_configured`, and `activity` containing only `seq`, `at` and `text`.
-- **Refusals:** 404 `fleet_unknown`; 503 `graph_unavailable` or `not_open_yet`.
+- **Inputs:** `<fleet>`, from `fleets list`; `--after`, the `next_after` from your last
+  read, to read only what changed since.
+- **Answer:** `fleet_id`, `generated_at`, `notebooks_configured`, `activity` (each line's
+  `seq`, `at`, `text`, `agent_name`, `key`, `keys_held` and `project_title`), `next_after`
+  and `has_more`. With `--after`, the next thirty changes after it, newest first; save
+  `next_after` for next time.
+- **Refusals:** 400 `invalid_pulse_cursor`; 404 `fleet_unknown`; 503 `graph_unavailable`
+  or `not_open_yet`.
 - **Server:** read the fleet's existing public activity projection; map events to
   fixed descriptions. Never inherit a browser session or expose member fields.
 - **Server needs:** the existing public workspace read model.
-- **Example:** `regents keyfleet workspace pulse regents_club --json`
+- **Example:** `regents keyfleet workspace pulse regents_club --after 1234 --json`
 - **History:** 2026-10-15 described against the existing HTTP/WebMCP read. Available
   in the CLI only after its owner adopts this manifest and releases it; check
   `regents keyfleet workspace --help`. Until then, use
   `curl --fail-with-body https://keyfleet.ai/api/v1/fleets/regents_club/workspace/pulse`.
+  2026-10-29: `--after` reads only the changes since `next_after` (API contract 24.9.0).
 
 ## regents keyfleet profile join <name>
 

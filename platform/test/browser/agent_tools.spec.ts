@@ -95,6 +95,10 @@ test("with nobody signed in and no proof, every public read answers, and an unkn
     expect(read, name).toMatchObject({ok: true, status: 200, data: {fleet_id: fleet}})
   }
 
+  const pulse = await callTool(page, "workspace_pulse", {fleet_id: fleet})
+  const since = await callTool(page, "workspace_pulse", {fleet_id: fleet, after: pulse.data.next_after})
+  expect(since).toMatchObject({ok: true, status: 200, data: {activity: [], next_after: pulse.data.next_after, has_more: false}})
+
   const unknown = await callTool(page, "fleets_show", {fleet_id: "no_such_fleet"})
   expect(unknown).toMatchObject({ok: false, status: 404, error: {code: "fleet_unknown"}})
 })

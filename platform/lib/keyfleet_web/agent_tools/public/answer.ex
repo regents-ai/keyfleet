@@ -30,9 +30,12 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
     end
   end
 
-  def answer(:pulse, %{"fleet_id" => fleet_id}, _actor, _waiter) do
-    case Keyfleet.WorkspacePulse.read(fleet_id) do
-      {:ok, pulse} -> ok(pulse)
+  def answer(:pulse, %{"fleet_id" => fleet_id} = params, _actor, _waiter) do
+    with {:ok, after_seq} <- since(Map.delete(params, "fleet_id")),
+         {:ok, pulse} <- Keyfleet.WorkspacePulse.read(fleet_id, after_seq) do
+      ok(pulse)
+    else
+      :error -> refusal(400, "invalid_pulse_cursor")
       :unknown -> refusal(404, "fleet_unknown")
       {:error, _error} -> refusal(503, "graph_unavailable")
     end
@@ -79,6 +82,17 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
   end
 
   defp cursor(_params), do: :error
+
+  defp since(params) when map_size(params) == 0, do: {:ok, nil}
+
+  defp since(%{"after" => value} = params) when map_size(params) == 1 and is_binary(value) do
+    if Regex.match?(~r/\A(0|[1-9][0-9]{0,18})\z/, value) and
+         String.to_integer(value) <= 9_223_372_036_854_775_807,
+       do: {:ok, String.to_integer(value)},
+       else: :error
+  end
+
+  defp since(_params), do: :error
 
   defp listing(fleet_id, before) do
     if fleet_id in Fleets.open_fleet_ids() do

@@ -10,10 +10,9 @@ defmodule KeyfleetWeb.PublicWorkspaceTest do
 
   @fleet "fibonacci_syndicate"
 
-  # Everything members wrote that is not a project's title or an open goal's
-  # title, and the project's own name.
+  # Everything members wrote that is not a project's name or title or an open
+  # goal's title.
   @private [
-    "rd-lab",
     "One paying customer.",
     "Who pays first?",
     "Finding a first customer.",
@@ -55,23 +54,28 @@ defmodule KeyfleetWeb.PublicWorkspaceTest do
     :ok
   end
 
-  test "public reads carry project titles and open goals' titles, and nothing else of the workspace",
+  test "public reads carry project names and titles and open goals' titles, and nothing else of the workspace",
        %{conn: conn} do
     json = conn |> get("/api/v1/fleets/#{@fleet}") |> json_response(200)
 
     assert json["projects"] == [
-             %{"title" => "General", "goals" => ["Revenue"]},
-             %{"title" => "Append-only scratchpad", "goals" => []},
-             %{"title" => "Keyfleet Syndicate #1 Collaborative Understanding", "goals" => []},
-             %{"title" => "Lab", "goals" => ["Try the model"]}
+             %{"name" => "general", "title" => "General", "goals" => ["Revenue"]},
+             %{"name" => "scratchpad", "title" => "Append-only scratchpad", "goals" => []},
+             %{
+               "name" => "understanding",
+               "title" => "Keyfleet Syndicate #1 Collaborative Understanding",
+               "goals" => []
+             },
+             %{"name" => "rd-lab", "title" => "Lab", "goals" => ["Try the model"]}
            ]
 
     markdown = conn |> get("/fleets/#{@fleet}.md") |> response(200)
 
     assert markdown =~
-             "## Projects\n\nEach project with its open goals.\n\n- “General”\n  - “Revenue”\n- “Append-only scratchpad” · no goals in progress\n" <>
-               "- “Keyfleet Syndicate #1 Collaborative Understanding” · no goals in progress\n" <>
-               "- “Lab”\n  - “Try the model”\n"
+             "## Projects\n\nEach project with its open goals.\n\n- “General” (`general`)\n  - “Revenue”\n" <>
+               "- “Append-only scratchpad” (`scratchpad`) · no goals in progress\n" <>
+               "- “Keyfleet Syndicate #1 Collaborative Understanding” (`understanding`) · no goals in progress\n" <>
+               "- “Lab” (`rd-lab`)\n  - “Try the model”\n"
 
     {:ok, hall, _html} = live(conn, Fleets.path(@fleet))
     {:ok, workspace, _html} = live(conn, Fleets.path(@fleet) <> "/workspace")

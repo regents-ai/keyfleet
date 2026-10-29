@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.8.1
+  version: 24.9.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -139,10 +139,13 @@ paths:
         name it goes by in its Regent pairing, "Agent of Key 20³ worked on Lab" for an agent with
         no name, and "Holder of Key 20³ worked on Lab" for a person. The raised number is how many
         of the fleet's Keys that Key's holder has now. No item, item title or text an item holds is
-        returned. No mutation or inherited browser authority.
+        returned. No mutation or inherited browser authority. Pass the answer's next_after back as
+        after to read only the changes made since: the next thirty after it, newest first, with
+        has_more true while more follow.
       security: []
       parameters:
         - {name: fleet_id, in: path, required: true, schema: {type: string}}
+        - {name: after, in: query, required: false, schema: {type: string, pattern: "^(0|[1-9][0-9]{0,18})$", maxLength: 19}, description: "next_after from the last read, unchanged; omit for the latest changes"}
       responses:
         "200":
           description: Public workspace activity
@@ -150,7 +153,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [fleet_id, generated_at, notebooks_configured, activity]
+                required: [fleet_id, generated_at, notebooks_configured, activity, next_after, has_more]
                 properties:
                   fleet_id: {type: string}
                   generated_at: {type: string, format: date-time}
@@ -170,6 +173,9 @@ paths:
                         key: {type: integer, minimum: 1, description: The Key the change was made as}
                         keys_held: {type: integer, minimum: 1, description: "How many of the fleet's Keys that Key's holder has now: the raised number in text"}
                         project_title: {type: string, description: The title of the project worked on}
+                  next_after: {type: string, pattern: "^(0|[1-9][0-9]{0,18})$", maxLength: 19, description: "The newest change read, or the after sent when none was. Pass it back unchanged as after next time. Keep as text."}
+                  has_more: {type: boolean, description: "Whether more changes came after next_after than this answer holds; always false without after"}
+        "400": {description: "invalid_pulse_cursor: only an optional decimal after cursor at most 9223372036854775807 is accepted."}
         "404": {description: Unknown or unopened fleet}
         "503": {description: Workspace unavailable or site not open}
   /api/v1/fleets/{fleet_id}/treasury:
@@ -8147,8 +8153,9 @@ components:
     FleetProject:
       type: object
       additionalProperties: false
-      required: [title, goals]
+      required: [name, title, goals]
       properties:
+        name: {type: string, description: "The project's name, as workspace reads with project, code pushes and its clone address take it"}
         title: {type: string, maxLength: 60}
         goals: {type: array, maxItems: 50, items: {type: string, maxLength: 200}, description: "The titles of the goals open in this project, the most recently changed first; up to 50 across the fleet"}
     FleetRoom:
