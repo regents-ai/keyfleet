@@ -6320,3 +6320,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: Sean, 29 October 20:27Z, "regents club should be the exception to the
   marimo notebook rules I was saying. delete all 1600 marimo notebooks and the
   2200 snapshots from regents club, but keep classic #1".
+- A test now checks that recording the shared `understanding` project's space
+  queues its first page, and recording any other project's space does not
+  (asked in the review of this change).

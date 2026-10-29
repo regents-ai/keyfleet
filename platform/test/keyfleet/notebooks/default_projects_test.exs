@@ -9,7 +9,7 @@ defmodule Keyfleet.Notebooks.DefaultProjectsTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.{Backups, DeleteSpace, Makers, Scratchpads, Setting}
+  alias Keyfleet.Notebooks.{Backups, DeleteSpace, Makers, Scratchpads, Setting, UnderstandingPage}
   alias Keyfleet.Projects
   alias Keyfleet.Projects.Errors.HoldError
   alias Keyfleet.WorkspaceFixtures, as: Workspace
@@ -82,6 +82,22 @@ defmodule Keyfleet.Notebooks.DefaultProjectsTest do
 
     assert Notebooks.notebook_settings!(@club, actor: @system) == []
     assert [%{key: 7}] = Notebooks.notebook_settings!(@fleet, actor: @system)
+  end
+
+  # Costly failure: a fleet whose understanding page is never made, or a page
+  # queued for another project.
+  test "recording the understanding project's space queues its first page, and no other project's does" do
+    record = fn name ->
+      @fleet
+      |> Projects.project!(name, actor: @system)
+      |> Projects.record_space!("proj-#{name}", actor: @system)
+    end
+
+    record.("scratchpad")
+    assert all_enqueued(worker: UnderstandingPage) == []
+
+    record.("understanding")
+    assert [%{args: %{"fleet_id" => @fleet}}] = all_enqueued(worker: UnderstandingPage)
   end
 
   # Costly failure: another member writing in a Key's scratchpad, or anyone
