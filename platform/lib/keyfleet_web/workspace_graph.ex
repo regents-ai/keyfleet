@@ -77,7 +77,8 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   @doc """
   The picture and the list of `graph`: each item with its place, its tone and
   the address of its page; each link with the path it runs along; the tones
-  in use, for the key; and each item's links in words, for the list.
+  in use, for the key; each item's links in words, for the list; and when
+  the most recently changed item changed (`newest`), nil for none.
   `labels` names each project by its title in the whole fleet's view.
   """
   def draw(graph, fleet_id, labels) do
@@ -96,7 +97,8 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       owners: graph.owners,
       rows: rows(nodes, graph.edges, Map.new(nodes, &{&1.id, &1})),
       more_nodes?: graph.more_nodes,
-      more_edges?: graph.more_edges
+      more_edges?: graph.more_edges,
+      newest: newest(graph.nodes)
     }
   end
 
@@ -164,6 +166,16 @@ defmodule KeyfleetWeb.WorkspaceGraph do
           via: via,
           branch: branch(under(children, id), children, by_id)
         }
+  end
+
+  # The read answers each item's change as an ISO 8601 time.
+  defp newest(nodes) do
+    nodes
+    |> Enum.map(fn %{changed_at: at} ->
+      {:ok, at, _offset} = DateTime.from_iso8601(at)
+      at
+    end)
+    |> Enum.max(DateTime, fn -> nil end)
   end
 
   @doc "The tone an item is drawn in, by its standing."

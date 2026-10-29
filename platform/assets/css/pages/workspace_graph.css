@@ -136,14 +136,6 @@
 :is(.workspace-graph, .workspace-map) [data-tone="dropped"] { --kf-tone: var(--kf-tone-dropped); }
 :is(.workspace-graph, .workspace-map) [data-tone="plain"] { --kf-tone: var(--kf-tone-plain); }
 
-/* The goal a graph is drawn around, and the way back to every goal. */
-.workspace-graph-goal {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1rem;
-}
-
 .workspace-graph-head {
   display: flex;
   flex-wrap: wrap;
@@ -158,14 +150,97 @@
   justify-items: start;
 }
 
+/* The stage: a frame with a bracket at each corner, the workspace's name
+   and when it last changed along its top, the goal it steps through, and
+   the picture. */
+.workspace-stage {
+  --kf-bracket: var(--color-fg);
+  --kf-bracket-reach: 1rem;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(var(--kf-bracket) 0 0) left top / var(--kf-bracket-reach) 2px no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) left top / 2px var(--kf-bracket-reach) no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) right top / var(--kf-bracket-reach) 2px no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) right top / 2px var(--kf-bracket-reach) no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) left bottom / var(--kf-bracket-reach) 2px no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) left bottom / 2px var(--kf-bracket-reach) no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) right bottom / var(--kf-bracket-reach) 2px no-repeat,
+    linear-gradient(var(--kf-bracket) 0 0) right bottom / 2px var(--kf-bracket-reach) no-repeat,
+    var(--color-bg);
+}
+
+.workspace-stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  font-family: var(--font-family-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-stage-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+}
+
+.workspace-stage-live > span:not(:first-child, :nth-child(2))::before {
+  content: "· ";
+  color: var(--color-fg-muted);
+}
+
+.workspace-stage-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-error);
+}
+
+/* The step card: which goal of how many, its title, its tasks, and the way
+   to the goals either side of it. */
+.workspace-step {
+  justify-self: start;
+  width: min(100%, 30rem);
+}
+
+.workspace-step-title {
+  font-size: 1.25rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.workspace-step-moves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.workspace-step-move {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--ash-line-strong);
+  font-size: 1.1rem;
+  text-decoration: none;
+}
+
+.workspace-step-move:hover { border-color: var(--ash-accent); }
+
 /* The picture keeps its own size and scrolls inside its frame, never the
    page. */
 .workspace-graph-frame {
   max-width: 100%;
   overflow: auto;
-  padding: 1.25rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
   overscroll-behavior-x: contain;
 }
 
@@ -441,7 +516,12 @@
 }
 
 @media (max-width: 47.99rem) {
-  .workspace-graph-frame { padding: 0.75rem; }
+  .workspace-stage { padding: 0.75rem; }
+
+  .workspace-step-move {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
 
   .workspace-map-branch { --kf-map-indent: 1rem; }
 

@@ -6238,3 +6238,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The Graph view's items are cards of the same kind, cut at two corners, and
   its fork and review links are dashed, on screens with WebGPU too.
 - This is step 3 of the Workspace plan drawn from four reference videos.
+
+## 2026-10-29 — The Graph view's stage and step card
+
+- The Graph view's picture stands on a stage: a frame with a bracket at each
+  corner, "Live" with the fleet and project along its top, and when the
+  newest item changed.
+- A step card on the stage steps from goal to goal, in the order the goals
+  were added: "Goal 2 of 24", the goal's title, its tasks and how many await
+  review, and arrows to the goals either side. With no goal chosen it counts
+  the goals and steps into the first. "Every goal" goes back to the whole
+  picture.
+- This is step 4 of the Workspace plan drawn from four reference videos.

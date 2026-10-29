@@ -1987,6 +1987,42 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, ~s([data-item="#{fork}"] > .workspace-map-card), "Key 7")
     end
 
+    test "steps from goal to goal on the stage, in the order they were added",
+         %{conn: conn} do
+      [first, second, third] =
+        for title <- ["Revenue", "Hiring", "Research"],
+            do: create(@fleet, "goal", %{"title" => title})
+
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
+      link(@fleet, task, second, "implements")
+      submit(@fleet, task, "https://example.com/brief")
+      map = fn goal -> @board <> "?view=graph&goal=" <> URI.encode_www_form(goal) end
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, "#workspace-stage .workspace-stage-live", "Live")
+      assert has_element?(view, "#workspace-step", "Every goal")
+      assert has_element?(view, "#workspace-step", "3 goals")
+      refute has_element?(view, "#workspace-step-back")
+
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, map.(first))
+      assert has_element?(view, "#workspace-step", "Goal 1 of 3")
+
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, map.(second))
+      assert has_element?(view, "#workspace-step", "Goal 2 of 3")
+      assert has_element?(view, "#workspace-graph-goal", "Hiring")
+      assert has_element?(view, "#workspace-step", "1 task")
+      assert has_element?(view, "#workspace-step", "1 awaiting review")
+
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, map.(third))
+      refute has_element?(view, "#workspace-step-on")
+
+      view |> element("#workspace-step-back") |> render_click()
+      assert_patch(view, map.(second))
+    end
+
     test "is linked from the goal's page", %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue"})
 
