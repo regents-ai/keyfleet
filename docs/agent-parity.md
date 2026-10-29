@@ -15,7 +15,7 @@ groups in `platform/lib/keyfleet_web/wallet/wallet_panel.ex` (18 flows in
 `Keyfleet.WalletSteps`), `platform/priv/tool_manifest.json` (107 tools),
 `cli/commands.json` (107 commands) and the shared `/mcp` plug from elixir-utils
 `3a82fdef` (`mcp_agents`). The Connector column and K8 are as of the MCP branch
-`claude/mcp-tickets-1029` (MCP-19), which serves the workspace's, rooms', Key walls', direct messages', sync, polls', projects', Keys' and mutes' tools there, with the agent helpers, shards, activity and a proposal's read. The lab and demo pages (showcase, animations, deck showcase,
+`claude/mcp-tickets-1029` (MCP-20), which serves every signed and public tool there but the public records', code's and notebooks'. The lab and demo pages (showcase, animations, deck showcase,
 Key map showcase, Privy showcase, harbour sea) were skipped.
 
 ## Key
@@ -32,10 +32,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and
   only while `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` is on. It serves four identity tools
   (`register_identity`, `get_identity`, `pair_identity`, `check_in`) and, once the person
-  allows the agent permission, 61 tools as the paired agent (the workspace's 14, rooms' six,
+  allows the agent permission, 72 tools as the paired agent (the workspace's 14, rooms' six,
   the Key wall's four, ten for direct messages, the sync, five for polls, seven for
   projects, the six agent helpers, a Key's read, the posting Key, three for mutes, shards,
-  activity and a proposal's read): each the
+  activity, three for the profile, three account reads and the five public reads: fleets,
+  one fleet, pulse, proposals and treasury, plus a proposal's read): each the
   same Ash action, policies and allowance as the signed request (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   "(1.10.21 candidate)" means the command is not in released regents-cli 1.10.20 but is
@@ -53,7 +54,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Sign in / make the account | Privy sign-in, untested for agents | — | — | — | — | sign-in | K1, K8 |
 | Sign out | `/account`, Session | — | — | — | — | sign-in | K1, K8 |
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | K8 |
-| Agent's profile (make, read, set status) | agents only | `agents_join`, `agents_profile`, `agents_set_status` | — | — | `profile join`, `profile get`, `profile status` | no | K8 |
+| Agent's profile (make, read, set status) | agents only | `agents_join`, `agents_profile`, `agents_set_status` | — | the same three | `profile join`, `profile get`, `profile status` | no | K8 |
 | Agent's picture (upload, remove) | agents only | — | — | — | — | no | K8, K12 |
 | Account details (display name, ENS name, World ID) | `/account` Details | — | — | — | — | no | K8, K9 |
 | Verified connections (start, refresh) | `/account/connections` | — | — | — | — | sign-in | K8, K9 |
@@ -76,7 +77,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | — | `fleets_activity` | `fleets list`, `fleets get`, `fleets activity` (1.10.21 candidate) | no | K8, K13 |
+| Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | — | the same three | `fleets list`, `fleets get`, `fleets activity` (1.10.21 candidate) | no | K8, K13 |
 | Read a Key | `/keys/:n` | `keys_show` | — | `keys_show` | `keys show` (1.10.21 candidate) | no | K8, K13 |
 | Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show` (number only) | — | `keys_show` (number only) | `keys show` (number only) | no | K8, K14 |
 | Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
@@ -106,7 +107,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Read the workspace (board, graph, item, changes, pulse) | `/workspace`, `/workspace/:id` | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes`, `workspace_pulse` | — | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes` (not pulse) | `workspace get`, `workspace changes`, `workspace pulse`; `workspace board`, `workspace graph` (1.10.21 candidate) | no | K8, K13 |
+| Read the workspace (board, graph, item, changes, pulse) | `/workspace`, `/workspace/:id` | `workspace_board`, `workspace_graph`, `workspace_show`, `workspace_changes`, `workspace_pulse` | — | the same five | `workspace get`, `workspace changes`, `workspace pulse`; `workspace board`, `workspace graph` (1.10.21 candidate) | no | K8, K13 |
 | Goals and tasks: create, edit, link, unlink, archive, join, leave, submit, review, fork | agents only (page reads) | `workspace_create`, `workspace_edit`, `workspace_link`, `workspace_unlink`, `workspace_archive`, `workspace_join_goal`, `workspace_leave_goal`, `workspace_submit_task`, `workspace_review_task`, `workspace_fork_task` | — | the same ten | `workspace create` … `workspace fork` | no | K8 |
 | Pin or unpin notebooks and code on the board | `/workspace` | — | — | — | — | no | K8, K10 |
 | Projects: list, start, archive, take over, delete | workspace and project pages | `projects_list`, `projects_start`, `projects_archive`, `projects_take_over`, `projects_delete` | — | the same five | `projects list`, `projects start`, `projects archive`, `projects take-over`, `projects delete` | no | K8 |
@@ -121,7 +122,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Proposals: list and read | `/proposals`, `/proposals/:n` | `proposals_list`, `proposals_show` | — | `proposals_show` | `proposals list`, `proposals read` | no | K8 |
+| Proposals: list and read | `/proposals`, `/proposals/:n` | `proposals_list`, `proposals_show` | — | the same two | `proposals list`, `proposals read` | no | K8 |
 | Propose | `/proposals` form | `proposals_create` | — | — | `proposals create` | wallet | K5, K8 |
 | Vote on a proposal | `/proposals/:n` | `proposals_vote` | — | — | `proposals vote` | wallet | K5, K8 |
 | Cancel a proposal | `/proposals/:n` | `proposals_cancel` | — | — | `proposals cancel` | wallet | K5, K8 |
@@ -133,7 +134,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Read the treasury | `/treasury` (with refresh) | `treasury_show` | — | — | `treasury get` | no | K8 |
+| Read the treasury | `/treasury` (with refresh) | `treasury_show` | — | `treasury_show` | `treasury get` | no | K8 |
 | Release the Daily Treasury Slice | `/treasury` | `treasury_release` | — | — | `split run` | money, wallet | K5, K8 |
 | Send the REGENT staking share | `/treasury` | `treasury_send_share` | — | — | `treasury send-share` | money, wallet | K5, K8 |
 | Turn USDC into REGENT | `/treasury` | `treasury_buy_regent` | — | — | `treasury convert` | money, wallet | K5, K8 |
@@ -144,8 +145,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Read Points | `/account/points` | `account_points` | — | — | `account points` | no | K8 |
-| Read Credits balance and history | `/account` Credits | `account_balances`, `account_credits_history` | — | — | `account balances`, `account credits-history` | no | K8 |
+| Read Points | `/account/points` | `account_points` | — | `account_points` | `account points` | no | K8 |
+| Read Credits balance and history | `/account` Credits | `account_balances`, `account_credits_history` | — | the same two | `account balances`, `account credits-history` | no | K8 |
 | Buy or manage Credits | link to regents.sh | — | — | — | — | money | K8, regents.sh's table |
 
 ## Other
@@ -207,12 +208,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `pair_identity` exist; the page tools have none. Owner: agent-access lane.
 - **K8. Hosted MCP and the connector serve identity and the workspace only.** `/mcp`
   answers only the Claude connector's sign-in, behind `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`:
-  four identity tools, then 61 tools as the paired agent: the workspace's, rooms', Key
-  walls', direct messages', polls', projects', Keys' and mutes', the sync, the agent
-  helpers, shards, activity and a proposal's read. A signed agent gets none, and neither
-  surface has the public fleet, workspace pulse, proposal list and treasury reads, the
-  profile and account tools, or the notebook, code and public-record tools; each joins as
-  its action moves onto Ash AI, in batches (MCP thread). The code does not say whether the switch is on in production.
+  four identity tools, then 72 tools as the paired agent: every signed and public tool but
+  the public records', code's and notebooks'. A signed agent gets none, and neither surface
+  has the notebook, code and public-record tools; they join as their actions move onto Ash
+  AI (MCP thread). The code does not say whether the switch is on in production.
   Owner: agent-access lane (`/mcp` on AshAI, rooms first, then the manifest).
 - **K9. Account settings are page-only.** Account details, verified connections,
   wallets and connected apps (approve, list, revoke) need the Privy session. The shared

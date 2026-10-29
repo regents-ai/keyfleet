@@ -26,6 +26,8 @@ defmodule KeyfleetWeb.AgentTools do
     resource KeyfleetWeb.AgentTools.Projects
     resource KeyfleetWeb.AgentTools.Fleets
     resource KeyfleetWeb.AgentTools.Keys
+    resource KeyfleetWeb.AgentTools.Account
+    resource KeyfleetWeb.AgentTools.Public
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
@@ -41,6 +43,8 @@ defmodule KeyfleetWeb.AgentTools do
   @projects KeyfleetWeb.AgentTools.Projects
   @fleets KeyfleetWeb.AgentTools.Fleets
   @keys KeyfleetWeb.AgentTools.Keys
+  @account KeyfleetWeb.AgentTools.Account
+  @public KeyfleetWeb.AgentTools.Public
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -92,7 +96,18 @@ defmodule KeyfleetWeb.AgentTools do
     mutes_list: {@keys, :mutes, "Mutes", :read},
     mutes_add: {@keys, :mute, "Mute", :repeatable},
     mutes_remove: {@keys, :unmute, "Unmute", :repeatable},
-    shards_list: {@keys, :shards, "Shards", :read}
+    shards_list: {@keys, :shards, "Shards", :read},
+    agents_profile: {@account, :profile, "Profile", :read},
+    agents_join: {@account, :join, "Join", :repeatable},
+    agents_set_status: {@account, :set_status, "Status", :repeatable},
+    account_balances: {@account, :balances, "Credits", :read},
+    account_credits_history: {@account, :credits_history, "Credits history", :read},
+    account_points: {@account, :points, "Points", :read},
+    fleets_list: {@public, :fleets, "Fleets", :read},
+    fleets_show: {@public, :fleet, "Fleet", :read},
+    workspace_pulse: {@public, :pulse, "Pulse", :read},
+    proposals_list: {@public, :proposals, "Proposals", :read},
+    treasury_show: {@public, :treasury, "Treasury", :read}
   ]
 
   tools do

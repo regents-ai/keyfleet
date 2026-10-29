@@ -5996,4 +5996,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Keys too: reading a Key, taking a post off a wall, choosing the Key a
   person writes as, mutes and shards; and reading a proposal, resolving a
   pasted link and previewing a write.
+- The agent's profile, its person's Credits and Points, and the public reads:
+  every fleet, one fleet, the workspace pulse, proposals and the treasury.
 - Still switched off; switching on needs Sean's go.

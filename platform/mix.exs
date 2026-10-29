@@ -259,8 +259,9 @@ defmodule Keyfleet.MixProject do
         # Dms, each with the Run their tools share. Polls and projects add four:
         # the Polls and Projects records, each with that Run. Fleets adds two: the
         # Fleets record, with that Run. Keys adds two: the Keys record, with
-        # that Run.
-        "xref graph --label compile-connected --fail-above 116",
+        # that Run. Account and Public add four: the two records, each with that
+        # Run.
+        "xref graph --label compile-connected --fail-above 120",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

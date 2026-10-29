@@ -33,12 +33,19 @@ defmodule KeyfleetWeb.AgentTools.SignedRequest do
   @doc """
   `:ok` when `params` fit the signed request of the browser tool named
   `tool`, or the refusal that request would be answered with. Each tool's
-  action takes its address's names, so its request always has them.
+  action takes its address's names, so its request always has them. A
+  public read sends no signed request, so its action's arguments are its
+  whole check.
   """
   @spec check(String.t(), map()) :: :ok | {:error, Exception.t()}
   def check(tool, params) do
-    browser_tool = Enum.find(Capabilities.tools(), &(&1["name"] == tool))
+    case Enum.find(Capabilities.tools(), &(&1["name"] == tool)) do
+      %{"authentication" => "public"} -> :ok
+      browser_tool -> signed(browser_tool, params)
+    end
+  end
 
+  defp signed(browser_tool, params) do
     case Capabilities.request(browser_tool, params) do
       {:ok, "GET", _path, nil} -> :ok
       {:ok, _method, path, body} -> fits(path, body)

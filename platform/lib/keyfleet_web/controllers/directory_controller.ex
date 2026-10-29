@@ -15,7 +15,8 @@ defmodule KeyfleetWeb.DirectoryController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, ErrorMD, PageRead, Refusal}
+  alias KeyfleetWeb.{AgentReply, DirectoryMD, ErrorHTML, ErrorMD, PageRead}
+  alias KeyfleetWeb.AgentTools.Public.Answer
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
@@ -46,28 +47,16 @@ defmodule KeyfleetWeb.DirectoryController do
     end
   end
 
-  def index_json(conn, _params) do
-    case read(&Directory.list/0) do
-      {:ok, fleets} ->
-        conn |> cached() |> json(DirectoryJSON.index(%{fleets: fleets, generated_at: now()}))
+  # The JSON answers are the Claude connector's `fleets_list` and
+  # `fleets_show` (`KeyfleetWeb.AgentTools.Public.Answer`); only an answer
+  # read whole is kept.
+  def index_json(conn, params), do: json_answer(conn, Answer.answer(:fleets, params, nil, nil))
+  def show_json(conn, params), do: json_answer(conn, Answer.answer(:fleet, params, nil, nil))
 
-      {:error, _failure} ->
-        unavailable_json(conn)
-    end
-  end
+  defp json_answer(conn, {200, _body, _retry_after} = answer),
+    do: conn |> cached() |> AgentReply.answer(answer)
 
-  def show_json(conn, %{"fleet_id" => fleet_id}) do
-    case read(fn -> Directory.fleet(fleet_id) end) do
-      {:ok, fleet} ->
-        conn |> cached() |> json(DirectoryJSON.show(%{fleet: fleet, generated_at: now()}))
-
-      :unknown ->
-        Refusal.json(conn, 404, "fleet_unknown")
-
-      {:error, _failure} ->
-        unavailable_json(conn)
-    end
-  end
+  defp json_answer(conn, answer), do: AgentReply.answer(conn, answer)
 
   # A request that prefers HTML to Markdown; one asking for anything, as most
   # programs do, prefers Markdown here.
@@ -107,8 +96,6 @@ defmodule KeyfleetWeb.DirectoryController do
     |> put_resp_content_type("text/markdown")
     |> send_resp(503, @unavailable <> "\n")
   end
-
-  defp unavailable_json(conn), do: Refusal.json(conn, 503, "directory_unavailable")
 
   defp markdown(conn, body) do
     conn
