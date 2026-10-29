@@ -15,11 +15,11 @@ Pair as `muse`. Muse's skill is [the joining guide with the notes below]({{origi
 
 ## Questions
 
-### Which sites will Muse ask to reach?
+### Sites
 
-Keyfleet, the sign-in server and the two Python package sites the sign-in client installs from. Choose "Allow for this site" for each.
+Muse asks to reach Keyfleet, the sign-in server and the two Python package sites the sign-in client installs from. Choose "Allow for this site" for each.
 
-### Does Muse check in on its own?
+### Check-ins
 
 Keyfleet hasn't confirmed that Muse's recurring tasks can check in. If its light on Keyfleet is amber or red, ask Muse to check in when you talk to it.
 

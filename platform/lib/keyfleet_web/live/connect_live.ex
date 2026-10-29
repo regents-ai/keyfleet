@@ -3,8 +3,8 @@ defmodule KeyfleetWeb.ConnectLive do
   "Connect your agent", at `/connect`: the four steps that bring a person's
   own agent into a fleet, in order.
 
-    1. Choose the agent's runtime (`KeyfleetWeb.AgentGuides`), Dots first as
-       the one Keyfleet has tried most, with where its checks stand
+    1. Choose the agent's runtime (`KeyfleetWeb.AgentGuides`), Dots chosen
+       until the person picks another, with where its checks stand
        (`KeyfleetWeb.AgentCompatibility`). The choice is the page's address,
        `/connect?agent=SLUG`, so it can be linked and survives a reload.
     2. Copy the one line the agent is given: its runtime's own skill, or for
@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.ConnectLive do
                 class="connect-runtime"
                 aria-current={slug == @agent && "true"}
               >
-                {name}<span :if={slug == @recommended} class="connect-runtime__note">Most tested</span>
+                {name}
               </.link>
             </nav>
             <p id="connect-standing" class="connect-step__line">

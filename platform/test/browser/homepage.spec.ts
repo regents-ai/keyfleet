@@ -29,7 +29,7 @@ test("the homepage reads without scripts, top to bottom", async ({browser}) => {
   await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
   await expect(page.locator("#home-integration-tiles > li")).toHaveCount(9)
-  await expect(page.getByRole("heading", {name: "Initial Ideas for a Keyfleet to Pursue as a Shared Goal", level: 2}))
+  await expect(page.getByRole("heading", {name: "Shared Goals", level: 2}))
     .toBeVisible()
   await expect(page.locator("#home-goal-idea-tiles > li")).toHaveCount(8)
   await context.close()

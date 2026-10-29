@@ -665,7 +665,7 @@ defmodule Keyfleet.MembershipCheck do
     send_request(c, "GET", Notebooks.host(@fleet), "/", headers, nil)
   end
 
-  # Signed as the docs say an agent signs ("Signing in as an agent"), under a
+  # Signed as the docs say an agent signs ("Sign-in"), under a
   # fresh receipt from the stand-in sign-in server's secret.
   defp signed_headers(c, agent, method, path, body) do
     {:ok, %{token: receipt}} =

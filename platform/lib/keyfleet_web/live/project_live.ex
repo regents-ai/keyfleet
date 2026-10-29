@@ -82,7 +82,7 @@ defmodule KeyfleetWeb.ProjectLive do
         />
         <.part
           id="project-open"
-          title="Open to take"
+          title="Open tasks"
           labelled={false}
           invites
           part={@project.parts.open}

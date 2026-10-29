@@ -36,7 +36,8 @@ defmodule KeyfleetWeb.AgentPublicationController do
            Projects.publications(fleet_id, name, page: page) do
       json(conn, %{
         publications: Enum.map(publications, &publication/1),
-        next_cursor: if(more?, do: List.last(publications).__metadata__.keyset)
+        next_cursor: if(more?, do: List.last(publications).__metadata__.keyset),
+        has_more: more?
       })
     else
       {:fleet, {:ok, nil}} -> Refusal.json(conn, 404, "fleet_unknown")

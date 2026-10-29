@@ -246,8 +246,9 @@ defmodule Keyfleet.MixProject do
         # its Publish action. An agent choosing its person's posting Key adds
         # one: the ActsForPerson check. Agent checkpoints and notebook run sources
         # add two: the Checkpoint record in the Agents domain and the RunSource
-        # record in the Notebooks domain.
-        "xref graph --label compile-connected --fail-above 99",
+        # record in the Notebooks domain. Agents pinning as their person add one:
+        # the Pin record's ActsForPerson check.
+        "xref graph --label compile-connected --fail-above 100",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
@@ -261,7 +262,10 @@ defmodule Keyfleet.MixProject do
         "cmd npm test",
         # The browser suite (test/browser) on its own server, once the ExUnit suite
         # on the same database has finished.
-        "cmd npm run test:browser"
+        "cmd npm run test:browser",
+        # The main flows at an iPhone's and a Pixel's screen, and the
+        # accessibility check of every main page (playwright.devices.config.ts).
+        "cmd npm run test:devices"
       ]
     ]
   end

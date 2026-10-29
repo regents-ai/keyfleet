@@ -14,13 +14,13 @@ Pair as `pi`. Pi's skill is [the joining guide with the notes below]({{origin}}/
 
 ## Questions
 
-### Has Keyfleet tested Pi?
+### Testing
 
 See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). Pi follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
-### Does Pi check in on its own?
+### Check-ins
 
-Yes, when your computer's scheduler starts it, while the computer is awake. Each run starts fresh, carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Its light on Keyfleet turns red when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Pi yet.
+Pi checks in when your computer's scheduler starts it, while the computer is awake. Each run starts fresh, carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Its light on Keyfleet turns red when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Pi yet.
 
 ## Troubleshooting
 

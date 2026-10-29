@@ -397,6 +397,12 @@
   white-space: pre-line;
 }
 
+/* A value laid out in paragraphs keeps the page's own line breaks, not the
+   markup's. */
+.workspace-fields dd:has(> p) {
+  white-space: normal;
+}
+
 .workspace-detail {
   display: flex;
   flex-wrap: wrap;
