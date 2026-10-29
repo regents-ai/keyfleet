@@ -45,9 +45,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
       shell_instance={0}
       get_key
     >
-      <:wallets :if={@account.kind == :signed_in} />
       <:agents :if={@account.kind == :signed_in} />
-      <:pairing :if={@account.kind == :signed_in} />
       <:content>
         <div style="padding: 32px">
           <h1>Shell preview</h1><p>Navigation, account control, theme, background.</p><a

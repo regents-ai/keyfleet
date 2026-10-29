@@ -9,14 +9,14 @@ defmodule Keyfleet.MixProject do
   # mcp_agents with address/1, for Claude working as its paired agent at /mcp
   # (claude/mcp-site-tools-1029).
   @elixir_utils_mcp_ref "dea334b0cc9477a26fa9bbd03e4f803359ab420b"
-  # agents: the held release plus Claude as a hosted runtime, so the connector
-  # changes nothing for any other agent.
-  @elixir_utils_agents_ref "edfc6f10f78c3556b076a104bcb964204d7ce477"
+  # agents: the template's pin, with Pair New Agent on the Account page in its
+  # words. Only the agents package moves here, so it brings no migration.
+  @elixir_utils_agents_ref "9539469f3afbfcdb6925f1916723887d36bee700"
   # Everything else stays here and moves with its own shared rollout: chain's Base
   # Builder Code suffix is a wallet change, and credits brings card_purchases.
   @elixir_utils_held_ref "20ee19753a11c113fd1a8d2f9e151be14a0dafae"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "cda974fa964f4bfd009dbbe0afeb1f2eb88530b9"
+  @design_system_ref "3134bab0a23452fb82d3248072327e1d0199cc9a"
 
   def project do
     [
@@ -78,7 +78,7 @@ defmodule Keyfleet.MixProject do
        ref: "55db7d449aad351d200c5f300fca2a83e0a8734c",
        override: true},
       {:oban, "~> 2.24"},
-      # Each paired agent's activity, kept a few minutes for the side panel.
+      # Each paired agent's activity, kept a few minutes for the account menu.
       {:nebulex, "~> 3.0"},
       {:nebulex_local, "~> 3.0"},
       # The notebook gateway's connection to a fleet hub's live notebook sockets.

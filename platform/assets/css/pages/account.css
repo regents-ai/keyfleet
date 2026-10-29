@@ -36,8 +36,12 @@
   text-transform: uppercase;
 }
 
-.account-identity .account-kicker {
+.account-identity .rg-account-identity__kicker {
   color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* Panels */
@@ -48,10 +52,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   gap: 1.5rem;
-}
-
-.account-identity {
-  grid-column: 1 / -1;
 }
 
 .account-panel,
@@ -74,31 +74,28 @@
   align-content: end;
 }
 
-.account-identity__who {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  min-width: 0;
+/* The shared account card stands on the holographic ground, in its ink. */
+.account-identity .rg-account-identity {
+  padding: 0;
+  color: var(--rg-holo-ink);
 }
 
-.account-identity__avatar {
-  flex: none;
-  width: 4rem;
-  height: 4rem;
-  border: 1px solid var(--rg-holo-edge);
+.account-identity .rg-account-identity__picture {
+  border-color: var(--rg-holo-edge);
+}
+
+.account-identity .rg-account-identity__picture img {
   object-fit: cover;
 }
 
-.account-identity__name {
-  display: grid;
-  gap: 0.25rem;
-  min-width: 0;
+.account-identity .rg-account-identity__name h2 {
+  font-family: var(--font-family-title);
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 400;
 }
 
-.account-identity__name h2 {
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
-  line-height: 1.05;
-  overflow-wrap: anywhere;
+.account-identity .rg-account-identity__name p {
+  color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
 }
 
 /* Your keys */
@@ -390,6 +387,9 @@ div.verified-connections__notice p {
    and open ground. */
 .account-grid > .rg-account,
 .account-agents > .rg-account,
+.rg-account-layout__full > .rg-account,
+.rg-account-layout__column > .rg-account,
+.rg-account-layout__grid > .rg-account,
 .account-page > .rg-account--signed-out {
   padding: var(--rg-panel-padding);
   border: 1px solid var(--color-border);
@@ -398,7 +398,7 @@ div.verified-connections__notice p {
 
 /* The shared sections' headings take the same face and size as the page's
    other panels. */
-:is(.account-grid, .account-agents) > .rg-account h2 {
+:is(.account-grid, .account-agents, .rg-account-layout__full, .rg-account-layout__column, .rg-account-layout__grid) > .rg-account h2 {
   font-family: var(--font-family-title);
   font-size: 1.35rem;
   font-weight: 400;

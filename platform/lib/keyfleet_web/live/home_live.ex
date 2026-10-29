@@ -31,11 +31,9 @@ defmodule KeyfleetWeb.HomeLive do
   whose sales are still being read keeps the button working: the fleet's own
   page reads the price again before anything reaches the wallet.
 
-  Signed in, the header's account name and panel button open the side panel
-  (`KeyfleetWeb.Components.Shell.aside/1`), as on the app's pages: Sign out,
-  Manage Account, the account's wallets, its agents and the box to pair a new
-  one. Open, it sits under the header beside the page, which narrows to make
-  room for it.
+  Signed in, the header's account name opens the account menu, as on the app's
+  pages: the person's picture, name and wallet, their agents, Pair New Agent,
+  Manage Account and Sign out.
 
   The page reads nothing itself. Classic is read once for every open page
   (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and so are the
@@ -230,7 +228,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   def handle_event("close_agent", _params, socket), do: {:noreply, assign(socket, :ship, nil)}
 
-  # Hears when the person's agents change on any Regent site, for the side panel.
+  # Hears when the person's agents change on any Regent site, for the account menu.
   defp follow_agents(%{privy_user_id: person}),
     do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, RegentAgents.topic(person))
 
@@ -241,8 +239,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def handle_info(:agents_changed, socket) do
-    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
-    send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
+    send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
     {:noreply, socket}
   end
 
@@ -279,36 +276,23 @@ defmodule KeyfleetWeb.HomeLive do
       )
 
     ~H"""
-    <Regent.Structure.frame id="public-home" class="rl-root" phx-hook="SidePanel">
+    <Regent.Structure.frame id="public-home" class="rl-root">
       <Shell.header
         account_control={@account_control}
         get_key={not @classic.coming_soon?}
         menu={false}
         theme={true}
         fleets
-      />
-
-      <Shell.aside account_control={@account_control}>
-        <:wallets :if={@account}>
-          <.live_component module={KeyfleetWeb.AccountWallets} id="shell-wallets" account={@account} />
-        </:wallets>
+      >
         <:agents :if={@account}>
           <.live_component
-            module={KeyfleetWeb.PanelAgents}
+            module={KeyfleetWeb.MenuAgents}
             id="shell-agents"
             lease={@session_lease}
             account={@account}
           />
         </:agents>
-        <:pairing :if={@account}>
-          <.live_component
-            module={KeyfleetWeb.PairingBox}
-            id="shell-pairing-box"
-            lease={@session_lease}
-            account={@account}
-          />
-        </:pairing>
-      </Shell.aside>
+      </Shell.header>
 
       <main>
         <Regent.Structure.row rail={false}>

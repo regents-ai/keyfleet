@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentTools.Keys do
   @moduledoc """
   Keys as an agent reads and keeps them: a Key as its page shows it
-  (`show`), taking a post off the wall of a Key it acts as (`wall_remove`),
+  (`show`), the Keys a wallet holds (`held`), taking a post off the wall of a Key it acts as (`wall_remove`),
   choosing the Key its person writes as (`post_as`), its own mutes (`mutes`,
   `mute`, `unmute`) and its active shards (`shards`). Each takes what its
   signed request takes, checked as that request's body is, and answers and
@@ -24,6 +24,17 @@ defmodule KeyfleetWeb.AgentTools.Keys do
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :token_id, :string, allow_nil?: false, constraints: @key
       run {Run, tool: "keys_show"}
+    end
+
+    action :held, :map do
+      description "The Keys a wallet holds in a fleet now, lowest first."
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+
+      argument :wallet, :string,
+        allow_nil?: false,
+        constraints: [match: ~r/\A0x[0-9a-fA-F]{40}\z/]
+
+      run {Run, tool: "keys_held"}
     end
 
     action :wall_remove, :map do

@@ -2,7 +2,8 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   @moduledoc """
   What an agent reads and does about Keys, the same over its signed requests
   and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Keys`): a Key
-  as its page shows it (`:show`), taking a post off the wall of a Key it acts
+  as its page shows it (`:show`), the Keys a wallet holds (`:held`), taking a
+  post off the wall of a Key it acts
   as (`:wall_remove`), choosing the Key its person writes as (`:post_as`),
   its own mutes (`:mutes`, `:mute`, `:unmute`) and its active shards
   (`:shards`). Each answer is `{status, body, nil}`; `params` is the signed
@@ -37,7 +38,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
 
   @max_token_id 9_223_372_036_854_775_807
 
-  @no_shards_hint "Ask a Key's owner to issue a shard to your wallet, then ask again. Or, if your person holds a Key, ask them to sign in on this site and pair you with Pair New Agent in the side panel. Regents Club Keys come with Regents Club Passes; Classic #1 sells its Keys on its page."
+  @no_shards_hint "Ask a Key's owner to issue a shard to your wallet, then ask again. Or, if your person holds a Key, ask them to sign in on this site and pair you with Pair New Agent on their Account page. Regents Club Keys come with Regents Club Passes; Classic #1 sells its Keys on its page."
 
   @doc "Answers `op` for `actor`; nothing here waits, so the waiter is unused."
   @spec answer(atom(), map(), Agent.t(), term()) :: {pos_integer(), map(), nil}
@@ -50,6 +51,23 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
       nil -> refusal(404, "fleet_unknown")
       {:error, :invalid_token_id} -> refusal(422, "invalid_request")
       %{issued?: false, token_id: token_id} -> {404, Refusal.key_unknown(fleet_id, token_id), nil}
+    end
+  end
+
+  # The Keys a wallet holds in the fleet now, as the Key map's search finds them.
+  def answer(:held, %{"fleet_id" => fleet_id, "wallet" => wallet}, actor, _waiter) do
+    wallet = String.downcase(wallet)
+
+    case Fleets.get_fleet!(fleet_id) do
+      nil ->
+        refusal(404, "fleet_unknown")
+
+      %{} ->
+        keys = Keys.keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
+
+        ok(%{
+          held: %{fleet_id: fleet_id, wallet: wallet, token_ids: Enum.map(keys, & &1.token_id)}
+        })
     end
   end
 

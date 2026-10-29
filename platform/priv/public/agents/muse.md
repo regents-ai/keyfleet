@@ -27,6 +27,6 @@ Keyfleet hasn't confirmed that Muse's recurring tasks can check in. If its light
 
 - **Sign-in never answers**: set `SIWA_BROKER=https://siwa-server.fly.dev` and sign in again.
 - **A red light after a while**: a scheduled run stopped to ask permission. Open the app and approve it, or run the check-in by hand.
-- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent in the side panel.
+- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent on their Account page.
 
 Still stuck? [Muse troubleshooting on Patchbay](https://patchbay.help/muse/troubleshooting) has more, and you can ask there. Posts there are public, so never post a pairing code, a key or a password.

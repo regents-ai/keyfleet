@@ -6126,3 +6126,58 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   long title in the History, instead of stacking a letter to a line.
 - Parent and Fetch in a commit's Details no longer leave blank lines.
 - Line counts read with thousands separators (+12,345).
+
+## 2026-10-29 — Agents find Keys by wallet
+
+- An agent finds the Keys a wallet holds in a fleet, as the Key map's search
+  on the page does, with `POST /api/v1/agent/fleets/FLEET_ID/keys/held` and
+  `{"wallet"}` (`keys_held` in the browser, `regents keyfleet keys held FLEET
+  WALLET`). It answers the Keys' numbers, lowest first, and the wallet in
+  lowercase; a wallet that holds none answers an empty list. Contract 24.8.0.
+- The agent parity table marks finding Keys by wallet (K14) closed; the
+  command reaches regents-cli with K13.
+
+## 2026-10-29 — Picture upload from the command line
+
+- `regents keyfleet profile avatar-upload <upload-url> <file>` sends a
+  picture's bytes to the `upload_url` that `profile avatar-start` answered,
+  so an agent on the command line can set its picture end to end, as
+  `agents_avatar_upload` does in the browser. The command line sends it only
+  to this site. `REGENTS_CLI_REV` names regents-cli main 361bf476, whose
+  format has the `site_url` and `file` inputs this needs.
+
+## 2026-10-29 — Notebook walk
+
+- The browser walk's stand-in notebook hub keeps each notebook's code and
+  answers it, as the real hub does, so the group walk runs its notebook again
+  now that a run records the code it ran from.
+
+  Keys by wallet and K13 (25 commands not in released regents-cli; 23 are on
+  regents-cli main `f844056` for 1.10.21) need none.
+
+## 2026-10-29 — Account menu
+
+- The side panel is gone. Signed in, the account's name at the top right opens
+  the account menu (`Regent.Account.menu`), the same on every page and the
+  homepage: the person's picture, name and wallet, their three most recently
+  active agents (`KeyfleetWeb.MenuAgents`, which reads where each was last
+  active when the menu opens), Pair New Agent, Manage Account and Sign out.
+  Escape or a press outside closes it, and a link followed from it closes it
+  (`assets/js/account_menu.ts`).
+- The Account page draws the layout every Regent site shares
+  (`Regent.Account.layout`): Your Keys and the account's wallets first, then
+  the account card, the agents, Pair New Agent at `#account-pairing`, Credits,
+  and the details and session. Pair New Agent in the menu, beside the agents
+  and on Connect leads there, with the keyboard on the agent choice.
+- On a phone the open navigation menu makes the page and its footer
+  unreachable until it closes, as before.
+- The `keyfleet_aside` cookie and the plug that read it are removed; nothing
+  remembers a panel any more.
+- Refusals, guides and the API contract say Pair New Agent is on the person's
+  Account page. API contract 24.8.1. The joining guide is 3.22.1. The
+  agent parity table names the same place.
+- design-system 3134bab0 (the account menu, the shared Account layout and
+  Claude Duet's picture) and the agents package at the template's 9539469f.
+  No migration comes with either.
+- A test draws every agent kind's picture, so an agent paired on another site
+  with a kind Keyfleet has no picture for fails here first.

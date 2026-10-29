@@ -8,7 +8,9 @@ defmodule KeyfleetWeb.AccountLive do
   several, the one they post as
   (`KeyfleetWeb.PostingKeyChoice`), the agents
   paired with their account, which they may open, rename and unpair
-  (`KeyfleetWeb.AgentsPanel`), their Credits and this browser's session), Wallets (the wallets their sign-in
+  (`KeyfleetWeb.AgentsPanel`), pairing a new one (`KeyfleetWeb.PairingBox`),
+  their Credits and this browser's session, in the layout every Regent site
+  shares, `Regent.Account.layout`, Keyfleet's own sections first), Wallets (the wallets their sign-in
   verified, the same list) and Connections (the accounts they have connected, which each
   fleet's Member List shows beside their address). Points has its
   own page (`KeyfleetWeb.PointsLive`).
@@ -29,7 +31,6 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
-  alias Keyfleet.PublicIdentity
   alias Keyfleet.WalletSteps.Reads
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.WalletPanel
@@ -68,155 +69,163 @@ defmodule KeyfleetWeb.AccountLive do
       signed_out_reason={@signed_out_reason}
     >
       <:tip>Your identity on Keyfleet, your Keys, your agents and your Credits.</:tip>
-      <div class="account-grid">
-        <Regent.HolographicCard.card
-          id="account-identity"
-          class="account-identity"
-          phx-hook="HolographicCard"
-        >
-          <p class="account-kicker">Your account</p>
-          <div class="account-identity__who">
-            <img
-              :if={@account_control.avatar_src}
-              class="account-identity__avatar"
-              src={@account_control.avatar_src}
-              referrerpolicy="no-referrer"
-              width="64"
-              height="64"
-              alt=""
-            />
-            <div class="account-identity__name">
-              <h2 :if={!name_is_wallet?(@account, @account_control.label)}>
-                {@account_control.label}
-              </h2>
-              <h2 :if={name_is_wallet?(@account, @account_control.label)}>
-                <Regent.Primitives.address
-                  id="account-name"
-                  address={@account.wallet_address}
-                  label={@account_control.label}
-                />
-              </h2>
-            </div>
-          </div>
-        </Regent.HolographicCard.card>
-
-        <.live_component
-          module={KeyfleetWeb.AccountWallets}
-          id="account-wallets"
-          class="account-panel"
-          account={@account}
-        />
-
-        <section class="account-panel account-details" aria-labelledby="account-details-title">
-          <h2 id="account-details-title">Details</h2>
-          <dl>
-            <div id="account-ens-name">
-              <dt>ENS name</dt>
-              <.ens_name account={@account} />
-            </div>
-            <div>
-              <dt>Display name</dt>
-              <dd>{@account.display_name || "Not set"}</dd>
-            </div>
-            <div id="account-world-id">
-              <dt>World ID</dt>
-              <dd :if={@account.world_verified_at}>
-                Verified on {Calendar.strftime(@account.world_verified_at, "%-d %B %Y")}
-              </dd>
-              <dd :if={is_nil(@account.world_verified_at)}>Not verified</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section
-          id="account-keys"
-          class="account-panel account-keys"
-          aria-labelledby="account-keys-title"
-        >
-          <h2 id="account-keys-title">Your Keys</h2>
-          <Regent.Primitives.empty_state
-            :if={@held_keys == []}
-            class="kf-empty"
-            title="No Keys yet."
+      <Regent.Account.layout id="account">
+        <:site>
+          <section
+            id="account-keys"
+            class="account-panel account-keys"
+            aria-labelledby="account-keys-title"
           >
-            <:action>
-              <.link
-                class="rg-button rg-button--secondary"
-                patch={Keyfleet.Fleets.path("fleet_tech_classic")}
-              >
-                <span class="rg-button__label">Get a Key on Classic #1</span>
-              </.link>
-            </:action>
-          </Regent.Primitives.empty_state>
-          <div :for={fleet <- @held_keys} class="account-keys__fleet">
-            <h3>
-              <.link patch={Keyfleet.Fleets.path(fleet.fleet_id)}>{fleet.name}</.link>
-            </h3>
-            <ul class="account-keys__list">
-              <li :for={token_id <- fleet.token_ids}>
-                <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
-                <.slice slices={@slices} fleet_id={fleet.fleet_id} token_id={token_id} />
-              </li>
-            </ul>
-            <.live_component
-              :if={fleet.chain_id}
-              module={WalletPanel}
-              id={"account-claim-#{fleet.fleet_id}"}
-              class="account-keys__claim"
-              flow={:claim_all}
-              tool="keys_claim_all"
-              fleet={%{fleet_id: fleet.fleet_id, chain_id: fleet.chain_id}}
-              actor={@actor}
-              lease={@lease}
-              refresh={fleet.token_ids}
+            <h2 id="account-keys-title">Your Keys</h2>
+            <Regent.Primitives.empty_state
+              :if={@held_keys == []}
+              class="kf-empty"
+              title="No Keys yet."
             >
-              <:buttons :let={panel}>
-                <WalletPanel.step_button
-                  :for={waiting <- waiting(panel)}
-                  panel={panel}
-                  step={"claim-#{waiting.asset}"}
-                  id={"account-claim-#{fleet.fleet_id}-#{waiting.asset}"}
+              <:action>
+                <.link
+                  class="rg-button rg-button--secondary"
+                  patch={Keyfleet.Fleets.path("fleet_tech_classic")}
                 >
-                  Claim {WalletWords.token_amount(waiting)}
-                </WalletPanel.step_button>
-              </:buttons>
-            </.live_component>
-            <.live_component
-              :if={length(fleet.token_ids) > 1}
-              module={KeyfleetWeb.PostingKeyChoice}
-              id={"account-posting-key-#{fleet.fleet_id}"}
-              fleet_id={fleet.fleet_id}
-              token_ids={fleet.token_ids}
-              account={@account}
-              lease={@lease}
-            />
-          </div>
-        </section>
+                  <span class="rg-button__label">Get a Key on Classic #1</span>
+                </.link>
+              </:action>
+            </Regent.Primitives.empty_state>
+            <div :for={fleet <- @held_keys} class="account-keys__fleet">
+              <h3>
+                <.link patch={Keyfleet.Fleets.path(fleet.fleet_id)}>{fleet.name}</.link>
+              </h3>
+              <ul class="account-keys__list">
+                <li :for={token_id <- fleet.token_ids}>
+                  <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
+                  <.slice slices={@slices} fleet_id={fleet.fleet_id} token_id={token_id} />
+                </li>
+              </ul>
+              <.live_component
+                :if={fleet.chain_id}
+                module={WalletPanel}
+                id={"account-claim-#{fleet.fleet_id}"}
+                class="account-keys__claim"
+                flow={:claim_all}
+                tool="keys_claim_all"
+                fleet={%{fleet_id: fleet.fleet_id, chain_id: fleet.chain_id}}
+                actor={@actor}
+                lease={@lease}
+                refresh={fleet.token_ids}
+              >
+                <:buttons :let={panel}>
+                  <WalletPanel.step_button
+                    :for={waiting <- waiting(panel)}
+                    panel={panel}
+                    step={"claim-#{waiting.asset}"}
+                    id={"account-claim-#{fleet.fleet_id}-#{waiting.asset}"}
+                  >
+                    Claim {WalletWords.token_amount(waiting)}
+                  </WalletPanel.step_button>
+                </:buttons>
+              </.live_component>
+              <.live_component
+                :if={length(fleet.token_ids) > 1}
+                module={KeyfleetWeb.PostingKeyChoice}
+                id={"account-posting-key-#{fleet.fleet_id}"}
+                fleet_id={fleet.fleet_id}
+                token_ids={fleet.token_ids}
+                account={@account}
+                lease={@lease}
+              />
+            </div>
+          </section>
+        </:site>
+        <:site>
+          <.live_component
+            module={KeyfleetWeb.AccountWallets}
+            id="account-wallets"
+            class="account-panel"
+            account={@account}
+          />
+        </:site>
+        <:identity>
+          <Regent.HolographicCard.card
+            id="account-identity"
+            class="account-identity"
+            phx-hook="HolographicCard"
+          >
+            <Regent.Account.identity
+              id="account-who"
+              name={@account_control.label}
+              wallet={@account_control.wallet}
+              ens_name={@account_control.ens_name}
+            >
+              <:picture>
+                <img
+                  :if={@account_control.avatar_src}
+                  src={@account_control.avatar_src}
+                  referrerpolicy="no-referrer"
+                  width="64"
+                  height="64"
+                  alt=""
+                />
+              </:picture>
+            </Regent.Account.identity>
+          </Regent.HolographicCard.card>
+        </:identity>
+        <:agents>
+          <.live_component
+            module={KeyfleetWeb.AgentsPanel}
+            id="account-agents"
+            account={@account}
+            lease={@lease}
+          />
+        </:agents>
+        <:pairing>
+          <.live_component
+            module={KeyfleetWeb.PairingBox}
+            id="account-pairing-box"
+            lease={@lease}
+            account={@account}
+          />
+        </:pairing>
+        <:credits>
+          <Regent.Account.credits_summary
+            id="account-credits"
+            available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
+            held={@credits.value && RegentCredits.Amount.format(@credits.value.held)}
+            state={summary_state(@credits.state)}
+          >
+            <a href="https://regents.sh/account">Manage Credits on regents.sh</a>
+          </Regent.Account.credits_summary>
+        </:credits>
+        <:profile>
+          <section class="account-panel account-details" aria-labelledby="account-details-title">
+            <h2 id="account-details-title">Details</h2>
+            <dl>
+              <div id="account-ens-name">
+                <dt>ENS name</dt>
+                <.ens_name account={@account} />
+              </div>
+              <div>
+                <dt>Display name</dt>
+                <dd>{@account.display_name || "Not set"}</dd>
+              </div>
+              <div id="account-world-id">
+                <dt>World ID</dt>
+                <dd :if={@account.world_verified_at}>
+                  Verified on {Calendar.strftime(@account.world_verified_at, "%-d %B %Y")}
+                </dd>
+                <dd :if={is_nil(@account.world_verified_at)}>Not verified</dd>
+              </div>
+            </dl>
+          </section>
 
-        <.live_component
-          module={KeyfleetWeb.AgentsPanel}
-          id="account-agents"
-          account={@account}
-          lease={@lease}
-        />
-
-        <Regent.Account.credits_summary
-          id="account-credits"
-          available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
-          held={@credits.value && RegentCredits.Amount.format(@credits.value.held)}
-          state={summary_state(@credits.state)}
-        >
-          <a href="https://regents.sh/account">Manage Credits on regents.sh</a>
-        </Regent.Account.credits_summary>
-
-        <section class="account-panel account-session" aria-labelledby="account-session-title">
-          <h2 id="account-session-title">Session</h2>
-          <p>Signing out ends this session on this browser only.</p>
-          <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-out">
-            Sign out
-          </Regent.Primitives.button>
-        </section>
-      </div>
+          <section class="account-panel account-session" aria-labelledby="account-session-title">
+            <h2 id="account-session-title">Session</h2>
+            <p>Signing out ends this session on this browser only.</p>
+            <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-out">
+              Sign out
+            </Regent.Primitives.button>
+          </section>
+        </:profile>
+      </Regent.Account.layout>
     </.settings_page>
     """
   end
@@ -370,13 +379,6 @@ defmodule KeyfleetWeb.AccountLive do
     </article>
     """
   end
-
-  # The card names the person the way the header does. A name that is the
-  # wallet itself, its ENS name or short address, opens and copies the address.
-  defp name_is_wallet?(%{wallet_address: wallet} = account, label) when is_binary(wallet),
-    do: label in [PublicIdentity.short_wallet(wallet), account.ens_name]
-
-  defp name_is_wallet?(_account, _label), do: false
 
   # A read not yet answered shows as loading, and an answer with nothing in it
   # as current figures.

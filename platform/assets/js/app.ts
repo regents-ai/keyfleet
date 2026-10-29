@@ -24,7 +24,7 @@ import {
 import {installCopyButtons} from "./copy_buttons"
 import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
-import {installShellPanels} from "./shell_panels"
+import {arriveAt, hashTarget, installAccountMenu} from "./account_menu"
 import {installVitals} from "./vitals"
 import {installLaunchSteps} from "./launch_steps"
 import {AccountWallets} from "./hooks/account_wallets"
@@ -41,10 +41,9 @@ import {KeyMap} from "./hooks/key_map"
 import {LocalTime} from "./hooks/local_time"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
-import {PanelAgents} from "./hooks/panel_agents"
+import {MenuAgents} from "./hooks/menu_agents"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
-import {SidePanel} from "./hooks/side_panel"
 import {TokenMenu} from "./hooks/token_menu"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {WorkspaceGraph} from "./hooks/workspace_graph"
@@ -57,7 +56,6 @@ installVisitLog()
 type ShellHook = Hook & {
   el: HTMLElement
   cleanup?: () => void
-  panels?: ReturnType<typeof installShellPanels>
   shellState?: ShellState
   restoreState?: () => void
 }
@@ -126,6 +124,7 @@ window.addEventListener("pageshow", syncTheme)
 // Before the lazy imports below can hold this module, so the page's first
 // pageshow registers the browser tools.
 installPublicTools()
+installAccountMenu()
 
 const shellBehavior: Hook = {
   mounted(this: ShellHook) {
@@ -231,7 +230,8 @@ const shellBehavior: Hook = {
         return
       }
 
-      if (event.key === "Escape") {
+      // An open account menu takes Escape itself, before any section behind it.
+      if (event.key === "Escape" && !shell.querySelector(":popover-open")) {
         const openDetails = [...shell.querySelectorAll<HTMLDetailsElement>("details[open]")].at(-1)
 
         if (openDetails) {
@@ -248,20 +248,30 @@ const shellBehavior: Hook = {
       scroller()?.scrollTo({top: 0})
     }
 
+    // LiveView records a new address only once its page is drawn, so what a
+    // #fragment names is reached here, after the page has started at its top.
+    const onNavigate = () => {
+      const named = hashTarget()
+      if (named) arriveAt(named)
+    }
+
     shell.addEventListener("click", onClick)
     shell.addEventListener("keydown", onKeydown)
     window.addEventListener("popstate", onHistoryNavigation)
-    this.panels = installShellPanels(shell)
+    window.addEventListener("phx:navigate", onNavigate)
     this.restoreState()
-    scroller()?.scrollTo({top: 0})
+    // A page opened at a #fragment starts at what it names, otherwise at its top.
+    const opened = hashTarget()
+    if (opened) arriveAt(opened)
+    else scroller()?.scrollTo({top: 0})
     shell.dataset.behaviorReady = "true"
 
     this.cleanup = () => {
       closeMenu(false)
-      this.panels?.cleanup()
       shell.removeEventListener("click", onClick)
       shell.removeEventListener("keydown", onKeydown)
       window.removeEventListener("popstate", onHistoryNavigation)
+      window.removeEventListener("phx:navigate", onNavigate)
     }
   },
 
@@ -280,7 +290,6 @@ const shellBehavior: Hook = {
       this.shellState = reconcileShellState(this.shellState, incoming)
     }
     this.restoreState?.()
-    this.panels?.sync()
     if (menuWasOpen && this.shellState?.menuOpen === false) {
       this.el.querySelector<HTMLButtonElement>("#mobile-menu-button")?.focus()
     }
@@ -319,6 +328,7 @@ const hooks = {
   KeyCardTurn,
   KeyMap,
   LocalTime,
+  MenuAgents,
   ModalDialog,
   MotionCascade,
   MotionCount,
@@ -327,10 +337,8 @@ const hooks = {
   MotionTabs,
   NextKeyCard,
   OnchainSteps,
-  PanelAgents,
   PlacesChart,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
-  SidePanel,
   TokenMenu,
   VerifiedConnections,
   WorkspaceGraph,

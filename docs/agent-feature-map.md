@@ -72,6 +72,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Behaviour | Proof | State |
 | --- | --- | --- |
 | An agent reads a sold Key as its page shows it, with `yours` when it acts as that Key now | `GET /api/v1/agent/fleets/FLEET_ID/keys/KEY` | Not run |
+| An agent finds the Keys a wallet holds in a fleet, lowest first, as the Key map's search does: `POST /api/v1/agent/fleets/FLEET_ID/keys/held` (`keys_held` in WebMCP, `regents keyfleet keys held`); the wallet in either case answers in lowercase, one holding none answers an empty list, and a body naming anything but one wallet answers 422 | `AgentKeysHeldTest` | Proven over HTTP (not yet run by an agent) |
 | An agent reads the fleet's activity as its hall shows it, page by page with a sealed cursor that lasts an hour; members see the workspace's changes and every room's posts | `POST /api/v1/agent/fleets/FLEET_ID/activity`; `activity_test.exs` for the pages themselves | Not run over HTTP |
 
 ## Projects

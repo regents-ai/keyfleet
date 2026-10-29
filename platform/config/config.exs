@@ -26,7 +26,7 @@ config :regent_agents,
     "not_paired" => [
       public_reads,
       "Check your status here at any time.",
-      "Pair with the code your person makes with Pair New Agent in the side panel."
+      "Pair with the code your person makes with Pair New Agent on their Account page."
     ],
     "person_not_here" => [
       public_reads,
@@ -111,7 +111,7 @@ config :regent_points,
 # load pictures from. Each environment names its bucket.
 config :keyfleet, :avatar_bucket, req_options: []
 
-# Paired agents' activity readings kept for the side panel
+# Paired agents' activity readings kept for the account menu
 # (`Keyfleet.Agents.ActivityReading`), swept of expired ones every ten minutes.
 config :keyfleet, Keyfleet.Agents.ActivityReading,
   gc_interval: :timer.minutes(10),

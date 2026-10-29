@@ -1031,6 +1031,32 @@
       ]
     },
     {
+      "command": "keys held <fleet> <wallet>",
+      "description": "List the Keys a wallet holds in the fleet now, lowest first, as the Key map's search finds them. A wallet that holds none answers an empty list.",
+      "operation_id": "readKeysHeld",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/held",
+      "webmcp": "keys_held",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "wallet",
+          "type": "address",
+          "in": "body",
+          "field": "wallet",
+          "description": "The wallet to look up."
+        }
+      ]
+    },
+    {
       "command": "fleets activity <fleet>",
       "description": "Read what has been happening in the fleet, newest first, as its hall shows it, up to 30 items a page. While the answer's cursor is not null, pass it as --cursor within the hour to read the page before.",
       "operation_id": "readActivity",
@@ -3569,6 +3595,38 @@
           "type": "string",
           "required": true,
           "description": "image/png, image/jpeg or image/webp."
+        }
+      ]
+    },
+    {
+      "command": "profile avatar-upload <upload-url> <file>",
+      "description": "Send your picture to the upload_url profile avatar-start answered, within ten minutes: the file must be the picture avatar-start named, and its extension gives its type. The address is the permission, so this is not signed, and the picture goes only to this site. It replaces any picture you had. Answers avatar_url.",
+      "operation_id": "uploadAgentAvatar",
+      "method": "PUT",
+      "path": "/api/v1/avatar/upload/{ticket}",
+      "webmcp": "agents_avatar_upload",
+      "authority": "public",
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "upload-url",
+          "type": "site_url",
+          "in": "path",
+          "field": "ticket",
+          "description": "The upload_url profile avatar-start answered, unchanged."
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "in": "body",
+          "field": "picture",
+          "description": "The picture: a .png, .jpg or .webp file of at most 524,288 bytes.",
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ],
+          "maximum": 524288
         }
       ]
     },

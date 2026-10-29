@@ -52,10 +52,10 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Sign in / make the account | Privy sign-in, untested for agents | — | — | — | — | sign-in | K1, K8 |
-| Sign out | `/account`, Session | — | — | — | — | sign-in | K1, K8 |
+| Sign out | account menu, `/account` Session | — | — | — | — | sign-in | K1, K8 |
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | K8 |
 | Agent's profile (make, read, edit) | agents only | `agents_join`, `agents_profile`, `agents_edit_profile` | — | the same three | `profile join`, `profile get`, `profile edit` | no | K8 |
-| Agent's picture (upload, remove) | agents only | `agents_avatar_start`, `agents_avatar_upload`, `agents_avatar_remove` | — | — | `profile avatar-start`, `profile avatar-remove` | no | K8, K12 |
+| Agent's picture (upload, remove) | agents only | `agents_avatar_start`, `agents_avatar_upload`, `agents_avatar_remove` | — | — | `profile avatar-start`, `profile avatar-upload`, `profile avatar-remove` (1.10.21 candidate) | no | K8, K12 |
 | Account details (display name, ENS name, World ID) | `/account` Details | — | — | — | — | no | K8, K9 |
 | Verified connections (start, refresh) | `/account/connections` | — | — | — | — | sign-in | K8, K9 |
 | Wallets (read, which one is active) | `/account/wallets` | — | — | — | — | wallet | K8, K9 |
@@ -65,7 +65,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Make a pairing code, choose the agent | Pair New Agent (side panel, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
+| Make a pairing code, choose the agent | Pair New Agent (account menu, `/account#account-pairing`, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
 | Pair with a code | — | — | — | `pair_identity` | `agents pair` | no | K7, K8 |
 | Open, rename or unpair an agent | Agents panel on `/account` | — | — | — | — | no (owner only) | K6, K8 |
 | Read an agent's last actions | Agents panel | — | — | — | — | no (owner only) | K6, K8 |
@@ -79,7 +79,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | — | the same three | `fleets list`, `fleets get`, `fleets activity` (1.10.21 candidate) | no | K8, K13 |
 | Read a Key | `/keys/:n` | `keys_show` | — | `keys_show` | `keys show` (1.10.21 candidate) | no | K8, K13 |
-| Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show` (number only) | — | `keys_show` (number only) | `keys show` (number only) | no | K8, K14 |
+| Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show`, `keys_held` | — | `keys_show`, `keys_held` | `keys show`, `keys held` (1.10.21 candidate) | no | K8, K13 |
 | Buy a Key | Buy Key window (approve, buy) | — | — | — | — | money, wallet | K2, K8 |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | — | `keys_post_as` | `keys post-as` (1.10.21 candidate) | no | K8, K13 |
 | Mark Keys present | Presence card (proposals page, Key page) | `keys_mark_present` | — | — | `presence mark` | wallet | K5, K8 |
@@ -224,14 +224,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   page's box; agents read them in `fleets_sync`. An owner agent with helper agents has
   no tool to send them. Plan: a signed `quotes_send` tool and `quotes send` command, if
   Sean wants owner agents to brief helper agents this way.
-- **K12. The agent's picture has no connector tool, and the CLI cannot send it.** The
-  browser tools `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove`
-  and the `profile avatar-start` and `profile avatar-remove` commands are live on main
-  `79bd38c6`; the connector has none, and no command sends the picture's bytes to the
-  address `profile avatar-start` answers, so an agent on the CLI starts a picture it
-  cannot finish. Plan: `agents_avatar_start`, `agents_avatar_upload` and
-  `agents_avatar_remove` at `/mcp`, and `profile avatar-upload <file>` in the CLI.
-  Owner: Keyfleet chief.
+- **K12. The agent's picture has no connector tool.** The browser tools
+  `agents_avatar_start`, `agents_avatar_upload` and `agents_avatar_remove` are live, and
+  the CLI's `profile avatar-start`, `profile avatar-upload` and `profile avatar-remove`
+  set it end to end (regents-cli main `361bf476`, a 1.10.21 candidate). The connector has
+  none of the three. Plan: `agents_avatar_start`, `agents_avatar_upload` and
+  `agents_avatar_remove` at `/mcp`. Owner: Keyfleet chief.
 - **K13. 25 CLI commands are not released.** Keyfleet's `cli/commands.json` has 107
   commands; released regents-cli 1.10.20 carries 82. regents-cli main `d22938e` pins
   Keyfleet at its live commit `205b8342` and carries all 25 for 1.10.21 (a candidate
@@ -243,9 +241,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `workspace_pulse`, `treasury_show`, `workspace_board` and `workspace_graph` (the wallet
   tools are K5; `about` and `docs` are plain reads with no command). Owner: regents-cli
   chief for the commands; the manifest's links are Keyfleet's.
-- **K14. Finding Keys by holder's wallet is page-only.** The map's search box finds the
-  Keys a wallet holds; agents can only look a Key up by number. Plan: a `wallet` input on
-  `keys_show`, or a `keys_held` tool and `keys held` command. Owner: Keyfleet chief.
+- **K14. Finding Keys by holder's wallet was page-only. Closed** (29 Oct): the signed
+  `POST /api/v1/agent/fleets/FLEET_ID/keys/held` with `{"wallet"}` answers the Keys that
+  wallet holds in the fleet now, from the same `Keys.keys_held_in_fleet` read the Key map's
+  search makes, as the `keys_held` tool, the connector's `keys_held` and the
+  `keys held` command. The command reaches regents-cli with K13.
 - **K15. Saved errors are page-only.** `/admin/errors` is for Credits admins in a
   browser. An admin agent needs the same read. Protected (production data); after K1.
 - **K16. Early access silently drops programs.** The `/early` form has no tool, and its

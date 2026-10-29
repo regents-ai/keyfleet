@@ -97,6 +97,7 @@ defmodule KeyfleetWeb.AgentTools do
     links_resolve: {@fleets, :link, "Link", :read},
     writes_preview: {@fleets, :preview, "Preview", :read},
     keys_show: {@keys, :show, "Key", :read},
+    keys_held: {@keys, :held, "Held Keys", :read},
     walls_remove: {@keys, :wall_remove, "Remove post", :remove},
     keys_post_as: {@keys, :post_as, "Posting Key", :repeatable},
     mutes_list: {@keys, :mutes, "Mutes", :read},

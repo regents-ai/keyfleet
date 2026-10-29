@@ -1,21 +1,12 @@
-/* The side panel's width slides, so the page beside it gives way smoothly. */
-@property --shell-aside {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
 /* The app fills the screen edge to edge: the menu stands against the screen's
-   left edge and the page runs to its right edge, or to the side panel's. */
+   left edge and the page runs to its right edge. */
 #app-shell {
-  --shell-aside-open: 20rem;
-  --shell-aside: var(--shell-aside-open);
   position: relative;
   isolation: isolate;
   inline-size: 100%;
   border-inline: 0;
   display: grid;
-  grid-template: auto minmax(0, 1fr) / var(--rg-rail-width) minmax(0, 1fr) var(--shell-aside);
+  grid-template: auto minmax(0, 1fr) / var(--rg-rail-width) minmax(0, 1fr);
   min-width: 0;
   height: 100dvh;
   overflow: visible;
@@ -23,13 +14,6 @@
   color: var(--color-fg);
   font-family: var(--font-family-ui);
   line-height: 1.55;
-  transition: --shell-aside var(--duration-slow) var(--ease-out);
-}
-
-/* Closed, or signed out with no side panel at all, it keeps no room. */
-:root:not([data-aside="open"]) #app-shell,
-#app-shell:not(:has(#shell-aside)) {
-  --shell-aside: 0px;
 }
 
 /* The first stop for a keyboard: out of sight until it has focus. */
@@ -103,9 +87,9 @@
   position: relative;
 }
 
-/* The side panel hangs under the header. */
-#shell-header {
-  anchor-name: --shell-header;
+/* The account menu hangs from the account button. */
+#account-chip {
+  anchor-name: --rg-account-menu;
 }
 
 /* Every header control is a bordered cell, as the marketing header's tabs are. */
@@ -143,8 +127,8 @@
   font: inherit;
 }
 
-/* Signed in, the name opens the side panel, drawn as the header cell it was
-   rather than as a plain button; on a page without the panel it only shows who
+/* Signed in, the name opens the account menu, drawn as the header cell it was
+   rather than as a plain button; on a page without the menu it only shows who
    is signed in. */
 #shell-header button.account-chip {
   padding: 0.45rem 0.85rem;
@@ -156,35 +140,6 @@
 
 span.account-chip {
   cursor: default;
-}
-
-/* The side panel's own button, after the name. */
-#app-shell #shell-header .shell-aside-button,
-.rl-root #shell-header .shell-aside-button {
-  position: relative;
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  align-self: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  margin-inline-end: var(--space-1);
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-fg-muted);
-  cursor: pointer;
-}
-
-.shell-aside-button .shell-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-#shell-header [data-aside-toggle][aria-expanded="true"] {
-  background: var(--ash-panel-strong);
-  color: var(--color-fg);
 }
 
 #shell-header > .account-control {
@@ -211,7 +166,6 @@ span.account-chip {
 @media (hover: hover) {
   .shell-brand:hover,
   button.account-chip:hover,
-  .shell-aside-button:hover,
   .mobile-menu-button:hover {
     background: color-mix(in oklch, var(--color-fg) 6%, transparent);
     color: var(--color-fg);
@@ -518,7 +472,7 @@ span.account-chip {
 .shell-get-key { display: flex; align-items: center; }
 .shell-get-key > .rg-button { margin: var(--space-1); height: auto; white-space: nowrap; }
 @media (min-width: 48rem) and (max-width: 63.99rem) {
-  #app-shell { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr) var(--shell-aside); }
+  #app-shell { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
   #shell-sidebar { grid-area: 2 / 1; border-inline-end: 0; border-block-end: 1px solid var(--color-border); }
   #app-shell-scroller { grid-area: 3 / 1; }
   #shell-sidebar ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -560,228 +514,6 @@ span.account-chip {
   /* A 320px phone has no room for the theme switch beside Purchase Key; the
      device's own light or dark setting applies until the screen is wider. */
   #shell-header:has(.shell-get-key) .theme-control { display: none; }
-}
-
-/* ---- Side panel ---- */
-
-/* On a wide screen the side panel is a column beside the page. A size
-   container, so the agents list can take a share of its height. */
-#shell-aside {
-  position: relative;
-  z-index: var(--rg-layer-panel);
-  container-type: size;
-  display: grid;
-  grid-column: 3;
-  grid-row: 2;
-  align-content: start;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden auto;
-  overscroll-behavior: contain;
-  border-inline-start: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-family: var(--font-family-ui);
-  line-height: 1.55;
-  /* Hidden, and its hairline gone, only once it has slid shut, so a shut
-     panel takes no room past the screen's edge. */
-  transition:
-    visibility var(--duration-slow),
-    border-inline-start-width 0s var(--duration-slow);
-}
-
-/* Shown at once on opening, so focus can move into it. */
-:root[data-aside="open"] #shell-aside {
-  transition: none;
-}
-
-#shell-aside:focus {
-  outline: none;
-}
-
-/* Its parts keep their width while it slides, so nothing inside rewraps. */
-#shell-aside > * {
-  min-inline-size: calc(20rem - 1px);
-}
-
-:root:not([data-aside="open"]) #shell-aside {
-  visibility: hidden;
-  border-inline-start-width: 0;
-}
-
-/* Sign out and Manage Account share one short row; the header's panel button
-   closes the panel. */
-.shell-aside__head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 3rem;
-  padding-inline: 1rem;
-  border-block-end: 1px solid var(--color-border);
-}
-
-.shell-aside__head .rg-button {
-  min-height: 2rem;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.8125rem;
-  white-space: nowrap;
-}
-
-#shell-aside section {
-  display: grid;
-  gap: 0.6rem;
-  padding: 1rem;
-  border-block-end: 1px solid var(--color-border);
-}
-
-#shell-aside h2 {
-  margin: 0;
-  font-family: var(--font-family-ui);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-#shell-aside p {
-  margin: 0;
-}
-
-#shell-aside ul,
-#shell-aside ol {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The agents list keeps its own rows; the panel's list spacing is for its other lists. */
-#shell-aside .rg-account__brief-list {
-  gap: 0;
-}
-
-/* A page's own Pair New Agent button brings the pairing box into view and lights
-   it in blue for a moment, so the press always shows where pairing happens. With
-   reduced motion the light holds still for that moment instead of fading. */
-#shell-pairing:focus {
-  outline: none;
-}
-
-@keyframes shell-pairing-flash {
-  from,
-  35% {
-    box-shadow: inset 0 0 0 2px var(--ash-accent);
-    background-color: color-mix(in oklab, var(--palette-powder-blue) 22%, var(--color-bg));
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  #shell-pairing[data-flash] {
-    animation: shell-pairing-flash 1.2s var(--ease-out);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #shell-pairing[data-flash] {
-    box-shadow: inset 0 0 0 2px var(--ash-accent);
-    background-color: color-mix(in oklab, var(--palette-powder-blue) 22%, var(--color-bg));
-  }
-}
-
-/* Between a phone and a wide screen the menu is a strip under the header, and
-   the panel stands beside both the strip and the page. */
-@media (min-width: 48rem) and (max-width: 63.99rem) {
-  #shell-aside { grid-area: 2 / 2 / 4; }
-}
-
-/* The homepage scrolls as one sheet, so there the panel stands fixed under the
-   header at its right edge, and the page below the header narrows by the
-   panel's width, as the app's pages do. Open, the header stays at the top of
-   the screen, so the button that closes the panel never scrolls away. */
-.rl-root:has(> #shell-aside) {
-  --shell-aside-open: 20rem;
-  --shell-aside: var(--shell-aside-open);
-  transition: --shell-aside var(--duration-slow) var(--ease-out);
-}
-
-:root:not([data-aside="open"]) .rl-root:has(> #shell-aside) {
-  --shell-aside: 0px;
-}
-
-.rl-root:has(> #shell-aside) > :not(#shell-header, #shell-aside) {
-  margin-inline-end: var(--shell-aside);
-}
-
-:root[data-aside="open"] .rl-root:has(> #shell-aside) > #shell-header {
-  position: sticky;
-  inset-block-start: 0;
-}
-
-.rl-root > #shell-aside {
-  position: fixed;
-  position-anchor: --shell-header;
-  inset-block: anchor(bottom) 0;
-  inset-inline-end: anchor(right);
-  inline-size: var(--shell-aside-open);
-  container-type: normal;
-  transition:
-    transform var(--duration-slow) var(--ease-out),
-    visibility var(--duration-slow),
-    border-inline-start-width 0s var(--duration-slow);
-}
-
-/* Opening, it is shown at once and slides in. */
-:root[data-aside="open"] .rl-root > #shell-aside {
-  transition: transform var(--duration-slow) var(--ease-out);
-}
-
-:root:not([data-aside="open"]) .rl-root > #shell-aside {
-  transform: translateX(100%);
-}
-
-/* A phone has no room beside the page, so there the panel opens over the page
-   under the header, the full width of the screen. It slides in from the edge,
-   and opens only when opened on this page, never on arrival; a link inside it
-   closes it. */
-@media (max-width: 47.99rem) {
-  .rl-root:has(> #shell-aside) {
-    --shell-aside: 0px;
-  }
-
-  :root:not([data-aside-here]) .rl-root:has(> #shell-aside) > #shell-header {
-    position: relative;
-  }
-
-  #shell-aside,
-  .rl-root > #shell-aside {
-    position: fixed;
-    inset: anchor(--shell-header bottom) env(safe-area-inset-right) 0 env(safe-area-inset-left);
-    z-index: var(--rg-layer-panel);
-    inline-size: auto;
-    padding-block-end: env(safe-area-inset-bottom);
-    border-inline-start: 0;
-    container-type: normal;
-    transition:
-      transform var(--duration-slow) var(--ease-out),
-      visibility var(--duration-slow);
-  }
-
-  :root[data-aside="open"][data-aside-here] #shell-aside {
-    transition: transform var(--duration-slow) var(--ease-out);
-  }
-
-  :root:not([data-aside="open"]) #shell-aside,
-  :root:not([data-aside-here]) #shell-aside {
-    visibility: hidden;
-    transform: translateX(100%);
-  }
-
-  #shell-aside > * {
-    min-inline-size: 0;
-  }
-
-  .shell-aside__head .rg-button {
-    min-height: 2.75rem;
-  }
 }
 
 /* ---- Header marks ---- */
@@ -1009,13 +741,6 @@ span.account-chip {
   inset-block: auto calc(100% + 0.35rem);
 }
 
-/* The side panel's button is the header's last, at the screen's edge, so its
-   name lines up with its right edge, as the panel does, and never runs off. */
-.shell-aside-button > .shell-tool__tip {
-  inset-inline: auto 0;
-  transform: none;
-}
-
 .shell-tool:focus-visible > .shell-tool__tip {
   opacity: 1;
 }
@@ -1139,13 +864,7 @@ span.account-chip {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell-tool__tip,
-  #app-shell,
-  #shell-aside,
-  .rl-root:has(> #shell-aside),
-  .rl-root > #shell-aside,
-  :root[data-aside="open"] .rl-root > #shell-aside,
-  :root[data-aside="open"][data-aside-here] #shell-aside {
+  .shell-tool__tip {
     transition: none;
   }
 }

@@ -43,10 +43,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the page ends with the starting ideas for a shared goal as Sean wrote
   #   them, each link to another site opening in a new tab, and the Markdown
   #   homepage carries the same section
-  # - signed in, the header opens the side panel, covering the page, with Sign
-  #   out, the account's agents and the box to pair one, and an agent paired
-  #   while the page is open shows in it; Fleets beside the name opens Classic;
-  #   signed out there is neither
+  # - signed in, the header's name opens the account menu, with Sign out,
+  #   Manage Account, the account's agents and Pair New Agent leading to the
+  #   Account page, and an agent paired while the page is open shows in it;
+  #   Fleets beside the name opens Classic; signed out there is neither
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -72,11 +72,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#app-shell")
   end
 
-  test "signed in, the homepage has the side panel and Fleets; signed out, neither",
+  test "signed in, the homepage has the account menu and Fleets; signed out, neither",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    refute has_element?(view, "#shell-aside")
-    refute has_element?(view, "[data-aside-toggle]")
+    refute has_element?(view, "#account-menu")
+    refute has_element?(view, "[popovertarget=account-menu]")
     refute has_element?(view, "#shell-fleets")
 
     wallet = "0x" <> String.duplicate("b", 40)
@@ -89,16 +89,19 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     {:ok, view, _html} = conn |> init_test_session(%{human_account_id: account.id}) |> live("/")
 
-    assert has_element?(view, "#public-home[phx-hook=SidePanel]")
-    assert has_element?(view, "#shell-header #shell-aside-button[data-aside-toggle]")
-    assert has_element?(view, "#shell-header #account-chip[data-aside-toggle]")
+    assert has_element?(view, "#shell-header #account-chip[popovertarget=account-menu]")
     assert has_element?(view, "#account-control a#shell-fleets[href='/classic/1']", "Fleets")
-    refute has_element?(view, "#shell-header [data-account-target=sign-out]")
-    assert has_element?(view, "#shell-aside #shell-account", "Sign out")
-    assert has_element?(view, ~s(#shell-account a[href="/account"]), "Manage Account")
+    refute has_element?(view, "#account-control [data-account-target=sign-out]")
+    assert has_element?(view, "#account-menu[popover] [data-account-target=sign-out]", "Sign out")
+    assert has_element?(view, ~s(#account-menu a[href="/account"]), "Manage Account")
+
+    assert has_element?(
+             view,
+             ~s(#account-menu a[href="/account#account-pairing"]),
+             "Pair New Agent"
+           )
+
     assert has_element?(view, ~s(#shell-agents a[href="/account#account-agents"]), "Manage")
-    assert has_element?(view, "#shell-aside #shell-pairing h2", "Pair New Agent")
-    assert has_element?(view, "#shell-pairing-box input[name=harness][value=hermes]")
     refute has_element?(view, "#shell-agents li")
 
     %{code: code} =

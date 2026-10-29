@@ -87,7 +87,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  test "the signed-in name opens the side panel, which holds Sign out", %{conn: conn} do
+  test "the signed-in name opens the account menu, which holds Sign out", %{conn: conn} do
     account = register_account("signed-in-control", "0x1111111111111111111111111111111111111111")
 
     {:ok, view, _html} =
@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#account-control button#account-chip[data-aside-toggle][aria-controls=shell-aside]"
+             "#account-control button#account-chip[popovertarget=account-menu]"
            )
 
     refute has_element?(view, "#account-control [data-account-target=sign-out]")
@@ -113,14 +113,20 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#shell-aside #shell-account button[type=button][data-account-target=sign-out]",
+             "#account-menu[popover] button[type=button][data-account-target=sign-out]",
              "Sign out"
            )
 
     assert has_element?(
              view,
-             ~s{#shell-account a[href="/account"]:not([target])},
+             ~s{#account-menu a[href="/account"]:not([target])},
              "Manage Account"
+           )
+
+    assert has_element?(
+             view,
+             ~s{#account-menu a[href="/account#account-pairing"]:not([target])},
+             "Pair New Agent"
            )
 
     assert has_element?(
@@ -129,12 +135,11 @@ defmodule KeyfleetWeb.ShellLiveTest do
              "Manage"
            )
 
-    assert has_element?(view, "#shell-header #shell-aside-button[data-aside-toggle]")
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the side panel pairs only an offered agent, with a new code",
+  test "the Account page pairs only an offered agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
@@ -143,7 +148,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    box = "#shell-pairing-box"
+    box = "#account-pairing-box"
     assert has_element?(view, "#{box} input[name=harness][value=hermes]")
     refute has_element?(view, "#{box} input[name=harness][value=chatgpt]")
 
@@ -159,7 +164,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   # Sean, 27 Oct 2026: switching agents made a new code each time and soon said
   # none could be made; each agent keeps its code until it expires.
-  test "each agent in the side panel keeps its own code until a new one is asked for",
+  test "each agent on the Account page keeps its own code until a new one is asked for",
        %{conn: conn} do
     account = register_account("pairing-codes", "0x5555555555555555555555555555555555555555")
 
@@ -168,7 +173,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    box = "#shell-pairing-box"
+    box = "#account-pairing-box"
 
     code = fn html ->
       Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html, capture: :all_but_first)
@@ -221,7 +226,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-agents li .rg-account__wallet", "0x4444..4444")
 
     # An agent that never came to Keyfleet has no check-in light; once it has,
-    # Account and the side panel show it.
+    # Account and the account menu show it.
     refute has_element?(view, "#account-agents .rg-account__light")
 
     {:ok, agent} =
@@ -257,7 +262,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
     refute has_element?(view, "[data-account-target=sign-out]")
-    refute has_element?(view, "#shell-aside")
+    refute has_element?(view, "#account-menu")
   end
 
   test "signed-in account presentation survives an in-shell patch", %{conn: conn} do
@@ -279,10 +284,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert view.pid == pid
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
     assert has_element?(view, "#account-control [data-account-target=profile]", "0x2222..2222")
-    assert has_element?(view, "#shell-account [data-account-target=sign-out]", "Sign out")
+    assert has_element?(view, "#account-menu [data-account-target=sign-out]", "Sign out")
   end
 
-  test "the signed-in account chip shows the picture and the name, and opens the side panel" do
+  test "the signed-in account chip shows the picture and the name, and opens the account menu" do
     html =
       render_shell(%AccountControl{
         kind: :signed_in,
@@ -293,8 +298,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert html =~ ~r/data-account-target="profile">\s*Ada\s*</
     assert html =~ ~s(class="account-avatar")
     assert html =~ ~s(src="data:image/svg+xml;base64,PHN2Zy8+")
-    assert html =~ ~r/<button[^>]*id="account-chip"[^>]*data-aside-toggle/s
-    assert html =~ ~r/<aside[^>]*id="shell-aside"/
+    assert html =~ ~r/<button[^>]*id="account-chip"[^>]*popovertarget="account-menu"/s
+    assert html =~ ~r/<section[^>]*id="account-menu"[^>]*popover/s
     assert html =~ "Sign out"
     refute html =~ "Sign Out"
   end
@@ -339,7 +344,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#account-identity h2 #account-name-copy[data-copy-text='#{wallet}']"
+             "#account-identity h2 #account-who-wallet-copy[data-copy-text='#{wallet}']"
            )
 
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
@@ -402,7 +407,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  test "the side panel and Account say which wallet is the Regents wallet and which is active",
+  test "Account says which wallet is the Regents wallet and which is active",
        %{conn: conn} do
     own = "0x8888888888888888888888888888888888888888"
     regents = "0xabababababababababababababababababababab"
@@ -416,35 +421,38 @@ defmodule KeyfleetWeb.ShellLiveTest do
     {view, _html} = open_account(conn, account)
 
     # Until the browser says, each wallet shows and copies as linked, with no mark.
-    for list <- ~w(#shell-wallets #account-wallets), address <- [own, regents] do
+    for address <- [own, regents] do
       assert has_element?(
                view,
-               "#{list}-#{address} .account-wallets__label",
+               "#account-wallets-#{address} .account-wallets__label",
                "Linked to this account"
              )
 
-      assert has_element?(view, "#{list}-#{address}-address-copy[data-copy-text='#{address}']")
+      assert has_element?(
+               view,
+               "#account-wallets-#{address}-address-copy[data-copy-text='#{address}']"
+             )
     end
 
-    refute has_element?(view, "#shell-wallets .rg-status")
+    refute has_element?(view, "#account-wallets .rg-status")
 
     seen!(
       view,
-      "#shell-wallets",
+      "#account-wallets",
       "0x" <> String.upcase("abababababababababababababababababababab"),
       [regents]
     )
 
-    assert has_element?(view, "#shell-wallets-#{own} .account-wallets__label", "Your wallet")
-    refute has_element?(view, "#shell-wallets-#{own} .rg-status")
+    assert has_element?(view, "#account-wallets-#{own} .account-wallets__label", "Your wallet")
+    refute has_element?(view, "#account-wallets-#{own} .rg-status")
 
     assert has_element?(
              view,
-             "#shell-wallets-#{regents} .account-wallets__label",
+             "#account-wallets-#{regents} .account-wallets__label",
              "Regents wallet"
            )
 
-    assert has_element?(view, "#shell-wallets-#{regents} .rg-status", "Active")
+    assert has_element?(view, "#account-wallets-#{regents} .rg-status", "Active")
 
     # A wallet the account isn't linked to, such as a wallet app left connected
     # from before a Google sign-in, is never shown and never marked.
@@ -896,9 +904,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       shell_instance: 1,
       get_key: true,
       content: [%{inner_block: fn _, _ -> "Fixture content" end}],
-      wallets: [],
-      agents: [],
-      pairing: []
+      agents: []
     )
   end
 end

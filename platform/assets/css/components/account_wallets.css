@@ -1,4 +1,4 @@
-/* The person's wallets, in the side panel and on Account: what each one is
+/* The person's wallets, on the Account page: what each one is
    over its address, with the active one marked beside the address, so the mark
    coming and going never moves the rows below. */
 .account-wallets__list {

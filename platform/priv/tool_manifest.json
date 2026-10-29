@@ -192,6 +192,7 @@
               "walls_post",
               "walls_remove",
               "keys_show",
+              "keys_held",
               "fleets_activity",
               "keys_post_as",
               "receipts_read",
@@ -3332,6 +3333,100 @@
       "interfaces": {
         "webmcp": "keys_show",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "keys_held",
+      "title": "Held Keys",
+      "description": "List the Keys a wallet holds in this fleet now, lowest first, as the Key map's search on the page finds them. The wallet is answered in lowercase; one that holds none answers an empty list. keys_show reads each Key. Changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "wallet"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "wallet": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{40}$",
+                "minLength": 42,
+                "maxLength": 42,
+                "description": "The wallet to look up: 0x and forty hex digits"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/held",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "wallet"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "wallet": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "minLength": 42,
+            "maxLength": 42,
+            "description": "The wallet to look up: 0x and forty hex digits"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "keys_held",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/held",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

@@ -65,7 +65,7 @@ defmodule Keyfleet.Application do
       Keyfleet.AccessCache,
       # The wallet of each connected account's hosted identity, read once.
       Keyfleet.Agents.HostedAddress,
-      # Each paired agent's activity, kept a few minutes for the side panel,
+      # Each paired agent's activity, kept a few minutes for the account menu,
       # and the reads that fetch it.
       Keyfleet.Agents.ActivityReading,
       {Task.Supervisor, name: Keyfleet.Agents.Reads},

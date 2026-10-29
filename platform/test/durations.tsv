@@ -101,7 +101,7 @@
 4	test/keyfleet_web/controllers/error_html_test.exs
 4	test/keyfleet_web/security/injection_probes_test.exs
 3	test/keyfleet/deployment_race_test.exs
-3	test/keyfleet_web/panel_agents_test.exs
+3	test/keyfleet_web/menu_agents_test.exs
 3	test/keyfleet_web/route_handoff_test.exs
 2	test/keyfleet/accounts_policy_test.exs
 2	test/keyfleet/check_in_status_test.exs

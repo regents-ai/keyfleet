@@ -474,15 +474,15 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
-  # corrected or unpaired. The side panel follows on every page, the Account
-  # page's list on that page.
+  # corrected or unpaired. The account menu follows on every page, the Account
+  # page's list and pairing box on that page.
   defp notice(:agents_changed, socket) do
-    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
-    send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
+    send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
 
     case socket.assigns.route_spec.route_id do
       :account ->
         send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
+        send_update(KeyfleetWeb.PairingBox, id: "account-pairing-box", agents_changed: true)
         {:noreply, socket}
 
       :connect ->
@@ -660,29 +660,14 @@ defmodule KeyfleetWeb.ShellLive do
       shell_instance={@shell_instance}
       get_key={@get_key}
     >
-      <:wallets :if={current_account(@access_context)}>
-        <.live_component
-          module={KeyfleetWeb.AccountWallets}
-          id="shell-wallets"
-          account={current_account(@access_context)}
-        />
-      </:wallets>
       <:agents :if={current_account(@access_context)}>
         <.live_component
-          module={KeyfleetWeb.PanelAgents}
+          module={KeyfleetWeb.MenuAgents}
           id="shell-agents"
           lease={@session_lease}
           account={current_account(@access_context)}
         />
       </:agents>
-      <:pairing :if={current_account(@access_context)}>
-        <.live_component
-          module={KeyfleetWeb.PairingBox}
-          id="shell-pairing-box"
-          lease={@session_lease}
-          account={current_account(@access_context)}
-        />
-      </:pairing>
       <:buy_key :if={@buy_key}>
         <BuyKey.window sale={@buy_key} actor={actor(@access_context)} lease={@session_lease} />
       </:buy_key>
@@ -1422,7 +1407,7 @@ defmodule KeyfleetWeb.ShellLive do
     socket
   end
 
-  # Hears when the person's agents change, for the side panel on every page.
+  # Hears when the person's agents change, for the account menu on every page.
   defp follow_agents(%{assigns: %{agents_topic: nil}} = socket, %{privy_user_id: person}) do
     if connected?(socket) do
       topic = RegentAgents.topic(person)

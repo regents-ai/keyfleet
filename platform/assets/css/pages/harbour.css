@@ -1,6 +1,6 @@
 /* The swarm city behind the app's pages (`KeyfleetWeb.HarbourSeaLive`): it
    fills the screen behind everything, seen from above its southern edge. The
-   header, sidebar, side panel, cards and reading column stay solid over it;
+   header, sidebar, cards and reading column stay solid over it;
    the open margins between them show the city. Every rule here applies only
    while the city is on the page, so a page without it (the homepage, /early)
    is drawn as before. Unlayered, so it wins over the shell's own rules. */

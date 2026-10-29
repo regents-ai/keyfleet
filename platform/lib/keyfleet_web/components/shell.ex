@@ -1,22 +1,19 @@
 defmodule KeyfleetWeb.Components.Shell do
   @moduledoc """
-  The app shell: the header, the sidebar, the page with the site's footer at its
-  end and, for someone signed in, the side panel on the right.
+  The app shell: the header, the sidebar and the page with the site's footer at
+  its end.
 
   Every page that has the header holds the "Buy Key" window its "Purchase Key"
   opens (`KeyfleetWeb.Components.BuyKey`): the app's pages draw it in the
   `buy_key` slot, the homepage in its own Classic section.
 
-  The side panel is the same on every page that has it, the app's pages and the
-  homepage: Sign out, Manage Account (the account page), the account's wallets
-  (the `wallets` slot), the agents paired with the account (the `agents` slot)
-  and the box to pair an agent (the `pairing` slot).
-  The account's name and the panel button in the header open and close it.
-  Whether it is open is the browser's (`assets/js/shell_panels.ts` and the
-  `keyfleet_aside` cookie, read into `<html data-aside>`), so the server never
-  stores it. Open, it sits beside the page, which narrows to make room for it,
-  on the app's pages and the homepage alike; on a phone there is no room
-  beside the page, so there it opens over the page under the header.
+  Signed in, the account's picture and name at the top right open the account
+  menu (`Regent.Account.menu`), the same on the app's pages and the homepage: the
+  person's picture, name and wallet, the agents paired with the account (the
+  `agents` slot), Pair New Agent, Manage Account and Sign out. Pairing itself,
+  the account's wallets and everything else about the account are on the
+  Account page. The browser opens and closes the menu (`popover`); following a
+  link inside it closes it (`assets/js/account_menu.ts`).
   """
 
   use KeyfleetWeb, :html
@@ -39,12 +36,10 @@ defmodule KeyfleetWeb.Components.Shell do
 
   slot(:content, required: true)
 
-  # Required, so a page that draws the shell without one of these does not compile:
-  # signed in, it would show half a side panel. A caller leaves one out for
-  # someone signed out with `:if`.
-  slot(:wallets, required: true, doc: "The account's wallets, in the side panel.")
-  slot(:agents, required: true, doc: "The agents paired with the account, in the side panel.")
-  slot(:pairing, required: true, doc: "The box to pair an agent, in the side panel.")
+  # Required, so a page that draws the shell without it does not compile: signed
+  # in, it would show a menu without agents. A caller leaves it out for someone
+  # signed out with `:if`.
+  slot(:agents, required: true, doc: "The agents paired with the account, in the account menu.")
   slot(:buy_key, doc: "The \"Buy Key\" window, while it is open.")
 
   def shell(assigns) do
@@ -67,7 +62,9 @@ defmodule KeyfleetWeb.Components.Shell do
         get_key={@get_key}
         menu
         theme
-      />
+      >
+        <:agents>{render_slot(@agents)}</:agents>
+      </.header>
 
       <nav
         id="shell-sidebar"
@@ -125,12 +122,6 @@ defmodule KeyfleetWeb.Components.Shell do
         <KeyfleetWeb.Layouts.product_links />
       </div>
 
-      <.aside account_control={@account_control}>
-        <:wallets>{render_slot(@wallets)}</:wallets>
-        <:agents>{render_slot(@agents)}</:agents>
-        <:pairing :if={@pairing != []}>{render_slot(@pairing)}</:pairing>
-      </.aside>
-
       {render_slot(@buy_key)}
     </div>
     """
@@ -152,11 +143,13 @@ defmodule KeyfleetWeb.Components.Shell do
     default: false,
     doc: "whether a Fleets link to Classic's page follows the signed-in name (the homepage)"
 
+  slot :agents, required: true, doc: "The agents paired with the account, in the account menu."
+
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
   switch (not on the always-dark homepage), the Regents crown and links,
-  "Purchase Key" (once Classic is open) and the account control. It fits one
-  line on a phone.
+  "Purchase Key" (once Classic is open), the account control and, signed in,
+  the account menu its name opens. It fits one line on a phone.
   """
   def header(assigns) do
     ~H"""
@@ -200,78 +193,28 @@ defmodule KeyfleetWeb.Components.Shell do
         <.get_key id="shell-get-key" />
       </div>
       <.account_control account_control={@account_control} fleets={@fleets} />
-      <button
+      <Regent.Account.menu
         :if={@account_control.kind == :signed_in}
-        id="shell-aside-button"
-        class="shell-tool shell-aside-button"
-        type="button"
-        aria-controls="shell-aside"
-        aria-expanded="false"
-        aria-label="Side panel"
-        data-aside-toggle
-        phx-mounted={JS.ignore_attributes(["aria-expanded"])}
+        id="account-menu"
+        name={@account_control.label}
+        wallet={@account_control.wallet}
+        ens_name={@account_control.ens_name}
+        manage_href={~p"/account"}
+        pair_href={~p"/account#account-pairing"}
       >
-        <svg
-          class="shell-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="square"
-          stroke-linejoin="miter"
-          aria-hidden="true"
-        >
-          <path d="M3 4h18v16H3zM15 4v16" />
-        </svg>
-        <span class="shell-tool__tip" aria-hidden="true">Side panel</span>
-      </button>
+        <:picture>
+          <img
+            :if={@account_control.avatar_src}
+            src={@account_control.avatar_src}
+            referrerpolicy="no-referrer"
+            width="40"
+            height="40"
+            alt=""
+          />
+        </:picture>
+        <:agents>{render_slot(@agents)}</:agents>
+      </Regent.Account.menu>
     </header>
-    """
-  end
-
-  attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
-
-  # Required for the same reason as the shell's.
-  slot :wallets, required: true, doc: "The account's wallets."
-  slot :agents, required: true, doc: "The agents paired with the account."
-  slot :pairing, required: true, doc: "The box to pair an agent."
-
-  @doc """
-  The side panel, for someone signed in: Sign out and Manage Account, the
-  account's wallets, its agents and the box to pair a new one.
-  """
-  def aside(assigns) do
-    ~H"""
-    <aside
-      :if={@account_control.kind == :signed_in}
-      id="shell-aside"
-      aria-label="Your account and agents"
-      tabindex="-1"
-    >
-      <div id="shell-account" class="shell-aside__head">
-        <Regent.Primitives.button variant="secondary" type="button" data-account-target="sign-out">
-          Sign out
-        </Regent.Primitives.button>
-        <.link navigate="/account" class="rg-button rg-button--secondary">
-          <span class="rg-button__label">Manage Account</span>
-        </.link>
-      </div>
-
-      {render_slot(@wallets)}
-
-      {render_slot(@agents)}
-
-      <section
-        :if={@pairing != []}
-        id="shell-pairing"
-        aria-labelledby="shell-pairing-title"
-        tabindex="-1"
-        phx-mounted={JS.ignore_attributes(["data-flash"])}
-      >
-        <h2 id="shell-pairing-title">Pair New Agent</h2>
-        {render_slot(@pairing)}
-      </section>
-    </aside>
     """
   end
 
@@ -301,11 +244,11 @@ defmodule KeyfleetWeb.Components.Shell do
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
   attr :enabled, :boolean, default: true
 
-  attr :panel, :boolean,
+  attr :menu, :boolean,
     default: true,
     doc: """
-    Signed in, the name opens the side panel, which holds Sign out. A page
-    without the side panel (the Privy workshop page) shows Sign out beside the name.
+    Signed in, the name opens the account menu, which holds Sign out. A page
+    without the menu (the Privy workshop page) shows Sign out beside the name.
     """
 
   attr :fleets, :boolean,
@@ -329,14 +272,11 @@ defmodule KeyfleetWeb.Components.Shell do
         {@account_control.label}
       </Regent.Primitives.button>
       <button
-        :if={@panel and @account_control.kind == :signed_in}
+        :if={@menu and @account_control.kind == :signed_in}
         id="account-chip"
         class="account-chip"
         type="button"
-        aria-controls="shell-aside"
-        aria-expanded="false"
-        data-aside-toggle
-        phx-mounted={JS.ignore_attributes(["aria-expanded"])}
+        popovertarget="account-menu"
       >
         <.account_name account_control={@account_control} />
       </button>
@@ -348,7 +288,7 @@ defmodule KeyfleetWeb.Components.Shell do
       >
         <span class="rg-button__label">Fleets</span>
       </.link>
-      <%= if !@panel and @account_control.kind == :signed_in do %>
+      <%= if !@menu and @account_control.kind == :signed_in do %>
         <span class="account-chip">
           <.account_name account_control={@account_control} />
         </span>

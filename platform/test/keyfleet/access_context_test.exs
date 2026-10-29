@@ -12,7 +12,7 @@ defmodule Keyfleet.AccessContextTest do
   end
 
   test "a signed human is named by their display name and drawn from their wallet" do
-    account = %{wallet_address: @wallet, display_name: "Account label"}
+    account = %{wallet_address: @wallet, display_name: "Account label", ens_name: nil}
 
     assert %AccountControl{
              kind: :signed_in,
@@ -22,7 +22,7 @@ defmodule Keyfleet.AccessContextTest do
   end
 
   test "a signed human without a display name is named by their shortened wallet" do
-    account = %{wallet_address: @wallet, display_name: nil}
+    account = %{wallet_address: @wallet, display_name: nil, ens_name: nil}
 
     assert %AccountControl{kind: :signed_in, label: "0x1111..1111"} =
              AccessContext.account_control(AccessContext.for_account(account))

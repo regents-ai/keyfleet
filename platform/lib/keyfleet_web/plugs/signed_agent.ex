@@ -27,6 +27,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @token ~S"[1-9][0-9]{0,17}"
   # A post is named by its id as the API answers it: lowercase and hyphenated.
   @post_id ~r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z"
+  # A wallet as the Key map's search takes it: 0x and forty hex digits.
+  @wallet ~r"\A0x[0-9a-fA-F]{40}\z"
   @rooms_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms\z"
   @create_room_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/create\z"
   @topic_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/topic\z"
@@ -43,6 +45,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_get_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/get\z"
   # A Key as its page shows it, and what has been happening in its fleet.
   @key_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}\z"
+  # The Keys a wallet holds in a fleet, as the Key map's search finds them.
+  @keys_held_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/held\z"
   @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
   # The Key the agent's person writes as.
   @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"
@@ -149,6 +153,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
     {@key_remove_path, {~w(message_id), []}},
+    {@keys_held_path, {~w(wallet), []}},
     {@activity_path, {[], ~w(cursor)}},
     {@code_history_path, {[], ~w(from page)}},
     {@posting_key_path, {~w(token_id), []}},
@@ -703,6 +708,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_get_path,
         @key_send_path,
         @key_remove_path,
+        @keys_held_path,
         @activity_path,
         @posting_key_path,
         @receipts_path,
@@ -860,16 +866,23 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_room_body(nil, _params), do: :invalid
 
-  # Taking a post off a Key's wall, reading the fleet's activity and choosing
-  # the Key a person posts as each name fields of their own.
+  # Taking a post off a Key's wall, finding the Keys a wallet holds, reading
+  # the fleet's activity and choosing the Key a person posts as each name
+  # fields of their own.
   defp key_op(path) do
     Enum.find_value(
-      [key_remove: @key_remove_path, activity: @activity_path, posting_key: @posting_key_path],
+      [
+        key_remove: @key_remove_path,
+        keys_held: @keys_held_path,
+        activity: @activity_path,
+        posting_key: @posting_key_path
+      ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
   end
 
   defp check_key_body(:key_remove, params), do: admit(valid_remove_body?(params))
+  defp check_key_body(:keys_held, params), do: admit(valid_held_body?(params))
   defp check_key_body(:activity, params), do: admit(valid_activity_body?(params))
   defp check_key_body(:posting_key, params), do: check_posting_key_body(params)
 
@@ -1236,6 +1249,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: map_size(params) == 1 and is_binary(id) and Regex.match?(@post_id, id)
 
   defp valid_remove_body?(_params), do: false
+
+  # Finding the Keys a wallet holds names the wallet, in either case.
+  defp valid_held_body?(%{"wallet" => wallet} = params),
+    do: map_size(params) == 1 and is_binary(wallet) and Regex.match?(@wallet, wallet)
+
+  defp valid_held_body?(_params), do: false
 
   # The fleet's activity is read from the newest page, {}, or on from the
   # cursor the last page answered.
