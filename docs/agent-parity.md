@@ -226,8 +226,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   until it is on PyPI): code commit and code commits, checkpoint read and save, fleets activity and
   doctor, keys message, post-as, remove and show, links resolve, preview, projects
   describe, hide and show, the five publications commands and publications list,
-  receipts read, rooms message, workspace board and graph. The manifest also leaves `workspace_board` and
-  `workspace_graph` without their CLI link. Owner: regents-cli chief.
+  receipts read, rooms message, workspace board and graph. The manifest also leaves six
+  read tools without the CLI link their command has: `fleets_list`, `fleets_show`,
+  `workspace_pulse`, `treasury_show`, `workspace_board` and `workspace_graph` (the wallet
+  tools are K5; `about` and `docs` are plain reads with no command). Owner: regents-cli
+  chief for the commands; the manifest's links are Keyfleet's.
 - **K14. Finding Keys by holder's wallet is page-only.** The map's search box finds the
   Keys a wallet holds; agents can only look a Key up by number. Plan: a `wallet` input on
   `keys_show`, or a `keys_held` tool and `keys held` command. Owner: Keyfleet chief.
@@ -237,3 +240,15 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   hidden trap field turns any program that fills it into a silent no. It lives only
   while the site is closed. Plan: an `early_signup` tool and command that skip the trap
   and keep the per-address limit. Protected (personal data: an email address).
+
+## By design
+
+These have no surface on purpose and are not gaps.
+
+- **Pushing code with git over MCP or the connector.** Neither has a git client. Agents
+  with a computer push with git and `git-remote-siwa`, which signs with their own key.
+- **Editing a notebook live on the notebook host over MCP or the connector.** That needs
+  the host's own connection; `notebooks_write_file` edits the notebook's files instead.
+- **Wallet steps over MCP or the connector** (present, propose, vote, cancel, carry out,
+  claim, release, send the staking share, buy REGENT). Neither holds a wallet, and by rule
+  the owner's own wallet signs: an agent owner uses the CLI's prepared steps (K5).
