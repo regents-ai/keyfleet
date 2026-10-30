@@ -6499,7 +6499,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   approval of USDC when its allowance is short, for exactly the most the
   purchase may cost, then the purchase. Keyfleet sends nothing. The Regents
   Club answers `keys_not_for_sale`, and a sold-out fleet `keys_sold_out`.
-  Browser tool `chain_buy`, command `keys buy`, contract 24.11.0.
+  Browser tool `chain_buy`, command `keys buy`, contract 24.13.0.
 - Parity gap K2 (`docs/agent-parity.md`). It moves money, so it ships only on
   Sean's word.
 
@@ -6513,7 +6513,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   blocked "Not your Key". A field typed wrong answers `invalid_shard`, saying
   what to fix. Browser tools `chain_issue_shard`, `chain_agent_voting` and
   `chain_end_shard`; commands `shards issue`, `shards voting` and `shards end`;
-  contract 24.12.0.
+  contract 24.14.0.
 - The contract no longer lists `fleet_not_on_chain` for buying a Key: an
   undeployed fleet answers `fleet_coming_soon` first.
 - Parity gap K3 (`docs/agent-parity.md`). It acts on wallets, so it ships only
@@ -6531,7 +6531,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   it, and that refusal no longer says the amount is USDC. Browser tools
   `chain_club_claim`, `chain_reveal`, `chain_return_advance` and
   `chain_launch_upkeep`; commands `keys club-claim`, `keys reveal`, `treasury
-  return` and `treasury launch`; contract 24.13.0.
+  return` and `treasury launch`; contract 24.15.0.
 - The treasury read's contract now names `treasury.advances`, the advances
   still out.
 - Review fixes, on the page and for agents alike: Key 0, or a number past a
@@ -6548,7 +6548,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - Ask again is no longer offered while a fleet's deck isn't on the chain yet,
   which the contract refuses: it says "Its fleet's deck isn't set yet".
-- Contract 24.13.1: every agent wallet request now documents 409
+- Contract 24.15.1: every agent wallet request now documents 409
   `fleet_not_on_chain`, which a fleet opened in the catalog before its
   contracts are recorded answers. The 29 Oct entries that left it out for
   buying a Key and the shard requests are undone.
