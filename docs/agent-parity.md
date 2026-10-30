@@ -182,22 +182,21 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   Privy account whose login wallet is the agent's SIWA wallet is the agent's own account;
   a request signed by that wallet acts as its owner, as in ash-template's G1. Protected
   (sign-in): waits for Sean's go. Owner: agent-access lane with Keyfleet.
-- **K2. Buying a Key had no agent path. Built** (29 Oct, waits for Sean's go to ship:
-  money, wallet): the signed `POST /api/v1/agent/fleets/FLEET_ID/keys/buy` answers the same
+- **K2. Buying a Key had no agent path. Closed** (live 30 Oct, contract
+  24.13.0): the signed `POST /api/v1/agent/fleets/FLEET_ID/keys/buy` answers the same
   approve and buy steps the Buy Key window builds (`Keyfleet.WalletSteps`, flow `buy`), for
   the agent's own wallet to send; Keyfleet sends nothing. The approval is exactly the most
   the purchase may cost: the window's Unlimited box has no agent form. Tool `chain_buy`,
   command `keys buy`.
-- **K3. Shard controls were page-only. Built** (29 Oct, waits for Sean's go to ship:
-  wallet): the signed `shards/issue` (`{"keys","wallet","days"}`, as the New shard form
-  types them), `shards/voting` (`{"keys","voting"}`, `on` or `off`) and
+- **K3. Shard controls were page-only. Closed** (live 30 Oct, contract 24.14.0): the
+  signed `shards/issue` (`{"keys","wallet","days"}`, as the New shard form types them), `shards/voting` (`{"keys","voting"}`, `on` or `off`) and
   `keys/KEY/shards/end` answer the same steps the Key page builds (flows `issue_shard`,
   `agent_voting`, `end_shard`) for the agent's own wallet. Only a Key's holder may send
   them: for anyone else the steps answer blocked "Not your Key", and the contract refuses
   them. Tools `chain_issue_shard`, `chain_agent_voting`, `chain_end_shard`; commands `shards
   issue`, `shards voting`, `shards end`.
-- **K4. Four more wallet buttons were page-only. Built** (29 Oct, waits for Sean's go to
-  ship: wallet, money): the signed `keys/KEY/club_claim` and `keys/KEY/reveal` (`{}`),
+- **K4. Four more wallet buttons were page-only. Closed** (live 30 Oct, contract
+  24.15.0): the signed `keys/KEY/club_claim` and `keys/KEY/reveal` (`{}`),
   `treasury/advances/ADVANCE_ID/return` (`{"amount"}`, in whole tokens, as the Return field
   types it) and `treasury/launch` (`{"step"}`, one of `settle`, `bind`, `release`,
   `collect`) answer the same steps the Key and treasury pages build (flows `club_claim`,
@@ -210,8 +209,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   `chain_*` signed tools answer the same steps the CLI gets, built for the agent's own
   key on the existing chain routes, and each command's `webmcp` names its tool. The page
   wallet tools (`keys_claim`, `proposals_vote` and the rest) still press the page's
-  button for the signed-in person's Privy wallet. Protected (wallet, money): ships on
-  Sean's letter.
+  button for the signed-in person's Privy wallet. Live 30 Oct.
 - **K6. Owner-only agent controls have no tools.** Making a pairing code, choosing the
   agent, opening, renaming and unpairing an agent, and reading its last actions run only
   on the page. They stay out of reach of a paired helper agent and open only to the
@@ -264,7 +262,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   browser. An admin agent needs the same read. Protected (production data); after K1.
 - **K16. Early access silently drops programs.** The `/early` form has no tool, and its
   hidden trap field turns any program that fills it into a silent no. It lives only
-  while the site is closed. Plan: an `early_signup` tool and command that skip the trap
+  while the site is closed; the site is open (30 Oct), so `/early` sends everyone home
+  and nothing waits on this. If the site closes again, the plan stands: an `early_signup` tool and command that skip the trap
   and keep the per-address limit. Protected (personal data: an email address).
 
 ## By design
