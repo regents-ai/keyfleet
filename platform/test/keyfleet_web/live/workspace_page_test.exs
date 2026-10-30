@@ -1775,22 +1775,46 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       task = create(@fleet, "task", %{"title" => "Draft the price"}, project: "lab")
       link(@fleet, task, goal, "implements")
-      %{task: task}
+      %{goal: goal, task: task}
     end
 
-    # Costly failure: a visitor sent from a task's title to the general
-    # Public place, when the task's page is only the members'.
-    test "a goal's task titles open the task for a member and are plain text for anyone else",
-         %{conn: conn, visitor: visitor, task: task} do
+    # Costly failure: a visitor sent from a title to the general Public
+    # place, when the item's page is only the members'.
+    test "its titles open their items for a member and are plain text for anyone else",
+         %{conn: conn, visitor: visitor, goal: goal, task: task} do
       {:ok, view, _html} = live(conn, "/syndicate/1/projects/lab")
+      goal_path = KeyfleetWeb.WorkspacePage.item_path(@fleet, goal)
+      task_path = KeyfleetWeb.WorkspacePage.item_path(@fleet, task)
 
       assert has_element?(
                view,
-               ~s(.project-goal-tasks [data-item="#{task}"] a[href="#{KeyfleetWeb.WorkspacePage.item_path(@fleet, task)}"]),
+               ~s(#project-goals a.project-title[href="#{goal_path}"]),
+               "Try the new model"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#project-work a.project-title[href="#{task_path}"]),
+               "Draft the price"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#project-open a.project-title[href="#{task_path}"]),
+               "Draft the price"
+             )
+
+      assert has_element?(
+               view,
+               ~s(.project-goal-tasks [data-item="#{task}"] a[href="#{task_path}"]),
                "Draft the price"
              )
 
       {:ok, view, _html} = live(visitor, "/syndicate/1/projects/lab")
+
+      assert has_element?(view, "#project-goals span.project-title", "Try the new model")
+      assert has_element?(view, "#project-work span.project-title", "Draft the price")
+      assert has_element?(view, "#project-open span.project-title", "Draft the price")
 
       assert has_element?(
                view,
@@ -1798,7 +1822,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Draft the price"
              )
 
-      refute has_element?(view, ~s(.project-goal-tasks [data-item="#{task}"] a))
+      refute has_element?(view, "#project-parts a.project-title")
+      refute has_element?(view, "#project-parts .project-goal-tasks a")
     end
   end
 

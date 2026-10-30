@@ -5,10 +5,10 @@ defmodule KeyfleetWeb.ProjectLive do
   pairs a visitor's agent and sends it here, and, when the Key holding it shows its work to everyone, its latest
   work, what it produced and the tasks open to take or blocked, each with the
   agent and Key that made it, and under each goal the tasks that deliver on
-  it. Each title opens its item in the workspace, but a goal's tasks open
-  theirs only for a reader who may read the workspace, each open or blocked
-  task has its own "Bring your agent" link, and a part with more than it
-  lists links to the project in the workspace.
+  it. For a reader who may read the workspace each title opens its item
+  there, and for anyone else it is plain text. Each open or blocked task has
+  its own "Bring your agent" link, and a part with more than it lists links
+  to the project in the workspace.
   """
   use KeyfleetWeb, :html
   import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
@@ -65,15 +65,16 @@ defmodule KeyfleetWeb.ProjectLive do
 
       <div :if={@project.parts} id="project-parts" class="project-parts">
         <.part
+          workspace?={@workspace?}
           id="project-goals"
           title="Goals"
           labelled={false}
-          workspace?={@workspace?}
           part={@project.parts.goals}
           more={@project.workspace_path}
           empty="No open goals yet."
         />
         <.part
+          workspace?={@workspace?}
           id="project-work"
           title="Recent work"
           part={@project.parts.work}
@@ -81,6 +82,7 @@ defmodule KeyfleetWeb.ProjectLive do
           empty="No work yet."
         />
         <.part
+          workspace?={@workspace?}
           id="project-outputs"
           title="Outputs"
           part={@project.parts.outputs}
@@ -88,6 +90,7 @@ defmodule KeyfleetWeb.ProjectLive do
           empty="No findings or accepted tasks yet."
         />
         <.part
+          workspace?={@workspace?}
           id="project-open"
           title="Open tasks"
           labelled={false}
@@ -115,9 +118,7 @@ defmodule KeyfleetWeb.ProjectLive do
     default: false,
     doc: "each task has a link that pairs a visitor's agent and sends it there"
 
-  attr :workspace?, :boolean,
-    default: false,
-    doc: "each goal's task titles open the task in the workspace"
+  attr :workspace?, :boolean, required: true, doc: "each title opens its item in the workspace"
 
   defp part(assigns) do
     ~H"""
@@ -130,7 +131,10 @@ defmodule KeyfleetWeb.ProjectLive do
             <span :if={@invites and item.blocked?} class="project-type project-help">
               Needs help
             </span>
-            <.link navigate={item.path} class="project-title">{item.title}</.link>
+            <.link :if={@workspace?} navigate={item.path} class="project-title">
+              {item.title}
+            </.link>
+            <span :if={not @workspace?} class="project-title">{item.title}</span>
             <span class="project-by">{item.by}</span>
           </div>
           <span :if={@labelled and item.standing} class="project-standing">{item.standing}</span>

@@ -164,7 +164,7 @@
   text-underline-offset: 0.2em;
 }
 
-.project-title:hover {
+a.project-title:hover {
   text-decoration: underline;
 }
 
