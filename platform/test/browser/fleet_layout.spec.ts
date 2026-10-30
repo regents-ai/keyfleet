@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {prepareFleet, sellKey} from "./support/fleet_chain"
+import {prepareFleet, sayInPublic, sellKey} from "./support/fleet_chain"
 
 // A fleet page's layout: the hall's columns scroll inside the fleet's box and
 // never run past its edge, the way in sits in the bar above the tabs, and it
@@ -81,6 +81,69 @@ for (const [width, height] of [
     expect(Math.abs(box.y + box.height - height)).toBeLessThanOrEqual(1)
   })
 }
+
+// The footer is one short row. A Key holder's channel list holds every room
+// and runs past its foot: a "…" stands there until the last room shows, and
+// scrolling on past the last room carries on down the page to the footer.
+// Scrolling over the left menu moves the page too. Sean, 30 October 2026. The
+// Key is sold, and the rooms opened, on a fleet of its own, so the Classic
+// fleet stays unsold.
+test("the footer is one short row, reached from the channel list and the left menu", async ({page}) => {
+  prepareFleet("fibonacci_cascade")
+  sayInPublic("fibonacci_cascade", "0x1111111111111111111111111111111111111111", "Hello.")
+  await page.setViewportSize({width: 1440, height: 800})
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(`/cascade/1`)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+
+  const scroller = page.locator("#app-shell-scroller")
+  const footer = scroller.locator(":scope > .regent-footer")
+  expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(56)
+
+  const channels = page.locator("#fleet-channels")
+  const read = () =>
+    page.evaluate(() => {
+      const list = document.querySelector("#fleet-channels")!
+      const shell = document.querySelector("#app-shell-scroller")!
+      return {
+        hidden: list.scrollHeight - list.clientHeight - list.scrollTop,
+        more: getComputedStyle(list, "::after").opacity,
+        below: shell.scrollHeight - shell.clientHeight - shell.scrollTop,
+      }
+    })
+  const before = await read()
+  expect(before.hidden).toBeGreaterThan(0)
+  expect(before.more).toBe("1")
+
+  const box = (await channels.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(async () => {
+    await page.mouse.wheel(0, 200)
+    const after = await read()
+    expect(after.hidden).toBeLessThanOrEqual(1)
+    expect(after.more).toBe("0")
+    expect(after.below).toBeLessThanOrEqual(1)
+  }).toPass()
+
+  await scroller.evaluate(el => el.scrollTo(0, 0))
+  const sidebar = (await page.locator("#shell-sidebar").boundingBox())!
+  await page.mouse.move(sidebar.x + sidebar.width / 2, sidebar.y + sidebar.height - 20)
+  await page.mouse.wheel(0, 400)
+  await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1)
+})
+
+// A list with every room in view never shows the "…".
+test("a channel list with every room in view shows no \"…\"", async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900})
+  await openFleet(page)
+
+  const list = await page.locator("#fleet-channels").evaluate(el => ({
+    hidden: el.scrollHeight - el.clientHeight,
+    more: getComputedStyle(el, "::after").opacity,
+  }))
+  expect(list).toEqual({hidden: 0, more: "0"})
+})
 
 for (const scheme of ["light", "dark"] as const) {
   test(`"Purchase Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page, baseURL}) => {

@@ -255,8 +255,23 @@ const shellBehavior: Hook = {
       if (named) arriveAt(named)
     }
 
+    // The sidebar stands beside the page rather than in it, so a scroll over a
+    // sidebar with no more of its own to scroll that way moves the page, down
+    // to its footer. The open phone menu keeps its scroll to itself.
+    const onWheel = (event: WheelEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      const overSidebar = target?.closest<HTMLElement>("#shell-sidebar")
+      if (!overSidebar || event.ctrlKey || shell.dataset.menuOpen === "true") return
+      const {scrollTop, scrollHeight, clientHeight} = overSidebar
+      const room = event.deltaY > 0 ? scrollHeight - clientHeight - scrollTop : scrollTop
+      if (room > 1) return
+      const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      scroller()?.scrollBy({top: lines ? event.deltaY * 16 : event.deltaY})
+    }
+
     shell.addEventListener("click", onClick)
     shell.addEventListener("keydown", onKeydown)
+    shell.addEventListener("wheel", onWheel, {passive: true})
     window.addEventListener("popstate", onHistoryNavigation)
     window.addEventListener("phx:navigate", onNavigate)
     this.restoreState()
@@ -270,6 +285,7 @@ const shellBehavior: Hook = {
       closeMenu(false)
       shell.removeEventListener("click", onClick)
       shell.removeEventListener("keydown", onKeydown)
+      shell.removeEventListener("wheel", onWheel)
       window.removeEventListener("popstate", onHistoryNavigation)
       window.removeEventListener("phx:navigate", onNavigate)
     }

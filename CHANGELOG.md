@@ -6612,3 +6612,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   leaves, as the connector's is. The address stays behind
   `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`.
 - `docs/agent-parity.md` closes K8 and fills the MCP column.
+
+## 2026-10-30 — A short footer, reached from the channel list
+
+- The footer at the foot of every page is one short row: less space above and
+  below it, and the privacy and terms links no longer take a line of their own
+  on a phone.
+- Scrolling down a fleet's channel list past its last room carries on down the
+  page to the footer, and so does scrolling over the left menu.
+- While rooms are hidden below the channel list's foot, a "…" stands there; it
+  goes once the last room is in view.
