@@ -6578,7 +6578,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The account menu's Manage opens `/account/agents`; its Pair New Agent, the
   pairing hints and the agent guides open `/account/agents#account-pairing`.
 - Every hint, guide, refusal and API description that told a person to pair
-  or unpair "on their Account page" now says "on their Agents page".
+  or unpair "on their Account page" now says "on their Agents page"
+  (contract 24.15.2, wording only), and so does `agents_pair`'s description.
 - Pins design-system `7a853f85` (the shared `agents_layout`), as the
   template did in `927ae6ea` (template.regents.sh v142). Sean, 29 October
   20:30:55Z: "I want to see the improvement to the account and pairing UI

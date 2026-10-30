@@ -108,7 +108,7 @@
     {
       "name": "agents_pair",
       "title": "Pair",
-      "description": "Pair with your person: redeem the single-use code they give you from Pair New Agent on their Account page, with your name and what you run on. A code works once, for ten minutes; never repeat it in a reply. One pairing works on every Regent site and gives no authority over your person's wallets or spending. Then call agents_whoami with a fresh proof.",
+      "description": "Pair with your person: redeem the single-use code they give you from Pair New Agent on their Agents page, with your name and what you run on. A code works once, for ten minutes; never repeat it in a reply. One pairing works on every Regent site and gives no authority over your person's wallets or spending. Then call agents_whoami with a fresh proof.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

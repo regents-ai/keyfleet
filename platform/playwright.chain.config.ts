@@ -7,7 +7,7 @@ import {defineConfig, devices} from "@playwright/test"
 // the fleet page's motion, the wallet buttons, a key's shards, muting a key
 // in a room, the copy buttons, the pages' security policy, the links
 // between the in-app pages, the agent tools the pages register and managing
-// paired agents on the Account page, the Treasury's last reading and its
+// paired agents on the Agents page, the Treasury's last reading and its
 // refresh icon, new work gliding into a fleet's workstream, a visit told
 // again from the server's lines, and the city button beside an open fleet's
 // name with its bar, in Chromium.
