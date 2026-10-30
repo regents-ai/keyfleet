@@ -303,6 +303,8 @@ defmodule KeyfleetWeb.Router do
   # alone, JSON, one call, no query string and no page from another site, with
   # a token from the sign-in above. The app is the actor, or, once its identity
   # is paired and the person allowed the agent permission, that paired agent.
+  # An agent that signs the request with its own SIWA key instead, as it signs
+  # its /api/v1/agent requests, is that agent, admitted as those requests are.
   # So AshAi's own origin check takes whatever McpAgent let through. Each
   # connected account gets 120 requests a minute; before that the endpoint
   # counts a request without a token against the /api per-address budget, and
@@ -331,6 +333,8 @@ defmodule KeyfleetWeb.Router do
                   "your name and your harness, and call check_in so your person sees you are active. " <>
                   "Once paired, with both permissions allowed, the fleet tools work as the agent you are, " <>
                   "as this site's /agents/claude guide describes. " <>
+                  "An agent that signs each request with its own SIWA key, as its signed requests are, " <>
+                  "works here as itself once paired, with the same fleet tools and no identity tools. " <>
                   "Never ask for a password, a private key or a wallet signature.",
               list_ttl_ms: 0,
               read_ttl_ms: 0,

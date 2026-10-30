@@ -91,13 +91,8 @@ defmodule KeyfleetWeb.McpConnectorTest do
       token = connect!(subject, @agent_scopes)
       listed = tool_names(token, c)
 
-      fleet_tools =
-        for domain <- [KeyfleetWeb.AgentTools, Keyfleet.Graph],
-            tool <- AshAi.Info.tools(domain),
-            do: to_string(tool.name)
-
-      assert "workspace_create" in fleet_tools
-      assert Enum.sort(listed) == Enum.sort(RegentMCPAgents.Tools.names() ++ fleet_tools)
+      assert "workspace_create" in fleet_tools()
+      assert Enum.sort(listed) == Enum.sort(RegentMCPAgents.Tools.names() ++ fleet_tools())
 
       for wallet_tool <- ["keys_claim", "proposals_vote"] do
         refute wallet_tool in listed
@@ -122,6 +117,81 @@ defmodule KeyfleetWeb.McpConnectorTest do
       assert refused.status == 401
       assert error(refused)["code"] == "connection_required"
       assert [_challenge] = get_resp_header(refused, "www-authenticate")
+    end
+  end
+
+  # The same address for an agent that signs its own requests with its SIWA
+  # key and sends no token: it is that agent, admitted as its signed requests
+  # are, with the paired agent's tools and none of the identity tools.
+  describe "an agent that signs its own requests" do
+    test "paired, it lists every fleet tool and no identity or wallet tool, and each answers as its signed request does",
+         c do
+      pair!(account!(), c.signer.address)
+      listed = Enum.map(signed_mcp(c, rpc("tools/list")).body["result"]["tools"], & &1["name"])
+      assert Enum.sort(listed) == Enum.sort(fleet_tools())
+
+      for tool <- RegentMCPAgents.Tools.names() ++ ["keys_claim", "proposals_vote"] do
+        refute tool in listed
+        assert %{"error" => _} = signed_call(c, tool, %{})
+      end
+
+      manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+
+      for {name, input} <- [
+            {"polls_list", %{"fleet_id" => @fleet}},
+            {"polls_list", %{"fleet_id" => "no_such_fleet"}},
+            {"agents_profile", %{}}
+          ] do
+        http = http_twin(c, manifest[name], input)
+        over_mcp = result(signed_call(c, name, input))
+
+        if http.status in 200..299 do
+          assert %{"isError" => false, "structuredContent" => answer} = over_mcp, name
+          assert comparable(answer) == comparable(http.body), name
+        else
+          assert %{"isError" => true, "content" => [%{"text" => text}]} = over_mcp, name
+          assert Jason.decode!(text)["error"] == http.body["error"], name
+        end
+      end
+    end
+
+    test "unpaired, it is refused as its signed requests are", c do
+      refused = signed_mcp(c, rpc("tools/list"))
+      twin = signed(c, "GET", "/api/v1/agent/profile", nil)
+
+      assert refused.status == 403
+      assert refused.body["error"]["code"] == "agent_not_paired"
+      assert {twin.status, twin.body} == {refused.status, refused.body}
+    end
+
+    test "a body changed after it was signed is refused", c do
+      request =
+        SignedAgentHelpers.sign(c.signer, c.secret, "POST", "/mcp", Jason.encode!(rpc("ping")))
+
+      pair!(account!(), c.signer.address)
+
+      refused =
+        Req.post!(c.app <> "/mcp",
+          headers: Map.drop(request.headers, ["cookie", "authorization"]),
+          body: Jason.encode!(rpc("tools/list")),
+          retry: false
+        )
+
+      assert refused.status == 401
+      assert refused.body["error"]["code"] == "http_signature_invalid"
+    end
+
+    test "an answer whose pairing ends while the tool runs is replaced", c do
+      subject = account!()
+      agent = pair!(subject, c.signer.address)
+
+      during_polls_list(fn ->
+        :ok = RegentAgents.unpair_agent!(agent, actor: person(subject))
+      end)
+
+      replaced = signed_mcp(c, call_rpc("polls_list", %{"fleet_id" => @fleet}))
+      assert replaced.status == 403
+      assert replaced.body["error"]["code"] == "agent_not_paired"
     end
   end
 
@@ -524,8 +594,21 @@ defmodule KeyfleetWeb.McpConnectorTest do
     @endpoint.call(conn, [])
   end
 
-  defp call_conn(token, name, input, c),
-    do: mcp(rpc("tools/call", %{"name" => name, "arguments" => %{"input" => input}}), token, c)
+  defp call_conn(token, name, input, c), do: mcp(call_rpc(name, input), token, c)
+
+  defp call_rpc(name, input),
+    do: rpc("tools/call", %{"name" => name, "arguments" => %{"input" => input}})
+
+  # The same JSON-RPC message, signed by the agent's own key and sent with no token.
+  defp signed_mcp(c, body), do: signed(c, "POST", "/mcp", body)
+
+  defp signed_call(c, name, input), do: signed_mcp(c, call_rpc(name, input)).body
+
+  defp fleet_tools do
+    for domain <- [KeyfleetWeb.AgentTools, Keyfleet.Graph],
+        tool <- AshAi.Info.tools(domain),
+        do: to_string(tool.name)
+  end
 
   defp call(token, name, input, c), do: json(call_conn(token, name, input, c))
 

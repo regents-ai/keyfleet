@@ -137,7 +137,8 @@ defmodule KeyfleetWeb.Endpoint do
   # tokens one address can have looked up, each one indexed hash query; it is
   # one bucket per address, not one per token, since an invented token would
   # buy a fresh bucket. A request without a token is answered before any
-  # account is known, so it spends the /api budget.
+  # account is known, so it spends the /api budget, as does an agent's own
+  # signed request there, as its signed requests under /api do.
   defp limit_rate(%Plug.Conn{path_info: ["mcp" | _]} = conn, _opts) do
     case Plug.Conn.get_req_header(conn, "authorization") do
       ["Bearer " <> _token] -> RegentAgentAccess.RateLimit.call(conn, connector_rate_limit())
