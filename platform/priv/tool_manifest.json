@@ -345,6 +345,7 @@
               "account_balances",
               "account_points",
               "agents_whoami",
+              "agents_pair",
               "agents_status",
               "code_pushes",
               "code_commits",
