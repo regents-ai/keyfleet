@@ -30,6 +30,10 @@ defmodule Keyfleet.Actors.Agent do
   delegation episode. World ID is optional. Pairing admits protected work;
   Key and shard ownership still decide the product permissions.
 
+  `owner?` is true for an agent that opened its own account
+  (`Keyfleet.Accounts.AgentAccount`): it acts for that account as its owner,
+  `pairing` names the account, and there is no pairing, so `pairing_id` is nil.
+
   `connection` is set when the agent is a connected app's own identity, such
   as Claude's, acting at `/mcp` with the token its person approved: what
   `RegentOAuth.verify/3` answered for that token. Its `verification_method`
@@ -54,6 +58,7 @@ defmodule Keyfleet.Actors.Agent do
     :human_account_id,
     :connection,
     role: :agent,
+    owner?: false,
     pairing: :none
   ]
 
@@ -67,6 +72,7 @@ defmodule Keyfleet.Actors.Agent do
           registry_url: String.t() | nil,
           human_id: String.t() | nil,
           same_person_agent_count: pos_integer() | nil,
+          owner?: boolean(),
           pairing: Keyfleet.Actors.Human.t() | :none | :person_not_here
         }
 
@@ -83,7 +89,21 @@ defmodule Keyfleet.Actors.Agent do
 
   def authenticated?(_), do: false
 
-  @doc "Refresh account wallets without replacing the original pairing episode."
+  @doc """
+  Refresh account wallets without replacing the original pairing episode, or,
+  for an agent that owns its account, while the wallet still owns that account.
+  """
+  def refresh(%__MODULE__{owner?: true, human_account_id: account} = actor)
+      when is_integer(account) do
+    with true <- authenticated?(actor),
+         {:ok, %__MODULE__{owner?: true, human_account_id: ^account} = current} <-
+           Keyfleet.Agents.with_pairing(actor) do
+      {:ok, current}
+    else
+      _ -> {:error, :not_paired}
+    end
+  end
+
   def refresh(%__MODULE__{pairing_id: id, privy_user_id: owner} = actor)
       when is_binary(id) and is_binary(owner) do
     with true <- authenticated?(actor),
@@ -96,6 +116,15 @@ defmodule Keyfleet.Actors.Agent do
   end
 
   def refresh(_), do: {:error, :not_paired}
+
+  def valid?(%__MODULE__{owner?: true, human_account_id: account} = actor)
+      when is_integer(account) do
+    authenticated?(actor) and
+      case Keyfleet.Accounts.AgentAccount.owned(actor.wallet_address) do
+        {:ok, %{id: ^account}} -> true
+        _ -> false
+      end
+  end
 
   def valid?(%__MODULE__{pairing_id: id, privy_user_id: owner} = actor)
       when is_binary(id) and is_binary(owner) do

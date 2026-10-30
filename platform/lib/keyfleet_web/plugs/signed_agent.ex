@@ -12,6 +12,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @profile_path "/api/v1/agent/profile"
   @credits_history_path "/api/v1/agent/account/credits/history"
   @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/points)
+  # An agent opens its own account here, so it is let in before it acts for any
+  # account (`KeyfleetWeb.AgentAccountController`).
+  @open_account_path "/api/v1/agent/account"
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
@@ -540,6 +543,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
             _saved_or_logged = Keyfleet.Agents.save_listing(paired)
             {:ok, assign(conn, :agent_actor, paired)}
 
+          {:error, :not_paired} when conn.request_path == @open_account_path ->
+            {:ok, assign(conn, :agent_actor, actor)}
+
           {:error, :not_paired} ->
             {:error, %{reason: :agent_not_paired}}
 
@@ -674,6 +680,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("POST", @update_path), do: true
   defp supported?("POST", @avatar_start_path), do: true
   defp supported?("POST", @avatar_remove_path), do: true
+  defp supported?("POST", @open_account_path), do: true
   defp supported?("GET", @shards_path), do: true
   defp supported?("POST", @links_path), do: true
   defp supported?("POST", @preview_path), do: true
@@ -831,6 +838,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   def check_body(@preview_path, _params), do: :invalid
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
+  def check_body(@open_account_path, params), do: admit(params == %{})
 
   def check_body(path, params) do
     cond do

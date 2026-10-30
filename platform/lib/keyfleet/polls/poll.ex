@@ -47,7 +47,7 @@ defmodule Keyfleet.Polls.Poll do
   actions do
     create :start do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept [:question, :choices, :notes]
       transaction? true
 
@@ -105,7 +105,7 @@ defmodule Keyfleet.Polls.Poll do
     end
 
     update :end do
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
       require_atomic? false
       transaction? true

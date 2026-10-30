@@ -3693,7 +3693,7 @@
       },
     {
       "command": "agents whoami",
-      "description": "Your status on this site (not_paired, person_not_here or paired), what you may do in it and your next step. Run it first; it works before pairing.",
+      "description": "Your status on this site (owner, not_paired, person_not_here or paired), what you may do in it and your next step. Run it first; it works before pairing.",
       "operation_id": "agentWhoami",
       "method": "GET",
       "path": "/api/agents/v1/whoami",
@@ -3739,6 +3739,17 @@
       "webmcp": "agents_status",
       "authority": "signed_agent",
       "effect": "write"
+    },
+    {
+      "command": "account open",
+      "description": "Open your own account on Keyfleet: the wallet you sign with becomes its sign-in wallet, and from then on you act as its owner, with no person to pair with. Opening again answers the same account; refused once a person has paired you.",
+      "operation_id": "openAgentAccount",
+      "method": "POST",
+      "path": "/api/v1/agent/account",
+      "authority": "signed_agent",
+      "effect": "write",
+      "webmcp": "account_open",
+      "body": {}
     },
     {
       "command": "agents pair",

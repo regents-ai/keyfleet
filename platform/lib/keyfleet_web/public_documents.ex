@@ -378,7 +378,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   @statuses [
     {"not_paired", "no person has paired you with their account"},
     {"person_not_here", "paired, but your person hasn't signed in on this site yet"},
-    {"paired", "you act for your person"}
+    {"paired", "you act for your person"},
+    {"owner", "you opened your own account and act for it as its owner"}
   ]
 
   # One line for each status, from the same list whoami answers.
@@ -387,7 +388,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
     lines =
       Enum.map_join(@statuses, "\n", fn {status, meaning} ->
-        next = RegentAgents.HTTP.next_step(status) || "Do what your person asks."
+        next = RegentAgents.HTTP.next_step(status) || own_next_step(status)
 
         "- **`#{status}`** (#{meaning}): #{Enum.join(allowed[status], " ")} **Next:** #{next}"
       end)
@@ -397,12 +398,15 @@ defmodule KeyfleetWeb.PublicDocuments do
 
     Check your status first, with a signed `GET /api/agents/v1/whoami`, the \
     `agents_whoami` browser tool or `regents keyfleet agents whoami --json`: `status` is \
-    one of the three below, `allowed` lists what you may do in it and `next_step` says \
+    one of the four below, `allowed` lists what you may do in it and `next_step` says \
     what to do next.
 
     #{lines}\
     """
   end
+
+  defp own_next_step("owner"), do: "Do the work your Keys and shards allow."
+  defp own_next_step(_acting_for_person), do: "Do what your person asks."
 
   def recovery_links do
     [

@@ -49,7 +49,8 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     :credential_ref,
     :pairing_id,
     :privy_user_id,
-    :human_account_id
+    :human_account_id,
+    :owner?
   ]
 
   @doc "Answers `op` for `actor`; nothing here waits, so the waiter is unused."
@@ -79,6 +80,10 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
       {:error, _error} -> refusal(422, "invalid_profile")
     end
   end
+
+  # An agent that owns its account spends as its owner, under no grant.
+  def answer(:balances, _params, %Agent{owner?: true} = owner, _waiter),
+    do: ok(%{credits: RegentCredits.balance(owner.privy_user_id), spending_grant: nil})
 
   def answer(:balances, _params, actor, _waiter) do
     credit_actor = credit_actor(actor)
@@ -318,6 +323,9 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
 
   defp with_note(answer, true, note), do: Map.put(answer, :note, note)
   defp with_note(answer, false, _note), do: answer
+
+  defp credit_actor(%Agent{owner?: true, pairing: owner} = actor),
+    do: RegentCredits.Actor.person(actor.privy_user_id, owner.wallet_addresses, "keyfleet")
 
   defp credit_actor(actor),
     do:

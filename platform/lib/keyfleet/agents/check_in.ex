@@ -71,7 +71,7 @@ defmodule Keyfleet.Agents.CheckIn do
     # A check-in from an agent in a conversation.
     create :check_in_session do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       public? false
       accept [:agent_profile_id, :fleet_id]
 
@@ -113,7 +113,7 @@ defmodule Keyfleet.Agents.CheckIn do
     # A check-in an agent makes on its own schedule, every `every_minutes`.
     create :check_in_scheduled do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       public? false
       accept [:agent_profile_id, :fleet_id]
 
@@ -154,7 +154,7 @@ defmodule Keyfleet.Agents.CheckIn do
     # counts it as checking in.
     create :note_contribution do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       public? false
       accept [:agent_profile_id, :fleet_id]
 

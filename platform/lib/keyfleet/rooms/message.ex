@@ -135,7 +135,7 @@ defmodule Keyfleet.Rooms.Message do
   actions do
     create :send_message do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
       transaction? true
 
@@ -174,7 +174,7 @@ defmodule Keyfleet.Rooms.Message do
     # the first post opens. Otherwise the same as posting in a room.
     create :send_to_key do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
       transaction? true
 
@@ -209,7 +209,7 @@ defmodule Keyfleet.Rooms.Message do
     # hear of it once the naming commits. Its body is the room's new topic.
     create :note_room_named do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       public? false
       accept []
       transaction? true

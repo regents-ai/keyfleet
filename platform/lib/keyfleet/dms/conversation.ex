@@ -112,7 +112,7 @@ defmodule Keyfleet.Dms.Conversation do
     update :set_auto_delete do
       change Keyfleet.Agents.Changes.RecordAuthority
       require_atomic? false
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :auto_delete_days, :integer
@@ -148,7 +148,7 @@ defmodule Keyfleet.Dms.Conversation do
     update :clear do
       change Keyfleet.Agents.Changes.RecordAuthority
       require_atomic? false
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
 

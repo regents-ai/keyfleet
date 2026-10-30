@@ -194,6 +194,7 @@ defmodule Keyfleet.ReleaseTest do
              "account_ens_identities",
              "agent_check_ins",
              "agent_checkpoints",
+             "agent_owned_accounts",
              "agent_profiles",
              "agent_voting_settings",
              "chain_cursors",

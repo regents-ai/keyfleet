@@ -9,9 +9,10 @@ defmodule Keyfleet.MixProject do
   # mcp_agents with address/1, for Claude working as its paired agent at /mcp
   # (claude/mcp-site-tools-1029).
   @elixir_utils_mcp_ref "dea334b0cc9477a26fa9bbd03e4f803359ab420b"
-  # agents: the template's pin, with Pair New Agent on the Account page in its
-  # words. Only the agents package moves here, so it brings no migration.
-  @elixir_utils_agents_ref "9539469f3afbfcdb6925f1916723887d36bee700"
+  # agents and privy: the template's line for an agent that opens its own account
+  # (G1, privy-agent-account-1029-5): whoami's owner status and Privy's user calls.
+  # Only these two packages move here, so they bring no migration.
+  @elixir_utils_agents_ref "f19aed04ea997bb3a547587a358efef03a45fd27"
   # Everything else stays here and moves with its own shared rollout: chain's Base
   # Builder Code suffix is a wallet change, and credits brings card_purchases.
   @elixir_utils_held_ref "20ee19753a11c113fd1a8d2f9e151be14a0dafae"
@@ -89,7 +90,7 @@ defmodule Keyfleet.MixProject do
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.14.2"},
       {:regent_privy,
-       git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "privy", override: true},
+       git: @elixir_utils, ref: @elixir_utils_agents_ref, sparse: "privy", override: true},
       {:regent_identity,
        git: @elixir_utils, ref: @elixir_utils_held_ref, sparse: "ash_components/identity"},
       {:regent_agents,

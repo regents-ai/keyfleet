@@ -27,7 +27,11 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   server: System.get_env("KEYFLEET_BROWSER_TEST") == "1"
 
 config :keyfleet, :privy_verifier, Keyfleet.TestPrivyVerifier
-config :keyfleet, :privy, app_id: "keyfleet-test"
+
+config :keyfleet, :privy,
+  app_id: "keyfleet-test",
+  app_secret: "test-secret",
+  req_options: [plug: {Req.Test, RegentPrivy.Users}]
 
 # The SIWA sign-in server agents use. The agent API tests start their own and
 # point this at it; a browser test server may name a local one.
@@ -115,8 +119,10 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds:
 config :keyfleet, :api_rate_limit, limit: 100_000, window_seconds: 60
 config :keyfleet, :connector_rate_limit, limit: 100_000, window_seconds: 60
 
-# And for the early-access form. Its own test puts the release 5/600 back.
+# And for the early-access form and accounts agents open. Their own tests put
+# the release budgets back.
 config :keyfleet, :early_signup_rate_limit, limit: 100_000, window_seconds: 600
+config :keyfleet, :account_open_rate_limit, limit: 100_000, window_seconds: 86_400
 
 # Tests key rate limits as production does, behind Fly's proxy.
 config :keyfleet, :behind_fly_proxy, true

@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/agents/v1/pair",
              "/api/agents/v1/whoami",
              "/api/v1/about",
+             "/api/v1/agent/account",
              "/api/v1/agent/account/balances",
              "/api/v1/agent/account/credits/history",
              "/api/v1/agent/account/points",

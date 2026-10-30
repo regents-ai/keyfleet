@@ -9,6 +9,7 @@ defmodule Keyfleet.RuntimeConfigTest do
     names = [
       "PRIVY_APP_ID",
       "PRIVY_VERIFICATION_KEY",
+      "PRIVY_APP_SECRET",
       "DATABASE_POOLED_URL",
       "DATABASE_DIRECT_URL",
       "DATABASE_URL",
@@ -61,8 +62,13 @@ defmodule Keyfleet.RuntimeConfigTest do
     pem = "-----BEGIN PUBLIC KEY-----\nabc123\n-----END PUBLIC KEY-----"
     System.put_env("PRIVY_APP_ID", "local-privy-app")
     System.put_env("PRIVY_VERIFICATION_KEY", pem)
+    System.put_env("PRIVY_APP_SECRET", "local-privy-secret")
 
-    assert privy_config() == [app_id: "local-privy-app", verification_key: pem]
+    assert privy_config() == [
+             app_id: "local-privy-app",
+             verification_key: pem,
+             app_secret: "local-privy-secret"
+           ]
   end
 
   test "test runtime keeps its fixed local repository despite database environment values" do

@@ -34,7 +34,7 @@ defmodule Keyfleet.Rooms.Mute do
 
     create :mute do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept [:fleet_id, :token_id]
       upsert? true
       upsert_identity :one_per_key
@@ -50,7 +50,7 @@ defmodule Keyfleet.Rooms.Mute do
 
     destroy :unmute do
       require_atomic? false
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
     end
 
     # The actor's mutes in a fleet, by key number.

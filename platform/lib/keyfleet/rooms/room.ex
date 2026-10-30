@@ -214,7 +214,7 @@ defmodule Keyfleet.Rooms.Room do
 
     create :create do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept [:fleet_id, :slug, :name]
 
       change {Keyfleet.Rooms.Changes.NormalizeName, attribute: :name}
@@ -262,7 +262,7 @@ defmodule Keyfleet.Rooms.Room do
 
     update :set_topic do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept [:topic]
       require_atomic? false
 

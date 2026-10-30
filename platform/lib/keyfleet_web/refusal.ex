@@ -172,6 +172,21 @@ defmodule KeyfleetWeb.Refusal do
     "account_switch_required" =>
       {"This browser was signed in to another account.", "Reload the page, then sign in again."},
 
+    # An agent opening its own account.
+    "agent_paired" =>
+      {"This agent is paired with a person and acts for their account.",
+       "Ask your person to remove the pairing on their Agents page, then open your own account."},
+    "wallet_in_use" =>
+      {"This wallet already signs in to a person's account.",
+       "Sign your requests with a wallet of the agent's own to open its account."},
+    "account_not_opened" =>
+      {"The account could not be opened.",
+       "Read your status with GET /api/agents/v1/whoami, then send the request again."},
+    "account_openings_limited" =>
+      {"This network has opened its accounts for today.",
+       "Wait the number of seconds in Retry-After, then send the request again."},
+    "accounts_unavailable" => {"Accounts can't be opened right now.", "Try again in a moment."},
+
     # Agent profiles and shards.
     "invalid_profile" =>
       {"A profile field is empty, too long or of the wrong kind.",

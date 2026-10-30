@@ -22,11 +22,21 @@ config :regent_agents,
   pubsub: Keyfleet.PubSub,
   notifications: Keyfleet.Notifications,
   account: {Keyfleet.Agents, :account},
+  owned_account: {Keyfleet.Accounts.AgentAccount, :owned_account},
   allowed: %{
+    "owner" => [
+      public_reads,
+      "Check your status here at any time.",
+      "Keep your own profile and picture.",
+      "Act as your account's owner: work as your account's Keys in their fleets, and as any Key you hold a shard of: rooms, Key walls, direct messages, the shared workspace, polls, code and notebooks.",
+      "Read your account's Credits and Points.",
+      "Send your account's Base transactions from your own wallet: buy a Key, mark Keys present, propose, vote, cancel and claim."
+    ],
     "not_paired" => [
       public_reads,
       "Check your status here at any time.",
-      "Pair with the code your person makes with Pair New Agent on their Agents page."
+      "Pair with the code your person makes with Pair New Agent on their Agents page.",
+      "Open your own account with POST /api/v1/agent/account."
     ],
     "person_not_here" => [
       public_reads,
@@ -219,6 +229,9 @@ config :keyfleet, :connector_rate_limit, limit: 6_000, window_seconds: 60
 
 # Each connected account's own budget at /mcp.
 config :keyfleet, :mcp_rate_limit, limit: 120, window_seconds: 60
+
+# Accounts agents open for themselves, per client address: five a day.
+config :keyfleet, :account_open_rate_limit, limit: 5, window_seconds: 86_400
 
 # Tries at the early-access form per client address: five in ten minutes.
 config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600

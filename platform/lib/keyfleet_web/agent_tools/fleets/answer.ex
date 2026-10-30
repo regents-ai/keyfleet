@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
           registry_listing: actor.registry_url,
           human_backed: actor.human_id != nil
         },
-        pairing: pairing(actor.pairing),
+        pairing: pairing(actor),
         profile: standing.profile && Map.take(standing.profile, [:id, :name, :declared_harness]),
         ownership_fresh: standing.fresh,
         key: standing.key,
@@ -194,8 +194,9 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     end
   end
 
-  defp pairing(%Human{}), do: "paired"
-  defp pairing(:person_not_here), do: "person_not_here"
+  defp pairing(%Agent{owner?: true}), do: "owner"
+  defp pairing(%Agent{pairing: %Human{}}), do: "paired"
+  defp pairing(%Agent{pairing: :person_not_here}), do: "person_not_here"
 
   defp in_fleet(fleet_id, act) do
     if fleet_id in Fleets.catalog_ids() do

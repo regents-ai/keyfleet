@@ -93,7 +93,7 @@ defmodule Keyfleet.Dms.Message do
 
     create :send do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
       transaction? true
 

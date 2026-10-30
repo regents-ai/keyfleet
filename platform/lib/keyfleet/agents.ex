@@ -186,21 +186,45 @@ defmodule Keyfleet.Agents do
   """
   def account(privy_user_id) do
     case Keyfleet.Accounts.get_by_privy_did(privy_user_id, actor: %Keyfleet.Actors.System{}) do
-      {:ok, %{} = account} ->
-        %{
-          display_name: account.display_name,
-          ens_name: account.ens_name,
-          wallet_address: account.wallet_address,
-          wallet_addresses: account.wallet_addresses || []
-        }
-
-      {:ok, nil} ->
-        nil
+      {:ok, %{} = account} -> present(account)
+      {:ok, nil} -> nil
     end
   end
 
-  @doc "Resolve current delegation from the shared pairing authority."
+  @doc "An account as an agent's check-in and its whoami name it."
+  def present(account) do
+    %{
+      display_name: account.display_name,
+      ens_name: account.ens_name,
+      wallet_address: account.wallet_address,
+      wallet_addresses: account.wallet_addresses || []
+    }
+  end
+
+  @doc """
+  The account the agent acts for. An agent that opened its own account
+  (`Keyfleet.Accounts.AgentAccount`) acts for that account, with no pairing;
+  any other agent acts for the person the shared pairing authority names.
+  """
   def with_pairing(%Keyfleet.Actors.Agent{} = agent) do
+    case Keyfleet.Accounts.AgentAccount.owned(agent.wallet_address) do
+      {:ok, %{} = account} -> {:ok, owner(agent, account)}
+      {:ok, nil} -> paired(agent)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp owner(agent, account) do
+    %{
+      agent
+      | owner?: true,
+        privy_user_id: account.privy_user_id,
+        human_account_id: account.id,
+        pairing: Keyfleet.Actors.Human.for_account(account)
+    }
+  end
+
+  defp paired(agent) do
     with {:ok, pairing} <- RegentAgents.Authority.resolve(Keyfleet.Repo, agent.wallet_address),
          {:ok, account} <-
            Keyfleet.Accounts.get_by_privy_did(pairing.privy_user_id,

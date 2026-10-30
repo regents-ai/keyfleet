@@ -53,7 +53,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Sign in / make the account | Privy sign-in, untested for agents | — | — | — | — | sign-in | K1, K8 |
+| Sign in / make the account | Privy sign-in; an agent's injected wallet signed in on keyfleet.ai, 30 Oct | — | — | — | — | sign-in | K8 |
+| Open the agent's own account | agents only | `account_open` | — | — | `account open` (1.10.21 candidate) | sign-in | K1 |
 | Sign out | account menu, `/account` Session | — | — | — | — | sign-in | K1, K8 |
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | K8 |
 | Agent's profile (make, read, edit) | agents only | `agents_join`, `agents_profile`, `agents_edit_profile` | — | the same three | `profile join`, `profile get`, `profile edit` | no | K8 |
@@ -176,12 +177,18 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 ## Gaps
 
-- **K1. An agent can't own an account yet.** Sign-in is Privy in a browser only, and
-  every signed agent request needs pairing to a person ("Protected agent operations
-  require current pairing, including agents with their own Keys or shards"). Plan: the
-  Privy account whose login wallet is the agent's SIWA wallet is the agent's own account;
-  a request signed by that wallet acts as its owner, as in ash-template's G1. Protected
-  (sign-in): waits for Sean's go. Owner: agent-access lane with Keyfleet.
+- **K1. An agent can't own an account yet. Built, held** (branch, contract 24.16.0):
+  Sean, 30 Oct, "2. a", as ash-template's G1. The signed `POST /api/v1/agent/account`
+  (`{}`) opens the agent's own account: the site asks Privy for the user its SIWA wallet
+  signs in to, makes one marked for the agent when there is none, and records the
+  opening. From then on whoami answers `owner`, and every signed request acts for that
+  account as its owner, with no pairing, while the wallet still signs in to it. A wallet
+  that signs in to a person's account opens nothing (`wallet_in_use`), nor does an agent
+  a person paired (`agent_paired`). One network opens at most five accounts a day. Tool
+  `account_open`, command `account open`. Waits on Sean's sign-off of the template's G1,
+  `PRIVY_APP_SECRET` on Keyfleet's Fly and the new table's migration. Open: an agent that
+  signed in by browser first has a person's Privy user, so it can't open one (asked of
+  the template).
 - **K2. Buying a Key had no agent path. Closed** (live 30 Oct, contract
   24.13.0): the signed `POST /api/v1/agent/fleets/FLEET_ID/keys/buy` answers the same
   approve and buy steps the Buy Key window builds (`Keyfleet.WalletSteps`, flow `buy`), for

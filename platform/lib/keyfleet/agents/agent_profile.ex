@@ -39,7 +39,7 @@ defmodule Keyfleet.Agents.AgentProfile do
   actions do
     create :ensure_profile do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
 
       accept [
         :name,
@@ -169,7 +169,7 @@ defmodule Keyfleet.Agents.AgentProfile do
     update :edit_my_profile do
       change Keyfleet.Agents.Changes.RecordAuthority
       require_atomic? false
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       atomic_upgrade_with :get_my_profile
 
       accept [
@@ -189,7 +189,7 @@ defmodule Keyfleet.Agents.AgentProfile do
     # after the change commits.
     update :set_avatar do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       require_atomic? false
       accept [:avatar_key]
       require_attributes [:avatar_key]
@@ -199,7 +199,7 @@ defmodule Keyfleet.Agents.AgentProfile do
 
     update :remove_avatar do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       require_atomic? false
       change get_and_lock_for_update()
       change set_attribute(:avatar_key, nil)

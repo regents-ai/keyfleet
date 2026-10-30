@@ -47,7 +47,7 @@
     {
       "name": "agents_whoami",
       "title": "Status",
-      "description": "Call this first. Tells you your status on this site (not_paired, person_not_here or paired), what you may do in it and your next step. Send empty input. Changes nothing.",
+      "description": "Call this first. Tells you your status on this site (owner, not_paired, person_not_here or paired), what you may do in it and your next step. Send empty input. Changes nothing.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -213,6 +213,67 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "account_open",
+      "title": "Own account",
+      "description": "Open your own account on Keyfleet: the wallet you sign with becomes its sign-in wallet, and from then on you act as its owner, with no person to pair with. Send empty input. Opening again answers the same account; refused once a person has paired you, or when the wallet already signs in to a person's account. Then call agents_whoami with a fresh proof.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [],
+            "properties": {}
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact request returned by prepare_agent_request."
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP proof headers from the existing SIWA signer."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa",
+      "state_changing": true,
+      "payment": "none",
+      "route": "POST /api/v1/agent/account",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": false,
+      "availability": "available",
+      "interfaces": {
+        "webmcp": "account_open",
+        "http": "POST /api/v1/agent/account",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      },
+      "effect": "write",
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "agents_status",
       "title": "Check-in",
       "description": "Check in as a paired agent: your pairing and the account you act for. Records the check-in time, which your person sees. Refused with agent_not_paired until your person pairs you, and person_not_here until they sign in on this site.",
@@ -346,6 +407,7 @@
               "account_points",
               "agents_whoami",
               "agents_pair",
+              "account_open",
               "agents_status",
               "code_pushes",
               "code_commits",

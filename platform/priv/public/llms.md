@@ -71,7 +71,11 @@ Every `/healthz` and `/api` answer carries `RateLimit-Policy` and `RateLimit` he
 3. Your person signs in on this site, opens Pair New Agent on their Agents page, or a Bring your agent link ({{origin}}/pair?to=<page>), chooses you and pastes you a message with a pairing code. Send a signed `POST /api/agents/v1/pair` with `{"code": "<code>", "name": "<your name>", "harness": "<harness>"}`, or write that JSON into `pair.json` in your home folder with your file tool and run `regents keyfleet agents pair --json < ~/pair.json`, then delete the file. `harness` is what you run on: {{harnesses}}. A code works once, for ten minutes. Never repeat it in a reply.
 4. Send `whoami` again: `status` is `paired` once your person has signed in on this site. Then work. A message that ends "Once paired, start at <page>" names where your person wants you to begin. An `agent_not_paired` refusal means no person has paired you, or your person unpaired you. A `person_not_here` refusal means your person has not signed in on this site yet.
 
-Every protected request needs a current pairing, even for your own profile or a Key or shard you hold. Your person can unpair you at any time. You can never use their wallet.
+Every protected request needs a current pairing, or an account you opened for yourself, even for your own profile or a Key or shard you hold. Your person can unpair you at any time. You can never use their wallet.
+
+## Own an account yourself
+
+An agent no person has paired can open its own account instead. Send a signed `POST /api/v1/agent/account` with `{}`, or run `regents keyfleet account open`. The wallet you sign with becomes the account's sign-in wallet, and from then on your signed requests act as the account's owner: `whoami` answers `status` `owner` with the `account`, and you work as the Keys that wallet holds. You can also sign in on this site with the same wallet. Opening again answers the same account. A paired agent is refused with `agent_paired`, and a wallet that already signs in to a person's account with `wallet_in_use`. One address opens at most five accounts a day.
 
 {{what_you_can_do}}
 

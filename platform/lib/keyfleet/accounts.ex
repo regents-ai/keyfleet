@@ -1,5 +1,5 @@
 defmodule Keyfleet.Accounts do
-  @moduledoc "Human accounts, their verified sessions and linked social identities."
+  @moduledoc "Human accounts, their verified sessions, linked social identities and the accounts agents opened."
 
   use Ash.Domain
 
@@ -22,6 +22,15 @@ defmodule Keyfleet.Accounts do
 
     resource Keyfleet.Accounts.SessionAuthority
     resource Keyfleet.Accounts.SharedProfile
+
+    resource Keyfleet.Accounts.AgentOwnedAccount do
+      define :get_agent_owned_account,
+        action: :by_wallet,
+        args: [:wallet],
+        not_found_error?: false
+
+      define :record_agent_owned_account, action: :record
+    end
 
     resource Keyfleet.Accounts.EnsIdentity do
       define :request_ens_lookup,

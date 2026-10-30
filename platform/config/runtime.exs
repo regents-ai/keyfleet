@@ -6,7 +6,9 @@ require Logger
 if config_env() != :test do
   config :keyfleet, :privy,
     app_id: System.get_env("PRIVY_APP_ID"),
-    verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
+    verification_key: System.get_env("PRIVY_VERIFICATION_KEY"),
+    # Only an agent opening its own account uses it (Keyfleet.Accounts.AgentAccount).
+    app_secret: System.get_env("PRIVY_APP_SECRET")
 end
 
 # The Claude connector, behind one switch: its sign-in (Keyfleet.OAuth), its

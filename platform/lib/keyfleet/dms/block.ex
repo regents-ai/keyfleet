@@ -37,7 +37,7 @@ defmodule Keyfleet.Dms.Block do
     # Blocking a Key that is already blocked keeps the block it has.
     create :block do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept []
 
       argument :fleet_id, :string, allow_nil?: false
@@ -59,7 +59,7 @@ defmodule Keyfleet.Dms.Block do
 
     destroy :unblock do
       require_atomic? false
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
     end
 
     # The Keys one Key has blocked, lowest first.

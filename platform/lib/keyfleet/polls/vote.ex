@@ -57,7 +57,7 @@ defmodule Keyfleet.Polls.Vote do
   actions do
     create :cast do
       change Keyfleet.Agents.Changes.RecordAuthority
-      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change Keyfleet.Agents.Changes.RequireAccount
       accept [:choice, :reason]
       transaction? true
 

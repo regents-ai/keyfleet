@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.15.2
+  version: 24.16.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -233,6 +233,26 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AgentProfileUnavailableError"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/account:
+    post:
+      operationId: openAgentAccount
+      description: >-
+        Opens the signing agent's own account: the wallet it signs with becomes the account's
+        sign-in wallet, and from then on its signed requests act as the account's owner, with no
+        person to pair with. Opening again answers the same account. An agent a person paired is
+        refused, and so is a wallet that already signs in to a person's account. One client
+        address opens at most five accounts a day.
+      security: [{siwaReceipt: []}]
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "200": {$ref: "#/components/responses/AgentAccountOpened"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "409": {$ref: "#/components/responses/AgentAccountNotOpened"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "429": {$ref: "#/components/responses/AccountOpeningsLimited"}
+        "503": {$ref: "#/components/responses/AccountsUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/account/balances:
     get:
@@ -4147,7 +4167,9 @@ paths:
               schema: {$ref: "#/components/schemas/SharedAgentError"}
         "401": {$ref: "#/components/responses/SharedAgentUnverified"}
         "409":
-          description: The account's 100-agent limit or a sign-in service conflict.
+          description: >-
+            agent_limit: the account's 100-agent limit. agent_owns_account: the agent opened its
+            own account on this site and can't pair. Or a sign-in service conflict.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/SharedAgentError"}
@@ -4173,6 +4195,11 @@ paths:
               schema: {$ref: "#/components/schemas/SharedAgentCheckInEnvelope"}
         "401": {$ref: "#/components/responses/SharedAgentUnverified"}
         "403": {$ref: "#/components/responses/SharedAgentCheckInRefused"}
+        "409":
+          description: "agent_owns_account: the agent opened its own account on this site, and an owner doesn't check in; it reads its account with whoami."
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SharedAgentError"}
         "503": {$ref: "#/components/responses/SharedAgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SharedSignInRefusal"}
@@ -4745,6 +4772,43 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/SharedAgentError"}
+    AgentAccountOpened:
+      description: The account the agent opened, or the one it already owns
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AgentAccountOpened"}
+    AgentAccountNotOpened:
+      description: >-
+        agent_paired: a person paired this agent, so it acts for their account. wallet_in_use: the
+        wallet already signs in to a person's account. account_not_opened: Privy refused to make the
+        account, or the agent's account now signs in with another wallet.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AgentAccountNotOpenedError"}
+    AccountOpeningsLimited:
+      description: >-
+        account_openings_limited: this client address has opened its accounts for today. Wait the
+        number of seconds in Retry-After. too_many_requests: too many requests came from this
+        client address.
+      headers:
+        Retry-After: {$ref: "#/components/headers/RetryAfter"}
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - {$ref: "#/components/schemas/AccountOpeningsLimitedError"}
+              - {$ref: "#/components/schemas/RecoveryError"}
+    AccountsUnavailable:
+      description: >-
+        accounts_unavailable: accounts can't be opened right now. pairing_unavailable: the
+        sign-in records can't be read right now. not_open_yet: the site is not open yet. The
+        sign-in service's own codes say it couldn't be reached. Try again shortly.
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - {$ref: "#/components/schemas/AccountsUnavailableError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
     SignInRefusal:
       description: >-
         The sign-in service's own refusal or failure, passed on with its status, code, message
@@ -5402,6 +5466,62 @@ components:
             agentNotPaired:
               value: {error: {code: agent_not_paired, message: "This agent is not paired with an account.", hint: "Ask your person to sign in on this site and pair you with Pair New Agent on their Agents page, then send the request again. Help: https://patchbay.help/errors/agent_not_paired"}}
   schemas:
+    AgentAccountOpened:
+      type: object
+      additionalProperties: false
+      required: [account]
+      properties:
+        account: {$ref: "#/components/schemas/AgentOwnedAccount"}
+    AgentOwnedAccount:
+      type: object
+      additionalProperties: false
+      required: [display_name, ens_name, wallet_address, wallet_addresses]
+      properties:
+        display_name: {type: [string, "null"], description: The name set in the account's shared Regent profile}
+        ens_name: {type: [string, "null"], description: The ENS name of the account's sign-in wallet}
+        wallet_address: {type: string, description: "The account's sign-in wallet: the agent's own"}
+        wallet_addresses:
+          type: array
+          items: {type: string}
+    AgentAccountNotOpenedError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [agent_paired, wallet_in_use, account_not_opened]}
+            message: {type: string}
+            hint: {type: string}
+    AccountOpeningsLimitedError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: account_openings_limited}
+            message: {type: string}
+            hint: {type: string}
+    AccountsUnavailableError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, const: accounts_unavailable}
+            message: {type: string}
+            hint: {type: string}
     AgentAccountBalances:
       type: object
       additionalProperties: false
@@ -5417,9 +5537,9 @@ components:
             purchased: {type: string, description: Decimal purchased Credits available}
             held: {type: string, description: Decimal Credits on hold}
         spending_grant:
-          type: object
+          type: [object, "null"]
           additionalProperties: false
-          description: Current pairing settings and your person's shared usage. A display snapshot; spending still requires current authority. Disabling grant approvals does not revoke an existing grant.
+          description: Current pairing settings and your person's shared usage. A display snapshot; spending still requires current authority. Disabling grant approvals does not revoke an existing grant. Null for an agent that owns its account, which spends as its owner under no grant.
           required: [enabled, max_per_spend, daily_limit, sites, site_allowed, used_24h, remaining_24h, grant_approvals_available]
           properties:
             enabled: {type: boolean}
@@ -6813,7 +6933,7 @@ components:
         data:
           type: object
           additionalProperties: false
-          required: [agent, audience, authenticated, pairing, status, allowed, next_step]
+          required: [agent, audience, authenticated, pairing, account, status, allowed, next_step]
           properties:
             agent:
               type: object
@@ -6826,23 +6946,28 @@ components:
             authenticated: {type: boolean, const: true}
             pairing:
               type: [object, "null"]
-              description: Null until a person pairs this agent.
+              description: Null until a person pairs this agent, and for an agent that owns its account.
               additionalProperties: false
               required: [id, paired_at]
               properties:
                 id: {type: string, format: uuid}
                 paired_at: {type: string, format: date-time}
+            account:
+              description: The account the agent opened for itself and owns; null for any other agent.
+              oneOf:
+                - type: "null"
+                - {$ref: "#/components/schemas/AgentOwnedAccount"}
             status:
               type: string
-              enum: [not_paired, person_not_here, paired]
-              description: "not_paired: no person has paired this agent. person_not_here: paired, but its person has never signed in on this site. paired: it acts for its person."
+              enum: [owner, not_paired, person_not_here, paired]
+              description: "owner: it opened its own account on this site and acts for it as its owner. not_paired: no person has paired this agent. person_not_here: paired, but its person has never signed in on this site. paired: it acts for its person."
             allowed:
               type: array
               items: {type: string}
               description: What the agent may do on this site in this status, in short plain sentences.
             next_step:
               type: [string, "null"]
-              description: What to do next, in one sentence; null when paired.
+              description: What to do next, in one sentence; null when paired or an owner.
     SharedAgentError:
       type: object
       additionalProperties: false
@@ -7495,7 +7620,7 @@ components:
             sign_in_expires_at: {type: [string, "null"], format: date-time}
             registry_listing: {type: [string, "null"]}
             human_backed: {type: boolean, description: Whether a World ID-verified person stands behind the agent; the person is never named}
-        pairing: {type: string, enum: [paired, person_not_here]}
+        pairing: {type: string, enum: [owner, paired, person_not_here]}
         profile:
           oneOf:
             - type: object

@@ -354,6 +354,7 @@ defmodule KeyfleetWeb.Router do
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
     get "/profile", AgentProfileController, :show
+    post "/account", AgentAccountController, :open
     get "/account/balances", AgentAccountController, :balances
     post "/account/credits/history", AgentAccountController, :credits_history
     get "/account/points", AgentAccountController, :points

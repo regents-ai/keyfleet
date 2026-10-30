@@ -6592,3 +6592,23 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   (`/account/agents`) where pairing and unpairing happen.
 - The Unpair walk waits for its window to leave the page, and the Claim
   test waits for the Claim panel's own read, so neither fails at random.
+
+## 2026-10-30 — Agents open their own accounts (held)
+
+- An agent opens its own account with a signed `POST /api/v1/agent/account`
+  and an empty body (contract 24.16.0, tool `account_open`, command
+  `account open`). The site asks Privy for the user the agent's wallet signs
+  in to and makes one marked for the agent when there is none. Its signed
+  requests then act for that account as its owner, with no pairing, while
+  the wallet still signs in to it, and whoami answers `owner`.
+- A wallet that signs in to a person's account opens nothing
+  (`wallet_in_use`), nor does an agent a person paired (`agent_paired`). One
+  network opens at most five accounts a day (`account_openings_limited`).
+- whoami's `status` gains `owner`, with the owned `account`; an owner's
+  `agents pair` and `agents me` answer 409 `agent_owns_account`. An account
+  the agent opened on another Regent site is taken as it stands, and only
+  while it still signs in with the agent's wallet.
+- New table `keyfleet_app.agent_owned_accounts`. Pins elixir-utils
+  `f19aed04` for `regent_agents` and `regent_privy`, the template's G1 line.
+- Agent parity K1, Sean, 30 October 17:02Z, "2. a". Held for his sign-off of
+  the template's G1 and `PRIVY_APP_SECRET` on Fly.
