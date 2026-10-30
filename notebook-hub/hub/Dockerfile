@@ -36,6 +36,11 @@ RUN git apply /tmp/sweep-concurrency.patch
 # other brief store failure; writes are not, so a landed write is never retried.
 COPY marimohub/storage-read-retry.patch /tmp/storage-read-retry.patch
 RUN git apply /tmp/storage-read-retry.patch
+# The app pool sweep works on 16 pools at a time and passes over a deleted
+# notebook's empty pool, so a purged project's thousands of pools finish inside
+# both loop deadlines.
+COPY marimohub/app-pool-sweep.patch /tmp/app-pool-sweep.patch
+RUN git apply /tmp/app-pool-sweep.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
@@ -45,6 +50,8 @@ RUN cd packages/core && pnpm exec vp test run src/services/catalog/
 # storage client's tests, with the storage-read-retry.patch adds.
 RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts
 RUN cd packages/storage-s3 && pnpm exec vp test run
+# The app pool tests, with the app-pool-sweep.patch add.
+RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---

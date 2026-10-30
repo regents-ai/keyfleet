@@ -6636,3 +6636,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Until 5 November both reach ten times further back in time than they will
   after it: the second reading covers ten minutes of Base, and the allowance
   is about 100 minutes of blocks, still inside the seven-minute read limit.
+
+## 2026-10-30 — Regents Club notebook cleanup on time again
+
+- Deleting a project leaves a small marker for each of its notebooks, so a
+  notebook that comes back late cannot start again. After the Regents Club
+  scratchpad was cleared on 29 October, its hub kept about 2,000 of them, and
+  both regular cleanups visited each one in turn, a few storage reads apiece.
+  Every pass ran past its limit and was stopped.
+- The cleanup now passes over a marker with nothing left in it after one read,
+  and works on 16 notebooks at a time.
+- A Keyfleet patch on marimohub (`notebook-hub/marimohub/app-pool-sweep.patch`),
+  tested in the hub image build. The hub image is now `626ec14-e673b6f`.

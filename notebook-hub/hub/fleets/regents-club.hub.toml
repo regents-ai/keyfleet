@@ -8,7 +8,7 @@ app = "kf-nb-regents-club"
 primary_region = "iad"
 
 [build]
-  image = "registry.fly.io/kf-nb-regents-club:626ec14-58179fa"
+  image = "registry.fly.io/kf-nb-regents-club:626ec14-e673b6f"
 
 [env]
   MARIMOHUB_RUN_MAINTENANCE = "true"
