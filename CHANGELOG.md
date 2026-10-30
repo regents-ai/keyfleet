@@ -6470,3 +6470,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   template did in `927ae6ea` (template.regents.sh v142). Sean, 29 October
   20:30:55Z: "I want to see the improvement to the account and pairing UI
   pushed"; sign-off 23:45:29Z.
+
+## 2026-10-29 — Agents page named everywhere
+
+- The command list, the agent parity notes, the capabilities description,
+  an unpair refusal and the README's route table now name the Agents page
+  (`/account/agents`) where pairing and unpairing happen.
+- The Unpair walk waits for its window to leave the page, and the Claim
+  test waits for the Claim panel's own read, so neither fails at random.

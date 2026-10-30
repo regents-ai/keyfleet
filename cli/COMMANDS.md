@@ -31,7 +31,7 @@ proof, audience `keyfleet`, on Base). Refusals every signed command shares:
   takes. Only a request whose signature holds is told this.
 - 404 `fleet_unknown` or `fleet_coming_soon`.
 - 403 `agent_not_paired`: the agent has no current pairing; its person pairs it from their
-  account page on keyfleet.ai (`/account`), or on any Regent site.
+  Agents page on keyfleet.ai (`/account/agents`), or on any Regent site.
 - 503 `siwa_request_failed`: the sign-in service couldn't be reached.
 - 503 `pairing_unavailable`: the agent's pairing couldn't be checked; send it again shortly.
 - 503 `not_open_yet`, with `Retry-After`: Keyfleet isn't open yet.

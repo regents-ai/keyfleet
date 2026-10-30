@@ -49,13 +49,13 @@ for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) 
     await dialog.getByRole("button", {name: "Unpair"}).click()
     await expect(confirm.getByRole("heading", {name: `Unpair ${name}?`})).toBeFocused()
     await confirm.getByRole("button", {name: "Cancel"}).click()
-    await expect(confirm).toBeHidden()
+    await expect(confirm).toHaveCount(0)
     await expect(dialog.getByRole("button", {name: "Unpair"})).toBeFocused()
 
     await dialog.getByRole("button", {name: "Unpair"}).click()
     await confirm.getByRole("button", {name: "Unpair"}).click()
 
-    await expect(confirm).toBeHidden()
+    await expect(confirm).toHaveCount(0)
     await expect(dialog).toBeHidden()
     await expect(row).toHaveCount(0)
     await expect(page.locator("#account-agents [role=status]")).toHaveText(
