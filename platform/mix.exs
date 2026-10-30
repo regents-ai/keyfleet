@@ -262,8 +262,9 @@ defmodule Keyfleet.MixProject do
         # that Run. Account and Public add four: the two records, each with that
         # Run. Publications, Code and Notebooks add six: the three records, each
         # with that Run. Agents pinning as their person add one: the Pin record's
-        # ActsForPerson check.
-        "xref graph --label compile-connected --fail-above 127",
+        # ActsForPerson check. The connector's pin and unpin add one: Workspace
+        # with that Run beside its Read.
+        "xref graph --label compile-connected --fail-above 128",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

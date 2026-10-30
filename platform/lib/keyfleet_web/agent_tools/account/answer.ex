@@ -37,7 +37,6 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   @spending_off "Approving agent spending is off on this site."
 
   @salt "agent avatar upload"
-  @max_bytes Avatar.max_bytes()
   @ticket_seconds 10 * 60
   @uploads "/api/v1/avatar/upload/"
   # The ticket is signed, not sealed, so it names the agent and nothing the
@@ -243,10 +242,13 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   def keep(_upload, :too_large), do: refusal(413, "request_too_large")
   def keep(_upload, :unreadable), do: refusal(503, "avatar_unavailable")
 
-  def keep(_upload, bytes) when byte_size(bytes) > @max_bytes,
-    do: refusal(413, "request_too_large")
+  def keep(upload, bytes) do
+    if byte_size(bytes) > Avatar.max_bytes(),
+      do: refusal(413, "request_too_large"),
+      else: store(upload, bytes)
+  end
 
-  def keep(%{actor: actor, profile_id: profile_id, declared: declared}, bytes) do
+  defp store(%{actor: actor, profile_id: profile_id, declared: declared}, bytes) do
     case Agents.store_avatar(actor, profile_id, declared, bytes) do
       {:ok, profile} -> ok(%{avatar_url: Avatar.url(profile)})
       {:error, :mismatch} -> refusal(422, "avatar_mismatch")
