@@ -371,7 +371,10 @@ defmodule KeyfleetWeb.PublicDocuments do
           "person signs in to Keyfleet from the app and allows it, the app pairs like any agent, " <>
           "and the address offers the tools above under the same names, working as that " <>
           "agent. " <>
-          "[Claude]({{origin}}/agents/claude) has the setup.",
+          "[Claude]({{origin}}/agents/claude) has the setup. " <>
+          "An agent that signs its own requests may call the same address, signing each " <>
+          "JSON-RPC POST as it signs its requests under /api/v1/agent: once paired, it works " <>
+          "there as itself, with the same tools and no identity tools.",
       else: "Keyfleet does not offer a hosted MCP endpoint."
   end
 

@@ -41,7 +41,17 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   refused with that reason (`siwa_request_failed`, `pairing_unavailable`)
   rather than served as someone it may not be.
 
-  A request without a token, or with one this site didn't give, is asked to
+  A request without a token that an agent signed with its own SIWA key, as it
+  signs its requests under `/api/v1/agent`, is that agent once its signature
+  verifies and its pairing admits it, exactly as `KeyfleetWeb.Plugs.SignedAgent`
+  admits a signed request: the same refusals, and the same tools the
+  connector's paired agent gets, without the identity tools, which keep a
+  connected app's hosted identity. The signature covers the exact bytes
+  `KeyfleetWeb.BodyReader` kept. Its syncs wait for news under its client
+  address, as its signed syncs do, and its pairing is read again before the
+  answer leaves, as the connector's is.
+
+  A request with neither, or with a token this site didn't give, is asked to
   connect (`connection_required`), with the `WWW-Authenticate` challenge
   naming this site's sign-in and both permissions, so an app such as Claude
   starts its sign-in on its first request.
@@ -53,11 +63,13 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   """
 
   @behaviour Plug
+  @behaviour Siwa.AgentAuthPlug.Hooks
 
   import Plug.Conn
 
   alias Keyfleet.Actors.{Agent, ConnectedApp, Human}
   alias Keyfleet.Agents.HostedAddress
+  alias KeyfleetWeb.ClientAddress
   alias KeyfleetWeb.Plugs.SignedAgent
   alias KeyfleetWeb.PublicDocuments
 
@@ -91,7 +103,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
         refuse(conn, "batch_not_supported")
 
       true ->
-        connected_app(conn)
+        caller(conn)
     end
   end
 
@@ -113,6 +125,16 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     end
   end
 
+  # A token makes the request a connected app's; without one, a signature
+  # makes it the agent's own.
+  defp caller(conn) do
+    cond do
+      get_req_header(conn, "authorization") != [] -> connected_app(conn)
+      Siwa.AgentAuthPlug.signed_request?(conn) -> signed_agent(conn)
+      true -> connect(conn)
+    end
+  end
+
   defp connected_app(conn) do
     with ["Bearer " <> bearer] <- get_req_header(conn, "authorization"),
          {:ok, principal} <-
@@ -124,6 +146,36 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     else
       _no_token_of_ours -> connect(conn)
     end
+  end
+
+  # The agent the signature names, admitted as a signed request is.
+  defp signed_agent(conn) do
+    Siwa.AgentAuthPlug.call(conn,
+      client: Keyfleet.SiwaBroker,
+      hooks: __MODULE__,
+      audience: "keyfleet",
+      body: :always
+    )
+  end
+
+  @impl Siwa.AgentAuthPlug.Hooks
+  def before_verify(_conn, _headers), do: {:ok, nil}
+
+  @impl Siwa.AgentAuthPlug.Hooks
+  def accept(conn, data, _context) do
+    with {:ok, %{assigns: %{agent_actor: agent}} = conn} <- SignedAgent.accept_agent(conn, data) do
+      {:ok,
+       conn
+       |> Ash.PlugHelpers.set_actor(agent)
+       |> Ash.PlugHelpers.set_context(%{waiter: ClientAddress.key(conn)})
+       |> register_before_send(&recheck(&1, agent))}
+    end
+  end
+
+  @impl Siwa.AgentAuthPlug.Hooks
+  def deny(conn, metadata) do
+    {status, body} = SignedAgent.refusal(conn, metadata)
+    conn |> put_status(status) |> Phoenix.Controller.json(body) |> halt()
   end
 
   # The app's paired identity, when the person allowed it to work here as that

@@ -6592,3 +6592,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   (`/account/agents`) where pairing and unpairing happen.
 - The Unpair walk waits for its window to leave the page, and the Claim
   test waits for the Claim panel's own read, so neither fails at random.
+
+## 2026-10-30 — Signed agents at /mcp
+
+- An agent that signs its own requests with its SIWA key can now call the MCP
+  address, `/mcp`, signing each JSON-RPC POST as it signs its `/api/v1/agent`
+  requests and sending no token. It is admitted as those requests are, with
+  the same refusals, and once paired it gets the tools the Claude connector's
+  paired agent gets, under the same names, without the identity tools and
+  without any wallet tool. Its pairing is read again before each answer
+  leaves, as the connector's is. The address stays behind
+  `KEYFLEET_CLAUDE_CONNECTOR_ENABLED`.
+- `docs/agent-parity.md` closes K8 and fills the MCP column.
