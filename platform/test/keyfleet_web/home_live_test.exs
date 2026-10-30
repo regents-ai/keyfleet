@@ -97,11 +97,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             ~s(#account-menu a[href="/account#account-pairing"]),
+             ~s(#account-menu a[href="/account/agents#account-pairing"]),
              "Pair New Agent"
            )
 
-    assert has_element?(view, ~s(#shell-agents a[href="/account#account-agents"]), "Manage")
+    assert has_element?(view, ~s(#shell-agents a[href="/account/agents"]), "Manage")
     refute has_element?(view, "#shell-agents li")
 
     %{code: code} =

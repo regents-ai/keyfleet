@@ -474,13 +474,13 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
-  # corrected or unpaired. The account menu follows on every page, the Account
+  # corrected or unpaired. The account menu follows on every page, the Agents
   # page's list and pairing box on that page.
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
 
     case socket.assigns.route_spec.route_id do
-      :account ->
+      :account_agents ->
         send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
         send_update(KeyfleetWeb.PairingBox, id: "account-pairing-box", agents_changed: true)
         {:noreply, socket}
@@ -713,6 +713,13 @@ defmodule KeyfleetWeb.ShellLive do
           lease={@session_lease}
           actor={actor(@access_context)}
           credits={@credits}
+        />
+
+        <AccountLive.agents
+          :if={@route_spec.route_id == :account_agents}
+          account={current_account(@access_context)}
+          signed_out_reason={@signed_out_reason}
+          lease={@session_lease}
         />
 
         <PointsLive.page
@@ -951,9 +958,13 @@ defmodule KeyfleetWeb.ShellLive do
        do: fleet_id
   end
 
-  # Keys changed in an open fleet while the Account page is on show: its
+  # Keys changed in an open fleet while the Agents page is on show: its
   # agents' Keys are read afresh, so a shard just issued names its Key.
-  defp keys_changed(%{assigns: %{route_spec: %{route_id: :account}}} = socket, _fleet_id, _ids) do
+  defp keys_changed(
+         %{assigns: %{route_spec: %{route_id: :account_agents}}} = socket,
+         _fleet_id,
+         _ids
+       ) do
     send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", keys_changed: true)
     {:noreply, socket}
   end
@@ -1125,9 +1136,9 @@ defmodule KeyfleetWeb.ShellLive do
             ],
        do: [fleet_id]
 
-  # The Account page shows the Keys the person's agents hold shards of, in
+  # The Agents page shows the Keys the person's agents hold shards of, in
   # every open fleet.
-  defp keys_fleets(%{route_id: :account}, _params), do: Fleets.open_fleet_ids()
+  defp keys_fleets(%{route_id: :account_agents}, _params), do: Fleets.open_fleet_ids()
   defp keys_fleets(_route_spec, _params), do: []
 
   # A person signed in hears when their own mutes change, on any of their

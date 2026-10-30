@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.AgentKeys do
   @moduledoc """
-  The Keys a person's agents act for, as the Account page shows them beside
+  The Keys a person's agents act for, as the Agents page shows them beside
   each agent (`KeyfleetWeb.AgentsPanel`) and once an agent pairs
   (`KeyfleetWeb.PairingBox`): each Key an agent's wallet holds an active shard
   of, linked to its page, or, for an agent with none, where to give it one, the

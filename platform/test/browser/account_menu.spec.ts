@@ -6,8 +6,8 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 //   under it inside the screen, holds the person's agents with Manage, Pair New
 //   Agent, Manage Account and Sign out, and closes on Escape with focus back on
 //   the name; Escape closes it before an open section behind it
-// - Manage Account opens Keyfleet's Account page and the menu closes
-// - Pair New Agent lands on the Account page's pairing box with the keyboard on
+// - Manage Account opens Keyfleet's Account page, with no agents, and the menu closes
+// - Pair New Agent lands on the Agents page's pairing box with the keyboard on
 //   the agent choice, again when pressed from the same address
 // - on the homepage the same menu opens and Manage Account loads the Account page
 // - on a phone, the open navigation menu makes the page behind it, footer
@@ -52,7 +52,7 @@ for (const width of [1280, 390]) {
       await expect(menu(page).getByRole("heading", {name: "Your agents"})).toBeAttached()
       await expect(menu(page).getByRole("link", {name: "Manage your agents"})).toHaveAttribute(
         "href",
-        "/account#account-agents",
+        "/account/agents",
       )
       await expect(menu(page).getByRole("link", {name: "Pair New Agent"})).toBeVisible()
       await expect(menu(page).getByRole("button", {name: "Sign out"})).toBeVisible()
@@ -85,31 +85,35 @@ for (const width of [1280, 390]) {
       await openMenu(page)
       await menu(page).getByRole("link", {name: "Manage Account"}).click()
       await expect(page).toHaveURL(/\/account$/)
-      await expect(page.locator("#account-agents")).toBeVisible()
+      await expect(page.locator("#account-page")).toBeVisible()
+      await expect(page.locator("#account-agents")).toHaveCount(0)
       await expect(menu(page)).toBeHidden()
     })
 
-    test("Pair New Agent lands on the Account page's pairing box", async ({page}) => {
+    test("Pair New Agent lands on the Agents page's pairing box", async ({page}) => {
       await signIn(page)
       await openShell(page, "/classic/1")
       await openMenu(page)
       await menu(page).getByRole("link", {name: "Pair New Agent"}).click()
-      await expect(page).toHaveURL(/\/account#account-pairing$/)
+      await expect(page).toHaveURL(/\/account\/agents#account-pairing$/)
       await expect(menu(page)).toBeHidden()
       const pairing = page.locator("#account-pairing")
       await expect(pairing).toBeInViewport()
       await expect(pairing.getByRole("radio").first()).toBeFocused()
 
-      // Pressed again from the same address after scrolling away, it moves there again.
+      // Pressed again from the same address after leaving the box, it moves there again.
+      // The Agents page can be short enough that the box never scrolls out of view,
+      // so the keyboard moving back to the agent choice is what shows it.
       await page.locator("#app-shell-scroller").evaluate(scroller => scroller.scrollTo({top: 0}))
-      await expect(pairing.getByRole("heading", {name: "Pair New Agent"})).not.toBeInViewport()
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+      await expect(pairing.getByRole("radio").first()).not.toBeFocused()
       await openMenu(page)
       await menu(page).getByRole("link", {name: "Pair New Agent"}).click()
       await expect(menu(page)).toBeHidden()
       await expect(pairing).toBeInViewport()
       await expect(pairing.getByRole("radio").first()).toBeFocused()
 
-      // The Account page's own Pair New Agent, beside the agents, goes there too.
+      // The Agents page's own Pair New Agent, beside the agents, goes there too.
       await page.locator("#app-shell-scroller").evaluate(scroller => scroller.scrollTo({top: 0}))
       await page.locator("#account-agents").getByRole("link", {name: "Pair New Agent"}).click()
       await expect(pairing).toBeInViewport()

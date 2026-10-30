@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
 
     assert has_element?(
              view,
-             ~s(a#connect-pair-new[href="/account#account-pairing"]),
+             ~s(a#connect-pair-new[href="/account/agents#account-pairing"]),
              "Pair New Agent"
            )
 

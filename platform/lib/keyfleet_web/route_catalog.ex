@@ -44,6 +44,13 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :account
     },
     %Entry{
+      path_pattern: "/account/agents",
+      live_action: :account_agents,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :account_agents
+    },
+    %Entry{
       path_pattern: "/account/points",
       live_action: :points,
       parameter_schema: %{},
@@ -135,6 +142,8 @@ defmodule KeyfleetWeb.RouteCatalog do
   @specs %{
     home: {:home, nil, nil, "Keyfleet", "/", [], :home, %{}},
     account: {:account, :product, "Keyfleet", "Profile", "/", [:profile_actions], :product, %{}},
+    account_agents:
+      {:account_agents, :product, "Keyfleet", "Agents", "/", [:profile_actions], :product, %{}},
     points: {:points, :product, "Keyfleet", "Points", "/", [:profile_actions], :product, %{}},
     wallets: {:wallets, :product, "Keyfleet", "Wallets", "/", [:profile_actions], :product, %{}},
     connections:
@@ -176,6 +185,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   # The account's views, each its own page under one tab bar.
   @account_tabs [
     %RouteTarget{route_id: :account, label: "Profile", path: "/account"},
+    %RouteTarget{route_id: :account_agents, label: "Agents", path: "/account/agents"},
     %RouteTarget{route_id: :points, label: "Points", path: "/account/points"},
     %RouteTarget{route_id: :wallets, label: "Wallets", path: "/account/wallets"},
     %RouteTarget{route_id: :connections, label: "Connections", path: "/account/connections"}

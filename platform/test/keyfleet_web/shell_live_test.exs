@@ -125,13 +125,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             ~s{#account-menu a[href="/account#account-pairing"]:not([target])},
+             ~s{#account-menu a[href="/account/agents#account-pairing"]:not([target])},
              "Pair New Agent"
            )
 
     assert has_element?(
              view,
-             ~s{#shell-agents a[href="/account#account-agents"]:not([target])},
+             ~s{#shell-agents a[href="/account/agents"]:not([target])},
              "Manage"
            )
 
@@ -139,14 +139,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the Account page pairs only an offered agent, with a new code",
+  test "the Agents page pairs only an offered agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/account")
+      |> live("/account/agents")
 
     box = "#account-pairing-box"
     assert has_element?(view, "#{box} input[name=harness][value=hermes]")
@@ -164,14 +164,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   # Sean, 27 Oct 2026: switching agents made a new code each time and soon said
   # none could be made; each agent keeps its code until it expires.
-  test "each agent on the Account page keeps its own code until a new one is asked for",
+  test "each agent on the Agents page keeps its own code until a new one is asked for",
        %{conn: conn} do
     account = register_account("pairing-codes", "0x5555555555555555555555555555555555555555")
 
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/account")
+      |> live("/account/agents")
 
     box = "#account-pairing-box"
 
@@ -201,7 +201,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute new == hermes
   end
 
-  test "the Account page lists a paired agent with its picture and harness", %{conn: conn} do
+  test "the Agents page lists a paired agent with its picture and harness", %{conn: conn} do
     account = register_account("paired-agent", "0x3333333333333333333333333333333333333333")
 
     %{code: code} =
@@ -213,8 +213,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
       actor: %RegentAgents.Agent{wallet: "0x4444444444444444444444444444444444444444"}
     )
 
-    {view, _html} = open_account(conn, account)
+    {profile, _html} = open_account(conn, account)
+    refute has_element?(profile, "#account-agents")
+    refute has_element?(profile, "#account-pairing-box")
 
+    {view, _html} = open_account(conn, account, "/account/agents")
+
+    assert has_element?(view, "#account-agents-title", "Paired")
     assert has_element?(view, "#account-agents li", "Astra")
 
     assert has_element?(
@@ -226,7 +231,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-agents li .rg-account__wallet", "0x4444..4444")
 
     # An agent that never came to Keyfleet has no check-in light; once it has,
-    # Account and the account menu show it.
+    # the Agents page and the account menu show it.
     refute has_element?(view, "#account-agents .rg-account__light")
 
     {:ok, agent} =
@@ -239,7 +244,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     Keyfleet.Agents.ensure_profile!(%{name: "Astra", declared_harness: "hermes"}, actor: agent)
 
-    {view, _html} = open_account(conn, account)
+    {view, _html} = open_account(conn, account, "/account/agents")
 
     for list <- ["#account-agents", "#shell-agents"] do
       assert has_element?(
@@ -727,7 +732,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            ]
   end
 
-  test "the Account page looks at, renames and unpairs a paired agent", %{conn: conn} do
+  test "the Agents page looks at, renames and unpairs a paired agent", %{conn: conn} do
     account = register_account("agent-manage", "0x3434343434343434343434343434343434343434")
 
     %{code: code} =
@@ -739,7 +744,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       actor: %RegentAgents.Agent{wallet: "0x4545454545454545454545454545454545454545"}
     )
 
-    {view, _html} = open_account(conn, account)
+    {view, _html} = open_account(conn, account, "/account/agents")
 
     view |> element("#account-agents button", "See what it has done") |> render_click()
     render_async(view)
@@ -835,7 +840,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  describe "an agent's Keys on the Account page" do
+  describe "an agent's Keys on the Agents page" do
     @fleet "fleet_tech_classic"
     @person "0x6767676767676767676767676767676767676767"
     @agent "0x7878787878787878787878787878787878787878"
@@ -857,7 +862,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     end
 
     test "a shard issued while the page is open names its Key on the agent's row", c do
-      {view, _html} = open_account(c.conn, c.account)
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
 
       assert has_element?(
                view,
@@ -879,7 +884,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
         "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.shard_events RENAME TO shard_events_gone"
       )
 
-      {view, _html} = open_account(c.conn, c.account)
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
 
       assert has_element?(view, "#account-agents li", "Astra")
       assert has_element?(view, "#account-agents li", "Couldn’t read Keys")
