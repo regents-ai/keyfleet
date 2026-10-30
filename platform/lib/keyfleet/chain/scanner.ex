@@ -14,8 +14,8 @@ defmodule Keyfleet.Chain.Scanner do
 
   Each pass reads the head and the buyer the manager names there, and a pass
   that cannot read the buyer reads nothing and fails. It then reads again the
-  last 30 blocks it already
-  recorded (about a minute of Base), then records what
+  last 300 blocks it already
+  recorded (about a minute of Base at five blocks a second), then records what
   happened after them up to the head. Each stretch of blocks is one request
   for all seven contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
@@ -78,7 +78,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias RegentChain.Abi
   alias RegentChain.Call
 
-  @rescan_blocks 30
+  @rescan_blocks 300
   @regent_buyer Call.encode("REGENT_BUYER()", [])
   @max_range 10_000
   @system %System{}

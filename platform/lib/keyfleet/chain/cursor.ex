@@ -3,8 +3,8 @@ defmodule Keyfleet.Chain.Cursor do
   How far one fleet's key history has been read from the chain, and whether it
   can be trusted right now.
 
-  Base makes a block about every two seconds and nothing here waits for
-  more: ownership is recorded at the head. A later reading that
+  Base makes five blocks a second from Denim (5 November 2026, 18:00 UTC;
+  one every two seconds before it), and nothing here waits for more: ownership is recorded at the head. A later reading that
   disagrees with what was recorded sets `rescan_from` and stops the fleet
   there until an operator has corrected the record by hand.
 
@@ -20,9 +20,9 @@ defmodule Keyfleet.Chain.Cursor do
   # Ownership is fresh while the head was read within this many seconds (one
   # five-minute turn of `Keyfleet.Chain.ReadFleet` and two retries a minute
   # apart), and the record reaches to within this many blocks of it (ten
-  # minutes of Base).
+  # minutes of Base at five blocks a second).
   @fresh_seconds 420
-  @fresh_blocks 300
+  @fresh_blocks 3_000
 
   postgres do
     table "chain_cursors"

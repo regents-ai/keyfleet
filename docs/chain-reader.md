@@ -101,8 +101,8 @@ holds the original.
 Seeing that these ran, running them again and stopping them is in
 `docs/recurring-jobs.md`.
 
-Each pass reads the head, reads again the last 30 blocks it already recorded
-(about a minute of Base), then records what happened after them up to the
+Each pass reads the head, reads again the last 300 blocks it already recorded
+(about a minute of Base at five blocks a second, from Denim on 5 November 2026), then records what happened after them up to the
 head, in stretches of at most 10,000 blocks. A stretch is one request for all
 the contracts above.
 
@@ -162,13 +162,13 @@ the contracts above.
 
 While a fleet's head was last read more than seven minutes ago (one
 five-minute turn and two retries a minute apart), or its record
-is 300 blocks (about ten minutes) or more behind that head, or while it is
+is 3,000 blocks (about ten minutes) or more behind that head, or while it is
 stopped, nobody can post in its rooms or change its workspace; pages still
 load and say the record is catching up.
 
 ## What a stop means
 
-A second reading of the last 30 blocks found an ownership change, reveal,
+A second reading of the last 300 blocks found an ownership change, reveal,
 proposal, ballot, cancellation, execution, presence, edit restriction, shard
 record, agent-voting setting or money event that reads differently from the
 record, or a recorded one gone from a block whose hash is no longer the

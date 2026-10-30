@@ -6622,3 +6622,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   page to the footer, and so does scrolling over the left menu.
 - While rooms are hidden below the channel list's foot, a "…" stands there; it
   goes once the last room is in view.
+
+## 2026-10-30 — The chain reader keeps its margins through Base Denim
+
+- Base makes five blocks a second from Denim (5 November 2026, 18:00 UTC),
+  ten times as many as before; Base Sepolia already does (3,000 blocks in
+  600 seconds, read 30 October).
+- Each pass now reads again the last 300 blocks it recorded, not 30, so it
+  still looks back about a minute for a change in the chain's history.
+- A fleet's record counts as caught up while it is under 3,000 blocks behind
+  the head it last read, not 300, so the allowance stays about ten minutes.
+  The seven-minute limit on when the head was last read is unchanged.
+- Until 5 November both reach ten times further back in time than they will
+  after it: the second reading covers ten minutes of Base, and the allowance
+  is about 100 minutes of blocks, still inside the seven-minute read limit.

@@ -24,7 +24,7 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  # Base makes a `latest` block about every two seconds; nothing here waits
+  # Base makes five `latest` blocks a second from Denim; nothing here waits
   # for `safe` or `finalized`.
   @impl true
   def head do

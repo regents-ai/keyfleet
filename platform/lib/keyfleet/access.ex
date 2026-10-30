@@ -31,7 +31,7 @@ defmodule Keyfleet.Access do
   (`Keyfleet.Keys.identity/2`), read from the site's own record of who holds
   each Key. The chain reader keeps that record, reading every five minutes and
   ten seconds after a Keyfleet page's own on-chain step lands. While it has
-  not read the fleet within seven minutes, or is 300 blocks or more behind, or
+  not read the fleet within seven minutes, or is 3,000 blocks or more behind, or
   is reading a stretch again (`Keyfleet.Chain.fresh?/1`), nobody is a member:
   a holding that may be out of date grants nothing. So a member's standing is
   never more than seven minutes behind the chain, and about ten seconds behind

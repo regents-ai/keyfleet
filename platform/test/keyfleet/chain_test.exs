@@ -43,7 +43,7 @@ defmodule Keyfleet.ChainTest do
       for {attrs, fresh?} <- [
             {%{observed_at: DateTime.add(DateTime.utc_now(), -421, :second)}, false},
             {%{observed_at: DateTime.add(DateTime.utc_now(), -360, :second)}, true},
-            {%{head_block: 1_300, next_block: 1_000}, false},
+            {%{head_block: 4_000, next_block: 1_000}, false},
             {%{}, true},
             {%{rescan_from: 900}, false}
           ] do
@@ -369,9 +369,9 @@ defmodule Keyfleet.ChainTest do
       assert owner == wallet("a")
     end
 
-    # The second reading covers the 30 blocks below the cursor and no more, and
+    # The second reading covers the 300 blocks below the cursor and no more, and
     # never reaches below the deployment for a fleet younger than that.
-    test "the second reading spans the last 30 blocks, from the deployment at the earliest", %{
+    test "the second reading spans the last 300 blocks, from the deployment at the earliest", %{
       fleet: fleet
     } do
       StubClient.put_chain(head(@deployed + 5), [log(1, 1, "a", @deployed, 0)])
@@ -384,17 +384,17 @@ defmodule Keyfleet.ChainTest do
       end)
 
       Chain.clear_divergence!(@fleet)
-      edge = [log(2, 1, "b", @deployed + 170, 0), log(3, 1, "c", @deployed + 171, 0)]
-      StubClient.put_chain(head(@deployed + 200), [log(1, 1, "a", @deployed, 0) | edge])
+      edge = [log(2, 1, "b", @deployed + 1_700, 0), log(3, 1, "c", @deployed + 1_701, 0)]
+      StubClient.put_chain(head(@deployed + 2_000), [log(1, 1, "a", @deployed, 0) | edge])
       assert Scanner.step(fleet, StubClient) == :ok
-      assert next_block() == @deployed + 201
+      assert next_block() == @deployed + 2_001
 
-      StubClient.put_chain(head(@deployed + 201), [log(1, 1, "a", @deployed, 0)],
-        block_hashes: %{(@deployed + 170) => @new_hash, (@deployed + 171) => @new_hash}
+      StubClient.put_chain(head(@deployed + 2_001), [log(1, 1, "a", @deployed, 0)],
+        block_hashes: %{(@deployed + 1_700) => @new_hash, (@deployed + 1_701) => @new_hash}
       )
 
       capture_log(fn ->
-        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 171}
+        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 1_701}
       end)
     end
   end
