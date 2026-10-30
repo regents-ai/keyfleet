@@ -331,13 +331,32 @@ const createHarbourSeaController = (
   }
 }
 
+/**
+ * Whether a press lands on the open margin around a fleet's panel, where the
+ * city shows through: the page that holds the panel, never the panel or
+ * anything else on the page.
+ */
+const onMargin = (target: EventTarget | null) => {
+  const panel = document.getElementById("fleet-view")
+  return (
+    target instanceof Element &&
+    panel !== null &&
+    target !== panel &&
+    target.contains(panel) &&
+    target.closest("#app-shell-scroller") !== null
+  )
+}
+
 type HarbourSeaHook = {
   el: HTMLElement
   controller?: HarbourSeaController
   shownPath?: string
   shownPage?: string
+  pressedMargin?: boolean
   onPageLoaded?: (event?: CustomEvent<{kind: string}>) => void
   onKey?: (event: KeyboardEvent) => void
+  onPress?: (event: PointerEvent) => void
+  onMarginClick?: (event: MouseEvent) => void
   pushEvent(event: string, payload: object): void
   liveSocket: {
     js(): {
@@ -359,6 +378,11 @@ type HarbourSeaHook = {
  * included, brings a lifted page back down, and a new page closes the card, so
  * nobody is left on a page they can't see. Escape brings the page back as the
  * bar's first button does, unless a Key's card is open: Escape closes that first.
+ *
+ * A press on the margin around a fleet's panel lifts the page as the city button
+ * beside the fleet's name does. It must start and end there, so a drag that
+ * selects text in the panel never lifts it, and a press that only closes an
+ * open menu does nothing more.
  */
 export const HarbourSea = {
   mounted(this: HarbourSeaHook) {
@@ -383,6 +407,16 @@ export const HarbourSea = {
         this.liveSocket.js().exec(back, back.getAttribute("phx-click")!)
     }
     window.addEventListener("keydown", this.onKey)
+    this.onPress = event => {
+      this.pressedMargin = onMargin(event.target) && !document.querySelector(":popover-open")
+    }
+    this.onMarginClick = event => {
+      const lift = document.getElementById("sea-lift")
+      if (lift && this.pressedMargin && onMargin(event.target))
+        this.liveSocket.js().exec(lift, lift.getAttribute("phx-click")!)
+    }
+    window.addEventListener("pointerdown", this.onPress)
+    window.addEventListener("click", this.onMarginClick)
     this.controller = createHarbourSeaController(
       this.el,
       id => this.pushEvent("show_agent", {id}),
@@ -405,6 +439,8 @@ export const HarbourSea = {
   destroyed(this: HarbourSeaHook) {
     window.removeEventListener("phx:page-loading-stop", this.onPageLoaded as EventListener)
     window.removeEventListener("keydown", this.onKey!)
+    window.removeEventListener("pointerdown", this.onPress!)
+    window.removeEventListener("click", this.onMarginClick!)
     this.controller?.destroy()
     this.controller = undefined
   },

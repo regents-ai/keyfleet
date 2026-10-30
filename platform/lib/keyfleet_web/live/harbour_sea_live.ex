@@ -493,7 +493,9 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   @doc """
   The button beside a fleet's name that lifts the page away to show the city,
-  handing focus to the bar's first button, which brings it back (`land/0`).
+  handing focus to the bar's first button, which brings it back (`land/0`). A
+  press on the margin around the fleet's panel does the same
+  (`assets/js/hooks/harbour_sea.ts`).
   """
   def lift(assigns) do
     ~H"""
