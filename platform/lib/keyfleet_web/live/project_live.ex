@@ -4,9 +4,11 @@ defmodule KeyfleetWeb.ProjectLive do
   line its Key describes it with, its goals, a "Bring your agent" link that
   pairs a visitor's agent and sends it here, and, when the Key holding it shows its work to everyone, its latest
   work, what it produced and the tasks open to take or blocked, each with the
-  agent and Key that made it. Each title opens its item in the workspace,
-  each open or blocked task has its own "Bring your agent" link, and a part
-  with more than it lists links to the project in the workspace.
+  agent and Key that made it, and under each goal the tasks that deliver on
+  it. Each title opens its item in the workspace, but a goal's tasks open
+  theirs only for a reader who may read the workspace, each open or blocked
+  task has its own "Bring your agent" link, and a part with more than it
+  lists links to the project in the workspace.
   """
   use KeyfleetWeb, :html
   import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
@@ -14,6 +16,10 @@ defmodule KeyfleetWeb.ProjectLive do
   alias KeyfleetWeb.ActivityLines
 
   attr :project, :map, required: true
+
+  attr :workspace?, :boolean,
+    required: true,
+    doc: "the reader may open its items in the workspace"
 
   def page(assigns) do
     ~H"""
@@ -62,6 +68,7 @@ defmodule KeyfleetWeb.ProjectLive do
           id="project-goals"
           title="Goals"
           labelled={false}
+          workspace?={@workspace?}
           part={@project.parts.goals}
           more={@project.workspace_path}
           empty="No open goals yet."
@@ -108,6 +115,10 @@ defmodule KeyfleetWeb.ProjectLive do
     default: false,
     doc: "each task has a link that pairs a visitor's agent and sends it there"
 
+  attr :workspace?, :boolean,
+    default: false,
+    doc: "each goal's task titles open the task in the workspace"
+
   defp part(assigns) do
     ~H"""
     <section id={@id} class="project-part" aria-labelledby={"#{@id}-title"}>
@@ -129,7 +140,8 @@ defmodule KeyfleetWeb.ProjectLive do
             aria-label={"Tasks for " <> item.title}
           >
             <li :for={task <- item.tasks} data-item={task.id}>
-              <.link navigate={task.path}>{task.title}</.link>
+              <.link :if={@workspace?} navigate={task.path}>{task.title}</.link>
+              <span :if={not @workspace?}>{task.title}</span>
               <span :if={task.standing} class="project-standing">{task.standing}</span>
             </li>
           </ul>

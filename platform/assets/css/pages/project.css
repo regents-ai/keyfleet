@@ -119,7 +119,9 @@
 .project-items .project-goal-tasks {
   grid-column: 1 / -1;
   display: grid;
-  gap: 0.15rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  row-gap: 0.15rem;
   margin: 0.4rem 0 0 0.35rem;
   padding: 0 0 0 0.9rem;
   list-style: none;
@@ -127,16 +129,19 @@
   font-size: 0.9rem;
 }
 
+/* Every task's badge stands in one column, however long its title. */
 .project-items .project-goal-tasks li {
-  display: flex;
-  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 1rem;
   padding-block: 0.25rem;
   border: 0;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.project-goal-tasks .project-standing {
+  justify-self: start;
 }
 
 .project-type {
