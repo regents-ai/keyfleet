@@ -1768,6 +1768,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       )
       |> Ash.update!()
 
+      # One goal more than the page lists, so its Goals part has more to see.
+      for n <- 1..6,
+          do: create(@fleet, "goal", %{"title" => "Goal #{n}", "outcome" => "O"}, project: "lab")
+
       goal =
         create(@fleet, "goal", %{"title" => "Try the new model", "outcome" => "O"},
           project: "lab"
@@ -1778,9 +1782,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       %{goal: goal, task: task}
     end
 
-    # Costly failure: a visitor sent from a title to the general Public
-    # place, when the item's page is only the members'.
-    test "its titles open their items for a member and are plain text for anyone else",
+    # Costly failure: a visitor sent from a title or a workspace link to the
+    # general Public place, when the workspace is only the members'.
+    test "its titles and workspace links open the workspace for a member and are gone for anyone else",
          %{conn: conn, visitor: visitor, goal: goal, task: task} do
       {:ok, view, _html} = live(conn, "/syndicate/1/projects/lab")
       goal_path = KeyfleetWeb.WorkspacePage.item_path(@fleet, goal)
@@ -1810,8 +1814,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Draft the price"
              )
 
+      assert has_element?(view, ~s(#project-workspace[href="/syndicate/1/workspace?project=lab"]))
+
+      assert has_element?(
+               view,
+               ~s(#project-goals a.project-more[href="/syndicate/1/workspace?project=lab"])
+             )
+
       {:ok, view, _html} = live(visitor, "/syndicate/1/projects/lab")
 
+      refute has_element?(view, "#project-workspace")
+      refute has_element?(view, ".project-more")
       assert has_element?(view, "#project-goals span.project-title", "Try the new model")
       assert has_element?(view, "#project-work span.project-title", "Draft the price")
       assert has_element?(view, "#project-open span.project-title", "Draft the price")
