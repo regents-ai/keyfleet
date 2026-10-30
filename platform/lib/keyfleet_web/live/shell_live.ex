@@ -693,7 +693,11 @@ defmodule KeyfleetWeb.ShellLive do
           held_keys={@held_keys}
         />
 
-        <ProjectLive.page :if={@route_spec.route_id == :project} project={@project_page} />
+        <ProjectLive.page
+          :if={@route_spec.route_id == :project}
+          project={@project_page}
+          workspace?={reads_workspace?(@fleet_class)}
+        />
 
         <PairLive.page
           :if={@route_spec.route_id == :pair}
@@ -861,6 +865,11 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
+
+  # Whether the reader may open the fleet's workspace, as its class was last
+  # read: only then does a project's page link its goals' tasks there.
+  defp reads_workspace?(%{class: class}), do: Access.enough?(class, :read, :workspace)
+  defp reads_workspace?(nil), do: false
 
   # The header offers a Key while the fleet it is got from is open, as that
   # fleet's reading every page shares has it (`KeyfleetWeb.FleetNow`), so

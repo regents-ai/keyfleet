@@ -6311,3 +6311,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   it is there before the first change, the line leaving and the line
   coming in share its place while they cross, and a long sentence ends in
   an ellipsis (the Workstream panel has it whole). Nothing below it moves.
+
+## 2026-10-30 — Project page: goal tasks for every reader
+
+- A shown project's page links each goal's task titles to the task only for
+  a reader who may read the fleet's workspace. Anyone else reads the title
+  as plain text, where the link used to send them to the Public place.
+- The task status badges under a goal stand in one column, however long a
+  task's title.

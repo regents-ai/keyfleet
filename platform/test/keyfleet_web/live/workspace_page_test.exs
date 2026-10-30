@@ -1758,6 +1758,50 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "a shown project's page" do
+    setup do
+      open_log(@fleet)
+
+      start_project(@fleet, "lab", "Lab")
+      |> Ash.Changeset.for_update(:shown, %{shown_to_everyone: true, key: 20},
+        actor: %Actors.System{}
+      )
+      |> Ash.update!()
+
+      goal =
+        create(@fleet, "goal", %{"title" => "Try the new model", "outcome" => "O"},
+          project: "lab"
+        )
+
+      task = create(@fleet, "task", %{"title" => "Draft the price"}, project: "lab")
+      link(@fleet, task, goal, "implements")
+      %{task: task}
+    end
+
+    # Costly failure: a visitor sent from a task's title to the general
+    # Public place, when the task's page is only the members'.
+    test "a goal's task titles open the task for a member and are plain text for anyone else",
+         %{conn: conn, visitor: visitor, task: task} do
+      {:ok, view, _html} = live(conn, "/syndicate/1/projects/lab")
+
+      assert has_element?(
+               view,
+               ~s(.project-goal-tasks [data-item="#{task}"] a[href="#{KeyfleetWeb.WorkspacePage.item_path(@fleet, task)}"]),
+               "Draft the price"
+             )
+
+      {:ok, view, _html} = live(visitor, "/syndicate/1/projects/lab")
+
+      assert has_element?(
+               view,
+               ~s(.project-goal-tasks [data-item="#{task}"] span),
+               "Draft the price"
+             )
+
+      refute has_element?(view, ~s(.project-goal-tasks [data-item="#{task}"] a))
+    end
+  end
+
   describe "another fleet's workspace" do
     test "never shows up in this one", %{conn: conn} do
       open_log(@fleet)
