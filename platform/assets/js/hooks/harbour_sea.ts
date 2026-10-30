@@ -356,6 +356,7 @@ type HarbourSeaHook = {
   onPageLoaded?: (event?: CustomEvent<{kind: string}>) => void
   onKey?: (event: KeyboardEvent) => void
   onPress?: (event: PointerEvent) => void
+  onRelease?: (event: PointerEvent) => void
   onMarginClick?: (event: MouseEvent) => void
   pushEvent(event: string, payload: object): void
   liveSocket: {
@@ -410,12 +411,20 @@ export const HarbourSea = {
     this.onPress = event => {
       this.pressedMargin = onMargin(event.target) && !document.querySelector(":popover-open")
     }
+    // A click lands on what holds both ends of a drag, so where the press ended
+    // is read from the release itself.
+    this.onRelease = event => {
+      this.pressedMargin = this.pressedMargin && onMargin(event.target)
+    }
     this.onMarginClick = event => {
       const lift = document.getElementById("sea-lift")
-      if (lift && this.pressedMargin && onMargin(event.target))
+      const pressed = this.pressedMargin
+      this.pressedMargin = false
+      if (lift && pressed && onMargin(event.target))
         this.liveSocket.js().exec(lift, lift.getAttribute("phx-click")!)
     }
     window.addEventListener("pointerdown", this.onPress)
+    window.addEventListener("pointerup", this.onRelease)
     window.addEventListener("click", this.onMarginClick)
     this.controller = createHarbourSeaController(
       this.el,
@@ -440,6 +449,7 @@ export const HarbourSea = {
     window.removeEventListener("phx:page-loading-stop", this.onPageLoaded as EventListener)
     window.removeEventListener("keydown", this.onKey!)
     window.removeEventListener("pointerdown", this.onPress!)
+    window.removeEventListener("pointerup", this.onRelease!)
     window.removeEventListener("click", this.onMarginClick!)
     this.controller?.destroy()
     this.controller = undefined
