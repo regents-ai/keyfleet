@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.AgentPicture
   import KeyfleetWeb.Components.Footnote
   import KeyfleetWeb.Components.LoadFailed
   import KeyfleetWeb.Components.SentFrom
@@ -37,7 +38,6 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph.Errors.UnknownFleetError
-  alias Keyfleet.PublicIdentity
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.{MuteLimitError, PostLimitError}
   alias Keyfleet.Rooms.Message
@@ -86,12 +86,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   def thread(assigns) do
     ~H"""
-    <section
-      id="rooms-thread"
-      class="rooms-thread"
-      aria-labelledby="rooms-thread-title"
-      phx-hook="Conversation"
-    >
+    <section id="rooms-thread" class="rooms-thread" aria-labelledby="rooms-thread-title">
       <header class="rooms-thread__head">
         <h2 id="rooms-thread-title" tabindex="-1">
           {cond do
@@ -166,89 +161,67 @@ defmodule KeyfleetWeb.RoomsLive do
       </div>
 
       <div :if={@room.room_id != nil} class="rooms-posts">
-        <%!-- Each room has a list of its own, so opening one starts at its newest post and is not read out as new. --%>
-        <div
-          id={"rooms-log-#{@room.room_id}"}
-          class="rooms-scroller"
-          role="log"
-          aria-labelledby="rooms-thread-title"
-          tabindex="0"
-          data-conversation-scroller
+        <.notice :if={not @room.people?} notice={@notice} />
+
+        <Regent.Primitives.empty_state
+          :if={not @room.shown? and @room.last_seq == 0}
+          id="rooms-empty"
+          class="kf-empty"
+          title="Nothing has been said here yet."
+        />
+        <%!-- The room's latest posts were read, but each is from a Key the reader muted. --%>
+        <Regent.Primitives.empty_state
+          :if={not @room.shown? and @room.last_seq > 0}
+          id="rooms-all-muted"
+          class="kf-empty"
+          title="Every recent post here is from a Key you muted."
+        />
+
+        <ol
+          id="rooms-thread-list"
+          class="rooms-thread-list"
+          phx-update="stream"
+          phx-hook="MotionList"
+          data-variant={Motion.standard("list")}
+          data-layout-id="rooms-thread-list"
+          data-children="[data-post]"
         >
-          <div class="rooms-scroller__inner">
-            <Regent.Primitives.empty_state
-              :if={not @room.shown? and @room.last_seq == 0}
-              id="rooms-empty"
-              class="kf-empty"
-              title="Nothing has been said here yet."
-            />
-            <%!-- The room's latest posts were read, but each is from a Key the reader muted. --%>
-            <Regent.Primitives.empty_state
-              :if={not @room.shown? and @room.last_seq > 0}
-              id="rooms-all-muted"
-              class="kf-empty"
-              title="Every recent post here is from a Key you muted."
-            />
-
-            <ol
-              id="rooms-thread-list"
-              class="rooms-messages"
-              phx-update="stream"
-              phx-hook="MotionList"
-              data-variant={Motion.standard("list")}
-              data-layout-id="rooms-thread-list"
-              data-children="[data-post]"
-              data-conversation-messages
-            >
-              <li
-                :for={{dom_id, message} <- @posts}
-                id={dom_id}
-                data-post
-                data-layout-id={dom_id}
-                data-author={message.kind == :post && author_tag(message)}
-                data-at={DateTime.to_unix(message.inserted_at)}
-                phx-mounted={JS.ignore_attributes(["data-continued"])}
-                class={["rooms-message", message.kind == :room_named && "rooms-naming"]}
+          <li
+            :for={{dom_id, message} <- @posts}
+            id={dom_id}
+            data-post
+            data-layout-id={dom_id}
+            class={message.kind == :room_named && "rooms-naming"}
+          >
+            <p :if={message.kind == :room_named} class="rooms-detail">
+              <.author room={@room} message={message} /> named this room “{message.body}” on
+              <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+            </p>
+            <p :if={message.kind == :post} class="rooms-author">
+              <.author room={@room} message={message} />
+              <Regent.Primitives.button
+                :if={@room.muter? and message.as_key != nil}
+                id={"rooms-mute-#{message.id}"}
+                class="rooms-mute"
+                type="button"
+                variant="quiet"
+                phx-click="mute_key"
+                phx-value-key={message.as_key}
               >
-                <p :if={message.kind == :room_named} class="rooms-detail rooms-message__main">
-                  <.author room={@room} message={message} /> named this room “{message.body}” on
-                  <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
-                </p>
-                <.avatar :if={message.kind == :post} src={picture(message.author)} />
-                <div :if={message.kind == :post} class="rooms-message__main">
-                  <p class="rooms-author">
-                    <.author room={@room} message={message}>
-                      <KeyfleetWeb.Time.local
-                        id={"#{dom_id}-at"}
-                        class="rooms-message__time"
-                        at={message.inserted_at}
-                        as={:moment}
-                        title_as={:stamp}
-                      />
-                    </.author>
-                  </p>
-                  <p :if={message.reply_to_seq} class="rooms-detail">
-                    Replying to post {message.reply_to_seq}
-                  </p>
-                  <div class="rooms-body">{body_html(message.body)}</div>
-                </div>
-                <Regent.Primitives.button
-                  :if={message.kind == :post and @room.muter? and message.as_key != nil}
-                  id={"rooms-mute-#{message.id}"}
-                  class="rooms-mute"
-                  type="button"
-                  variant="quiet"
-                  phx-click="mute_key"
-                  phx-value-key={message.as_key}
-                >
-                  Mute Key {Rules.grouped(message.as_key)}
-                </Regent.Primitives.button>
-              </li>
-            </ol>
-          </div>
-        </div>
+                Mute Key {Rules.grouped(message.as_key)}
+              </Regent.Primitives.button>
+            </p>
+            <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
+              Replying to post {message.reply_to_seq}
+            </p>
+            <div :if={message.kind == :post} class="rooms-body">{body_html(message.body)}</div>
+            <p :if={message.kind == :post} class="rooms-detail">
+              <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+            </p>
+          </li>
+        </ol>
 
-        <.notice notice={@notice} />
+        <.notice :if={@room.people?} notice={@notice} />
 
         <.form
           :if={@room.people? and @room.signed_in?}
@@ -256,22 +229,17 @@ defmodule KeyfleetWeb.RoomsLive do
           as={:post}
           id="rooms-composer"
           class="rooms-composer"
-          phx-change="draft_room_post"
           phx-submit="post_to_room"
         >
-          <label for="rooms-composer-body" class="visually-hidden">Post in {@room.name}</label>
+          <label for="rooms-composer-body">Post in {@room.name}</label>
           <textarea
             id="rooms-composer-body"
             name="post[body]"
-            rows="1"
+            rows="3"
             maxlength="4000"
-            placeholder={"Message #{@room.name}"}
             required
           >{@room.draft}</textarea>
           <Regent.Primitives.button type="submit">Post</Regent.Primitives.button>
-          <p id="rooms-composer-hint" class="rooms-composer__hint">
-            Enter posts. Shift+Enter starts a new line.
-          </p>
         </.form>
 
         <div
@@ -342,13 +310,11 @@ defmodule KeyfleetWeb.RoomsLive do
 
   attr :room, :map, required: true, doc: "the room open in the hall"
   attr :message, :map, required: true, doc: "a line as `Message.public/2` draws it"
-  slot :inner_block, doc: "what follows the line's name, such as when it was written"
 
   # Who wrote a line: the key it was written as, which opens that key over
-  # the room, then the person's wallet or the agent's name, and whether the
-  # agent was quoting its person. A line written as no key names its writer
-  # alone. Whatever is given follows the line's name: the Key, or the writer
-  # when there is no Key.
+  # the room, and beneath it the person's wallet or the agent's name, and
+  # whether the agent was quoting its person. A line written as no key names
+  # its writer alone.
   defp author(assigns) do
     ~H"""
     <.link
@@ -357,46 +323,12 @@ defmodule KeyfleetWeb.RoomsLive do
     >
       Key {Rules.grouped(@message.as_key)}
     </.link>
-    {if @message.as_key, do: render_slot(@inner_block)}
+    <.agent_picture :if={@message.author.picture} src={@message.author.picture} />
     <.writer id={"rooms-writer-#{@message.id}"} author={@message.author} />
-    {if !@message.as_key, do: render_slot(@inner_block)}
     <small :if={@message.quoting?} class="rooms-writer">Quoting its person</small>
     <.verified_human :if={@message.author.human_backed} id={"rooms-human-#{@message.id}"} />
     """
   end
-
-  attr :src, :string, required: true, doc: "the writer's picture, or nil when there is none"
-
-  @doc """
-  The picture at the start of a message in a conversation. The name beside it
-  says who it is, so the picture says nothing to a screen reader.
-  """
-  def avatar(assigns) do
-    ~H"""
-    <img
-      :if={@src}
-      class="rooms-avatar"
-      src={@src}
-      alt=""
-      width="36"
-      height="36"
-      loading="lazy"
-      referrerpolicy="no-referrer"
-    />
-    <span :if={!@src} class="rooms-avatar" aria-hidden="true"></span>
-    """
-  end
-
-  # A post's picture: the agent's own, or the one made from the person's wallet.
-  defp picture(%{picture: nil, wallet: wallet}),
-    do: PublicIdentity.avatar_src(%{wallet_address: wallet})
-
-  defp picture(%{picture: picture}), do: picture
-
-  # Posts that run on from the same writer, written as the same Key, share
-  # one name and picture (the `Conversation` hook groups them).
-  defp author_tag(%{as_key: as_key, author: author}),
-    do: :erlang.phash2({as_key, author.kind, author.name, author.wallet, author.via_agent})
 
   attr :id, :string, required: true
 
@@ -467,15 +399,6 @@ defmodule KeyfleetWeb.RoomsLive do
         {:noreply, mute_refused(socket, @mute_failed)}
     end
   end
-
-  # What the person has typed so far, so the box empties once their post is in.
-  def handle_event(
-        "draft_room_post",
-        %{"post" => %{"body" => body}},
-        %{assigns: %{room: %{people?: true} = room}} = socket
-      )
-      when is_binary(body),
-      do: {:noreply, assign(socket, :room, %{room | draft: body})}
 
   # A post a person writes in the People and agents room, as their Key when
   # they hold one and as themselves otherwise. It reaches the page the way

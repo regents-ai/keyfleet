@@ -75,6 +75,12 @@
   overflow-wrap: anywhere;
 }
 
+/* A message's parts sit inside it, not in boxes of their own. */
+.rooms-thread-list .dms-parts li {
+  padding: 0;
+  border: 0;
+}
+
 /* The site a named link goes to, under its name. */
 .dms-link-host {
   display: block;

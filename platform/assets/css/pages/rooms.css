@@ -112,47 +112,9 @@
   padding: 0.75rem var(--rg-panel-padding);
 }
 
-/* Beside the channels, the room fills the hall's height: its name at the
-   top, the message box at the foot, and the posts scrolling between them. */
-@media (width > 64rem) {
-  .fleet-hall > .rooms-thread:has(> .rooms-posts) {
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* A long list of muted Keys scrolls in its own space, so the posts keep
-     theirs. */
-  .fleet-hall > .rooms-thread > .rooms-muted {
-    flex: none;
-    max-block-size: 10rem;
-    overflow-y: auto;
-  }
-
-  .fleet-hall > .rooms-thread > .rooms-posts {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  /* When the hall is too short for everything, the posts keep a reading
-     height and the room scrolls to the box. */
-  .fleet-hall > .rooms-thread .rooms-scroller {
-    flex: 1;
-    block-size: auto;
-    min-block-size: 12rem;
-  }
-}
-
-/* The room's name heads it on one line with the detail beside it, over a
-   hairline, as a channel's header does. */
 .rooms-thread__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 0.75rem;
-  padding-block-end: 0.75rem;
-  border-block-end: 1px solid var(--color-border);
+  display: grid;
+  gap: 0.25rem;
 }
 
 .rooms-thread__head h2 {
@@ -166,111 +128,7 @@
 
 .rooms-posts {
   display: grid;
-  gap: 0.75rem;
-}
-
-/* The conversation scrolls on its own and rests at its newest post: the
-   reversed column keeps the view at the bottom as posts arrive, while the
-   posts themselves stay oldest first for reading and keyboard order. */
-.rooms-scroller {
-  display: flex;
-  flex-direction: column-reverse;
-  inline-size: 100%;
-  block-size: clamp(20rem, 60dvh, 42rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.rooms-scroller__inner {
-  display: grid;
-  gap: 0.75rem;
-  padding-block: 0.5rem;
-}
-
-.rooms-messages {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rooms-messages:not(:has(> li)) {
-  display: none;
-}
-
-/* A post: its writer's picture, then their name and time on one line over
-   the words. */
-.rooms-message {
-  position: relative;
-  display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1fr);
-  gap: 0 0.75rem;
-  align-items: start;
-  padding: 0.6rem 0.5rem 0.15rem;
-}
-
-.rooms-message[data-continued] {
-  padding-block-start: 0.1rem;
-}
-
-@media (hover: hover) {
-  .rooms-message:hover {
-    background: color-mix(in oklch, var(--color-fg) 4%, transparent);
-  }
-}
-
-.rooms-avatar {
-  display: block;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-bg);
-  object-fit: cover;
-}
-
-/* A post that runs on from its writer's last one keeps the picture's column
-   but not the picture, and leaves out the name line the post above shows. */
-.rooms-message[data-continued] .rooms-avatar {
-  visibility: hidden;
-  block-size: 0;
-}
-
-.rooms-message[data-continued] .rooms-author {
-  display: none;
-}
-
-.rooms-message .rooms-author {
-  gap: 0.125rem 0.6rem;
-}
-
-.rooms-message__main {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-/* How a post arrived and who wrote it stay together on one line, the
-   address giving way first when the line is short. */
-.rooms-message .rooms-writer {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  min-width: 0;
-  max-inline-size: 100%;
-}
-
-.rooms-message__time {
-  color: var(--color-fg-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-
-/* The note that someone named the room reads as a line of its own, set
-   where the words of a post start. */
-.rooms-message.rooms-naming {
-  grid-template-columns: minmax(0, 1fr);
-  padding-block: 0.5rem;
-  padding-inline-start: calc(0.5rem + 2.25rem + 0.75rem);
+  gap: 1rem;
 }
 
 /* A room for Keys only offers signing in and General side by side, wrapping on a phone. */
@@ -320,7 +178,13 @@
   border-block-end: 0;
 }
 
-/* The Key, the time and who wrote as the Key share the post's first line. */
+/* The note that someone named the room reads as a line of its own, not a post. */
+.rooms-thread-list li.rooms-naming {
+  padding-block: 0.5rem;
+}
+
+/* The Key and its Mute button share the post's first line; who wrote as the
+   Key runs on the line under them. */
 .rooms-author {
   display: flex;
   flex-wrap: wrap;
@@ -329,15 +193,13 @@
   font-weight: 600;
 }
 
-/* On a Key's wall the Key and its button share the first line; who wrote as
-   the Key runs on the line under them. */
-.rooms-thread-list .rooms-author::after {
+.rooms-author::after {
   content: "";
   flex-basis: 100%;
   order: 1;
 }
 
-.rooms-thread-list .rooms-author > .rooms-writer {
+.rooms-author > .rooms-writer {
   order: 2;
 }
 
@@ -376,30 +238,8 @@
 }
 
 .rooms-mute {
+  margin-inline-start: auto;
   font-weight: 400;
-}
-
-/* On a touch screen a post's button sits under its words. */
-.rooms-message .rooms-mute {
-  grid-column: 2;
-  justify-self: start;
-}
-
-/* With a pointer it floats over the post's top right corner while the post is
-   pointed at or reached by keyboard, taking no room from the words. */
-@media (hover: hover) {
-  .rooms-message .rooms-mute {
-    position: absolute;
-    inset-block-start: 0.25rem;
-    inset-inline-end: 0.5rem;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    opacity: 0;
-  }
-
-  .rooms-message:is(:hover, :focus-within) .rooms-mute {
-    opacity: 1;
-  }
 }
 
 .rooms-muted ul {
@@ -441,33 +281,6 @@
   gap: 0.5rem;
   width: 100%;
   justify-items: start;
-}
-
-/* A room's message box sits under the posts with Post beside it, one line
-   tall until there is more to say. */
-.rooms-thread .rooms-composer {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  justify-items: stretch;
-}
-
-.rooms-thread .rooms-composer textarea {
-  min-block-size: 2.75rem;
-  max-block-size: 12rem;
-  field-sizing: content;
-  resize: none;
-}
-
-.rooms-composer__hint {
-  grid-column: 1 / -1;
-  color: var(--color-fg-muted);
-  font-size: 0.75rem;
-}
-
-@media (pointer: coarse) {
-  .rooms-composer__hint {
-    display: none;
-  }
 }
 
 .rooms-field {

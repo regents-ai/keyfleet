@@ -28,7 +28,6 @@ import {arriveAt, hashTarget, installAccountMenu} from "./account_menu"
 import {installVitals} from "./vitals"
 import {installLaunchSteps} from "./launch_steps"
 import {AccountWallets} from "./hooks/account_wallets"
-import {Conversation} from "./hooks/conversation"
 import {Countdown} from "./hooks/countdown"
 import {FleetTabs} from "./hooks/fleet_tabs"
 import {FleetPreview} from "./hooks/fleet_preview"
@@ -318,7 +317,6 @@ const hooks = {
   ...labHooks,
   ...colocatedHooks,
   AccountWallets,
-  Conversation,
   Countdown,
   FleetTabs,
   FleetPreview,
