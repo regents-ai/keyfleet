@@ -210,10 +210,12 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "asking again for a key's draw" do
-    defp draw(fleet, seed, requested_at) do
+    defp draw(fleet, seed, requested_at, deck_hash \\ "0x" <> String.duplicate("d", 64)) do
       ChainViews.put!([
         {fleet.keys_address, "revealSeed(uint256)", [id(4)], {"bytes32", [seed]}},
-        uint(fleet.keys_address, "revealRequestedAt(uint256)", [id(4)], requested_at)
+        uint(fleet.keys_address, "revealRequestedAt(uint256)", [id(4)], requested_at),
+        {fleet.keys_address, "fleet(uint256)", [fleet.chain_fleet_id],
+         {"address,uint8,uint32,uint32,bytes32", [fleet.manager_address, 0, 1, 1, deck_hash]}}
       ])
     end
 
@@ -230,6 +232,12 @@ defmodule Keyfleet.WalletStepsTest do
 
       draw(fleet, "0x" <> String.duplicate("1", 64), @now)
       assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :revealed}
+    end
+
+    test "nothing is asked while the fleet's deck isn't set on the chain", %{fleet: fleet} do
+      zero = "0x" <> String.duplicate("0", 64)
+      draw(fleet, zero, 0, zero)
+      assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :deck_not_set}
     end
 
     test "a key dealt its card by number never draws", %{fleet: fleet} do

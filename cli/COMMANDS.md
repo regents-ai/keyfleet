@@ -639,8 +639,8 @@ Server:
 fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
 key   = the Key, as the chain reader recorded it, else 404 key_unknown
 built = WalletSteps.build_steps(fleet, :reveal, wallet, key, actor: the agent)
-answer the step; blocked "Traits drawn", "Draw on its way" or "Its number gives its
-traits" when so
+answer the step; blocked "Traits drawn", "Draw on its way", "Its number gives its
+traits" or "Its fleet's deck isn't set yet" when so
 ```
 
 - **History:** 2026-10-29 added (parity gap K4).

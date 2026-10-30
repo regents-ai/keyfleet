@@ -421,6 +421,8 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
 test("a key whose draw was turned down can be asked again: every press reaches the wallet, and the server says when the draw is on its way", async ({
   page,
 }) => {
+  // Key 1 is dealt its card by number and never draws; Key 2 draws.
+  sellKey(fleet, stranger)
   const key = sellKey(fleet, stranger)
   refuseDraw(fleet, key, true)
   const errors: string[] = []

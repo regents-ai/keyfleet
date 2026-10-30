@@ -126,6 +126,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   test "the budget is spent before the sign-in server is asked, even while it is down", c do
+    # An hour's window, so a run that crosses a minute mark keeps its count.
+    budget = Application.fetch_env!(:keyfleet, :mcp_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :mcp_rate_limit, budget) end)
+    Application.put_env(:keyfleet, :mcp_rate_limit, Keyword.put(budget, :window_seconds, 3600))
     subject = account!()
     token = connect!(subject, @agent_scopes)
     test = self()

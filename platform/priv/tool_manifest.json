@@ -12197,7 +12197,7 @@
         "untrustedContentHint": true,
         "consequentialHint": true
       },
-      "requires": "siwa_and_pairing_and_product_rights",
+      "requires": "siwa_and_pairing",
       "state_changing": false,
       "payment": "none",
       "scope": "site",
@@ -12277,7 +12277,7 @@
         "untrustedContentHint": true,
         "consequentialHint": true
       },
-      "requires": "siwa_and_pairing_and_product_rights",
+      "requires": "siwa_and_pairing",
       "state_changing": false,
       "payment": "none",
       "scope": "site",
@@ -12373,7 +12373,7 @@
         "untrustedContentHint": true,
         "consequentialHint": true
       },
-      "requires": "siwa_and_pairing_and_product_rights",
+      "requires": "siwa_and_pairing",
       "state_changing": false,
       "payment": "none",
       "scope": "site",

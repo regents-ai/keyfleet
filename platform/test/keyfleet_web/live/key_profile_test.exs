@@ -293,11 +293,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       # still being read: the first read from now on takes its time.
       reads = :atomics.new(1, [])
       seed = Call.encode("revealSeed(uint256)", [id(12)])
+      record = Call.selector("fleet(uint256)")
 
       rewards_answer(fn
         _to, ^seed, _hash ->
           if :atomics.add_get(reads, 1, 1) == 1, do: Process.sleep(2_000)
           {:ok, <<0::256>>}
+
+        _to, ^record <> _fleet_id, _hash ->
+          {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
 
         _to, _data, _hash ->
           {:ok, <<0::256>>}
@@ -687,15 +691,18 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     )
   end
 
-  # What the fleet answers for key 12's seed, which it has none of, and for
-  # when its request for a draw was accepted; anything else is zero.
+  # What the fleet answers for key 12's seed, which it has none of, for when
+  # its request for a draw was accepted, and for its deck, which is set;
+  # anything else is zero.
   defp draw_answer(requested_at) do
     seed = Call.encode("revealSeed(uint256)", [id(12)])
     requested = Call.encode("revealRequestedAt(uint256)", [id(12)])
+    record = Call.selector("fleet(uint256)")
 
     rewards_answer(fn
       _to, ^seed, _hash -> {:ok, <<0::256>>}
       _to, ^requested, _hash -> {:ok, <<requested_at::256>>}
+      _to, ^record <> _fleet_id, _hash -> {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
       _to, _data, _hash -> {:ok, <<0::256>>}
     end)
   end

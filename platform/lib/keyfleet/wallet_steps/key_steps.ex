@@ -614,9 +614,18 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
 
-  # Whether the chain has a seed for the key, or a request on its way.
+  # Whether the chain has a seed for the key, or a request on its way, and
+  # whether its fleet's deck is set on the chain yet, as the contract checks.
   defp reveal(fleet, onchain, step, figures) do
     with {:ok, reads} <- Reads.at_head(),
+         {:ok, [_manager, _preset, _type, _size, deck_hash]} <-
+           Reads.many(
+             reads,
+             fleet.keys_address,
+             "fleet(uint256)",
+             [fleet.chain_fleet_id],
+             [:address, {:uint, 8}, {:uint, 32}, {:uint, 32}, :bytes32]
+           ),
          {:ok, seed} <-
            Reads.one(reads, fleet.keys_address, "revealSeed(uint256)", [onchain], :bytes32),
          {:ok, requested_at} <-
@@ -631,6 +640,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         cond do
           seed != @no_seed -> %{"reveal" => :revealed}
           requested_at != 0 -> %{"reveal" => :reveal_requested}
+          deck_hash == @no_seed -> %{"reveal" => :deck_not_set}
           true -> %{}
         end
 

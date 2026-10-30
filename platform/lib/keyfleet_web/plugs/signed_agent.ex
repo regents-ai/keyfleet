@@ -1073,8 +1073,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          "treasury/convert",
          %{"inputs" => %{"amount" => amount} = inputs} = params
        )
-       when map_size(params) == 1 and map_size(inputs) == 1 and is_binary(amount),
-       do: :ok
+       when map_size(params) == 1 and map_size(inputs) == 1,
+       do: admit(typed?(amount, 100))
 
   defp check_chain_body("proposals/create", params) when is_map(params) do
     admit(

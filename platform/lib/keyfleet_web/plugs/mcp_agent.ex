@@ -61,16 +61,6 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   alias KeyfleetWeb.Plugs.SignedAgent
   alias KeyfleetWeb.PublicDocuments
 
-  # 120 requests a minute for each connected account, after the endpoint's
-  # ceiling for the connector's addresses.
-  @budget RegentAgentAccess.RateLimit.init(
-            policy: "mcp",
-            limit: 120,
-            window: 60,
-            admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
-            key: &__MODULE__.account/1
-          )
-
   @impl true
   def init(opts), do: opts
 
@@ -129,7 +119,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
            RegentOAuth.verify(bearer, RegentOAuth.resource(), RegentMCPAgents.identity_scope()) do
       conn
       |> put_private(:mcp_principal, principal)
-      |> RegentAgentAccess.RateLimit.call(@budget)
+      |> RegentAgentAccess.RateLimit.call(budget())
       |> as_connected_app(principal)
     else
       _no_token_of_ours -> connect(conn)
@@ -277,4 +267,19 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   end
 
   defp url, do: PublicDocuments.url("/mcp")
+
+  # 120 requests a minute for each connected account, after the endpoint's
+  # ceiling for the connector's addresses. Read on each request, as the
+  # endpoint's budgets are.
+  defp budget do
+    budget = Application.fetch_env!(:keyfleet, :mcp_rate_limit)
+
+    RegentAgentAccess.RateLimit.init(
+      policy: "mcp",
+      limit: Keyword.fetch!(budget, :limit),
+      window: Keyword.fetch!(budget, :window_seconds),
+      admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
+      key: &__MODULE__.account/1
+    )
+  end
 end

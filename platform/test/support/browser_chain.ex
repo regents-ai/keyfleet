@@ -59,6 +59,7 @@ defmodule Keyfleet.BrowserChain do
   @allowance Call.selector("allowance(address,address)")
   @reveal_seed Call.selector("revealSeed(uint256)")
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
+  @fleet_record Call.selector("fleet(uint256)")
   @owner_of Call.selector("ownerOf(uint256)")
   @sales_open_at Call.selector("salesOpenAt(uint256)")
   @total_minted Call.selector("totalMinted()")
@@ -233,6 +234,10 @@ defmodule Keyfleet.BrowserChain do
   end
 
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
+
+  # Every fleet's deck is set on the chain.
+  defp answer(_keys, @fleet_record <> _fleet_id, _block_hash),
+    do: {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
 
   defp answer(keys, @reveal_requested_at <> token_id, _block_hash) do
     refused? = Map.get(answers(), {:draw_refused, keys, String.to_integer(token_id, 16)}, false)

@@ -6543,3 +6543,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the contract allows.
 - Parity gap K4 (`docs/agent-parity.md`). It moves money and acts on wallets,
   so it ships only on Sean's word.
+
+## 2026-10-30 — Leftovers from the wallet release review
+
+- Ask again is no longer offered while a fleet's deck isn't on the chain yet,
+  which the contract refuses: it says "Its fleet's deck isn't set yet".
+- Contract 24.13.1: every agent wallet request now documents 409
+  `fleet_not_on_chain`, which a fleet opened in the catalog before its
+  contracts are recorded answers. The 29 Oct entries that left it out for
+  buying a Key and the shard requests are undone.
+- The browser tools for the daily split, the staking share and Buy REGENT no
+  longer say they need a Key: anyone may use them.
+- The signed Buy REGENT request refuses an amount longer than the contract's
+  100 characters.
+- Each connected account's budget at `/mcp` (120 a minute) is read from config
+  on each request, so a test can widen its window.

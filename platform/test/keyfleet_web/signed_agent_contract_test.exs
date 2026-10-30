@@ -835,13 +835,28 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       end)
 
     documented = documented_answers()
-    # Keep the legacy fleet_not_on_chain responses in the published contract.
-    # Every undeployed catalog fleet now stops at fleet_coming_soon instead.
-    legacy =
-      for path <- [@presence, @propose, @vote, @cancel, @carry_out, @split, @claim],
+    # A fleet opened in the catalog before its deployment is recorded answers
+    # fleet_not_on_chain on every chain route. Every catalog fleet here is
+    # coming soon until it is deployed, so none can be driven to it.
+    not_on_chain =
+      for path <- [
+            @presence,
+            @propose,
+            @vote,
+            @cancel,
+            @carry_out,
+            @split,
+            @claim,
+            @claim_all,
+            @issue_shard,
+            @agent_voting,
+            @end_shard,
+            @reveal,
+            @return_advance
+          ],
           do: {"POST", path, 409}
 
-    assert Enum.sort(documented -- answered) == Enum.sort(legacy)
+    assert Enum.sort(documented -- answered) == Enum.sort(not_on_chain)
     assert answered -- documented == []
   end
 
@@ -1197,9 +1212,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        {"address,address,uint256,bytes32", [operator, usdc, outstanding, purpose]}}
     end
 
+    quiet = "0x" <> String.duplicate("7c", 20)
+    Keyfleet.ProposalHelpers.asset_details!(@fleet, quiet, "QUIET", nil)
+
     ChainViews.put!([
       advance.(7, @owner, 5_000_000),
       advance.(8, "0x" <> String.duplicate("0", 40), 0),
+      {treasury, "advances(uint256)", [9],
+       {"address,address,uint256,bytes32", [@owner, quiet, 5, purpose]}},
       uint.(usdc, "balanceOf(address)", [wallet], 10_000_000),
       uint.(usdc, "allowance(address,address)", [wallet, treasury], 0)
     ])
@@ -1239,10 +1259,29 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert refused.body["error"]["code"] == "invalid_amount"
     assert is_binary(refused.body["error"]["details"]["problem"])
 
+    # Advance 9 is in a token that never said its decimals, so no amount of
+    # it can be read.
+    unknown = Map.put(@address, "advance_id", "9")
+    refused = answer(c, c.signer, "POST", @return_advance, unknown, %{"amount" => "2"}, 422)
+    assert refused.body["error"]["code"] == "invalid_amount"
+
+    assert refused.body["error"]["details"]["problem"] ==
+             "This token hasn’t said its decimals, so no amount can be read."
+
     never = Map.put(@address, "advance_id", "8")
 
     assert answer(c, c.signer, "POST", @return_advance, never, %{"amount" => "1"}, 404).body ==
              refused("advance_unknown")
+
+    # Turning USDC into REGENT takes an amount no longer than the contract's
+    # 100 characters, as returning an advance does.
+    convert = "/api/v1/agent/fleets/#{@fleet}/treasury/convert"
+    assert SignedAgent.check_body(convert, %{"inputs" => %{"amount" => "250"}}) == :ok
+
+    assert SignedAgent.check_body(convert, %{
+             "inputs" => %{"amount" => String.duplicate("1", 101)}
+           }) ==
+             :invalid
 
     launch_routes(c, fleet, uint)
   end
@@ -1299,7 +1338,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     draw = fn requested_at ->
       ChainViews.put!([
         {fleet.keys_address, "revealSeed(uint256)", [key], {"bytes32", [zero]}},
-        {fleet.keys_address, "revealRequestedAt(uint256)", [key], {"uint64", [requested_at]}}
+        {fleet.keys_address, "revealRequestedAt(uint256)", [key], {"uint64", [requested_at]}},
+        {fleet.keys_address, "fleet(uint256)", [fleet.chain_fleet_id],
+         {"address,uint8,uint32,uint32,bytes32",
+          [fleet.manager_address, 0, 1, 1, "0x" <> String.duplicate("d", 64)]}}
       ])
     end
 

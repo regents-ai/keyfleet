@@ -217,6 +217,9 @@ config :keyfleet, :api_rate_limit, limit: 120, window_seconds: 60
 # minute of their own at /mcp.
 config :keyfleet, :connector_rate_limit, limit: 6_000, window_seconds: 60
 
+# Each connected account's own budget at /mcp.
+config :keyfleet, :mcp_rate_limit, limit: 120, window_seconds: 60
+
 # Tries at the early-access form per client address: five in ten minutes.
 config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600
 

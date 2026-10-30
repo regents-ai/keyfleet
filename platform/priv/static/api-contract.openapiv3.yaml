@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.15.0
+  version: 24.15.1
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -3163,6 +3163,7 @@ paths:
               schema: {$ref: "#/components/schemas/ChainClaimAll"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
@@ -3237,6 +3238,7 @@ paths:
               schema: {$ref: "#/components/schemas/ChainIssueShard"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -3286,6 +3288,7 @@ paths:
               schema: {$ref: "#/components/schemas/ChainAgentVoting"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -3326,6 +3329,7 @@ paths:
               schema: {$ref: "#/components/schemas/ChainEndShard"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/KeyNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
@@ -3369,8 +3373,9 @@ paths:
       description: >-
         The transaction that asks again for a Key's random draw of its traits, as the Key page's Ask
         again button does. Anyone may send it while the Key's request was refused. Blocked "Traits
-        drawn" once the draw is made, "Draw on its way" while a request waits, and "Its number
-        gives its traits" for a Key dealt its card by number, which never draws. Nothing is sent
+        drawn" once the draw is made, "Draw on its way" while a request waits, "Its number
+        gives its traits" for a Key dealt its card by number, which never draws, and "Its
+        fleet's deck isn't set yet" until the fleet's deck is on the chain. Nothing is sent
         here: the signing wallet sends it itself, on Base.
       security: [{siwaReceipt: []}]
       parameters:
@@ -3386,6 +3391,7 @@ paths:
               schema: {$ref: "#/components/schemas/ChainKeyStep"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/KeyNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
@@ -3436,6 +3442,7 @@ paths:
               schema: {$ref: "#/components/schemas/ChainReturnAdvance"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AdvanceNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -4965,6 +4972,7 @@ components:
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentBuyRefused:
       description: >-
+        fleet_not_on_chain: the fleet is open but its contracts aren't recorded yet.
         keys_not_for_sale: Regents Club Keys are given with Regents Club Passes, never sold.
         keys_sold_out: every Key of the fleet is sold. request_replayed: the sign-in service has
         seen this signed request before; sign it again and send it.
@@ -4973,10 +4981,11 @@ components:
           schema:
             anyOf:
               - {$ref: "#/components/schemas/BuyRefusedError"}
+              - {$ref: "#/components/schemas/FleetNotOnChainError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentClubClaimRefused:
       description: >-
-        not_club_key: only a Regents Club Key is claimed with its Pass; claim another fleet's Key's
+        fleet_not_on_chain: the fleet is open but its contracts aren't recorded yet. not_club_key: only a Regents Club Key is claimed with its Pass; claim another fleet's Key's
         money with keys/TOKEN_ID/claim. request_replayed: the sign-in service has seen this signed
         request before; sign it again and send it.
       content:
@@ -4984,10 +4993,11 @@ components:
           schema:
             anyOf:
               - {$ref: "#/components/schemas/NotClubKeyError"}
+              - {$ref: "#/components/schemas/FleetNotOnChainError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentNoLaunch:
       description: >-
-        no_launch: the fleet hasn't launched a token yet; a launch comes from a carried-out launch
+        fleet_not_on_chain: the fleet is open but its contracts aren't recorded yet. no_launch: the fleet hasn't launched a token yet; a launch comes from a carried-out launch
         proposal. request_replayed: the sign-in service has seen this signed request before; sign
         it again and send it.
       content:
@@ -4995,6 +5005,7 @@ components:
           schema:
             anyOf:
               - {$ref: "#/components/schemas/NoLaunchError"}
+              - {$ref: "#/components/schemas/FleetNotOnChainError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AdvanceNotFound:
       description: >-
