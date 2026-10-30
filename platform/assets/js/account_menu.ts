@@ -15,7 +15,7 @@ export function arriveAt(target: HTMLElement) {
   return choice !== undefined
 }
 
-/** The element the address's #fragment names, such as the Account page's pairing box. */
+/** The element the address's #fragment names, such as the Agents page's pairing box. */
 export const hashTarget = () => {
   const id = decodeURIComponent(window.location.hash.slice(1))
   return id ? document.getElementById(id) : null

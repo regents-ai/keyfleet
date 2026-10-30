@@ -10,8 +10,8 @@ defmodule KeyfleetWeb.Components.Shell do
   Signed in, the account's picture and name at the top right open the account
   menu (`Regent.Account.menu`), the same on the app's pages and the homepage: the
   person's picture, name and wallet, the agents paired with the account (the
-  `agents` slot), Pair New Agent, Manage Account and Sign out. Pairing itself,
-  the account's wallets and everything else about the account are on the
+  `agents` slot), Pair New Agent, Manage Account and Sign out. The agents and pairing are on the Agents page,
+  and the account's wallets and everything else about the account are on the
   Account page. The browser opens and closes the menu (`popover`); following a
   link inside it closes it (`assets/js/account_menu.ts`).
   """
@@ -200,7 +200,7 @@ defmodule KeyfleetWeb.Components.Shell do
         wallet={@account_control.wallet}
         ens_name={@account_control.ens_name}
         manage_href={~p"/account"}
-        pair_href={~p"/account#account-pairing"}
+        pair_href={~p"/account/agents#account-pairing"}
       >
         <:picture>
           <img

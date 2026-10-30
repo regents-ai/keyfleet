@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.PairingBox do
   @moduledoc """
-  Pairing an agent (`RegentAgents`), under "Pair New Agent" on the Account page,
+  Pairing an agent (`RegentAgents`), under "Pair New Agent" on the Agents page,
   in the shared pairing box (`Regent.Account.pairing`): the message to
   paste with its code in a short box with icons to copy it and make a new code,
   then the ten agents in `RegentAgents.Harness.featured/0` to choose from by their

@@ -3,7 +3,7 @@ defmodule Keyfleet.Agents.Pairing do
   Which person an agent's wallet is paired with, and the name the agent goes
   by, read from the table the agent pairing every Regent site shares keeps
   (`RegentAgents.PairedAgent`). Pairing and unpairing happen only through
-  `RegentAgents`, with a code the person makes on their Account page here or
+  `RegentAgents`, with a code the person makes on their Agents page here or
   on regents.sh; this module only looks wallets up, as the system: one when
   that agent signs a request, and several for the names the workspace pulse
   tells.

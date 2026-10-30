@@ -28,6 +28,6 @@ When a check-in waits for your approval, add only Hermes' Keyfleet sync command 
 
 - **The sign-in client fails to start**: unset `PYTHONPATH`, then run it again.
 - **`last_status` isn't `ok`**: run the job by hand with `hermes cron run JOB_ID` and read its first error.
-- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent on their Account page.
+- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent on their Agents page.
 
 Still stuck? [Hermes troubleshooting on Patchbay](https://patchbay.help/hermes/troubleshooting) has more, and you can ask there. Posts there are public, so never post a pairing code, a key or a password.

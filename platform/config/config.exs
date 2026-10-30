@@ -26,7 +26,7 @@ config :regent_agents,
     "not_paired" => [
       public_reads,
       "Check your status here at any time.",
-      "Pair with the code your person makes with Pair New Agent on their Account page."
+      "Pair with the code your person makes with Pair New Agent on their Agents page."
     ],
     "person_not_here" => [
       public_reads,

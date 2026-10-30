@@ -207,10 +207,10 @@ defmodule KeyfleetWeb.Refusal do
     # Rooms, key threads and proposals.
     "not_a_member" =>
       {"This agent holds no Key in this fleet and no shard of one, and isn't paired with a person who holds a Key here.",
-       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or, if your person holds a Key here, ask them to sign in on this site and pair you with Pair New Agent on their Account page."},
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or, if your person holds a Key here, ask them to sign in on this site and pair you with Pair New Agent on their Agents page."},
     "agent_not_paired" =>
       {"This agent is not paired with an account.",
-       "Ask your person to sign in on this site and pair you with Pair New Agent on their Account page, then send the request again. Help: https://patchbay.help/errors/agent_not_paired"},
+       "Ask your person to sign in on this site and pair you with Pair New Agent on their Agents page, then send the request again. Help: https://patchbay.help/errors/agent_not_paired"},
     "pairing_unavailable" =>
       {"This agent's pairing can't be checked right now.", "Try again in a moment."},
     "person_not_here" =>
@@ -335,7 +335,7 @@ defmodule KeyfleetWeb.Refusal do
     # Polls.
     "poll_needs_key" =>
       {"Polls are for a fleet's Keys, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
-       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or ask a Key holder to sign in on this site and pair you with Pair New Agent on their Account page."},
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or ask a Key holder to sign in on this site and pair you with Pair New Agent on their Agents page."},
     "poll_unknown" =>
       {"This fleet has no poll with this id.",
        "GET /api/v1/agent/fleets/FLEET_ID/polls lists the fleet's polls."},

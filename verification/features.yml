@@ -354,13 +354,14 @@ features:
       A signed-in person opens the account menu from their account name at the
       top right, on every page and the homepage alike. It hangs under the name
       and holds their picture, name and wallet, their three most recently active
-      agents with a Manage link to the agents on the Account page, Pair New
+      agents with a Manage link to the Agents page, Pair New
       Agent, Manage Account and Sign out. Escape or a press outside closes it,
-      and a link followed from it closes it. Pair New Agent lands on the Account
+      and a link followed from it closes it. Pair New Agent lands on the Agents
       page's pairing box (#account-pairing) with the keyboard on the agent
-      choice, as the Account page's own Pair New Agent and Connect's do. The
+      choice, as the Agents page's own Pair New Agent and Connect's do. The
       Account page draws the layout every Regent site shares, Keyfleet's own
-      sections (Your Keys, wallets) first. On a phone the open navigation menu
+      sections (Your Keys, wallets) first, and the Agents page its agents list
+      and pairing box (`Regent.Account.agents_layout`). On a phone the open navigation menu
       makes the page and its footer unreachable until it closes. On the
       homepage, Fleets beside the name opens Classic #1's page.
     who: person

@@ -16,7 +16,7 @@ defmodule Keyfleet.MixProject do
   # Builder Code suffix is a wallet change, and credits brings card_purchases.
   @elixir_utils_held_ref "20ee19753a11c113fd1a8d2f9e151be14a0dafae"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "3134bab0a23452fb82d3248072327e1d0199cc9a"
+  @design_system_ref "7a853f854168f208975815286eace8a502ec9aea"
 
   def project do
     [
