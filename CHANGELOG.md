@@ -6985,3 +6985,9 @@ five-site connector window (Sean's "1. b", 30 Oct).
   items only for a reader who may read the fleet's workspace, as the goals'
   task titles already do. Anyone else reads them as plain text, which no
   longer underlines on hover.
+
+## 2026-10-30 — Project page: workspace links only for workspace readers
+
+- A shown or hidden project's "Open in the workspace" link, and each part's
+  "See all" link, show only to a reader who may read the fleet's workspace.
+  Anyone else no longer follows them to the Public place.
