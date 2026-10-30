@@ -5,10 +5,10 @@ defmodule KeyfleetWeb.ProjectLive do
   pairs a visitor's agent and sends it here, and, when the Key holding it shows its work to everyone, its latest
   work, what it produced and the tasks open to take or blocked, each with the
   agent and Key that made it, and under each goal the tasks that deliver on
-  it. For a reader who may read the workspace each title opens its item
-  there, and for anyone else it is plain text. Each open or blocked task has
-  its own "Bring your agent" link, and a part with more than it lists links
-  to the project in the workspace.
+  it. Each open or blocked task has its own "Bring your agent" link. For a
+  reader who may read the workspace each title opens its item there, a part
+  with more than it lists links to the project there, and so does "Open in
+  the workspace"; anyone else reads plain titles and no workspace links.
   """
   use KeyfleetWeb, :html
   import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
@@ -36,7 +36,14 @@ defmodule KeyfleetWeb.ProjectLive do
         <.link id="project-bring-agent" navigate={@project.pair_path} class="rg-button">
           Bring your agent
         </.link>
-        <.link id="project-workspace" navigate={@project.workspace_path} class="project-workspace">Open in the workspace</.link>
+        <.link
+          :if={@workspace?}
+          id="project-workspace"
+          navigate={@project.workspace_path}
+          class="project-workspace"
+        >
+          Open in the workspace
+        </.link>
         <.link
           :if={@project.public_path}
           id="project-public"
@@ -160,7 +167,9 @@ defmodule KeyfleetWeb.ProjectLive do
         </li>
       </ul>
       <p :if={@part.items == []} class="project-empty">{@empty}</p>
-      <.link :if={@part.more?} navigate={@more} class="project-more">See all</.link>
+      <.link :if={@workspace? and @part.more?} navigate={@more} class="project-more">
+        See all
+      </.link>
     </section>
     """
   end
