@@ -17,6 +17,7 @@ defmodule KeyfleetWeb.DmsLive do
   import Phoenix.LiveView, only: [stream: 4, push_patch: 2]
 
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Agents.Avatar
   alias Keyfleet.Chain
   alias Keyfleet.Dms
   alias Keyfleet.Dms.Errors.SendLimitError
@@ -24,6 +25,7 @@ defmodule KeyfleetWeb.DmsLive do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
+  alias Keyfleet.PublicIdentity
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
@@ -184,43 +186,81 @@ defmodule KeyfleetWeb.DmsLive do
           </div>
         </section>
 
-        <section class="rooms-panel rooms-thread" aria-labelledby="dms-thread-title">
+        <section
+          id="dms-thread"
+          class="rooms-panel rooms-thread"
+          aria-labelledby="dms-thread-title"
+          phx-hook="Conversation"
+        >
           <h2 id="dms-thread-title">
             Key {Rules.grouped(@dms.token_id)} and Key {Rules.grouped(@dms.other_token_id)}
           </h2>
           <p :if={@dms.blocked?} id="dms-blocked-note" class="rooms-detail">Blocked</p>
-          <Regent.Primitives.empty_state
-            :if={@dms.last_seq == 0}
-            id="dms-thread-empty"
-            class="kf-empty"
-            title="No messages yet."
-          >
-            Say hello below.
-          </Regent.Primitives.empty_state>
 
-          <ol id="dms-thread-list" class="rooms-thread-list" phx-update="stream">
-            <li :for={{dom_id, message} <- @messages} id={dom_id}>
-              <p class="rooms-author">
-                <.link patch={KeyLinks.key_path(@dms.fleet_id, message.from_token_id)}>
-                  Key {Rules.grouped(message.from_token_id)}
-                </.link>
-                <small class="rooms-writer">
-                  <.sent_from via={arrival(message)} />
-                  <span :if={message.via_agent}>{message.via_agent.name}</span>
-                  <Regent.Primitives.address
-                    :if={!message.via_agent}
-                    id={"#{dom_id}-writer"}
-                    address={message.author_wallet}
-                  />
-                </small>
-              </p>
-              <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
-              <.parts parts={message.parts} />
-              <p class="rooms-detail">
-                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
-              </p>
-            </li>
-          </ol>
+          <div
+            id={"dms-log-#{@dms.token_id}-#{@dms.other_token_id}"}
+            class="rooms-scroller"
+            role="log"
+            aria-labelledby="dms-thread-title"
+            tabindex="0"
+            data-conversation-scroller
+          >
+            <div class="rooms-scroller__inner">
+              <Regent.Primitives.empty_state
+                :if={@dms.last_seq == 0}
+                id="dms-thread-empty"
+                class="kf-empty"
+                title="No messages yet."
+              >
+                Say hello below.
+              </Regent.Primitives.empty_state>
+
+              <ol
+                id="dms-thread-list"
+                class="rooms-messages"
+                phx-update="stream"
+                data-conversation-messages
+              >
+                <li
+                  :for={{dom_id, message} <- @messages}
+                  id={dom_id}
+                  class="rooms-message"
+                  data-author={author_tag(message)}
+                  data-at={DateTime.to_unix(message.inserted_at)}
+                  phx-mounted={JS.ignore_attributes(["data-continued"])}
+                >
+                  <RoomsLive.avatar src={picture(message)} />
+                  <div class="rooms-message__main">
+                    <p class="rooms-author">
+                      <.link patch={KeyLinks.key_path(@dms.fleet_id, message.from_token_id)}>
+                        Key {Rules.grouped(message.from_token_id)}
+                      </.link>
+                      <KeyfleetWeb.Time.local
+                        id={"#{dom_id}-at"}
+                        class="rooms-message__time"
+                        at={message.inserted_at}
+                        as={:moment}
+                        title_as={:stamp}
+                      />
+                      <small class="rooms-writer">
+                        <.sent_from via={arrival(message)} />
+                        <span :if={message.via_agent}>{message.via_agent.name}</span>
+                        <Regent.Primitives.address
+                          :if={!message.via_agent}
+                          id={"#{dom_id}-writer"}
+                          address={message.author_wallet}
+                        />
+                      </small>
+                    </p>
+                    <div :if={message.body} class="rooms-body">
+                      {RoomsLive.body_html(message.body)}
+                    </div>
+                    <.parts parts={message.parts} />
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
 
           <.form
             for={@form}
@@ -238,7 +278,7 @@ defmodule KeyfleetWeb.DmsLive do
               <textarea
                 id={field.id}
                 name={@form[:body].name}
-                rows="3"
+                rows="1"
                 maxlength="4000"
                 required
                 phx-debounce="300"
@@ -246,6 +286,9 @@ defmodule KeyfleetWeb.DmsLive do
               >{Phoenix.HTML.Form.normalize_value("textarea", @form.params["body"])}</textarea>
             </Regent.Primitives.field>
             <Regent.Primitives.button type="submit">Send</Regent.Primitives.button>
+            <p id="dms-composer-hint" class="rooms-composer__hint">
+              Enter sends. Shift+Enter starts a new line.
+            </p>
           </.form>
 
           <p id="dms-notice" class="dms-notice" role="status" aria-live="polite">{@notice}</p>
@@ -386,6 +429,18 @@ defmodule KeyfleetWeb.DmsLive do
   # How a message reached Keyfleet: an agent's signed request, or the website.
   defp arrival(%{via_agent_id: nil}), do: :web
   defp arrival(%{via_agent_id: _agent}), do: :agent
+
+  # The picture at the start of a message: the agent's that wrote it, or the
+  # one made from the wallet of the person holding the Key.
+  defp picture(%{via_agent: nil, author_wallet: wallet}),
+    do: PublicIdentity.avatar_src(%{wallet_address: wallet})
+
+  defp picture(%{via_agent: agent}), do: Avatar.src(agent)
+
+  # Messages that run on from the same Key, written the same way, share one
+  # name and picture (the `Conversation` hook groups them).
+  defp author_tag(message),
+    do: :erlang.phash2({message.from_token_id, message.author_wallet, message.via_agent_id})
 
   defp auto_delete_options, do: @auto_delete
 
