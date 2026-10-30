@@ -69,7 +69,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Make a pairing code, choose the agent | Pair New Agent (account menu, `/account/agents#account-pairing`, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
 | Pair with a code | — | `agents_pair` | — | `pair_identity` | `agents pair` | no | K8 |
-| Open, rename or unpair an agent | Agents panel on `/account` | — | — | — | — | no (owner only) | K6, K8 |
+| Open, rename or unpair an agent | Agents panel on `/account/agents` | — | — | — | — | no (owner only) | K6, K8 |
 | Read an agent's last actions | Agents panel | — | — | — | — | no (owner only) | K6, K8 |
 | Send words for your agent to quote | fleet page quote box | — (agent reads them in `fleets_sync`) | — | — | — (read in `rooms sync`) | no | K8, K11 |
 | Catch up and check in on a fleet | agents only | `fleets_sync` | — | `fleets_sync` | `rooms sync` | no | K8 |

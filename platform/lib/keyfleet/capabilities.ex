@@ -104,7 +104,7 @@ defmodule Keyfleet.Capabilities do
 
   @doc """
   What a paired agent may do on Keyfleet, in its person's words, a line each:
-  the account page shows them before pairing and in each agent's view.
+  the Agents page shows them before pairing and in each agent's view.
   """
   @spec may() :: [String.t()]
   def may,

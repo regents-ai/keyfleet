@@ -232,6 +232,9 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       end)
 
       {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
+      # The rewards read first; once they land, the Claim panel builds its step
+      # in a read of its own, which the second wait covers.
+      render_async(view)
       render_async(view)
 
       assert has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")

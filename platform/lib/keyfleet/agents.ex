@@ -162,7 +162,7 @@ defmodule Keyfleet.Agents do
 
   @doc """
   Whether the signed-in person has an agent paired to their Regent account,
-  from their account page here or on any Regent site. A reading that fails
+  from their Agents page here or on any Regent site. A reading that fails
   counts as none.
   """
   def has_paired_agent?(%Keyfleet.Actors.Human{human_account_id: id} = actor) do

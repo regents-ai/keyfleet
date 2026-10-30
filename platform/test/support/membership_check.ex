@@ -364,7 +364,7 @@ defmodule Keyfleet.MembershipCheck do
     end
   end
 
-  # Pairing guidance names this site's Account page, never regents.sh.
+  # Pairing guidance names this site's Agents page, never regents.sh.
   defp own_site do
     %{error: %{message: message, hint: hint}} = Refusal.body("agent_not_paired")
 
@@ -541,7 +541,7 @@ defmodule Keyfleet.MembershipCheck do
   ## People and their agents
 
   # A person with a fresh wallet, and their agent, paired the way the person's
-  # Account page pairs one, with a profile so it may open the notebooks.
+  # Agents page pairs one, with a profile so it may open the notebooks.
   defp pair! do
     wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
     {:ok, signer} = Siwa.LocalSigner.new()

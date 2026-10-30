@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   homepage carries the same section
   # - signed in, the header's name opens the account menu, with Sign out,
   #   Manage Account, the account's agents and Pair New Agent leading to the
-  #   Account page, and an agent paired while the page is open shows in it;
+  #   Agents page, and an agent paired while the page is open shows in it;
   #   Fleets beside the name opens Classic; signed out there is neither
 
   @classic "fleet_tech_classic"
