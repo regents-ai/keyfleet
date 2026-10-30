@@ -7,8 +7,8 @@ defmodule KeyfleetWeb.AgentPinsTest do
   import Phoenix.ConnTest
   import Plug.Conn
 
-  alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{Accounts, ChainHelpers, Code, Fleets, Graph, Keys, PairingHelpers, Projects}
+  alias Keyfleet.Actors.{Human, System}
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -146,6 +146,7 @@ defmodule KeyfleetWeb.AgentPinsTest do
 
   defp code(body), do: body["error"]["code"]
 
+  # The pins as stored, whoever may read them.
   defp pinned_paths do
     @fleet
     |> Graph.pins!(:code, "general", authorize?: false)
