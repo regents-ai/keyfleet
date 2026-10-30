@@ -146,7 +146,8 @@ defmodule KeyfleetWeb.AgentPinsTest do
 
   defp code(body), do: body["error"]["code"]
 
-  # The pins as stored, whoever may read them.
+  # Read past the policy: the test checks what the board holds, not who may
+  # read it.
   defp pinned_paths do
     @fleet
     |> Graph.pins!(:code, "general", authorize?: false)
