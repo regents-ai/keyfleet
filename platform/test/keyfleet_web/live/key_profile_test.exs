@@ -219,6 +219,40 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       refute has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
     end
 
+    # REGENT has 18 decimals; the window shows two of them.
+    test "REGENT waiting shows cut to two decimals", %{conn: conn} do
+      holder = wallet("e")
+      regent = "0x6f89bca4ea5931edfcb09786267b251dee752b07"
+      owner_of = Call.encode("ownerOf(uint256)", [id(12)])
+      accrued = Call.encode("accrued(address,uint256)", [regent, id(12)])
+
+      rewards_answer(
+        fn
+          _to, ^owner_of, _hash ->
+            {:ok, <<0::96>> <> Base.decode16!(String.duplicate("ee", 20), case: :lower)}
+
+          _to, ^accrued, _hash ->
+            {:ok, <<9_750_773_103_342_555_816_583::256>>}
+
+          _to, _credits, _hash ->
+            {:ok, <<0::256>>}
+        end,
+        [@usdc, regent]
+      )
+
+      {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
+      render_async(view)
+
+      view
+      |> with_target("#key-profile-claim-action")
+      |> render_hook("onchain_active_wallet", %{"address" => holder})
+
+      render_async(view)
+
+      assert text(view, "#key-profile-claim-#{regent}") == "Claim 9,750.77 REGENT"
+      assert text(view, "#key-profile-rewards") == "9,750.77 REGENT"
+    end
+
     test "nothing waiting keeps the button in view, not pressable, and says so", %{conn: conn} do
       holder = wallet("e")
       owner_of = Call.encode("ownerOf(uint256)", [id(12)])
@@ -672,8 +706,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   end
 
   # What the fleet's contracts answer, at a head the chain has. Its reward
-  # ledger pays out USDC alone.
-  defp rewards_answer(calls) do
+  # ledger pays out `assets`, USDC alone unless a test names others.
+  defp rewards_answer(calls, assets \\ [@usdc]) do
     StubClient.put_chain(
       %{
         number: 1_000,
@@ -684,15 +718,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       [],
       calls: fn
         @rewards, @reward_assets, _hash ->
-          {:ok,
-           <<32::256, 1::256, 0::96>> <>
-             Base.decode16!(String.slice(@usdc, 2..-1//1), case: :lower)}
+          {:ok, <<32::256, length(assets)::256>> <> Enum.map_join(assets, &address_word/1)}
 
         to, data, hash ->
           calls.(to, data, hash)
       end
     )
   end
+
+  defp address_word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
 
   # What the fleet answers for key 12's seed, which it has none of, for when
   # its request for a draw was accepted, and for its deck, which is set;

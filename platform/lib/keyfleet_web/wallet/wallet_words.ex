@@ -248,12 +248,15 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted(_step), do: "Didn’t go through. Nothing moved."
 
   @doc """
-  An amount of a token: the fleet's USDC exactly, another the fleet's
-  deployment names in its own units with its symbol, any other token with
-  its address too, or in its smallest units when it hasn't said its
-  decimals.
+  An amount of a token: the fleet's USDC exactly, its REGENT cut to two
+  decimal places, another the fleet's deployment names in its own units with
+  its symbol, any other token with its address too, or in its smallest units
+  when it hasn't said its decimals.
   """
   def token_amount(%{amount: amount, usdc?: true}), do: FleetLive.usdc(amount)
+
+  def token_amount(%{amount: amount, known?: true, symbol: "REGENT", decimals: decimals}),
+    do: "#{ProposalsPage.regent(amount, decimals)} REGENT"
 
   def token_amount(%{amount: amount, known?: true, symbol: symbol, decimals: decimals}),
     do: "#{ProposalsPage.units(amount, decimals)} #{symbol}"
