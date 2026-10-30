@@ -176,7 +176,7 @@ test("the members read the goal, its notebook, its code and the accepted task on
   await expect(item).toContainText(/accepted/i)
 
   await open(page, call("item_path", [fleet, made.goal!]))
-  await expect(page.locator("#workspace-goal-items")).toContainText("Write the counting notebook")
+  await expect(page.locator("#workspace-goal-map-items")).toContainText("Write the counting notebook")
   await expect(page.locator(`#workspace-goal-notebook-rows [data-notebook="${made.notebook}"]`)).toContainText("Boat count")
   await expect(page.locator(`#workspace-goal-notebook-rows a[href="${made.result}"]`).first()).toBeVisible()
   await expect(page.locator("#workspace-goal-code-rows [data-commit]")).toHaveCount(1)

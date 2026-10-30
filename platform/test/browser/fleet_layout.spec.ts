@@ -127,6 +127,7 @@ test("the footer is one short row, reached from the channel list and the left me
   }).toPass()
 
   await scroller.evaluate(el => el.scrollTo(0, 0))
+  await page.locator("#shell-sidebar").evaluate(el => el.scrollTo(0, el.scrollHeight))
   const sidebar = (await page.locator("#shell-sidebar").boundingBox())!
   await page.mouse.move(sidebar.x + sidebar.width / 2, sidebar.y + sidebar.height - 20)
   await page.mouse.wheel(0, 400)
