@@ -138,7 +138,10 @@ features:
       Every link and button in the site header and footer has a name and is at
       least 44 pixels square under a finger, on a touch phone and tablet, the X
       and GitHub marks included. Under a mouse they keep the design system's own
-      sizes.
+      sizes. The footer is one short row under a mouse. Scrolling past the
+      last room of a fleet's channel list, or over the left menu, carries on
+      down the page to the footer, and a "…" stands at the channel list's foot
+      while rooms are hidden below it.
     who: person
     level: ordinary
     paths:
@@ -146,11 +149,15 @@ features:
       - platform/lib/keyfleet_web/components/layouts.ex
       - platform/lib/keyfleet_web/components/regent_links.ex
       - platform/assets/css/app.css
+      - platform/assets/css/pages/fleet.css
       - platform/assets/css/pages/home.css
+      - platform/assets/js/app.ts
     entry:
       - route: GET /
+      - live: KeyfleetWeb.FleetLive
     proofs:
       - platform/test/browser/homepage_details.spec.ts
+      - platform/test/browser/fleet_layout.spec.ts
     regressions:
       - id: R-20261019-links-fit-a-finger
         from: Sentinel read of ff1146e1

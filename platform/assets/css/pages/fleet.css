@@ -354,12 +354,15 @@
   overscroll-behavior: contain;
 }
 
+/* Scrolled past its last room, the list hands the scroll on to the page, so
+   the page's footer comes into view. */
 .fleet-channels {
   display: grid;
   align-content: start;
   gap: 0.25rem;
   padding: 0.75rem 0.5rem;
   border-inline-end: 1px solid var(--color-border);
+  overscroll-behavior: auto;
 }
 
 /* Small labels rather than the display face the page's other headings use. */
@@ -963,7 +966,38 @@
   100% { --fleet-fade-start: 2rem; --fleet-fade-end: 0px; }
 }
 
+/* While rooms lie below the list's foot, a "…" stands there; it fades as the
+   list reaches its end, and a list with nothing below never shows it. */
+@keyframes fleet-more-below {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 @supports (animation-timeline: scroll()) {
+  @media (min-width: 64.01rem) {
+    /* A pseudo-element scrolls nothing itself, so the list names its own
+       scroll for the "…" to follow. */
+    .fleet-channels {
+      scroll-timeline: --fleet-channels block;
+    }
+
+    .fleet-channels::after {
+      content: "…";
+      position: sticky;
+      inset-block-end: -0.75rem;
+      margin-block: -1.5rem -0.75rem;
+      padding-block: 0.75rem 0.25rem;
+      background: linear-gradient(transparent, var(--color-surface) 60%);
+      color: var(--color-fg-muted);
+      line-height: 1;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      animation: fleet-more-below linear both;
+      animation-timeline: --fleet-channels;
+    }
+  }
+
   .fleet-bar__nav,
   .fleet-channels,
   .fleet-entry__cards {
