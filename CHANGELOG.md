@@ -6942,3 +6942,10 @@ Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /c
   as plain text, where the link used to send them to the Public place.
 - The task status badges under a goal stand in one column, however long a
   task's title.
+
+## 2026-10-30 — Project page: every title links only for workspace readers
+
+- A shown project's goal, work, output and open task titles now link to their
+  items only for a reader who may read the fleet's workspace, as the goals'
+  task titles already do. Anyone else reads them as plain text, which no
+  longer underlines on hover.

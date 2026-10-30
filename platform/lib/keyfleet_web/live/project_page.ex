@@ -7,8 +7,9 @@ defmodule KeyfleetWeb.ProjectPage do
   work to everyone (`Keyfleet.Projects.Project`), its latest work, what it
   produced and the tasks open to take or blocked, each by title and the agent
   and Key that made it, with how many there are of each, and under each goal
-  the tasks that deliver on it, by title and standing alone. Each title links to
-  its item's page in the workspace, and each open or blocked task has a link
+  the tasks that deliver on it, by title and standing alone. For a reader who
+  may read the workspace (`KeyfleetWeb.ProjectLive`) each title links to its
+  item's page there, and each open or blocked task has a link
   that pairs a visitor's agent and sends it to that task. A project's page
   never shows more than titles and who made them: members read the rest in
   the workspace.
