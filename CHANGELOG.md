@@ -6944,3 +6944,11 @@ Moved: on the Proposals tab the Present card lists the wallet's idle Keys above 
 Not checked live: the signed-in idle and present split, which needs a wallet with Keys signed in; the Proposals page tests cover it (43 of 43). No proposal is open now, so live pages show only Voting ends.
 
 Live read at 17:03Z, signed out, headless Chromium: capabilities.json names 28331751; /classic/1/proposals answers 200 with the Present figures and no key list, then Every proposal; Proposals 1 and 2 answer 200 with "Voting ends" alone, as settled proposals do; no sideways scroll and no page errors at 1280, 390 and 320.
+
+## 2026-10-30 — Project page: goal tasks for every reader
+
+- A shown project's page links each goal's task titles to the task only for
+  a reader who may read the fleet's workspace. Anyone else reads the title
+  as plain text, where the link used to send them to the Public place.
+- The task status badges under a goal stand in one column, however long a
+  task's title.
