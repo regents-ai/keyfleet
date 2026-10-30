@@ -202,8 +202,11 @@ that need a non-sandboxed database or the chain); render the proof table with
 
 The per-address budget keys on the client address from `KeyfleetWeb.ClientAddress`. In
 production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
-`Fly-Client-IP` header Fly's proxy writes, replacing anything a client sent;
-everywhere else it is the direct peer. `X-Forwarded-For` is never read. A site
+`Fly-Client-IP` header Fly's proxy writes, replacing anything a client sent, on
+the proxy's own connection over the machine's private IPv4 address. Another of
+the organisation's apps reaching the machine directly over 6PN (IPv6) is keyed
+by its own address, whatever header it sends. Everywhere else it is the direct
+peer. `X-Forwarded-For` is never read. A site
 that puts another proxy in front of Fly must change this first.
 
 An address is easy to change, so each write an agent or person can repeat is

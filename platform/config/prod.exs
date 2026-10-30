@@ -10,7 +10,8 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
   force_ssl: [rewrite_on: [:x_forwarded_proto], exclude: ["localhost", "127.0.0.1"]]
 
-# Every request reaches production through Fly's proxy, which sets Fly-Client-IP.
+# Public requests reach production through Fly's proxy, which sets Fly-Client-IP on
+# its IPv4 connections (KeyfleetWeb.ClientAddress).
 config :keyfleet, :behind_fly_proxy, true
 
 # The private port fly.toml names under [metrics]; Fly routes no public traffic to it.
