@@ -44,12 +44,59 @@ defmodule Keyfleet.Chain.RpcClientTest do
     assert log =~ "-32000"
   end
 
+  test "each request the node fails is counted for the health numbers, and a refusal is not", %{
+    config: config
+  } do
+    ref = make_ref()
+    test = self()
+    handler = "rpc-client-test-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler,
+      [:keyfleet, :chain, :failure],
+      fn _event, measurements, metadata, _config -> send(test, {ref, measurements, metadata}) end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    node!(config, error(3, "reverted with reason: not yet"))
+    assert RpcClient.call(address(), <<1, 2, 3, 4>>, @block_hash) == {:error, :reverted}
+    refute_received {^ref, _measurements, _metadata}
+
+    node!(config, error(-32_000, "header not found"))
+    capture_log(fn -> RpcClient.call(address(), <<1, 2, 3, 4>>, @block_hash) end)
+
+    assert_received {^ref, %{count: 1},
+                     %{method: "eth_call", class: "rpc", chain_id: 8453, scope: "fleet"}}
+
+    node!(config, %{}, 503)
+    capture_log(fn -> assert RpcClient.head() == {:error, :chain_unavailable} end)
+    assert_received {^ref, %{count: 1}, %{method: "eth_getBlockByNumber", class: "http_503"}}
+
+    # A node asking for fewer requests still left the request unanswered.
+    node!(config, %{}, 429)
+    capture_log(fn -> assert RpcClient.head() == {:error, :chain_busy} end)
+    assert_received {^ref, %{count: 1}, %{method: "eth_getBlockByNumber", class: "http_429"}}
+
+    Application.put_env(
+      :keyfleet,
+      Keyfleet.Chain,
+      Keyword.put(config, :rpc_url, "http://127.0.0.1:1")
+    )
+
+    capture_log(fn -> assert RpcClient.chain_id() == {:error, :chain_unavailable} end)
+    assert_received {^ref, %{count: 1}, %{method: "eth_chainId", class: "transport"}}
+  end
+
   defp error(code, message),
     do: %{"jsonrpc" => "2.0", "id" => 1, "error" => %{"code" => code, "message" => message}}
 
-  defp node!(config, answer) do
+  defp node!(config, answer, status \\ 200) do
     plug = fn conn, _opts ->
-      conn |> put_resp_content_type("application/json") |> send_resp(200, Jason.encode!(answer))
+      conn
+      |> put_resp_content_type("application/json")
+      |> send_resp(status, Jason.encode!(answer))
     end
 
     pid =

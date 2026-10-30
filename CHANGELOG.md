@@ -6572,3 +6572,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   now empties once the post is in.
 - On a laptop the room fills the hall's height between its name and the box;
   a post's Mute button shows when the post is pointed at.
+
+## 2026-10-30 — Failed fleet chain reads are counted
+
+- Each request the fleet reader's chain node does not answer, asks to slow
+  down on, or answers with an error other than the contract refusing the
+  call, is counted in the health numbers' chain requests with no answer,
+  under the scope "fleet". Sentinel warns when ten fail in five minutes.
+  Before, only the wallet reads were counted, so a lasting node outage on
+  fleet reads sent nothing.

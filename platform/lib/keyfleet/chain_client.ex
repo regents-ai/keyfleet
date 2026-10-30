@@ -37,7 +37,9 @@ defmodule Keyfleet.ChainClient do
 
   @doc """
   One JSON-RPC request to the chain's node. Every request that gets no answer
-  is counted in `health.chain_request_failures.total` (`KeyfleetWeb.Telemetry`).
+  is counted in `health.chain_request_failures.total` (`KeyfleetWeb.Telemetry`)
+  under the scope "wallet"; the fleet reader counts its own under "fleet"
+  (`Keyfleet.Chain.RpcClient`).
   """
   @impl RegentPoints.ChainClient
   def rpc(%{chain_id: chain_id} = chain, method, params) do
