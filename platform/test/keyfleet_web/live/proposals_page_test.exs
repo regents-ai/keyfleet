@@ -388,6 +388,17 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert cells(view, @usdc) == ["27.8649 USDC", "0.004321 USDC"]
     end
 
+    test "REGENT shows two decimal places, and less than 0.01 says so", %{conn: conn} do
+      regent = "0x6f89bca4ea5931edfcb09786267b251dee752b07"
+
+      ProposalHelpers.treasury_reading!(@fleet, [
+        balance(regent, held: 9_750_773_103_342_555_816_583, backed: 4_321)
+      ])
+
+      {:ok, view, _html} = open(conn, @treasury_page)
+      assert cells(view, regent) == ["9,750.77 REGENT", "<0.01 REGENT"]
+    end
+
     # The contract holds any uint256, which is shown to its last whole digit
     # and four decimal places.
     test "the largest amount the contract can hold is shown whole", %{conn: conn} do

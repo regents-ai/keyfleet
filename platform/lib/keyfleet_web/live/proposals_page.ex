@@ -213,8 +213,9 @@ defmodule KeyfleetWeb.ProposalsPage do
   An amount of an asset as every page shows it, `%{text: text, token: address
   | nil, symbol?: boolean}`, grouped: in its own units with its symbol when
   the token has reported both, cut to four decimal places (below one token,
-  to its first four significant digits), and otherwise as the whole number
-  the chain holds. `symbol?` says whether `text` ends in the symbol the token chose.
+  to its first four significant digits; the fleet's REGENT to two, as
+  `regent/2` cuts it), and otherwise as the whole number the chain holds.
+  `symbol?` says whether `text` ends in the symbol the token chose.
   Every asset but the ones the fleet's deployment names (ETH, its USDC and
   REGENT), known by their addresses, comes with its address as `token`, so a
   token calling itself USDC is never taken for it. `assets` is as `Keyfleet.Treasury.assets/1`
@@ -222,8 +223,11 @@ defmodule KeyfleetWeb.ProposalsPage do
   """
   def amount(atoms, asset, %{known: known, details: details}) do
     {text, symbol?} =
-      case details[asset] do
-        {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
+      case {details[asset], asset in known} do
+        {{"REGENT", decimals}, true} ->
+          {"#{regent(atoms, decimals)} REGENT", true}
+
+        {{symbol, decimals}, _known?} when is_binary(symbol) and is_integer(decimals) ->
           {"#{figure(atoms, decimals)} #{symbol}", true}
 
         _unknown ->
@@ -577,6 +581,18 @@ defmodule KeyfleetWeb.ProposalsPage do
     if atoms > 0 and digits <= decimals,
       do: cut(atoms, decimals, min(decimals, decimals - digits + 4)),
       else: cut(atoms, decimals, min(decimals, 4))
+  end
+
+  @doc """
+  `atoms` of the fleet's REGENT, which has `decimals` places, as every page
+  shows them: whole tokens, thousands grouped, cut to two decimal places, or
+  "<0.01" when there is some but less than that. Cut, never rounded up.
+  """
+  def regent(atoms, decimals) do
+    case cut(atoms, decimals, 2) do
+      "0" when atoms > 0 -> "<0.01"
+      shown -> shown
+    end
   end
 
   defp cut(atoms, decimals, kept) do

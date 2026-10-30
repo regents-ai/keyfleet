@@ -1007,7 +1007,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   # The slice's figures, cut as the balances above them are.
   defp slice_amount(%{usdc?: false, known?: true, symbol: symbol, decimals: decimals}, atoms)
-       when is_binary(symbol) and is_integer(decimals),
+       when symbol != "REGENT" and is_binary(symbol) and is_integer(decimals),
        do: "#{ProposalsPage.figure(atoms, decimals)} #{symbol}"
 
   defp slice_amount(asset, atoms), do: WalletWords.token_amount(Map.put(asset, :amount, atoms))
