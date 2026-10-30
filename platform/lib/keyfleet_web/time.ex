@@ -38,7 +38,12 @@ defmodule KeyfleetWeb.Time do
   attr :id, :string, required: true
   attr :at, DateTime, required: true
   attr :as, :atom, required: true, values: [:clock, :moment, :stamp, :date]
-  attr :title_as, :atom, default: nil, values: [nil, :moment], doc: "how its hover title says it"
+
+  attr :title_as, :atom,
+    default: nil,
+    values: [nil, :moment, :stamp],
+    doc: "how its hover title says it"
+
   attr :class, :string, default: nil
 
   @doc """
