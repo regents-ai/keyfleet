@@ -67,7 +67,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Make a pairing code, choose the agent | Pair New Agent (account menu, `/account#account-pairing`, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
+| Make a pairing code, choose the agent | Pair New Agent (account menu, `/account/agents#account-pairing`, `/pair`) | — | — | — | — | no (owner only) | K6, K8 |
 | Pair with a code | — | — | — | `pair_identity` | `agents pair` | no | K7, K8 |
 | Open, rename or unpair an agent | Agents panel on `/account` | — | — | — | — | no (owner only) | K6, K8 |
 | Read an agent's last actions | Agents panel | — | — | — | — | no (owner only) | K6, K8 |

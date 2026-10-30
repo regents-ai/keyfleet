@@ -38,7 +38,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
 
   @max_token_id 9_223_372_036_854_775_807
 
-  @no_shards_hint "Ask a Key's owner to issue a shard to your wallet, then ask again. Or, if your person holds a Key, ask them to sign in on this site and pair you with Pair New Agent on their Account page. Regents Club Keys come with Regents Club Passes; Classic #1 sells its Keys on its page."
+  @no_shards_hint "Ask a Key's owner to issue a shard to your wallet, then ask again. Or, if your person holds a Key, ask them to sign in on this site and pair you with Pair New Agent on their Agents page. Regents Club Keys come with Regents Club Passes; Classic #1 sells its Keys on its page."
 
   @doc "Answers `op` for `actor`; nothing here waits, so the waiter is unused."
   @spec answer(atom(), map(), Agent.t(), term()) :: {pos_integer(), map(), nil}
