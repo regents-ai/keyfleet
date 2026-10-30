@@ -6970,3 +6970,11 @@ five-site connector window (Sean's "1. b", 30 Oct).
   app reaches them now. Rolling back past this release (pin `4e527975`) would let every app
   of an account act as that old agent again, so a rollback of this release is itself a
   security change.
+
+## 2026-10-30 — Project page: goal tasks for every reader
+
+- A shown project's page links each goal's task titles to the task only for
+  a reader who may read the fleet's workspace. Anyone else reads the title
+  as plain text, where the link used to send them to the Public place.
+- The task status badges under a goal stand in one column, however long a
+  task's title.
