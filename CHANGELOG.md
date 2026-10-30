@@ -6581,3 +6581,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   under the scope "fleet". Sentinel warns when ten fail in five minutes.
   Before, only the wallet reads were counted, so a lasting node outage on
   fleet reads sent nothing.
+
+## 2026-10-30 — Rate limits trust the proxy only over IPv4
+
+- Rate limits read `Fly-Client-IP` only when the request came from Fly's
+  proxy, which reaches the machine over private IPv4. Another of the
+  organisation's apps calling over the private IPv6 network is keyed by its
+  own address, whatever header it sends, so it can no longer pick a fresh
+  budget for each request. Matches the template (816a5110).
