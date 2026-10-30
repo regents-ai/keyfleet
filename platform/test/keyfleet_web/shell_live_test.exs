@@ -15,6 +15,23 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias KeyfleetWeb.RouteCatalog
   alias RegentChain.Call
 
+  # The Account and Key pages read the chain after they open: a chain where
+  # every contract read answers zero, unless a test puts another.
+  setup do
+    StubClient.put_chain(
+      %{
+        number: 1_000,
+        hash: "0x" <> String.duplicate("c", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
+      [],
+      calls: fn _to, _data, _hash -> {:ok, <<0::256>>} end
+    )
+
+    :ok
+  end
+
   test "an anonymous visitor to /account is asked to sign in, without private content", %{
     conn: conn
   } do
@@ -886,12 +903,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
     end
 
     test "the New shard form fills in the person's own agent, by name, and no other wallet", c do
-      StubClient.put_chain(
-        %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
-        [],
-        calls: fn _to, _data, _hash -> {:ok, <<0::256>>} end
-      )
-
       view = open_key(c.conn, c.account, "/classic/1/keys/1?shard_to=#{@agent}")
 
       assert has_element?(view, ~s(input#key-shard-wallet[value="#{@agent}"]))
