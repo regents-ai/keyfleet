@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentsPanel do
   @moduledoc """
   The agents a person has paired with their account (`RegentAgents`), on the
-  Account page, in the shared agents list (`Regent.Account.agents`), each with
+  Agents page, in the shared agents list (`Regent.Account.agents`), each with
   its check-in light (`Keyfleet.Agents.check_in_lights/2`), with Pair
   New Agent leading to the pairing box below it (`KeyfleetWeb.PairingBox`),
   and a larger view of one agent with where it has been active across the Regent

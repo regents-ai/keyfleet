@@ -6,11 +6,11 @@ defmodule KeyfleetWeb.AccountLive do
   the time left until it first shares the Daily Treasury Slice to Keys, with
   one Claim per fleet for all of them at once and, in a fleet where they hold
   several, the one they post as
-  (`KeyfleetWeb.PostingKeyChoice`), the agents
-  paired with their account, which they may open, rename and unpair
-  (`KeyfleetWeb.AgentsPanel`), pairing a new one (`KeyfleetWeb.PairingBox`),
-  their Credits and this browser's session, in the layout every Regent site
-  shares, `Regent.Account.layout`, Keyfleet's own sections first), Wallets (the wallets their sign-in
+  (`KeyfleetWeb.PostingKeyChoice`), their Credits and this browser's session, in
+  the layout every Regent site shares, `Regent.Account.layout`, Keyfleet's own
+  sections first), Agents (the agents paired with their account, which they may
+  open, rename and unpair (`KeyfleetWeb.AgentsPanel`), and pairing a new one
+  (`KeyfleetWeb.PairingBox`), in `Regent.Account.agents_layout`), Wallets (the wallets their sign-in
   verified, the same list) and Connections (the accounts they have connected, which each
   fleet's Member List shows beside their address). Points has its
   own page (`KeyfleetWeb.PointsLive`).
@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.AccountLive do
 
   attr :lease, :map,
     default: nil,
-    doc: "the page's `session_lease`, which the agents list and Claim check"
+    doc: "the page's `session_lease`, which Claim checks"
 
   attr :actor, :any, default: nil, doc: "the signed-in person, or nil"
 
@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>Your identity on Keyfleet, your Keys, your agents and your Credits.</:tip>
+      <:tip>Your identity on Keyfleet, your Keys and your Credits.</:tip>
       <Regent.Account.layout id="account">
         <:site>
           <section
@@ -169,22 +169,6 @@ defmodule KeyfleetWeb.AccountLive do
             </Regent.Account.identity>
           </Regent.HolographicCard.card>
         </:identity>
-        <:agents>
-          <.live_component
-            module={KeyfleetWeb.AgentsPanel}
-            id="account-agents"
-            account={@account}
-            lease={@lease}
-          />
-        </:agents>
-        <:pairing>
-          <.live_component
-            module={KeyfleetWeb.PairingBox}
-            id="account-pairing-box"
-            lease={@lease}
-            account={@account}
-          />
-        </:pairing>
         <:credits>
           <Regent.Account.credits_summary
             id="account-credits"
@@ -295,6 +279,41 @@ defmodule KeyfleetWeb.AccountLive do
   defp ens_name(assigns) do
     ~H"""
     <dd role="status">Couldn’t check. Refresh to try again.</dd>
+    """
+  end
+
+  attr :lease, :map, required: true
+  attr :account, :map, default: nil
+  attr :signed_out_reason, :atom, default: :signed_out
+
+  def agents(assigns) do
+    ~H"""
+    <.settings_page
+      id="account-agents-page"
+      title="Agents"
+      account={@account}
+      signed_out_reason={@signed_out_reason}
+    >
+      <:tip>The agents you paired, and pairing a new one.</:tip>
+      <Regent.Account.agents_layout id="account">
+        <:agents>
+          <.live_component
+            module={KeyfleetWeb.AgentsPanel}
+            id="account-agents"
+            account={@account}
+            lease={@lease}
+          />
+        </:agents>
+        <:pairing>
+          <.live_component
+            module={KeyfleetWeb.PairingBox}
+            id="account-pairing-box"
+            lease={@lease}
+            account={@account}
+          />
+        </:pairing>
+      </Regent.Account.agents_layout>
+    </.settings_page>
     """
   end
 

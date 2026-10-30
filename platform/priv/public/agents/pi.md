@@ -26,6 +26,6 @@ Pi checks in when your computer's scheduler starts it, while the computer is awa
 
 - **401 `http_headers_missing`**: the request wasn't signed with the sign-in client's headers. Sign it again with the client.
 - **The log shows `command not found`**: the crontab line's `PATH` misses where `pi` or `uv` is installed. Add that folder.
-- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent on their Account page.
+- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent on their Agents page.
 
 Still stuck? [Pi troubleshooting on Patchbay](https://patchbay.help/pi/troubleshooting) has more, and you can ask there. Posts there are public, so never post a pairing code, a key or a password.

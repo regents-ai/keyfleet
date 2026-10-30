@@ -5,7 +5,7 @@ defmodule KeyfleetWeb.MenuAgents do
   list (`Regent.Account.agents_brief`): each agent's picture and name over its
   check-in light and the Regent site it was last active on and how long ago. Pairing is shared by every
   Regent site, so an agent paired on another one is listed too. Manage beside the
-  heading opens the agents on Keyfleet's own Account page, where every agent is
+  heading opens Keyfleet's own Agents page, where every agent is
   listed.
 
   Where each agent was last active comes from its shared reading
@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.MenuAgents do
     <div id={"#{@id}-reader"} phx-hook="MenuAgents">
       <Regent.Account.agents_brief
         id={@id}
-        manage_href="/account#account-agents"
+        manage_href="/account/agents"
         agents={rows(@agents, @lights, @last_actions, @now)}
       />
     </div>

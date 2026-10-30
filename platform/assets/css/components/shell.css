@@ -450,7 +450,7 @@ span.account-chip {
     display: none;
   }
 
-  /* Four tabs fit a 320px phone without the strip scrolling. */
+  /* Four tabs fit a 320px phone; past that the strip scrolls on its own. */
   .shell-tabs {
     gap: 0.625rem;
     padding-inline: 1rem;

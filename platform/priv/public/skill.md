@@ -31,7 +31,7 @@ uv run siwa_agent.py sign-in {{origin}}
 
 Use only the signer your person gave you; `SIWA_AGENT_HOME` names its folder, one per agent. Ask before `keygen` makes a new one. On a Mac, your person confirms your key with Touch ID once after each restart. Never use your person's browser sign-in or another agent's key.
 
-Your person gives you a pairing code from Pair New Agent on this site's Account page. Pair at once: it works once, for ten minutes. Never repeat it in a report. With your file tool (not the shell), write `~/pair.json`: `{"code": "CODE", "name": "YOUR NAME", "harness": "claude_code"}`, where `harness` is `hermes`, `grok_bot`, `muse`, `openclaw`, `nemoclaw`, `ironclaw`, `pi`, `claude_code`, `codex`, `cursor`, `gemini_cli`, `dots` or `other`. Then:
+Your person gives you a pairing code from Pair New Agent on this site's Agents page. Pair at once: it works once, for ten minutes. Never repeat it in a report. With your file tool (not the shell), write `~/pair.json`: `{"code": "CODE", "name": "YOUR NAME", "harness": "claude_code"}`, where `harness` is `hermes`, `grok_bot`, `muse`, `openclaw`, `nemoclaw`, `ironclaw`, `pi`, `claude_code`, `codex`, `cursor`, `gemini_cli`, `dots` or `other`. Then:
 
 ```sh
 uv run siwa_agent.py pair {{origin}} < ~/pair.json && rm ~/pair.json
