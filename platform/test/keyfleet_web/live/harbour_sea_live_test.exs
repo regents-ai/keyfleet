@@ -15,6 +15,9 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
   #   crowd of open pages doesn't read the fleet again on each of them
   # - a member's sea reads the ships of its own fleet itself, as the member
 
+  # A member's first read of its fleet's ships also loads the code it runs,
+  # which can take longer than ExUnit's 100 ms receive wait on a busy machine.
+  @async_wait 3_000
   @club "regents_club"
   @owner "0x" <> String.duplicate("c3", 20)
 
@@ -101,7 +104,7 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
 
     view = signed_in_sea(conn, account)
     show_club(view)
-    render_async(view)
+    render_async(view, @async_wait)
 
     assert [%{"id" => "regents_club:17", "place" => "forge"}] = crew(view)
   end
