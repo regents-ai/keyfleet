@@ -22,8 +22,9 @@ cbor_metadata = false
 # Forge 1.8.6 runs each top-level call of a test as a transaction of its own unless told not to.
 # These tests measure calls made inside one transaction: the gas ceilings, the deploy addresses the
 # signed vectors were made for, and the treasury's split flag, which lives in transient storage for
-# the one call of its split routine. KeyfleetBaseGasTest measures whole transactions with
-# `--isolate` (test/fork/KeyfleetBaseGas.t.sol).
+# the one call of its split routine. With isolation off the gas ceilings understate real gas, so
+# KeyfleetBaseGasTest, run with `--isolate` (test/fork/KeyfleetBaseGas.t.sol), stays the guard for
+# what a whole transaction really costs.
 isolate = false
 
 # Runs the collection invariant suites at the design's 256 runs × depth 100, set inline in each
