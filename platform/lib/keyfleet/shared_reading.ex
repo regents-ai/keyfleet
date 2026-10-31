@@ -166,13 +166,16 @@ defmodule Keyfleet.SharedReading do
           "which its page shows anyone, and that Key's name and card picture " <>
           "(Keyfleet.Keys.KeyReveal and KeyPicture read policies), which its Key's page shows " <>
           "anyone; if any of these tightens, this kind changes with it",
-      # One for each fleet with a picture of its own (KeyfleetWeb.ShareCard.fleets/0).
-      keys: 2,
-      # About 200 bytes for each project: a name of up to 32 characters, a title
-      # of up to 60, a Key's name and an IPFS address. A larger one is refused;
-      # the one held before stays, and with none its fleet's project pages show
-      # the fleet's picture.
-      bytes: 65_536,
+      # One for each project, deleted ones aside, of the fleets with a picture
+      # of their own (KeyfleetWeb.ShareCard.fleets/0), and one more for each of
+      # those fleets holding how many it has. A Key holds at most one active
+      # project and five archived ones, so 6 x (1,024 + 1,998) = 18,132 at the
+      # most. A project past the count shows its fleet's picture.
+      keys: 18_200,
+      # About 200 bytes: a title of up to 60 characters, a Key's name and an
+      # IPFS address. A larger one is refused; the one held before stays, and
+      # with none its project's page shows the fleet's picture.
+      bytes: 1_024,
       within: 120
     },
     proposal: %{

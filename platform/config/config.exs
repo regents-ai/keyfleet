@@ -117,6 +117,13 @@ config :keyfleet, Keyfleet.Agents.ActivityReading,
   gc_interval: :timer.minutes(10),
   max_size: 10_000
 
+# Share pictures drawn for link previews (`KeyfleetWeb.SharePictures`), swept
+# of expired ones every ten minutes. Each is a PNG of a few hundred kilobytes,
+# so at most 64 are kept.
+config :keyfleet, KeyfleetWeb.SharePictures,
+  gc_interval: :timer.minutes(10),
+  max_size: 64
+
 # The key-art service that draws revealed keys' cards (`key-art/`).
 config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
 

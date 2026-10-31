@@ -11,11 +11,13 @@ defmodule KeyfleetWeb.ShareCard do
   shows the site's picture.
 
   Each fleet's projects, as their pictures show them, are read with its
-  Treasury page too and held beside its figures (`project_key/1`). A project
-  the last read did not find, or one made since, shows its fleet's picture
-  until the next read, within a minute. A title with a character the
-  picture's set has not got is set as the project's name, its hyphens as
-  spaces.
+  Treasury page too and held one project to a key (`project_key/2`), beside
+  how many the fleet's last read found (`projects_key/1`). A project the last
+  read did not find, or one made since, shows its fleet's picture until the
+  next read, within a minute; asked for by its address, it is not found once
+  the fleet's projects have been read, and not ready yet while they can't
+  be. A title with a character the picture's set has not got is set as the
+  project's name, its hyphens as spaces.
 
   Each fleet's figures are read with its Treasury page by
   `KeyfleetWeb.FleetProposals` and held in `Keyfleet.SharedReading`, so a
@@ -28,9 +30,11 @@ defmodule KeyfleetWeb.ShareCard do
   set in and where they go are drawn by `scripts/share-cards/render.mjs` into
   `priv/share`. A page names its fleet's picture with a version of its
   figures, so a site that keeps pictures by their address, as X does, asks
-  again once they change. The last picture drawn of each fleet is kept in
-  `:persistent_term` with its figures, so it is drawn again only when they
-  change.
+  again once they change. Each picture drawn is kept by the version of what
+  it shows (`KeyfleetWeb.SharePictures`), so it is drawn again only when that
+  changes, and a draw that failed is tried again a minute later at the
+  soonest. A Key's card is read for a picture with a short wait
+  (`@card_waits`), since a site making a link preview is waiting for it.
 
   A fleet's treasury is what its treasury holds of USDC, REGENT and ETH,
   with the USDC from Key sales still waiting to turn into REGENT; another
@@ -42,7 +46,7 @@ defmodule KeyfleetWeb.ShareCard do
   alias Keyfleet.{Chain, Fleets, Keys, Projects, SharedReading, Treasury}
   alias Keyfleet.Fleets.{Presets, Rules}
   alias Keyfleet.Keys.{KeyArt, Metadata}
-  alias KeyfleetWeb.{DirectoryMD, ProposalsPage}
+  alias KeyfleetWeb.{DirectoryMD, ProposalsPage, SharePictures}
   alias Vix.Vips.{Image, Operation}
 
   @layout_path Path.join([__DIR__, "..", "..", "priv", "share", "layout.json"])
@@ -54,6 +58,10 @@ defmodule KeyfleetWeb.ShareCard do
   @labels @layout["fleets"]
 
   @site_alt "agents: join, start or invest in a fleet. Three Keyfleet Key cards."
+
+  # How long a picture waits for a Key's card from its host: a link preview
+  # is waiting, and a failed draw is kept for a minute.
+  @card_waits [receive_timeout: 5_000, connect_options: [timeout: 3_000]]
 
   @doc """
   The picture the page at `path` shows where it is shared, as `{address,
@@ -96,8 +104,23 @@ defmodule KeyfleetWeb.ShareCard do
   @doc "Where the figures on `fleet_id`'s picture are held."
   def key(fleet_id), do: {:share_card, fleet_id}
 
-  @doc "Where what the pictures of `fleet_id`'s projects show is held."
-  def project_key(fleet_id), do: {:project_cards, fleet_id}
+  @doc """
+  Where what the picture of `fleet_id`'s project `name` shows is held. The
+  trailing ":" after the fleet keeps one fleet's projects from matching
+  another's (`project_ids/1`).
+  """
+  def project_key(fleet_id, name), do: {:project_cards, "#{fleet_id}:#{name}"}
+
+  @doc """
+  Where how many projects the last read of `fleet_id`'s found is held: what
+  tells a project that is not there from one not read yet.
+  """
+  def projects_key(fleet_id), do: {:project_cards, fleet_id}
+
+  @doc "The ids of `fleet_id`'s projects held, for its producer's pass."
+  def project_ids(fleet_id) do
+    Enum.filter(SharedReading.ids(:project_cards), &String.starts_with?(&1, fleet_id <> ":"))
+  end
 
   # The project whose page is at `path`, in a fleet with a picture of its
   # own, as `{fleet_id, name, project}`, or nil for any other page and for a
@@ -108,7 +131,7 @@ defmodule KeyfleetWeb.ShareCard do
 
       with true <- String.starts_with?(path, prefix),
            name = String.replace_prefix(path, prefix, ""),
-           %{} = project <- Map.get(projects(fleet_id), name) do
+           %{} = project <- project(fleet_id, name) do
         {fleet_id, name, project}
       else
         _other -> nil
@@ -116,11 +139,20 @@ defmodule KeyfleetWeb.ShareCard do
     end)
   end
 
-  # What the last read of `fleet_id`'s projects found, by name.
-  defp projects(fleet_id) do
-    case SharedReading.fetch(project_key(fleet_id)) do
-      {:ok, %{reading: %{} = projects}} -> projects
-      _not_read -> %{}
+  # What the last read of `fleet_id`'s projects found of `name`, or nil.
+  defp project(fleet_id, name) do
+    case SharedReading.fetch(project_key(fleet_id, name)) do
+      {:ok, %{reading: %{} = project}} -> project
+      _not_read -> nil
+    end
+  end
+
+  # Whether the last read of `fleet_id`'s projects was taken, so a project
+  # it did not find is not there.
+  defp projects_read?(fleet_id) do
+    case SharedReading.fetch(projects_key(fleet_id)) do
+      {:ok, %{reading: count, degraded?: false}} -> is_integer(count)
+      _not_read -> false
     end
   end
 
@@ -131,40 +163,31 @@ defmodule KeyfleetWeb.ShareCard do
   """
   def png(fleet_id) do
     case held(fleet_id) do
-      nil -> {:error, :not_read}
-      figures -> kept({__MODULE__, fleet_id}, version(figures), fn -> draw(fleet_id, figures) end)
+      nil ->
+        {:error, :not_read}
+
+      figures ->
+        SharePictures.drawn({fleet_id, :fleet, version(figures)}, fn ->
+          draw(fleet_id, figures)
+        end)
     end
   end
 
   @doc """
   The picture of the project `name` of `fleet_id`, a PNG of 1200 by 630, as
-  `{:ok, png}`, or `{:error, reason}` when its fleet's last read of its
-  projects did not find it or its Key's card can't be read.
+  `{:ok, png}`; `{:error, :not_found}` when its fleet's last read of its
+  projects was taken and did not find it; or `{:error, reason}` while its
+  fleet's projects can't be read or its Key's card can't be.
   """
   def project_png(fleet_id, name) do
-    case Map.get(projects(fleet_id), name) do
+    case project(fleet_id, name) do
       nil ->
-        {:error, :not_read}
+        if projects_read?(fleet_id), do: {:error, :not_found}, else: {:error, :not_read}
 
       project ->
-        kept({__MODULE__, fleet_id, name}, version(project), fn ->
+        SharePictures.drawn({fleet_id, name, version(project)}, fn ->
           draw_project(fleet_id, project)
         end)
-    end
-  end
-
-  # The picture last drawn at `place`, if it was drawn from the same version
-  # of what it shows; else drawn again and kept.
-  defp kept(place, version, draw) do
-    case :persistent_term.get(place, nil) do
-      {^version, png} ->
-        {:ok, png}
-
-      _other ->
-        with {:ok, png} <- draw.() do
-          :persistent_term.put(place, {version, png})
-          {:ok, png}
-        end
     end
   end
 
@@ -198,8 +221,9 @@ defmodule KeyfleetWeb.ShareCard do
   What the pictures of `fleet_id`'s projects show, by project name: each
   title as its page shows it, set in the characters the picture has, and the
   name and card picture of the Key holding it, both nil for a project no Key
-  holds. Every project its page shows is here, an archived one too. Read by
-  `KeyfleetWeb.FleetProposals`, which holds them.
+  holds. Every project its page shows is here, an archived one too, since
+  its page shows it (`KeyfleetWeb.ProjectPage`). Read by
+  `KeyfleetWeb.FleetProposals`, which holds each under `project_key/2`.
   """
   def project_figures(fleet_id) do
     fleet = Fleets.get_fleet!(fleet_id)
@@ -370,7 +394,7 @@ defmodule KeyfleetWeb.ShareCard do
   defp card(cid) do
     %{"width" => width, "height" => height} = @slots["picture"]
 
-    with {:ok, png} <- KeyArt.kept(cid),
+    with {:ok, png} <- KeyArt.kept(cid, @card_waits),
          {:ok, picture} <- Image.new_from_buffer(png) do
       picture
       |> Operation.thumbnail_image!(width, height: height)

@@ -7,7 +7,9 @@ defmodule KeyfleetWeb.ShareCardController do
   is a new address; the picture served is always the one of what is held
   now. Before that is first read, or when the card it shows can't be read,
   the answer is 503, asked again in a minute. A project its fleet's last read
-  did not find is 503 too, since one just started arrives with the next.
+  did not find is 404 once that read was taken, and 503 while the fleet's
+  projects can't be read. The endpoint counts every request here against the
+  per-address budget (`KeyfleetWeb.Endpoint`).
   """
   use KeyfleetWeb, :controller
 
@@ -36,6 +38,9 @@ defmodule KeyfleetWeb.ShareCardController do
         |> put_resp_content_type("image/png", nil)
         |> put_resp_header("cache-control", "public, max-age=300")
         |> send_resp(200, png)
+
+      {:error, :not_found} ->
+        send_resp(conn, 404, "")
 
       {:error, _reason} ->
         conn |> put_resp_header("retry-after", "60") |> send_resp(503, "")

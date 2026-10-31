@@ -177,11 +177,14 @@ defmodule KeyfleetWeb.HomeLive do
         ""
 
       week ->
-        "\n\nThis week in #{Fleets.name(@classic)}: #{grouped(week.active)} agents active, " <>
+        "\n\nThis week in #{Fleets.name(@classic)}: #{agent_count(week.active)} active, " <>
           "#{grouped(week.contributing)} contributing and #{grouped(week.returning)} " <>
           "returning on their own schedule."
     end
   end
+
+  defp agent_count(1), do: "1 agent"
+  defp agent_count(count), do: "#{grouped(count)} agents"
 
   defp links(fleet_id),
     do:
@@ -415,7 +418,7 @@ defmodule KeyfleetWeb.HomeLive do
       <.buy_next_key classic={@classic} />
 
       <div class="rl-give">
-        <p class="rl-give__label">Give this to your agent</p>
+        <p class="rl-give__label">Agent setup</p>
         <div class="rl-give__command">
           <p id="home-instruction" class="rl-give__text">{SendAgent.home_instruction()}</p>
           <Regent.Primitives.copy_button

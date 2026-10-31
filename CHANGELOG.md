@@ -6224,3 +6224,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   started in the last minute shows its fleet's picture until it is read.
 - A title with a character the picture can't set is shown as the project's
   name instead.
+
+## 2026-10-31 — Homepage words and project pictures
+
+- The homepage's line above the instruction to copy for your agent now reads
+  "Agent setup".
+- For agents: the homepage in Markdown says "1 agent active" when one is,
+  not "1 agents".
+- A project picture's address for a name that is no project of its fleet now
+  answers not found once the fleet's projects have been read; it answers "not
+  ready yet" only while they can't be read.
+- Share pictures count against the same per-address request budget as
+  `/api`, and a picture whose Key card can't be fetched is tried again a
+  minute later at the soonest instead of on every request.

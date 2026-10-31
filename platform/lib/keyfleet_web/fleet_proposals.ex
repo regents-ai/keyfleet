@@ -18,10 +18,12 @@ defmodule KeyfleetWeb.FleetProposals do
       own, the figures on it (`KeyfleetWeb.ShareCard.figures/1`), so the
       pages naming the picture and the picture itself read nothing. A Key's
       card made after the Key changed hands arrives with the minute's heal;
-    * `KeyfleetWeb.ShareCard.project_key/1`: for the same fleets, what the
-      pictures of its projects show (`KeyfleetWeb.ShareCard.project_figures/1`).
-      A project started, retitled or handed to another Key arrives with the
-      minute's heal.
+    * `KeyfleetWeb.ShareCard.project_key/2`: for the same fleets, what the
+      picture of each of its projects shows
+      (`KeyfleetWeb.ShareCard.project_figures/1`), one key to a project, and
+      under `KeyfleetWeb.ShareCard.projects_key/1` how many the read found. A
+      project started, retitled or handed to another Key arrives with the
+      minute's heal, and a deleted one's key goes with it.
 
   None of these depends on who is reading: `KeyfleetWeb.ProposalsPage`
   reads with no actor, and a reader's own Keys and wallet are read by the
@@ -191,9 +193,32 @@ defmodule KeyfleetWeb.FleetProposals do
     end
 
     case PageRead.run("project pictures", fn -> ShareCard.project_figures(fleet_id) end) do
-      {:ok, projects} -> SharedReading.put(ShareCard.project_key(fleet_id), projects)
-      {:error, _not_read} -> SharedReading.degraded(ShareCard.project_key(fleet_id))
+      {:ok, projects} -> put_projects(fleet_id, projects)
+      {:error, _not_read} -> degraded_projects(fleet_id)
     end
+  end
+
+  # Each project under its own key, then how many there are, so a page that
+  # finds the count finds every project it counts; a project the read no
+  # longer has goes.
+  defp put_projects(fleet_id, projects) do
+    kept =
+      for {name, project} <- projects, into: MapSet.new() do
+        {:project_cards, id} = key = ShareCard.project_key(fleet_id, name)
+        SharedReading.put(key, project)
+        id
+      end
+
+    for id <- ShareCard.project_ids(fleet_id),
+        id not in kept,
+        do: SharedReading.delete({:project_cards, id})
+
+    SharedReading.put(ShareCard.projects_key(fleet_id), map_size(projects))
+  end
+
+  defp degraded_projects(fleet_id) do
+    Enum.each(ShareCard.project_ids(fleet_id), &SharedReading.degraded({:project_cards, &1}))
+    SharedReading.degraded(ShareCard.projects_key(fleet_id))
   end
 
   defp degraded(fleet_id) do
@@ -202,7 +227,7 @@ defmodule KeyfleetWeb.FleetProposals do
     Enum.each(held(fleet_id), &SharedReading.degraded({:proposal, &1}))
     if fleet_id in ShareCard.fleets() do
       SharedReading.degraded(ShareCard.key(fleet_id))
-      SharedReading.degraded(ShareCard.project_key(fleet_id))
+      degraded_projects(fleet_id)
     end
   end
 

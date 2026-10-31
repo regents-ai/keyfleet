@@ -10,7 +10,8 @@ defmodule Keyfleet.Agents.Here do
       the addresses holding a Key and of those online now
       (`Keyfleet.Keys.count_holders/2`, over the last hour), the week's
       figures for the agents here (`Keyfleet.Agents.count_week/2`, over the
-      last seven days, nil when they could not be counted), and as many of
+      last seven days) in the one fleet the homepage shows them for, nil in
+      every other fleet and when they could not be counted, and as many of
       the agents as the fleet's directory lists, each with what its check-ins
       say (its light, the light's meaning and its two lines, `seen_by/2`), the id
       that names its row and the address of its own picture, or nil when it
@@ -49,6 +50,10 @@ defmodule Keyfleet.Agents.Here do
 
   # As many of a Key's agents as its page lists (`Keyfleet.Keys.Profile`).
   @listed 100
+
+  # The fleet whose agents' week the homepage shows (`KeyfleetWeb.HomeLive`),
+  # Classic #1; no other fleet's week is counted, since nothing shows it.
+  @week_fleet "fleet_tech_classic"
 
   @kinds [:fleet_agents, :key_agents]
 
@@ -140,11 +145,7 @@ defmodule Keyfleet.Agents.Here do
         {:error, _failure} -> nil
       end
 
-    week =
-      case Agents.count_week(fleet_id, DateTime.add(now, -7, :day)) do
-        {:ok, week} -> week
-        {:error, _failure} -> nil
-      end
+    week = if fleet_id == @week_fleet, do: week(fleet_id, now)
 
     keys = for %{key: token_id} <- agents, is_integer(token_id), uniq: true, do: token_id
 
@@ -160,6 +161,13 @@ defmodule Keyfleet.Agents.Here do
     # The database not answering raises beneath Ash. It is a read not taken,
     # never a reason for this process, and the site with it, to stop.
     error in [Ash.Error.Unknown, DBConnection.ConnectionError, Postgrex.Error] -> {:error, error}
+  end
+
+  defp week(fleet_id, now) do
+    case Agents.count_week(fleet_id, DateTime.add(now, -7, :day)) do
+      {:ok, week} -> week
+      {:error, _failure} -> nil
+    end
   end
 
   defp read_keys(fleet_id, now) do

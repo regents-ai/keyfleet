@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.ShareCardControllerTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys.KeyArt
   alias Keyfleet.SharedReading
-  alias KeyfleetWeb.{FleetProposals, ShareCard}
+  alias KeyfleetWeb.{FleetProposals, ShareCard, SharePictures}
   alias Vix.Vips.{Image, Operation}
 
   @classic "fleet_tech_classic"
@@ -29,11 +29,11 @@ defmodule KeyfleetWeb.ShareCardControllerTest do
       ChainHelpers.seed_cursor!(fleet_id)
       SharedReading.delete(ShareCard.key(fleet_id))
 
-      on_exit(fn ->
-        SharedReading.delete(ShareCard.key(fleet_id))
-        :persistent_term.erase({ShareCard, fleet_id})
-      end)
+      on_exit(fn -> SharedReading.delete(ShareCard.key(fleet_id)) end)
     end
+
+    # The pictures drawn, and the draws that failed, are kept by version.
+    on_exit(fn -> SharePictures.delete_all() end)
 
     test = self()
     {:ok, card} = Image.write_to_buffer(Operation.black!(767, 959, bands: 3), ".png")

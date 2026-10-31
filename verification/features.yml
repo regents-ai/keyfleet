@@ -1284,8 +1284,11 @@ features:
     level: ordinary
     paths:
       - platform/lib/keyfleet_web/share_card.ex
+      - platform/lib/keyfleet_web/share_pictures.ex
       - platform/lib/keyfleet_web/fleet_proposals.ex
       - platform/lib/keyfleet_web/controllers/share_card_controller.ex
+      - platform/lib/keyfleet_web/endpoint.ex
+      - platform/lib/keyfleet/keys/key_art.ex
       - platform/lib/keyfleet/keys/metadata.ex
       - platform/lib/keyfleet/shared_reading.ex
       - platform/scripts/share-cards/render.mjs
