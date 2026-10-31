@@ -1078,6 +1078,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         %{
           method: method,
           path: path,
+          authority: Siwa.Contract.authority(c.app),
           body: Jason.encode!(body),
           headers: %{"content-type" => "application/json"}
         },
@@ -1125,7 +1126,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     case Siwa.verify_authenticated_request(KeyfleetWeb.SignedAgentHelpers.siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           authorities: [payload["authority"]]
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
         answer(conn, 200, %{

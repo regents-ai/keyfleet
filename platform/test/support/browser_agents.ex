@@ -1,9 +1,9 @@
 defmodule Keyfleet.BrowserAgents do
   @moduledoc """
   The browser tests' agents. Called on the browser test server's own node, it
-  makes agents with signers of their own, signs the requests a page's
-  `prepare_agent_request` tool prepares for them, as an agent's own SIWA
-  signer does, and pairs them with people, so a spec drives a page's signed
+  makes agents with signers of their own, signs the exact request a page's
+  signed tool builds for them, as an agent's browser host does with its own
+  SIWA key, and pairs them with people, so a spec drives a page's signed
   tools the way an agent does.
 
   The server checks each signed request with a stand-in for the SIWA sign-in
@@ -57,15 +57,16 @@ defmodule Keyfleet.BrowserAgents do
   end
 
   @doc """
-  The proof `agent`'s signer makes for a request a page prepared, given as its
-  `method`, `path` and, for any request but a read, `body`: exactly the
-  headers the tool manifest lists, as JSON.
+  The proof `agent`'s signer makes for a request a page built, given as the
+  `origin` it goes to, its `method`, `path` and, for any request but a read,
+  `body`: exactly the headers the tool manifest lists, as JSON.
   """
-  def sign!(agent, %{"method" => method, "path" => path} = request) do
+  def sign!(agent, %{"origin" => origin, "method" => method, "path" => path} = request) do
     %{headers: headers} =
       SignedAgentHelpers.sign(
         :persistent_term.get({__MODULE__, agent}),
         :persistent_term.get({__MODULE__, :secret}),
+        Siwa.Contract.authority(origin),
         method,
         path,
         request["body"]

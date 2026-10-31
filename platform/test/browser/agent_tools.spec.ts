@@ -8,8 +8,9 @@ import {offerRewards, prepareFleet, readTreasury, sayInPublic, sellKey} from "./
 // register (priv/tool_manifest.json), as the WebMCP acceptance of 16 October
 // 2026 does on the live site: it finds them, reads without signing in, checks
 // who it is, and talks in a fleet's Public room. Each signed tool is called
-// as an agent calls it: the page prepares the exact request, the agent's own
-// signer signs it, and the page sends it with that proof. The server checks
+// as an agent calls it: the page builds the exact request, the agent's own
+// signer signs it through a stand-in browser host (window.regentsSign), and
+// the page sends it with that proof. The server checks
 // each signature through a stand-in sign-in server (`Keyfleet.BrowserAgents`).
 //
 // The workspace steps are left out: the work graph's Python host does not run

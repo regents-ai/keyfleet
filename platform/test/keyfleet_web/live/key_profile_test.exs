@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
   alias KeyfleetWeb.FleetNow
+  alias RegentChain.BuilderCode
   alias RegentChain.Call
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
@@ -214,7 +215,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert claim.step == "claim-#{@usdc}"
       assert claim.to == @rewards
-      assert claim.data == Call.encode("claim(uint256[],address[])", [[id(12)], [@usdc]])
+
+      assert claim.data ==
+               BuilderCode.append(Call.encode("claim(uint256[],address[])", [[id(12)], [@usdc]]))
+
       assert text(view, "#key-profile-claim-#{@usdc}") == "Claim 2.5 USDC"
       refute has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
     end
@@ -305,7 +309,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert reveal.step == "reveal"
       assert reveal.to == Fleets.get_fleet!(@fleet).keys_address
-      assert reveal.data == Call.encode("requestReveal(uint256)", [id(12)])
+      assert reveal.data == BuilderCode.append(Call.encode("requestReveal(uint256)", [id(12)]))
 
       assert has_element?(view, "#key-profile-reveal-again[data-onchain-step='reveal']")
       refute has_element?(view, "#key-profile-reveal-again[phx-click]")

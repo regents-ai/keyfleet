@@ -704,7 +704,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     [plain, extra] =
       for extra <- [%{}, %{"x-agent-role" => "admin"}] do
-        request = SignedAgentHelpers.sign(signer, secret, "GET", "/", "")
+        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", "/", "")
 
         %{build_conn() | host: @host, remote_ip: {198, 51, 100, 130}}
         |> then(
@@ -742,7 +742,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     created = ~s({"name":"orbit.py"})
 
     for {method, path, body, status} <- [{"GET", "/", "", 200}, {"POST", notebooks, created, 201}] do
-      request = SignedAgentHelpers.sign(signer, secret, method, path, body)
+      request = SignedAgentHelpers.sign(signer, secret, @host, method, path, body)
 
       conn =
         Enum.reduce(
@@ -778,7 +778,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     [unbound, bound] =
       for body <- [nil, ""] do
-        request = SignedAgentHelpers.sign(signer, secret, "GET", code, body)
+        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", code, body)
 
         Enum.reduce(
           request.headers,
@@ -968,7 +968,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
           case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
                  secret: secret,
                  audience: "keyfleet",
-                 wallet_audiences: ["keyfleet"]
+                 wallet_audiences: ["keyfleet"],
+                 authorities: [payload["authority"]]
                ) do
             {:ok, verified} ->
               SignedAgentHelpers.granted(verified, payload)

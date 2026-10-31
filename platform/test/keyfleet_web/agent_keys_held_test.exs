@@ -74,7 +74,7 @@ defmodule KeyfleetWeb.AgentKeysHeldTest do
 
   defp post!(c, path, body) do
     raw = Jason.encode!(body)
-    request = SignedAgentHelpers.sign(c.signer, c.secret, "POST", path, raw)
+    request = SignedAgentHelpers.sign(c.signer, c.secret, "www.example.com", "POST", path, raw)
 
     request.headers
     |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 151}}, fn {name, value}, conn ->

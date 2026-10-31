@@ -65,7 +65,8 @@ Follow regent-workflow's "Live checks". On Keyfleet:
   any folder under it; the signer reads what it needs.
 - **WebMCP.** Every keyfleet.ai page registers the public reads `about`, `docs`,
   `fleets_list`, `fleets_show`, `workspace_pulse`, `proposals_list` and
-  `treasury_show`; signed tools go through `prepare_agent_request` and the SIWA client.
+  `treasury_show`; signed tools take only their input, and the agent's browser host signs
+  them (`regents browser --site keyfleet`).
 - **Allowlist.** Sean's own Claude settings (`/Users/sean/.claude/settings.json`,
   AGENT-TESTING 1 a, 28 Oct 2026) let a thread run `regents --version`, `regents
   --help` and the `regents keyfleet` groups `account`, `agents`, `code`, `dms`,

@@ -95,7 +95,14 @@ defmodule KeyfleetWeb.RedTeamHelpers do
   """
   def send_signed(ctx, signer, method, path, body \\ nil) do
     request =
-      SignedAgentHelpers.sign(signer, ctx.secret, method, path, body && Jason.encode!(body))
+      SignedAgentHelpers.sign(
+        signer,
+        ctx.secret,
+        Siwa.Contract.authority(ctx.app),
+        method,
+        path,
+        body && Jason.encode!(body)
+      )
 
     Req.request!(
       method: verb(method),

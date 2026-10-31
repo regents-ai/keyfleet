@@ -474,7 +474,17 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   end
 
   defp signed(c, body, audience \\ "keyfleet", chain \\ 8453, path \\ @path),
-    do: SignedAgentHelpers.sign(c.signer, c.secret, "POST", path, body, audience, chain)
+    do:
+      SignedAgentHelpers.sign(
+        c.signer,
+        c.secret,
+        Siwa.Contract.authority(c.app),
+        "POST",
+        path,
+        body,
+        audience,
+        chain
+      )
 
   defp send_request(c, request),
     do:

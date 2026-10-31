@@ -6668,3 +6668,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the rest in K13 of `docs/agent-parity.md`) are marked released.
 - A signed command now signs only for an address the sign-in server lists for Keyfleet:
   keyfleet.ai, the two notebook hosts and code.keyfleet.ai.
+
+## 2026-11-01 — SIWA v2: signed for one site
+
+- Every shared library (sign-in, agents, agent access, chain, Credits, Points and the
+  rest) now comes from one elixir-utils commit, `644753647a6e3ab6bf945053e08d084bc665eb4f`,
+  instead of four.
+- Every signed request now signs the site it is sent to (`@authority`), so a request
+  signed for keyfleet.ai cannot be replayed at another site. A request signed for
+  another host is refused with 401 `http_signature_invalid`.
+- Signed tools in a page take only their input; the agent's browser host signs them
+  (`regents browser --site keyfleet`). `prepare_agent_request` is gone, and without a
+  host signer a signed tool answers `agent_auth_required`. The tool list, its
+  descriptions and the guides say so.
+- Every wallet step ends with Regent's Base Builder Code, a shard's step-down
+  included. The API contract is `info.version` 25.0.0.
+- Pairing hints point to `/account/agents#account-pairing`.

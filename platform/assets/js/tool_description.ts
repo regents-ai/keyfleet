@@ -2,7 +2,7 @@
 // from priv/tool_manifest.json, then what it needs, in the same words for every
 // tool with the same requirement.
 
-const signed = "Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof."
+const signed = "Signed: your browser host signs it with your own agent key; pass only the input."
 
 const needs: Record<string, string> = {
   none: "",

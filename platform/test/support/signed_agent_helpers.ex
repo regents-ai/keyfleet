@@ -38,11 +38,11 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc """
-  `method path` with `body`, signed by `signer` under a fresh receipt for
-  `audience` on `chain`, carrying a cookie and a bearer token the site must
-  not forward.
+  `method path` with `body`, sent to `authority` (`Siwa.Contract.authority/1`)
+  and signed by `signer` under a fresh receipt for `audience` on `chain`,
+  carrying a cookie and a bearer token the site must not forward.
   """
-  def sign(signer, secret, method, path, body, audience \\ "keyfleet", chain \\ 8453) do
+  def sign(signer, secret, authority, method, path, body, audience \\ "keyfleet", chain \\ 8453) do
     {:ok, %{token: receipt}} =
       Siwa.Receipt.create(
         %{
@@ -63,6 +63,7 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
         %{
           method: method,
           path: path,
+          authority: authority,
           body: body,
           headers: %{
             "content-type" => "application/json",
@@ -93,13 +94,16 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
 
   @doc """
   The request in `payload`, the JSON the site sends the sign-in server, as
-  siwa-server hands it to the library: its method, path, headers and the
-  digest of its body.
+  siwa-server hands it to the library: its method, path, the host it reached,
+  headers and the digest of its body. A stand-in serves Keyfleet at whatever
+  host a test sends to, so it lists that host as the site's own
+  (`authorities: [payload["authority"]]`).
   """
   def siwa_request(payload) do
     %{
       method: payload["method"],
       path: payload["path"],
+      authority: payload["authority"],
       headers: payload["headers"],
       body_digest: payload["body_digest"]
     }
@@ -116,7 +120,8 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
     case Siwa.verify_authenticated_request(siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           authorities: [payload["authority"]]
          ) do
       {:ok, verified} -> granted(verified, payload)
       {:error, _} -> {401, %{error: refusal()}}

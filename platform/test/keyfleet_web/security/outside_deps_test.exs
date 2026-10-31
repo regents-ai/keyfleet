@@ -52,7 +52,15 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
     end
 
     test "OD-SIWA-REPLAY: a signed request is served once and refused when sent again", ctx do
-      request = SignedAgentHelpers.sign(ctx.signer, ctx.secret, "POST", @join_path, body(@join))
+      request =
+        SignedAgentHelpers.sign(
+          ctx.signer,
+          ctx.secret,
+          authority(ctx),
+          "POST",
+          @join_path,
+          body(@join)
+        )
 
       assert %{status: 200} = deliver(ctx, "POST", @join_path, request)
       assert_receive {:broker_payload, _first}
@@ -66,7 +74,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
          ctx do
       own = "/api/v1/agent/fleets/#{fleet()}/keys/1/dms"
       other = "/api/v1/agent/fleets/#{fleet()}/keys/2/dms"
-      request = SignedAgentHelpers.sign(ctx.signer, ctx.secret, "GET", own, nil)
+      request = SignedAgentHelpers.sign(ctx.signer, ctx.secret, authority(ctx), "GET", own, nil)
 
       assert deliver(ctx, "GET", other, request).status == 401
       assert_receive {:broker_payload, %{"path" => ^other} = moved}
@@ -87,7 +95,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
 
       pathless =
         ctx.signer
-        |> SignedAgentHelpers.sign(ctx.secret, "GET", own, nil)
+        |> SignedAgentHelpers.sign(ctx.secret, authority(ctx), "GET", own, nil)
         |> sign_again_without("@path", ctx.signer)
 
       assert deliver(ctx, "GET", other, pathless).status == 401
@@ -100,6 +108,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
         SignedAgentHelpers.sign(
           ctx.signer,
           ctx.secret,
+          authority(ctx),
           "POST",
           @join_path,
           body(@join),
@@ -321,6 +330,9 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
   defp body(map), do: Jason.encode!(map)
 
   # Sends a request already signed, as it was signed or at another address.
+  # The host the site is served at here, as a signed request names it.
+  defp authority(ctx), do: Siwa.Contract.authority(ctx.app)
+
   defp deliver(ctx, method, path, request) do
     Req.request!(
       method: method |> String.downcase() |> String.to_existing_atom(),
@@ -339,7 +351,8 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
              Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
                secret: ctx.secret,
                audience: "keyfleet",
-               wallet_audiences: ["keyfleet"]
+               wallet_audiences: ["keyfleet"],
+               authorities: [payload["authority"]]
              )
 
     reason
@@ -389,6 +402,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
         %{
           method: method,
           path: path,
+          authority: authority(ctx),
           body: body,
           headers: %{"content-type" => "application/json"}
         },

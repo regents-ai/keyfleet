@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   admits, and the answers it really gives.
   """
   use ExUnit.Case, async: false
+
   use ExUnitProperties
   import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
@@ -19,6 +20,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Plugs.SignedAgent
+  alias RegentChain.BuilderCode
 
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
   # A field the signed-request check admits has to be spelled in its source.
@@ -518,10 +520,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert shard["step_down"]["to"] == shard["shards_contract"]
 
     assert shard["step_down"]["data"] ==
-             RegentChain.Call.encode("end(uint256[],address)", [
-               [ChainHelpers.onchain_id(@fleet, 1)],
-               holder.address
-             ])
+             BuilderCode.append(
+               RegentChain.Call.encode("end(uint256[],address)", [
+                 [ChainHelpers.onchain_id(@fleet, 1)],
+                 holder.address
+               ])
+             )
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
     owners_agent =
@@ -1238,12 +1242,16 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert {approve["name"], approve["blocked"]} == {"approve", nil}
 
     assert approve["data"] ==
-             RegentChain.Call.encode("approve(address,uint256)", [treasury, 2_500_000])
+             BuilderCode.append(
+               RegentChain.Call.encode("approve(address,uint256)", [treasury, 2_500_000])
+             )
 
     assert {give_back["name"], give_back["blocked"]} == {"return", "Approve first"}
 
     assert give_back["data"] ==
-             RegentChain.Call.encode("returnAdvance(uint256,uint256)", [7, 2_500_000])
+             BuilderCode.append(
+               RegentChain.Call.encode("returnAdvance(uint256,uint256)", [7, 2_500_000])
+             )
 
     assert [_approve, %{"blocked" => "More than is owed"}] =
              answer(c, c.signer, "POST", @return_advance, @address, %{"amount" => "6"}, 200).body[
@@ -1351,7 +1359,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              answer(c, c.signer, "POST", @reveal, own, %{}, 200).body
 
     assert {step["name"], step["to"], step["blocked"]} == {"reveal", fleet.keys_address, nil}
-    assert step["data"] == RegentChain.Call.encode("requestReveal(uint256)", [key])
+
+    assert step["data"] ==
+             BuilderCode.append(RegentChain.Call.encode("requestReveal(uint256)", [key]))
 
     draw.(1)
 
@@ -1387,7 +1397,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              answer(c, c.signer, "POST", @club_claim, address, %{}, 200).body
 
     assert {step["name"], step["to"], step["blocked"]} == {"club-claim", claims, nil}
-    assert step["data"] == RegentChain.Call.encode("claim(uint256,address)", [1, wallet])
+
+    assert step["data"] ==
+             BuilderCode.append(RegentChain.Call.encode("claim(uint256,address)", [1, wallet]))
 
     waiting.(@owner)
 
@@ -1420,7 +1432,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert {step["name"], step["blocked"]} == {"issue", nil}
 
     assert step["data"] ==
-             RegentChain.Call.encode("issue(uint256[],address,uint16)", [[two], agent, 30])
+             BuilderCode.append(
+               RegentChain.Call.encode("issue(uint256[],address,uint16)", [[two], agent, 30])
+             )
 
     assert [%{"blocked" => "Not your Key"}] =
              answer(c, c.signer, "POST", @issue_shard, @address, %{issue | "keys" => "1, 2"}, 200).body[
@@ -1510,7 +1524,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert {buy["name"], buy["blocked"]} == {"buy", "Approve USDC first"}
 
     assert approve["data"] ==
-             RegentChain.Call.encode("approve(address,uint256)", [manager, 105_000_000])
+             BuilderCode.append(
+               RegentChain.Call.encode("approve(address,uint256)", [manager, 105_000_000])
+             )
 
     ChainViews.put!(
       List.replace_at(
@@ -1981,6 +1997,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
         %{
           method: method,
           path: path,
+          authority: Siwa.Contract.authority(c.app),
           body: body,
           headers: %{"content-type" => "application/json"}
         },
@@ -2008,7 +2025,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     case Siwa.verify_authenticated_request(KeyfleetWeb.SignedAgentHelpers.siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           authorities: [payload["authority"]]
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
         reply(conn, 200, %{

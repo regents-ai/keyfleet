@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.Live.ProposalsPageTest do
   use KeyfleetWeb.ConnCase, async: false
+
   use Oban.Testing, repo: Keyfleet.Repo
 
   alias Keyfleet.Accounts
@@ -17,6 +18,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetProposals
   alias KeyfleetWeb.WalletWords
+  alias RegentChain.BuilderCode
   alias RegentChain.Call
 
   # A page's first wallet build in a run also loads the code it runs, which
@@ -773,9 +775,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       })
 
       assert {present.to, present.data} ==
-               {@votes, Call.encode("present(uint256[])", [[id(1), id(2), id(3)]])}
+               {@votes,
+                BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2), id(3)]]))}
 
-      assert {sweep.to, sweep.data} == {@votes, Call.encode("sweepExpired(uint256)", [256])}
+      assert {sweep.to, sweep.data} ==
+               {@votes, BuilderCode.append(Call.encode("sweepExpired(uint256)", [256]))}
     end
 
     test "a wallet with no keys can't mark any present, but may still press Continue", %{
@@ -822,7 +826,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         })
 
         assert step.data ==
-                 Call.encode(@propose, [id(7), keccak(text), Actions.encode(action, fleet)])
+                 BuilderCode.append(
+                   Call.encode(@propose, [id(7), keccak(text), Actions.encode(action, fleet)])
+                 )
 
         assert text(view, "#propose-action-line") == "#{line} Voting closes 8 Oct, 12:00 UTC."
       end
@@ -1013,7 +1019,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         review: %{steps: [%{step: "run_split", to: @treasury} = run]}
       })
 
-      assert run.data == Call.encode("runDailySplit()", [])
+      assert run.data == BuilderCode.append(Call.encode("runDailySplit()", []))
     end
 
     test "before any key is sold the split can't run, and says so", %{conn: conn} do
@@ -1064,10 +1070,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       })
 
       assert {approve.to, approve.data} ==
-               {@usdc, Call.encode("approve(address,uint256)", [@treasury, 3_000_000])}
+               {@usdc,
+                BuilderCode.append(
+                  Call.encode("approve(address,uint256)", [@treasury, 3_000_000])
+                )}
 
       assert {give_back.to, give_back.data, give_back.value} ==
-               {@treasury, Call.encode("returnAdvance(uint256,uint256)", [1, 3_000_000]), "0x0"}
+               {@treasury,
+                BuilderCode.append(Call.encode("returnAdvance(uint256,uint256)", [1, 3_000_000])),
+                "0x0"}
 
       assert pressable?(view, "approve", ["#proposals-return-1-approve"])
       assert has_element?(view, "#proposals-return-1-button-why", "Approve first")
@@ -1128,7 +1139,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         review: %{steps: [%{step: "send_share", to: @fleet_contract} = send]}
       })
 
-      assert send.data == Call.encode("sendProtocolShare()", [])
+      assert send.data == BuilderCode.append(Call.encode("sendProtocolShare()", []))
     end
 
     # The treasury's figures follow what was just done on its page (Sean,
@@ -1272,11 +1283,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       for {step, name, choice} <- [{yes, "yes", 1}, {no, "no", 2}, {abstain, "abstain", 3}] do
         assert {step.step, step.to, step.data} ==
                  {name, @votes,
-                  Call.encode("castBallot(uint256,uint256[],uint8)", [
-                    1,
-                    [id(1), id(2), id(3)],
-                    choice
-                  ])}
+                  BuilderCode.append(
+                    Call.encode("castBallot(uint256,uint256[],uint8)", [
+                      1,
+                      [id(1), id(2), id(3)],
+                      choice
+                    ])
+                  )}
       end
 
       assert text(view, "#proposal-vote-action-line") == "With Keys 1, 2, 3."
@@ -1352,7 +1365,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         review: %{steps: [%{step: "carry_out", to: @votes} = carry_out]}
       })
 
-      assert carry_out.data == Call.encode(@execute, [2, [{target, value, data}]])
+      assert carry_out.data ==
+               BuilderCode.append(Call.encode(@execute, [2, [{target, value, data}]]))
+
       assert pressable?(view, "carry_out", ["#proposal-carry-out-button"])
       assert pressable?(view, "cancel", ["#proposal-cancel-button"])
     end

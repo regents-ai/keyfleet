@@ -166,7 +166,14 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     test "a body changed after it was signed is refused", c do
       request =
-        SignedAgentHelpers.sign(c.signer, c.secret, "POST", "/mcp", Jason.encode!(rpc("ping")))
+        SignedAgentHelpers.sign(
+          c.signer,
+          c.secret,
+          Siwa.Contract.authority(c.app),
+          "POST",
+          "/mcp",
+          Jason.encode!(rpc("ping"))
+        )
 
       pair!(account!(), c.signer.address)
 
@@ -633,7 +640,14 @@ defmodule KeyfleetWeb.McpConnectorTest do
   # The same agent's own signed request, through the site served on a port.
   defp signed(c, method, path, body) do
     request =
-      SignedAgentHelpers.sign(c.signer, c.secret, method, path, body && Jason.encode!(body))
+      SignedAgentHelpers.sign(
+        c.signer,
+        c.secret,
+        Siwa.Contract.authority(c.app),
+        method,
+        path,
+        body && Jason.encode!(body)
+      )
 
     Req.request!(
       method: method |> String.downcase() |> String.to_existing_atom(),

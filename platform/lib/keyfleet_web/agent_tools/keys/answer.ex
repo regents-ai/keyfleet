@@ -34,7 +34,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias Keyfleet.Rooms.Errors.MuteLimitError
   alias KeyfleetWeb.{Refusal, RoomJSON}
-  alias RegentChain.Call
+  alias RegentChain.{BuilderCode, Call}
 
   @max_token_id 9_223_372_036_854_775_807
 
@@ -236,10 +236,12 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
         chain_id: shard.fleet.chain_id,
         to: shard.fleet.shards_address,
         data:
-          Call.encode("end(uint256[],address)", [
-            [Fleet.onchain_token_id(shard.fleet, shard.token_id)],
-            wallet
-          ]),
+          BuilderCode.append(
+            Call.encode("end(uint256[],address)", [
+              [Fleet.onchain_token_id(shard.fleet, shard.token_id)],
+              wallet
+            ])
+          ),
         value: "0"
       }
     }

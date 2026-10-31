@@ -487,7 +487,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   # `signed` is what the agent signed; `sent` is what arrives. Each agent
   # sends from its own address, so no other test spent its budget.
   defp signed(agent, path, signed, sent \\ nil) do
-    request = SignedAgentHelpers.sign(agent.signer, agent.secret, "POST", path, signed)
+    request = SignedAgentHelpers.sign(agent.signer, agent.secret, @host, "POST", path, signed)
 
     %{build_conn() | host: @host, remote_ip: {198, 51, 100, 140}}
     |> then(

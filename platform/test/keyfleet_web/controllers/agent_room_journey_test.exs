@@ -66,7 +66,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
                KeyfleetWeb.SignedAgentHelpers.siwa_request(payload),
                secret: secret,
                audience: "keyfleet",
-               wallet_audiences: ["keyfleet"]
+               wallet_audiences: ["keyfleet"],
+               authorities: [payload["authority"]]
              ) do
           {:ok, %{claims: claims, covered_components: covered}} ->
             answer(conn, 200, %{
@@ -561,6 +562,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         %{
           method: method,
           path: path,
+          authority: Siwa.Contract.authority(c.app),
           body: body,
           headers: %{"content-type" => "application/json"}
         },

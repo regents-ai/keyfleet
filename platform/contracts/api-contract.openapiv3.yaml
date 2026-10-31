@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 24.15.2
+  version: 25.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -6883,7 +6883,7 @@ components:
           properties:
             chain_id: {type: integer, minimum: 1}
             to: {$ref: "#/components/schemas/AgentWallet"}
-            data: {type: string, pattern: '^0x8dbf85b7[0-9a-f]{256}$', description: "end(uint256[] tokenIds, address wallet), with the one Key"}
+            data: {type: string, pattern: '^0x8dbf85b7[0-9a-f]{256}62635f7530393336306a6f0b0080218021802180218021802180218021$', description: "end(uint256[] tokenIds, address wallet), with the one Key, then Regent's Base Builder Code"}
             value: {type: string, const: "0"}
     AgentShardList:
       type: object

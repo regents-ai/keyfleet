@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetProposals
   alias Phoenix.Socket.Broadcast
+  alias RegentChain.BuilderCode
   alias RegentChain.Call
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
@@ -515,7 +516,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       [approve, buy] = review.steps
       assert approve.to == @usdc
-      assert approve.data == Call.encode("approve(address,uint256)", [@contract, 45_150_000])
+
+      assert approve.data ==
+               BuilderCode.append(
+                 Call.encode("approve(address,uint256)", [@contract, 45_150_000])
+               )
+
       assert buy.to == @contract
       assert "0x" <> _calldata = buy.data
 
@@ -559,7 +565,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       })
 
       assert approve.data ==
-               Call.encode("approve(address,uint256)", [@contract, 2 ** 256 - 1])
+               BuilderCode.append(
+                 Call.encode("approve(address,uint256)", [@contract, 2 ** 256 - 1])
+               )
 
       # The purchase still costs no more than the price with its room.
       assert buy.to == @contract
@@ -572,7 +580,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         review: %{steps: [approve, _buy], inputs: %{"unlimited" => "false"}}
       })
 
-      assert approve.data == Call.encode("approve(address,uint256)", [@contract, 45_150_000])
+      assert approve.data ==
+               BuilderCode.append(
+                 Call.encode("approve(address,uint256)", [@contract, 45_150_000])
+               )
+
       refute has_element?(view, "#buy-key-unlimited[checked]")
     end
 
@@ -1221,10 +1233,17 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         review: %{steps: [settle, bind, release, collect]}
       })
 
-      assert {settle.to, settle.data} == {@strategy, Call.encode("migrate(address)", [@auction])}
-      assert {bind.to, bind.data} == {@treasury, Call.encode("bindLaunchToken(uint256)", [7])}
-      assert {release.to, release.data} == {@escrow, Call.encode("release()", [])}
-      assert {collect.to, collect.data} == {@locker, Call.encode("collect(uint256)", [42])}
+      assert {settle.to, settle.data} ==
+               {@strategy, BuilderCode.append(Call.encode("migrate(address)", [@auction]))}
+
+      assert {bind.to, bind.data} ==
+               {@treasury, BuilderCode.append(Call.encode("bindLaunchToken(uint256)", [7]))}
+
+      assert {release.to, release.data} ==
+               {@escrow, BuilderCode.append(Call.encode("release()", []))}
+
+      assert {collect.to, collect.data} ==
+               {@locker, BuilderCode.append(Call.encode("collect(uint256)", [42]))}
 
       assert has_element?(view, "#fleet-launch-settle:not([disabled])", "Settle sale")
 

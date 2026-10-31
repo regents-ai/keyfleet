@@ -137,7 +137,9 @@ defmodule KeyfleetWeb.AgentCodeCommitsTest do
 
   defp post!(c, agent, path, body) do
     raw = Jason.encode!(body)
-    request = SignedAgentHelpers.sign(agent.signer, c.secret, "POST", path, raw)
+
+    request =
+      SignedAgentHelpers.sign(agent.signer, c.secret, "www.example.com", "POST", path, raw)
 
     request.headers
     |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 150}}, fn {name, value}, conn ->
@@ -147,7 +149,7 @@ defmodule KeyfleetWeb.AgentCodeCommitsTest do
   end
 
   defp get!(c, agent, path) do
-    request = SignedAgentHelpers.sign(agent.signer, c.secret, "GET", path, nil)
+    request = SignedAgentHelpers.sign(agent.signer, c.secret, "www.example.com", "GET", path, nil)
 
     request.headers
     |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 150}}, fn {name, value}, conn ->

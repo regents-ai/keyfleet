@@ -29,6 +29,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
 
   @methods ~w(GET POST PUT PATCH DELETE)
   @verify [audience: "keyfleet", wallet_audiences: ["keyfleet"]]
+  @authority "keyfleet.ai"
 
   describe "a SIWA signature binds its request (OD-SIWA-BINDING)" do
     setup do
@@ -43,7 +44,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
                 body <- body(),
                 change <- change(method, path, body),
                 max_runs: 200 do
-        signed = SignedAgentHelpers.sign(c.signer, c.secret, method, path, body)
+        signed = SignedAgentHelpers.sign(c.signer, c.secret, @authority, method, path, body)
         changed = apply_change(signed, change)
 
         assert verify(changed, c.secret) == {:error, refusal(change, body)}
@@ -169,10 +170,11 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
       %{
         method: request.method,
         path: request.path,
+        authority: request.authority,
         headers: request.headers,
         body_digest: Siwa.RequestAuth.content_digest_for_body(request.body)
       },
-      [secret: secret] ++ @verify
+      [secret: secret, authorities: [@authority]] ++ @verify
     )
   end
 

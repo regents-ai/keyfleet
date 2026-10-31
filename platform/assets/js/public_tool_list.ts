@@ -1,11 +1,13 @@
-// Manifest-listed public reads, exact signed agent tools and the picture upload. The existing SIWA
-// signer supplies proof; browser cookies never authorize these requests.
+// Manifest-listed public reads, exact signed agent tools and the picture upload. A signed tool
+// takes only its input; the agent's browser host signs the exact request (window.regentsSign),
+// so no key, signature or receipt passes through the page. Browser cookies never authorize
+// these requests.
 // page_tools.ts keeps the separately approved wallet-button interaction.
 // public_tools.ts loads this file only in a browser that has its own agent.
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
-import {signedTools, type SignedOperation, type SignedInput} from "../vendor/regent_agent_access/signed_tools"
+import {Refused, signedTools, type SignedOperation} from "../vendor/regent_agent_access/signed_tools"
 
 import {described} from "./tool_description"
 import {inputProblem, type Schema} from "./tool_input"
@@ -16,10 +18,8 @@ function signedTransport() {
     trustedOrigins: [document.querySelector<HTMLMetaElement>('meta[name="agent-request-origin"]')?.content ?? ""],
     audience: manifest.audience, proofHeaders: manifest.proof_headers,
     requestHeaders: client,
-    // Only the signed tools are operations; each is sent with its operation's own inputs.
-    operations: manifest.tools.flatMap(entry =>
-      "operation_input_schema" in entry ? [{...entry, input_schema: entry.operation_input_schema}] : [],
-    ) as unknown as SignedOperation[]})
+    // Only the signed tools are operations.
+    operations: manifest.tools.filter(entry => entry.authentication === "siwa_per_request") as unknown as SignedOperation[]})
 }
 
 type Entry = {
@@ -83,12 +83,12 @@ function lost(entry: Entry, input: unknown, status: number | undefined, error: {
   if (!entry.state_changing) return {ok: false, ...at, error: {...error, hint: "Try again in a moment."}}
 
   const field = entry.operation_id_field
-  const sent = field && (input as {input?: Record<string, unknown>} | null)?.input?.[field]
+  const sent = field && (input as Record<string, unknown> | null)?.[field]
   const hint = typeof sent !== "string"
     ? "Check what happened before you send it again. Read back what it changes first."
     : receipted(entry)
-      ? `Check what happened before you send it again. receipts_read with this ${field} says whether it ran; to send it again, keep the same ${field} and sign the request again.`
-      : `Check what happened before you send it again. Sent again with the same ${field} and a fresh signature, it runs once.`
+      ? `Check what happened before you send it again. receipts_read with this ${field} says whether it ran; to send it again, keep the same ${field} and call the tool again.`
+      : `Check what happened before you send it again. Sent again with the same ${field}, it runs once.`
   return {ok: false, ...at, outcome: "unknown", error: {...error, hint}}
 }
 
@@ -190,6 +190,7 @@ function refused(code: string, operation: string | undefined, error: unknown, hi
 function explain(reason: string, operation: string | undefined): string {
   const [kind, field] = reason.split(":", 2)
   switch (kind) {
+    case "invalid_input": return "Send an object of named fields."
     case "missing_field": return `${field} is required.`
     case "invalid_field": return `${field} is not a field of this tool, or is not the kind of value it takes.`
     case "invalid_path_field": return `${field} must be a name, not empty.`
@@ -200,14 +201,13 @@ function explain(reason: string, operation: string | undefined): string {
     }
     case "body_too_large": return "The input is too large."
     case "input_complexity_exceeded": return "The input has too many parts or is nested too deeply."
-    case "prepared_request_mismatch": return "The signed request is not the one prepared for this input. Prepare it again with the same input, then sign it."
-    case "signed_request_required": return "Send the prepared request as request, with its proof."
+    case "invalid_signer_answer":
     case "proof_required":
     case "invalid_proof":
     case "incomplete_proof":
     case "body_proof_required":
     case "unexpected_body_proof":
-      return "The proof is missing or incomplete. Sign the prepared request with your SIWA signer and send every header it returns."
+      return "Your agent's signer gave an incomplete answer, so nothing was sent. Update regents-cli and open this site again with regents browser."
     case "untrusted_origin":
     case "insecure_origin":
       return "This page can't send signed requests."
@@ -225,24 +225,19 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
   inputSchema: entry.input_schema,
   annotations: entry.annotations,
   async execute(input: unknown, {signal}: {signal?: AbortSignal}) {
-    if (entry.name === "prepare_agent_request") {
-      const args = input as {operation: string; input: Record<string, unknown>}
-      try {
-        return {ok: true, request: signedTransport().prepare(args.operation, args.input)}
-      } catch (error) {
-        return refused("invalid_preparation", args?.operation, error, "Check the input against the operation's schema, then prepare it again.")
-      }
-    }
     if (entry.authentication === "siwa_per_request") {
       let response: Response
       try {
-        response = await signedTransport().execute(entry.name, input as SignedInput, signal)
+        response = await signedTransport().execute(entry.name, input as Record<string, unknown>, signal)
       } catch (error) {
+        // With no agent signer, or when it says no, the transport refuses with
+        // Refused, which carries the words for the agent.
+        if (error instanceof Refused) return {ok: false, error: error.refusal}
         // fetch fails with a TypeError, or an AbortError when cancelled; every
         // other error is the transport refusing the call before anything is sent.
         const sent = error instanceof TypeError || (error as Error).name === "AbortError"
         if (!sent) return refused("signed_call_refused", entry.name, error,
-          "Nothing was sent. Prepare this exact request with prepare_agent_request, sign it with your SIWA signer, then call again with input, request and proof. If you have no signer, report that as a blocker.")
+          "Nothing was sent. Check the input against this tool's schema, then call the tool again.")
         unsent(entry, signal)
         return lost(entry, input, undefined, {code: "signed_request_failed", message: String(error)})
       }

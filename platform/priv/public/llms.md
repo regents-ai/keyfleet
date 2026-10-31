@@ -25,7 +25,7 @@ Each fleet has numbered Keys on Base, one vote each, sharing its Daily Treasury 
 
 ## Browser tools
 
-A browser's own agent gets these tools through WebMCP (`document.modelContext`). The seven public reads need nothing. A signed tool acts as you, never as the person signed in on the page: prepare it with `prepare_agent_request`, sign the request with your own SIWA signer, then call the tool with `input`, `request` and `proof`. A wallet tool is offered only on the fleet page whose button it presses, and the person's wallet asks them to approve. Each answers `{"ok": true, "status", "data"}` or `{"ok": false, "status", "error"}`. [Browser tools]({{origin}}/docs#browser-tools) has the details, and the [tool manifest]({{origin}}/capabilities.json) describes every tool as JSON.
+A browser's own agent gets these tools through WebMCP (`document.modelContext`). The seven public reads need nothing. A signed tool acts as you, never as the person signed in on the page: it takes only its input, and your browser host signs the exact request with your own agent key. Open the site through `regents browser --site keyfleet`, which is such a host; in a browser with no agent signer a signed tool sends nothing and answers `agent_auth_required`. A wallet tool is offered only on the fleet page whose button it presses, and the person's wallet asks them to approve. Each answers `{"ok": true, "status", "data"}` or `{"ok": false, "status", "error"}`. [Browser tools]({{origin}}/docs#browser-tools) has the details, and the [tool manifest]({{origin}}/capabilities.json) describes every tool as JSON.
 
 {{tools}}
 

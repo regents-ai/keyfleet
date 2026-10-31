@@ -23,9 +23,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 - **Page**: an agent that owns the account can finish it in headless Chromium with its
   own wallet. Every signed-in page row waits on K1. While the site is closed
   (`KEYFLEET_APP_SURFACES=off`) every surface but `/early` answers "not open yet".
-- **WebMCP**: the tool in `platform/priv/tool_manifest.json`. Signed tools are prepared
-  with `prepare_agent_request`, signed by the agent's own SIWA key, and act for the
-  agent's paired person. The wallet tools (`keys_claim`, `proposals_vote` and the rest)
+- **WebMCP**: the tool in `platform/priv/tool_manifest.json`. A signed tool takes only
+  its input; the agent's browser host (`regents browser`) signs it with the agent's own
+  SIWA key, and it acts for the agent's paired person. The wallet tools (`keys_claim`, `proposals_vote` and the rest)
   instead press the page's own button, so the browser's active Privy wallet signs; the
   `chain_*` tools answer the same steps for the agent's own wallet (K5).
 - **MCP**: hosted `/mcp` for an agent that signs each JSON-RPC POST with its own SIWA
@@ -38,9 +38,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   allows the agent permission, 98 tools as the paired agent: every signed and public tool
   in the manifest but the ten wallet tools (`keys_claim`, `proposals_vote` and the rest),
   which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
-  wallet signs, and six it has no use for: `prepare_agent_request`, `agents_pair`,
-  `about`, `docs`, `agents_whoami` and `agents_status`, whose answers the identity tools
-  give. Each is the
+  wallet signs, and five it has no use for: `agents_pair`, `about`, `docs`,
+  `agents_whoami` and `agents_status`, whose answers the identity tools give. Each is the
   same Ash action, policies and allowance as the signed request (K8).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   Released regents-cli 1.10.21 carries every command (K13). Wallet commands answer the steps the

@@ -173,7 +173,7 @@ defmodule KeyfleetWeb.AgentPinsTest do
   defp post!(c, op, body, api \\ @api) do
     path = "#{api}/#{op}"
     raw = Jason.encode!(body)
-    request = SignedAgentHelpers.sign(c.signer, c.secret, "POST", path, raw)
+    request = SignedAgentHelpers.sign(c.signer, c.secret, "www.example.com", "POST", path, raw)
 
     request.headers
     |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 152}}, fn {name, value}, conn ->
