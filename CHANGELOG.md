@@ -6648,3 +6648,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   and works on 16 notebooks at a time.
 - A Keyfleet patch on marimohub (`notebook-hub/marimohub/app-pool-sweep.patch`),
   tested in the hub image build. The hub image is now `626ec14-e673b6f`.
+
+## 2026-10-31 — Page library security update
+
+- Moved phoenix_html from 4.3.0 to 4.4.0, which fixes the medium advisory
+  EEF-CVE-2026-117645 published today. Only the lock file changes; `mix.exs`
+  already allowed 4.4, and the dependency audit in `mix precommit` is clean again.
+- The proposals reader's test now expects the 300-block look-back that the Base
+  Denim change set on 30 Oct; it still expected the old 30 blocks.

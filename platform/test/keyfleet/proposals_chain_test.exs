@@ -455,9 +455,9 @@ defmodule Keyfleet.ProposalsChainTest do
       assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
                [
                  {@deployed, @deployed + 9_999},
-                 {@deployed + 9_970, @deployed + 9_999},
+                 {@deployed + 9_700, @deployed + 9_999},
                  {@deployed + 10_000, @deployed + 19_999},
-                 {@deployed + 19_970, @deployed + 19_999},
+                 {@deployed + 19_700, @deployed + 19_999},
                  {@deployed + 20_000, @deployed + 25_000}
                ]
     end
