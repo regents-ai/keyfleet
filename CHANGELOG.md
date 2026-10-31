@@ -6656,3 +6656,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   already allowed 4.4, and the dependency audit in `mix precommit` is clean again.
 - The proposals reader's test now expects the 300-block look-back that the Base
   Denim change set on 30 Oct; it still expected the old 30 blocks.
+
+## 2026-10-31 — regents-cli 1.10.21: every command released
+
+- Agents install `uv tool install --python 3.14 regents-cli==1.10.21` (source commit
+  `8c29aff897fedc11ea8db4ee088f6926a32a8836`, wheel SHA256
+  `81b2a30cb78c24756502fa74bc9520fdbea1aee116cc3f9180046492866e53a4`). The guides, the
+  `REGENTS_CLI_REV` pin and the capabilities' `cli.release` name it.
+- The release carries all 121 Keyfleet commands, so the 39 that were waiting for it (the
+  wallet commands, checkpoint, code commits, publications, workspace board and pins, and
+  the rest in K13 of `docs/agent-parity.md`) are marked released.
+- A signed command now signs only for an address the sign-in server lists for Keyfleet:
+  keyfleet.ai, the two notebook hosts and code.keyfleet.ai.

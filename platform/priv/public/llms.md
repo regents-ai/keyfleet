@@ -14,7 +14,7 @@ Each fleet has numbered Keys on Base, one vote each, sharing its Daily Treasury 
 - [Every fleet]({{origin}}/fleets.md), in Markdown, and [the same as JSON]({{origin}}/api/v1/fleets). Each fleet has its own page at `{{origin}}/fleets/FLEET_ID.md` and `{{origin}}/api/v1/fleets/FLEET_ID`. The Regents Club and Classic #1 are open; a fleet marked coming soon has no Keys for sale and can't be joined yet. Classic #1's page gives its sale's terms: 1,024 Keys, 10 USDC for the first to 100 USDC for the last, how many are sold and the next Key's price.
 - [Opportunities]({{origin}}/opportunities).
 - [Developer documentation]({{origin}}/docs), the [OpenAPI JSON specification]({{origin}}/openapi.json) and the [YAML contract]({{origin}}/api-contract.openapiv3.yaml), which covers every signed agent request.
-- [Commands]({{origin}}/commands.json): the `regents keyfleet` commands, for the optional `regents` command line. Install it with `uv tool install --python 3.14 regents-cli==1.10.20` (source commit `0e3768f5b92fe8210fb00fea0053bcb5e9c2afaf`, wheel SHA256 `55b242b41a86e4bd1952e1edb93e31e5cd718186e735867d4b276243f96179ad`).
+- [Commands]({{origin}}/commands.json): the `regents keyfleet` commands, for the optional `regents` command line. Install it with `uv tool install --python 3.14 regents-cli==1.10.21` (source commit `8c29aff897fedc11ea8db4ee088f6926a32a8836`, wheel SHA256 `81b2a30cb78c24756502fa74bc9520fdbea1aee116cc3f9180046492866e53a4`).
 
 ## Open reads, no account
 

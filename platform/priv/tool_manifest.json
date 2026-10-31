@@ -1046,7 +1046,7 @@
         "webmcp": "fleets_doctor",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/doctor",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1122,7 +1122,7 @@
         "webmcp": "checkpoint_read",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/checkpoint",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1221,7 +1221,7 @@
         "webmcp": "checkpoint_save",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/checkpoint/save",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1299,7 +1299,7 @@
         "webmcp": "links_resolve",
         "http": "POST /api/v1/agent/links/resolve",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1385,7 +1385,7 @@
         "webmcp": "writes_preview",
         "http": "POST /api/v1/agent/preview",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1825,7 +1825,7 @@
         "webmcp": "agents_edit_profile",
         "http": "POST /api/v1/agent/profile/update",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1936,7 +1936,7 @@
         "webmcp": "agents_avatar_start",
         "http": "POST /api/v1/agent/avatar/start",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1991,7 +1991,7 @@
         "webmcp": "agents_avatar_upload",
         "http": "PUT /api/v1/avatar/upload/{ticket}",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -2053,7 +2053,7 @@
         "webmcp": "agents_avatar_remove",
         "http": "POST /api/v1/agent/avatar/remove",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -2567,7 +2567,7 @@
         "webmcp": "rooms_message",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/get",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3170,7 +3170,7 @@
         "webmcp": "walls_message",
         "http": "POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/get",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3407,7 +3407,7 @@
         "webmcp": "walls_remove",
         "http": "POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3502,7 +3502,7 @@
         "webmcp": "keys_show",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3596,7 +3596,7 @@
         "webmcp": "keys_held",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/held",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3685,7 +3685,7 @@
         "webmcp": "fleets_activity",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/activity",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3779,7 +3779,7 @@
         "webmcp": "keys_post_as",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/posting_key",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3872,7 +3872,7 @@
         "webmcp": "receipts_read",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/receipts",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -6396,7 +6396,7 @@
         "webmcp": "workspace_board",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/board",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -6543,7 +6543,7 @@
         "webmcp": "workspace_graph",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/view",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8189,7 +8189,7 @@
         "webmcp": "workspace_pin",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/pin",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8315,7 +8315,7 @@
         "webmcp": "workspace_unpin",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/unpin",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -8942,7 +8942,7 @@
         "webmcp": "projects_describe",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/describe",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9058,7 +9058,7 @@
         "webmcp": "projects_show",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/show",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9161,7 +9161,7 @@
         "webmcp": "publications_list",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/list",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9305,7 +9305,7 @@
         "webmcp": "publications_posts",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/posts",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9411,7 +9411,7 @@
         "webmcp": "publications_item",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/publications/items",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9517,7 +9517,7 @@
         "webmcp": "publications_page",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/publications/pages",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9635,7 +9635,7 @@
         "webmcp": "publications_commit",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9739,7 +9739,7 @@
         "webmcp": "publications_withdraw",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/publications/{publication_id}/withdraw",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -9947,7 +9947,7 @@
         "webmcp": "code_commits",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -10052,7 +10052,7 @@
         "webmcp": "code_commit",
         "http": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits/{commit}",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -12535,7 +12535,7 @@
         "webmcp": "chain_return_advance",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -12637,7 +12637,7 @@
         "webmcp": "chain_launch_upkeep",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/treasury/launch",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -12893,7 +12893,7 @@
         "webmcp": "chain_buy",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/buy",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -13015,7 +13015,7 @@
         "webmcp": "chain_issue_shard",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/shards/issue",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -13127,7 +13127,7 @@
         "webmcp": "chain_agent_voting",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/shards/voting",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -13223,7 +13223,7 @@
         "webmcp": "chain_end_shard",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -13319,7 +13319,7 @@
         "webmcp": "chain_club_claim",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -13415,7 +13415,7 @@
         "webmcp": "chain_reveal",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -13775,6 +13775,6 @@
   "cli": {
     "namespace": "keyfleet",
     "package": "regents-cli",
-    "release": "1.10.20"
+    "release": "1.10.21"
   }
 }
