@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.FleetProposals do
   every open page and held in `Keyfleet.SharedReading`. One runs on each
   machine.
 
-  Four kinds of reading come from each pass over a fleet, the first three
+  Five kinds of reading come from each pass over a fleet, the first three
   exactly as `KeyfleetWeb.ProposalsPage.first_pages/2` reads them:
 
     * `list_key/1`: the first page of its proposals, with what the form for a
@@ -17,7 +17,11 @@ defmodule KeyfleetWeb.FleetProposals do
     * `KeyfleetWeb.ShareCard.key/1`: for a fleet with a share picture of its
       own, the figures on it (`KeyfleetWeb.ShareCard.figures/1`), so the
       pages naming the picture and the picture itself read nothing. A Key's
-      card made after the Key changed hands arrives with the minute's heal.
+      card made after the Key changed hands arrives with the minute's heal;
+    * `KeyfleetWeb.ShareCard.project_key/1`: for the same fleets, what the
+      pictures of its projects show (`KeyfleetWeb.ShareCard.project_figures/1`).
+      A project started, retitled or handed to another Key arrives with the
+      minute's heal.
 
   None of these depends on who is reading: `KeyfleetWeb.ProposalsPage`
   reads with no actor, and a reader's own Keys and wallet are read by the
@@ -58,7 +62,7 @@ defmodule KeyfleetWeb.FleetProposals do
   alias Keyfleet.{Fleets, Keys, Proposals, SharedReading}
   alias KeyfleetWeb.{PageRead, ProposalsPage, ShareCard}
 
-  @kinds [:fleet_proposals, :fleet_treasury, :proposal, :share_card]
+  @kinds [:fleet_proposals, :fleet_treasury, :proposal, :share_card, :project_cards]
 
   @doc "Where the first page of `fleet_id`'s proposals is held."
   def list_key(fleet_id), do: {:fleet_proposals, fleet_id}
@@ -122,7 +126,7 @@ defmodule KeyfleetWeb.FleetProposals do
   # A Key sold or moved changes the Keys sold the Treasury page shows.
   def handle_info({:keys_changed, fleet_id, _token_ids}, due), do: {:noreply, due(due, fleet_id)}
 
-  # The four kinds' heals arrive together each minute and join one pass.
+  # The five kinds' heals arrive together each minute and join one pass.
   def handle_info({:shared_reading_heal, _kind}, due),
     do: {:noreply, Enum.reduce(Fleets.catalog_ids(), due, &due(&2, &1))}
 
@@ -138,8 +142,8 @@ defmodule KeyfleetWeb.FleetProposals do
   end
 
   @doc """
-  Reads `fleet_id`'s first pages, and its share picture's figures if it has
-  one, and puts them, deleting the proposals its list no longer holds. What
+  Reads `fleet_id`'s first pages, and its share picture's figures and its
+  projects' if it has one, and puts them, deleting the proposals its list no longer holds. What
   the producer runs on each pass.
 
   Each proposal's page is put before the list, and the list names the ones
@@ -185,13 +189,21 @@ defmodule KeyfleetWeb.FleetProposals do
       {:ok, figures} -> SharedReading.put(ShareCard.key(fleet_id), figures)
       {:error, _not_read} -> SharedReading.degraded(ShareCard.key(fleet_id))
     end
+
+    case PageRead.run("project pictures", fn -> ShareCard.project_figures(fleet_id) end) do
+      {:ok, projects} -> SharedReading.put(ShareCard.project_key(fleet_id), projects)
+      {:error, _not_read} -> SharedReading.degraded(ShareCard.project_key(fleet_id))
+    end
   end
 
   defp degraded(fleet_id) do
     SharedReading.degraded(list_key(fleet_id))
     SharedReading.degraded(treasury_key(fleet_id))
     Enum.each(held(fleet_id), &SharedReading.degraded({:proposal, &1}))
-    if fleet_id in ShareCard.fleets(), do: SharedReading.degraded(ShareCard.key(fleet_id))
+    if fleet_id in ShareCard.fleets() do
+      SharedReading.degraded(ShareCard.key(fleet_id))
+      SharedReading.degraded(ShareCard.project_key(fleet_id))
+    end
   end
 
   # The proposal's page from the last pass, if one is held.

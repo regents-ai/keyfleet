@@ -212,6 +212,7 @@ defmodule KeyfleetWeb.Router do
     get "/metadata/collection.json", MetadataController, :collection
     get "/metadata/keys/:token_id", MetadataController, :show
     get "/share/:file", ShareCardController, :show
+    get "/share/projects/:fleet_id/:file", ShareCardController, :project
   end
 
   # A visitor's page timings, sent by `navigator.sendBeacon` as the page is

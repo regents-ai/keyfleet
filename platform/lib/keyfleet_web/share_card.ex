@@ -5,7 +5,17 @@ defmodule KeyfleetWeb.ShareCard do
   Classic #1's and the Regents Club's pages, and every page under them, show
   their fleet's own: its name, how many Keys it has, what its treasury holds
   and the card of its latest Key, drawn from its figures as the picture is
-  asked for. Every other page shows the site's picture.
+  asked for. A project's page in either fleet shows the project's own
+  instead: its fleet's name, its title, and the name and card of the Key
+  holding it, the line under its title asking an agent in. Every other page
+  shows the site's picture.
+
+  Each fleet's projects, as their pictures show them, are read with its
+  Treasury page too and held beside its figures (`project_key/1`). A project
+  the last read did not find, or one made since, shows its fleet's picture
+  until the next read, within a minute. A title with a character the
+  picture's set has not got is set as the project's name, its hyphens as
+  spaces.
 
   Each fleet's figures are read with its Treasury page by
   `KeyfleetWeb.FleetProposals` and held in `Keyfleet.SharedReading`, so a
@@ -29,16 +39,17 @@ defmodule KeyfleetWeb.ShareCard do
 
   use KeyfleetWeb, :verified_routes
 
-  alias Keyfleet.{Chain, Fleets, Keys, SharedReading, Treasury}
+  alias Keyfleet.{Chain, Fleets, Keys, Projects, SharedReading, Treasury}
   alias Keyfleet.Fleets.{Presets, Rules}
   alias Keyfleet.Keys.{KeyArt, Metadata}
-  alias KeyfleetWeb.ProposalsPage
+  alias KeyfleetWeb.{DirectoryMD, ProposalsPage}
   alias Vix.Vips.{Image, Operation}
 
   @layout_path Path.join([__DIR__, "..", "..", "priv", "share", "layout.json"])
   @external_resource @layout_path
   @layout @layout_path |> File.read!() |> Jason.decode!()
   @slots @layout["slots"]
+  @project_slots @layout["project_slots"]
   @glyphs @layout["glyphs"]
   @labels @layout["fleets"]
 
@@ -46,10 +57,21 @@ defmodule KeyfleetWeb.ShareCard do
 
   @doc """
   The picture the page at `path` shows where it is shared, as `{address,
-  alt}`: its fleet's for a page of a fleet with a picture of its own, the
-  site's for any other.
+  alt}`: a project's own for its page in a fleet with a picture of its own,
+  its fleet's for the fleet's other pages, the site's for any other.
   """
   def image(path) do
+    case project_page(path) do
+      {fleet_id, name, project} ->
+        address = url(~p"/share/projects/#{fleet_id}/#{name <> ".png"}?#{[v: version(project)]}")
+        {address, project_alt(fleet_id, project)}
+
+      nil ->
+        fleet_image(path)
+    end
+  end
+
+  defp fleet_image(path) do
     case Enum.find(fleets(), &fleet_page?(path, &1)) do
       nil ->
         {static(), @site_alt}
@@ -74,6 +96,34 @@ defmodule KeyfleetWeb.ShareCard do
   @doc "Where the figures on `fleet_id`'s picture are held."
   def key(fleet_id), do: {:share_card, fleet_id}
 
+  @doc "Where what the pictures of `fleet_id`'s projects show is held."
+  def project_key(fleet_id), do: {:project_cards, fleet_id}
+
+  # The project whose page is at `path`, in a fleet with a picture of its
+  # own, as `{fleet_id, name, project}`, or nil for any other page and for a
+  # project its fleet's last read did not find.
+  defp project_page(path) do
+    Enum.find_value(fleets(), fn fleet_id ->
+      prefix = Fleets.path(fleet_id) <> "/projects/"
+
+      with true <- String.starts_with?(path, prefix),
+           name = String.replace_prefix(path, prefix, ""),
+           %{} = project <- Map.get(projects(fleet_id), name) do
+        {fleet_id, name, project}
+      else
+        _other -> nil
+      end
+    end)
+  end
+
+  # What the last read of `fleet_id`'s projects found, by name.
+  defp projects(fleet_id) do
+    case SharedReading.fetch(project_key(fleet_id)) do
+      {:ok, %{reading: %{} = projects}} -> projects
+      _not_read -> %{}
+    end
+  end
+
   @doc """
   The picture of `fleet_id`, a PNG of 1200 by 630, as `{:ok, png}`, or
   `{:error, reason}` before its figures are first read or when its latest
@@ -82,18 +132,37 @@ defmodule KeyfleetWeb.ShareCard do
   def png(fleet_id) do
     case held(fleet_id) do
       nil -> {:error, :not_read}
-      figures -> png(fleet_id, figures, version(figures))
+      figures -> kept({__MODULE__, fleet_id}, version(figures), fn -> draw(fleet_id, figures) end)
     end
   end
 
-  defp png(fleet_id, figures, version) do
-    case :persistent_term.get({__MODULE__, fleet_id}, nil) do
+  @doc """
+  The picture of the project `name` of `fleet_id`, a PNG of 1200 by 630, as
+  `{:ok, png}`, or `{:error, reason}` when its fleet's last read of its
+  projects did not find it or its Key's card can't be read.
+  """
+  def project_png(fleet_id, name) do
+    case Map.get(projects(fleet_id), name) do
+      nil ->
+        {:error, :not_read}
+
+      project ->
+        kept({__MODULE__, fleet_id, name}, version(project), fn ->
+          draw_project(fleet_id, project)
+        end)
+    end
+  end
+
+  # The picture last drawn at `place`, if it was drawn from the same version
+  # of what it shows; else drawn again and kept.
+  defp kept(place, version, draw) do
+    case :persistent_term.get(place, nil) do
       {^version, png} ->
         {:ok, png}
 
       _other ->
-        with {:ok, png} <- draw(fleet_id, figures) do
-          :persistent_term.put({__MODULE__, fleet_id}, {version, png})
+        with {:ok, png} <- draw.() do
+          :persistent_term.put(place, {version, png})
           {:ok, png}
         end
     end
@@ -123,6 +192,45 @@ defmodule KeyfleetWeb.ShareCard do
       name: token_id && Fleets.key_name(fleet_id, token_id),
       cid: token_id && Metadata.image_cid(fleet, token_id)
     }
+  end
+
+  @doc """
+  What the pictures of `fleet_id`'s projects show, by project name: each
+  title as its page shows it, set in the characters the picture has, and the
+  name and card picture of the Key holding it, both nil for a project no Key
+  holds. Every project its page shows is here, an archived one too. Read by
+  `KeyfleetWeb.FleetProposals`, which holds them.
+  """
+  def project_figures(fleet_id) do
+    fleet = Fleets.get_fleet!(fleet_id)
+    projects = Projects.project_titles!(fleet_id)
+
+    holders = for %{key: key} <- projects, is_integer(key), uniq: true, do: key
+
+    cards =
+      holders
+      |> Enum.chunk_every(100)
+      |> Enum.reduce(%{}, &Map.merge(&2, Metadata.card_cids(fleet, &1)))
+
+    Map.new(projects, fn project ->
+      {project.name,
+       %{
+         title: title(project),
+         key: project.key && Fleets.key_name(fleet_id, project.key),
+         cid: project.key && Map.get(cards, project.key, Metadata.pass_cid())
+       }}
+    end)
+  end
+
+  # The project's title as its page shows it, if the picture has every one of
+  # its characters; else its name, its hyphens as spaces.
+  defp title(project) do
+    shown = project.title |> DirectoryMD.visible() |> String.trim()
+    characters = @glyphs["title"]["characters"]
+
+    if shown != "" and Enum.all?(String.graphemes(shown), &Map.has_key?(characters, &1)),
+      do: shown,
+      else: project.name |> String.replace("-", " ") |> String.capitalize()
   end
 
   defp minted!(fleet_id) do
@@ -190,6 +298,56 @@ defmodule KeyfleetWeb.ShareCard do
 
     "#{name} on Keyfleet. #{keys}: #{figures.keys}. Treasury: #{Enum.join(figures.treasury, " + ")}. " <>
       "#{key}: #{card}."
+  end
+
+  defp project_alt(fleet_id, project) do
+    held = if project.key, do: "Held by #{project.key}", else: "Shared by every Key"
+    "#{project.title}, a project of #{Fleets.name(fleet_id)} on Keyfleet. #{held}."
+  end
+
+  defp draw_project(fleet_id, project) do
+    title = @project_slots["title"]
+
+    with {:ok, card} <- card(project.cid) do
+      ("project_" <> fleet_id <> ".png")
+      |> share_file()
+      |> opaque()
+      |> set_lines(wrap(project.title, "title", title), "title", title)
+      |> set(project.key || "EVERY KEY", "name", @project_slots["name"], :centre)
+      |> place(card, @project_slots["picture"])
+      |> Operation.flatten!()
+      |> Image.write_to_buffer(".png")
+    end
+  end
+
+  # `text` broken between words into lines no wider than `slot`, in `style`,
+  # as many as the slot has room for: the last takes the words left over, and
+  # `set/5` makes it smaller to fit.
+  defp wrap(text, style, slot) do
+    room = div(slot["height"], @glyphs[style]["height"])
+    [first | rest] = String.split(text, " ", trim: true)
+
+    lines =
+      rest
+      |> Enum.reduce([first], fn word, [line | done] ->
+        longer = line <> " " <> word
+
+        if width(longer, style) <= slot["width"],
+          do: [longer | done],
+          else: [word, line | done]
+      end)
+      |> Enum.reverse()
+
+    case Enum.split(lines, room - 1) do
+      {kept, []} -> kept
+      {kept, left} -> kept ++ [Enum.join(left, " ")]
+    end
+  end
+
+  # How wide `text` is set in `style`, from its characters' advances.
+  defp width(text, style) do
+    characters = @glyphs[style]["characters"]
+    text |> String.graphemes() |> Enum.map(&characters[&1]["advance"]) |> Enum.sum()
   end
 
   defp draw(fleet_id, figures) do

@@ -1274,3 +1274,23 @@ features:
     proofs: []
     gaps:
       - No test yet; tests follow once the row has worked live. The counts' query and the row at 390 and 1280 are first checked by the Mac's `mix precommit` and browser walk.
+  - id: share-project
+    what: >-
+      A link to one of Classic #1's or the Regents Club's project pages, shared
+      where links show a picture, shows the project's own: its fleet's name, its
+      title, the name and card of the Key holding it and a line asking an agent
+      in. A project not read yet shows its fleet's picture.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/share_card.ex
+      - platform/lib/keyfleet_web/fleet_proposals.ex
+      - platform/lib/keyfleet_web/controllers/share_card_controller.ex
+      - platform/lib/keyfleet/keys/metadata.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/scripts/share-cards/render.mjs
+    entry:
+      - route: GET /share/projects/:fleet_id/:file
+    proofs: []
+    gaps:
+      - No test yet; tests follow once the picture has worked live. The Mac redraws the bases with `node scripts/share-cards/render.mjs` and checks a project page's picture at /share/projects/fleet_tech_classic/<name>.png.

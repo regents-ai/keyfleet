@@ -159,6 +159,22 @@ defmodule Keyfleet.SharedReading do
       bytes: 1_024,
       within: 120
     },
+    project_cards: %{
+      open:
+        "what a fleet's project pictures show is open to a signed-out read: each project's " <>
+          "name and title and the Key holding it (Keyfleet.Projects.Project :titles policy), " <>
+          "which its page shows anyone, and that Key's name and card picture " <>
+          "(Keyfleet.Keys.KeyReveal and KeyPicture read policies), which its Key's page shows " <>
+          "anyone; if any of these tightens, this kind changes with it",
+      # One for each fleet with a picture of its own (KeyfleetWeb.ShareCard.fleets/0).
+      keys: 2,
+      # About 200 bytes for each project: a name of up to 32 characters, a title
+      # of up to 60, a Key's name and an IPFS address. A larger one is refused;
+      # the one held before stays, and with none its fleet's project pages show
+      # the fleet's picture.
+      bytes: 65_536,
+      within: 120
+    },
     proposal: %{
       open:
         "a proposal's first page is open to a signed-out read: the proposal, its calls, its " <>

@@ -6214,3 +6214,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the week has been counted the row is left out, never shown as zero.
 - For agents: the homepage in Markdown says the same week in one sentence
   under Classic Keyfleet.
+
+## 2026-10-29 — Project pictures
+
+- A link to a project's page in Classic #1 or the Regents Club now shows that
+  project's own picture where it is shared: the fleet's name, the project's
+  title, the name and card of the Key holding it (or "Every Key" for a shared
+  project) and the line "Bring your agent to work on it with a Key." A project
+  started in the last minute shows its fleet's picture until it is read.
+- A title with a character the picture can't set is shown as the project's
+  name instead.

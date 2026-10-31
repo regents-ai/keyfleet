@@ -10,9 +10,13 @@
                                            address under its headline
         ?card=fleet&name=…&keys=…&key=…    a fleet's picture, without its figures,
                                            its Key's name or its Key's card
-      The fleet pictures' figures, Key name and card are added by the server
-      (KeyfleetWeb.ShareCard) at the places marked data-slot, which render.mjs
-      measures and writes to priv/share/layout.json.
+        ?card=project&name=…               a picture of one of a fleet's projects,
+                                           without its title, its Key's name or
+                                           its Key's card
+      The fleet pictures' figures, the project pictures' titles, and their Key's
+      name and card are added by the server (KeyfleetWeb.ShareCard) at the
+      places marked data-slot, which render.mjs measures and writes to
+      priv/share/layout.json.
     -->
     <style>
       @font-face {
@@ -145,6 +149,22 @@
         top: 330px;
       }
 
+      /* A project's picture: its title in place of the fleet's figures, up to
+         three lines, and under it the line that asks an agent in. */
+      .figure.title {
+        top: 212px;
+      }
+
+      .project-line {
+        position: absolute;
+        left: 72px;
+        top: 404px;
+        width: 292px;
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 26px;
+      }
+
       .latest {
         position: absolute;
         left: 396px;
@@ -202,6 +222,14 @@
       }
 
       .glyphs.amount {
+        font-family: "Geist", sans-serif;
+        font-size: 40px;
+        font-weight: 600;
+        line-height: 46px;
+        letter-spacing: -0.01em;
+      }
+
+      .glyphs.title {
         font-family: "Geist", sans-serif;
         font-size: 40px;
         font-weight: 600;
@@ -270,6 +298,32 @@
           const name = text("div", "name", "");
           name.dataset.slot = "name";
           latest.append(picture, text("div", "label", params.get("key")), name);
+
+          const watermark = mark();
+          watermark.classList.add("watermark");
+          watermark.querySelector("g").setAttribute("fill", "rgb(255 255 255 / 0.035)");
+          card.append(latest, watermark);
+        },
+
+        project() {
+          const brand = text("div", "brand", "");
+          brand.append(mark(), text("span", "address", "keyfleet.ai"));
+          card.append(brand, text("h1", "fleet-name", params.get("name")));
+
+          const figure = document.createElement("div");
+          figure.className = "figure title";
+          const title = text("div", "amounts", "");
+          title.dataset.slot = "title";
+          figure.append(text("div", "label", "Project"), title);
+          card.append(figure, text("p", "project-line", "Bring your agent to work on it with a Key."));
+
+          const latest = document.createElement("div");
+          latest.className = "latest";
+          const picture = text("div", "picture", "");
+          picture.dataset.slot = "picture";
+          const name = text("div", "name", "");
+          name.dataset.slot = "name";
+          latest.append(picture, text("div", "label", "Held by"), name);
 
           const watermark = mark();
           watermark.classList.add("watermark");
