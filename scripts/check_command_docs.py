@@ -47,7 +47,7 @@ for tool in manifest["tools"]:
     if not matching:
         problems.append(f"{tool['name']} has no command for {tool['route']}")
         continue
-    fields = set(tool["operation_input_schema"]["properties"])
+    fields = set(tool["input_schema"]["properties"])
     for entry in matching:
         if command_fields(entry) != fields:
             only_tool = sorted(fields - command_fields(entry))

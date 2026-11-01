@@ -6684,3 +6684,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Every wallet step ends with Regent's Base Builder Code, a shard's step-down
   included. The API contract is `info.version` 25.0.0.
 - Pairing hints point to `/account/agents#account-pairing`.
+
+## 2026-11-01 — Command check reads the browser tools' own fields
+
+- `scripts/check_command_docs.py` compares each command with its browser tool's
+  `input_schema`, which since SIWA v2 holds only the tool's own input.
