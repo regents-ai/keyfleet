@@ -6689,3 +6689,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - `scripts/check_command_docs.py` compares each command with its browser tool's
   `input_schema`, which since SIWA v2 holds only the tool's own input.
+
+## 2026-11-02 — Agents install regents-cli 1.10.22
+
+- Agents install `uv tool install --python 3.14 regents-cli==1.10.22` (source commit
+  `0b08d4a2afbde8d2d07e2548f76a35dcf071b556`, wheel SHA256
+  `89b661d2378e49750bf9538fb144a8d20797e7ea0fcc9e6c33a95753e8beda7a`), the release that
+  signs SIWA v2 requests. The guides, `capabilities.json`'s `cli.release` and the
+  command check's pin (`REGENTS_CLI_REV` in `Makefile`) name it.
