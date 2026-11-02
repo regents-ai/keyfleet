@@ -33,6 +33,11 @@ defmodule Keyfleet.Code.Push do
         :beneficiary_privy_user_id,
         :agent_pairing_id
       ]
+
+      emit Keyfleet.Code.Signals, :ref_pushed, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Code.Signals, signal: :ref_pushed, fields: [push_id: :id]}
     end
 
     # Every push to one project's repository, for its deletion.

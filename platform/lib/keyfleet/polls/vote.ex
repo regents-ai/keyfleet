@@ -73,6 +73,11 @@ defmodule Keyfleet.Polls.Vote do
       return_skipped_upsert? true
 
       change Keyfleet.Polls.Changes.CastVote
+
+      emit Keyfleet.Polls.Signals, :vote_cast, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Polls.Signals, signal: :vote_cast, fields: [vote_id: :id]}
     end
 
     # Only for checking whether a Key has voted.

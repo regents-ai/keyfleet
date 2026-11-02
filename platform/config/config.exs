@@ -104,7 +104,17 @@ config :regent_points,
   program_id: "regents-points-v1",
   starts_at: nil,
   approved_rules: [],
-  adapters: %{}
+  adapters: %{
+    "credits.purchase_settled" => Keyfleet.Points.CreditsPurchase,
+    "keyfleet.first_membership" => Keyfleet.Points.KeyEpoch,
+    "keyfleet.key_bought" => Keyfleet.Points.KeyEpoch,
+    "keyfleet.first_reveal" => Keyfleet.Points.KeyReveal,
+    "keyfleet.first_authorized_agent" => Keyfleet.Points.ShardIssue,
+    "keyfleet.first_message" => Keyfleet.Points.Message,
+    "keyfleet.first_vote" => Keyfleet.Points.PollVote,
+    "keyfleet.integration.twigpine" => Keyfleet.Points.CodePush,
+    "keyfleet.integration.activegraph" => Keyfleet.Points.GraphEvent
+  }
 
 # Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
 # its S3 `endpoint`, `bucket`, `region` and keys, and the `public_url` pages
@@ -294,6 +304,8 @@ config :keyfleet, Oban,
   # one long-lived history job per fleet and its balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
   # `regent_credits` checks Credits purchases on chain.
+  # Regent Points checks what may earn (`points`), and reads the chain for
+  # the rules that need it (`points_chain`), as the template runs them.
   queues: [
     default: 5,
     notebook_hubs: 1,
@@ -303,7 +315,9 @@ config :keyfleet, Oban,
     key_art: 1,
     chain: 10,
     ens: 3,
-    regent_credits: 3
+    regent_credits: 3,
+    points: 5,
+    points_chain: 2
   ],
   cron: [
     crontab: [

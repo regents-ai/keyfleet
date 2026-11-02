@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 25.0.0
+  version: 26.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -234,9 +234,9 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/AgentProfileUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/account/balances:
+  /api/v1/account/balances:
     get:
-      operationId: getAgentAccountBalances
+      operationId: getAccountBalances
       description: Read shared Credits and the current pairing budget. The budget is a snapshot, not permission to spend. Account and pairing identifiers are omitted.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
@@ -259,9 +259,9 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/account/credits/history:
+  /api/v1/account/credits/history:
     post:
-      operationId: readAgentCreditsHistory
+      operationId: listCreditsHistory
       description: Read the paired person's Credits history, newest first, using an exact signed JSON body. Send {} for the newest entries, or after with the previous page's pagination.next_cursor, unchanged.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
@@ -425,9 +425,9 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/account/points:
+  /api/v1/account/points:
     get:
-      operationId: getAgentPoints
+      operationId: getAccountPoints
       description: Read shared Points as decimal strings, daily allowances and reduced history entries. Does not activate earning or award Points.
       security: [{siwaReceipt: []}]
       x-pairing-required: true

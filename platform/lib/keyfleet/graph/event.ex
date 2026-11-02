@@ -372,6 +372,13 @@ defmodule Keyfleet.Graph.Event do
         encoded = changeset.attributes |> view() |> Jason.encode_to_iodata!()
         Ash.Changeset.force_change_attribute(changeset, :byte_size, IO.iodata_length(encoded))
       end
+
+      emit Keyfleet.Graph.Signals, :event_copied, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Graph.Signals,
+              signal: :event_copied,
+              fields: [fleet_id: :fleet_id, seq: :seq, actor: :actor]}
     end
   end
 

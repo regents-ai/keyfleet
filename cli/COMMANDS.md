@@ -3175,14 +3175,14 @@ POST `/api/v1/agent/avatar/remove` with `{}`, fresh wallet proof and current pai
 
 Read `credits` and `spending_grant` for the current pairing, including `site_allowed`, `used_24h`, `remaining_24h` and `grant_approvals_available`. Amounts are decimal strings. Account and pairing identifiers are omitted. A budget snapshot does not authorize spending.
 
-GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
+GET `/api/v1/account/balances` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
 ## regents keyfleet account credits-history
 
 - **Purpose:** reads your paired person's Credits history, newest first, with older-page cursors. Grouped events stay whole.
 - **Access:** a currently paired agent, using its own SIWA signer.
 - **Changes:** nothing (read); it grants no spending authority.
-- **Route:** `POST /api/v1/agent/account/credits/history` → `readAgentCreditsHistory`.
+- **Route:** `POST /api/v1/account/credits/history` → `listCreditsHistory`.
 - **Inputs:** optional `--after`, the previous answer's `pagination.next_cursor`, unchanged. Omit it when null. The body is `{}` or `{"after":"..."}`, signed exactly; no query string.
 - **Answer:** `entries` and `pagination` containing `has_more` and `next_cursor`.
 - **Refusals:** 422 `invalid_cursor` for a non-string, overlong (more than 2048 characters) or malformed cursor; 422 `invalid_request` for any other field; the shared sign-in, pairing, rate-limit and availability refusals.
@@ -3195,7 +3195,7 @@ GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing
 
 Read `points`, `earned_today`, `pending`, `daily_allowances`, `entries` and `more`. Points amounts are decimal strings, truncated to at most two decimal places. Entries contain only `points`, `source`, `by` and `earned_at`. No rewards or activation.
 
-GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
+GET `/api/v1/account/points` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
 ## regents keyfleet agents pair
 

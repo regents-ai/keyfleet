@@ -6689,3 +6689,33 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - `scripts/check_command_docs.py` compares each command with its browser tool's
   `input_schema`, which since SIWA v2 holds only the tool's own input.
+
+## 2026-11-02 — Points from Keyfleet's own records
+
+- Keyfleet now offers Regent Points what may earn, inside the transaction that first
+  saves it, from `Keyfleet.Points.Award`, which replaces `Keyfleet.Credits.Credited`:
+  a person's first Key and each Key's sale (its first ownership epoch), a revealed Key,
+  a shard issued to an agent paired with the Key's person, a poll vote, a post written
+  as a Key or a direct message, a push to a fleet's code, a change to a fleet's
+  workspace made as a Key, and a Credits purchase. A chain record read again, or a send
+  repeated, offers nothing twice (`Keyfleet.Points.Changes.Announce`).
+- Each rule has its check (`Keyfleet.Points.KeyEpoch`, `KeyReveal`, `ShardIssue`,
+  `PollVote`, `Message`, `CodePush`, `GraphEvent` and `CreditsPurchase`). Each credits
+  the person whose verified wallets held the Key when Keyfleet recorded it, from the
+  Points wallet history (`RegentPoints.WalletSnapshot.owner/2`), never the Key's owner
+  today. An agent counts for that person only through a pairing of theirs
+  (`Keyfleet.Points.Holder`); its entry names the agent by its wallet, with the
+  pairing as evidence, and the Points page names it from that wallet's latest pairing.
+- Every rule stays off: `approved_rules` is `[]` and `starts_at` is nil, so nothing is
+  queued. Oban runs the `points` (5) and `points_chain` (2) queues, as the template does.
+- elixir-utils moves to `e37cb01da2376fc95d9b5547132473c28d14130d`, which adds the
+  wallet history lookup and the reads of past pairings: which pairing held a wallet at a
+  moment (`RegentAgents.pairing_at/2`), one pairing (`pairing_history/1`) and a person's
+  (`pairing_histories/1`). Keyfleet reads pairings only through them, and itself checks
+  that the pairing is the Key holder's.
+- A paired agent reads its person's Credits and Points at `/api/v1/account/balances`,
+  `/api/v1/account/credits/history` and `/api/v1/account/points`, as ash-template has
+  them; the `/api/v1/agent/account/` addresses are gone. Their operations are
+  `getAccountBalances`, `listCreditsHistory` and `getAccountPoints`, and the API
+  contract is `info.version` 26.0.0. `cli/commands.json`, `cli/COMMANDS.md`, the tool
+  list and the guide say so; regents-cli's next release follows.

@@ -353,14 +353,21 @@ defmodule KeyfleetWeb.Router do
     put "/avatar/upload/:ticket", AgentAvatarController, :upload
   end
 
+  # A paired agent's reads of its person's Credits and Points, at the
+  # addresses every Regent site gives them. Each request is signed, as under
+  # /api/v1/agent (`KeyfleetWeb.Plugs.SignedAgent`).
+  scope "/api/v1/account", KeyfleetWeb do
+    pipe_through [:api, :agent]
+    get "/balances", AgentAccountController, :balances
+    post "/credits/history", AgentAccountController, :credits_history
+    get "/points", AgentAccountController, :points
+  end
+
   scope "/api/v1/agent", KeyfleetWeb do
     pipe_through [:api, :agent]
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
     get "/profile", AgentProfileController, :show
-    get "/account/balances", AgentAccountController, :balances
-    post "/account/credits/history", AgentAccountController, :credits_history
-    get "/account/points", AgentAccountController, :points
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove
     get "/shards", AgentShardController, :index

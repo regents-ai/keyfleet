@@ -97,6 +97,11 @@ defmodule Keyfleet.Keys.KeyReveal do
               block: :block_number}
 
       change Keyfleet.Keys.Changes.QueuePicture
+
+      emit Keyfleet.Keys.Signals, :key_revealed, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Keys.Signals, signal: :key_revealed, fields: [key_reveal_id: :id]}
     end
 
     # The keys revealed after the fleet's reveal number `after_seq`, oldest first.

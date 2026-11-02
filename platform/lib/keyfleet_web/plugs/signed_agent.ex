@@ -10,8 +10,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @profile_path "/api/v1/agent/profile"
-  @credits_history_path "/api/v1/agent/account/credits/history"
-  @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/points)
+  @credits_history_path "/api/v1/account/credits/history"
+  @account_paths ~w(/api/v1/account/balances /api/v1/account/points)
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
@@ -301,8 +301,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     if agent_request?(conn), do: authenticate(conn), else: conn
   end
 
+  # A paired agent's account reads sit at /api/v1/account, the address every
+  # Regent site gives them; everything else an agent signs is under /api/v1/agent.
   defp agent_request?(conn),
-    do: Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) == ["api", "v1", "agent"]
+    do:
+      Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) in [
+        ["api", "v1", "agent"],
+        ["api", "v1", "account"]
+      ]
 
   # An address no operation has, a method its operation doesn't take and a
   # body that isn't JSON are each told so before any signature is read: the

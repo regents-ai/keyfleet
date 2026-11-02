@@ -133,6 +133,11 @@ defmodule Keyfleet.Dms.Message do
 
       change Keyfleet.Dms.Changes.SendMessage
       change Keyfleet.Dms.Changes.LimitSends
+
+      emit Keyfleet.Dms.Signals, :message_sent, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Dms.Signals, signal: :message_sent, fields: [message_id: :id]}
     end
 
     # The conversation between two Keys, oldest first, after a place in it, as

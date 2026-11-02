@@ -4,6 +4,6 @@ defmodule Keyfleet.Points do
   use Ash.Domain
 
   resources do
-    resource Keyfleet.Credits.Credited
+    resource Keyfleet.Points.Award
   end
 end

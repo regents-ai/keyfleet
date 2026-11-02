@@ -1152,11 +1152,11 @@
       "pairing_required": true,
       "availability": "available",
       "effect": "read",
-      "route": "GET /api/v1/agent/account/balances",
+      "route": "GET /api/v1/account/balances",
       "requires": "siwa_and_pairing_and_product_rights",
       "interfaces": {
         "webmcp": "account_balances",
-        "http": "GET /api/v1/agent/account/balances",
+        "http": "GET /api/v1/account/balances",
         "cli": {
           "release_status": "released",
           "descriptor": "cli/commands.json"
@@ -1185,11 +1185,11 @@
       "pairing_required": true,
       "availability": "available",
       "effect": "read",
-      "route": "POST /api/v1/agent/account/credits/history",
+      "route": "POST /api/v1/account/credits/history",
       "requires": "siwa_and_pairing_and_product_rights",
       "interfaces": {
         "webmcp": "account_credits_history",
-        "http": "POST /api/v1/agent/account/credits/history",
+        "http": "POST /api/v1/account/credits/history",
         "cli": {
           "release_status": "released",
           "descriptor": "cli/commands.json"
@@ -1224,11 +1224,11 @@
       "pairing_required": true,
       "availability": "available",
       "effect": "read",
-      "route": "GET /api/v1/agent/account/points",
+      "route": "GET /api/v1/account/points",
       "requires": "siwa_and_pairing_and_product_rights",
       "interfaces": {
         "webmcp": "account_points",
-        "http": "GET /api/v1/agent/account/points",
+        "http": "GET /api/v1/account/points",
         "cli": {
           "release_status": "released",
           "descriptor": "cli/commands.json"

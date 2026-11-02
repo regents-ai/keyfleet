@@ -149,6 +149,13 @@ defmodule Keyfleet.Keys.KeyAttachment do
 
       # A dealt Key has its card from its mint, its first ownership record.
       change Keyfleet.Keys.Changes.QueuePicture, where: [attribute_equals(:ownership_epoch, 1)]
+
+      emit Keyfleet.Keys.Signals, :key_held, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Keys.Signals,
+              signal: :key_held,
+              fields: [key_epoch_id: :id, ownership_epoch: :ownership_epoch]}
     end
 
     # The keys of the epochs recorded after the fleet's epoch number

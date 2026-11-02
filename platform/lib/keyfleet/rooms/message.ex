@@ -168,6 +168,13 @@ defmodule Keyfleet.Rooms.Message do
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
       change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
+
+      emit Keyfleet.Rooms.Signals, :post_written, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Rooms.Signals,
+              signal: :post_written,
+              fields: [message_id: :id, as_key: :as_key]}
     end
 
     # A post written to one of the fleet's keys, in that key's thread, which
@@ -202,6 +209,13 @@ defmodule Keyfleet.Rooms.Message do
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
       change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
+
+      emit Keyfleet.Rooms.Signals, :post_written, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Rooms.Signals,
+              signal: :post_written,
+              fields: [message_id: :id, as_key: :as_key]}
     end
 
     # The line an open room takes when a member names it, written inside the

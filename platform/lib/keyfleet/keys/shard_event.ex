@@ -128,6 +128,13 @@ defmodule Keyfleet.Keys.ShardEvent do
               identity: [:transaction_hash, :log_index], number: :shard_seq, block: :block_number}
 
       change {Keyfleet.Notebooks.Changes.UpdateRoster, ends: :expires_at}
+
+      emit Keyfleet.Keys.Signals, :shard_recorded, dynamic?: true
+
+      change {Keyfleet.Points.Changes.Announce,
+              signals: Keyfleet.Keys.Signals,
+              signal: :shard_recorded,
+              fields: [shard_event_id: :id, kind: :kind]}
     end
 
     # What was recorded from a stretch of the fleet's blocks, so a second
