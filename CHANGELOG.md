@@ -6723,3 +6723,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - `/changelog` is a public reading page from `priv/public/changelog.md`: the changes a
   visitor or an agent would notice, newest first, also served as Markdown. The page
   links and the footer link it. Sentinel's same checks asked for both.
+
+## 2026-11-02 — Two kept tests for signed account bodies
+
+- `test/KEPT_TESTS.md` goes from 49 to 51 (KF-TESTS-SIGNED-BODY a): a signed body to the
+  credits history is read as it was signed, and one changed after signing is refused.
+  Patchbay refused these requests on 2 November because it kept signed bytes under one
+  address only. Both tests fail when the signed check stops keeping the bytes at this
+  address.

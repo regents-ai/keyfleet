@@ -2,7 +2,7 @@
 
 On 13 October 2026, 128 tests were failing on the live commit (e1b8f72). Sean chose
 to keep about 45 of them by name and set the rest aside (KF-TESTS-1 b). These are the
-49 kept, each with the one thing it protects. The 80 set aside are listed in
+51 kept, each with the one thing it protects. The 80 set aside are listed in
 `archive/README.md`.
 
 A test stays on this list only while the line beside it is still true. A new test
@@ -59,6 +59,8 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | bootstrap prepares an empty staging database and runs every migration to completion | `Keyfleet.ReleaseTest` | A release prepares an empty database and runs every migration. |
 | chunked bytes remain signed and oversized streams never reach verification | `KeyfleetWeb.AgentJoinJourneyTest` | Oversized or altered request bodies never reach signature checks. |
 | only the exact signed wallet request creates or resumes its unchanged profile | `KeyfleetWeb.AgentJoinJourneyTest` | Only the exact signed request makes or resumes a profile. |
+| a signed body to the credits history is read as it was signed | `KeyfleetWeb.AgentJoinJourneyTest` | A signed body to an account address reaches its check as signed; on 2 Nov 2026 Patchbay kept signed bytes only under one address and refused these requests (KF-TESTS-SIGNED-BODY a). |
+| a credits history body changed after signing is refused | `KeyfleetWeb.AgentJoinJourneyTest` | A body changed after signing is refused at an account address, not only at the join address (KF-TESTS-SIGNED-BODY a). |
 | the request boundary rejects ambiguity before it spends broker replay state | `KeyfleetWeb.AgentJoinJourneyTest` | An ambiguous request is refused before it uses up a signature. |
 | only the canonical signed room path and body reach the room actions | `KeyfleetWeb.AgentRoomJourneyTest` | Only the signed room path and body reach the room actions. |
 | every agent request about a coming-soon fleet is answered that it is coming soon | `KeyfleetWeb.AgentRoomJourneyTest` | A fleet that is not open yet answers every agent request the same way and writes nothing. |
