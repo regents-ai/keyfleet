@@ -6668,3 +6668,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the rest in K13 of `docs/agent-parity.md`) are marked released.
 - A signed command now signs only for an address the sign-in server lists for Keyfleet:
   keyfleet.ai, the two notebook hosts and code.keyfleet.ai.
+
+## 2026-11-02 — Key cards draw on the first request after a rest
+
+- The key-art service's machine is now suspended between drawings instead of stopped,
+  so it resumes with its browser already running. A stopped machine started cold, and
+  on 23, 24 and 28 October and 2 November Fly's proxy gave up on the waking request
+  ("failed to connect to machine") before the server took it; the card was drawn on the
+  picture job's next try. `key-art/fly.toml` says so.
