@@ -15,6 +15,9 @@ defmodule Keyfleet.Points.Holder do
   alias Keyfleet.Keys.KeyAttachment
   alias Keyfleet.Repo
 
+  # Far longer than any sign-in write stays open.
+  @settled_after_seconds 600
+
   @type t :: %{
           fleet_id: String.t(),
           token_id: pos_integer(),
@@ -71,8 +74,18 @@ defmodule Keyfleet.Points.Holder do
        }}
     else
       nil -> {:error, :key_not_held}
-      {:error, :unknown_owner} -> {:error, :key_holder_unknown}
+      {:error, :unknown_owner} -> unknown(at)
     end
+  end
+
+  # A person's wallets are stamped as their sign-in writes them, before that write
+  # commits, so just after `at` the holder may still be on its way and the check
+  # comes back on Oban's next try. Once `at` is older than any write that can still
+  # commit, no holder then is final.
+  defp unknown(at) do
+    if DateTime.diff(DateTime.utc_now(), at) < @settled_after_seconds,
+      do: {:retry, :key_holder_unknown},
+      else: {:error, :key_holder_unknown}
   end
 
   @doc """

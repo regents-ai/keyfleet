@@ -6703,7 +6703,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `PollVote`, `Message`, `CodePush`, `GraphEvent` and `CreditsPurchase`). Each credits
   the person whose verified wallets held the Key when Keyfleet recorded it, from the
   Points wallet history (`RegentPoints.WalletSnapshot.owner/2`), never the Key's owner
-  today. An agent counts for that person only through a pairing of theirs
+  today. A record whose holder is not known yet is checked again for ten minutes, in
+  case that person's sign-in is still being saved, and then turned away. An agent
+  counts for that person only through a pairing of theirs
   (`Keyfleet.Points.Holder`); its entry names the agent by its wallet, with the
   pairing as evidence, and the Points page names it from that wallet's latest pairing.
 - Every rule stays off: `approved_rules` is `[]` and `starts_at` is nil, so nothing is
