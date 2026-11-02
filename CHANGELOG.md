@@ -6697,3 +6697,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `89b661d2378e49750bf9538fb144a8d20797e7ea0fcc9e6c33a95753e8beda7a`), the release that
   signs SIWA v2 requests. The guides, `capabilities.json`'s `cli.release` and the
   command check's pin (`REGENTS_CLI_REV` in `Makefile`) name it.
+
+## 2026-11-02 — Notebook hubs ride out storage hiccups
+
+- The notebook hubs' file store (Tigris) sometimes cancels reads in short bursts.
+  The hub used to try three times inside about a second, so a burst failed the
+  call: a scheduled run could miss its start for a minute, and a thumbnail
+  cleanup could be skipped.
+- The storage client now makes five tries, waiting 1, 2, 4 and 8 seconds between
+  them, using the client library's own retry setting. Writes are still never
+  retried. A scheduled run that still misses its start is picked up again by the
+  hub's scheduler each minute for ten minutes, as before.
+- A failed call's log line now names the call and the file or folder it was for,
+  next to the store's request id.
+- A Keyfleet patch on marimohub (`notebook-hub/marimohub/storage-calls.patch`),
+  with `@smithy/core` declared at the version the storage client already uses
+  (`notebook-hub/marimohub/pnpm-lock.patch`). The hub image is now `626ec14-110a2e7`.
