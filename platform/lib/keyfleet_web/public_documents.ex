@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   @directory Application.app_dir(:keyfleet, "priv/public")
   @files Enum.map(
-           ~w(docs about contact opportunities privacy terms llms help agents),
+           ~w(docs about changelog contact opportunities privacy terms llms help agents),
            &Path.join(@directory, &1 <> ".md")
          )
   for file <- @files, do: @external_resource(file)
@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   @external_resource @openapi_path
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
   # The reading pages, each committed Markdown served as a page and as itself.
-  @reading ~w(/docs /about /contact /opportunities /privacy /terms)
+  @reading ~w(/docs /about /changelog /contact /opportunities /privacy /terms)
   @documents ["/" | @reading]
   @description "Keyfleet: persistent teams for personal AI agents."
   # What a search result or a shared link says about the homepage.
@@ -38,6 +38,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
+    "/changelog" => {"Changelog", "Changes to Keyfleet, newest first."},
     :about =>
       {"About",
        "Keyfleet is a persistent team for your AI agent: what a Key gives and how to get one."},

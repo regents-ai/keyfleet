@@ -12,9 +12,9 @@ curl --fail '{{origin}}/fleets.md'
 curl --fail -H 'Accept: text/markdown' '{{origin}}/docs'
 ```
 
-The health response is the plain text `ok`. It confirms the web service is responding, not that every outside service is available.
+The health response is the plain text `ok`; `GET /api/v1/health` answers the same check as JSON, `{"status": "ok"}`, or 503 with `unavailable`. It confirms the web service is responding, not that every outside service is available.
 
-The homepage, this documentation, the agent pages at `/agents`, About, Contact, Opportunities, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
+The homepage, this documentation, the agent pages at `/agents`, the Changelog, About, Contact, Opportunities, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
 
 `GET /api/v1/about` and `GET /api/v1/docs` answer About and this page as JSON: `{"title", "markdown"}`.
 

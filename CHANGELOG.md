@@ -6713,3 +6713,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - A Keyfleet patch on marimohub (`notebook-hub/marimohub/storage-calls.patch`),
   with `@smithy/core` declared at the version the storage client already uses
   (`notebook-hub/marimohub/pnpm-lock.patch`). The hub image is now `626ec14-110a2e7`.
+
+## 2026-11-02 — Health in JSON and a changelog page
+
+- `GET /api/v1/health` answers the `/healthz` check as JSON, `{"status": "ok"}`, or 503
+  with the error code `unavailable`, both with `Cache-Control: no-store`, as the template
+  does. The public OpenAPI (`info.version` 15.2.0), the developer docs and `llms.txt`
+  list it.
+- `/changelog` is a public reading page from `priv/public/changelog.md`: the changes a
+  visitor or an agent would notice, newest first, also served as Markdown. The page
+  links and the footer link it. Sentinel's same checks asked for both.

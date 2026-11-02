@@ -472,7 +472,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
-  @open_paths ~w(/account /connect /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
+  @open_paths ~w(/account /connect /llms.txt /agents.md /skill.md /docs /changelog /about /contact /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do
