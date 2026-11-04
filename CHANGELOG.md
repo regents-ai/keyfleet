@@ -6801,3 +6801,17 @@ only, with their packages, until Sean decides whether that art changes. A card i
 picture: a new face would make new Keys differ from the ones already sold.
 
 Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v497, site v498 at deb01cda.
+
+## 2026-11-04 — Ecto 3.14.3 and one zod
+
+- ecto 3.14.2 to 3.14.3 for EEF-CVE-2026-118391 (high), lock only; ecto_sql stays at 3.14.0. Keyfleet's queries
+  put request data only in values: every JSON path is written out in the query, and no query uses a splice
+  list or `json_extract_path`, so the unbounded cache growth could not be reached from a request here.
+- `platform/package.json` forces zod 4.6.7 across the whole package tree in one top-level override, in place of
+  the per-package ones under vgpu and @modelcontextprotocol. Sean's ZOD-WHOLE-TREE a of 4 Nov, which replaces
+  ZOD-OVERRIDE b of 28 Oct. `npm audit` goes from 20 high to 0. The dismissed alert GHSA-mrhx-c7xc-m3w5
+  (Dependabot 10) is reopened and closes through this release.
+- Measured on Keyfleet: the sign-in download is unchanged at 632 KB compressed, and everything it can load on
+  demand at 1,949 KB. Reown's zod 3 schema file and wagmi's connectors are not in the bundle at all. zod itself
+  loads only with x402, in a part fetched on demand, which grows from 50 KB to 127 KB compressed; x402 under
+  zod 4 accepted a typical USDC request on Base and refused a bad one.
