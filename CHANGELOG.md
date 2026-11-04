@@ -6801,3 +6801,15 @@ only, with their packages, until Sean decides whether that art changes. A card i
 picture: a new face would make new Keys differ from the ones already sold.
 
 Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v497, site v498 at deb01cda.
+
+## 2026-11-04 — Key art on esbuild 0.28.2, and its sleep setting on main
+
+- The key-art service moves to esbuild 0.28.2. A sold Key (Classic #1, Key 19) drawn with the new bundle and
+  @noble/hashes 2.4.0 matches its kept picture: same size and traits, and on this Mac 0.12% of pixels differ by a
+  visible amount, all in the lettering's box, the known difference between Mac and Linux drawing.
+- `key-art/fly.toml` suspends the machine between drawings again. That change went live on 2 November from a
+  branch and never reached main, so a release from main would have undone it.
+- Closed, nothing to fix: each image build prints three "FORMATTER CRASH" notices with a TLS
+  alert_decode_error. Each follows a "Downloading NIF" line by about 30 seconds: the idle GitHub connection
+  closes after Mix has dropped ssl from its search path. Build time only. They appear in today's first build
+  log (67693415); earlier logs were not kept.
