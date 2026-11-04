@@ -230,7 +230,6 @@ defmodule KeyfleetWeb.Router do
     get "/agents", PublicPagesController, :show
     get "/agents/:agent", PublicPagesController, :show
     get "/changelog", PublicPagesController, :show
-    get "/contact", PublicPagesController, :show
     get "/privacy", PublicPagesController, :show
     get "/terms", PublicPagesController, :show
   end

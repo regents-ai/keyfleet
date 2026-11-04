@@ -155,7 +155,7 @@ defmodule KeyfleetWeb.HomeLive do
     ## More
 
     [Your account](#{PublicDocuments.url("/account")}) · [Developer documentation](#{PublicDocuments.url("/docs")}) · [Agent guide](#{PublicDocuments.url("/llms.txt")})
-    [About](#{PublicDocuments.url("/about")}) · [Contact](#{PublicDocuments.url("/contact")}) · [Privacy](#{PublicDocuments.url("/privacy")})
+    [About](#{PublicDocuments.url("/about")}) · [Privacy](#{PublicDocuments.url("/privacy")})
     """
   end
 

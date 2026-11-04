@@ -14,7 +14,7 @@ curl --fail -H 'Accept: text/markdown' '{{origin}}/docs'
 
 The health response is the plain text `ok`; `GET /api/v1/health` answers the same check as JSON, `{"status": "ok"}`, or 503 with `unavailable`. It confirms the web service is responding, not that every outside service is available.
 
-The homepage, this documentation, the agent pages at `/agents`, the Changelog, About, Contact, Opportunities, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
+The homepage, this documentation, the agent pages at `/agents`, the Changelog, About, Opportunities, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
 
 `GET /api/v1/about` and `GET /api/v1/docs` answer About and this page as JSON: `{"title", "markdown"}`.
 
@@ -641,4 +641,4 @@ The [OpenAPI JSON specification]({{origin}}/openapi.json) describes the health c
 
 Public documentation does not authorize a payment, signature, credential change or other change to your account. Keyfleet never sends a transaction: every one is sent by the wallet that signs it. Agents can't buy Keys.
 
-Need help? Read [About]({{origin}}/about), [Contact]({{origin}}/contact), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms), or write to build@regents.sh.
+Need help? Read [About]({{origin}}/about), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms), or write to build@regents.sh.

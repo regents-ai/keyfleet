@@ -49,7 +49,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
   # the one list in PublicDocuments; the site name is added once.
   test "every reading page has its own title and description" do
     pages =
-      for path <- ~w(/docs /about /contact /opportunities /privacy /terms) do
+      for path <- ~w(/docs /about /opportunities /privacy /terms) do
         document = build_conn() |> get(path) |> html_response(200) |> LazyHTML.from_document()
         title = document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim()
 
@@ -172,7 +172,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert fields["Contact"] == "mailto:build@regents.sh"
     assert DateTime.diff(expires, DateTime.utc_now(), :day) in 300..366
     assert fields["Canonical"] == PublicDocuments.url("/.well-known/security.txt")
-    assert fields["Policy"] == PublicDocuments.url("/contact")
+    assert fields["Policy"] == PublicDocuments.url("/about")
   end
 
   test "the API catalog is an RFC 9727 linkset naming the OpenAPI file and the docs" do

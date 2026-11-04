@@ -6802,6 +6802,18 @@ picture: a new face would make new Keys differ from the ones already sold.
 
 Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v497, site v498 at deb01cda.
 
+## 2026-11-04 — Key art on esbuild 0.28.2, and its sleep setting on main
+
+- The key-art service moves to esbuild 0.28.2. A sold Key (Classic #1, Key 19) drawn with the new bundle and
+  @noble/hashes 2.4.0 matches its kept picture: same size and traits, and on this Mac 0.12% of pixels differ by a
+  visible amount, all in the lettering's box, the known difference between Mac and Linux drawing.
+- `key-art/fly.toml` suspends the machine between drawings again. That change went live on 2 November from a
+  branch and never reached main, so a release from main would have undone it.
+- Closed, nothing to fix: each image build prints three "FORMATTER CRASH" notices with a TLS
+  alert_decode_error. Each follows a "Downloading NIF" line by about 30 seconds: the idle GitHub connection
+  closes after Mix has dropped ssl from its search path. Build time only. They appear in today's first build
+  log (67693415); earlier logs were not kept.
+
 ## 2026-11-04 — Ecto 3.14.3 and one zod
 
 - ecto 3.14.2 to 3.14.3 for EEF-CVE-2026-118391 (high), lock only; ecto_sql stays at 3.14.0. Keyfleet's queries
@@ -6815,3 +6827,15 @@ Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v49
   demand at 1,949 KB. Reown's zod 3 schema file and wagmi's connectors are not in the bundle at all. zod itself
   loads only with x402, in a part fetched on demand, which grows from 50 KB to 127 KB compressed; x402 under
   zod 4 accepted a typical USDC request on Base and refused a bad one.
+
+## 2026-11-04 — Contact moves into About
+
+Matches the template's eb94293d (list commit 5cd1f0b6), Sean's "1 a" of 4 Nov as relayed by the
+orchestrator. The /contact page and its Markdown are gone with no redirect, so the address answers 404.
+platform/priv/public/about.md gains a one-word Contact section with Keyfleet's own wording (Keys, the
+Patchbay forum). Footers, the sitemap, the guides and the link checks drop the entry. security.txt's
+Policy and the API description's contact address point at /about.
+
+Keyfleet-only choice: the closed-site list has no template equivalent. /contact leaves it and nothing
+replaces it, so a closed site keeps /early, /privacy and /terms; both legal pages and security.txt name
+the email address. Keyfleet has no required-fixes file, so the template's row for this has no copy here.
