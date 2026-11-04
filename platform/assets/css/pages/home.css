@@ -96,7 +96,7 @@
   .rl-buy__tag {
     position: absolute; inset-inline-start: calc(197 / 716 * 100% + var(--space-2)); inset-block-end: calc(40 / 900 * 100%);
     padding: .25rem .5rem; background: rgb(22 22 22 / .82); color: var(--palette-platinum);
-    font-family: var(--font-family-mono); font-size: .75rem; font-variant-numeric: tabular-nums;
+    font-family: var(--font-family-ui); font-size: .75rem; font-variant-numeric: tabular-nums;
     border: 1px solid rgb(229 227 210 / .18);
   }
   /* The button spans the card itself, columns 52 to 598 of the picture's 600,

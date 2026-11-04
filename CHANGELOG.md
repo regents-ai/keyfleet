@@ -6784,3 +6784,18 @@ Not at newest, each with its reason:
 - The design system pin and Geist Serif ship in their own release today.
 - Contract libraries stay at their pins, reason: frozen on-chain record. forge-std at its pin
   (newest v1.9.7), openzeppelin-contracts at its pin (newest v5.7.0).
+
+Live: graph v497, site v498 at deb01cda (2026-11-04 05:06Z). Rollback: graph v495, site v496.
+
+## 2026-11-04 — Geist Serif, and strict rules on every answer
+
+Every page, label and address now draws in Geist Serif, with Geist Mono only on code. Design
+system pin 7a853f85 to 4c7bbaa5. The early page uses the site's own type, the share pictures
+are redrawn, and the site's picture sets its words beside the cards.
+
+Every answer, including health, refusals and missing pages, now carries the content policy,
+referrer policy and nosniff; a route that sets a wider policy keeps it, so sign-in still works.
+
+Not moved: Bricolage Grotesque and IBM Plex Mono stay on the lettering of Key card pictures
+only, with their packages, until Sean decides whether that art changes. A card is a kept
+picture: a new face would make new Keys differ from the ones already sold.

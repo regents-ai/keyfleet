@@ -41,9 +41,10 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Plugs.ContractHeaders
 
   # Every answer, including the launch gate's and the Markdown and refusals the
-  # plugs below give before the router, lets browser agents use the tools this
-  # site's pages register, and no other site's.
-  plug :allow_page_tools
+  # plugs below give before the router, runs under the strict policy unless its
+  # route sets a wider one, and lets browser agents use the tools this site's
+  # pages register, and no other site's.
+  plug :secure_every_answer
 
   # While the site is closed, only the early-access page, the legal pages, the
   # operational files and the static files get past this.
@@ -196,9 +197,13 @@ defmodule KeyfleetWeb.Endpoint do
   # 2027. It is public; any other origin ignores it.
   @webmcp_trial "ApE5dJwldD+NxqoTmRf87JNS8wnauCpxIybfmYu2mCqPCv/vW/9Ox6kYsrn5vxpVrbLvzQF7BJmfElX1/tgDGgoAAABLeyJvcmlnaW4iOiJodHRwczovL2tleWZsZWV0LmFpOjQ0MyIsImZlYXR1cmUiOiJXZWJNQ1AiLCJleHBpcnkiOjE4MDYzNjQ4MDB9"
 
-  defp allow_page_tools(conn, _opts) do
-    conn
-    |> Plug.Conn.put_resp_header("permissions-policy", "tools=(self)")
-    |> Plug.Conn.put_resp_header("origin-trial", @webmcp_trial)
+  # The policy is built by ContentSecurityPolicy; Sobelow cannot evaluate its value.
+  # sobelow_skip ["Config.CSP"]
+  defp secure_every_answer(conn, _opts) do
+    Phoenix.Controller.put_secure_browser_headers(conn, %{
+      "content-security-policy" => KeyfleetWeb.ContentSecurityPolicy.reading(),
+      "permissions-policy" => "tools=(self)",
+      "origin-trial" => @webmcp_trial
+    })
   end
 end
