@@ -6799,3 +6799,5 @@ referrer policy and nosniff; a route that sets a wider policy keeps it, so sign-
 Not moved: Bricolage Grotesque and IBM Plex Mono stay on the lettering of Key card pictures
 only, with their packages, until Sean decides whether that art changes. A card is a kept
 picture: a new face would make new Keys differ from the ones already sold.
+
+Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v497, site v498 at deb01cda.
