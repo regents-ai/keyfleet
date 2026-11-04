@@ -20,7 +20,7 @@ graph host. The build fetches the shared libraries from GitHub at the commits
 `platform/` itself.
 
 1. The sealed supplies live in `/Users/sean/Documents/regent/archive/release-supply`:
-   `regent-graph-host-arm64-20260926` and `regent-graph-host-amd64-20260926`.
+   `regent-graph-host-arm64-20261104` and `regent-graph-host-amd64-20261104`.
    Reseal with `scripts/seal-graph-host-supply.sh <arch>` only when
    `graph_host/uv.lock` or `graph_host/.python-version` changes.
 2. Commit everything first: uncommitted changes are left out, and the script

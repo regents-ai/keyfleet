@@ -6,8 +6,8 @@
  * fingerprint, so the page and the site read the same bytes.
  */
 
-import {keccak_256} from "@noble/hashes/sha3"
-import {hexToBytes} from "@noble/hashes/utils"
+import {keccak_256} from "@noble/hashes/sha3.js"
+import {hexToBytes} from "@noble/hashes/utils.js"
 
 import table from "../../../priv/trait_tables/0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe.json"
 

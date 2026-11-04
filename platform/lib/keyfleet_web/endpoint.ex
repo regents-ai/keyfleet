@@ -109,7 +109,7 @@ defmodule KeyfleetWeb.Endpoint do
   # anything past a megabyte is refused before it is read.
   plug KeyfleetWeb.Plugs.Parsers,
     body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
-    parsers: [:urlencoded, :json],
+    parsers: [Plug.Parsers.URLENCODED, Plug.Parsers.JSON],
     pass: ["*/*"],
     length: 1_000_000,
     json_decoder: Phoenix.json_library()

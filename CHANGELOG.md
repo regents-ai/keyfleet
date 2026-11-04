@@ -6739,3 +6739,48 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   to 0.8.7 and nimble_options to 1.2.0, ahead of the wider package update.
 - The agent guides, skill.md, capabilities.json's `cli.release` and the command check's
   pin name regents-cli 1.10.23, tag commit 8e8f2af4 and wheel SHA256 2020d16c.
+
+  That release went out as graph v495 and site v496 (rollback v493 and v494, b243ec03).
+
+## 2026-11-04 — Packages to newest, the site's own first
+
+Moved, majors first: uuid 11.1.1 to 14.0.3 (major, override), @noble/hashes 1.8.0 to 2.4.0
+(major; its import paths now end in `.js`), sobelow 0.16.0 to 0.18.1 (scanner, new minor
+series), @privy-io/react-auth 3.49.1 to 3.51.1, viem 2.57.7 to 2.57.16, @solana/kit 8.5.0 to
+8.6.0, @solana-program/system 0.15.0 to 0.16.0, @solana-program/token 0.17.0 to 0.18.0, axios
+1.20.0 to 1.21.0, ws 8.22.0 to 8.22.1, @modelcontextprotocol/server and core 2.3.1 to 2.4.0,
+esbuild (site build) 0.25.4 to 0.28.2, ash_ai 1.4.1 to 1.5.0,
+ash_double_entry 1.0.19 to 1.1.1, ash_money 0.2.6 to 0.2.7, elixir_make 0.10.0 to 0.10.1,
+esbuild (Hex) 0.10.0 to 0.10.1, ex_money 6.2.1 to 6.3.0, ex_money_sql 2.1.0 to 2.2.0, fine
+0.1.6 to 0.2.0, igniter 0.8.4 to 0.8.5, lazy_html 0.1.13 to 0.1.14, localize 1.3.0 to 1.6.1,
+localize_sql 1.0.1 to 1.1.0, mdex 0.14.2 to 0.14.6, mdex_native 0.2.11 to 0.3.1, phoenix
+1.8.15 to 1.8.16, phoenix_live_view 1.2.12 to 1.2.13, rustler_precompiled 0.10.0 to 0.10.1,
+usage_rules 1.2.8 to 1.3.1, websock_adapter 0.6.0 to 0.7.0, @types/node 26.6.5 to 26.6.6,
+vitest 5.0.5 to 5.1.0, decode-uri-component 0.5.0 to 0.5.1, follow-redirects 1.16.1 to
+1.16.2. Graph host: pydantic 2.13.5 to 2.14.2, pydantic-core 2.46.5 to 2.50.2, iniconfig
+2.3.0 to 2.3.1, pluggy 1.6.0 to 1.7.0, pytest 9.1.1 to 9.2.0, setuptools 84.0.0 to 84.2.1,
+with the Python supply sealed again (`regent-graph-host-*-20261104`). Key art: esbuild 0.25.4
+to 0.28.2. elixir-utils pin 64475364 to c4a78d22. Rollback: graph v495, site v496.
+
+- sobelow 0.18 found three new low-confidence uses of a computed module name. They are gone
+  from the code: the endpoint names Plug's parser modules, and an agent tool's answer module
+  is named per resource.
+- Phoenix 1.8.16 closes a signed-out socket with code 1000 where 1.8.15 used 1001, so LiveView
+  now reloads a page the server signs out 5 to 10 seconds later, not at the next reconnect.
+  The page's own sign-out still reloads as soon as the wallet step ends.
+- mdex 0.14.6 reads `{...}` straight after inline code as attributes and drops it, so both
+  direct markdown callers turn that off (rooms and public documents).
+
+Not at newest, each with its reason:
+
+- activegraph stays at 1.10.0 (newest 1.13.0). From 1.11 the store opens its own transaction
+  on every event, which cannot run inside the one transaction that holds a fleet's whole
+  accepted write and its ledger entry: 205 of the host's 241 tests stop on it. Upstream
+  offers no way to append several events together. Moving means redesigning how a write
+  stays whole. Keeping the pin keeps that guarantee.
+- uv_build stays at 0.12 (newest 0.13.7) and playwright-core at 1.61.1 (newest 1.64.1): each
+  is tied to an image the Dockerfiles pin, which moves with the runtimes in wave 2.
+- ws 7.5.13 stays where a wallet package asks for it.
+- The design system pin and Geist Serif ship in their own release today.
+- Contract libraries stay at their pins, reason: frozen on-chain record. forge-std at its pin
+  (newest v1.9.7), openzeppelin-contracts at its pin (newest v5.7.0).

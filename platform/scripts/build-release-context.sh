@@ -24,8 +24,8 @@
 set -euo pipefail
 
 readonly DEFAULT_SUPPLY_ROOT="/Users/sean/Documents/regent/archive/release-supply"
-readonly ARM64_GRAPH_HOST_SUPPLY="regent-graph-host-arm64-20260926"
-readonly AMD64_GRAPH_HOST_SUPPLY="regent-graph-host-amd64-20260926"
+readonly ARM64_GRAPH_HOST_SUPPLY="regent-graph-host-arm64-20261104"
+readonly AMD64_GRAPH_HOST_SUPPLY="regent-graph-host-amd64-20261104"
 
 usage() {
   printf 'usage: %s <destination> <arch> [supply-root]\n' "${0##*/}" >&2

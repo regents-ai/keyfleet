@@ -163,7 +163,10 @@ defmodule KeyfleetWeb.PublicDocuments do
   # sobelow_skip ["XSS.Raw"]
   def html(markdown) do
     markdown
-    |> MDEx.to_html!(extension: [table: true, header_id_prefix: ""], sanitize: @sanitize)
+    |> MDEx.to_html!(
+      extension: [table: true, header_id_prefix: "", inline_code_attributes: false],
+      sanitize: @sanitize
+    )
     |> Phoenix.HTML.raw()
   end
 

@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "644753647a6e3ab6bf945053e08d084bc665eb4f"
+  @elixir_utils_ref "c4a78d220033354ee447142a8a974c95e82298aa"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "7a853f854168f208975815286eace8a502ec9aea"
 
@@ -58,7 +58,7 @@ defmodule Keyfleet.MixProject do
       {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3.26"},
       # The Claude connector's MCP address (/mcp), as ash-template serves its own.
-      {:ash_ai, "~> 1.4.1"},
+      {:ash_ai, "~> 1.5"},
       # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
       # use the repo's prefix, which picks each site's schema on the shared
       # database. It stands in for the Hex release that ash_money and
@@ -76,8 +76,8 @@ defmodule Keyfleet.MixProject do
       # The code gateway's connection to the fleets' code store.
       {:mint, "~> 1.11"},
       {:ash_oban, "~> 0.10.3"},
-      {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
-      {:mdex, "== 0.14.2"},
+      {:igniter, "== 0.8.5", only: [:dev, :test], runtime: false},
+      {:mdex, "== 0.14.6"},
       {:regent_privy,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
       {:regent_identity,
@@ -135,8 +135,8 @@ defmodule Keyfleet.MixProject do
        sparse: "credo_ash",
        only: [:dev, :test],
        runtime: false},
-      {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
-      {:usage_rules, "~> 1.2.8", only: [:dev, :test], runtime: false}
+      {:sobelow, "~> 0.18", only: [:dev, :test], runtime: false},
+      {:usage_rules, "~> 1.3", only: [:dev, :test], runtime: false}
     ]
   end
 
