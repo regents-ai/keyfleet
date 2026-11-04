@@ -6731,3 +6731,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Patchbay refused these requests on 2 November because it kept signed bytes under one
   address only. Both tests fail when the signed check stops keeping the bytes at this
   address.
+
+## 2026-11-04 — ash_sql 0.8.7 and regents-cli 1.10.23
+
+- hex retired ash_sql 0.8.3 to 0.8.5 (an Ecto query cache issue gives unpredictable query
+  returns), and the template's required fixes now ask for at least 0.8.6. The lock moves
+  to 0.8.7 and nimble_options to 1.2.0, ahead of the wider package update.
+- The agent guides, skill.md, capabilities.json's `cli.release` and the command check's
+  pin name regents-cli 1.10.23, tag commit 8e8f2af4 and wheel SHA256 2020d16c.
