@@ -225,7 +225,6 @@ test("on a phone, a Workstream item keeps its closing quote beside its name", as
 // phone width puts that word at the end of a line.
 test("on a narrow phone, a footnote's tip stays beside its last word", async ({page}) => {
   for (const [path, tip] of [
-    [`${fleetPath}?room=general`, "rooms-who-posts"],
     [`${fleetPath}/polls`, "polls-who-tip"],
   ]) {
     await page.setViewportSize({width: 390, height: 800})

@@ -30,15 +30,6 @@
   margin: 0;
 }
 
-.rooms-kicker {
-  color: var(--color-fg-muted);
-  font-family: var(--font-family-ui);
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .rooms-heading {
   display: grid;
   gap: 1rem;

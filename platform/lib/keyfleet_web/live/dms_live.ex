@@ -49,7 +49,7 @@ defmodule KeyfleetWeb.DmsLive do
   def inbox(assigns) do
     ~H"""
     <article id="dms-page" class="rooms-page dms-page">
-      <.heading dms={@dms} title="Messages" />
+      <.heading title={if open?(@dms), do: "Key #{Rules.grouped(@dms.token_id)}", else: "Messages"} />
       <.closed :if={not open?(@dms)} dms={@dms} />
 
       <section
@@ -65,7 +65,6 @@ defmodule KeyfleetWeb.DmsLive do
           class="kf-empty"
           title="No messages yet."
         >
-          Open another Key’s page to start a conversation.
           <:action>
             <.link
               class="rg-button rg-button--secondary"
@@ -84,12 +83,7 @@ defmodule KeyfleetWeb.DmsLive do
         class="rooms-panel"
         aria-labelledby="dms-blocked-title"
       >
-        <h2 id="dms-blocked-title">
-          Blocked
-          <Regent.Primitives.tip id="dms-blocked-tip" label="About blocked Keys">
-            Messages from Keys this Key blocked wait here. Unblock a Key from its conversation.
-          </Regent.Primitives.tip>
-        </h2>
+        <h2 id="dms-blocked-title">Blocked</h2>
         <.conversation_list dms={@dms} conversations={@dms.blocked} />
       </section>
     </article>
@@ -105,10 +99,9 @@ defmodule KeyfleetWeb.DmsLive do
   def conversation(assigns) do
     ~H"""
     <article id="dms-page" class="rooms-page dms-page">
-      <.heading
-        dms={@dms}
-        title={if open?(@dms), do: "Key #{Rules.grouped(@dms.other_token_id)}", else: "Messages"}
-      />
+      <.heading title={
+        if open?(@dms), do: "Key #{Rules.grouped(@dms.other_token_id)}", else: "Messages"
+      } />
       <.closed :if={not open?(@dms)} dms={@dms} />
 
       <div :if={open?(@dms)} class="rooms-grid">
@@ -188,15 +181,12 @@ defmodule KeyfleetWeb.DmsLive do
           <h2 id="dms-thread-title">
             Key {Rules.grouped(@dms.token_id)} and Key {Rules.grouped(@dms.other_token_id)}
           </h2>
-          <p :if={@dms.blocked?} id="dms-blocked-note" class="rooms-detail">Blocked</p>
           <Regent.Primitives.empty_state
             :if={@dms.last_seq == 0}
             id="dms-thread-empty"
             class="kf-empty"
             title="No messages yet."
-          >
-            Say hello below.
-          </Regent.Primitives.empty_state>
+          />
 
           <ol id="dms-thread-list" class="rooms-thread-list" phx-update="stream">
             <li :for={{dom_id, message} <- @messages} id={dom_id}>
@@ -255,13 +245,11 @@ defmodule KeyfleetWeb.DmsLive do
     """
   end
 
-  attr :dms, :any, required: true
   attr :title, :string, required: true
 
   defp heading(assigns) do
     ~H"""
     <header class="rooms-heading">
-      <p class="rooms-kicker">{kicker(@dms)}</p>
       <h1 tabindex="-1">{@title}</h1>
     </header>
     """
@@ -351,11 +339,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp open?(%{holder?: true}), do: true
   defp open?(_dms), do: false
-
-  defp kicker(%{fleet_name: name, token_id: token_id}) when is_binary(name),
-    do: "#{name} · Key #{Rules.grouped(token_id)}"
-
-  defp kicker(_dms), do: "Keyfleet"
 
   defp closed_reason(%{fleet_name: nil}), do: "This fleet doesn’t exist."
   defp closed_reason(%{refreshing?: true}), do: KeysLive.refreshing()

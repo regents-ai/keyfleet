@@ -766,10 +766,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       />
     </.link>
     <RoomsLive.writer id={"key-profile-writer-#{@message.id}"} author={Message.author(@message)} />
-    <RoomsLive.verified_human
-      :if={RoomsLive.human_backed?(@message)}
-      id={"key-profile-post-human-#{@message.id}"}
-    />
+    <RoomsLive.verified_human :if={RoomsLive.human_backed?(@message)} />
     """
   end
 

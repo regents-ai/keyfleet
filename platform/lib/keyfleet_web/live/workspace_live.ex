@@ -2428,10 +2428,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               </.link>
               <.agent_picture :if={post.author.picture} src={post.author.picture} />
               <RoomsLive.writer id={"public-#{record.id}-#{post.seq}-writer"} author={post.author} />
-              <RoomsLive.verified_human
-                :if={post.author.human_backed}
-                id={"public-#{record.id}-#{post.seq}-human"}
-              />
+              <RoomsLive.verified_human :if={post.author.human_backed} />
             </p>
             <p :if={post.reply_to_seq} class="rooms-detail">
               Replying to post {post.reply_to_seq}
