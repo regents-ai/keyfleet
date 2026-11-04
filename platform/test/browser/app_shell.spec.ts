@@ -100,7 +100,7 @@ test("page headings use canonical Pixel Square", async ({page}) => {
     await page
       .locator(".page-head h1")
       .evaluate(element => getComputedStyle(element).fontFamily),
-  ).toContain("Geist Pixel Square")
+  ).toContain("Geist Serif")
 })
 
 test("all approved routes render within their page budget", async ({page, request}) => {

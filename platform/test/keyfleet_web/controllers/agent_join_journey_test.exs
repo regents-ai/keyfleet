@@ -5,6 +5,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   alias KeyfleetWeb.SignedAgentHelpers
   @path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
+  @credits_history_path "/api/v1/account/credits/history"
   @body ~s({ "name": "Wallet agent", "declared_harness": "local" })
 
   setup do
@@ -149,6 +150,24 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert oversized.status == 413
     refute_receive {:broker_payload, _}
+  end
+
+  test "a signed body to the credits history is read as it was signed", c do
+    response = send_request(c, signed(c, "{}", "keyfleet", 8453, @credits_history_path))
+
+    assert response.status == 200
+    body_digest = digest("{}")
+
+    assert_receive {:broker_payload,
+                    %{"body_digest" => ^body_digest, "path" => @credits_history_path}}
+  end
+
+  test "a credits history body changed after signing is refused", c do
+    request = signed(c, "{}", "keyfleet", 8453, @credits_history_path)
+    response = send_request(c, %{request | body: ~s({"after":"x"})})
+
+    assert response.status == 401
+    assert response.body == %{"error" => SignedAgentHelpers.refusal()}
   end
 
   test "verification transport never retries or follows redirects", c do

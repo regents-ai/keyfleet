@@ -96,6 +96,7 @@ defmodule KeyfleetWeb.Layouts do
         <a href={@buy_regent} target="_blank" rel="noopener noreferrer">Buy $REGENT</a>
         <a href={~p"/about"}>About</a>
         <a href={~p"/docs"}>Developer docs</a>
+        <a href={~p"/changelog"}>Changelog</a>
         <button type="button" class="regent-footer__guide" popovertarget="footer-agent-guide">
           Agent guide
         </button>

@@ -229,6 +229,7 @@ defmodule KeyfleetWeb.Router do
     get "/docs", PublicPagesController, :show
     get "/agents", PublicPagesController, :show
     get "/agents/:agent", PublicPagesController, :show
+    get "/changelog", PublicPagesController, :show
     get "/contact", PublicPagesController, :show
     get "/privacy", PublicPagesController, :show
     get "/terms", PublicPagesController, :show
@@ -254,6 +255,7 @@ defmodule KeyfleetWeb.Router do
 
   scope "/api/v1", KeyfleetWeb do
     pipe_through :api
+    get "/health", HealthController, :status
     get "/about", PublicPagesController, :document, assigns: %{document: "/about", page: :about}
     get "/docs", PublicPagesController, :document, assigns: %{document: "/docs", page: "/docs"}
     get "/fleets", DirectoryController, :index_json

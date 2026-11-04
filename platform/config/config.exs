@@ -430,7 +430,7 @@ config :keyfleet, KeyfleetWeb.Endpoint,
 
 # Configure esbuild (the version is required)
 config :esbuild,
-  version: "0.25.4",
+  version: "0.28.2",
   keyfleet: [
     args:
       ~w(js/app.ts js/privy_bridge.tsx js/key_roller.ts --bundle --splitting --format=esm --target=es2022 --outdir=../priv/static/assets/js --chunk-names=chunks/[name]-[hash] --asset-names=chunks/[name]-[hash] --external:/fonts/* --external:/images/* --alias:@=. --loader:.woff2=file --loader:.woff=file --loader:.ttf=file --metafile=../priv/esbuild-meta.json),

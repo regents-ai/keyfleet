@@ -10,17 +10,45 @@ defmodule KeyfleetWeb.AgentTools.Run do
   """
   use Ash.Resource.Actions.Implementation
 
-  alias KeyfleetWeb.AgentTools.SignedRequest
+  alias KeyfleetWeb.AgentTools.{
+    Account,
+    Code,
+    Dms,
+    Fleets,
+    Keys,
+    Notebooks,
+    Polls,
+    Projects,
+    Public,
+    Publications,
+    Rooms,
+    SignedRequest,
+    Workspace
+  }
 
   @impl true
   def run(input, opts, context) do
     params = SignedRequest.params(input.arguments, Keyword.get(opts, :fixed, %{}))
 
     with :ok <- SignedRequest.check(opts[:tool], params) do
-      answer = Module.concat(input.resource, "Answer")
       waiter = Map.fetch!(context.source_context, :waiter)
 
-      SignedRequest.result(answer.answer(input.action.name, params, context.actor, waiter))
+      SignedRequest.result(
+        answer(input.resource).answer(input.action.name, params, context.actor, waiter)
+      )
     end
   end
+
+  defp answer(Account), do: Account.Answer
+  defp answer(Code), do: Code.Answer
+  defp answer(Dms), do: Dms.Answer
+  defp answer(Fleets), do: Fleets.Answer
+  defp answer(Keys), do: Keys.Answer
+  defp answer(Notebooks), do: Notebooks.Answer
+  defp answer(Polls), do: Polls.Answer
+  defp answer(Projects), do: Projects.Answer
+  defp answer(Public), do: Public.Answer
+  defp answer(Publications), do: Publications.Answer
+  defp answer(Rooms), do: Rooms.Answer
+  defp answer(Workspace), do: Workspace.Answer
 end

@@ -181,7 +181,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.25rem 1rem;
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-ui);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -421,7 +421,7 @@
 }
 
 .workspace-instrument h3 {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-ui);
   font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;

@@ -5,9 +5,8 @@
     <title>Keyfleet share pictures</title>
     <!--
       Drawn by render.mjs, one picture per address:
-        ?card=home                         the site's picture: home.png (the earlier
-                                           picture without its address) with the
-                                           address under its headline
+        ?card=home                         the site's picture: the cards from home.png
+                                           beside its words
         ?card=fleet&name=…&keys=…&key=…    a fleet's picture, without its figures,
                                            its Key's name or its Key's card
       The fleet pictures' figures, Key name and card are added by the server
@@ -16,22 +15,8 @@
     -->
     <style>
       @font-face {
-        font-family: "Geist";
-        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/Geist-Regular.woff2") format("woff2");
-        font-weight: 400;
-      }
-      @font-face {
-        font-family: "Geist";
-        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/Geist-SemiBold.woff2") format("woff2");
-        font-weight: 600;
-      }
-      @font-face {
-        font-family: "Geist Mono";
-        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/GeistMono-Regular.woff2") format("woff2");
-      }
-      @font-face {
-        font-family: "Geist Pixel";
-        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/GeistPixel-Square.woff2") format("woff2");
+        font-family: "Geist Serif";
+        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/GeistSerif-Regular.woff2") format("woff2");
       }
 
       :root {
@@ -62,7 +47,7 @@
           radial-gradient(ellipse 70% 90% at 78% 30%, rgb(255 255 255 / 0.035), transparent 70%),
           var(--paper);
         color: var(--ink);
-        font-family: "Geist", sans-serif;
+        font-family: "Geist Serif", serif;
       }
 
       /* X keeps only the left part of a picture in its narrow view, about
@@ -85,21 +70,31 @@
 
       .address {
         font-size: 26px;
-        font-weight: 600;
         line-height: 26px;
         letter-spacing: -0.01em;
       }
 
+      /* The cards from home.png; the words beside them are set here. */
       .home {
         position: absolute;
         inset: 0;
+        width: 1200px;
+        height: 630px;
+        mask-image: linear-gradient(to right, transparent 517px, black 534px);
       }
 
       /* The site's picture: the address under its headline. */
-      .home-address {
+      .home-words {
         position: absolute;
-        top: 414px;
         left: 72px;
+        top: 168px;
+        font-size: 60px;
+        line-height: 66px;
+        letter-spacing: -0.01em;
+      }
+      .home-words em {
+        font-style: normal;
+        color: var(--accent);
       }
 
       /* A fleet's picture: its name and figures at the left, its latest
@@ -109,7 +104,7 @@
         position: absolute;
         left: 72px;
         top: 124px;
-        font-family: "Geist Pixel", monospace;
+        font-family: "Geist Serif", serif;
         font-size: 48px;
         line-height: 52px;
         letter-spacing: -0.01em;
@@ -194,23 +189,21 @@
       }
 
       .glyphs.value {
-        font-family: "Geist", sans-serif;
+        font-family: "Geist Serif", serif;
         font-size: 58px;
-        font-weight: 600;
         line-height: 66px;
         letter-spacing: -0.01em;
       }
 
       .glyphs.amount {
-        font-family: "Geist", sans-serif;
+        font-family: "Geist Serif", serif;
         font-size: 40px;
-        font-weight: 600;
         line-height: 46px;
         letter-spacing: -0.01em;
       }
 
       .glyphs.name {
-        font-family: "Geist Mono", monospace;
+        font-family: "Geist Serif", serif;
         font-size: 20px;
         line-height: 28px;
         letter-spacing: 0.04em;
@@ -240,19 +233,26 @@
 
       const mark = () => document.getElementById("mark").content.firstElementChild.cloneNode(true);
 
+      const brand = () => {
+        const el = text("div", "brand", "");
+        el.append(mark(), text("span", "address", "keyfleet.ai"));
+        return el;
+      };
+
       const draw = {
         home() {
           const base = document.createElement("img");
           base.className = "home";
           base.alt = "";
           base.src = "home.png";
-          card.append(base, text("div", "address home-address", "keyfleet.ai"));
+          const words = document.createElement("div");
+          words.className = "home-words";
+          words.innerHTML = "agents:<br />join <em>//</em> start <em>//</em><br />invest in a fleet";
+          card.append(base, brand(), words);
         },
 
         fleet() {
-          const brand = text("div", "brand", "");
-          brand.append(mark(), text("span", "address", "keyfleet.ai"));
-          card.append(brand, text("h1", "fleet-name", params.get("name")));
+          card.append(brand(), text("h1", "fleet-name", params.get("name")));
 
           for (const [place, label, kind] of [["keys", params.get("keys"), "value"], ["treasury", "Treasury", "amounts"]]) {
             const figure = document.createElement("div");

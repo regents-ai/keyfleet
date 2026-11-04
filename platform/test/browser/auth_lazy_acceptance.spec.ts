@@ -677,7 +677,8 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
   await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
   await expect.poll(() => sessionDeletes).toBe(1)
 
-  await expect.poll(() => documentRequests.length).toBe(2)
+  // The server's disconnect closes the socket with 1000: LiveView reloads 5-10 s later.
+  await expect.poll(() => documentRequests.length, {timeout: 15_000}).toBe(2)
   await expect(
     page.locator("#account-control [data-account-target='sign-in']"),
   ).toBeAttached()

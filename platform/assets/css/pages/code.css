@@ -49,7 +49,7 @@
 }
 
 .code-message {
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-ui);
   font-size: 0.85rem;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -66,12 +66,12 @@
 
 .code-added {
   color: var(--color-success);
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-ui);
 }
 
 .code-removed {
   color: var(--color-error);
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-ui);
 }
 
 /* Each changed file is a hairline card; its lines scroll inside it, so a

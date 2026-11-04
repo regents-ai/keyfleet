@@ -41,6 +41,10 @@ RUN git apply /tmp/storage-read-retry.patch
 # both loop deadlines.
 COPY marimohub/app-pool-sweep.patch /tmp/app-pool-sweep.patch
 RUN git apply /tmp/app-pool-sweep.patch
+# A store call that fails names its call and object key in its log line, and the
+# storage client's own retries wait 1, 2, 4 and 8 seconds between five tries.
+COPY marimohub/storage-calls.patch /tmp/storage-calls.patch
+RUN git apply /tmp/storage-calls.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build

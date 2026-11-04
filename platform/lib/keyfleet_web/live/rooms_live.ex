@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.RoomsLive do
   # Posts are plain writing. Paragraphs, line breaks and links survive; anything
   # that looks like markup is shown as the characters the writer typed.
   @markdown [
-    extension: [autolink: true],
+    extension: [autolink: true, inline_code_attributes: false],
     render: [escape: true, hardbreaks: true],
     sanitize: [
       tags: ~w(p a br),

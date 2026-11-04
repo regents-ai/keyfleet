@@ -113,6 +113,7 @@ defmodule KeyfleetWeb.PublicPagesHTML do
                 {"Opportunities", "/opportunities"},
                 {"Docs", "/docs"},
                 {"Agents", "/agents"},
+                {"Changelog", "/changelog"},
                 {"About", "/about"},
                 {"Contact", "/contact"},
                 {"Privacy", "/privacy"},

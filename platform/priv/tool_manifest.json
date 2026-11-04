@@ -7458,6 +7458,6 @@
   "cli": {
     "namespace": "keyfleet",
     "package": "regents-cli",
-    "release": "1.10.21"
+    "release": "1.10.23"
   }
 }

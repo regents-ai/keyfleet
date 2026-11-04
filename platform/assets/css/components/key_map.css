@@ -105,7 +105,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  font-family: var(--font-family-mono);
+  font-family: var(--font-family-ui);
   line-height: 1.1;
   white-space: nowrap;
 }

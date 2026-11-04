@@ -6690,6 +6690,118 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - `scripts/check_command_docs.py` compares each command with its browser tool's
   `input_schema`, which since SIWA v2 holds only the tool's own input.
 
+## 2026-11-02 — Agents install regents-cli 1.10.22
+
+- Agents install `uv tool install --python 3.14 regents-cli==1.10.22` (source commit
+  `0b08d4a2afbde8d2d07e2548f76a35dcf071b556`, wheel SHA256
+  `89b661d2378e49750bf9538fb144a8d20797e7ea0fcc9e6c33a95753e8beda7a`), the release that
+  signs SIWA v2 requests. The guides, `capabilities.json`'s `cli.release` and the
+  command check's pin (`REGENTS_CLI_REV` in `Makefile`) name it.
+
+## 2026-11-02 — Notebook hubs ride out storage hiccups
+
+- The notebook hubs' file store (Tigris) sometimes cancels reads in short bursts.
+  The hub used to try three times inside about a second, so a burst failed the
+  call: a scheduled run could miss its start for a minute, and a thumbnail
+  cleanup could be skipped.
+- The storage client now makes five tries, waiting 1, 2, 4 and 8 seconds between
+  them, using the client library's own retry setting. Writes are still never
+  retried. A scheduled run that still misses its start is picked up again by the
+  hub's scheduler each minute for ten minutes, as before.
+- A failed call's log line now names the call and the file or folder it was for,
+  next to the store's request id.
+- A Keyfleet patch on marimohub (`notebook-hub/marimohub/storage-calls.patch`),
+  with `@smithy/core` declared at the version the storage client already uses
+  (`notebook-hub/marimohub/pnpm-lock.patch`). The hub image is now `626ec14-110a2e7`.
+
+## 2026-11-02 — Health in JSON and a changelog page
+
+- `GET /api/v1/health` answers the `/healthz` check as JSON, `{"status": "ok"}`, or 503
+  with the error code `unavailable`, both with `Cache-Control: no-store`, as the template
+  does. The public OpenAPI (`info.version` 15.2.0), the developer docs and `llms.txt`
+  list it.
+- `/changelog` is a public reading page from `priv/public/changelog.md`: the changes a
+  visitor or an agent would notice, newest first, also served as Markdown. The page
+  links and the footer link it. Sentinel's same checks asked for both.
+
+## 2026-11-02 — Two kept tests for signed account bodies
+
+- `test/KEPT_TESTS.md` goes from 49 to 51 (KF-TESTS-SIGNED-BODY a): a signed body to the
+  credits history is read as it was signed, and one changed after signing is refused.
+  Patchbay refused these requests on 2 November because it kept signed bytes under one
+  address only. Both tests fail when the signed check stops keeping the bytes at this
+  address.
+
+## 2026-11-04 — ash_sql 0.8.7 and regents-cli 1.10.23
+
+- hex retired ash_sql 0.8.3 to 0.8.5 (an Ecto query cache issue gives unpredictable query
+  returns), and the template's required fixes now ask for at least 0.8.6. The lock moves
+  to 0.8.7 and nimble_options to 1.2.0, ahead of the wider package update.
+- The agent guides, skill.md, capabilities.json's `cli.release` and the command check's
+  pin name regents-cli 1.10.23, tag commit 8e8f2af4 and wheel SHA256 2020d16c.
+
+  That release went out as graph v495 and site v496 (rollback v493 and v494, b243ec03).
+
+## 2026-11-04 — Packages to newest, the site's own first
+
+Moved, majors first: uuid 11.1.1 to 14.0.3 (major, override), @noble/hashes 1.8.0 to 2.4.0
+(major; its import paths now end in `.js`), sobelow 0.16.0 to 0.18.1 (scanner, new minor
+series), @privy-io/react-auth 3.49.1 to 3.51.1, viem 2.57.7 to 2.57.16, @solana/kit 8.5.0 to
+8.6.0, @solana-program/system 0.15.0 to 0.16.0, @solana-program/token 0.17.0 to 0.18.0, axios
+1.20.0 to 1.21.0, ws 8.22.0 to 8.22.1, @modelcontextprotocol/server and core 2.3.1 to 2.4.0,
+esbuild (site build) 0.25.4 to 0.28.2, ash_ai 1.4.1 to 1.5.0,
+ash_double_entry 1.0.19 to 1.1.1, ash_money 0.2.6 to 0.2.7, elixir_make 0.10.0 to 0.10.1,
+esbuild (Hex) 0.10.0 to 0.10.1, ex_money 6.2.1 to 6.3.0, ex_money_sql 2.1.0 to 2.2.0, fine
+0.1.6 to 0.2.0, igniter 0.8.4 to 0.8.5, lazy_html 0.1.13 to 0.1.14, localize 1.3.0 to 1.6.1,
+localize_sql 1.0.1 to 1.1.0, mdex 0.14.2 to 0.14.6, mdex_native 0.2.11 to 0.3.1, phoenix
+1.8.15 to 1.8.16, phoenix_live_view 1.2.12 to 1.2.13, rustler_precompiled 0.10.0 to 0.10.1,
+usage_rules 1.2.8 to 1.3.1, websock_adapter 0.6.0 to 0.7.0, @types/node 26.6.5 to 26.6.6,
+vitest 5.0.5 to 5.1.0, decode-uri-component 0.5.0 to 0.5.1, follow-redirects 1.16.1 to
+1.16.2. Graph host: pydantic 2.13.5 to 2.14.2, pydantic-core 2.46.5 to 2.50.2, iniconfig
+2.3.0 to 2.3.1, pluggy 1.6.0 to 1.7.0, pytest 9.1.1 to 9.2.0, setuptools 84.0.0 to 84.2.1,
+with the Python supply sealed again (`regent-graph-host-*-20261104`). Key art: esbuild 0.25.4
+to 0.28.2. elixir-utils pin 64475364 to c4a78d22. Rollback: graph v495, site v496.
+
+- sobelow 0.18 found three new low-confidence uses of a computed module name. They are gone
+  from the code: the endpoint names Plug's parser modules, and an agent tool's answer module
+  is named per resource.
+- Phoenix 1.8.16 closes a signed-out socket with code 1000 where 1.8.15 used 1001, so LiveView
+  now reloads a page the server signs out 5 to 10 seconds later, not at the next reconnect.
+  The page's own sign-out still reloads as soon as the wallet step ends.
+- mdex 0.14.6 reads `{...}` straight after inline code as attributes and drops it, so both
+  direct markdown callers turn that off (rooms and public documents).
+
+Not at newest, each with its reason:
+
+- activegraph stays at 1.10.0 (newest 1.13.0). From 1.11 the store opens its own transaction
+  on every event, which cannot run inside the one transaction that holds a fleet's whole
+  accepted write and its ledger entry: 205 of the host's 241 tests stop on it. Upstream
+  offers no way to append several events together. Moving means redesigning how a write
+  stays whole. Keeping the pin keeps that guarantee.
+- uv_build stays at 0.12 (newest 0.13.7) and playwright-core at 1.61.1 (newest 1.64.1): each
+  is tied to an image the Dockerfiles pin, which moves with the runtimes in wave 2.
+- ws 7.5.13 stays where a wallet package asks for it.
+- The design system pin and Geist Serif ship in their own release today.
+- Contract libraries stay at their pins, reason: frozen on-chain record. forge-std at its pin
+  (newest v1.9.7), openzeppelin-contracts at its pin (newest v5.7.0).
+
+Live: graph v497, site v498 at deb01cda (2026-11-04 05:06Z). Rollback: graph v495, site v496.
+
+## 2026-11-04 — Geist Serif, and strict rules on every answer
+
+Every page, label and address now draws in Geist Serif, with Geist Mono only on code. Design
+system pin 7a853f85 to 4c7bbaa5. The early page uses the site's own type, the share pictures
+are redrawn, and the site's picture sets its words beside the cards.
+
+Every answer, including health, refusals and missing pages, now carries the content policy,
+referrer policy and nosniff; a route that sets a wider policy keeps it, so sign-in still works.
+
+Not moved: Bricolage Grotesque and IBM Plex Mono stay on the lettering of Key card pictures
+only, with their packages, until Sean decides whether that art changes. A card is a kept
+picture: a new face would make new Keys differ from the ones already sold.
+
+Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v497, site v498 at deb01cda.
+
 ## 2026-11-02 — Points from Keyfleet's own records
 
 - Keyfleet now offers Regent Points what may earn, inside the transaction that first
