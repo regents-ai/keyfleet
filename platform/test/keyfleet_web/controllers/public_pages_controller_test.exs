@@ -60,8 +60,8 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         {title, description}
       end
 
-    assert pages |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length() == 6
-    assert pages |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 6
+    assert pages |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length() == 5
+    assert pages |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 5
 
     assert {"Terms of Use · Keyfleet", "The terms that apply when you use Keyfleet."} in pages
   end
