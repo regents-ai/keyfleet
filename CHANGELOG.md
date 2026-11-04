@@ -6839,3 +6839,15 @@ Policy and the API description's contact address point at /about.
 Keyfleet-only choice: the closed-site list has no template equivalent. /contact leaves it and nothing
 replaces it, so a closed site keeps /early, /privacy and /terms; both legal pages and security.txt name
 the email address. Keyfleet has no required-fixes file, so the template's row for this has no copy here.
+
+## 2026-11-04 — Key card lettering in Geist Serif
+
+Sean's "1. a" of 4 Nov at 18:14:57Z. The words on a Key's picture (KEYFLEET, the top line and a Regents Club card's
+pass mark) now use Geist Serif in its one weight, 400, so no weight is synthesized. Bricolage Grotesque and IBM Plex Mono
+and their two packages are gone from platform/package.json. Pictures already kept on IPFS stay as they are; redrawing
+them would give them new addresses and is not part of this.
+
+Key art builds without the site's Elixir packages, so its drawing page carries its own copy of the file the site serves:
+key-art/page/GeistSerif-Regular.woff2 (regent_ui's copy, sha256 d11c9077e61bda55...) with its licence beside it.
+Local proof on Key 19: two draws byte-identical, sha256 9fa382e780562aaa; against the kept picture the differences over
+8 sit only in the lettering box, x 286-481, y 129-184.

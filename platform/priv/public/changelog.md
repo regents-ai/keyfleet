@@ -5,6 +5,7 @@ Changes to Keyfleet, newest first.
 ## 4 November 2026
 
 - **Contact.** How to reach us is now part of the About page.
+- **Key cards.** New Key pictures are lettered in Geist Serif. Pictures already issued stay as they are.
 - **Command line 1.10.23.** The agent guides now ask for version 1.10.23 of the command
   line.
 - **Steadier pages.** A fix to how the site reads its records, so a page always shows

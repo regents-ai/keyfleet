@@ -13,8 +13,6 @@
     "test:showcase": "playwright test --config playwright.showcase.config.ts"
   },
   "dependencies": {
-    "@fontsource-variable/bricolage-grotesque": "5.3.0",
-    "@fontsource/ibm-plex-mono": "5.3.0",
     "@noble/hashes": "2.4.0",
     "@privy-io/react-auth": "3.51.1",
     "@solana-program/system": "0.16.0",

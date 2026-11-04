@@ -1,7 +1,3 @@
-/* The lettering on a Key card picture. Only the card drawing asks for these. */
-@import "@fontsource-variable/bricolage-grotesque/opsz.css";
-@import "@fontsource/ibm-plex-mono/600.css";
-
 @layer regents-product {
 /* A Key's card on its stage. Every Key's picture is drawn on the same
    charcoal, so the stage carries that ground out to whatever edges the page
