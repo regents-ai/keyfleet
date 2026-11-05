@@ -6851,3 +6851,11 @@ Key art builds without the site's Elixir packages, so its drawing page carries i
 key-art/page/GeistSerif-Regular.woff2 (regent_ui's copy, sha256 d11c9077e61bda55...) with its licence beside it.
 Local proof on Key 19: two draws byte-identical, sha256 9fa382e780562aaa; against the kept picture the differences over
 8 sit only in the lettering box, x 286-481, y 129-184.
+
+## 2026-11-05 — Vote buttons stop pointing at Yes
+
+Proposal 1 on Classic asks for 99% of the treasury's REGENT to go to one wallet, and the vote panel's only highlighted
+button was Yes. Yes, No and Abstain are now the same plain button, and so is Execution. The site no longer suggests an answer.
+A proposal's page now leads with what it does: the action, then the vote, then the tally and Execution. Inside the action,
+the calls come before the author's words. Each row on the proposal list now says what the proposal does, for example
+"Pay 99% of the treasury's REGENT to 0x4331..9995". Every press still reaches the wallet.

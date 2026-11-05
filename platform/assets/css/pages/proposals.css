@@ -117,6 +117,10 @@
   border: 1px solid var(--color-border);
 }
 
+.proposals-card-action {
+  overflow-wrap: anywhere;
+}
+
 .proposals-card h3 {
   font-size: 1.15rem;
   line-height: 1.2;
