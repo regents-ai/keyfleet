@@ -34,6 +34,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Limits
+  alias Keyfleet.Proposals
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
@@ -1068,6 +1069,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             <span :if={action.address}>{RegentFormat.short_address(action.address)}</span>
           </p>
           <.vote_tally yes={proposal.yes} no={proposal.no} abstain={proposal.abstain} />
+          <p class="open-proposal__count">
+            {proposal.counted} counted · {Proposals.approvals_needed(proposal.counted)} needed
+          </p>
           <.live_component
             module={WalletPanel}
             id={"open-proposal-#{proposal.number}"}
@@ -1079,6 +1083,14 @@ defmodule KeyfleetWeb.ProposalsLive do
             lease={@lease}
             proposal={proposal.number}
           >
+            <:notes :let={panel}>
+              <p
+                :if={Map.get(WalletPanel.figures(panel), :undecided, []) != []}
+                class="open-proposal__yours"
+              >
+                Yours: undecided
+              </p>
+            </:notes>
             <:buttons :let={panel}>
               <WalletPanel.step_button
                 panel={panel}

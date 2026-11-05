@@ -5,7 +5,9 @@ defmodule Keyfleet.Agents.Upkeep do
   each Key it can mark stops being present, the proposals its person's Keys or
   its own haven't decided, and how many marks its wallet's ETH would pay for.
 
-  `setup/4` reads the same figures as the five states an agent's setup ends in.
+  `setup/4` reads the same figures as the five states an agent's setup ends in,
+  and `person_agents/2` the same states for the agents a signed-in person has
+  paired, with `pays?/2` the chain's answer on gas.
   """
 
   alias Keyfleet.Actors.Human
@@ -47,28 +49,79 @@ defmodule Keyfleet.Agents.Upkeep do
   gas), and the one thing to do next, nil once all five are true.
   """
   def setup(actor, fleet_id, profile, upkeep) do
-    now = DateTime.utc_now()
     check_in = profile && Agents.get_check_in!(profile.id, fleet_id)
     keys = upkeep.presence.keys
 
-    states = %{
-      paired: match?(%Human{}, actor.pairing),
-      gas: can_pay?(actor, keys, upkeep.gas),
-      schedule: check_in != nil and check_in.schedule_minutes != nil,
-      marked: keys != [] and Enum.all?(keys, &present?(&1, now)),
-      repeated: CheckInStatus.repeating?(check_in, now)
-    }
+    states =
+      check_in
+      |> states(keys, DateTime.utc_now())
+      |> Map.merge(%{paired: match?(%Human{}, actor.pairing), gas: can_pay?(keys, upkeep.gas)})
 
     Map.put(states, :next_step, next_step(states, keys))
   end
 
-  # With no Key to mark there is nothing to pay for yet. A plain wallet pays with
-  # its own ETH; nil when the chain didn't say how much. A smart wallet may have
-  # its fee paid for it, as `Reads.short_of_gas?/2` holds.
-  defp can_pay?(_actor, [], _gas), do: nil
-  defp can_pay?(%{verification_method: :eoa_recovery}, _keys, nil), do: nil
-  defp can_pay?(%{verification_method: :eoa_recovery}, _keys, %{marks_left: left}), do: left > 0
-  defp can_pay?(_smart_wallet, _keys, _gas), do: true
+  @doc """
+  The agents `person` has paired, each as `%{wallet, name, key_count, schedule,
+  marked, repeated, run_missed, lapses_at}`, in the fleet. `lapses_at` is when
+  the first of its Keys stops being present. Nothing here reads the chain, so a
+  page draws them at once and asks `pays?/2` beside them.
+  """
+  def person_agents(%Human{} = person, fleet_id) do
+    now = DateTime.utc_now()
+    agents = Agents.my_agents(person)
+    check_ins = Agents.check_ins_by_wallet(Enum.map(agents, & &1.wallet), fleet_id)
+
+    for %{wallet: wallet, name: name} <- agents do
+      check_in = Map.get(check_ins, wallet)
+      keys = presence(fleet_id, wallet_keys(wallet, fleet_id), now).keys
+
+      check_in
+      |> states(keys, now)
+      |> Map.merge(%{
+        wallet: wallet,
+        name: name,
+        key_count: length(keys),
+        run_missed: match?({:paused, _label}, CheckInStatus.derive(check_in, now)),
+        lapses_at: lapses_at(keys)
+      })
+    end
+  end
+
+  @doc """
+  Whether `wallet` can pay to mark `key_count` Keys at the latest block: nil with
+  none to mark or when the chain doesn't answer.
+  """
+  def pays?(_wallet, 0), do: nil
+  def pays?(wallet, key_count), do: can_pay?([key_count], gas(wallet, key_count))
+
+  defp states(check_in, keys, now) do
+    %{
+      schedule: check_in != nil and check_in.schedule_minutes != nil,
+      marked: keys != [] and Enum.all?(keys, &present?(&1, now)),
+      repeated: CheckInStatus.repeating?(check_in, now)
+    }
+  end
+
+  defp wallet_keys(wallet, fleet_id) do
+    held = Keys.keys_held_in_fleet!(fleet_id, [wallet])
+    sharded = for %{fleet_id: ^fleet_id} = shard <- Keys.active_shards_held_by!(wallet), do: shard
+
+    (held ++ sharded) |> Enum.map(& &1.token_id) |> Enum.uniq() |> Enum.sort()
+  end
+
+  defp lapses_at(keys) do
+    keys
+    |> Enum.map(& &1.present_until)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.min(DateTime, fn -> nil end)
+  end
+
+  # With no Key to mark there is nothing to pay for yet, and nil too when the
+  # chain didn't answer. A wallet with code may have its fee paid for it.
+  defp can_pay?([], _gas), do: nil
+  defp can_pay?(_keys, nil), do: nil
+  defp can_pay?(_keys, %{pays_own_fee: false}), do: true
+  defp can_pay?(_keys, %{marks_left: left}), do: left > 0
 
   defp next_step(%{paired: false}, _keys), do: "Ask your person for a pairing code."
 
@@ -150,9 +203,10 @@ defmodule Keyfleet.Agents.Upkeep do
 
   defp gas(wallet, key_count) do
     with {:ok, %Reads{head: head} = reads} <- Reads.at_head(),
-         {:ok, wei} <- Reads.balance(reads, wallet) do
+         {:ok, wei} <- Reads.balance(reads, wallet),
+         {:ok, pays_own_fee?} <- Reads.pays_own_fee?(reads, wallet) do
       cost = key_count * @gas_per_key * (2 * head.base_fee + @tip_wei)
-      %{wei: Integer.to_string(wei), marks_left: div(wei, cost)}
+      %{wei: Integer.to_string(wei), marks_left: div(wei, cost), pays_own_fee: pays_own_fee?}
     else
       {:error, _reason} -> nil
     end

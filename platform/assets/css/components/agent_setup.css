@@ -1,0 +1,62 @@
+/* A row of dots for each paired agent: filled when true, open when false, faint
+   when not known. */
+.agent-setup {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.agent-setup[hidden] {
+  display: none;
+}
+
+.agent-setup h2 {
+  margin: 0;
+}
+
+.agent-setup__agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.agent-setup__name {
+  overflow: hidden;
+  max-inline-size: 16rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-setup__states {
+  display: flex;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-setup__states li {
+  inline-size: 0.625rem;
+  block-size: 0.625rem;
+  border: 1px solid var(--color-fg-muted);
+  border-radius: 50%;
+}
+
+.agent-setup__states li[data-state="yes"] {
+  border-color: var(--color-success);
+  background: var(--color-success);
+}
+
+.agent-setup__states li[data-state="unknown"] {
+  border-color: var(--color-border);
+}
+
+.agent-setup__wrong {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-danger);
+}
+
+.fleet-stage > .agent-setup {
+  margin-block-end: 1rem;
+}

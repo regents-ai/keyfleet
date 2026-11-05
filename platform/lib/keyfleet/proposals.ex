@@ -191,6 +191,18 @@ defmodule Keyfleet.Proposals do
     |> Enum.filter(&(status(&1, now) in [:open, :waiting]))
   end
 
+  @doc "The Keys that have cast a ballot on proposal `number` of the fleet."
+  def voted_keys(fleet_id, number) do
+    Proposal
+    |> Ash.Query.filter(fleet_id == ^fleet_id and number == ^number)
+    |> Ash.Query.load(:votes)
+    |> Ash.read_one!()
+    |> case do
+      nil -> []
+      proposal -> Enum.flat_map(proposal.votes, & &1.token_ids)
+    end
+  end
+
   @doc "The fleet's proposals carried out, newest first, with their executions."
   def executed(fleet_id) do
     Proposal

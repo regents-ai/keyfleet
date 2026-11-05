@@ -165,6 +165,12 @@
   margin: 0;
 }
 
+.open-proposal__count,
+.open-proposal__yours {
+  font-size: 0.875rem;
+  color: var(--color-fg-muted);
+}
+
 .open-proposal__head {
   display: flex;
   flex-wrap: wrap;
@@ -237,7 +243,7 @@
 
 .fleet-stage > .open-proposals {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 1 / span 2;
   padding: 0 0 0 var(--rg-panel-padding);
   border-block-end: 0;
 }

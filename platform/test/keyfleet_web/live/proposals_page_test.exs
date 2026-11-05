@@ -750,21 +750,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Key 3 Not present"
              ]
 
-      assert has_element?(view, "#proposals-present-rule", "Any Key idle for 48 hours")
       assert has_element?(view, "#proposals-present-sweep", "Continue")
-      assert has_element?(view, "#proposals-present-idle-count", "2")
-
-      view |> element("#proposals-present-idle-open") |> render_click()
-
-      assert lines(view, "#proposals-present-idle-list li") == [
-               "Key 2 Held by #{RegentFormat.short_address(@holder)} #{@holder}",
-               "Key 3 Held by #{RegentFormat.short_address(@other)} #{@other}"
-             ]
-
-      assert has_element?(
-               view,
-               ~s(#proposals-present-idle-key-2[href="/syndicate/1?key=2"])
-             )
+      assert has_element?(view, "#proposals-present-figures-present", "1")
 
       assert pressable?(view, "present", ["#proposals-present-mark"])
       assert pressable?(view, "sweep", ["#proposals-present-sweep"])
@@ -793,7 +780,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposals-present-mark[disabled]")
       assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
       assert pressable?(view, "sweep", ["#proposals-present-sweep"])
-      assert has_element?(view, "#proposals-present-idle-count", "0")
+      assert has_element?(view, "#proposals-present-figures-present", "0")
     end
 
     # Each proposal is built on the server from the form as typed, for the
@@ -1240,7 +1227,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(conn, @list)
       render_async(view, @async_wait)
 
-      assert has_element?(view, "#proposals-present-idle-count", "0")
+      assert has_element?(view, "#proposals-present-figures-present", "0")
       refute has_element?(view, "#proposals-present-action [data-onchain-step]")
       assert pressable?(view, "propose", ["#propose-button"])
 

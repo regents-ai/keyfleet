@@ -64,6 +64,7 @@ defmodule KeyfleetWeb.FleetLive do
     ]
 
   alias Keyfleet.Activity
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Agents
   alias Keyfleet.Agents.Here
   alias Keyfleet.Chain
@@ -77,6 +78,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.AgentSetup
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
@@ -351,6 +353,9 @@ defmodule KeyfleetWeb.FleetLive do
               aria-current={if @view == :proposals, do: "page"}
             >
               Proposals
+              <span :if={@fleet.open_proposals != []} class="fleet-tab-count">
+                {length(@fleet.open_proposals)}<span class="visually-hidden"> open</span>
+              </span>
             </.link>
             <span
               class="fleet-bar__ink"
@@ -367,6 +372,13 @@ defmodule KeyfleetWeb.FleetLive do
             fleet={@fleet}
             actor={@actor}
             lease={@lease}
+          />
+          <.live_component
+            :if={@view == :workspace and match?(%Human{}, @actor)}
+            module={AgentSetup}
+            id="fleet-agent-setup"
+            fleet_id={@fleet.fleet_id}
+            actor={@actor}
           />
           {render_slot(@inner_block)}
           <.hall
@@ -1906,10 +1918,11 @@ defmodule KeyfleetWeb.FleetLive do
   defp follow_shared(socket, fleet_id, view) do
     now = if from_reading?(socket, fleet_id, view), do: [FleetNow.key(fleet_id)], else: []
 
-    proposals =
-      if view in [:hall, :workspace], do: [FleetProposals.list_key(fleet_id)], else: []
-
-    SharedFigures.follow(socket, :fleet, [Here.fleet_key(fleet_id)] ++ now ++ proposals)
+    SharedFigures.follow(
+      socket,
+      :fleet,
+      [Here.fleet_key(fleet_id), FleetProposals.list_key(fleet_id)] ++ now
+    )
   end
 
   # Before the fleet's first reading, the agents and holders are said to be uncounted,

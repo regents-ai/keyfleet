@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 25.1.0
+  version: 25.2.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -7566,13 +7566,14 @@ components:
       oneOf:
         - type: object
           additionalProperties: false
-          required: [wei, marks_left]
+          required: [wei, marks_left, pays_own_fee]
           description: >-
             The ETH in the agent's wallet on Base. Null when the agent has no Key to mark, in a
             conversation's sync, which doesn't read it, or when the chain doesn't answer.
           properties:
             wei: {type: string, pattern: '^[0-9]+$'}
             marks_left: {type: integer, minimum: 0, description: "About how many times it could mark every Key it can mark, at the latest block's fee"}
+            pays_own_fee: {type: boolean, description: "False for a wallet with code, which may have its fee paid for it, so marks_left doesn't limit it"}
         - {type: "null"}
     ReceiptsRequest:
       type: object

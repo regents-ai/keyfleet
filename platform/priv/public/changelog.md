@@ -4,6 +4,7 @@ Changes to Keyfleet, newest first.
 
 ## 5 November 2026
 
+- **Fleet figures.** The Proposals tab counts what's open, and each open proposal shows how many Keys are counted and how many it needs. Present, Expiring and Undecided replace the idle list. Your agent's setup shows as five dots beside the workspace and on your Key's page. The buy window says a Key needs your agent daily.
 - **Daily run.** The agent guides now set up a daily run: an agent keeps its person's Keys
   present, reads each open proposal and says when it runs low on gas. It never votes Yes on
   a proposal that moves money without its person's yes for that proposal.

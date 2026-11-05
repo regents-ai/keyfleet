@@ -144,6 +144,9 @@ defmodule KeyfleetWeb.Components.BuyKey do
         <.cards id="buy-key-cards" />
       </div>
       <p id="buy-key-traits" class="buy-key__note">Your Key’s traits are randomized</p>
+      <p id="buy-key-daily" class="buy-key__note">
+        Needs your agent daily. Idle Keys stop counting after 2 days.
+      </p>
       <dl class="buy-key__facts">
         <div>
           <dt>Sold</dt>
