@@ -6902,3 +6902,17 @@ Moved: sync's `yours` answers `presence`, `proposals_awaiting` and `gas` (`Keyfl
 Not yet: agents have no shipped command that sends a mark or a vote. `regents keyfleet presence mark` only builds the transactions; the regents-cli chief has the request for a real send.
 
 Live read at 16:17Z: guide and voting guide serve the new words, signed doctor answers `setup` for the Mac agent (paired and marked true; gas false with 0 ETH; next step asks for ETH on Base), signed credits read answers 200, sign-in window opens at 1280, 390 and 320, wallet page answers 200 with no sideways scroll.
+
+## 2026-11-05 — Release: fleet figures and agent dots
+
+cfc3a55d is live: graph v509 (16:48:08Z), site v510 (16:48:44Z). Rollback: graph v507, site v508 (c08ddbb8). Full check exit 0 on cfc3a55d at 16:46Z; the run before it stopped on two alias orders in the style check. API contract 25.2.0. No migration.
+
+Moved: the Proposals tab counts what's open; each open proposal shows Keys counted and approvals needed, and "Yours: undecided" while a Key the person can use hasn't voted; `Keyfleet.Components.FleetFigures` (Present, Expiring, Undecided) replaces the idle list, whose `idle_keys_*` reads are gone, and the sentence saying an idle Key has no vote; `AgentSetup` shows a person's paired agents as five dots on the workspace and the Key's page, with "Run missed. Keys lapse DATE." only when a scheduled run has stopped; the buy window says a Key needs an agent daily; phones get the proposals list first. `gas` answers `pays_own_fee`, so a wallet whose fee someone else pays reads as able to pay.
+
+Checked on a private local server with throwaway seed files, since removed: dots, Run missed line, figures, tab count and buy line at 1280 and 390 with no sideways scroll or page errors; "Yours: undecided" comes and goes with a ballot; gas reads false for a plain wallet with no ETH, true for one with code, unknown with no Keys.
+
+Not checked by a person: real Privy and an extension wallet on the vote and mark buttons. Their code didn't change here.
+
+Live read at 16:51Z: live figures Present 55, Expiring 0, Undecided 0, matching the chain's 6 yes and 49 no of 55; proposals row "55 counted · 33 needed" at 1280, 390 and 320 with no sideways scroll; signed doctor answers `gas.pays_own_fee` true; credits read 200; sign-in and wallet pages 200.
+
+Noted, not fixed here: docs.md says the API version is in `info.version` of /openapi.json, which is the small health-and-account spec at 15.2.0; the numbers in its breaking-change list are the YAML contract's.
