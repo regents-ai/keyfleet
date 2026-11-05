@@ -6880,3 +6880,13 @@ Wallet journeys for the new list (one control pair, Vote yes and Vote no, two pr
 8aca0ac7 is live: graph v503 (15:13:34Z), site v504 (15:14:16Z). Rollback: graph and site v501/v502 (840a9866). Full check exit 0 on 8aca0ac7 at 15:12Z; two earlier runs caught a proposal link too small to tap on a phone (fixed in f9c93ed1) and the newer regents-cli 1.10.24 (moved in 8aca0ac7). Moved: regents-cli 1.10.24 named in the install lines. No migration.
 
 The release also took the staged secret KEYFLEET_PRESENCE_TIMER_KEY; nothing reads it yet. Live read at 15:15Z, signed out: the list shows at the top right at 1280 and first on phones at 390 and 320, on Chat and Workspace, with no sideways scroll; its link is 44 pixels tall on a phone; "Trying now" is gone. Sign-in window opens at all three widths. Signed agent read of Credits history answers 200; wallet page https://keyfleet.ai/classic/1/treasury reads. Not checked: pressing Vote yes or Vote no with real Privy or an extension wallet on a lab chain, which a person does. Sentinel's same-checks run on their own 30 minutes after a release.
+
+## 2026-11-05 — Release: shared re-pin and the presence timer
+
+00b0f003 is live: graph v505 (15:39:54Z), site v506 (15:40:40Z). Rollback: graph v503, site v504 (8aca0ac7). Full check exit 0 on 00b0f003. Moved: elixir-utils 4e527975, design-system 46e68fab, regent_http pinned. No migration.
+
+Keyfleet's own crash saving (`Keyfleet.ErrorHandlers`) is gone; `RegentHttp.ErrorSaving` does that job, and its test lives in elixir-utils. A save that fails is now one warning line, not an error line. The copy button can fetch a page when pressed, as the template's does; no Keyfleet page uses that yet.
+
+`Keyfleet.Keys.PresenceTimer` runs at :07 past every hour from the wallet 0x0890073F213c29EceBAaf2152392D0079bbE88dB, whose key is only on Fly as KEYFLEET_PRESENCE_TIMER_KEY. It marks only Keys whose shard it holds. None yet, so until Sean's presses it does nothing. Proved once on a private copy of Base, with real contracts, Keys 3,4,5,8,9,10,13 and a throwaway key: nothing sent with 36 hours left, one send after they lapsed that made them present again, nothing on the next run, and the lapsing, low ETH and ending shard errors saved. A refused send was not forced. Throwaway check, not kept.
+
+Live read at 15:41Z, signed out: sign-in window opens at 1280, 390 and 320, Chat, Workspace and the wallet page answer 200 with no sideways scroll, signed agent read answers 200.
