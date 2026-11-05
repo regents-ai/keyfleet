@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.ConnCase do
 
   setup tags do
     # At repeatable read, so a page's one-snapshot reads (the fleet page's
-    # "Trying now") can run inside the test's transaction.
+    # "Recent Work") can run inside the test's transaction.
     pid =
       Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
         shared: not tags[:async],

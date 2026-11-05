@@ -6859,3 +6859,18 @@ button was Yes. Yes, No and Abstain are now the same plain button, and so is Exe
 A proposal's page now leads with what it does: the action, then the vote, then the tally and Execution. Inside the action,
 the calls come before the author's words. Each row on the proposal list now says what the proposal does, for example
 "Pay 99% of the treasury's REGENT to 0x4331..9995". Every press still reaches the wallet.
+
+## 2026-11-05 — Release: packages, sign-in window and Key art
+
+840a9866 is live: graph v501 (03:38:39Z), site v502 (03:39:19Z), Key art v8 (03:45:09Z). Rollback: site and graph v499/v500 (1b2764d5), Key art v7. Full check on 840a9866 ended exit=0. Live read after release: sign-in page, one signed agent read and the wallet read page answered; Privy's window sits inside the screen at 1280, 390 and 320 wide.
+
+## 2026-11-05 — Proposals beside chat and work, votes as a picture, Recent Work
+
+Sean, 5 Nov: "we need an active proposals scrollable list section on the top right of the chat / workspace, with 1 click vote yes / vote no , and what it does"; the feed's vote line "really hides the 6 vote vs 49 vote nature"; "'Trying now' is terrible for the rightside panel ... 'Recent Work' is better".
+
+- Chat and Workspace carry a Proposals list at the top right, above the chat rail and beside the workspace; on a phone it comes before them. Each open or waiting proposal shows its time left, what it does, the vote so far and two equal buttons, Vote yes and Vote no. No Abstain here; that stays on the proposal's page. The list scrolls and is gone when nothing is open.
+- A press goes straight to the wallet, through the panel the proposal page uses, for every Key the wallet may vote. During a money proposal's wait Vote yes is disabled with "Only No while it waits", because the contract refuses it; Vote no stays.
+- The feed's vote line and the list share one bar: yes, no and abstain to scale with their counts, so 6 against 49 reads at a glance.
+- "Trying now" is now "Recent Work" on the site and in its code. Its heading matches "Here now"; project names are small capitals and goals sit under them at reading size, so heading, project and goal no longer look alike.
+
+Wallet journeys for the new list (one control pair, Vote yes and Vote no, two proposal states). Rendered and read here: signed out asks for sign-in; a holder's buttons carry no page event, so a press goes to the wallet's hook; waiting disables only Yes with its reason; a wallet with no Keys shows the panel's reason; a settled proposal leaves the list; a new proposal arrives without a reload; no sideways scroll at 1280, 390 and 320. Not run here: real Privy and a browser-extension wallet on a lab chain, which a person checks, and Keys too new, which reuses the proposal page's panel.

@@ -33,7 +33,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   (`Keyfleet.Graph.Checks.KeyReader`) and its code: for anyone else every page
   answers `members_only?: true`, with what the fleet shows anyone of its
   workspace: each project by title with the titles of its open goals
-  (`KeyfleetWeb.FleetPage.read_trying_now/1`), and nothing else members
+  (`KeyfleetWeb.FleetPage.read_recent_work/1`), and nothing else members
   write, except the Public place, which reads the same for everyone.
 
   A page name that is not one the tables can answer, such as an unknown type
@@ -889,7 +889,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       fleet_name: name,
       members_only?: true,
       seen: nil,
-      projects: FleetPage.read_trying_now(fleet_id)
+      projects: FleetPage.read_recent_work(fleet_id)
     }
   end
 

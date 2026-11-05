@@ -13,8 +13,8 @@ defmodule KeyfleetWeb.FleetNow do
       after them, and `faces`: who holds each Key that acted in them, the Key
       they write as and how many Keys they hold (`Keyfleet.Keys.faces/2`), for the city's
       discs;
-    * `trying`: "Trying now", each of its projects by title with the titles
-      of its open goals (`KeyfleetWeb.FleetPage.read_trying_now/1`);
+    * `recent_work`: "Recent Work", each of its projects by title with the titles
+      of its open goals (`KeyfleetWeb.FleetPage.read_recent_work/1`);
     * `goal`: the title of its most recently changed open goal, and
       `headline`: the item it features (`Keyfleet.Activity.headline/2`), which
       the homepage shows.
@@ -164,7 +164,7 @@ defmodule KeyfleetWeb.FleetNow do
       minted: if(deployed?, do: minted!(fleet_id), else: 0),
       feed: %{items: items, cursor: cursor},
       faces: Keys.faces(fleet_id, HarbourCrew.keys(items)),
-      trying: FleetPage.read_trying_now(fleet_id),
+      recent_work: FleetPage.read_recent_work(fleet_id),
       goal: goal(fleet_id),
       headline: Activity.headline(fleet_id, now)
     }

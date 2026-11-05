@@ -344,14 +344,28 @@
 .fleet-hall {
   display: grid;
   grid-template-columns: 12rem minmax(0, 1fr) 20rem;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
 
 .fleet-hall > * {
+  grid-row: 1 / -1;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+/* The right column: what is open to a vote, above the fleet now. */
+.fleet-hall > .open-proposals {
+  grid-column: 3;
+  grid-row: 1;
+  overflow: visible;
+}
+
+.fleet-hall > .fleet-rail {
+  grid-column: 3;
+  grid-row: 2;
 }
 
 /* Scrolled past its last room, the list hands the scroll on to the page, so
@@ -450,8 +464,11 @@
   border-inline-start: 1px solid var(--color-border);
 }
 
+/* Each section's title stands a clear step above what it heads: the one
+   weight the title face has, so size does the work. */
 .fleet-rail h2 {
-  font-size: 1.05rem;
+  font-size: 1.3rem;
+  line-height: 1.2;
 }
 
 /* A person's words for their agent to quote, and where each was quoted. */
@@ -751,10 +768,15 @@
 
   .fleet-hall {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     height: auto;
   }
 
-  .fleet-hall > * {
+  .fleet-hall > *,
+  .fleet-hall > .open-proposals,
+  .fleet-hall > .fleet-rail {
+    grid-column: auto;
+    grid-row: auto;
     overflow: visible;
   }
 

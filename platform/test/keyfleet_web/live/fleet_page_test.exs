@@ -1770,9 +1770,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
-  # What a fleet shows anyone of what its agents are trying: read here by a
+  # What a fleet shows anyone of what its agents are working on: read here by a
   # visitor who is not signed in.
-  describe "trying now" do
+  describe "recent work" do
     setup do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
@@ -1794,13 +1794,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, html} = live(conn, @path)
 
-      assert text(view, "#fleet-trying-project-0 h3") == "General"
-      assert text(view, "#fleet-trying-project-0 .trying-goal") == "Sell the first audit"
-      assert text(view, "#fleet-trying-project-1 h3") == "Append-only scratchpad"
-      assert text(view, "#fleet-trying-project-3 h3") == "Lab"
-      assert text(view, "#fleet-trying-project-3 .trying-goal") == "Try the model"
+      assert text(view, "#fleet-recent-work-project-0 h3") == "General"
+      assert text(view, "#fleet-recent-work-project-0 .recent-goal") == "Sell the first audit"
+      assert text(view, "#fleet-recent-work-project-1 h3") == "Append-only scratchpad"
+      assert text(view, "#fleet-recent-work-project-3 h3") == "Lab"
+      assert text(view, "#fleet-recent-work-project-3 .recent-goal") == "Try the model"
       refute html =~ "Draft the price"
-      refute has_element?(view, "#fleet-trying-empty")
+      refute has_element?(view, "#fleet-recent-work-empty")
     end
 
     # The open hall draws the fleet's new reading by itself.
@@ -1808,13 +1808,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       goal = goal!("Sell the first audit")
       read_now()
       {:ok, view, _html} = live(conn, @path)
-      assert has_element?(view, "#fleet-trying .trying-goal", "Sell the first audit")
+      assert has_element?(view, "#fleet-recent-work .recent-goal", "Sell the first audit")
 
       Workspace.edit(@fleet, goal, %{"status" => "achieved"})
       read_now()
 
-      refute has_element?(view, "#fleet-trying .trying-goal")
-      assert text(view, "#fleet-trying-empty") =~ "No goals in progress."
+      refute has_element?(view, "#fleet-recent-work .recent-goal")
+      assert text(view, "#fleet-recent-work-empty") =~ "No goals in progress."
     end
 
     test "what members wrote shows as text, with nothing that can't be seen", %{conn: conn} do
@@ -1823,11 +1823,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, _html} = live(conn, @path)
 
-      refute has_element?(view, "#fleet-trying b")
-      refute has_element?(view, "#fleet-trying script")
-      assert text(view, "#fleet-trying .trying-goal") =~ "<b>Hull</b>"
+      refute has_element?(view, "#fleet-recent-work b")
+      refute has_element?(view, "#fleet-recent-work script")
+      assert text(view, "#fleet-recent-work .recent-goal") =~ "<b>Hull</b>"
 
-      html = view |> element("#fleet-trying") |> render()
+      html = view |> element("#fleet-recent-work") |> render()
       refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
     end
 
@@ -1837,7 +1837,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert text(view, "#fleet-trying .trying-goal") == "A goal"
+      assert text(view, "#fleet-recent-work .recent-goal") == "A goal"
     end
   end
 

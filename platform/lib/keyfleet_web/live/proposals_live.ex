@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.Countdown
+  import KeyfleetWeb.Components.VoteTally
   import KeyfleetWeb.Components.LoadFailed
 
   alias Keyfleet.Chain.ReadBalances
@@ -1025,6 +1026,88 @@ defmodule KeyfleetWeb.ProposalsLive do
        do: "#{ProposalsPage.figure(atoms, decimals)} #{symbol}"
 
   defp slice_amount(asset, atoms), do: WalletWords.token_amount(Map.put(asset, :amount, atoms))
+
+  attr :fleet, :map, required: true, doc: "the fleet on show, with its `open_proposals`"
+  attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+
+  @doc """
+  The proposals a vote can still change, beside a fleet's chat and workspace:
+  what each one does and how long is left, with one press to vote. Yes and No
+  are the same size, as on the proposal's own page. It takes no room while
+  nothing is open.
+  """
+  def open_list(assigns) do
+    ~H"""
+    <section
+      :if={@fleet.open_proposals != []}
+      id="open-proposals"
+      class="open-proposals"
+      aria-labelledby="open-proposals-title"
+    >
+      <h2 id="open-proposals-title">Proposals</h2>
+      <ol class="open-proposals__list">
+        <li
+          :for={proposal <- @fleet.open_proposals}
+          class="open-proposal"
+          data-proposal={proposal.number}
+        >
+          <p class="open-proposal__head">
+            <.link patch={ProposalsPage.detail_path(@fleet.fleet_id, proposal.number)}>
+              Proposal {proposal.number}
+            </.link>
+            <.countdown
+              id={"open-proposal-#{proposal.number}-left"}
+              closes_at={left_until(proposal)}
+              now={DateTime.utc_now()}
+              format="hours"
+            />
+          </p>
+          <p :for={action <- proposal.actions} class="proposals-card-action">
+            {action.text}
+            <span :if={action.address}>{RegentFormat.short_address(action.address)}</span>
+          </p>
+          <.vote_tally yes={proposal.yes} no={proposal.no} abstain={proposal.abstain} />
+          <.live_component
+            module={WalletPanel}
+            id={"open-proposal-#{proposal.number}"}
+            class="open-proposal__vote"
+            flow={:ballot}
+            names_sender={false}
+            fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+            actor={@actor}
+            lease={@lease}
+            proposal={proposal.number}
+          >
+            <:buttons :let={panel}>
+              <WalletPanel.step_button
+                panel={panel}
+                step="yes"
+                id={"open-proposal-#{proposal.number}-yes"}
+                variant="secondary"
+              >
+                Vote yes
+              </WalletPanel.step_button>
+              <WalletPanel.step_button
+                panel={panel}
+                step="no"
+                id={"open-proposal-#{proposal.number}-no"}
+                variant="secondary"
+              >
+                Vote no
+              </WalletPanel.step_button>
+            </:buttons>
+          </.live_component>
+        </li>
+      </ol>
+    </section>
+    """
+  end
+
+  # A proposal still open counts down to its close; one waiting its day counts
+  # down to the end of that day, the last of the time a No can stop it.
+  defp left_until(%{status: :open, closes_at: closes_at}), do: closes_at
+  defp left_until(%{status: :waiting, carry_out_from: carry_out_from}), do: carry_out_from
 
   # The fleet the wallet buttons act on, and the network they send on.
   defp fleet(page), do: %{fleet_id: page.fleet_id, chain_id: page.chain_id}

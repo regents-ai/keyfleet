@@ -121,6 +121,136 @@
   overflow-wrap: anywhere;
 }
 
+/* What is open to a vote, top right of a fleet's chat and workspace. The list
+   scrolls in its own room, so a run of proposals never pushes the page away. */
+.open-proposals {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.75rem var(--rg-panel-padding);
+  border-inline-start: 1px solid var(--color-border);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.open-proposals h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.open-proposals__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  max-block-size: min(16rem, 40vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.open-proposal {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.open-proposal + .open-proposal {
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--color-border);
+}
+
+.open-proposal p {
+  margin: 0;
+}
+
+.open-proposal__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+/* Buttons first, so nothing that arrives moves one under a finger; below them
+   one line's room, held from the start, for how the vote is cast or why a
+   button can't be pressed. */
+.open-proposal .open-proposal__vote {
+  align-content: start;
+  gap: 0.35rem;
+  min-block-size: 4.25rem;
+}
+
+.open-proposal .wallet-panel-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  order: -1;
+  gap: 0.35rem 0.5rem;
+}
+
+.open-proposal .wallet-panel-step {
+  display: contents;
+}
+
+.open-proposal .wallet-panel-step > .rg-button {
+  grid-row: 1;
+  width: 100%;
+}
+
+.open-proposal .wallet-panel-why {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+/* Both buttons held back for one reason say it once. */
+.open-proposal .wallet-panel-step:has(.wallet-panel-why) + .wallet-panel-step .wallet-panel-why {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.open-proposal .wallet-panel-line {
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* In the workspace, the right column for as long as anything is open. */
+.fleet-view[data-view="workspace"] .fleet-stage:has(> .open-proposals) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.fleet-stage > .open-proposals {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0 0 0 var(--rg-panel-padding);
+  border-block-end: 0;
+}
+
+@media (max-width: 64rem) {
+  .open-proposals {
+    border-inline-start: 0;
+  }
+
+  .fleet-view[data-view="workspace"] .fleet-stage:has(> .open-proposals) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fleet-stage > .open-proposals {
+    grid-column: auto;
+    grid-row: auto;
+    padding: 0 0 1rem;
+    border-block-end: 1px solid var(--color-border);
+  }
+}
+
 .proposals-card h3 {
   font-size: 1.15rem;
   line-height: 1.2;

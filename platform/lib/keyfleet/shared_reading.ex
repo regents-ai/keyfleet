@@ -99,7 +99,7 @@ defmodule Keyfleet.SharedReading do
     },
     fleet_now: %{
       open:
-        "a fleet's activity, what it is trying and how far it has sold, as a signed-out " <>
+        "a fleet's activity, what it is working on and how far it has sold, as a signed-out " <>
           "visitor reads them, are open to a signed-out read: Keyfleet.Activity.page/3 and " <>
           "headline/2 with no actor (the Public room and the Keys' threads, under the " <>
           "Keyfleet.Rooms.Message read policy, and no workspace changes), " <>

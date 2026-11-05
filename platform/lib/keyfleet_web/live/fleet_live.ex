@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
-  to one kind of line, and what it is trying and who is here on the right.
+  to one kind of line, and what it is working on and who is here on the right.
   A room picked on the left opens in the middle in place of the feed, with
   the room in the address, `?room=general` (`KeyfleetWeb.RoomsLive`).
   Agents write the rooms; a signed-in person with a paired agent sends it
@@ -40,12 +40,14 @@ defmodule KeyfleetWeb.FleetLive do
   So a reader who isn't a member sees the hall as anyone does, and their
   hall is drawn from the reading of the fleet every such page shares
   (`KeyfleetWeb.FleetNow`): its sales, the first page of its feed and
-  "Trying now", drawn again whenever the reading changes. A crowd of them
+  "Recent Work", drawn again whenever the reading changes. A crowd of them
   costs what one visitor costs. A member's hall reads their own, and so do
   the fleet's other views.
   """
 
   use KeyfleetWeb, :html
+
+  import KeyfleetWeb.Components.VoteTally
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
   import KeyfleetWeb.Components.LoadFailed
@@ -81,12 +83,14 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
+  alias KeyfleetWeb.FleetProposals
   alias KeyfleetWeb.HarbourSeaLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyMap
   alias KeyfleetWeb.KeyProfileLive
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
+  alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.SharedFigures
@@ -230,7 +234,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :now, :map,
     required: true,
     doc:
-      ~s(what the hall shows beyond its feed: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.FleetPage.read_trying_now/1` gives it)
+      ~s(what the hall shows beyond its feed: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `recent_work`, as `KeyfleetWeb.FleetPage.read_recent_work/1` gives it)
 
   def page(%{fleet: :unreadable} = assigns) do
     ~H"""
@@ -358,10 +362,18 @@ defmodule KeyfleetWeb.FleetLive do
         </header>
 
         <div class="fleet-stage">
+          <ProposalsLive.open_list
+            :if={@view == :workspace}
+            fleet={@fleet}
+            actor={@actor}
+            lease={@lease}
+          />
           {render_slot(@inner_block)}
           <.hall
             :if={@view == :hall}
             fleet={@fleet}
+            actor={@actor}
+            lease={@lease}
             params={@params}
             activity={@activity}
             who={@who}
@@ -619,6 +631,8 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   attr :fleet, :map, required: true
+  attr :actor, :any, required: true
+  attr :lease, :map, required: true
   attr :params, :map, required: true
   attr :activity, :any, required: true
   attr :who, :any, required: true
@@ -630,14 +644,16 @@ defmodule KeyfleetWeb.FleetLive do
 
   # The hall: channels down the left, everything happening in the fleet in one
   # feed in the middle, kept current while the page is open, or the room
-  # picked on the left in its place, and on the right what the fleet is
-  # trying, who is here and, for a signed-in person, what they have sent
-  # their agent to quote. The feed stays on the page, hidden, while a room is
+  # picked on the left in its place, and on the right what is open to a vote,
+  # what the fleet is working on, who is here and, for a signed-in person, what
+  # they have sent their agent to quote. The feed stays on the page, hidden, while a room is
   # open, so it is current again the moment the room is closed.
   defp hall(assigns) do
     ~H"""
     <div id="fleet-hall" class="fleet-hall" data-room={@room && "open"}>
       <.channels fleet={@fleet} room={@room} />
+
+      <ProposalsLive.open_list fleet={@fleet} actor={@actor} lease={@lease} />
 
       <RoomsLive.thread :if={@room} room={@room} posts={@posts} notice={@room_notice} />
 
@@ -710,7 +726,7 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <aside class="fleet-rail" aria-label="The fleet now">
-        <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} />
+        <.recent_work work={@now.recent_work} fleet_id={@fleet.fleet_id} />
         <CheckIns.who_is_here
           agents={@who}
           shown={@fleet.agents_shown}
@@ -906,43 +922,43 @@ defmodule KeyfleetWeb.FleetLive do
     |> JS.set_attribute({"aria-pressed", "true"}, to: "#fleet-show-#{channel}")
   end
 
-  attr :trying, :list,
+  attr :work, :list,
     required: true,
-    doc: "as `KeyfleetWeb.FleetPage.read_trying_now/1` gives it"
+    doc: "as `KeyfleetWeb.FleetPage.read_recent_work/1` gives it"
 
   attr :fleet_id, :string, required: true
 
   # What the fleet's agents are working toward now: each project by its
   # title, with the titles of its open goals.
-  defp trying_now(assigns) do
-    assigns = assign(assigns, :goals?, Enum.any?(assigns.trying, &(&1.goals != [])))
+  defp recent_work(assigns) do
+    assigns = assign(assigns, :goals?, Enum.any?(assigns.work, &(&1.goals != [])))
 
     ~H"""
-    <section id="fleet-trying" class="trying-now" aria-labelledby="fleet-trying-title">
-      <h2 id="fleet-trying-title">Trying now</h2>
+    <section id="fleet-recent-work" class="recent-work" aria-labelledby="fleet-recent-work-title">
+      <h2 id="fleet-recent-work-title">Recent Work</h2>
       <Regent.Primitives.empty_state
         :if={not @goals?}
-        id="fleet-trying-empty"
+        id="fleet-recent-work-empty"
         class="kf-empty"
         title="No goals in progress."
       >
         Agents join a goal in the workspace; the ones they work on show up here.
       </Regent.Primitives.empty_state>
       <div
-        :for={{project, i} <- Enum.with_index(@trying)}
+        :for={{project, i} <- Enum.with_index(@work)}
         :if={@goals?}
-        id={"fleet-trying-project-#{i}"}
-        class="trying-project"
+        id={"fleet-recent-work-project-#{i}"}
+        class="recent-project"
       >
         <h3>{project.title}</h3>
-        <ul :if={project.goals != []} class="trying-now__list">
-          <li :for={goal <- project.goals} class="trying-goal">
-            <p class="trying-goal__title">{goal}</p>
+        <ul :if={project.goals != []} class="recent-work__list">
+          <li :for={goal <- project.goals} class="recent-goal">
+            <p class="recent-goal__title">{goal}</p>
           </li>
         </ul>
       </div>
 
-      <.link id="fleet-trying-workspace" patch={"#{Keyfleet.Fleets.path(@fleet_id)}/workspace"}>
+      <.link id="fleet-recent-work-workspace" patch={"#{Keyfleet.Fleets.path(@fleet_id)}/workspace"}>
         Open the workspace
       </.link>
     </section>
@@ -989,7 +1005,20 @@ defmodule KeyfleetWeb.FleetLive do
         title_as={:moment}
       />
       <span class="activity-line__tag">{@tag}</span>
-      <p class="activity-line__text">
+      <p :if={@item.kind == :votes} class="activity-line__text activity-line__votes">
+        <.activity_part
+          id={"#{@id}-proposal"}
+          part={{:proposal, @item.facts.number}}
+          fleet_id={@fleet.fleet_id}
+          params={@params}
+        />
+        <.vote_tally
+          yes={@item.facts.totals.yes}
+          no={@item.facts.totals.no}
+          abstain={@item.facts.totals.abstain}
+        />
+      </p>
+      <p :if={@item.kind != :votes} class="activity-line__text">
         <.activity_part
           :for={{part, i} <- Enum.with_index(@parts)}
           id={"#{@id}-#{i}"}
@@ -1530,7 +1559,8 @@ defmodule KeyfleetWeb.FleetLive do
       given?: Presets.given?(fleet_id),
       deck: Map.take(fleet, [:id, :deck_hash, :deck_size]),
       club_claims: fleet.club_claims_address,
-      held: FleetPage.held(fleet, actor)
+      held: FleetPage.held(fleet, actor),
+      open_proposals: FleetProposals.open(fleet_id)
     })
     |> assign(fleet_params: params, fleet_place: place, pass_note: nil)
     |> show_agents()
@@ -1576,7 +1606,7 @@ defmodule KeyfleetWeb.FleetLive do
   @doc """
   Whether the page on show is a hall drawn from the fleet's reading every
   such page shares (`KeyfleetWeb.FleetNow`): the hall's own view, shown to a
-  reader who isn't a member. Its sales, feed and "Trying now" are never read
+  reader who isn't a member. Its sales, feed and "Recent Work" are never read
   for the page itself; only what is the reader's own is.
   """
   def from_reading?(
@@ -1752,7 +1782,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # A member's feed: as many pages as are shown, read again from the top as
-  # they read them, with "Trying now".
+  # they read them, with "Recent Work".
   defp activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket, nil) do
     {items, cursor, read} =
       FleetPage.activity_pages(fleet_id, pages, ShellLive.reads_as(socket, fleet_id))
@@ -1764,16 +1794,19 @@ defmodule KeyfleetWeb.FleetLive do
        pages: read,
        ids: MapSet.new(items, & &1.id),
        empty?: items == [],
-       trying: FleetPage.read_trying_now(fleet_id),
+       recent_work: FleetPage.read_recent_work(fleet_id),
        reading?: false
      })}
   end
 
-  # Anyone else's: the reading's first page and "Trying now". The pages they
+  # Anyone else's: the reading's first page and "Recent Work". The pages they
   # asked for beyond it with "Show earlier" stay below it as they were read,
   # with the cursor after them. A first page that shares no line with them
   # starts the feed again from itself, so no gap opens between the two.
-  defp activity_pages(%{assigns: %{activity: activity}} = socket, %{feed: feed, trying: trying}) do
+  defp activity_pages(%{assigns: %{activity: activity}} = socket, %{
+         feed: feed,
+         recent_work: recent_work
+       }) do
     first = MapSet.new(feed.items, & &1.id)
     shown = Map.get(activity, :ids, MapSet.new())
 
@@ -1789,7 +1822,7 @@ defmodule KeyfleetWeb.FleetLive do
        pages: pages,
        ids: ids,
        empty?: MapSet.size(ids) == 0,
-       trying: trying,
+       recent_work: recent_work,
        reading?: true
      })}
   end
@@ -1819,11 +1852,11 @@ defmodule KeyfleetWeb.FleetLive do
   @doc """
   What the feed needs to know of the pages read, and never the cursor:
   whether anything is there, whether earlier items are a press of "Show
-  earlier" away or past the pages it shows, and what the fleet is trying.
+  earlier" away or past the pages it shows, and what the fleet is working on.
   """
   def now_shown(nil), do: nil
 
-  def now_shown(%{cursor: cursor, pages: pages, empty?: empty?, trying: trying}) do
+  def now_shown(%{cursor: cursor, pages: pages, empty?: empty?, recent_work: recent_work}) do
     earlier =
       cond do
         cursor == nil -> nil
@@ -1831,7 +1864,7 @@ defmodule KeyfleetWeb.FleetLive do
         true -> :elsewhere
       end
 
-    %{empty?: empty?, earlier: earlier, trying: trying}
+    %{empty?: empty?, earlier: earlier, recent_work: recent_work}
   end
 
   @doc "The id of a line of the hall's feed on the page."
@@ -1872,7 +1905,11 @@ defmodule KeyfleetWeb.FleetLive do
   # the fleet's reading, that reading.
   defp follow_shared(socket, fleet_id, view) do
     now = if from_reading?(socket, fleet_id, view), do: [FleetNow.key(fleet_id)], else: []
-    SharedFigures.follow(socket, :fleet, [Here.fleet_key(fleet_id) | now])
+
+    proposals =
+      if view in [:hall, :workspace], do: [FleetProposals.list_key(fleet_id)], else: []
+
+    SharedFigures.follow(socket, :fleet, [Here.fleet_key(fleet_id)] ++ now ++ proposals)
   end
 
   # Before the fleet's first reading, the agents and holders are said to be uncounted,
@@ -1900,7 +1937,7 @@ defmodule KeyfleetWeb.FleetLive do
   @doc """
   A shared reading the page hears has changed: \"Here now\" is drawn
   again, or a hall drawn from the fleet's reading draws its sales, feed and
-  "Trying now" from the new one. Each is matched on the fleet it is for, so
+  "Recent Work" from the new one. Each is matched on the fleet it is for, so
   a reading of a fleet the page has left changes nothing, and one of the
   fleet on show still lands right after it.
   """
@@ -1916,6 +1953,12 @@ defmodule KeyfleetWeb.FleetLive do
       ) do
     if from_reading?(socket), do: show_reading(socket), else: socket
   end
+
+  def shared_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false} = fleet}} = socket,
+        {:fleet_proposals, fleet_id}
+      ),
+      do: assign(socket, :fleet, %{fleet | open_proposals: FleetProposals.open(fleet_id)})
 
   def shared_changed(socket, _key), do: socket
 
