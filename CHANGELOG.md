@@ -6890,3 +6890,15 @@ Keyfleet's own crash saving (`Keyfleet.ErrorHandlers`) is gone; `RegentHttp.Erro
 `Keyfleet.Keys.PresenceTimer` runs at :07 past every hour from the wallet 0x0890073F213c29EceBAaf2152392D0079bbE88dB, whose key is only on Fly as KEYFLEET_PRESENCE_TIMER_KEY. It marks only Keys whose shard it holds. None yet, so until Sean's presses it does nothing. Proved once on a private copy of Base, with real contracts, Keys 3,4,5,8,9,10,13 and a throwaway key: nothing sent with 36 hours left, one send after they lapsed that made them present again, nothing on the next run, and the lapsing, low ETH and ending shard errors saved. A refused send was not forced. Throwaway check, not kept.
 
 Live read at 15:41Z, signed out: sign-in window opens at 1280, 390 and 320, Chat, Workspace and the wallet page answer 200 with no sideways scroll, signed agent read answers 200.
+
+## 2026-11-05 — Release: the daily run
+
+c08ddbb8 is live: graph v507 (16:15:01Z), site v508 (16:15:51Z). Rollback: graph v505, site v506 (00b0f003). Full check exit 0 on c08ddbb8 at 16:13Z; the run before it caught the joining guide over its 9,000 characters, repeated links to the voting guide, and a wallet with no Keys getting a different `setup.gas` by how the agent signed in.
+
+Moved: sync's `yours` answers `presence`, `proposals_awaiting` and `gas` (`Keyfleet.Agents.Upkeep`; gas only on a scheduled run). Doctor answers `setup` (`paired`, `gas`, `schedule`, `marked`, `repeated`, `next_step`) and `gas`, worked out from chain records and check-ins. API contract 25.1.0; joining guide 3.24.0 at 8,987 characters; the modes, marking and voting rules are in /skill/decide.md; all 12 runtime guides name the daily schedule and its limits; the fleet's paste command ends "Then look at the Classic fleet and set up your daily run." `chain_presence` and `chain_vote` words follow Sean's 8a.
+
+`marking_due` turns true at under 30 hours left, not the 24 in the plan, so a daily run that comes a little early still marks and the next one never arrives after the 48 hours end.
+
+Not yet: agents have no shipped command that sends a mark or a vote. `regents keyfleet presence mark` only builds the transactions; the regents-cli chief has the request for a real send.
+
+Live read at 16:17Z: guide and voting guide serve the new words, signed doctor answers `setup` for the Mac agent (paired and marked true; gas false with 0 ETH; next step asks for ETH on Base), signed credits read answers 200, sign-in window opens at 1280, 390 and 320, wallet page answers 200 with no sideways scroll.
