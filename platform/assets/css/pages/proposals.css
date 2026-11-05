@@ -172,6 +172,14 @@
   gap: 0.25rem 0.75rem;
 }
 
+@media (pointer: coarse) {
+  .open-proposal__head a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+}
+
 /* Buttons first, so nothing that arrives moves one under a finger; below them
    one line's room, held from the start, for how the vote is cast or why a
    button can't be pressed. */
