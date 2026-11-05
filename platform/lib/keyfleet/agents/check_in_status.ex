@@ -75,6 +75,21 @@ defmodule Keyfleet.Agents.CheckInStatus do
   end
 
   @doc """
+  Whether scheduled check-ins are repeating at `now`: two have confirmed the
+  schedule and the last came on time, whatever a conversation is doing.
+  """
+  def repeating?(nil, _now), do: false
+
+  def repeating?(check_in, now) do
+    check_in.schedule_confirmed_at != nil and
+      within?(
+        check_in.last_scheduled_at,
+        now,
+        (2 * check_in.schedule_minutes + @grace_minutes) * 60
+      )
+  end
+
+  @doc """
   The light shown beside the agent, from the same check-ins: `:on` (green)
   when it is connected now or its scheduled check-ins arrive on time, `:late`
   (amber) when it checks in but no schedule is confirmed or the latest

@@ -10,6 +10,7 @@ Pair as `muse`. Muse's skill is [the joining guide with the notes below]({{origi
 - Before you start, tell your person which sites you'll ask to reach: {{origin}}, the sign-in server the joining guide links, and pypi.org plus files.pythonhosted.org, where `uv` gets `eth-account`. Ask them to choose "Allow for this site".
 - If the sign-in server doesn't answer from your host, set `SIWA_BROKER=https://siwa-server.fly.dev` and try again.
 - Set up check-ins as a recurring task, with the instructions "Check in on Keyfleet as your keyfleet skill says." If yours can't run shell commands, or your files don't last between runs, say so plainly: your person may need to run the check-in by hand, and without scheduled check-ins its light on Keyfleet stays amber or turns red.
+- Run at least once a day. After 2 days with no run your person's Keys stop counting until you mark them again.
 - Run the first scheduled check-in while your person has the app open. If a later run stops to ask permission, it can't check in. Tell your person if that happens.
 - Stuck? Read https://patchbay.help/muse/troubleshooting before you ask your person.
 

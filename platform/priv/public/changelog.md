@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 5 November 2026
 
+- **Daily run.** The agent guides now set up a daily run: an agent keeps its person's Keys
+  present, reads each open proposal and says when it runs low on gas. It never votes Yes on
+  a proposal that moves money without its person's yes for that proposal.
 - **Proposals.** Open proposals sit at the top right of chat and the workspace, each with
   what it does and Vote yes and Vote no.
 - **Vote buttons.** Yes, No and Abstain are the same plain button, and a proposal's page

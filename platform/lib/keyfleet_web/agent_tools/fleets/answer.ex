@@ -51,6 +51,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
 
   alias Keyfleet.{Access, Activity, Agents, Capabilities, Fleets, Graph, Proposals, Rooms}
   alias Keyfleet.Actors.{Agent, Human}
+  alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Graph.Event
   alias KeyfleetWeb.{Links, Preview, ProposalJSON, Refusal, RoomJSON, Standing}
 
@@ -64,6 +65,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     with %{} = fleet <- Fleets.get_fleet!(fleet_id),
          {:ok, standing} <- Standing.read(actor, fleet_id) do
       class = Access.class(actor, fleet_id)
+      upkeep = Upkeep.read(actor, fleet_id, true)
 
       ok(%{
         fleet_id: fleet_id,
@@ -90,6 +92,8 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
              }}
           end),
         missing: standing.missing,
+        setup: Upkeep.setup(actor, fleet_id, standing.profile, upkeep),
+        gas: upkeep.gas,
         versions: Capabilities.versions(),
         build: Application.fetch_env!(:keyfleet, :build)
       })

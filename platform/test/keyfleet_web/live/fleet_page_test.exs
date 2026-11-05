@@ -1114,7 +1114,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     instruction = text(view, "#fleet-send-agent-instruction")
 
     assert instruction ==
-             "Install the Keyfleet skill from keyfleet.ai/skill.md and follow it. Then look at the Cascade #1 fleet."
+             "Install the Keyfleet skill from keyfleet.ai/skill.md and follow it. Then look at the Cascade #1 fleet and set up your daily run."
 
     assert has_element?(
              view,

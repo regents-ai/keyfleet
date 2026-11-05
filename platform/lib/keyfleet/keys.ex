@@ -294,6 +294,30 @@ defmodule Keyfleet.Keys do
   def held_keys(_actor, _fleet_id), do: []
 
   @doc """
+  Each of `token_ids`' last presence record in the fleet, as `%{token_id =>
+  record}`, or its last one before `{block_number, log_index}`. A Key with none
+  isn't in the map.
+  """
+  def last_presence(fleet_id, token_ids, before \\ nil) do
+    Keyfleet.Keys.Presence
+    |> Ash.Query.filter(fleet_id == ^fleet_id and token_id in ^token_ids)
+    |> presence_before(before)
+    |> Ash.Query.distinct(:token_id)
+    |> Ash.Query.distinct_sort(block_number: :desc, log_index: :desc)
+    |> Ash.read!()
+    |> Map.new(&{&1.token_id, &1})
+  end
+
+  defp presence_before(query, nil), do: query
+
+  defp presence_before(query, {block, log}) do
+    Ash.Query.filter(
+      query,
+      block_number < ^block or (block_number == ^block and log_index < ^log)
+    )
+  end
+
+  @doc """
   How many of the fleet's keys have no vote now (see the `idle` calculation of
   `Keyfleet.Keys.KeyAttachment`), as `{:ok, count}`, or `{:error, failure}`
   when the database doesn't answer (see `Keyfleet.Count`).

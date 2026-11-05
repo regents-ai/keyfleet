@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 25.0.0
+  version: 25.1.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -7480,7 +7480,7 @@ components:
     FleetDoctor:
       type: object
       additionalProperties: false
-      required: [fleet_id, fleet_name, agent, pairing, profile, ownership_fresh, key, keys, may, missing, versions, build]
+      required: [fleet_id, fleet_name, agent, pairing, profile, ownership_fresh, key, keys, may, missing, setup, gas, versions, build]
       properties:
         fleet_id: {type: string}
         fleet_name: {type: string}
@@ -7539,6 +7539,21 @@ components:
               code: {type: string, enum: [person_not_here, profile_not_found, ownership_refreshing, not_a_member, edits_restricted]}
               message: {type: string}
               hint: {type: string}
+        setup:
+          type: object
+          additionalProperties: false
+          required: [paired, gas, schedule, marked, repeated, next_step]
+          description: >-
+            The five states an agent's setup ends in, read from the chain and its check-ins, never
+            from what it says about itself.
+          properties:
+            paired: {type: boolean, description: Whether its person is paired with it}
+            gas: {type: [boolean, "null"], description: "Whether its wallet can pay to mark its Keys present; null when the chain didn't answer"}
+            schedule: {type: boolean, description: Whether a scheduled run has declared its schedule}
+            marked: {type: boolean, description: Whether every Key it can mark is present}
+            repeated: {type: boolean, description: "Whether two scheduled runs have confirmed its schedule, and the last came on time"}
+            next_step: {type: [string, "null"], description: What to do next; null once all five are true}
+        gas: {$ref: "#/components/schemas/WalletGas"}
         versions:
           type: object
           additionalProperties: false
@@ -7547,6 +7562,18 @@ components:
             api_contract: {type: string}
             agent_guide: {type: string}
         build: {type: object}
+    WalletGas:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [wei, marks_left]
+          description: >-
+            The ETH in the agent's wallet on Base. Null when the agent has no Key to mark, in a
+            conversation's sync, which doesn't read it, or when the chain doesn't answer.
+          properties:
+            wei: {type: string, pattern: '^[0-9]+$'}
+            marks_left: {type: integer, minimum: 0, description: "About how many times it could mark every Key it can mark, at the latest block's fee"}
+        - {type: "null"}
     ReceiptsRequest:
       type: object
       additionalProperties: false
@@ -8943,7 +8970,7 @@ components:
         yours:
           type: object
           additionalProperties: false
-          required: [as_key, edits_restricted, tasks, reviews, goals, posted_after_you]
+          required: [as_key, edits_restricted, tasks, reviews, goals, posted_after_you, presence, proposals_awaiting, gas]
           description: >-
             What the caller has here. A caller that neither owns one of the fleet's Keys nor holds
             a shard of one gets a null as_key, edits_restricted false and no tasks, reviews, goals or
@@ -9020,6 +9047,48 @@ components:
                     $ref: "#/components/schemas/RoomSeq"
                     description: The place of as_key's latest post in the room; read on from it
                   posts: {type: integer, minimum: 1, description: How many posts came after it}
+            presence:
+              type: object
+              additionalProperties: false
+              required: [marking_due, keys]
+              description: The Keys the caller's own wallet can mark present
+              properties:
+                marking_due: {type: boolean, description: "True when any of them is under 30 hours from the end of its presence, or past it: mark present on this run"}
+                keys:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [token_id, present_until]
+                    properties:
+                      token_id: {type: integer, minimum: 1}
+                      present_until: {type: [string, "null"], format: date-time, description: "When its presence ends; null when it changed hands and hasn't been marked since"}
+            proposals_awaiting:
+              type: array
+              description: >-
+                The proposals a vote can still change where a Key the caller acts as, or its person's,
+                hasn't voted, oldest first
+              items:
+                type: object
+                additionalProperties: false
+                required: [number, status, closes_at, moves_money, counted, needed, yes_votes, no_votes, undecided, counted_at_opening]
+                properties:
+                  number: {type: integer, minimum: 1}
+                  status: {type: string, enum: [open, waiting]}
+                  closes_at: {type: string, format: date-time}
+                  moves_money: {type: boolean, description: True when it waits a day after voting closes}
+                  counted: {type: integer, minimum: 0, description: The Keys it needs 60% of so far}
+                  needed: {type: integer, minimum: 0, description: The Yes votes that approve it at that count}
+                  yes_votes: {type: integer, minimum: 0}
+                  no_votes: {type: integer, minimum: 0}
+                  undecided: {type: array, items: {type: integer, minimum: 1}, description: The Keys that haven't voted}
+                  counted_at_opening:
+                    type: array
+                    items: {type: integer, minimum: 1}
+                    description: >-
+                      Those of them present when it opened. They already count, so staying silent works
+                      against a Yes; any other works against it only by voting No.
+            gas: {$ref: "#/components/schemas/WalletGas"}
     ProposalChanges:
       type: object
       additionalProperties: false

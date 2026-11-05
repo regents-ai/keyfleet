@@ -175,6 +175,22 @@ defmodule Keyfleet.Proposals do
     |> then(fn {proposals, older} -> {proposals, older != []} end)
   end
 
+  @doc """
+  The fleet's proposals a vote can still change at `now`, oldest first, as
+  `status/2` needs them and with their votes: those still open, and those
+  approved and waiting to be carried out.
+  """
+  def votable(fleet_id, now) do
+    Proposal
+    |> Ash.Query.filter(
+      fleet_id == ^fleet_id and execution_expiry > ^DateTime.add(now, 48, :hour)
+    )
+    |> Ash.Query.sort(number: :asc)
+    |> Ash.Query.load([:votes | @summary])
+    |> Ash.read!()
+    |> Enum.filter(&(status(&1, now) in [:open, :waiting]))
+  end
+
   @doc "The fleet's proposals carried out, newest first, with their executions."
   def executed(fleet_id) do
     Proposal
