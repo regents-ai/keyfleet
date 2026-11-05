@@ -204,7 +204,7 @@
   color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
   font-size: 0.6875rem;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-microlabel);
   text-transform: uppercase;
 }
 
