@@ -213,6 +213,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
       {:ok, steps,
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
+         ready: ready,
          maintenance?: maintenance?,
          blocked: present_blocked(keys, ready, token_id)
        }}

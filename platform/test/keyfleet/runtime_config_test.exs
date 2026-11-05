@@ -37,6 +37,7 @@ defmodule Keyfleet.RuntimeConfigTest do
       "LIGHTHOUSE_API_KEY",
       "KEYFLEET_MACHINE",
       "DNS_CLUSTER_QUERY",
+      "KEYFLEET_PRESENCE_TIMER_KEY",
       "SOURCE_COMMIT",
       "FLY_IMAGE_REF"
     ]
@@ -49,6 +50,7 @@ defmodule Keyfleet.RuntimeConfigTest do
     # Every production image carries the commit it was built from and its own name.
     System.put_env("SOURCE_COMMIT", "0123456789abcdef0123456789abcdef01234567")
     System.put_env("FLY_IMAGE_REF", "registry.fly.io/keyfleet:deployment-test")
+    System.put_env("KEYFLEET_PRESENCE_TIMER_KEY", "0x" <> String.duplicate("11", 32))
 
     on_exit(fn ->
       Enum.each(previous, fn {name, value} -> restore_env(name, value) end)
