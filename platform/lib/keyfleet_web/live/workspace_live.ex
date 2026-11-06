@@ -684,7 +684,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               title={@step.back.title}
               aria-label={"Goal before: #{@step.back.title}"}
             >
-              ‹
+              <Regent.Icons.icon name="chevron-left" />
             </.link>
             <.link
               :if={@step.on}
@@ -694,7 +694,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               title={@step.on.title}
               aria-label={"Next goal: #{@step.on.title}"}
             >
-              ›
+              <Regent.Icons.icon name="chevron-right" />
             </.link>
             <.link
               :if={@filter.goal}
@@ -1445,9 +1445,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       phx-value-project={@project}
       phx-value-target={@target}
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 3.5h6l-1 6 3.5 3.5v1.5h-11V13L10 9.5zM12 14.5V21" />
-      </svg>
+      <Regent.Icons.icon name="pin" />
     </button>
     """
   end
@@ -1909,6 +1907,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         open={length(@change.files) <= 5}
       >
         <summary class="code-file-head">
+          <Regent.Icons.icon name="chevron-right" class="code-file-mark" />
           <span class={"code-status code-status--#{file.status}"}>{change_label(file.status)}</span>
           <span class="code-file-path">
             <span :if={file.old_path} class="workspace-detail">{file.old_path} →</span>

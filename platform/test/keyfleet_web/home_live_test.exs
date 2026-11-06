@@ -44,8 +44,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   them, each link to another site opening in a new tab, and the Markdown
   #   homepage carries the same section
   # - signed in, the header's name opens the account menu, with Sign out,
-  #   Manage Account, the account's agents and Pair New Agent leading to the
-  #   Agents page, and an agent paired while the page is open shows in it;
+  #   Manage Account, the account's agents and Pair New Agent opening the
+  #   pairing window, and an agent paired while the page is open shows in it;
   #   Fleets beside the name opens Classic; signed out there is neither
 
   @classic "fleet_tech_classic"
@@ -97,9 +97,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             ~s(#account-menu a[href="/account/agents#account-pairing"]),
+             ~s(#account-menu button[data-pair-open][aria-controls="shell-pairing"]),
              "Pair New Agent"
            )
+
+    assert has_element?(view, "dialog#shell-pairing form#shell-pairing-box")
 
     assert has_element?(view, ~s(#shell-agents a[href="/account/agents"]), "Manage")
     refute has_element?(view, "#shell-agents li")

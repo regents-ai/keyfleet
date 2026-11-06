@@ -156,7 +156,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
             href="https://docs.privy.io/authentication/user-authentication/logout"
             target="_blank"
             rel="noopener noreferrer"
-          >Privy logout documentation ↗</a>
+          >Privy logout documentation <Regent.Icons.icon name="arrow-up-right" /></a>
         </section>
       </div>
     </main>

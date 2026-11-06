@@ -223,11 +223,6 @@
   display: block;
   inline-size: 100%;
   block-size: 100%;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 /* The Verified human mark keeps its tip beside it. */

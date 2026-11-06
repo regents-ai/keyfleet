@@ -669,19 +669,15 @@ span.account-chip {
   color: var(--color-success);
 }
 
-.rl-token-copy__icon {
-  display: inline-flex;
+.rl-token-copy .rl-token-copy__icon {
+  inline-size: 0.95em;
+  block-size: 0.95em;
   opacity: 0.55;
   transition: opacity 0.15s ease;
 }
 
 .rl-token-copy:hover .rl-token-copy__icon {
   opacity: 1;
-}
-
-.rl-token-copy__icon svg {
-  width: 0.95em;
-  height: 0.95em;
 }
 
 /* Buy on Uniswap and View Chart: Tangerine words on the panel, a full row each. */

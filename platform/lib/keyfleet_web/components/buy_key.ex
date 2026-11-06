@@ -268,7 +268,8 @@ defmodule KeyfleetWeb.Components.BuyKey do
           aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
         >
           <span class="fleet-step-mark" aria-hidden="true">
-            {if approve_done?(panel), do: "✓", else: "1"}
+            <Regent.Icons.icon :if={approve_done?(panel)} name="check" />
+            <span :if={not approve_done?(panel)}>1</span>
           </span>
           <span data-press-label>
             {if approve_done?(panel), do: "USDC approved", else: "Approve USDC"}

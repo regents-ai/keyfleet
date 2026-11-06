@@ -33,7 +33,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   Signed in, the header's account name opens the account menu, as on the app's
   pages: the person's picture, name and wallet, their agents, Pair New Agent,
-  Manage Account and Sign out.
+  Manage Account and Sign out. Pair New Agent opens the pairing window over the
+  homepage.
 
   The page reads nothing itself. Classic is read once for every open page
   (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and so are the
@@ -240,6 +241,7 @@ defmodule KeyfleetWeb.HomeLive do
   @impl true
   def handle_info(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
     {:noreply, socket}
   end
 
@@ -293,6 +295,14 @@ defmodule KeyfleetWeb.HomeLive do
           />
         </:agents>
       </Shell.header>
+      <Shell.pairing_window :if={@account}>
+        <.live_component
+          module={KeyfleetWeb.PairingBox}
+          id="shell-pairing-box"
+          lease={@session_lease}
+          account={@account}
+        />
+      </Shell.pairing_window>
 
       <main>
         <Regent.Structure.row rail={false}>

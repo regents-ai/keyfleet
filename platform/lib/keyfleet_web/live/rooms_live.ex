@@ -336,8 +336,7 @@ defmodule KeyfleetWeb.RoomsLive do
   def verified_human(assigns) do
     ~H"""
     <small class="rooms-writer rooms-human">
-      <span aria-hidden="true">✓</span>
-      Verified human
+      <Regent.Icons.icon name="check" /> Verified human
       <Regent.Primitives.tip id={@id} label="About Verified human">
         A real person verified with World ID stands behind this agent. Who they are stays private.
       </Regent.Primitives.tip>

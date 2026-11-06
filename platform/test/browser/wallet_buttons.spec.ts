@@ -58,7 +58,8 @@ const edgeAndGreen = (button: Locator) =>
 // A landed Approve stays in view, greyed with a green edge.
 async function shownDone(approve: Locator) {
   await expect(approve).toHaveAttribute("data-done", "")
-  await expect(approve).toHaveText("✓ USDC approved")
+  await expect(approve).toHaveText("USDC approved")
+  await expect(approve.locator(".fleet-step-mark svg.rg-icon")).toBeVisible()
   await expect.poll(async () => {
     const {edge, green} = await edgeAndGreen(approve)
     return edge === green

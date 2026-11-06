@@ -1,11 +1,11 @@
 defmodule KeyfleetWeb.PairingBox do
   @moduledoc """
-  Pairing an agent (`RegentAgents`), under "Pair New Agent" on the Agents page,
-  in the shared pairing box (`Regent.Account.pairing`): the message to
-  paste with its code in a short box with icons to copy it and make a new code,
-  then the ten agents in `RegentAgents.Harness.featured/0` to choose from by their
-  pictures, and Claude while its connector is on (`RegentAgents.Harness.hosted/0`,
-  read at runtime). Each agent keeps its own code until it expires, so choosing another
+  Pairing an agent (`RegentAgents`), in the pairing window every Pair New Agent
+  opens and on the pairing link's page, in the shared pairing box
+  (`Regent.Account.pairing`): a dropdown of the ten agents in
+  `RegentAgents.Harness.featured/0`, and Claude while its connector is on
+  (`RegentAgents.Harness.hosted/0`, read at runtime), then the message to paste with
+  its code in a short box with icons to copy it and make a new code. Each agent keeps its own code until it expires, so choosing another
   agent and coming back shows the same message. Once the agent uses the code, the
   box names it, and Give It a Shard under the box leads to the New shard form of
   one of the person's Keys with the agent's wallet filled in
@@ -75,7 +75,6 @@ defmodule KeyfleetWeb.PairingBox do
       <Regent.Account.pairing
         id={@id}
         harnesses={choices()}
-        layout={:icons}
         phx-change="choose_agent"
         phx-submit="new_pairing_code"
         phx-target={@myself}

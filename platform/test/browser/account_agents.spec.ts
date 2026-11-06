@@ -97,8 +97,10 @@ test("an agent that pairs is offered a shard of the person's Key, and its row th
   const errors = await signIn(page)
   await openAgents(page)
 
-  const box = page.locator("#account-pairing-box")
-  const next = page.locator("#account-pairing-box-next")
+  await page.locator("#account-agents").getByRole("button", {name: "Pair New Agent"}).click()
+  await expect(page.locator("#shell-pairing")).toBeVisible()
+  const box = page.locator("#shell-pairing-box")
+  const next = page.locator("#shell-pairing-box-next")
   const radio = box.getByRole("radio", {name: "Hermes", exact: true})
   await radio.locator("xpath=ancestor::label").click()
   const message = box.locator("pre")
@@ -107,12 +109,13 @@ test("an agent that pairs is offered a shard of the person's Key, and its row th
   const [, code] = (await message.innerText()).match(/Pairing code:\s*(\S+)/)!
   useCode(agent, code, name)
 
-  const give = page.locator("#account-pairing-box-give-shard")
+  const give = page.locator("#shell-pairing-box-give-shard")
   await expect(give).toHaveText(`Give ${name} a shard`)
   expect((await next.boundingBox())!.height).toBe(before)
   await expect(page.locator("#account-agents li", {hasText: name}).getByRole("link", {name: "Give it a shard"})).toBeVisible()
 
   await give.click()
+  await expect(page.locator("#shell-pairing")).toBeHidden()
   await expect(page.locator("#key-shard-wallet")).toHaveValue(agent)
   const key = Number(new URL(page.url()).pathname.split("/").pop())
   expect(new URL(page.url()).pathname).toBe(`/classic/1/keys/${key}`)

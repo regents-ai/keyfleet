@@ -231,8 +231,13 @@ const shellBehavior: Hook = {
       }
 
       // An open account menu takes Escape itself, before any section behind it.
+      // Otherwise Escape closes the last open section a person can see, inside the open
+      // window when one is open; a window with none open inside closes itself.
       if (event.key === "Escape" && !shell.querySelector(":popover-open")) {
-        const openDetails = [...shell.querySelectorAll<HTMLDetailsElement>("details[open]")].at(-1)
+        const layer = [...shell.querySelectorAll<HTMLDialogElement>("dialog:modal")].at(-1) ?? shell
+        const openDetails = [...layer.querySelectorAll<HTMLDetailsElement>("details[open]")]
+          .filter(details => details.checkVisibility())
+          .at(-1)
 
         if (openDetails) {
           openDetails.removeAttribute("open")

@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.ConnectLive do
        `/connect?agent=SLUG`, so it can be linked and survives a reload.
     2. Copy the one line the agent is given: its runtime's own skill, or for
        Claude the connector's address, which the person adds in Claude.
-    3. Pair it, under Pair New Agent on the Agents page, once signed in.
+    3. Pair it, once signed in: Pair New Agent opens the pairing window.
     4. Get a Key, which lets the agent into a fleet.
 
   Steps 3 and 4 show as done from the account itself: an agent paired with it
@@ -161,7 +161,10 @@ defmodule KeyfleetWeb.ConnectLive do
   defp mark(assigns) do
     ~H"""
     <span class="connect-step__mark">
-      <span aria-hidden="true">{if @done, do: "✓", else: @n}</span>
+      <span aria-hidden="true">
+        <Regent.Icons.icon :if={@done} name="check" />
+        <span :if={not @done}>{@n}</span>
+      </span>
       <span :if={@done} class="visually-hidden">Done:</span>
     </span>
     """
@@ -193,13 +196,17 @@ defmodule KeyfleetWeb.ConnectLive do
 
   defp pairing(assigns) do
     ~H"""
-    <.link
+    <Regent.Primitives.button
       id="connect-pair-new"
-      patch={~p"/account/agents#account-pairing"}
-      class="rg-button rg-button--secondary rg-button--no-arrow"
+      type="button"
+      variant="secondary"
+      arrow={false}
+      aria-haspopup="dialog"
+      aria-controls="shell-pairing"
+      data-pair-open
     >
-      <span class="rg-button__label">Pair New Agent</span>
-    </.link>
+      Pair New Agent
+    </Regent.Primitives.button>
     """
   end
 

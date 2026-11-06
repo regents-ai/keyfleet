@@ -72,9 +72,7 @@ defmodule KeyfleetWeb.Components.RegentLinks do
             aria-label="Copy $REGENT contract address"
           >
             <span class="rl-token-copy__label">$REGENT</span>
-            <span class="rl-token-copy__icon" aria-hidden="true">
-              <.source_icon kind={:copy} />
-            </span>
+            <Regent.Icons.icon name="copy" class="rl-token-copy__icon" />
           </Regent.Primitives.copy_button>
           <a class="rg-button rl-token-link" href={@buy} target="_blank" rel="noopener noreferrer">
             Buy on Uniswap
@@ -114,9 +112,7 @@ defmodule KeyfleetWeb.Components.RegentLinks do
       popovertarget={@id}
       aria-label="Regents Products"
     >
-      <svg class="shell-icon--apps" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <rect :for={{x, y} <- nine_dots()} x={x} y={y} width="4.5" height="4.5" />
-      </svg>
+      <Regent.Icons.icon name="grip" class="shell-icon--apps" />
       <span class="shell-tool__tip" aria-hidden="true">Regents Products</span>
     </button>
     <nav
@@ -147,8 +143,6 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     """
   end
 
-  defp nine_dots, do: for(y <- [1.5, 9.75, 18], x <- [1.5, 9.75, 18], do: {x, y})
-
   defp crown_blocks do
     top = for x <- [31, 103, 175], do: {x, 46}
     rows = for y <- [82, 118], x <- [31, 67, 103, 139, 175], do: {x, y}
@@ -161,14 +155,6 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     ~H"""
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-    """
-  end
-
-  def source_icon(%{kind: :copy} = assigns) do
-    ~H"""
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" />
     </svg>
     """
   end
