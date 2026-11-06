@@ -65,8 +65,6 @@ defmodule KeyfleetWeb.WalletPanel do
   @rebuild_buy_ms 300_000
   # How soon a group whose figures couldn't be read from the chain tries again.
   @reread_ms 10_000
-  # A build whose chain could not be read: no steps, and the figures unread.
-  @unread %{review: nil, figures: %{}, problem: :unread}
   # How soon a group with a button the chain's state holds back reads it again.
   @blocked_ms 15_000
   # The groups whose figures a visitor sees.
@@ -316,7 +314,8 @@ defmodule KeyfleetWeb.WalletPanel do
 
   def handle_async(:build, {:ok, _other_wallet}, socket), do: {:noreply, socket}
 
-  def handle_async(:build, {:exit, _reason}, socket), do: {:noreply, show(socket, @unread)}
+  def handle_async(:build, {:exit, _reason}, socket),
+    do: {:noreply, show(socket, %{review: nil, figures: %{}, problem: :unread})}
 
   # The signed-in person as the sign-in reads now. A wallet unlinked since
   # leaves the panel at once: its steps go and the figures follow the wallets
@@ -349,15 +348,14 @@ defmodule KeyfleetWeb.WalletPanel do
 
   # As `sync/1`, but built before it returns. A build still being read lands
   # later with the same steps, and the page keeps every review a press was
-  # sent from. A chain that can't be read leaves the panel as a build read
-  # away from the page does: no steps, and the figures unread.
+  # sent from.
   defp sync_now(socket) do
     {socket, figures_wallet} = follow_signer(socket)
 
     if figures_wallet do
       socket
       |> assign(shown: figures_wallet)
-      |> show(built(request(socket, figures_wallet)))
+      |> show(build_steps!(request(socket, figures_wallet)))
     else
       build(socket, nil)
     end
@@ -419,7 +417,7 @@ defmodule KeyfleetWeb.WalletPanel do
 
     socket
     |> assign(shown: wallet)
-    |> start_async(:build, fn -> {wallet, built(request)} end)
+    |> start_async(:build, fn -> {wallet, build_steps!(request)} end)
   end
 
   defp request(socket, wallet) do
@@ -440,21 +438,16 @@ defmodule KeyfleetWeb.WalletPanel do
     }
   end
 
-  # The steps and figures for the request, or none and the figures unread when
-  # the chain can't be read.
-  defp built(request) do
-    case WalletSteps.build_steps(
-           request.fleet_id,
-           request.flow,
-           request.signer,
-           request.component_id,
-           request.params,
-           actor: request.actor
-         ) do
-      {:ok, built} -> built
-      {:error, _unread} -> @unread
-    end
-  end
+  defp build_steps!(request),
+    do:
+      WalletSteps.build_steps!(
+        request.fleet_id,
+        request.flow,
+        request.signer,
+        request.component_id,
+        request.params,
+        actor: request.actor
+      )
 
   defp show(socket, built) do
     review = if built.review && built.review.signer == socket.assigns.signer, do: built.review
