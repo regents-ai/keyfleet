@@ -105,6 +105,8 @@ config :regent_points,
   starts_at: nil,
   approved_rules: [],
   adapters: %{
+    "account.activated" => Keyfleet.Points.AccountActivated,
+    "agent.activated" => Keyfleet.Points.PairedAgent,
     "credits.purchase_settled" => Keyfleet.Points.CreditsPurchase,
     "keyfleet.first_membership" => Keyfleet.Points.KeyEpoch,
     "keyfleet.key_bought" => Keyfleet.Points.KeyEpoch,
@@ -113,7 +115,10 @@ config :regent_points,
     "keyfleet.first_message" => Keyfleet.Points.Message,
     "keyfleet.first_vote" => Keyfleet.Points.PollVote,
     "keyfleet.integration.twigpine" => Keyfleet.Points.CodePush,
-    "keyfleet.integration.activegraph" => Keyfleet.Points.GraphEvent
+    "keyfleet.integration.activegraph" => Keyfleet.Points.GraphEvent,
+    "social.farcaster" => Keyfleet.Points.LinkedSocial,
+    "social.github" => Keyfleet.Points.LinkedSocial,
+    "social.x" => Keyfleet.Points.LinkedSocial
   }
 
 # Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
@@ -328,6 +333,8 @@ config :keyfleet, Oban,
       {"23 * * * *", Keyfleet.Treasury.OverdueCheck},
       {"41 * * * *", Keyfleet.Keys.DeckEndCheck},
       {"7 * * * *", Keyfleet.Keys.PresenceTimer},
+      # From the Points start, the one-time points for what accounts already had.
+      {"@hourly", RegentPoints.StartAwards},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_now"}},

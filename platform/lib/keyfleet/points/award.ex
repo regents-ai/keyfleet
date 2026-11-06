@@ -19,6 +19,14 @@ defmodule Keyfleet.Points.Award do
       now holds (`credits.purchase_settled`), from `RegentCredits.Signals`.
       Credits is one Regents ledger, so every site names it "regents" and a
       purchase earns once.
+    * A new Regent account (`account.activated`), from
+      `Keyfleet.Accounts.Signals`. The account is one Regents account on
+      every site, so it is named "regents" too.
+    * A social account linked to an account (`social.x`, `social.github`,
+      `social.farcaster`), from `Keyfleet.Accounts.Signals`, keyed by the
+      provider and its subject so one social account earns once.
+    * An agent paired with its person (`agent.activated`), from
+      `RegentAgents.Signals`, keyed by the pairing.
   """
 
   use Ash.Resource,
@@ -29,6 +37,15 @@ defmodule Keyfleet.Points.Award do
   alias Keyfleet.Keys.Signals.{KeyHeld, KeyRevealed, ShardRecorded}
 
   signals_in do
+    from Keyfleet.Accounts.Signals do
+      on :account_registered, :account_registered
+      on :social_linked, :social_linked
+    end
+
+    from RegentAgents.Signals do
+      on :agent_paired, :agent_paired
+    end
+
     from Keyfleet.Keys.Signals do
       on :key_held, :key_held
       on :key_revealed, :key_revealed
@@ -62,6 +79,34 @@ defmodule Keyfleet.Points.Award do
   end
 
   actions do
+    action :account_registered do
+      argument :signal, Keyfleet.Accounts.Signals.AccountRegistered, allow_nil?: false
+
+      run fn %{arguments: %{signal: signal}}, _context ->
+        record("account.activated", "account", to_string(signal.account_id), "regents")
+      end
+    end
+
+    action :social_linked do
+      argument :signal, Keyfleet.Accounts.Signals.SocialLinked, allow_nil?: false
+
+      run fn %{arguments: %{signal: signal}}, _context ->
+        record(
+          "social.#{signal.provider}",
+          "linked_identity",
+          "#{signal.provider}:#{signal.subject}"
+        )
+      end
+    end
+
+    action :agent_paired do
+      argument :signal, RegentAgents.Signals.AgentPaired, allow_nil?: false
+
+      run fn %{arguments: %{signal: signal}}, _context ->
+        record("agent.activated", "pairing", signal.paired_agent_id)
+      end
+    end
+
     action :key_held do
       argument :signal, KeyHeld, allow_nil?: false
 
