@@ -518,7 +518,8 @@ defmodule Keyfleet.BrowserChain do
   end
 
   # One pass over a chain whose next block holds the logs `logs_at` makes for
-  # the fleet and that block, and whose head is well past it.
+  # the fleet and that block, and whose head is past the 300 blocks the
+  # scanner reads again, so the next pass never reads this block again.
   defp pass!(fleet_id, logs_at) do
     fleet = Fleets.get_fleet!(fleet_id)
 
@@ -530,7 +531,7 @@ defmodule Keyfleet.BrowserChain do
 
     StubClient.put_chain(
       %{
-        number: block + 40,
+        number: block + 340,
         hash: "0x" <> String.duplicate("f", 64),
         timestamp: DateTime.utc_now(),
         base_fee: 0
