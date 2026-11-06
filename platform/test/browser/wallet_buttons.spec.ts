@@ -18,6 +18,8 @@ const usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 const approveSelector = "0x095ea7b3"
 const purchaseSelector = "0xb48eb184"
 const requestRevealSelector = "0x40261cdd"
+// The Builder Code every step's data ends with (RegentChain.BuilderCode).
+const builderCode = "62635f7530393336306a6f0b0080218021802180218021802180218021"
 
 // Opens the fleet's page, signed in as `bearer` unless it is null, with the
 // "Buy Key" window the header's "Purchase Key" opens: earlier tests may have
@@ -442,7 +444,7 @@ test("a key whose draw was turned down can be asked again: every press reaches t
   const [first, second] = await sentByStandIn(page)
   for (const {transaction} of [first, second]) {
     expect(transaction.to.toLowerCase()).toBe(keysContract)
-    expect(transaction.data).toBe(requestRevealSelector + collectionId(key).toString(16).padStart(64, "0"))
+    expect(transaction.data).toBe(requestRevealSelector + collectionId(key).toString(16).padStart(64, "0") + builderCode)
   }
 
   // The first is accepted; the server reads that the draw is on its way.
