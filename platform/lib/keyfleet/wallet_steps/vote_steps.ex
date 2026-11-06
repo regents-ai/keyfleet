@@ -153,15 +153,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
       closes_at = now + hours * 3600
       content_hash = content_hash(text)
       calls = Actions.encode(action, fleet)
-
-      reason =
-        cond do
-          not governs? -> :not_your_key
-          matures_at == nil or matures_at > now -> :too_new
-          kind in @money_kinds and (opens_at == 0 or opens_at > now) -> opening(opens_at)
-          lapsed? -> :clear_first
-          true -> nil
-        end
+      reason = propose_blocked(kind, governs?, matures_at, opens_at, lapsed?, now)
 
       figures =
         Map.merge(figures, %{
@@ -173,13 +165,6 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           blocked: if(reason, do: %{"propose" => reason}, else: %{})
         })
 
-      clear =
-        Review.step(
-          "sweep",
-          fleet.votes_address,
-          Call.encode("sweepExpired(uint256)", [@sweep_limit])
-        )
-
       propose =
         Review.step(
           "propose",
@@ -187,9 +172,30 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           Call.encode(@propose, [Fleet.onchain_token_id(fleet, key), content_hash, calls])
         )
 
-      {:ok, if(lapsed?, do: [clear, propose], else: [propose]), figures}
+      {:ok, clear_first(lapsed?, fleet) ++ [propose], figures}
     end
   end
+
+  defp propose_blocked(kind, governs?, matures_at, opens_at, lapsed?, now) do
+    cond do
+      not governs? -> :not_your_key
+      matures_at == nil or matures_at > now -> :too_new
+      kind in @money_kinds and (opens_at == 0 or opens_at > now) -> opening(opens_at)
+      lapsed? -> :clear_first
+      true -> nil
+    end
+  end
+
+  defp clear_first(false, _fleet), do: []
+
+  defp clear_first(true, fleet),
+    do: [
+      Review.step(
+        "sweep",
+        fleet.votes_address,
+        Call.encode("sweepExpired(uint256)", [@sweep_limit])
+      )
+    ]
 
   # Whether more lapsed presences wait than a proposal clears itself, asked of
   # the vote contract by simulating a clear of that many.
