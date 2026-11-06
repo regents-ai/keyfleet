@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   @directory Application.app_dir(:keyfleet, "priv/public")
   @files Enum.map(
-           ~w(docs about changelog contact opportunities privacy terms llms help agents),
+           ~w(docs about changelog opportunities privacy terms llms help agents),
            &Path.join(@directory, &1 <> ".md")
          )
   for file <- @files, do: @external_resource(file)
@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   @external_resource @openapi_path
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
   # The reading pages, each committed Markdown served as a page and as itself.
-  @reading ~w(/docs /about /changelog /contact /opportunities /privacy /terms)
+  @reading ~w(/docs /about /changelog /opportunities /privacy /terms)
   @documents ["/" | @reading]
   @description "Keyfleet: persistent teams for personal AI agents."
   # What a search result or a shared link says about the homepage.
@@ -41,10 +41,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/changelog" => {"Changelog", "Changes to Keyfleet, newest first."},
     :about =>
       {"About",
-       "Keyfleet is a persistent team for your AI agent: what a Key gives and how to get one."},
-    "/contact" =>
-      {"Contact",
-       "How to get help with Keyfleet, and where to send privacy requests, legal questions and security reports."},
+       "Keyfleet is a persistent team for your AI agent: what a Key gives, how to get one and how to reach us."},
     :connect =>
       {"Connect your agent",
        "Bring your own AI agent into a Keyfleet fleet: choose it, give it one line, pair it and get a Key."},
@@ -145,7 +142,7 @@ defmodule KeyfleetWeb.PublicDocuments do
         origin = url("")
 
         """
-        This site isn't open yet. You can read this guide, [the early-access page](#{origin}/early), [Contact](#{origin}/contact), [Privacy](#{origin}/privacy), [Terms](#{origin}/terms), [the sitemap](#{origin}/sitemap.xml) and [the health check](#{origin}/healthz). Public collection metadata is at [collection.json](#{origin}/metadata/collection.json); an existing Key's metadata is at `/metadata/keys/TOKEN_ID`. Missing or unavailable metadata does not grant access to a Key.
+        This site isn't open yet. You can read this guide, [the early-access page](#{origin}/early), [Privacy](#{origin}/privacy), [Terms](#{origin}/terms), [the sitemap](#{origin}/sitemap.xml) and [the health check](#{origin}/healthz). Public collection metadata is at [collection.json](#{origin}/metadata/collection.json); an existing Key's metadata is at `/metadata/keys/TOKEN_ID`. Missing or unavailable metadata does not grant access to a Key.
 
         Pairing, sign-in, fleet requests, private reads and agent writes are closed until it opens. API requests return `503 not_open_yet`; fleet documents, the joining guide, `/llms.txt` and API contracts return 503. Respect `Retry-After`. Don't get around this with another route, with your person's browser sign-in or by buying a Key. Report the operation as unavailable, not as a successful pairing or write. The rest of this guide applies once the site opens.\
         """
@@ -265,7 +262,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       "description" =>
         "The full agent contract: every signed agent request, with its fields, answers and refusals"
     })
-    |> put_in(["info", "contact", "url"], url("/contact"))
+    |> put_in(["info", "contact", "url"], url("/about"))
     |> put_in(["info", "termsOfService"], url("/terms"))
   end
 
@@ -305,7 +302,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     Expires: #{@released_at |> DateTime.shift(year: 1) |> DateTime.to_iso8601()}
     Preferred-Languages: en
     Canonical: #{url("/.well-known/security.txt")}
-    Policy: #{url("/contact")}
+    Policy: #{url("/about")}
     """
   end
 

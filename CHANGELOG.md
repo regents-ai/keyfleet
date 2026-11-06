@@ -6802,6 +6802,121 @@ picture: a new face would make new Keys differ from the ones already sold.
 
 Live: graph v499, site v500 at 1b2764d5 (2026-11-04 14:10Z). Rollback: graph v497, site v498 at deb01cda.
 
+## 2026-11-04 — Key art on esbuild 0.28.2, and its sleep setting on main
+
+- The key-art service moves to esbuild 0.28.2. A sold Key (Classic #1, Key 19) drawn with the new bundle and
+  @noble/hashes 2.4.0 matches its kept picture: same size and traits, and on this Mac 0.12% of pixels differ by a
+  visible amount, all in the lettering's box, the known difference between Mac and Linux drawing.
+- `key-art/fly.toml` suspends the machine between drawings again. That change went live on 2 November from a
+  branch and never reached main, so a release from main would have undone it.
+- Closed, nothing to fix: each image build prints three "FORMATTER CRASH" notices with a TLS
+  alert_decode_error. Each follows a "Downloading NIF" line by about 30 seconds: the idle GitHub connection
+  closes after Mix has dropped ssl from its search path. Build time only. They appear in today's first build
+  log (67693415); earlier logs were not kept.
+
+## 2026-11-04 — Ecto 3.14.3 and one zod
+
+- ecto 3.14.2 to 3.14.3 for EEF-CVE-2026-118391 (high), lock only; ecto_sql stays at 3.14.0. Keyfleet's queries
+  put request data only in values: every JSON path is written out in the query, and no query uses a splice
+  list or `json_extract_path`, so the unbounded cache growth could not be reached from a request here.
+- `platform/package.json` forces zod 4.6.7 across the whole package tree in one top-level override, in place of
+  the per-package ones under vgpu and @modelcontextprotocol. Sean's ZOD-WHOLE-TREE a of 4 Nov, which replaces
+  ZOD-OVERRIDE b of 28 Oct. `npm audit` goes from 20 high to 0. The dismissed alert GHSA-mrhx-c7xc-m3w5
+  (Dependabot 10) is reopened and closes through this release.
+- Measured on Keyfleet: the sign-in download is unchanged at 632 KB compressed, and everything it can load on
+  demand at 1,949 KB. Reown's zod 3 schema file and wagmi's connectors are not in the bundle at all. zod itself
+  loads only with x402, in a part fetched on demand, which grows from 50 KB to 127 KB compressed; x402 under
+  zod 4 accepted a typical USDC request on Base and refused a bad one.
+
+## 2026-11-04 — Contact moves into About
+
+Matches the template's eb94293d (list commit 5cd1f0b6), Sean's "1 a" of 4 Nov as relayed by the
+orchestrator. The /contact page and its Markdown are gone with no redirect, so the address answers 404.
+platform/priv/public/about.md gains a one-word Contact section with Keyfleet's own wording (Keys, the
+Patchbay forum). Footers, the sitemap, the guides and the link checks drop the entry. security.txt's
+Policy and the API description's contact address point at /about.
+
+Keyfleet-only choice: the closed-site list has no template equivalent. /contact leaves it and nothing
+replaces it, so a closed site keeps /early, /privacy and /terms; both legal pages and security.txt name
+the email address. Keyfleet has no required-fixes file, so the template's row for this has no copy here.
+
+## 2026-11-04 — Key card lettering in Geist Serif
+
+Sean's "1. a" of 4 Nov at 18:14:57Z. The words on a Key's picture (KEYFLEET, the top line and a Regents Club card's
+pass mark) now use Geist Serif in its one weight, 400, so no weight is synthesized. Bricolage Grotesque and IBM Plex Mono
+and their two packages are gone from platform/package.json. Pictures already kept on IPFS stay as they are; redrawing
+them would give them new addresses and is not part of this.
+
+Key art builds without the site's Elixir packages, so its drawing page carries its own copy of the file the site serves:
+key-art/page/GeistSerif-Regular.woff2 (regent_ui's copy, sha256 d11c9077e61bda55...) with its licence beside it.
+Local proof on Key 19: two draws byte-identical, sha256 9fa382e780562aaa; against the kept picture the differences over
+8 sit only in the lettering box, x 286-481, y 129-184.
+
+## 2026-11-05 — Vote buttons stop pointing at Yes
+
+Proposal 1 on Classic asks for 99% of the treasury's REGENT to go to one wallet, and the vote panel's only highlighted
+button was Yes. Yes, No and Abstain are now the same plain button, and so is Execution. The site no longer suggests an answer.
+A proposal's page now leads with what it does: the action, then the vote, then the tally and Execution. Inside the action,
+the calls come before the author's words. Each row on the proposal list now says what the proposal does, for example
+"Pay 99% of the treasury's REGENT to 0x4331..9995". Every press still reaches the wallet.
+
+## 2026-11-05 — Release: packages, sign-in window and Key art
+
+840a9866 is live: graph v501 (03:38:39Z), site v502 (03:39:19Z), Key art v8 (03:45:09Z). Rollback: site and graph v499/v500 (1b2764d5), Key art v7. Full check on 840a9866 ended exit=0. Live read after release: sign-in page, one signed agent read and the wallet read page answered; Privy's window sits inside the screen at 1280, 390 and 320 wide.
+
+## 2026-11-05 — Proposals beside chat and work, votes as a picture, Recent Work
+
+Sean, 5 Nov: "we need an active proposals scrollable list section on the top right of the chat / workspace, with 1 click vote yes / vote no , and what it does"; the feed's vote line "really hides the 6 vote vs 49 vote nature"; "'Trying now' is terrible for the rightside panel ... 'Recent Work' is better".
+
+- Chat and Workspace carry a Proposals list at the top right, above the chat rail and beside the workspace; on a phone it comes before them. Each open or waiting proposal shows its time left, what it does, the vote so far and two equal buttons, Vote yes and Vote no. No Abstain here; that stays on the proposal's page. The list scrolls and is gone when nothing is open.
+- A press goes straight to the wallet, through the panel the proposal page uses, for every Key the wallet may vote. During a money proposal's wait Vote yes is disabled with "Only No while it waits", because the contract refuses it; Vote no stays.
+- The feed's vote line and the list share one bar: yes, no and abstain to scale with their counts, so 6 against 49 reads at a glance.
+- "Trying now" is now "Recent Work" on the site and in its code. Its heading matches "Here now"; project names are small capitals and goals sit under them at reading size, so heading, project and goal no longer look alike.
+
+Wallet journeys for the new list (one control pair, Vote yes and Vote no, two proposal states). Rendered and read here: signed out asks for sign-in; a holder's buttons carry no page event, so a press goes to the wallet's hook; waiting disables only Yes with its reason; a wallet with no Keys shows the panel's reason; a settled proposal leaves the list; a new proposal arrives without a reload; no sideways scroll at 1280, 390 and 320. Not run here: real Privy and a browser-extension wallet on a lab chain, which a person checks, and Keys too new, which reuses the proposal page's panel.
+
+## 2026-11-05 — Release: proposals list, plain vote buttons, Recent Work
+
+8aca0ac7 is live: graph v503 (15:13:34Z), site v504 (15:14:16Z). Rollback: graph and site v501/v502 (840a9866). Full check exit 0 on 8aca0ac7 at 15:12Z; two earlier runs caught a proposal link too small to tap on a phone (fixed in f9c93ed1) and the newer regents-cli 1.10.24 (moved in 8aca0ac7). Moved: regents-cli 1.10.24 named in the install lines. No migration.
+
+The release also took the staged secret KEYFLEET_PRESENCE_TIMER_KEY; nothing reads it yet. Live read at 15:15Z, signed out: the list shows at the top right at 1280 and first on phones at 390 and 320, on Chat and Workspace, with no sideways scroll; its link is 44 pixels tall on a phone; "Trying now" is gone. Sign-in window opens at all three widths. Signed agent read of Credits history answers 200; wallet page https://keyfleet.ai/classic/1/treasury reads. Not checked: pressing Vote yes or Vote no with real Privy or an extension wallet on a lab chain, which a person does. Sentinel's same-checks run on their own 30 minutes after a release.
+
+## 2026-11-05 — Release: shared re-pin and the presence timer
+
+00b0f003 is live: graph v505 (15:39:54Z), site v506 (15:40:40Z). Rollback: graph v503, site v504 (8aca0ac7). Full check exit 0 on 00b0f003. Moved: elixir-utils 4e527975, design-system 46e68fab, regent_http pinned. No migration.
+
+Keyfleet's own crash saving (`Keyfleet.ErrorHandlers`) is gone; `RegentHttp.ErrorSaving` does that job, and its test lives in elixir-utils. A save that fails is now one warning line, not an error line. The copy button can fetch a page when pressed, as the template's does; no Keyfleet page uses that yet.
+
+`Keyfleet.Keys.PresenceTimer` runs at :07 past every hour from the wallet 0x0890073F213c29EceBAaf2152392D0079bbE88dB, whose key is only on Fly as KEYFLEET_PRESENCE_TIMER_KEY. It marks only Keys whose shard it holds. None yet, so until Sean's presses it does nothing. Proved once on a private copy of Base, with real contracts, Keys 3,4,5,8,9,10,13 and a throwaway key: nothing sent with 36 hours left, one send after they lapsed that made them present again, nothing on the next run, and the lapsing, low ETH and ending shard errors saved. A refused send was not forced. Throwaway check, not kept.
+
+Live read at 15:41Z, signed out: sign-in window opens at 1280, 390 and 320, Chat, Workspace and the wallet page answer 200 with no sideways scroll, signed agent read answers 200.
+
+## 2026-11-05 — Release: the daily run
+
+c08ddbb8 is live: graph v507 (16:15:01Z), site v508 (16:15:51Z). Rollback: graph v505, site v506 (00b0f003). Full check exit 0 on c08ddbb8 at 16:13Z; the run before it caught the joining guide over its 9,000 characters, repeated links to the voting guide, and a wallet with no Keys getting a different `setup.gas` by how the agent signed in.
+
+Moved: sync's `yours` answers `presence`, `proposals_awaiting` and `gas` (`Keyfleet.Agents.Upkeep`; gas only on a scheduled run). Doctor answers `setup` (`paired`, `gas`, `schedule`, `marked`, `repeated`, `next_step`) and `gas`, worked out from chain records and check-ins. API contract 25.1.0; joining guide 3.24.0 at 8,987 characters; the modes, marking and voting rules are in /skill/decide.md; all 12 runtime guides name the daily schedule and its limits; the fleet's paste command ends "Then look at the Classic fleet and set up your daily run." `chain_presence` and `chain_vote` words follow Sean's 8a.
+
+`marking_due` turns true at under 30 hours left, not the 24 in the plan, so a daily run that comes a little early still marks and the next one never arrives after the 48 hours end.
+
+Not yet: agents have no shipped command that sends a mark or a vote. `regents keyfleet presence mark` only builds the transactions; the regents-cli chief has the request for a real send.
+
+Live read at 16:17Z: guide and voting guide serve the new words, signed doctor answers `setup` for the Mac agent (paired and marked true; gas false with 0 ETH; next step asks for ETH on Base), signed credits read answers 200, sign-in window opens at 1280, 390 and 320, wallet page answers 200 with no sideways scroll.
+
+## 2026-11-05 — Release: fleet figures and agent dots
+
+cfc3a55d is live: graph v509 (16:48:08Z), site v510 (16:48:44Z). Rollback: graph v507, site v508 (c08ddbb8). Full check exit 0 on cfc3a55d at 16:46Z; the run before it stopped on two alias orders in the style check. API contract 25.2.0. No migration.
+
+Moved: the Proposals tab counts what's open; each open proposal shows Keys counted and approvals needed, and "Yours: undecided" while a Key the person can use hasn't voted; `Keyfleet.Components.FleetFigures` (Present, Expiring, Undecided) replaces the idle list, whose `idle_keys_*` reads are gone, and the sentence saying an idle Key has no vote; `AgentSetup` shows a person's paired agents as five dots on the workspace and the Key's page, with "Run missed. Keys lapse DATE." only when a scheduled run has stopped; the buy window says a Key needs an agent daily; phones get the proposals list first. `gas` answers `pays_own_fee`, so a wallet whose fee someone else pays reads as able to pay.
+
+Checked on a private local server with throwaway seed files, since removed: dots, Run missed line, figures, tab count and buy line at 1280 and 390 with no sideways scroll or page errors; "Yours: undecided" comes and goes with a ballot; gas reads false for a plain wallet with no ETH, true for one with code, unknown with no Keys.
+
+Not checked by a person: real Privy and an extension wallet on the vote and mark buttons. Their code didn't change here.
+
+Live read at 16:51Z: live figures Present 55, Expiring 0, Undecided 0, matching the chain's 6 yes and 49 no of 55; proposals row "55 counted · 33 needed" at 1280, 390 and 320 with no sideways scroll; signed doctor answers `gas.pays_own_fee` true; credits read 200; sign-in and wallet pages 200.
+
+Noted, not fixed here: docs.md says the API version is in `info.version` of /openapi.json, which is the small health-and-account spec at 15.2.0; the numbers in its breaking-change list are the YAML contract's.
+
 ## 2026-11-02 — Points from Keyfleet's own records
 
 - Keyfleet now offers Regent Points what may earn, inside the transaction that first

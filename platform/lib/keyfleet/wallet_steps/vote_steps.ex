@@ -59,7 +59,13 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           )
         end
 
-      {:ok, steps, %{keys: keys, status: status, blocked: ballot_blocked(status, governed, keys)}}
+      {:ok, steps,
+       %{
+         keys: keys,
+         undecided: keys -- Proposals.voted_keys(fleet.id, proposal),
+         status: status,
+         blocked: ballot_blocked(status, governed, keys)
+       }}
     else
       _unread -> {:problem, :unread, figures}
     end

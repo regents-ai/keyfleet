@@ -26,6 +26,7 @@ long (see "Money nobody has moved" below).
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
 | `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Accelerant #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |
+| `Keyfleet.Keys.PresenceTimer` | :07 past every hour | marks presence for the Keys whose shard the timer wallet holds once any has 24 hours or less left; saves an error for a failed send, a Key under 12 hours, low ETH or a shard ending within 30 days | chain | saved error, 1 try; the next hour reads again |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
 | Direct messages `remove_expired` (AshOban) | hourly | deletes expired direct messages | default | saved error |
 | Key pictures `close_up` and `small_card` (AshOban triggers) | every minute | makes each revealed Key's close-up and small card where one is missing | key_art | saved error, 5 tries; the next minute queues it again |
@@ -79,6 +80,14 @@ sells and waits in Revealing. `Keyfleet.Keys.DeckEndCheck` saves one error at
 and its deck's size: for Accelerant #1, from Key 900 to Key 1,000. Sentinel emails
 once; each hour in that window adds an occurrence. Classic #1 and the Regents
 Club, whose supply is their deck, are never named.
+
+## Keys the timer keeps present
+
+An owner who wants a Key kept present issues a shard to the timer wallet
+`0x0890073F213c29EceBAaf2152392D0079bbE88dB` with agent voting off, from the
+Key's page, and the wallet needs ETH on Base. `Keyfleet.Keys.PresenceTimer` then
+marks those Keys. It sends only `present`, never a ballot. If its key is lost, make
+a new wallet, store its key as `KEYFLEET_PRESENCE_TIMER_KEY` and issue new shards.
 
 ## Seeing that a job ran
 

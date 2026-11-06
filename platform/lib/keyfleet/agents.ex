@@ -165,16 +165,31 @@ defmodule Keyfleet.Agents do
   from their Agents page here or on any Regent site. A reading that fails
   counts as none.
   """
-  def has_paired_agent?(%Keyfleet.Actors.Human{human_account_id: id} = actor) do
+  def has_paired_agent?(%Keyfleet.Actors.Human{} = actor), do: my_agents(actor) != []
+
+  @doc """
+  The agents paired to the signed-in person's Regent account, from their Agents
+  page here or on any Regent site. A reading that fails counts as none.
+  """
+  def my_agents(%Keyfleet.Actors.Human{human_account_id: id} = actor) do
     with {:ok, account} <- Keyfleet.Accounts.get_human_account(id, actor: actor),
-         {:ok, [_ | _]} <-
+         {:ok, agents} <-
            RegentAgents.list_my_agents(
              actor: %RegentAgents.Person{privy_user_id: account.privy_user_id}
            ) do
-      true
+      agents
     else
-      _none -> false
+      _none -> []
     end
+  end
+
+  @doc "Each of `wallets`' check-ins with the fleet, as `%{wallet => check_in}`."
+  def check_ins_by_wallet(wallets, fleet_id) do
+    for profile <- agents_by_wallets!(wallets, load: [:check_ins]),
+        check_in <- profile.check_ins,
+        check_in.fleet_id == fleet_id,
+        into: %{},
+        do: {profile.wallet_address, check_in}
   end
 
   @doc """

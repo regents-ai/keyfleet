@@ -7,11 +7,13 @@
 app = "keyfleet-key-art"
 primary_region = "iad"
 
-# The machine sleeps when no picture is being drawn and wakes on the next request.
+# The machine is suspended when no picture is being drawn and resumes on the next
+# request with its browser already running. A stopped machine started cold, and Fly's
+# proxy gave up on the waking request before the server took it.
 [http_service]
   internal_port = 8080
   force_https = false
-  auto_stop_machines = "stop"
+  auto_stop_machines = "suspend"
   auto_start_machines = true
   min_machines_running = 0
 

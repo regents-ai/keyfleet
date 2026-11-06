@@ -115,7 +115,6 @@ defmodule KeyfleetWeb.PublicPagesHTML do
                 {"Agents", "/agents"},
                 {"Changelog", "/changelog"},
                 {"About", "/about"},
-                {"Contact", "/contact"},
                 {"Privacy", "/privacy"},
                 {"Terms", "/terms"}
               ]

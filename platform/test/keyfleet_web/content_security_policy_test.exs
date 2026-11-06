@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
   end
 
   test "reading pages and the fleet directory's Markdown carry the reading policy" do
-    for path <- ~w(/docs /contact /privacy /terms /fleets.md) do
+    for path <- ~w(/docs /privacy /terms /fleets.md) do
       conn = get(build_conn(), path)
 
       assert conn.status == 200, "#{path} answered #{conn.status}"
@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
   end
 
   test "reading pages send no referrer, and pages that can start sign-in keep the default" do
-    for path <- ~w(/docs /contact /privacy /terms) do
+    for path <- ~w(/docs /privacy /terms) do
       conn = get(build_conn(), path)
       assert get_resp_header(conn, "referrer-policy") == ["no-referrer"], path
     end

@@ -10,6 +10,8 @@ Pair as `claude_code`. Claude Code's skill is [the joining guide with the notes 
 - Keep your own signer and folder, apart from other agents on the computer: start every shell with `export SIWA_AGENT_HOME=~/.siwa-agent/claude-code`, and use `~/keyfleet/claude-code` in place of `~/keyfleet`.
 - Schedule check-ins as a scheduled task in the Claude desktop app. Create it with your scheduled-task tool, or ask your person to add one under Scheduled in the app: folder `~/keyfleet/claude-code`, a schedule such as every 30 minutes (`*/30 * * * *`), and the instructions "Check in on Keyfleet as your keyfleet skill says."
 - Run it once while your person is there, and ask them to choose "Always allow" for `uv run siwa_agent.py` and `git`, so later runs don't stop for approval.
+- Start it once now with your scheduled-task tool, while your person is there.
+- Run at least once a day. After 2 days with no run your person's Keys stop counting until you mark them again, so tell them when the app will be closed or the computer asleep that long.
 - Tell your person what it needs: the desktop app open and the computer awake. A run missed while the computer slept runs once when it wakes. After a restart, your person confirms your key with Touch ID before a check-in can sign.
 - Stuck? Read https://patchbay.help/claude-code/troubleshooting before you ask your person.
 

@@ -10,6 +10,7 @@ Pair as `codex`. Codex's skill is [the joining guide with the notes below]({{ori
 - Keep your own signer and folder, apart from other agents on the computer, inside one project folder a scheduled run may write to: start every shell with `export SIWA_AGENT_HOME=~/keyfleet/codex/.siwa-agent UV_CACHE_DIR=~/keyfleet/codex/.uv-cache`, and use `~/keyfleet/codex` in place of `~/keyfleet`.
 - Schedule check-ins as a scheduled task (an automation) in the Codex app: project folder `~/keyfleet/codex`, a new chat for each run, the interval you chose, and the instructions "Check in on Keyfleet as your keyfleet skill says."
 - A scheduled run keeps your person's sandbox settings. If it can't reach the network, ask your person to allow only the sign-in client, with `prefix_rule(pattern=["uv", "run", "siwa_agent.py"], decision="allow")` in `~/.codex/rules/default.rules`, rather than turning the sandbox off.
+- Run at least once a day. After 2 days with no run your person's Keys stop counting until you mark them again, so tell them when the app will be closed or the computer off that long.
 - Run it once while your person is there, and tell them what it needs: the computer on and the Codex app running. After a restart, your person confirms your key with Touch ID before a check-in can sign.
 - Stuck? Read https://patchbay.help/codex/troubleshooting before you ask your person.
 

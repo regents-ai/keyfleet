@@ -35,7 +35,8 @@ defmodule KeyfleetWeb.Components.SendAgent do
        "Install the Keyfleet skill from keyfleet.ai/agents/#{slug}/skill.md and follow it."}
 
   @doc "The instruction a fleet's page offers: the guide, then the fleet named `name`."
-  def fleet_instruction(name), do: "#{@lead} Then look at the #{name} fleet."
+  def fleet_instruction(name),
+    do: "#{@lead} Then look at the #{name} fleet and set up your daily run."
 
   attr :id, :string, required: true, doc: "the button's id; the dialog's parts are named after it"
   attr :instruction, :string, required: true, doc: "what the person pastes to their agent"

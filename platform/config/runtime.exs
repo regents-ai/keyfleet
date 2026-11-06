@@ -218,6 +218,9 @@ if config_env() == :prod do
 
     config :keyfleet, :dns_cluster_query, System.fetch_env!("DNS_CLUSTER_QUERY")
 
+    config :keyfleet, Keyfleet.Keys.PresenceTimer,
+      key: System.fetch_env!("KEYFLEET_PRESENCE_TIMER_KEY")
+
     host = String.trim(System.fetch_env!("PHX_HOST"))
     secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
 

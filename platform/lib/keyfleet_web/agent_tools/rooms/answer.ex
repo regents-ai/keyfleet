@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents
   alias Keyfleet.Agents.CheckInStatus
+  alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys
@@ -235,9 +236,13 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         if Enum.any?(synced.rooms, &match?(%{refused: true}, &1)),
           do: refused_code(fleet_id, actor)
 
+      # A conversation's syncs come many times a minute; only a scheduled run
+      # asks the chain for the wallet's ETH.
+      upkeep = Upkeep.read(actor, fleet_id, run["kind"] == "scheduled")
+
       answer =
         synced
-        |> sync_json(check_in, yours, muted, refused)
+        |> sync_json(check_in, Map.merge(yours, upkeep), muted, refused)
         |> put_dms(synced.dms)
         |> put_quotes(synced.quotes)
 

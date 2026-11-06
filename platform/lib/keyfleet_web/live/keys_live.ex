@@ -27,6 +27,7 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.Keys.Metadata
   alias Keyfleet.Keys.Profile
   alias Keyfleet.PublicIdentity
+  alias KeyfleetWeb.Components.AgentSetup
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.PresenceCard
@@ -110,6 +111,15 @@ defmodule KeyfleetWeb.KeysLive do
           actor={@actor}
           lease={@lease}
           token_id={@key.token_id}
+        />
+
+        <.live_component
+          :if={@key.owner? and match?(%Human{}, @actor)}
+          module={AgentSetup}
+          id="key-agent-setup"
+          class="key-panel"
+          fleet_id={@key.fleet.fleet_id}
+          actor={@actor}
         />
 
         <section id="key-shards" class="key-panel" aria-labelledby="key-shards-title">

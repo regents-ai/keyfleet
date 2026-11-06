@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.FleetPage do
   @moduledoc """
   What a fleet's page reads: the reader's own keys, the key on offer, the key
-  the map has chosen, and the hall's feed with what the fleet is trying now.
+  the map has chosen, and the hall's feed with what the fleet is recent work.
   """
 
   alias Keyfleet.Activity
@@ -55,12 +55,12 @@ defmodule KeyfleetWeb.FleetPage do
   def chosen_key(_progress, _key), do: nil
 
   @doc """
-  "Trying now", beside the hall's feed and on a visitor's workspace: each of
+  "Recent Work", beside the hall's feed and on a visitor's workspace: each of
   the fleet's projects with its open goals, as `Keyfleet.Graph.shown/1`
   reads them, every title as it can be seen. A title with nothing to see
   reads "A project" or "A goal".
   """
-  def read_trying_now(fleet_id) do
+  def read_recent_work(fleet_id) do
     for project <- Graph.shown(fleet_id) do
       %{
         title: seen(project.title, "A project"),

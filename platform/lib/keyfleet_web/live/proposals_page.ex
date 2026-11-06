@@ -42,13 +42,19 @@ defmodule KeyfleetWeb.ProposalsPage do
     before = number!(params["before"])
 
     with_fleet(fleet_id, fn fleet, reading ->
-      listed(fleet, reading, before, Proposals.list_page(fleet_id, before))
+      listed(
+        fleet,
+        reading,
+        Treasury.assets(fleet),
+        before,
+        Proposals.list_page(fleet_id, before)
+      )
     end)
   end
 
-  defp listed(fleet, reading, before, {proposals, older?}) do
+  defp listed(fleet, reading, assets, before, {proposals, older?}) do
     Map.merge(reading, %{
-      proposals: Enum.map(proposals, &summary(&1, fleet)),
+      proposals: Enum.map(proposals, &summary(&1, fleet, assets)),
       first_page?: is_nil(before),
       older: if(older?, do: list_path(fleet.id, before: List.last(proposals).number)),
       propose: reading.deployed? && propose(fleet)
@@ -75,7 +81,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       carried:
         fleet.id
         |> Proposals.latest_carried_out(@carried)
-        |> Enum.map(&summary(&1, fleet)),
+        |> Enum.map(&summary(&1, fleet, assets)),
       progress: reading.deployed? && Chain.progress(fleet.id),
       manager_address: fleet.manager_address
     })
@@ -151,7 +157,7 @@ defmodule KeyfleetWeb.ProposalsPage do
         do: Reads.at_head()
 
     %{
-      list: listed(fleet, reading, nil, listing),
+      list: listed(fleet, reading, assets, nil, listing),
       treasury: treasury_shown(fleet, reading, assets, treasury_reading),
       details:
         Map.new(Enum.zip(proposals, pages), fn {proposal, {page, held}} ->
@@ -182,7 +188,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp shown(proposal, fleet, reading, assets, balances) do
     Map.merge(reading, %{
       number: Integer.to_string(proposal.number),
-      proposal: Map.merge(summary(proposal, fleet), details(proposal, fleet, assets, balances))
+      proposal:
+        Map.merge(summary(proposal, fleet, assets), details(proposal, fleet, assets, balances))
     })
   end
 
@@ -278,10 +285,11 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp pay_name(%{address: address}), do: "Token #{RegentFormat.short_address(address)}"
 
-  defp summary(proposal, fleet) do
+  defp summary(proposal, fleet, assets) do
     %{
       number: proposal.number,
       kind: kind(proposal.calls, fleet),
+      actions: Enum.map(proposal.calls, &(&1 |> Actions.decode(fleet) |> said(assets, %{}))),
       status: Proposals.status(proposal),
       yes: proposal.yes_keys,
       no: proposal.no_keys,

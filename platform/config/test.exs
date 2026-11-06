@@ -74,6 +74,9 @@ config :keyfleet, Keyfleet.Decks,
 
 config :keyfleet, :database_startup_enabled, true
 
+# A wallet holding nothing, so the presence timer has nothing to mark.
+config :keyfleet, Keyfleet.Keys.PresenceTimer, key: "0x" <> String.duplicate("11", 32)
+
 # Jobs run only when a test runs them (`Oban.Testing`).
 config :keyfleet, Oban, testing: :manual
 

@@ -33,7 +33,6 @@ defmodule Keyfleet.Keys do
         not_found_error?: false
 
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
-      define :idle_keys_in_fleet, action: :idle_in_fleet, args: [:fleet_id]
       define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
       define :keys_held_everywhere, action: :held_everywhere, args: [:owner_wallets]
 
@@ -294,14 +293,43 @@ defmodule Keyfleet.Keys do
   def held_keys(_actor, _fleet_id), do: []
 
   @doc """
-  How many of the fleet's keys have no vote now (see the `idle` calculation of
-  `Keyfleet.Keys.KeyAttachment`), as `{:ok, count}`, or `{:error, failure}`
-  when the database doesn't answer (see `Keyfleet.Count`).
+  Each of `token_ids`' last presence record in the fleet, as `%{token_id =>
+  record}`, or its last one before `{block_number, log_index}`. A Key with none
+  isn't in the map.
   """
-  def count_idle_keys(fleet_id) do
-    Keyfleet.Keys.KeyAttachment
-    |> Ash.Query.for_read(:idle_in_fleet, %{fleet_id: fleet_id})
-    |> Keyfleet.Count.of()
+  def last_presence(fleet_id, token_ids, before \\ nil) do
+    Keyfleet.Keys.Presence
+    |> Ash.Query.filter(fleet_id == ^fleet_id and token_id in ^token_ids)
+    |> presence_before(before)
+    |> Ash.Query.distinct(:token_id)
+    |> Ash.Query.distinct_sort(block_number: :desc, log_index: :desc)
+    |> Ash.read!()
+    |> Map.new(&{&1.token_id, &1})
+  end
+
+  defp presence_before(query, nil), do: query
+
+  defp presence_before(query, {block, log}) do
+    Ash.Query.filter(
+      query,
+      block_number < ^block or (block_number == ^block and log_index < ^log)
+    )
+  end
+
+  @doc """
+  How many of the fleet's Keys a proposal opening now would count, and how many
+  of those have a day or less left (see the `present` and `expiring`
+  calculations of `Keyfleet.Keys.KeyAttachment`), as `{:ok, %{present, expiring}}`,
+  or `{:error, failure}` when the database doesn't answer (see `Keyfleet.Count`).
+  """
+  def presence_counts(fleet_id) do
+    query =
+      Ash.Query.for_read(Keyfleet.Keys.KeyAttachment, :present_in_fleet, %{fleet_id: fleet_id})
+
+    with {:ok, present} <- Keyfleet.Count.of(query),
+         {:ok, expiring} <- query |> Ash.Query.filter(expiring) |> Keyfleet.Count.of() do
+      {:ok, %{present: present, expiring: expiring}}
+    end
   end
 
   @doc """
@@ -652,25 +680,6 @@ defmodule Keyfleet.Keys do
     |> union(^started)
     |> union(^voted)
     |> Keyfleet.Repo.all()
-  end
-
-  @doc """
-  A hundred of the fleet's idle keys by key number, from the start or from
-  `position` (`[after: keyset]`), as `{:ok, page}`, or `{:error, failure}`
-  when the database doesn't answer, which is logged, so the page says it
-  couldn't list them rather than crashing.
-  """
-  def idle_keys_page(fleet_id, position) do
-    with {:error, failure} <- idle_keys_in_fleet(fleet_id, page: position),
-         do: idle_keys_unlisted(fleet_id, failure)
-  rescue
-    failure in [Postgrex.Error, DBConnection.ConnectionError] ->
-      idle_keys_unlisted(fleet_id, failure)
-  end
-
-  defp idle_keys_unlisted(fleet_id, failure) do
-    Logger.warning("Listing the idle keys of #{fleet_id} failed: " <> Exception.message(failure))
-    {:error, failure}
   end
 
   @doc """

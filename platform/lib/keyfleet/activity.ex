@@ -78,7 +78,8 @@ defmodule Keyfleet.Activity do
       calls the treasury makes if it is carried out.
     * `:votes`: consecutive votes on one proposal: `number`, and `yes`, `no`
       and `abstain`, each `%{count: keys, token_ids: up to three, lowest
-      first}`.
+      first}`; and `totals`, how the whole proposal stood when this was read,
+      `%{yes: keys, no: keys, abstain: keys}`.
     * `:executed`: `number`.
 
   ## Times
@@ -323,7 +324,9 @@ defmodule Keyfleet.Activity do
   defp read(:proposals, fleet_id, seq, limit, _read_as) do
     reads = [
       {Proposals.proposals_recorded_before!(fleet_id, seq, limit + 1), limit + 1},
-      {Proposals.votes_recorded_before!(fleet_id, seq, @votes_read), @votes_read},
+      {Proposals.votes_recorded_before!(fleet_id, seq, @votes_read,
+         load: [proposal: [:yes_keys, :no_keys, :abstain_keys]]
+       ), @votes_read},
       {Proposals.executions_recorded_before!(fleet_id, seq, limit + 1), limit + 1}
     ]
 
@@ -486,7 +489,12 @@ defmodule Keyfleet.Activity do
           number: first.proposal_number,
           yes: tally(sides[:yes]),
           no: tally(sides[:no]),
-          abstain: tally(sides[:abstain])
+          abstain: tally(sides[:abstain]),
+          totals: %{
+            yes: first.proposal.yes_keys,
+            no: first.proposal.no_keys,
+            abstain: first.proposal.abstain_keys
+          }
         }
       )
 

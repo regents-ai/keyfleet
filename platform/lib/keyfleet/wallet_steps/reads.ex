@@ -67,17 +67,22 @@ defmodule Keyfleet.WalletSteps.Reads do
   wallet or one delegating to one, may have its fee paid for it and is never
   short.
   """
-  def short_of_gas?(%__MODULE__{client: client, head: head} = reads, wallet) do
-    case client.get_code(wallet, head.hash) do
-      {:ok, ""} ->
+  def short_of_gas?(%__MODULE__{head: head} = reads, wallet) do
+    case pays_own_fee?(reads, wallet) do
+      {:ok, true} ->
         with {:ok, wei} <- balance(reads, wallet), do: {:ok, wei < 21_000 * head.base_fee}
 
-      {:ok, _code} ->
+      {:ok, false} ->
         {:ok, false}
 
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc "Whether `wallet` has no code at the head block, so it pays its own network fee."
+  def pays_own_fee?(%__MODULE__{client: client, head: head}, wallet) do
+    with {:ok, code} <- client.get_code(wallet, head.hash), do: {:ok, code == ""}
   end
 
   @doc """

@@ -81,6 +81,20 @@ defmodule KeyfleetWeb.FleetProposals do
     end
   end
 
+  @doc """
+  The proposals on `fleet_id`'s list a vote can still change, oldest first, so
+  the one closing soonest leads and newer ones never push it down.
+  """
+  def open(fleet_id) do
+    case fetch(list_key(fleet_id)) do
+      {%{proposals: proposals}, _degraded?} ->
+        proposals |> Enum.filter(&(&1.status in [:open, :waiting])) |> Enum.reverse()
+
+      _none ->
+        []
+    end
+  end
+
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil)
 
   @impl true

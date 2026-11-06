@@ -281,19 +281,6 @@ defmodule Keyfleet.Keys.KeyAttachment do
       pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
     end
 
-    # The fleet's keys that have no vote now, each with its owner today, a
-    # page at a time by key number.
-    read :idle_in_fleet do
-      argument :fleet_id, :string, allow_nil?: false
-
-      filter expr(
-               fleet_id == ^arg(:fleet_id) and ownership_epoch == current_ownership_epoch and idle
-             )
-
-      prepare build(sort: [token_id: :asc])
-      pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
-    end
-
     # The fleet's keys that have a vote now: the ones a proposal opening now
     # would count.
     read :present_in_fleet do
@@ -496,6 +483,30 @@ defmodule Keyfleet.Keys.KeyAttachment do
                     ) AS last
                     WHERE last.kind IN ('present', 'scheduled')
                       AND last.at <= (now() AT TIME ZONE 'utc')
+                      AND (now() AT TIME ZONE 'utc') < last.at + interval '48 hours'
+                  )
+                  """,
+                  fleet_id,
+                  token_id
+                )
+              )
+
+    # Whether a present key has a day or less of its 48 hours left.
+    calculate :expiring,
+              :boolean,
+              expr(
+                fragment(
+                  """
+                  EXISTS (
+                    SELECT 1 FROM (
+                      SELECT presence.kind, presence.at
+                      FROM keyfleet_app.key_presences AS presence
+                      WHERE presence.fleet_id = ? AND presence.token_id = ?
+                      ORDER BY presence.block_number DESC, presence.log_index DESC
+                      LIMIT 1
+                    ) AS last
+                    WHERE last.kind IN ('present', 'scheduled')
+                      AND (now() AT TIME ZONE 'utc') >= last.at + interval '24 hours'
                       AND (now() AT TIME ZONE 'utc') < last.at + interval '48 hours'
                   )
                   """,
