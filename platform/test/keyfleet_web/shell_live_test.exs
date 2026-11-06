@@ -142,7 +142,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             ~s{#account-menu a[href="/account/agents#account-pairing"]:not([target])},
+             ~s{#account-menu button[data-pair-open][aria-controls="shell-pairing"]},
              "Pair New Agent"
            )
 
@@ -156,7 +156,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the Agents page pairs only an offered agent, with a new code",
+  test "the pairing window pairs only an offered agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
@@ -165,7 +165,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account/agents")
 
-    box = "#account-pairing-box"
+    box = "#shell-pairing-box"
     assert has_element?(view, "#{box} input[name=harness][value=hermes]")
     refute has_element?(view, "#{box} input[name=harness][value=chatgpt]")
 
@@ -181,7 +181,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   # Sean, 27 Oct 2026: switching agents made a new code each time and soon said
   # none could be made; each agent keeps its code until it expires.
-  test "each agent on the Agents page keeps its own code until a new one is asked for",
+  test "each agent in the pairing window keeps its own code until a new one is asked for",
        %{conn: conn} do
     account = register_account("pairing-codes", "0x5555555555555555555555555555555555555555")
 
@@ -190,7 +190,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account/agents")
 
-    box = "#account-pairing-box"
+    box = "#shell-pairing-box"
 
     code = fn html ->
       Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html, capture: :all_but_first)
@@ -232,7 +232,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     {profile, _html} = open_account(conn, account)
     refute has_element?(profile, "#account-agents")
-    refute has_element?(profile, "#account-pairing-box")
+    assert has_element?(profile, "dialog#shell-pairing form#shell-pairing-box")
 
     {view, _html} = open_account(conn, account, "/account/agents")
 

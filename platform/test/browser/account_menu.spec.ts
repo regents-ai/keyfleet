@@ -7,8 +7,10 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 //   Agent, Manage Account and Sign out, and closes on Escape with focus back on
 //   the name; Escape closes it before an open section behind it
 // - Manage Account opens Keyfleet's Account page, with no agents, and the menu closes
-// - Pair New Agent lands on the Agents page's pairing box with the keyboard on
-//   the agent choice, again when pressed from the same address
+// - Pair New Agent, in the menu and on the Agents page, opens the pairing window
+//   over the page, every press, on the list of agents with the keyboard on it;
+//   a choice closes the list and shows the message without changing the
+//   window's height; the first Escape closes the list and the next the window
 // - on the homepage the same menu opens and Manage Account loads the Account page
 // - on a phone, the open navigation menu makes the page behind it, footer
 //   included, unreachable (inert), and closing it gives the page back
@@ -54,7 +56,7 @@ for (const width of [1280, 390]) {
         "href",
         "/account/agents",
       )
-      await expect(menu(page).getByRole("link", {name: "Pair New Agent"})).toBeVisible()
+      await expect(menu(page).getByRole("button", {name: "Pair New Agent"})).toBeVisible()
       await expect(menu(page).getByRole("button", {name: "Sign out"})).toBeVisible()
 
       await menu(page).getByRole("link", {name: "Manage Account"}).focus()
@@ -90,33 +92,64 @@ for (const width of [1280, 390]) {
       await expect(menu(page)).toBeHidden()
     })
 
-    test("Pair New Agent lands on the Agents page's pairing box", async ({page}) => {
+    // Keyfleet, 27 Oct 2026: pressed a second time, Pair New Agent did nothing a
+    // person could see. Every press opens the window, over the page that is open.
+    test("Pair New Agent opens the pairing window over the page, every press", async ({page}) => {
       await signIn(page)
       await openShell(page, "/classic/1")
-      await openMenu(page)
-      await menu(page).getByRole("link", {name: "Pair New Agent"}).click()
-      await expect(page).toHaveURL(/\/account\/agents#account-pairing$/)
-      await expect(menu(page)).toBeHidden()
-      const pairing = page.locator("#account-pairing")
-      await expect(pairing).toBeInViewport()
-      await expect(pairing.getByRole("radio").first()).toBeFocused()
+      const window = page.locator("#shell-pairing")
+      const box = page.locator("form#shell-pairing-box")
+      const list = box.locator("details")
+      const height = () => box.evaluate(element => element.getBoundingClientRect().height)
 
-      // Pressed again from the same address after leaving the box, it moves there again.
-      // The Agents page can be short enough that the box never scrolls out of view,
-      // so the keyboard moving back to the agent choice is what shows it.
-      await page.locator("#app-shell-scroller").evaluate(scroller => scroller.scrollTo({top: 0}))
-      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-      await expect(pairing.getByRole("radio").first()).not.toBeFocused()
       await openMenu(page)
-      await menu(page).getByRole("link", {name: "Pair New Agent"}).click()
+      await menu(page).getByRole("button", {name: "Pair New Agent"}).click()
       await expect(menu(page)).toBeHidden()
-      await expect(pairing).toBeInViewport()
-      await expect(pairing.getByRole("radio").first()).toBeFocused()
+      await expect(window).toBeVisible()
+      await expect(page).toHaveURL(/\/classic\/1$/)
+      await expect(list).toHaveAttribute("open", "")
+      await expect(list.locator("summary")).toBeFocused()
+      const drawn = (await window.boundingBox())!
+      expect(drawn.x).toBeGreaterThanOrEqual(0)
+      expect(drawn.x + drawn.width).toBeLessThanOrEqual(width)
 
-      // The Agents page's own Pair New Agent, beside the agents, goes there too.
-      await page.locator("#app-shell-scroller").evaluate(scroller => scroller.scrollTo({top: 0}))
-      await page.locator("#account-agents").getByRole("link", {name: "Pair New Agent"}).click()
-      await expect(pairing).toBeInViewport()
+      // A choice closes the list and shows that agent's message; the window
+      // keeps its height whatever is chosen (founder, 2026-10-07).
+      const before = await height()
+      await box.getByRole("radio", {name: "Hermes", exact: true}).locator("xpath=ancestor::label").click()
+      await expect(list).not.toHaveAttribute("open", "")
+      await expect(box.locator("pre")).toContainText(/Pairing code:\s*\S{12,}/)
+      expect(await height()).toBe(before)
+      await list.locator("summary").click()
+      await box.getByRole("radio", {name: "Dots", exact: true}).locator("xpath=ancestor::label").click()
+      await expect(box.locator("pre")).toContainText(/Pairing code:\s*\S{12,}/)
+      expect(await height()).toBe(before)
+
+      await window.getByRole("button", {name: "Close"}).click()
+      await expect(window).toBeHidden()
+
+      // Pressed again, it opens again; with the list open, the first Escape
+      // closes the list and the next the window.
+      await openMenu(page)
+      await menu(page).getByRole("button", {name: "Pair New Agent"}).click()
+      await expect(window).toBeVisible()
+      await list.locator("summary").click()
+      await expect(list).toHaveAttribute("open", "")
+      await page.keyboard.press("Escape")
+      await expect(list).not.toHaveAttribute("open", "")
+      await expect(window).toBeVisible()
+      await page.keyboard.press("Escape")
+      await expect(window).toBeHidden()
+
+      // The Agents page's own Pair New Agent, beside the agents, opens it too,
+      // and closing gives the keyboard back to it.
+      await openShell(page, "/account/agents")
+      const own = page.locator("#account-agents").getByRole("button", {name: "Pair New Agent"})
+      await own.click()
+      await expect(window).toBeVisible()
+      await window.getByRole("button", {name: "Close"}).click()
+      await expect(window).toBeHidden()
+      await expect(own).toBeFocused()
     })
 
     test("on the homepage the account menu opens and Manage Account loads the Account page", async ({page}) => {

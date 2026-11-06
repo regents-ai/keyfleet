@@ -100,7 +100,7 @@ body:has(.sc) { margin: 0; background: var(--color-bg); color: var(--color-fg); 
 .sc code { font: 12px/1.6 var(--font-family-mono); overflow-wrap: anywhere; }
 .sc-api-note { border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent); margin-top: 24px; padding-top: 8px; font-size: 11px; }
 .sc-api-note summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
-.sc-api-note[open] summary span { transform: rotate(90deg); }
+.sc-api-note[open] summary .rg-icon { transform: rotate(90deg); }
 .sc-api-note code { display: block; padding-top: 8px; }
 .sc-type-display { font: 400 42px/1.2 var(--font-family-title); margin: 16px 0; }
 .sc-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

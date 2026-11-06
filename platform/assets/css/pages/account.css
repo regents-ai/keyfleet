@@ -460,24 +460,51 @@ div.verified-connections__notice p {
   }
 }
 
-/* Bring your agent (/pair): the pairing box keeps the width it has on a phone,
-   so the agents' pictures stay together, and the page an agent starts at wraps
-   rather than running off a narrow screen. On the narrowest screens the
-   pictures shrink a little so all five in a row still fit. Unlayered, like the
-   shared pairing box it adjusts. */
+/* Pairing: the window every Pair New Agent opens, and the pairing link's page
+   (/pair), whose box keeps the window's width and whose start page wraps rather
+   than running off a narrow screen. Unlayered, like the shared pairing box. */
+.shell-pairing-dialog {
+  --rg-dialog-size: 30rem;
+  --shell-dialog-pad: clamp(var(--space-2), 4vw, var(--space-4));
+}
+
+.shell-pairing-dialog h2 {
+  margin: 0 0 var(--space-3);
+  padding-inline-end: 3rem;
+  font-family: var(--font-family-ui);
+  font-size: var(--type-headline-size);
+}
+
+/* The window's close button, square in its top right corner, and kept there
+   while the window scrolls. Its margins give back the room it takes, so what is
+   under it keeps its place. The pad is the window frame's own. */
+.shell-dialog-close {
+  position: sticky;
+  inset-block-start: calc(-1 * var(--shell-dialog-pad));
+  z-index: var(--rg-layer-card);
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  margin-block: calc(-1 * var(--shell-dialog-pad)) calc(var(--shell-dialog-pad) - 2.75rem);
+  margin-inline: auto calc(-1 * var(--shell-dialog-pad));
+  padding: 0;
+  border: 0;
+  border-radius: 0 calc(1.25rem - 1px) 0 0.75rem;
+}
+
+.shell-dialog-close svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
 .pair-page .rg-account__pair {
-  max-inline-size: 24rem;
+  max-inline-size: 27rem;
 }
 
 .pair-page #pair-start {
   overflow-wrap: anywhere;
-}
-
-@media (max-width: 22rem) {
-  .pair-page .rg-account__pair[data-layout="icons"] .rg-account__choice .rg-account__mark {
-    inline-size: 2rem;
-    block-size: 2rem;
-  }
 }
 
 /* Give It a Shard appears under the pairing box once an agent pairs; its line

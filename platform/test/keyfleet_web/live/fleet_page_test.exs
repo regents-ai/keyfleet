@@ -642,7 +642,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key-approve[hidden]")
       assert has_element?(view, "#buy-key-approve[data-done][disabled]")
       assert text(view, "#buy-key-approve [data-press-label]") == "USDC approved"
-      assert text(view, "#buy-key-approve .fleet-step-mark") == "✓"
+      assert text(view, "#buy-key-approve .fleet-step-mark") == ""
+      assert has_element?(view, "#buy-key-approve .fleet-step-mark svg.rg-icon")
       refute has_element?(view, "#buy-key-approve[aria-describedby]")
 
       assert has_element?(view, "#buy-key-unlimited[disabled]")

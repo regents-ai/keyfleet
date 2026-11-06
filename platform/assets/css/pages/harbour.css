@@ -430,9 +430,8 @@ body.sea-lifted:has(> .harbour-sea) #app-shell {
   text-decoration: none;
 }
 
-.harbour-card__key::after {
+.harbour-card__key .rg-icon {
   margin-inline-start: 0.4em;
-  content: "\2192";
 }
 
 @media (hover: hover) {

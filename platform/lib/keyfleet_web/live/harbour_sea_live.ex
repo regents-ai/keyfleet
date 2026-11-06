@@ -558,14 +558,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         </div>
         <form method="dialog">
           <button type="submit" class="harbour-card__close" aria-label="Close">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path
-                d="M3 3l10 10M13 3L3 13"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              />
-            </svg>
+            <Regent.Icons.icon name="x" />
           </button>
         </form>
       </header>
@@ -585,7 +578,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         </li>
       </ol>
       <.link class="harbour-card__key" navigate={KeyLinks.page_path(@ship.fleet_id, @ship.token_id)}>
-        View
+        View <Regent.Icons.icon name="arrow-right" />
       </.link>
     </Regent.Structure.dialog>
     """

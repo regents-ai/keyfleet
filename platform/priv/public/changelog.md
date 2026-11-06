@@ -4,6 +4,10 @@ Changes to Keyfleet, newest first.
 
 ## 6 November 2026
 
+- **Icons.** Every icon on a button now comes from one set and sits at one line weight.
+- **Pairing.** Pair New Agent, in the account menu and on the Agents page, opens one
+  window over the page you are on: choose your agent from the list, copy its message,
+  paste it, and a tick shows once it has paired.
 - **Present.** The Continue button is gone. On the rare day too many Keys have lapsed at once, Propose shows Clear lapsed Keys first.
 
 ## 5 November 2026

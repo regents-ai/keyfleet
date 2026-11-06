@@ -65,9 +65,11 @@ defmodule KeyfleetWeb.ShowcaseLive do
       <header class="sc-header">
         <a class="sc-wordmark" href="/showcase">Ash <span>Workshop</span></a>
         <span class="sc-local">Local only</span>
-        <a href="/showcase/catalog" class="sc-api">Agent catalog ↗</a>
-        <a href="/showcase/privy" class="sc-api">Privy reference ↗</a>
-        <a href="/showcase/key-map" class="sc-api">Key map ↗</a>
+        <a href="/showcase/catalog" class="sc-api">Agent catalog
+        <Regent.Icons.icon name="arrow-up-right" /></a>
+        <a href="/showcase/privy" class="sc-api">Privy reference
+        <Regent.Icons.icon name="arrow-up-right" /></a>
+        <a href="/showcase/key-map" class="sc-api">Key map <Regent.Icons.icon name="arrow-up-right" /></a>
       </header>
       <div class="sc-layout">
         <aside class="sc-sidebar">
@@ -301,7 +303,8 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   </svg>
                 </:media>
                 <:actions>
-                  <a href={card.href} class="rg-button rg-button--quiet">{card.action} ↗</a>
+                  <a href={card.href} class="rg-button rg-button--quiet">{card.action}
+                  <Regent.Icons.icon name="arrow-up-right" /></a>
                 </:actions>
               </S.capability_card>
             </div>
@@ -505,7 +508,8 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       verified with a real account. Wallet fixture state is separate.
                     </p>
                   </P.disclosure><h3>Product pages</h3><div class="sc-row">
-                    <a href="/">Home ↗</a><a href="/account">Account ↗</a>
+                    <a href="/">Home <Regent.Icons.icon name="arrow-up-right" /></a><a href="/account">Account
+                    <Regent.Icons.icon name="arrow-up-right" /></a>
                   </div><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="real-actions"
@@ -677,7 +681,8 @@ defmodule KeyfleetWeb.ShowcaseLive do
             </P.disclosure>
           </section>
           <footer class="sc-footer">
-            <span>Ash / Component workshop</span><a href="#showcase">Back to top ↑</a>
+            <span>Ash / Component workshop</span><a href="#showcase">Back to top
+            <Regent.Icons.icon name="arrow-up" /></a>
           </footer>
         </main>
       </div>
@@ -703,7 +708,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
   defp api(assigns) do
     ~H"""
     <details class="sc-api-note">
-      <summary>API <span aria-hidden="true">›</span></summary><code>{@module}.{@function}/1</code>
+      <summary>API <Regent.Icons.icon name="chevron-right" /></summary><code>{@module}.{@function}/1</code>
     </details>
     """
   end

@@ -348,8 +348,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp human_backing(%{agent: %{backing: %{human_backed: true}}} = assigns) do
     ~H"""
     <span id={"key-profile-human-#{@wallet}"} class="key-profile-status">
-      <span aria-hidden="true">✓</span>
-      Verified human
+      <Regent.Icons.icon name="check" /> Verified human
       <Regent.Primitives.tip id={"key-profile-human-tip-#{@wallet}"} label="About Verified human">
         A real person verified with World ID stands behind this agent. Who they are stays private.
       </Regent.Primitives.tip>
@@ -647,7 +646,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
               aria-label="Take this post off your wall"
               title="Take this post off your wall"
             >
-              ×
+              <Regent.Icons.icon name="x" />
             </Regent.Primitives.button>
           </p>
           <div class="rooms-body">{RoomsLive.body_html(message.body)}</div>

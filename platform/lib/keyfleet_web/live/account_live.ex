@@ -9,8 +9,8 @@ defmodule KeyfleetWeb.AccountLive do
   (`KeyfleetWeb.PostingKeyChoice`), their Credits and this browser's session, in
   the layout every Regent site shares, `Regent.Account.layout`, Keyfleet's own
   sections first), Agents (the agents paired with their account, which they may
-  open, rename and unpair (`KeyfleetWeb.AgentsPanel`), and pairing a new one
-  (`KeyfleetWeb.PairingBox`), in `Regent.Account.agents_layout`), Wallets (the wallets their sign-in
+  open, rename and unpair (`KeyfleetWeb.AgentsPanel`), whose Pair New Agent opens
+  the pairing window), Wallets (the wallets their sign-in
   verified, the same list) and Connections (the accounts they have connected, which each
   fleet's Member List shows beside their address). Points has its
   own page (`KeyfleetWeb.PointsLive`).
@@ -294,25 +294,13 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>The agents you paired, and pairing a new one.</:tip>
-      <Regent.Account.agents_layout id="account">
-        <:agents>
-          <.live_component
-            module={KeyfleetWeb.AgentsPanel}
-            id="account-agents"
-            account={@account}
-            lease={@lease}
-          />
-        </:agents>
-        <:pairing>
-          <.live_component
-            module={KeyfleetWeb.PairingBox}
-            id="account-pairing-box"
-            lease={@lease}
-            account={@account}
-          />
-        </:pairing>
-      </Regent.Account.agents_layout>
+      <:tip>The agents you paired.</:tip>
+      <.live_component
+        module={KeyfleetWeb.AgentsPanel}
+        id="account-agents"
+        account={@account}
+        lease={@lease}
+      />
     </.settings_page>
     """
   end

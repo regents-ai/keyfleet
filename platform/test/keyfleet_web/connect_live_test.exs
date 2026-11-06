@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
   #   runtime's own skill, copied exactly as shown
   # - a runtime the guides don't have is no page
   # - signed out, pairing starts with a sign-in and no step shows done
-  # - signed in, Pair New Agent leads to the Agents page; once an agent pairs,
+  # - signed in, Pair New Agent opens the pairing window; once an agent pairs,
   #   the step shows done with its name, and a Key the account holds shows
   #   the Key step done with the Key; a done step says "Done" to screen readers
 
@@ -88,9 +88,11 @@ defmodule KeyfleetWeb.ConnectLiveTest do
 
     assert has_element?(
              view,
-             ~s(a#connect-pair-new[href="/account/agents#account-pairing"]),
+             ~s(button#connect-pair-new[data-pair-open][aria-controls="shell-pairing"]),
              "Pair New Agent"
            )
+
+    assert has_element?(view, "dialog#shell-pairing form#shell-pairing-box")
 
     refute has_element?(view, ".connect-step[data-done]")
 

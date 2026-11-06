@@ -10,9 +10,10 @@ defmodule KeyfleetWeb.Components.Shell do
   Signed in, the account's picture and name at the top right open the account
   menu (`Regent.Account.menu`), the same on the app's pages and the homepage: the
   person's picture, name and wallet, the agents paired with the account (the
-  `agents` slot), Pair New Agent, Manage Account and Sign out. The agents and pairing are on the Agents page,
-  and the account's wallets and everything else about the account are on the
-  Account page. The browser opens and closes the menu (`popover`); following a
+  `agents` slot), Pair New Agent, Manage Account and Sign out. Pair New Agent
+  opens the pairing window (`pairing_window/1`) over the page; the agents are on
+  the Agents page, and the account's wallets and everything else about the
+  account are on the Account page. The browser opens and closes the menu (`popover`); following a
   link inside it closes it (`assets/js/account_menu.ts`).
   """
 
@@ -41,6 +42,10 @@ defmodule KeyfleetWeb.Components.Shell do
   # signed out with `:if`.
   slot(:agents, required: true, doc: "The agents paired with the account, in the account menu.")
   slot(:buy_key, doc: "The \"Buy Key\" window, while it is open.")
+
+  slot(:pairing_panel,
+    doc: "The pairing window's box, signed in, opened by every Pair New Agent."
+  )
 
   def shell(assigns) do
     ~H"""
@@ -123,7 +128,40 @@ defmodule KeyfleetWeb.Components.Shell do
       </div>
 
       {render_slot(@buy_key)}
+
+      <.pairing_window :if={@pairing_panel != []}>{render_slot(@pairing_panel)}</.pairing_window>
     </div>
+    """
+  end
+
+  slot :inner_block, required: true, doc: "the pairing box"
+
+  @doc """
+  The pairing window every Pair New Agent opens, in the account menu and on the
+  Agents page, over the page the person is on (`assets/js/account_menu.ts`): the
+  pairing box, with a close button in its top corner. The app's pages draw it in
+  the shell's `pairing_panel` slot, the homepage beside its header.
+  """
+  def pairing_window(assigns) do
+    ~H"""
+    <Regent.Structure.dialog
+      id="shell-pairing"
+      class="shell-pairing-dialog"
+      aria-labelledby="shell-pairing-title"
+      phx-mounted={JS.ignore_attributes(["open"])}
+    >
+      <Regent.Primitives.button
+        variant="quiet"
+        type="button"
+        class="shell-dialog-close"
+        aria-label="Close"
+        data-pair-close
+      >
+        <Regent.Icons.icon name="x" />
+      </Regent.Primitives.button>
+      <h2 id="shell-pairing-title">Pair New Agent</h2>
+      {render_slot(@inner_block)}
+    </Regent.Structure.dialog>
     """
   end
 
@@ -200,7 +238,7 @@ defmodule KeyfleetWeb.Components.Shell do
         wallet={@account_control.wallet}
         ens_name={@account_control.ens_name}
         manage_href={~p"/account"}
-        pair_href={~p"/account/agents#account-pairing"}
+        pair_window="shell-pairing"
       >
         <:picture>
           <img

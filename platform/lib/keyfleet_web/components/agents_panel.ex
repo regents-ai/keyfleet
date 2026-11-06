@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.AgentsPanel do
   The agents a person has paired with their account (`RegentAgents`), on the
   Agents page, in the shared agents list (`Regent.Account.agents`), each with
   its check-in light (`Keyfleet.Agents.check_in_lights/2`), with Pair
-  New Agent leading to the pairing box below it (`KeyfleetWeb.PairingBox`),
+  New Agent opening the pairing window (`KeyfleetWeb.PairingBox`),
   and a larger view of one agent with where it has been active across the Regent
   sites, a line for each site and day (`Keyfleet.Agents.ActivityReading`), its
   name, which the person may change, what it has spent of their Credits, and
@@ -211,9 +211,16 @@ defmodule KeyfleetWeb.AgentsPanel do
           </P.button>
         </:actions>
         <:footer>
-          <a href="#account-pairing" class="rg-button rg-button--secondary rg-button--no-arrow">
-            <span class="rg-button__label">Pair New Agent</span>
-          </a>
+          <P.button
+            type="button"
+            variant="secondary"
+            arrow={false}
+            aria-haspopup="dialog"
+            aria-controls="shell-pairing"
+            data-pair-open
+          >
+            Pair New Agent
+          </P.button>
 
           <Regent.Account.agent_detail
             :if={@detail}

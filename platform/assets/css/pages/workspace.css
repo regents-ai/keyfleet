@@ -759,11 +759,6 @@
 .kf-pin svg {
   width: 1.125rem;
   height: 1.125rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
   transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 

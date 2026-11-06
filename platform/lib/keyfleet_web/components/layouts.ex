@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.Layouts do
         aria-label="Dismiss"
         phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")}
       >
-        ×
+        <Regent.Icons.icon name="x" />
       </button>
     </div>
     """

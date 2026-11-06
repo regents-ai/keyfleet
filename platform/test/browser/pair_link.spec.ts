@@ -13,8 +13,11 @@ async function open(page: Page, path: string) {
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
 }
 
+// The page opens on the list of agents; a choice closes it, so a later one opens it again.
 async function choose(page: Page, agent: string) {
   const radio = box(page).getByRole("radio", {name: agent, exact: true})
+  const list = box(page).locator("details")
+  if (!(await list.evaluate(details => (details as HTMLDetailsElement).open))) await list.locator("summary").click()
   await radio.locator("xpath=ancestor::label").click()
   await expect(radio).toBeChecked()
 }

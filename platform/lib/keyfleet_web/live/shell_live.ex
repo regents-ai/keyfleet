@@ -474,15 +474,15 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
-  # corrected or unpaired. The account menu follows on every page, the Agents
-  # page's list and pairing box on that page.
+  # corrected or unpaired. The account menu and the pairing window follow on
+  # every page, the Agents page's list on that page.
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
 
     case socket.assigns.route_spec.route_id do
       :account_agents ->
         send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
-        send_update(KeyfleetWeb.PairingBox, id: "account-pairing-box", agents_changed: true)
         {:noreply, socket}
 
       :connect ->
@@ -671,6 +671,14 @@ defmodule KeyfleetWeb.ShellLive do
       <:buy_key :if={@buy_key}>
         <BuyKey.window sale={@buy_key} actor={actor(@access_context)} lease={@session_lease} />
       </:buy_key>
+      <:pairing_panel :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.PairingBox}
+          id="shell-pairing-box"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+        />
+      </:pairing_panel>
       <:content :if={@load_failed?}>
         <article id="page-load-failed" class="fleet-page">
           <section class="fleet-panel">
