@@ -70,6 +70,8 @@ defmodule Keyfleet.Points.StartAwardsTest do
     assert Enum.flat_map(@rules, &offers/1) == []
   end
 
+  # Oban's job rows are not Ash records, so the queued offers are read straight
+  # from its table.
   defp offers(rule) do
     Repo.all(
       from j in Oban.Job,
@@ -86,6 +88,7 @@ defmodule Keyfleet.Points.StartAwardsTest do
       Ash.read!(Ash.Query.filter(Event, account_id == ^account_id), actor: Store.system())
       |> Enum.map(& &1.id)
 
+    # Oban's job rows are not Ash records: the awards queued for these events.
     Repo.all(
       from j in Oban.Job,
         where:
@@ -98,6 +101,8 @@ defmodule Keyfleet.Points.StartAwardsTest do
   defp run(jobs, worker) do
     for job <- jobs, do: assert(worker.perform(%{job | attempt: 1}) == :ok)
 
+    # Oban's job rows are not Ash records: the jobs just run are marked done so a
+    # later read of the queue skips them.
     Repo.update_all(from(j in Oban.Job, where: j.id in ^Enum.map(jobs, & &1.id)),
       set: [state: "completed"]
     )
