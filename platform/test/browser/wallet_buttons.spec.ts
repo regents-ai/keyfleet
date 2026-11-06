@@ -18,6 +18,10 @@ const usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
 const approveSelector = "0x095ea7b3"
 const purchaseSelector = "0xb48eb184"
 const requestRevealSelector = "0x40261cdd"
+// The Builder Code every step's data ends with (RegentChain.BuilderCode).
+const builderCode = "62635f7530393336306a6f0b0080218021802180218021802180218021"
+// The amount an approval's data asks for: its last word before the Builder Code.
+const approvedAmount = (data: string) => Number(BigInt(`0x${data.slice(0, -builderCode.length).slice(-64)}`))
 
 // Opens the fleet's page, signed in as `bearer` unless it is null, with the
 // "Buy Key" window the header's "Purchase Key" opens: earlier tests may have
@@ -105,7 +109,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
 
   // The first approval lands; the steps are built again from the allowance
   // it gave, the most the purchase may cost, which leaves only the purchase.
-  allowUsdc(me, Number(BigInt(`0x${first.transaction.data.slice(-64)}`)))
+  allowUsdc(me, approvedAmount(first.transaction.data))
   landStep(first.hash, first.transaction, true)
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")
   await expect(sentLine(page, first.hash)).toContainText("Approved. Now press the next button.")
@@ -182,7 +186,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   expect(approval.transaction.data.startsWith(approveSelector)).toBe(true)
   await expect(window.locator("#buy-key-button")).toBeEnabled()
 
-  allowUsdc(me, Number(BigInt(`0x${approval.transaction.data.slice(-64)}`)))
+  allowUsdc(me, approvedAmount(approval.transaction.data))
   landStep(approval.hash, approval.transaction, true)
   await shownDone(window.locator("#buy-key-approve"))
   await expect(window.locator("#buy-key-unlimited")).toBeDisabled()
@@ -442,7 +446,7 @@ test("a key whose draw was turned down can be asked again: every press reaches t
   const [first, second] = await sentByStandIn(page)
   for (const {transaction} of [first, second]) {
     expect(transaction.to.toLowerCase()).toBe(keysContract)
-    expect(transaction.data).toBe(requestRevealSelector + collectionId(key).toString(16).padStart(64, "0"))
+    expect(transaction.data).toBe(requestRevealSelector + collectionId(key).toString(16).padStart(64, "0") + builderCode)
   }
 
   // The first is accepted; the server reads that the draw is on its way.
