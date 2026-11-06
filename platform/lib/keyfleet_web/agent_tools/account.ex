@@ -85,7 +85,7 @@ defmodule KeyfleetWeb.AgentTools.Account do
     end
 
     action :points, :map do
-      description "Your person's Points, today's total and recent entries."
+      description "Your person's Points, today and yesterday, their place, actions still open, daily limits, the leaderboard and recent entries."
       run {Run, tool: "account_points"}
     end
   end

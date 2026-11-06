@@ -7,9 +7,10 @@ defmodule KeyfleetWeb.Telemetry do
   `[:keyfleet, :chain, :failure]` for each chain request that got no answer
   (`Keyfleet.ChainClient`), and `[:keyfleet, :wallet, :failure]` for each
   press the browser reported as not sent or not confirmed (`wallet_failed/2`).
-  The figures every visitor sees alike (`Keyfleet.SharedReading`) report, for
-  each kind, how many keys are held, how many have never been read, how long ago
-  the oldest was read, each reading that could not be taken and each one refused.
+  The figures every reader they admit sees alike (`Keyfleet.SharedReading`)
+  report, for each kind, how many keys are held, how many have never been read,
+  how long ago the oldest was read, the size of each reading offered as a percent
+  of its kind's limit, each reading that could not be taken and each one refused.
   Visitors' browsers report each page's Core Web Vitals (`KeyfleetWeb.Vitals`,
   which also gives the queries for their 75th percentiles), one histogram for
   each with buckets around its targets, by page and device.
@@ -230,6 +231,14 @@ defmodule KeyfleetWeb.Telemetry do
         measurement: :late,
         tags: [:kind],
         description: "Keys of the kind last read longer ago than the kind's producer should allow"
+      ),
+      last_value("health.shared_reading.size.percent",
+        event_name: [:keyfleet, :shared_reading, :size],
+        measurement: &div(&1.bytes * 100, &1.limit),
+        tags: [:kind],
+        description:
+          "Size of the last reading each kind was offered, as a percent of the kind's limit; " <>
+            "past 100 it is refused and the last one held stays"
       ),
       last_value("health.shared_reading.never_read.keys",
         event_name: [:keyfleet, :shared_reading, :kind],

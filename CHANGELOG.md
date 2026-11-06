@@ -6966,3 +6966,31 @@ Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /c
   `getAccountBalances`, `listCreditsHistory` and `getAccountPoints`, and the API
   contract is `info.version` 26.0.0. `cli/commands.json`, `cli/COMMANDS.md`, the tool
   list and the guide say so; regents-cli's next release follows.
+
+## 2026-11-06 — Points page from the shared board
+
+- The Points page is drawn with the shared `Regent.Points` components (design-system
+  `871c3fe69f2501e9deb5de5626c7c9e7a5941d5e`), as ash-template 18973d86 has it: the
+  total with today and yesterday, the actions still open, the leaderboard's top ten with
+  each person's name, wallet, ENS name and picture, the period bonus, and recent
+  entries. The old page's own styles in `assets/css/pages/account.css` are gone.
+- The leaderboard is one shared reading, `Keyfleet.Points.Board`, held by the serving
+  machine under the new `points_board` kind (one key, 128 KB) and read again when an
+  award is broadcast on `points:board`. A Heal job checks it every minute. Every
+  reading offered reports its size against its kind's limit as
+  `health.shared_reading.size.percent`, refused ones too.
+- `Keyfleet.Points.Accounts.people/1` names the board's people through
+  `Keyfleet.PublicIdentity`, which now gives a listed name, the wallet, the ENS name, the
+  picture and the squares drawn from the wallet. Every wallet is public, and so is the
+  ENS name that points to it.
+- Credits purchases no longer earn Points: the `credits.purchase_settled` signal,
+  `Keyfleet.Points.CreditsPurchase` and the award's `credits_purchase` action are gone.
+  Credits itself is unchanged.
+- elixir-utils moves to `faa538d4028732a6b187165ebc0187cb9c573193`
+  (`RegentPoints.leaderboard/1`, places, the board broadcast, the `people/1` callback).
+- A paired agent's `GET /api/v1/account/points` (`account_points`) answers in the
+  template's shape: points, earned today and yesterday, place, activity being verified,
+  the to-do list, daily limits, the leaderboard, entries and period bonuses. It answers
+  503 `account_unavailable` until the board has been read. The API contract is
+  `info.version` 28.0.0; the docs' breaking changes, the guide, `cli/COMMANDS.md`,
+  `cli/commands.json` and the tool list say so. Every rule stays off.

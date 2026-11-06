@@ -15,13 +15,9 @@ defmodule Keyfleet.Points.Award do
     * A push to a fleet's code (`keyfleet.integration.twigpine`).
     * A change to a fleet's workspace made as a Key
       (`keyfleet.integration.activegraph`).
-    * A Credits purchase credited to an account, or a waiting one an account
-      now holds (`credits.purchase_settled`), from `RegentCredits.Signals`.
-      Credits is one Regents ledger, so every site names it "regents" and a
-      purchase earns once.
     * A new Regent account (`account.activated`), from
       `Keyfleet.Accounts.Signals`. The account is one Regents account on
-      every site, so it is named "regents" too.
+      every site, so every site names it "regents" and it earns once.
     * A social account linked to an account (`social.x`, `social.github`,
       `social.farcaster`), from `Keyfleet.Accounts.Signals`, keyed by the
       provider and its subject so one social account earns once.
@@ -70,11 +66,6 @@ defmodule Keyfleet.Points.Award do
 
     from Keyfleet.Graph.Signals do
       on :event_copied, :event_copied
-    end
-
-    from RegentCredits.Signals do
-      on :purchase_credited, :purchase_credited, action: :credits_purchase
-      on :purchase_attributed, :purchase_attributed, action: :credits_purchase
     end
   end
 
@@ -194,14 +185,6 @@ defmodule Keyfleet.Points.Award do
               "#{signal.fleet_id}:#{signal.seq}"
             ),
           else: :ok
-      end
-    end
-
-    action :credits_purchase do
-      argument :signal, :struct, allow_nil?: false
-
-      run fn %{arguments: %{signal: signal}}, _context ->
-        record("credits.purchase_settled", "credits_purchase", signal.purchase_id, "regents")
       end
     end
   end

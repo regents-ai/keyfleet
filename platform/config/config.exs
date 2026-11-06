@@ -107,7 +107,6 @@ config :regent_points,
   adapters: %{
     "account.activated" => Keyfleet.Points.AccountActivated,
     "agent.activated" => Keyfleet.Points.PairedAgent,
-    "credits.purchase_settled" => Keyfleet.Points.CreditsPurchase,
     "keyfleet.first_membership" => Keyfleet.Points.KeyEpoch,
     "keyfleet.key_bought" => Keyfleet.Points.KeyEpoch,
     "keyfleet.first_reveal" => Keyfleet.Points.KeyReveal,
@@ -341,7 +340,8 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_proposals"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_treasury"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "share_card"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}}
     ]
   ],
   pruner: [max_age: {7, :days}],

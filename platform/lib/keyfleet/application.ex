@@ -54,7 +54,7 @@ defmodule Keyfleet.Application do
       # Failures a page read rescued, saved beside the page; past this many at
       # once, a failure is only logged.
       {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
-      # Figures every visitor sees alike, read once for every open page; its
+      # Figures every reader they admit sees alike, read once for every open page; its
       # producers start after it.
       Keyfleet.SharedReading,
       # Jobs announce what they change, so they start after PubSub.
@@ -78,6 +78,7 @@ defmodule Keyfleet.Application do
       here_child(),
       fleet_now_child(),
       fleet_proposals_child(),
+      points_board_child(),
       # Agent requests held open waiting for news, by client address.
       KeyfleetWeb.AgentWaits,
       # Start a worker by calling: Keyfleet.Worker.start_link(arg)
@@ -147,6 +148,12 @@ defmodule Keyfleet.Application do
   # served, as each fleet's activity is.
   defp fleet_proposals_child do
     if serving?(), do: KeyfleetWeb.FleetProposals
+  end
+
+  # The Points board is read only where pages are served, so a task or a test
+  # never reads the database before it asks to.
+  defp points_board_child do
+    if serving?(), do: Keyfleet.Points.Board
   end
 
   defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)
