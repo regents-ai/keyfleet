@@ -26,7 +26,6 @@ defmodule KeyfleetWeb.ShellLive do
   alias KeyfleetWeb.{
     AccountLive,
     CodePassword,
-    ConnectLive,
     DmsLive,
     FleetLive,
     FleetNow,
@@ -47,7 +46,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorkspaceLive
   }
 
-  alias KeyfleetWeb.Components.{BuyKey, Reading}
+  alias KeyfleetWeb.Components.{BuyKey, Reading, SetupList}
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
@@ -98,10 +97,8 @@ defmodule KeyfleetWeb.ShellLive do
        connection_outcome: nil,
        held_keys: [],
        slices: %Read{},
-       connect_agent: nil,
        pair_start: nil,
        project_page: nil,
-       connect_paired: [],
        agents_topic: nil,
        credits: %Read{},
        credits_topic: nil,
@@ -166,7 +163,6 @@ defmodule KeyfleetWeb.ShellLive do
     route_spec = route_spec(uri, params)
     params = name_fleet(params, route_spec)
     if beyond_supply?(params), do: raise(NotFoundError)
-    if route_spec.route_id == :connect, do: ConnectLive.chosen(params)
 
     case PageRead.run("app", fn -> load(socket, route_spec, params) end) do
       {:ok, loaded} ->
@@ -196,7 +192,6 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_project(route_spec, params)
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
-       |> load_connect(route_spec, params)
        |> load_points(route_spec)
        |> read_class(params)
        |> follow_keys(keys_fleets(route_spec, params))
@@ -479,15 +474,12 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
+    socket = setup_changed(socket)
 
     case socket.assigns.route_spec.route_id do
       :account_agents ->
         send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
         {:noreply, socket}
-
-      :connect ->
-        account = current_account(socket.assigns.access_context)
-        {:noreply, assign(socket, connect_paired: ConnectLive.paired(account))}
 
       :pair ->
         send_update(KeyfleetWeb.PairingBox, id: "pair-pairing-box", agents_changed: true)
@@ -539,7 +531,7 @@ defmodule KeyfleetWeb.ShellLive do
   # address is read again first, and the page moves to what that class hears.
   # The class read stands, with what it hears, when the page can't be read again.
   defp notice({:keys_changed, fleet_id, token_ids}, socket) do
-    socket = reread_class(socket, fleet_id)
+    socket = socket |> reread_class(fleet_id) |> setup_changed()
 
     case PageRead.run("app", fn -> keys_changed(socket, fleet_id, token_ids) end) do
       {:ok, answer} -> answer
@@ -619,7 +611,7 @@ defmodule KeyfleetWeb.ShellLive do
     do: ProposalsLive.handle_info(message, socket)
 
   defp notice({:onchain_landed, fleet_id}, socket),
-    do: {:noreply, ProposalsLive.onchain_landed(socket, fleet_id)}
+    do: {:noreply, socket |> setup_changed() |> ProposalsLive.onchain_landed(fleet_id)}
 
   # A reading every page shares has changed: the part of the page showing it
   # draws it again.
@@ -693,14 +685,6 @@ defmodule KeyfleetWeb.ShellLive do
           path={@route_spec.destination}
         />
 
-        <ConnectLive.page
-          :if={@route_spec.route_id == :connect}
-          account={current_account(@access_context)}
-          agent={@connect_agent}
-          paired={@connect_paired}
-          held_keys={@held_keys}
-        />
-
         <ProjectLive.page :if={@route_spec.route_id == :project} project={@project_page} />
 
         <PairLive.page
@@ -758,6 +742,7 @@ defmodule KeyfleetWeb.ShellLive do
           place={fleet_place(@route_spec.route_id)}
           fleet={@fleet}
           actor={actor(@access_context)}
+          account={current_account(@access_context)}
           lease={@session_lease}
           params={@fleet_params}
           profile={@key_profile}
@@ -968,6 +953,17 @@ defmodule KeyfleetWeb.ShellLive do
 
   # Keys changed in an open fleet while the Agents page is on show: its
   # agents' Keys are read afresh, so a shard just issued names its Key.
+  # A fleet's page holds the new owner's setup list (`SetupList`), which reads
+  # its steps again when the person's agents, the fleet's Keys or a step sent
+  # from it change. Its pairing box follows a pairing as the others do.
+  defp setup_changed(%{assigns: %{fleet: %{fleet_id: _}}} = socket) do
+    send_update(SetupList, id: "fleet-setup", changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "fleet-setup-pairing", agents_changed: true)
+    socket
+  end
+
+  defp setup_changed(socket), do: socket
+
   defp keys_changed(
          %{assigns: %{route_spec: %{route_id: :account_agents}}} = socket,
          _fleet_id,
@@ -1409,13 +1405,6 @@ defmodule KeyfleetWeb.ShellLive do
     |> read_credits(account)
   end
 
-  defp load_account_page(socket, %{route_id: :connect}),
-    do:
-      socket
-      |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
-      |> Read.clear(:slices)
-      |> Read.clear(:credits)
-
   defp load_account_page(socket, _route_spec),
     do: socket |> assign(:held_keys, []) |> Read.clear(:slices) |> Read.clear(:credits)
 
@@ -1423,16 +1412,6 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp read_slices(%{assigns: %{held_keys: held_keys}} = socket),
     do: Read.start(socket, :slices, held_keys, fn -> AccountLive.slices(held_keys) end)
-
-  defp load_connect(socket, %{route_id: :connect}, params),
-    do:
-      assign(socket,
-        connect_agent: ConnectLive.chosen(params),
-        connect_paired: ConnectLive.paired(current_account(socket.assigns.access_context))
-      )
-
-  defp load_connect(socket, _route_spec, _params),
-    do: assign(socket, connect_agent: nil, connect_paired: [])
 
   # Only the connected page asks, so the first render does not ask again a
   # moment before it.

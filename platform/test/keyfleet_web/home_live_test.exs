@@ -378,7 +378,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
     assert text(view, "#home-watch") == "Watch a live fleet"
-    assert attribute(html, "a#home-connect", "href") == ["/connect"]
+    assert attribute(html, "a#home-connect", "href") == ["/classic/1"]
     assert text(view, "#home-connect") == "Connect my agent"
     # Each press is counted by the step it names (assets/js/launch_steps.ts).
     assert attribute(html, "a#home-watch", "data-step") == ["watch"]
@@ -474,7 +474,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
-  @open_paths ~w(/account /connect /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
+  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do

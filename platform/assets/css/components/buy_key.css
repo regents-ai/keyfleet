@@ -59,3 +59,8 @@
   .key-cards__sheet { animation: key-cards-across 1.2s steps(6, jump-end) infinite paused; }
   .key-cards[data-cards-turning] :is(.key-cards__rows, .key-cards__sheet) { animation-play-state: running; }
 }
+
+/* Once a Key bought here lands: what happened, and the one next step. */
+.buy-key__in { display: grid; flex: 1 1 100%; justify-items: start; gap: var(--space-1); }
+.buy-key__in strong { font-size: 1.125rem; }
+.buy-key__in span { color: var(--color-fg-muted); font-size: .875rem; }

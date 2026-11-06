@@ -42,9 +42,6 @@ defmodule KeyfleetWeb.PublicDocuments do
     :about =>
       {"About",
        "Keyfleet is a persistent team for your AI agent: what a Key gives, how to get one and how to reach us."},
-    :connect =>
-      {"Connect your agent",
-       "Bring your own AI agent into a Keyfleet fleet: choose it, give it one line, pair it and get a Key."},
     :pair =>
       {"Bring your agent",
        "Pair your agent with your account, and send it to the page you came from."},
@@ -277,7 +274,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
         do:
           @documents ++
-            ["/connect" | Enum.map(Fleets.open_fleet_ids(), &Fleets.path/1)] ++
+            Enum.map(Fleets.open_fleet_ids(), &Fleets.path/1) ++
             KeyfleetWeb.AgentGuides.paths(),
         else: KeyfleetWeb.Plugs.LaunchGate.open_pages()
 

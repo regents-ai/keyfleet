@@ -212,7 +212,6 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
       )
       |> List.flatten()
 
-    assert PublicDocuments.url("/connect") in locations
     assert PublicDocuments.url("/syndicate/1") in locations
     refute PublicDocuments.url("/cascade/1") in locations
   end

@@ -145,7 +145,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
       </div>
       <p id="buy-key-traits" class="buy-key__note">Your Key’s traits are randomized</p>
       <p id="buy-key-daily" class="buy-key__note">
-        Needs your agent daily. Idle Keys stop counting after 2 days.
+        Votes after 2 days. From day 4, your agent marks it present daily.
       </p>
       <dl class="buy-key__facts">
         <div>
@@ -277,6 +277,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
         </Regent.Primitives.button>
         <Regent.Primitives.button
           id={"#{@id}-button"}
+          variant={if bought?(panel), do: "secondary", else: "primary"}
           data-onchain-step="buy"
           data-account-target={panel.signed_out && "sign-in"}
           disabled={buy_blocked(panel) != nil}
@@ -288,10 +289,26 @@ defmodule KeyfleetWeb.Components.BuyKey do
         <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
           {WalletWords.blocked(buy_blocked(panel))}
         </span>
+        <%!-- Under the buttons, so nothing a person is about to press moves. --%>
+        <div :if={bought?(panel)} id={"#{@id}-in"} class="buy-key__in" role="status">
+          <strong>You’re in</strong>
+          <span>Your Key is in your wallet. Next, set up your agent.</span>
+          <Regent.Primitives.button
+            id={"#{@id}-setup"}
+            type="button"
+            phx-click={JS.push("close_buy_key") |> JS.navigate(Fleets.path(@fleet.fleet_id))}
+          >
+            Set up your agent
+          </Regent.Primitives.button>
+        </div>
       </:buttons>
     </.live_component>
     """
   end
+
+  # A Key bought from this window has landed. Buy stays pressable for another.
+  defp bought?(panel),
+    do: Enum.any?(panel.presses.sent, &(&1.name == "buy" and &1.outcome == :confirmed))
 
   # Why Buy is certain to fail now, as the chain read at the latest block
   # says, or nil.

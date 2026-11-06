@@ -56,7 +56,3 @@
   font-size: 0.875rem;
   color: var(--color-danger);
 }
-
-.fleet-stage > .agent-setup {
-  margin-block-end: 1rem;
-}
