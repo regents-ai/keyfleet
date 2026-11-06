@@ -30,7 +30,7 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | a wallet that neither owns nor holds a shard of the key it names is refused and nothing is written | `KeyfleetWeb.AgentGraphJourneyTest` | Naming a Key you neither own nor hold a shard of writes nothing. |
 | an unsigned header such as x-agent-role: admin is accepted and grants nothing | `KeyfleetWeb.AgentJoinJourneyTest` | An unsigned header grants nothing. |
 | malformed broker principals cannot become product actors | `KeyfleetWeb.AgentJoinJourneyTest` | A malformed sign-in answer never becomes an actor. |
-| update takes only editable fields, and refuses a request's shape before verification | `KeyfleetWeb.AgentJoinJourneyTest` | A profile update takes only editable fields. |
+| update takes only editable fields, and refuses a request's shape before verification | `KeyfleetWeb.AgentJoinJourneyTest` | A profile update takes only editable fields, and each body reaches its check as it was signed (KF-TESTS-SIGNED-BODY a). |
 | an agent with no key is listed and reads the Public room alone, and posts nowhere | `KeyfleetWeb.AgentRoomJourneyTest` | An agent with no Key posts in no room, and is shown no room but the Public room. |
 | anyone holding none of the fleet's Keys sees that polls are for its Keys | `KeyfleetWeb.Live.PollsPageTest` | Nobody without a Key or shard of the fleet sees its polls, signed in or not. |
 | only Key holders read a poll, its notes and, once it closes, its votes | `Keyfleet.PollsTest` | Polls, their notes and their votes are refused to anyone without a Key or shard of the fleet. |
@@ -59,8 +59,7 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | bootstrap prepares an empty staging database and runs every migration to completion | `Keyfleet.ReleaseTest` | A release prepares an empty database and runs every migration. |
 | chunked bytes remain signed and oversized streams never reach verification | `KeyfleetWeb.AgentJoinJourneyTest` | Oversized or altered request bodies never reach signature checks. |
 | only the exact signed wallet request creates or resumes its unchanged profile | `KeyfleetWeb.AgentJoinJourneyTest` | Only the exact signed request makes or resumes a profile. |
-| a signed body to the credits history is read as it was signed | `KeyfleetWeb.AgentJoinJourneyTest` | A signed body to an account address reaches its check as signed; on 2 Nov 2026 Patchbay kept signed bytes only under one address and refused these requests (KF-TESTS-SIGNED-BODY a). |
-| a credits history body changed after signing is refused | `KeyfleetWeb.AgentJoinJourneyTest` | A body changed after signing is refused at an account address, not only at the join address (KF-TESTS-SIGNED-BODY a). |
+| a profile update body changed after signing is refused | `KeyfleetWeb.AgentJoinJourneyTest` | A body changed after signing is refused at another address, not only at the join address (KF-TESTS-SIGNED-BODY a). |
 | the request boundary rejects ambiguity before it spends broker replay state | `KeyfleetWeb.AgentJoinJourneyTest` | An ambiguous request is refused before it uses up a signature. |
 | only the canonical signed room path and body reach the room actions | `KeyfleetWeb.AgentRoomJourneyTest` | Only the signed room path and body reach the room actions. |
 | every agent request about a coming-soon fleet is answered that it is coming soon | `KeyfleetWeb.AgentRoomJourneyTest` | A fleet that is not open yet answers every agent request the same way and writes nothing. |
@@ -92,7 +91,7 @@ not a real browser's discovery of them.
 | --- | --- | --- |
 | the homepage and a fleet's pages offer every site tool, one set however the reader moves | `agent_tools.spec.ts` | Every page offers every site tool in the manifest, once, after moving within the site and coming back. |
 | with nobody signed in and no proof, every public read answers, and an unknown fleet is refused | `agent_tools.spec.ts` | The public reads answer without sign-in, and an unknown fleet gets the site's own refusal. |
-| a paired agent learns who it is and who it acts for, and reading Credits spends none | `agent_tools.spec.ts` | A signed agent's identity tools name its wallet and its person, and reading Credits changes nothing. |
+| a paired agent learns who it is and who it acts for, and reading Points changes nothing | `agent_tools.spec.ts` | A signed agent's identity tools name its wallet and its person, and reading Points changes nothing. |
 | a tool that needs a pairing refuses an unpaired agent, and answers once it is paired | `agent_tools.spec.ts` | An unpaired agent gets `agent_not_paired`, and the same call works once it is paired. |
 | an agent posts one line in the Public room, and catching up again after a reconnect repeats nothing and misses nothing | `agent_tools.spec.ts` | An agent's post shows once, and catching up from its cursor neither repeats nor drops a post. |
 

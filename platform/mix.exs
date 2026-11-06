@@ -4,9 +4,9 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "faa538d4028732a6b187165ebc0187cb9c573193"
+  @elixir_utils_ref "f8801d79228282459ede9421a51260c3bd292f44"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "871c3fe69f2501e9deb5de5626c7c9e7a5941d5e"
+  @design_system_ref "d3845c6d9fe34b7131937bafa051e6e04c9b09dd"
 
   def project do
     [
@@ -61,8 +61,8 @@ defmodule Keyfleet.MixProject do
       {:ash_ai, "~> 1.5"},
       # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
       # use the repo's prefix, which picks each site's schema on the shared
-      # database. It stands in for the Hex release that ash_money and
-      # ash_double_entry ask for, until a release carries #910.
+      # database. It stands in for the copy the shared Regent libraries pin,
+      # until a release carries #910.
       {:ash_postgres,
        git: "https://github.com/ash-project/ash_postgres.git",
        ref: "55db7d449aad351d200c5f300fca2a83e0a8734c",
@@ -100,7 +100,6 @@ defmodule Keyfleet.MixProject do
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
       # Keeps crash saving on when one save fails (RegentHttp.ErrorSaving).
       {:regent_http, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "http"},
-      {:regent_credits, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "credits"},
       {:regent_points, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "points"},
       {:ens_elixir, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ens"},
       # The Claude connector: its sign-in, and the MCP address and identity tools

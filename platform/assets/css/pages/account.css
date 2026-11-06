@@ -269,9 +269,7 @@ div.verified-connections__notice p {
    product layer, so they win over the shared account sections' own padding
    and open ground. */
 .account-agents > .rg-account,
-.rg-account-layout__full > .rg-account,
-.rg-account-layout__column > .rg-account,
-.rg-account-layout__grid > .rg-account,
+.rg-account-layout > * > .rg-account,
 .account-page > .rg-account--signed-out {
   padding: var(--rg-panel-padding);
   border: 1px solid var(--color-border);
@@ -280,7 +278,7 @@ div.verified-connections__notice p {
 
 /* The shared sections' headings take the same face and size as the page's
    other panels. */
-:is(.account-agents, .rg-account-layout__full, .rg-account-layout__column, .rg-account-layout__grid) > .rg-account h2 {
+:is(.account-agents, .rg-account-layout > *) > .rg-account h2 {
   font-family: var(--font-family-title);
   font-size: 1.35rem;
   font-weight: 400;
@@ -294,11 +292,6 @@ div.verified-connections__notice p {
     flex: 1 1 auto;
   }
 
-  /* The link under the Credits figures stands apart from the last figure. */
-  #account-credits .rg-account__metrics {
-    margin-block-end: var(--space-2);
-  }
-
   /* An agent's name keeps the row's width; "World ID Connected" moves under
      it when both don't fit, instead of squeezing the name to nothing. */
   .rg-account__agent {
@@ -306,18 +299,16 @@ div.verified-connections__notice p {
     row-gap: 0;
   }
 
-  /* Each Key, each fleet's name above its Keys, the link under Credits and
-     each connected account are a full finger's height. */
+  /* Each Key, each fleet's name above its Keys and each connected account are
+     a full finger's height. */
   .account-keys__fleet h3 a,
   .account-keys__list a,
-  #account-credits > a,
   .verified-connections__list a {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
   }
 
-  #account-credits > a,
   .verified-connections__list a {
     justify-self: start;
   }

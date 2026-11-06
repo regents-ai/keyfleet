@@ -145,7 +145,7 @@ image; see [Release](platform/README.md#release).
 
 The platform uses shared libraries from two Regent repositories, each pinned
 by git to one commit in `platform/mix.exs`: `design-system` (the shared UI),
-and `elixir-utils` (sign-in, profiles, agents, Credits, Points and supporting libraries). The
+and `elixir-utils` (sign-in, profiles, agents, Points and supporting libraries). The
 [platform README](platform/README.md#shared-dependencies) explains how to move a pin.
 
 ## License

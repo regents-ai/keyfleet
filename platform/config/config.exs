@@ -39,7 +39,7 @@ config :regent_agents,
       "Check your status here at any time, and check in for your person.",
       "Keep your own profile and picture.",
       "Work as your person's Key in their fleets, and as any Key you own or hold a shard of: rooms, Key walls, direct messages, the shared workspace, polls, code and notebooks.",
-      "Read your person's Credits and Points.",
+      "Read your person's Points.",
       "With a shard in your own wallet, send that Key's Base transactions from it: mark it present, propose, vote, cancel and claim. You can never sign with your person's wallets."
     ]
   },
@@ -74,26 +74,10 @@ config :phoenix, :filter_parameters, [
   "id_token"
 ]
 
-# Regent Credits: one prepaid balance per Privy account, shared by every Regent
-# site. Credits are the private currency XRC, kept to the millionth. Admins come
-# from REGENT_CREDITS_ADMINS at runtime. Credits are bought here with USDC on
-# Base (`KeyfleetWeb.CreditsPanel`); the site's Oban checks each purchase and
-# reads Credits deposits on Base.
-config :ex_money,
-  custom_currencies: [{:XRC, name: "Credits", digits: 6}],
-  auto_start_exchange_rate_service: false
-
-config :regent_credits,
-  repo: Keyfleet.Repo,
-  pubsub: Keyfleet.PubSub,
-  notifications: Keyfleet.Notifications,
-  ash_domains: [RegentCredits],
-  admins: [],
-  chain_client: Keyfleet.ChainClient,
-  chains: %{
-    base: %{chain_id: 8453, name: "Base", rpc_url: "https://mainnet.base.org"},
-    ethereum: %{chain_id: 1, name: "Ethereum", rpc_url: "https://ethereum-rpc.publicnode.com"}
-  }
+# The Privy accounts that run this site: they see the saved errors at
+# /admin/errors and may remove an agent's picture (`RegentAgents.Checks.Admin`).
+# Set at runtime (config/runtime.exs).
+config :keyfleet, :admins, []
 
 config :regent_points,
   repo: Keyfleet.Repo,
@@ -163,10 +147,7 @@ config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://ma
 # page's wallet sent. A wallet adds a chain with its public `rpc_url` above;
 # the server reads through the node `KEYFLEET_RPC_URL` names when it is set,
 # such as a private node or a lab fork, and this address never reaches a page.
-config :keyfleet, :chain_nodes, %{
-  8453 => "https://mainnet.base.org",
-  1 => "https://ethereum-rpc.publicnode.com"
-}
+config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
 
 # How long an agent's waiting request is held open with nothing new, before
 # it answers and the agent asks again: well inside the 60 seconds the proxy
@@ -307,7 +288,6 @@ config :keyfleet, Oban,
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
-  # `regent_credits` checks Credits purchases on chain.
   # Regent Points checks what may earn (`points`), and reads the chain for
   # the rules that need it (`points_chain`), as the template runs them.
   queues: [
@@ -319,7 +299,6 @@ config :keyfleet, Oban,
     key_art: 1,
     chain: 10,
     ens: 3,
-    regent_credits: 3,
     points: 5,
     points_chain: 2
   ],
@@ -452,7 +431,7 @@ config :logger, :default_formatter,
   metadata: [:request_id, :visit, :actor, :surface, :event]
 
 # Failed requests, pages and jobs are saved in the site's own schema and shown
-# to Credits admins at /admin/errors. Only server faults are saved
+# to the site's admins at /admin/errors. Only server faults are saved
 # (Keyfleet.ErrorIgnorer), only where each one happened is kept
 # (Keyfleet.ErrorFilter), and Keyfleet.ErrorPruner clears each one a week
 # after it was last seen.

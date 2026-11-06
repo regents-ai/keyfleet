@@ -10,8 +10,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @profile_path "/api/v1/agent/profile"
-  @credits_history_path "/api/v1/account/credits/history"
-  @account_paths ~w(/api/v1/account/balances /api/v1/account/points)
+  @points_path "/api/v1/account/points"
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
@@ -684,8 +683,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("POST", @links_path), do: true
   defp supported?("POST", @preview_path), do: true
   defp supported?("GET", @profile_path), do: true
-  defp supported?("GET", path) when path in @account_paths, do: true
-  defp supported?("POST", @credits_history_path), do: true
+  defp supported?("GET", @points_path), do: true
 
   defp supported?("GET", path),
     do:
@@ -806,13 +804,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   def check_body(@update_path, params) when is_map(params),
     do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
-
-  # The newest page is {}; an older one names the previous page's cursor,
-  # which the controller and the shared history action check.
-  def check_body(@credits_history_path, params) when is_map(params),
-    do: admit(Map.keys(params) -- ["after"] == [])
-
-  def check_body(@credits_history_path, _params), do: :invalid
 
   def check_body(
         @avatar_start_path,
@@ -1583,7 +1574,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp fields(@join_path), do: {~w(name declared_harness), []}
   defp fields(@update_path), do: {:any_of, @editable}
   defp fields(@avatar_start_path), do: {~w(sha256 byte_size content_type), []}
-  defp fields(@credits_history_path), do: {[], ["after"]}
   defp fields(@links_path), do: {~w(url), []}
   defp fields(@preview_path), do: {~w(tool input), []}
 

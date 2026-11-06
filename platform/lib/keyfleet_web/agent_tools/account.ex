@@ -3,8 +3,7 @@ defmodule KeyfleetWeb.AgentTools.Account do
   An agent's own profile and its person's account as the agent reads them:
   its profile (`profile`), making it (`join`) and editing it
   (`edit_profile`), setting and removing its picture (`avatar_start`,
-  `avatar_upload`, `avatar_remove`), and its person's Credits, Credits
-  history and Points (`balances`, `credits_history`, `points`). Each takes
+  `avatar_upload`, `avatar_remove`), and its person's Points (`points`). Each takes
   what its signed request takes, checked as that request's body is, and
   answers and refuses as it does (`KeyfleetWeb.AgentTools.Run`,
   `KeyfleetWeb.AgentTools.Account.Answer`); the upload, which is not signed,
@@ -71,17 +70,6 @@ defmodule KeyfleetWeb.AgentTools.Account do
     action :avatar_remove, :map do
       description "Takes your picture away; the site shows one made from your wallet instead."
       run {Run, tool: "agents_avatar_remove"}
-    end
-
-    action :balances, :map do
-      description "Your person's Credits and your spending allowance."
-      run {Run, tool: "account_balances"}
-    end
-
-    action :credits_history, :map do
-      description "Your person's Credits history, 50 entries a page, newest first."
-      argument :after, :string, constraints: [max_length: 2048, trim?: false]
-      run {Run, tool: "account_credits_history"}
     end
 
     action :points, :map do

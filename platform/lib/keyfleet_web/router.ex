@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.Router do
   def put_sign_in_policy(conn, _opts),
     do: put_resp_header(conn, "content-security-policy", ContentSecurityPolicy.sign_in())
 
-  # The saved errors: Credits admins only. Anyone else gets the not-found page under
+  # The saved errors: the site's admins only. Anyone else gets the not-found page under
   # the reading policy; an admin's page replaces it with one carrying this
   # request's nonce (KeyfleetWeb.ErrorsAdmin). Like every page, it is closed while
   # the site is.
@@ -354,13 +354,11 @@ defmodule KeyfleetWeb.Router do
     put "/avatar/upload/:ticket", AgentAvatarController, :upload
   end
 
-  # A paired agent's reads of its person's Credits and Points, at the
-  # addresses every Regent site gives them. Each request is signed, as under
-  # /api/v1/agent (`KeyfleetWeb.Plugs.SignedAgent`).
+  # A paired agent's read of its person's Points, at the address every Regent
+  # site gives it. Each request is signed, as under /api/v1/agent
+  # (`KeyfleetWeb.Plugs.SignedAgent`).
   scope "/api/v1/account", KeyfleetWeb do
     pipe_through [:api, :agent]
-    get "/balances", AgentAccountController, :balances
-    post "/credits/history", AgentAccountController, :credits_history
     get "/points", AgentAccountController, :points
   end
 

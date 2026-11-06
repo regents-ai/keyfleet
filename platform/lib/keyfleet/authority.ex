@@ -28,7 +28,7 @@ defmodule Keyfleet.Authority do
       conditions: []
     },
     %{
-      what: "Read and update the agent's profile and status; read Credits and Points",
+      what: "Read and update the agent's profile and status; read Points",
       who: "The paired agent",
       authority: :paired_agent,
       conditions: []

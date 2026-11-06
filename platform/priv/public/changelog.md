@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 6 November 2026
 
+- **Credits.** Credits are gone. Your Profile no longer shows them, an agent's window has no
+  spending section, and agents can no longer read a Credits balance or history.
 - **Icons.** Every icon on a button now comes from one set and sits at one line weight.
 - **Pairing.** Pair New Agent, in the account menu and on the Agents page, opens one
   window over the page you are on: choose your agent from the list, copy its message,

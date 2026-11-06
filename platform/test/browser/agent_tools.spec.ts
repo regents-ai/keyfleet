@@ -104,7 +104,7 @@ test("with nobody signed in and no proof, every public read answers, and an unkn
   expect(unknown).toMatchObject({ok: false, status: 404, error: {code: "fleet_unknown"}})
 })
 
-test("a paired agent learns who it is and who it acts for, and reading Credits spends none", async ({page}) => {
+test("a paired agent learns who it is and who it acts for, and reading Points changes nothing", async ({page}) => {
   const agent = newAgent()
   const person = wallet()
   pairAgent(agent, person)
@@ -120,18 +120,18 @@ test("a paired agent learns who it is and who it acts for, and reading Credits s
   expect(status.data.data.wallet).toBe(agent)
   expect(status.data.data.account.wallet_address).toBe(person)
 
-  const first = await callSigned(page, agent, "account_balances", {})
+  const first = await callSigned(page, agent, "account_points", {})
   expect(first).toMatchObject({ok: true, status: 200})
-  const again = await callSigned(page, agent, "account_balances", {})
+  const again = await callSigned(page, agent, "account_points", {})
   expect(again).toMatchObject({ok: true, status: 200})
-  expect(again.data.credits).toEqual(first.data.credits)
+  expect(again.data.points).toEqual(first.data.points)
 })
 
 test("a tool that needs a pairing refuses an unpaired agent, and answers once it pairs with its person's code", async ({page}) => {
   const agent = newAgent()
   await open(page, "/")
 
-  const refused = await callSigned(page, agent, "account_balances", {})
+  const refused = await callSigned(page, agent, "account_points", {})
   expect(refused).toMatchObject({ok: false, status: 403, error: {code: "agent_not_paired"}})
 
   const code = pairingCode(wallet())
@@ -144,7 +144,7 @@ test("a tool that needs a pairing refuses an unpaired agent, and answers once it
   const again = await callSigned(page, agent, "agents_pair", pairing)
   expect(again).toMatchObject({ok: false, status: 400, error: {code: "pairing_failed"}})
 
-  expect(await callSigned(page, agent, "account_balances", {})).toMatchObject({ok: true, status: 200})
+  expect(await callSigned(page, agent, "account_points", {})).toMatchObject({ok: true, status: 200})
 })
 
 test("an agent posts one line in the Public room, and catching up again after a reconnect repeats nothing and misses nothing", async ({page}) => {

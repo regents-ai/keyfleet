@@ -3742,7 +3742,7 @@
     },
     {
       "command": "agents pair",
-      "description": "Redeem your person’s single-use pairing code with your existing agent identity. Pipe code, name and harness on private stdin; grants no wallet or spending authority.",
+      "description": "Redeem your person’s single-use pairing code with your existing agent identity. Pipe code, name and harness on private stdin; grants no wallet authority.",
       "operation_id": "pairSharedAgent",
       "method": "POST",
       "path": "/api/agents/v1/pair",
@@ -3900,41 +3900,6 @@
       "effect": "write",
       "webmcp": "agents_avatar_remove",
       "body": {}
-    },
-    {
-      "command": "account balances",
-      "description": "Read your person's Credits and your spending allowance. Spends nothing.",
-      "operation_id": "getAccountBalances",
-      "method": "GET",
-      "path": "/api/v1/account/balances",
-      "webmcp": "account_balances",
-      "authority": "paired_agent",
-      "effect": "read"
-    },
-    {
-      "command": "account credits-history",
-      "description": "Read your person's Credits history, up to 50 transfers grouped into complete entries per page.",
-      "operation_id": "listCreditsHistory",
-      "method": "POST",
-      "path": "/api/v1/account/credits/history",
-      "webmcp": "account_credits_history",
-      "authority": "paired_agent",
-      "effect": "read",
-      "pagination": {
-        "has_more": "pagination.has_more",
-        "cursor": "pagination.next_cursor",
-        "flag": "after"
-      },
-      "flags": [
-        {
-          "name": "after",
-          "type": "string",
-          "in": "body",
-          "field": "after",
-          "required": false,
-          "description": "The previous page's pagination.next_cursor unchanged, at most 2048 characters. Omit for the first page or when the cursor is null; do not send null."
-        }
-      ]
     },
     {
       "command": "account points",

@@ -6994,3 +6994,33 @@ Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /c
   503 `account_unavailable` until the board has been read. The API contract is
   `info.version` 28.0.0; the docs' breaking changes, the guide, `cli/COMMANDS.md`,
   `cli/commands.json` and the tool list say so. Every rule stays off.
+
+## 2026-11-06 — Credits are gone
+
+Sean, 6 November 2026: drop Credits entirely. HQ's order of 23:19Z (CREDITS-OUT a): remove
+them from the template and every site at once, as ash-template `8374a5af` does. No table or
+column is dropped and no production data is touched.
+
+- Removed from the site: the Credits summary on `/account`, the Spending section of an
+  agent's window, the `regent_credits` dependency, its migrator and its listener, the
+  `regent_credits` queue and the Credits domain on the site's Oban, and
+  `Keyfleet.ChainClient`'s `RegentCredits.ChainClient` reads (`block_number/1`,
+  `logs/2`). `mix.lock` loses the packages only Credits needed.
+- Removed operations: `GET /api/v1/account/balances` (`account_balances`,
+  `account balances`) and `POST /api/v1/account/credits/history`
+  (`account_credits_history`, `account credits-history`). Both contract copies move to
+  `info.version` 29.0.0; the tool list, `cli/commands.json`, `cli/COMMANDS.md`, the agent
+  guides, `/docs`, `/agents.md` and the public changelog say so. Pairing no longer
+  mentions a spending grant.
+- The site's admins are `config :keyfleet, :admins` (with `config :regent_agents,
+  :admins`), both set from `REGENT_CREDITS_ADMINS`; they open `/admin/errors` and may
+  remove an agent's picture. The variable keeps its name until its secret is renamed.
+- Chain node 1 is gone: only Credits read Ethereum through it; ENS keeps
+  `ETHEREUM_READ_RPC_URL` and Points reads NFTs on Base.
+- elixir-utils moves to `f8801d79228282459ede9421a51260c3bd292f44` and design-system to
+  `d3845c6d9fe34b7131937bafa051e6e04c9b09dd`. The account page's own layout rules
+  replace the shared layout classes design-system no longer draws.
+- Built on the Points branch (`kf/points-adapters-1106` `4d81d9ad`), which these pins need.
+- Removed tests: the Credits tests and browser walks; tests that asked a removed route ask
+  `GET /api/v1/account/points` instead.
+- The `regent_credits` schema and every table and column stay; nothing is migrated.

@@ -9,8 +9,6 @@ defmodule KeyfleetWeb.AgentAccountController do
   alias KeyfleetWeb.AgentReply
   alias KeyfleetWeb.AgentTools.Account.Answer
 
-  def balances(conn, params), do: reply(conn, :balances, params)
-  def credits_history(conn, _params), do: reply(conn, :credits_history, conn.body_params)
   def points(conn, params), do: reply(conn, :points, params)
 
   defp reply(conn, op, params),

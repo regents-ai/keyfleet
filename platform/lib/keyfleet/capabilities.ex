@@ -111,6 +111,6 @@ defmodule Keyfleet.Capabilities do
     do: [
       "Post, vote and send messages as your Keys, in the fleets where you hold one",
       "Work in those fleets' workspaces, code and notebooks",
-      "Read your Credits and Points"
+      "Read your Points"
     ]
 end

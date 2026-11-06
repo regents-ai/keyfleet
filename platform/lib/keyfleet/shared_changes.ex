@@ -1,10 +1,10 @@
 defmodule Keyfleet.SharedChanges do
   @moduledoc """
-  Changes made on any Regent site reach this site's open pages: a Credits balance
-  (`RegentCredits.Listener`) and a pairing made or ended (`RegentAgents.Listener`)
-  arrive as database notices. Both listen on one connection of the site's own,
-  `Keyfleet.Notifications` (`Keyfleet.DatabaseConfig.notifications_config/1`). The
-  connection starts first, so a new connection brings new listeners.
+  Changes made on any Regent site reach this site's open pages: a pairing made or
+  ended (`RegentAgents.Listener`) arrives as a database notice. It listens on a
+  connection of the site's own, `Keyfleet.Notifications`
+  (`Keyfleet.DatabaseConfig.notifications_config/1`). The connection starts first,
+  so a new connection brings a new listener.
   """
 
   use Supervisor
@@ -17,7 +17,6 @@ defmodule Keyfleet.SharedChanges do
 
     children = [
       {Postgrex.Notifications, [name: Keyfleet.Notifications] ++ connection},
-      RegentCredits.Listener,
       RegentAgents.Listener
     ]
 
