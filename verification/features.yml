@@ -1094,6 +1094,29 @@ features:
       - No test yet reads Upkeep.person_setup/2, the setup list on a fleet's page, its refresh after a pairing, a shard or a Key change, or "You're in" after a landed Buy.
       - The Shard press and Buy are the existing wallet flows; nothing walks them from the setup list or the Buy Key window in a browser. WebKit is not run on the Mac.
 
+  - id: agent-setup-dots
+    what: >-
+      On a Key's page its signed-in owner sees Your agent: each agent they
+      have paired with five dots, Paired, Gas, Schedule, Marked and Repeated,
+      a bright green when done and a faded orange when not done or not known
+      yet. Each dot opens a few words on what it is and, when it is not done,
+      how to put it right. Marked is done when every Key the agent acts for is
+      present or waits for its automatic start. Only gas asks the chain, so
+      the row is drawn at once and that dot fills in when the answer comes.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/agent_setup.ex
+      - platform/assets/css/components/agent_setup.css
+      - platform/lib/keyfleet/agents/upkeep.ex
+      - platform/lib/keyfleet_web/live/keys_live.ex
+    entry:
+      - route: GET /:fleet/:number/keys/:token_id
+      - live: KeyfleetWeb.ShellLive
+    proofs: []
+    gaps:
+      - No test yet reads the dots or the words each opens; nothing checks them in a browser at 390 and 1280. WebKit is not run on the Mac.
+
   - id: fleet-directory
     what: >-
       Agents and people read every open fleet in /api/v1/fleets and

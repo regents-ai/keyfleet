@@ -7085,3 +7085,7 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
 - The Connect page is removed. The homepage's Connect my agent opens
   Classic #1, and the sitemap and About no longer name the old page; the
   count of copied setup lines keeps only the homepage's line.
+- On a Key's page, Your agent shows bigger dots: a bright green when done,
+  a faded orange when not done or not known yet. Each dot opens a few words
+  on what it is and how to put it right; the header's tip is gone. Marked
+  says a Key waiting for its automatic start needs no mark.

@@ -1,5 +1,5 @@
-/* A row of dots for each paired agent: filled when true, open when false, faint
-   when not known. */
+/* A row of dots for each paired agent: green when done, faded orange when not
+   done or not known yet. */
 .agent-setup {
   display: grid;
   gap: 0.5rem;
@@ -36,19 +36,34 @@
 }
 
 .agent-setup__states li {
-  inline-size: 0.625rem;
-  block-size: 0.625rem;
-  border: 1px solid var(--color-fg-muted);
+  display: inline-flex;
+}
+
+/* Each dot opens its words: a 1.5rem target around a 0.875rem dot. */
+.agent-setup__states .rg-tip .rg-tip-button.rg-tip-button--figure {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
   border-radius: 50%;
+  text-decoration: none;
 }
 
-.agent-setup__states li[data-state="yes"] {
-  border-color: var(--color-success);
-  background: var(--color-success);
+/* Done is a bright green; not done, or not known yet, a faded orange. */
+.agent-setup__dot {
+  --agent-dot-done: light-dark(#1E9E56, #4ADE80);
+  --agent-dot-open: var(--palette-tangerine-tango);
+
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+  border: 1px solid color-mix(in oklab, var(--agent-dot-open) 55%, transparent);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--agent-dot-open) 30%, transparent);
 }
 
-.agent-setup__states li[data-state="unknown"] {
-  border-color: var(--color-border);
+.agent-setup__states li[data-state="yes"] .agent-setup__dot {
+  border-color: var(--agent-dot-done);
+  background: var(--agent-dot-done);
 }
 
 .agent-setup__wrong {
