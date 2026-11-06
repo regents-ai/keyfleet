@@ -72,6 +72,7 @@ paths:
                       - 'no'
                       - abstain
                       - counted
+                      - opened_at
                       - closes_at
                       - text
                       properties:
@@ -103,6 +104,9 @@ paths:
                         counted:
                           type: string
                           pattern: ^[0-9]+$
+                        opened_at:
+                          type: string
+                          format: date-time
                         closes_at:
                           type: string
                           format: date-time
