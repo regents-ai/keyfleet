@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 26.0.0
+  version: 27.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -72,6 +72,7 @@ paths:
                       - 'no'
                       - abstain
                       - counted
+                      - opened_at
                       - closes_at
                       - text
                       properties:
@@ -103,6 +104,9 @@ paths:
                         counted:
                           type: string
                           pattern: ^[0-9]+$
+                        opened_at:
+                          type: string
+                          format: date-time
                         closes_at:
                           type: string
                           format: date-time
@@ -2836,9 +2840,8 @@ paths:
       x-pairing-required: true
       operationId: buildPresence
       description: >-
-        The transactions that mark present every Key the signing wallet holds, or holds an active
-        shard of while the Key's agent voting is on, and then tidy up presences that have lapsed.
-        A Key stays present for 48 hours. Nothing is sent here: the signing wallet sends them
+        The transaction that marks present every Key the signing wallet holds, or holds an active
+        shard of while the Key's agent voting is on. A Key stays present for 48 hours. Nothing is sent here: the signing wallet sends them
         itself, on Base, in the order given.
       security: [{siwaReceipt: []}]
       parameters:
@@ -2867,7 +2870,9 @@ paths:
         The transaction that makes a proposal with one Key the signing wallet holds, or holds an
         active shard of while the Key's agent voting is on. The proposal's words are kept here and
         shown with the proposal once it is on the chain, which holds their fingerprint
-        (content_hash). Nothing is sent here: the signing wallet sends it itself, on Base. A wallet
+        (content_hash). When more lapsed presences wait than a proposal clears itself, a `sweep`
+        transaction that clears them comes first. Nothing is sent here: the signing wallet sends
+        them itself, on Base, in the order given. A wallet
         keeps the words of at most 20 proposals an hour. The body is at most 56,192 bytes.
       security: [{siwaReceipt: []}]
       parameters:
@@ -9397,7 +9402,7 @@ components:
     ChainPresence:
       type: object
       additionalProperties: false
-      required: [chain_id, says, transactions, keys, maintenance_needed]
+      required: [chain_id, says, transactions, keys]
       properties:
         chain_id: {$ref: "#/components/schemas/ChainId"}
         says: {$ref: "#/components/schemas/ChainSays"}
@@ -9411,7 +9416,6 @@ components:
             properties:
               token_id: {type: integer, minimum: 1}
               present_until: {type: [string, "null"], format: date-time, description: When its presence lapses; null when it isn't present}
-        maintenance_needed: {type: boolean, description: Lapsed presences are waiting to be tidied up}
     ChainProposal:
       type: object
       additionalProperties: false

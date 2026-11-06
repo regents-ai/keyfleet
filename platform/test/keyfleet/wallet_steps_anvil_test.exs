@@ -23,7 +23,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
   alias KeyfleetWeb.{FleetProposals, ProposalsPage}
-  alias RegentChain.{Abi, Call, Event, Outcome, Review}
+  alias RegentChain.{Abi, BuilderCode, Call, Event, Outcome, Review}
 
   @endpoint KeyfleetWeb.Endpoint
 
@@ -166,8 +166,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   end
 
   describe "being present" do
-    test "every Key at once, for 48 hours; a new Key waits two days; once they lapse, anyone tidies up",
-         %{url: url, lab: lab} do
+    test "every Key at once, for 48 hours; a new Key waits two days", %{url: url} do
       # Keys 1 and 2 have been present on their own since they turned two
       # days old.
       built = build!(:present, @buyer)
@@ -176,7 +175,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert DateTime.after?(until, DateTime.from_unix!(timestamp!(url)))
 
       assert Review.find(built.review, "present").data ==
-               Call.encode("present(uint256[])", [[id(1), id(2)]])
+               BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2)]]))
 
       assert pressed(url, built, "present") == {:ok, :confirmed}
       now = timestamp!(url)
@@ -184,7 +183,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       built = build!(:present, @buyer)
       assert [%{until: until}, %{until: until}] = built.figures.keys
       assert DateTime.to_unix(until) == now + 48 * @hour
-      refute built.figures.maintenance?
 
       # A wallet with no Keys may still press: the chain refuses it.
       stranger = build!(:present, @third)
@@ -203,17 +201,9 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert mixed.figures.blocked == %{}
 
       assert Review.find(mixed.review, "present").data ==
-               Call.encode("present(uint256[])", [[id(1), id(2)]])
+               BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2)]]))
 
       assert pressed(url, mixed, "present") == {:ok, :confirmed}
-
-      skip!(url, 49 * @hour)
-      built = build!(:present, @third)
-      assert built.figures.maintenance?
-      assert pressed(url, built, "sweep") == {:ok, :confirmed}
-      refute present?(url, lab, 1)
-      refute present?(url, lab, 2)
-      refute build!(:present, @third).figures.maintenance?
     end
   end
 
@@ -564,7 +554,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
       assert %{to: keys, data: data} = Review.find(built.review, "reveal")
       assert keys == lab.keys
-      assert data == Call.encode("requestReveal(uint256)", [id(2)])
+      assert data == BuilderCode.append(Call.encode("requestReveal(uint256)", [id(2)]))
 
       # Refused again: the press lands, and the Key is offered again.
       send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [true]))
@@ -620,7 +610,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert built.figures.blocked == %{}
       assert %{to: to, data: data} = Review.find(built.review, "club-claim")
       assert to == lab.club_claims
-      assert data == Call.encode("claim(uint256,address)", [1, @second])
+      assert data == BuilderCode.append(Call.encode("claim(uint256,address)", [1, @second]))
       assert pressed(url, built, "club-claim") == {:ok, :confirmed}
 
       key = Fleet.onchain_token_id(club, 1)
@@ -844,8 +834,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   end
 
   defp owner!(url, lab, key), do: address!(url, lab.keys, "ownerOf(uint256)", [id(key)])
-
-  defp present?(url, lab, key), do: uint!(url, lab.votes, "isActive(uint256)", [id(key)]) == 1
 
   defp advance!(url, lab),
     do:

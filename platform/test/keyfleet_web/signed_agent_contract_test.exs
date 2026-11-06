@@ -1106,14 +1106,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       owner,
       matures,
       {fleet.votes_address, "isActive(uint256)", [key], {"bool", [false]}},
-      {fleet.votes_address, "presentFrom(uint256)", [key], {"uint64", [0]}},
-      {fleet.votes_address, "sweepExpired(uint256)", [0], {"uint256,bool", [0, false]}}
+      {fleet.votes_address, "presentFrom(uint256)", [key], {"uint64", [0]}}
     ])
 
     assert %{"keys" => [%{"token_id" => 2, "present_until" => nil}], "transactions" => sent} =
              answer(c, c.signer, "POST", @presence, @address, %{}, 200).body
 
-    assert Enum.map(sent, &{&1["name"], &1["blocked"]}) == [{"present", nil}, {"sweep", nil}]
+    assert Enum.map(sent, &{&1["name"], &1["blocked"]}) == [{"present", nil}]
 
     ChainViews.put!([owner, {fleet.votes_address, "isActive(uint256)", [key], :revert}])
 
@@ -1121,7 +1120,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("chain_unavailable")
 
     # Proposing keeps the words before the wallet sends anything.
-    ChainViews.put!([owner, matures, uint.(fleet.votes_address, "treasuryOpensAt()", [], 1)])
+    ChainViews.put!([
+      owner,
+      matures,
+      uint.(fleet.votes_address, "treasuryOpensAt()", [], 1),
+      {fleet.votes_address, "sweepExpired(uint256)", [256], {"uint256,bool", [0, false]}}
+    ])
+
     made = answer(c, c.signer, "POST", @propose, @address, words, 200).body
     assert made["content_hash"] == Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the hull")
     assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)

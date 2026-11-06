@@ -6917,6 +6917,16 @@ Live read at 16:51Z: live figures Present 55, Expiring 0, Undecided 0, matching 
 
 Noted, not fixed here: docs.md says the API version is in `info.version` of /openapi.json, which is the small health-and-account spec at 15.2.0; the numbers in its breaking-change list are the YAML contract's.
 
+## 2026-11-06 — Release: Present loses Continue
+
+c02ba329 is live: graph v511 (02:48:07Z), site v512 (02:48:47Z). Rollback: site v510 (cfc3a55d). Full check exit 0 on c02ba329 at 02:46Z; the two runs before it stopped on the formatter's layout of two test files and on the propose step's complexity in the style check, before any test ran. API contract 26.0.0; public OpenAPI JSON 15.3.0. No migration.
+
+Moved: the Present card's Continue button is gone, with the `sweep` step and `maintenance_needed` figure it came from; presence steps are `present` alone. Propose reads `sweepExpired(256)` at the latest block, and only when more lapsed presences wait than a proposal clears itself does it show Clear lapsed Keys before Propose, with Propose disabled and "Clear lapsed Keys first" beside it; an agent's proposal steps then start with `sweep`. Each item of the public `/api/v1/fleets/{id}/proposals` answers `opened_at`. The chain-lab test file now expects the Builder Code on each step's data (3 of its 17 had failed since 1 Nov; outside the full check, run with `--include external`, 17 of 17).
+
+Callers of the 26.0.0 change: the site's own panels and `agent_chain_json`; no regents-cli code reads `maintenance_needed` or the presence `sweep` (its chief checked), and its bundled contract copy refreshes at the next re-pin.
+
+Live read at 02:50Z, signed out: proposals list answers `opened_at` for Proposal 1; Proposals, Key 19 and Key 9 pages answer 200 with no Continue; Present 55, Expiring 6, Undecided 0; sign-in window opens from /account; wallet page at 1280, 390 and 320 with no sideways scroll; signed doctor answers 200 with guide 3.24.0; signed credits history answers 200.
+
 ## 2026-11-02 — Points from Keyfleet's own records
 
 - Keyfleet now offers Regent Points what may earn, inside the transaction that first

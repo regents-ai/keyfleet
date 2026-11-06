@@ -692,6 +692,15 @@ defmodule KeyfleetWeb.ProposalsLive do
           </div>
         </:fields>
         <:buttons :let={panel}>
+          <WalletPanel.step_button
+            :if={WalletPanel.has_step?(panel, "sweep")}
+            panel={panel}
+            step="sweep"
+            id="propose-clear"
+            variant="secondary"
+          >
+            Clear lapsed Keys
+          </WalletPanel.step_button>
           <WalletPanel.step_button panel={panel} step="propose" id="propose-button">
             Propose
           </WalletPanel.step_button>

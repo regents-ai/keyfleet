@@ -4,9 +4,7 @@ defmodule KeyfleetWeb.Components.PresenceCard do
   on its own page, or every key the signed-in wallet holds or holds a shard of
   on the fleet's proposals. A present key is counted when a proposal opens;
   an idle one can still vote, and joins the count when it does. The card shows
-  the fleet's figures (`KeyfleetWeb.Components.FleetFigures`). Continue clears
-  the idle keys the vote contract still counts, which anyone may do; a proposal
-  can't be made while more than it clears itself are left.
+  the fleet's figures (`KeyfleetWeb.Components.FleetFigures`).
   """
   use KeyfleetWeb, :html
 
@@ -61,14 +59,6 @@ defmodule KeyfleetWeb.Components.PresenceCard do
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="present" id={"#{@id}-mark"}>
             Mark present
-          </WalletPanel.step_button>
-          <WalletPanel.step_button
-            panel={panel}
-            step="sweep"
-            id={"#{@id}-sweep"}
-            variant="secondary"
-          >
-            Continue
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>
