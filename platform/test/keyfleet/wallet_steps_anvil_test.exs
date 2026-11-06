@@ -23,7 +23,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
   alias KeyfleetWeb.{FleetProposals, ProposalsPage}
-  alias RegentChain.{Abi, Call, Event, Outcome, Review}
+  alias RegentChain.{Abi, BuilderCode, Call, Event, Outcome, Review}
 
   @endpoint KeyfleetWeb.Endpoint
 
@@ -175,7 +175,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert DateTime.after?(until, DateTime.from_unix!(timestamp!(url)))
 
       assert Review.find(built.review, "present").data ==
-               Call.encode("present(uint256[])", [[id(1), id(2)]])
+               BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2)]]))
 
       assert pressed(url, built, "present") == {:ok, :confirmed}
       now = timestamp!(url)
@@ -201,7 +201,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert mixed.figures.blocked == %{}
 
       assert Review.find(mixed.review, "present").data ==
-               Call.encode("present(uint256[])", [[id(1), id(2)]])
+               BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2)]]))
 
       assert pressed(url, mixed, "present") == {:ok, :confirmed}
     end
@@ -554,7 +554,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
       assert %{to: keys, data: data} = Review.find(built.review, "reveal")
       assert keys == lab.keys
-      assert data == Call.encode("requestReveal(uint256)", [id(2)])
+      assert data == BuilderCode.append(Call.encode("requestReveal(uint256)", [id(2)]))
 
       # Refused again: the press lands, and the Key is offered again.
       send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [true]))
@@ -610,7 +610,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert built.figures.blocked == %{}
       assert %{to: to, data: data} = Review.find(built.review, "club-claim")
       assert to == lab.club_claims
-      assert data == Call.encode("claim(uint256,address)", [1, @second])
+      assert data == BuilderCode.append(Call.encode("claim(uint256,address)", [1, @second]))
       assert pressed(url, built, "club-claim") == {:ok, :confirmed}
 
       key = Fleet.onchain_token_id(club, 1)
