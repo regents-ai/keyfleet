@@ -735,8 +735,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       ChainViews.put!(
         list_views(
-          keys: [{1, @holder, until}, {2, @holder, 0}, {3, @other, 0}],
-          maintenance: true
+          keys: [{1, @holder, until}, {2, @holder, 0}, {3, @other, 0}]
         ) ++
           [{@shards, "isActive(uint256,address)", [id(3), @holder], {"bool", [true]}}]
       )
@@ -750,26 +749,21 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Key 3 Not present"
              ]
 
-      assert has_element?(view, "#proposals-present-sweep", "Continue")
       assert has_element?(view, "#proposals-present-figures-present", "1")
 
       assert pressable?(view, "present", ["#proposals-present-mark"])
-      assert pressable?(view, "sweep", ["#proposals-present-sweep"])
 
       assert_push_event(view, "onchain-steps:review", %{
         component_id: "proposals-present-action",
-        review: %{signer: @holder, steps: [present, sweep]}
+        review: %{signer: @holder, steps: [present]}
       })
 
       assert {present.to, present.data} ==
                {@votes,
                 BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2), id(3)]]))}
-
-      assert {sweep.to, sweep.data} ==
-               {@votes, BuilderCode.append(Call.encode("sweepExpired(uint256)", [256]))}
     end
 
-    test "a wallet with no keys can't mark any present, but may still press Continue", %{
+    test "a wallet with no keys can't mark any present", %{
       conn: conn
     } do
       ChainViews.put!(list_views())
@@ -779,7 +773,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(view, "#proposals-present-mark[disabled]")
       assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
-      assert pressable?(view, "sweep", ["#proposals-present-sweep"])
       assert has_element?(view, "#proposals-present-figures-present", "0")
     end
 
@@ -1221,7 +1214,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     test "signed out, the split and presence show read-only, the treasury shows no buttons, and Propose takes the press",
          %{conn: conn} do
       ChainViews.put!(
-        list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}], maintenance: true)
+        list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}])
       )
 
       {:ok, view, _html} = open(conn, @list)
@@ -1503,8 +1496,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
 
     [
-      {@votes, "sweepExpired(uint256)", [0],
-       {"uint256,bool", [0, Keyword.get(opts, :maintenance, false)]}},
+      {@votes, "sweepExpired(uint256)", [256], {"uint256,bool", [0, false]}},
       {@votes, "treasuryOpensAt()", [], {"uint256", [1]}},
       {@treasury, "splitAssets()", [],
        {"address[]", [Keyword.get(opts, :split_assets, [@usdc])]}},

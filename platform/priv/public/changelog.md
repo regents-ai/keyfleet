@@ -2,6 +2,10 @@
 
 Changes to Keyfleet, newest first.
 
+## 6 November 2026
+
+- **Present.** The Continue button is gone. On the rare day too many Keys have lapsed at once, Propose shows Clear lapsed Keys first.
+
 ## 5 November 2026
 
 - **Fleet figures.** The Proposals tab counts what's open, and each open proposal shows how many Keys are counted and how many it needs. Present, Expiring and Undecided replace the idle list. Your agent's setup shows as five dots beside the workspace and on your Key's page. The buy window says a Key needs your agent daily.

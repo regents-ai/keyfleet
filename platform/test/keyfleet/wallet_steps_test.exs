@@ -332,9 +332,6 @@ defmodule Keyfleet.WalletStepsTest do
       ]
     end
 
-    defp sweep(fleet, due?),
-      do: {fleet.votes_address, "sweepExpired(uint256)", [0], {"uint256,bool", [0, due?]}}
-
     test "every key the signer holds or holds a shard of, marked in one press",
          %{fleet: fleet} do
       ProposalHelpers.keys_sold!(@fleet, [1, 2], @signer)
@@ -345,8 +342,7 @@ defmodule Keyfleet.WalletStepsTest do
         owner(fleet, 1, @signer),
         owner(fleet, 2, @signer),
         owner(fleet, 7, @other),
-        shard(fleet, "isActive", 7, @signer, true),
-        sweep(fleet, false)
+        shard(fleet, "isActive", 7, @signer, true)
       ]
 
       ChainViews.put!(
@@ -362,15 +358,11 @@ defmodule Keyfleet.WalletStepsTest do
                %{token_id: 7, until: nil}
              ]
 
-      assert built.figures.maintenance? == false
       assert built.figures.blocked == %{}
       assert steps(built)["present"].to == fleet.votes_address
 
       assert steps(built)["present"].data ==
                BuilderCode.append(Call.encode("present(uint256[])", [ids([1, 2, 7])]))
-
-      assert steps(built)["sweep"].data ==
-               BuilderCode.append(Call.encode("sweepExpired(uint256)", [256]))
 
       # A Key sold under two days ago is left out, so the others are still
       # marked; with none old enough the press is certain to fail.
@@ -395,22 +387,19 @@ defmodule Keyfleet.WalletStepsTest do
       assert build!(:present).figures.blocked == %{"present" => :too_new}
     end
 
-    test "a key's page shows its key to anyone, and lapsed presences need clearing",
-         %{fleet: fleet} do
+    test "a key's page shows its key to anyone", %{fleet: fleet} do
       ChainViews.put!(
-        [owner(fleet, 9, @other), shard(fleet, "isActive", 9, @signer, false), sweep(fleet, true)] ++
+        [owner(fleet, 9, @other), shard(fleet, "isActive", 9, @signer, false)] ++
           presence(fleet, 9, @now + 60)
       )
 
       built = build!(:present, token_id: 9)
       assert built.figures.keys == [%{token_id: 9, until: DateTime.from_unix!(@now + 60)}]
-      assert built.figures.maintenance? == true
-      # Continue stays open to anyone.
       assert built.figures.blocked == %{"present" => :not_your_key}
     end
 
-    test "a wallet with no keys may still press Continue", %{fleet: fleet} do
-      ChainViews.put!([sweep(fleet, false)])
+    test "a wallet with no keys can't mark any present" do
+      ChainViews.put!([])
       assert build!(:present).figures.blocked == %{"present" => :no_keys}
     end
   end
@@ -679,6 +668,10 @@ defmodule Keyfleet.WalletStepsTest do
   describe "proposing" do
     # Key 2 is the signer's and old enough to take part, the treasury opened
     # for spending a day ago, and holds 2,500 USDC and 1 ETH.
+    # Whether more lapsed presences wait than a proposal clears itself.
+    defp lapsed(fleet, due?),
+      do: {fleet.votes_address, "sweepExpired(uint256)", [256], {"uint256,bool", [256, due?]}}
+
     defp proposing(fleet, extra \\ []) do
       ChainViews.put!(
         [
@@ -686,6 +679,7 @@ defmodule Keyfleet.WalletStepsTest do
           matures(fleet, 2, @now - 1),
           uint(fleet.votes_address, "proposalCount()", 6),
           uint(fleet.votes_address, "treasuryOpensAt()", @now - 86_400),
+          lapsed(fleet, false),
           uint(@usdc, "balanceOf(address)", [fleet.treasury_address], 2_500_000_000)
         ] ++ extra,
         balances: %{fleet.treasury_address => 10 ** 18}
@@ -823,6 +817,16 @@ defmodule Keyfleet.WalletStepsTest do
       assert propose(pay).figures.blocked == %{
                "propose" => {:opens_at, DateTime.from_unix!(@now + 60)}
              }
+
+      # Too many lapsed presences for a proposal to clear: clearing them
+      # comes first.
+      proposing(fleet, [lapsed(fleet, true)])
+      lapsed = propose(%{"kind" => "decision"})
+      assert lapsed.figures.blocked == %{"propose" => :clear_first}
+      assert names(lapsed) == ["sweep", "propose"]
+
+      assert steps(lapsed)["sweep"].data ==
+               BuilderCode.append(Call.encode("sweepExpired(uint256)", [256]))
     end
   end
 

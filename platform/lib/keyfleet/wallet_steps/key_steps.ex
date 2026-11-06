@@ -34,8 +34,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @no_seed "0x" <> String.duplicate("0", 64)
   # How long a renewed shard lasts, in days.
   @renew_days 30
-  # How many lapsed presences one press of Continue clears.
-  @sweep_limit 256
   # How long a presence lasts, in seconds.
   @presence_seconds 172_800
 
@@ -186,35 +184,27 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # Key is present whoever is looking. A Key sold less than two days ago can't
   # be marked yet, and the vote contract refuses a call naming one, so only
   # the Keys old enough are named; with none old enough the press is certain
-  # to fail. Continue clears presences that have lapsed, which anyone may do.
-  # A visitor holds no Keys.
+  # to fail. A visitor holds no Keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
     candidates = present_candidates(fleet, signer, token_id)
-    figures = %{keys: [], maintenance?: false}
+    figures = %{keys: []}
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "isActive"),
          keys = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
          {:ok, presence} <-
-           Reads.each(if(token_id, do: [token_id], else: keys), &presence(reads, fleet, &1)),
-         {:ok, maintenance?} <- maintenance?(reads, fleet) do
+           Reads.each(if(token_id, do: [token_id], else: keys), &presence(reads, fleet, &1)) do
       ready = for %{token_id: key, mature?: true} <- presence, key in keys, do: key
       onchain = Enum.map(ready, &Fleet.onchain_token_id(fleet, &1))
 
       steps = [
-        Review.step("present", fleet.votes_address, Call.encode("present(uint256[])", [onchain])),
-        Review.step(
-          "sweep",
-          fleet.votes_address,
-          Call.encode("sweepExpired(uint256)", [@sweep_limit])
-        )
+        Review.step("present", fleet.votes_address, Call.encode("present(uint256[])", [onchain]))
       ]
 
       {:ok, steps,
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
          ready: ready,
-         maintenance?: maintenance?,
          blocked: present_blocked(keys, ready, token_id)
        }}
     else
@@ -561,18 +551,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
       {:error, :reverted} -> {:ok, nil}
       answer -> answer
     end
-  end
-
-  # Whether lapsed presences are waiting to be cleared: a proposal clears up
-  # to 256 itself and is refused while more are left. Asked of the vote
-  # contract by simulating a Continue that clears none.
-  defp maintenance?(reads, fleet) do
-    with {:ok, [_moved, due?]} <-
-           Reads.many(reads, fleet.votes_address, "sweepExpired(uint256)", [0], [
-             {:uint, 256},
-             :bool
-           ]),
-         do: {:ok, due?}
   end
 
   # Whether the signer holds every key named, read at the head.

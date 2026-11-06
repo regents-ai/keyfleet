@@ -33,11 +33,8 @@ defmodule KeyfleetWeb.AgentChainJSON do
   defp why(nil), do: nil
   defp why(reason), do: WalletWords.blocked(reason)
 
-  defp figures(:present, %{keys: keys, maintenance?: maintenance?}) do
-    %{
-      keys: Enum.map(keys, &%{token_id: &1.token_id, present_until: &1.until}),
-      maintenance_needed: maintenance?
-    }
+  defp figures(:present, %{keys: keys}) do
+    %{keys: Enum.map(keys, &%{token_id: &1.token_id, present_until: &1.until})}
   end
 
   defp figures(:propose, figures) do
