@@ -1126,6 +1126,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       uint.(fleet.votes_address, "treasuryOpensAt()", [], 1),
       {fleet.votes_address, "sweepExpired(uint256)", [256], {"uint256,bool", [0, false]}}
     ])
+
     made = answer(c, c.signer, "POST", @propose, @address, words, 200).body
     assert made["content_hash"] == Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the hull")
     assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)

@@ -734,9 +734,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       until = now() + 3_600
 
       ChainViews.put!(
-        list_views(
-          keys: [{1, @holder, until}, {2, @holder, 0}, {3, @other, 0}]
-        ) ++
+        list_views(keys: [{1, @holder, until}, {2, @holder, 0}, {3, @other, 0}]) ++
           [{@shards, "isActive(uint256,address)", [id(3), @holder], {"bool", [true]}}]
       )
 
@@ -1213,9 +1211,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     # wallet, which asks to sign in.
     test "signed out, the split and presence show read-only, the treasury shows no buttons, and Propose takes the press",
          %{conn: conn} do
-      ChainViews.put!(
-        list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}])
-      )
+      ChainViews.put!(list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}]))
 
       {:ok, view, _html} = open(conn, @list)
       render_async(view, @async_wait)
