@@ -2,9 +2,11 @@ defmodule KeyfleetWeb.Components.AgentSetup do
   @moduledoc """
   The agents a signed-in person has paired, each with the five states its setup
   ends in as dots, and a line only when its scheduled run has stopped. It takes
-  no room for a person with no agent. The states come from the chain reader's
-  records and check-ins (`Keyfleet.Agents.Upkeep`); only gas asks the chain, so
-  the row is drawn at once and that dot fills in when the answer comes.
+  no room for a person with no agent. Each dot opens a few words saying what it
+  is and, when it is not done, how to put it right. The states come from the
+  chain reader's records and check-ins (`Keyfleet.Agents.Upkeep`); only gas asks
+  the chain, so the row is drawn at once and that dot fills in when the answer
+  comes.
   """
   use KeyfleetWeb, :live_component
 
@@ -29,21 +31,22 @@ defmodule KeyfleetWeb.Components.AgentSetup do
       aria-labelledby={"#{@id}-title"}
       hidden={@agents == []}
     >
-      <h2 id={"#{@id}-title"}>
-        Your agent
-        <Regent.Primitives.tip id={"#{@id}-tip"} label="About the dots">
-          Paired, gas, schedule, marked, repeated.
-        </Regent.Primitives.tip>
-      </h2>
-      <div :for={agent <- @agents} class="agent-setup__agent" data-wallet={agent.wallet}>
+      <h2 id={"#{@id}-title"}>Your agent</h2>
+      <div
+        :for={{agent, n} <- Enum.with_index(@agents)}
+        class="agent-setup__agent"
+        data-wallet={agent.wallet}
+      >
         <span class="agent-setup__name">{agent.name}</span>
         <ul class="agent-setup__states">
-          <li
-            :for={{label, state} <- states(agent, @gas)}
-            data-state={word(state)}
-            title={"#{label}: #{word(state)}"}
-          >
-            <span class="visually-hidden">{label}: {word(state)}</span>
+          <li :for={{label, state, words} <- states(agent, @gas)} data-state={word(state)}>
+            <Regent.Primitives.tip id={"#{@id}-#{n}-#{String.downcase(label)}"}>
+              <:figure>
+                <span class="agent-setup__dot" aria-hidden="true"></span>
+                <span class="visually-hidden">{label}: {word(state)}</span>
+              </:figure>
+              <strong>{label}.</strong> {words}
+            </Regent.Primitives.tip>
           </li>
         </ul>
         <p :if={agent.run_missed} class="agent-setup__wrong">{missed(agent.lapses_at)}</p>
@@ -62,15 +65,44 @@ defmodule KeyfleetWeb.Components.AgentSetup do
     end)
   end
 
-  defp states(agent, %AsyncResult{result: gas}) do
+  # Each state with the words its dot opens: what it is, and how to put it
+  # right when it is not done.
+  defp states(agent, %AsyncResult{} = gas) do
+    paid = gas.result && gas.result[agent.wallet]
+
     [
-      {"Paired", true},
-      {"Gas", gas && gas[agent.wallet]},
-      {"Schedule", agent.schedule},
-      {"Marked", agent.marked},
-      {"Repeated", agent.repeated}
+      {"Paired", true, "This agent is paired with your account."},
+      {"Gas", paid, gas_words(paid, agent.key_count, gas.loading)},
+      {"Schedule", agent.schedule, schedule_words(agent.schedule)},
+      {"Marked", agent.marked, marked_words(agent.marked, agent.key_count)},
+      {"Repeated", agent.repeated, repeated_words(agent.repeated)}
     ]
   end
+
+  defp gas_words(true, _keys, _loading), do: "Its wallet has the ETH on Base to mark your Keys."
+  defp gas_words(false, _keys, _loading), do: "Its wallet is out of ETH. Send it ETH on Base."
+
+  defp gas_words(nil, 0, _loading),
+    do: "Nothing to pay for until it acts for a Key. Give it a shard."
+
+  defp gas_words(nil, _keys, loading) when loading in [nil, false],
+    do: "The chain didn’t answer. Reload in a minute."
+
+  defp gas_words(nil, _keys, _loading), do: "Reading its wallet."
+
+  defp schedule_words(true), do: "Its daily run is scheduled."
+  defp schedule_words(false), do: "No daily run yet. Ask your agent to schedule one."
+
+  defp marked_words(true, _keys), do: "Every Key it acts for is present and counts in votes."
+  defp marked_words(false, 0), do: "It acts for no Key yet. Give it a shard."
+
+  defp marked_words(false, _keys),
+    do: "A Key it acts for isn’t present. Ask your agent to mark it, or mark it yourself."
+
+  defp repeated_words(true), do: "Its daily run keeps arriving on time."
+
+  defp repeated_words(false),
+    do: "Its daily run hasn’t come back on time yet. Check after its next run."
 
   defp word(true), do: "yes"
   defp word(false), do: "no"
