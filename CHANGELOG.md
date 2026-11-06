@@ -6926,3 +6926,11 @@ Moved: the Present card's Continue button is gone, with the `sweep` step and `ma
 Callers of the 26.0.0 change: the site's own panels and `agent_chain_json`; no regents-cli code reads `maintenance_needed` or the presence `sweep` (its chief checked), and its bundled contract copy refreshes at the next re-pin.
 
 Live read at 02:50Z, signed out: proposals list answers `opened_at` for Proposal 1; Proposals, Key 19 and Key 9 pages answer 200 with no Continue; Present 55, Expiring 6, Undecided 0; sign-in window opens from /account; wallet page at 1280, 390 and 320 with no sideways scroll; signed doctor answers 200 with guide 3.24.0; signed credits history answers 200.
+
+## 2026-11-06 — Release: one icon set and one pairing window
+
+4250f9cf is live: graph v513 (12:53:31Z), site v514 (12:54:11Z), image registry.fly.io/keyfleet:4250f9c (sha256:0cd37cbc9ef0). Rollback: site v512 and graph v511 (c02ba329). Full check exit 0 on 4250f9cf at 12:39Z (547 contract tests ok). No migration; API contracts unchanged.
+
+Moved, from the template's shared round (design-system 768719f3): every icon on a button comes from the shared Lucide set at one line weight (apps grip, copy, pin, steppers, file marks, close, tick, arrows); Pair New Agent, in the account menu and on the Agents page, opens one pairing window over the page you are on; Escape closes the top layer first. The products menu already read Patchbay, Autolaunch, Techtree, $REGENT Staking. The account-menu walk (11 of 11) covers the window at 1280 and 390; two practice-chain walks stop with `log_missing_from_block` on main since 5b34ce9b and are fixed on kf/chain-walks-1106.
+
+Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /connect, /pair, /account, /account/agents, /opportunities, /changelog, /classic/1 and its workspace, proposals and Key 19 pages answer 200; header icons at 1280 are Lucide at 1.8 stroke beside the X and GitHub marks; no sideways scroll at 390 and 320.
