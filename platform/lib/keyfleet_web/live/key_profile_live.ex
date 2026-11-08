@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <%= if @profile.issued? do %>
           <.holder profile={@profile} params={@params} />
           <.reveal
-            :if={is_nil(@profile.traits)}
+            :if={is_nil(@profile.traits) and not @profile.draw_ended?}
             profile={@profile}
             fleet={@fleet}
             actor={@actor}
@@ -172,7 +172,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__traits" aria-labelledby="key-profile-traits-title">
       <h3 id="key-profile-traits-title">Traits</h3>
-      <p :if={is_nil(@profile.traits)} class="key-profile-muted">Revealing</p>
+      <p :if={is_nil(@profile.traits)} class="key-profile-muted">
+        {if @profile.draw_ended?, do: "Never gets traits", else: "Revealing"}
+      </p>
       <ul :if={@profile.traits} class="key-profile-traits">
         <li :for={trait <- @profile.traits}>
           {trait.trait}: {trait.value}

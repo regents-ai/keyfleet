@@ -437,6 +437,30 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
       refute has_element?(view, "#key-profile-reveal")
     end
+
+    test "goes once the key's ended wait is recorded, and says it never gets traits", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      assert text(view, ".key-profile__traits") == "Traits Revealing"
+
+      Keys.record_reveal_expiry!(
+        %{
+          fleet_id: @fleet,
+          token_id: 12,
+          block_number: 500,
+          block_hash: "0x" <> String.duplicate("c", 64),
+          transaction_hash: Traits.keccak256("#{@fleet}/12/expired"),
+          log_index: 0
+        },
+        actor: @system
+      )
+
+      keys_changed([12])
+
+      refute has_element?(view, "#key-profile-reveal")
+      assert text(view, ".key-profile__traits") == "Traits Never gets traits"
+    end
   end
 
   describe "who may write to a key" do

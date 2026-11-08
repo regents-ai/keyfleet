@@ -4238,9 +4238,11 @@ paths:
         collection's metadata base followed by the Key's token id, its fleet's number times
         10,000,000,000 plus its Key number. Its name is the fleet's type, the fleet's number
         within its type and the Key's number, such as CLASSIC—001—072. Until the Key's traits are drawn it shows the waiting
-        picture and Status Revealing, and may be cached for 30 seconds. Once drawn, the Key shows
-        its traits; it keeps the waiting picture, cached for 30 seconds, while its card is being
-        drawn, then shows its card and may be cached for an hour. Needs no sign-in.
+        picture and Status Revealing, and may be cached for 30 seconds. Once the wait for its draw
+        was ended, it keeps the waiting picture and shows Status Never Revealed for good, and may be
+        cached for an hour. Once drawn, the Key shows its traits; it keeps the waiting picture,
+        cached for 30 seconds, while its card is being drawn, then shows its card and may be cached
+        for an hour. Needs no sign-in.
       parameters:
         - {$ref: "#/components/parameters/CollectionTokenId"}
       responses:
@@ -7213,7 +7215,7 @@ components:
         key:
           type: object
           additionalProperties: false
-          required: [fleet_id, token_id, yours, image, level, traits, holder, held_since, changed_hands, writes_as, holder_keys, holder_key_count, wall, room_posts, votes_cast, shards]
+          required: [fleet_id, token_id, yours, image, level, traits, draw_ended, holder, held_since, changed_hands, writes_as, holder_keys, holder_key_count, wall, room_posts, votes_cast, shards]
           properties:
             fleet_id: {type: string}
             token_id: {type: integer, minimum: 1, maximum: 9223372036854775807}
@@ -7222,7 +7224,7 @@ components:
             level: {type: [integer, "null"], minimum: 1, description: The Key's level, in a fleet whose Keys have levels}
             traits:
               type: [array, "null"]
-              description: Each trait the Key's card draws, with the share of Keys that draw it; null while the card is still being revealed
+              description: Each trait the Key's card draws, with the share of Keys that draw it; null while the card is still being revealed, or for good once draw_ended
               items:
                 type: object
                 additionalProperties: false
@@ -7231,6 +7233,7 @@ components:
                   trait: {type: string}
                   value: {type: string}
                   share: {type: number, minimum: 0, maximum: 1}
+            draw_ended: {type: boolean, description: "Whether the wait for the Key's draw was ended, so it never gets traits"}
             holder: {type: string, pattern: '^0x[0-9a-f]{40}$', description: The wallet holding the Key}
             held_since: {type: string, format: date-time}
             changed_hands: {type: integer, minimum: 0, description: How many times the Key has moved to another wallet}
@@ -9935,7 +9938,7 @@ components:
         image: {type: string, pattern: '^https?://'}
         attributes:
           type: array
-          description: The Key's Level in a Fibonacci fleet, then Status Revealing
+          description: The Key's Level in a Fibonacci fleet, then Status Revealing, or Never Revealed once the wait for its draw was ended
           items: {$ref: "#/components/schemas/KeyAttribute"}
     KeyMetadataRevealed:
       type: object

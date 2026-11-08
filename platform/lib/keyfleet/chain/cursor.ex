@@ -9,8 +9,8 @@ defmodule Keyfleet.Chain.Cursor do
   there until an operator has corrected the record by hand.
 
   It also numbers the fleet's proposal and budget records (`proposal_seq`),
-  its key reveals (`reveal_seq`), its ownership epochs (`ownership_seq`) and
-  its shards issued and ended (`shard_seq`).
+  its key reveals and ended draw waits (`reveal_seq`), its ownership epochs
+  (`ownership_seq`) and its shards issued and ended (`shard_seq`).
   """
   use Ash.Resource,
     domain: Keyfleet.Chain,
@@ -153,8 +153,8 @@ defmodule Keyfleet.Chain.Cursor do
       public?: true,
       constraints: [min: 0]
 
-    # The last number given to one of the fleet's key reveals. It is moved only
-    # by `Keyfleet.Chain.take_reveal_seq!/1`.
+    # The last number given to one of the fleet's key reveals or ended draw
+    # waits. It is moved only by `Keyfleet.Chain.take_reveal_seq!/1`.
     attribute :reveal_seq, :integer,
       allow_nil?: false,
       default: 0,

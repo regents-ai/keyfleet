@@ -135,6 +135,66 @@ defmodule Keyfleet.RevealsChainTest do
     end
   end
 
+  describe "recording ended draw waits" do
+    # An ended wait takes the fleet's next reveal number, the pass names its
+    # key, and the same ended wait read again, from another block, is the one
+    # already recorded.
+    test "each ended wait is recorded once and its key is named", %{fleet: fleet} do
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
+
+      StubClient.put_chain(head(@deployed + 10), [
+        mint(1, @deployed + 1, 0),
+        mint(2, @deployed + 2, 0),
+        revealed(2, 7, @seed, @deployed + 3, 0),
+        expired(1, @deployed + 4, 0)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_changed, @fleet, [2, 1]}
+
+      assert %{block_number: block, log_index: 0, record_seq: 2} =
+               recorded = Keys.get_reveal_expiry!(@fleet, 1)
+
+      assert block == @deployed + 4
+      assert Keys.get_reveal_expiry!(@fleet, 2) == nil
+      assert Chain.get_cursor!(@fleet).reveal_seq == 2
+
+      moved = %{expired(1, @deployed + 6, 1) | "blockHash" => @new_hash}
+
+      StubClient.put_chain(
+        head(@deployed + 12),
+        [mint(1, @deployed + 1, 0), mint(2, @deployed + 2, 0), moved],
+        block_hashes: %{(@deployed + 4) => @new_hash, (@deployed + 6) => @new_hash}
+      )
+
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert Keys.get_reveal_expiry!(@fleet, 1) == recorded
+      assert Chain.get_cursor!(@fleet).reveal_seq == 2
+      refute_received {:keys_changed, _fleet, _token_ids}
+    end
+
+    test "the table refuses every change, delete and emptying", %{fleet: fleet} do
+      StubClient.put_chain(head(@deployed + 10), [
+        mint(1, @deployed + 1, 0),
+        expired(1, @deployed + 4, 0)
+      ])
+
+      assert Scanner.step(fleet, StubClient) == :ok
+
+      for sql <- [
+            "UPDATE keyfleet_app.key_reveal_expiries SET log_index = 9",
+            "DELETE FROM keyfleet_app.key_reveal_expiries",
+            "TRUNCATE keyfleet_app.key_reveal_expiries CASCADE"
+          ] do
+        assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
+                 Repo.query(sql, [], mode: :savepoint),
+               sql
+      end
+
+      assert %{log_index: 0} = Keys.get_reveal_expiry!(@fleet, 1)
+    end
+  end
+
   describe "the reveal table" do
     test "refuses every change, delete and emptying", %{fleet: fleet} do
       StubClient.put_chain(head(@deployed + 10), [
@@ -159,6 +219,25 @@ defmodule Keyfleet.RevealsChainTest do
   end
 
   describe "reading logs" do
+    test "only ended-wait logs in the contract's exact encoding are read", %{fleet: fleet} do
+      ended = expired(1, @deployed + 1, 0)
+
+      assert {:ok, [{:reveal_expiry, %{token_id: 1}}]} =
+               Logs.decode([ended], fleet, StubClient.regent_buyer(), @deployed, @deployed + 10)
+
+      for broken <- [
+            %{ended | "address" => @votes},
+            %{ended | "topics" => List.replace_at(ended["topics"], 1, hex(<<0::256>>))},
+            %{ended | "topics" => Enum.drop(ended["topics"], -1)},
+            %{ended | "topics" => ended["topics"] ++ [hex(<<1::256>>)]},
+            %{ended | "data" => hex(<<0::256>>)}
+          ] do
+        assert Logs.decode([broken], fleet, StubClient.regent_buyer(), @deployed, @deployed + 10) ==
+                 {:error, {:unreadable_log, broken["transactionHash"], broken["logIndex"]}},
+               inspect(broken)
+      end
+    end
+
     # Anything not exactly as the fleet contract emits it refuses the stretch.
     test "only reveal logs in the contract's exact encoding are read", %{fleet: fleet} do
       reveal = revealed(1, 7, @seed, @deployed + 1, 0)
@@ -198,6 +277,16 @@ defmodule Keyfleet.RevealsChainTest do
         <<request_id::256>>
       ],
       <<key::256>> <> bytes(seed),
+      block,
+      log_index
+    )
+  end
+
+  # The wait for key `key`'s draw ended, named in the Key collection by its id there.
+  defp expired(key, block, log_index) do
+    log(
+      [RevealLog.expired_topic(), <<ChainHelpers.onchain_id(@fleet, key)::256>>],
+      <<>>,
       block,
       log_index
     )

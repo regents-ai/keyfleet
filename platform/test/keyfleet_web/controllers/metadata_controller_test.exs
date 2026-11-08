@@ -72,6 +72,41 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     end
   end
 
+  # A key whose wait for its draw was ended never gets traits, so it says so
+  # for good and may be kept for an hour.
+  test "a key whose draw's wait was ended says it is never revealed", %{conn: conn} do
+    Keys.record_reveal_expiry!(
+      %{
+        fleet_id: "fibonacci_cascade",
+        token_id: 3,
+        block_number: 12,
+        block_hash: "0x" <> String.duplicate("c", 64),
+        transaction_hash: transaction("fibonacci_cascade", 3, "expired"),
+        log_index: 0
+      },
+      actor: %System{}
+    )
+
+    response = get(conn, key_path("fibonacci_cascade", 3))
+
+    assert get_resp_header(response, "cache-control") == ["public, max-age=3600"]
+
+    assert json_response(response, 200) == %{
+             "name" => "CASCADE—001—003",
+             "description" =>
+               "Key 3 of Cascade #1. It never gets traits: the wait for its draw was ended.",
+             "image" => @interim_pass,
+             "attributes" => [
+               %{"trait_type" => "Set Type", "value" => "Cascade"},
+               %{"trait_type" => "Set ID", "value" => "001"},
+               %{"trait_type" => "Level", "value" => 2},
+               %{"trait_type" => "Status", "value" => "Never Revealed"}
+             ]
+           }
+
+    assert ContractSchema.response_errors(json_response(response, 200), "GET", @path, 200) == []
+  end
+
   # The traits are the fixture table's golden draw for this seed, the same
   # draw contracts/test/KeyfleetTraitDraw.t.sol pins. A reveal queues its
   # card's drawing; until the card is in the bucket the key keeps the pass.

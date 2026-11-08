@@ -35,6 +35,7 @@ defmodule Keyfleet.ProposalsChainTest do
   # contracts in contracts/test/KeyfleetVotesTopics.t.sol where it pins them.
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
   @revealed "0x2641319733d9075c8fb8c0e9c0738513e76e459cba32ba76efd9a29096dc8a24"
+  @reveal_expired "0xe7a4b3ed034eada5a71195b6461d48bb201a05ce179836c366f403517eaa78b8"
   @forwarded "0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81"
   @protocol_share "0x406fe989f03a57e5eb52c9fc293be7940d07567bd9425fb5fe3d0eafd20be3f3"
   @created "0x959c9f8f330ac28b7f4719d751c7fa2d25e7be768c2642037e274c468a0ac796"
@@ -131,6 +132,7 @@ defmodule Keyfleet.ProposalsChainTest do
                Enum.sort([
                  @ownership,
                  @revealed,
+                 @reveal_expired,
                  @forwarded,
                  @protocol_share,
                  @created,
