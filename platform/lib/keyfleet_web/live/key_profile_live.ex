@@ -475,7 +475,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
             id="key-profile-reveal-expire"
             variant="secondary"
           >
-            End the wait
+            End the wait for good
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>
