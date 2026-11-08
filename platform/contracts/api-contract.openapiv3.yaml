@@ -3409,12 +3409,12 @@ paths:
       operationId: buildExpireReveal
       description: >-
         The transaction that ends the wait for a Key's random draw that hasn't come 24 hours after
-        its request was accepted, as the Key page's End the wait button does. Anyone may send it.
-        It can't be undone: the Key then never gets traits, and the draws' coordinator is free to
-        be changed again. Blocked "From TIME" until the 24 hours are up, "No draw waiting" while no
-        request waits, "Traits drawn" once the draw is made, "Wait ended: it never gets traits"
-        once the wait was ended, and "Its number gives its traits" for a Key dealt its card by
-        number. Nothing is sent here: the signing wallet sends it itself, on Base.
+        its request was accepted, as the Key page's End the wait for good button does. Anyone may
+        send it. It can't be undone: the Key then never gets traits, and the draws' coordinator is
+        free to be changed again. Blocked "From TIME" until the 24 hours are up, "No draw waiting"
+        while no request waits, "Traits drawn" once the draw is made, "Wait ended: it never gets
+        traits" once the wait was ended, and "Its number gives its traits" for a Key dealt its card
+        by number. Nothing is sent here: the signing wallet sends it itself, on Base.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
