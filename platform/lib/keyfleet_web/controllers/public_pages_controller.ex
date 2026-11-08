@@ -16,6 +16,9 @@ defmodule KeyfleetWeb.PublicPagesController do
   @doc "`/app` opens the Regents Club's hall, the fleet every Club Pass comes with."
   def app(conn, _params), do: redirect(conn, to: ~p"/app/fleets/regents_club")
 
+  @doc "`/agent` and `/start`, where a new agent often looks first, open the Agents page."
+  def agents_start(conn, _params), do: redirect(conn, to: ~p"/agents")
+
   def openapi(conn, _params) do
     body = Jason.encode!(PublicDocuments.openapi())
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)
