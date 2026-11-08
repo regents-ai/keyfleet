@@ -17,7 +17,10 @@ defmodule Keyfleet.Keys.KeyPicture do
   (`Keyfleet.Keys.KeyArt.small_card/1`). A job per picture without one makes
   it (`MakeSmallPicture`), found every minute, so new cards and the cards
   drawn before it existed are covered the same way. Until it is made, the Key
-  is shown by its number.
+  is shown by its number. A job tries for days; when its last try fails, the
+  time is kept (`close_up_failed_at`, `small_card_failed_at`) and that small
+  picture is not looked for again, so a picture that can't be made never
+  holds the key-art queue.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -64,13 +67,13 @@ defmodule Keyfleet.Keys.KeyPicture do
     # The pictures the close-up job looks through, a page at a time.
     read :without_close_up do
       pagination keyset?: true, required?: false
-      filter expr(is_nil(close_up_cid))
+      filter expr(is_nil(close_up_cid) and is_nil(close_up_failed_at))
     end
 
     # The pictures the small-card job looks through, a page at a time.
     read :without_small_card do
       pagination keyset?: true, required?: false
-      filter expr(is_nil(small_card_cid))
+      filter expr(is_nil(small_card_cid) and is_nil(small_card_failed_at))
     end
 
     # Each reads the card back, makes its small picture and keeps it, outside
@@ -89,6 +92,19 @@ defmodule Keyfleet.Keys.KeyPicture do
       require_atomic? false
       change {MakeSmallPicture, kind: :small_card}
     end
+
+    # A small picture's job failed its last try.
+    update :close_up_failed do
+      public? false
+      accept []
+      change set_attribute(:close_up_failed_at, &DateTime.utc_now/0)
+    end
+
+    update :small_card_failed do
+      public? false
+      accept []
+      change set_attribute(:small_card_failed_at, &DateTime.utc_now/0)
+    end
   end
 
   oban do
@@ -97,10 +113,11 @@ defmodule Keyfleet.Keys.KeyPicture do
       trigger :close_up do
         action :make_close_up
         read_action :without_close_up
-        where expr(is_nil(close_up_cid))
+        where expr(is_nil(close_up_cid) and is_nil(close_up_failed_at))
         queue(:key_art)
         worker_priority(3)
-        max_attempts(5)
+        max_attempts(20)
+        on_error(:close_up_failed)
         lock_for_update?(false)
         scheduler_module_name(Keyfleet.Keys.KeyPicture.Workers.CloseUpScheduler)
         worker_module_name(Keyfleet.Keys.KeyPicture.Workers.CloseUp)
@@ -109,10 +126,11 @@ defmodule Keyfleet.Keys.KeyPicture do
       trigger :small_card do
         action :make_small_card
         read_action :without_small_card
-        where expr(is_nil(small_card_cid))
+        where expr(is_nil(small_card_cid) and is_nil(small_card_failed_at))
         queue(:key_art)
         worker_priority(3)
-        max_attempts(5)
+        max_attempts(20)
+        on_error(:small_card_failed)
         lock_for_update?(false)
         scheduler_module_name(Keyfleet.Keys.KeyPicture.Workers.SmallCardScheduler)
         worker_module_name(Keyfleet.Keys.KeyPicture.Workers.SmallCard)
@@ -163,6 +181,14 @@ defmodule Keyfleet.Keys.KeyPicture do
     attribute :small_card_cid, :string do
       public? true
       description "The small card's IPFS address, once it is made."
+    end
+
+    attribute :close_up_failed_at, :utc_datetime_usec do
+      description "When the close-up's job failed its last try; it isn't tried again."
+    end
+
+    attribute :small_card_failed_at, :utc_datetime_usec do
+      description "When the small card's job failed its last try; it isn't tried again."
     end
 
     create_timestamp :drawn_at, public?: true

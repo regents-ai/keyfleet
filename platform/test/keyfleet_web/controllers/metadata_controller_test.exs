@@ -218,6 +218,43 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     end
   end
 
+  # A close-up that can't be made is tried for days, then given up for good,
+  # so it never holds the key-art queue again.
+  test "a small picture whose job fails its last try is not looked for again" do
+    picture =
+      Keyfleet.Keys.KeyPicture
+      |> Ash.Changeset.for_create(
+        :record,
+        %{
+          fleet_id: "fibonacci_cascade",
+          token_id: 3,
+          seed: Traits.keccak256("golden-1"),
+          cid: "b" <> String.duplicate("c", 58)
+        },
+        actor: %System{}
+      )
+      |> Ash.create!()
+
+    Req.Test.stub(KeyArt, &Plug.Conn.send_resp(&1, 502, ""))
+    waiting = fn -> Ash.read!(Keyfleet.Keys.KeyPicture, action: :without_close_up) end
+    args = %{"primary_key" => %{"id" => picture.id}}
+
+    # An earlier try fails the job, which Oban runs again later.
+    assert_raise Ash.Error.Unknown, fn ->
+      perform_job(Keyfleet.Keys.KeyPicture.Workers.CloseUp, args, attempt: 19, max_attempts: 20)
+    end
+
+    assert [%{id: id, close_up_failed_at: nil}] = waiting.()
+    assert id == picture.id
+
+    perform_job(Keyfleet.Keys.KeyPicture.Workers.CloseUp, args, attempt: 20, max_attempts: 20)
+
+    assert waiting.() == []
+
+    assert %{close_up_failed_at: %DateTime{}, close_up_cid: nil} =
+             Ash.get!(Keyfleet.Keys.KeyPicture, picture.id)
+  end
+
   # A key's traits need its fleet's table; a key still waiting for its card
   # does not, so it is still served.
   @tag :tmp_dir
