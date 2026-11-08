@@ -827,6 +827,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(view, "#proposals-present-mark[disabled]")
       assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
+      refute has_element?(view, "#proposals-present-active")
       assert has_element?(view, "#proposals-present-figures-present", "0")
     end
 
@@ -1273,6 +1274,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       render_async(view, @async_wait)
 
       assert has_element?(view, "#proposals-present-figures-present", "0")
+      refute has_element?(view, "#proposals-present-active")
       refute has_element?(view, "#proposals-present-action [data-onchain-step]")
       assert pressable?(view, "propose", ["#propose-button"])
 
