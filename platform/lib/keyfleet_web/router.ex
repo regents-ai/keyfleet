@@ -191,6 +191,8 @@ defmodule KeyfleetWeb.Router do
   scope "/", KeyfleetWeb do
     get "/healthz", HealthController, :show
     get "/app", PublicPagesController, :app
+    get "/agent", PublicPagesController, :agents_start
+    get "/start", PublicPagesController, :agents_start
     get "/openapi.json", PublicPagesController, :openapi
     get "/sitemap.xml", PublicPagesController, :sitemap
     get "/robots.txt", PublicPagesController, :robots

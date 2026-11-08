@@ -6934,3 +6934,7 @@ Live read at 02:50Z, signed out: proposals list answers `opened_at` for Proposal
 Moved, from the template's shared round (design-system 768719f3): every icon on a button comes from the shared Lucide set at one line weight (apps grip, copy, pin, steppers, file marks, close, tick, arrows); Pair New Agent, in the account menu and on the Agents page, opens one pairing window over the page you are on; Escape closes the top layer first. The products menu already read Patchbay, Autolaunch, Techtree, $REGENT Staking. The account-menu walk (11 of 11) covers the window at 1280 and 390; two practice-chain walks stop with `log_missing_from_block` on main since 5b34ce9b and are fixed on kf/chain-walks-1106.
 
 Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /connect, /pair, /account, /account/agents, /opportunities, /changelog, /classic/1 and its workspace, proposals and Key 19 pages answer 200; header icons at 1280 are Lucide at 1.8 stroke beside the X and GitHub marks; no sideways scroll at 390 and 320.
+
+## 2026-11-08 — /agent and /start open the Agents page
+
+`/agent` and `/start`, where a new agent often looks first, now open the Agents page (`/agents`) instead of a missing-page answer.
