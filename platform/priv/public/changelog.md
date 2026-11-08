@@ -2,6 +2,11 @@
 
 Changes to Keyfleet, newest first.
 
+## 8 November 2026
+
+- **Present.** On the Proposals tab your idle Keys come first, above Mark present. Your
+  present Keys fold into a list under it, so the proposals stay near the top.
+
 ## 6 November 2026
 
 - **Icons.** Every icon on a button now comes from one set and sits at one line weight.

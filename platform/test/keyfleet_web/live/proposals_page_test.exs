@@ -719,9 +719,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   describe "the wallet buttons on the list" do
     # Keys 1 and 2 are the holder's; Key 3 is another's, with the holder's
     # shard on it, so the holder may mark it present too.
-    test "the present card marks every key the wallet may, and lists the idle keys", %{
-      conn: conn
-    } do
+    test "the present card marks every key the wallet may, idle keys first and present ones folded",
+         %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, 1..2, @holder)
       ProposalHelpers.keys_sold!(@fleet, [3], @other)
       ChainHelpers.issue_shard!(@fleet, 3, @holder)
@@ -741,11 +740,28 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
       active!(view, "#proposals-present-action", @holder)
 
-      assert lines(view, "#proposals-present-keys li") == [
-               "Key 1 Present until 7 Oct, 13:00 UTC",
+      # The idle keys stand above the button; the present one waits in a
+      # closed dropdown under it, ahead of the proposals.
+      assert lines(view, "#proposals-present-idle li") == [
                "Key 2 Not present",
                "Key 3 Not present"
              ]
+
+      assert has_element?(view, "#proposals-present-active:not([open])", "Present Keys (1)")
+
+      assert lines(view, "#proposals-present-active-keys li") == [
+               "Key 1 Present until 7 Oct, 13:00 UTC"
+             ]
+
+      html = render(view)
+
+      assert [idle, mark, active, proposals] =
+               Enum.map(
+                 ~w(proposals-present-idle proposals-present-mark proposals-present-active proposals-list-title),
+                 &(:binary.match(html, ~s(id="#{&1}")) |> elem(0))
+               )
+
+      assert idle < mark and mark < active and active < proposals
 
       assert has_element?(view, "#proposals-present-figures-present", "1")
 
