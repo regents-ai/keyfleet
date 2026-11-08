@@ -97,7 +97,7 @@ defmodule Keyfleet.Agents.Upkeep do
   defp states(check_in, keys, now) do
     %{
       schedule: check_in != nil and check_in.schedule_minutes != nil,
-      marked: keys != [] and Enum.all?(keys, &present?(&1, now)),
+      marked: keys != [] and Enum.all?(keys, &needs_no_mark?(&1, now)),
       repeated: CheckInStatus.repeating?(check_in, now)
     }
   end
@@ -138,8 +138,13 @@ defmodule Keyfleet.Agents.Upkeep do
   defp next_step(%{repeated: false}, _keys), do: "Check again after your next scheduled run."
   defp next_step(_states, _keys), do: nil
 
-  defp present?(%{present_until: nil}, _now), do: false
-  defp present?(%{present_until: until}, now), do: DateTime.after?(until, now)
+  # A Key needs no mark while its 48 hours run, and while it waits for its
+  # automatic start, which comes by itself and before which the contract
+  # refuses a mark (`maturesAt`): both end at `present_until`. Only the first
+  # is present now, as the contract counts it (`KeyfleetPresence.isActive`,
+  # the `present` calculation of `Keyfleet.Keys.KeyAttachment`).
+  defp needs_no_mark?(%{present_until: nil}, _now), do: false
+  defp needs_no_mark?(%{present_until: until}, now), do: DateTime.after?(until, now)
 
   defp presence(fleet_id, token_ids, now) do
     last = Keys.last_presence(fleet_id, token_ids)
