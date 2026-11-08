@@ -1,0 +1,52 @@
+---
+title: "A shard's life, as the chain and Keyfleet see it"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Gives rights
+    lg1: Still counted
+    lg2: Gives nothing
+  }
+  class lg0 teal
+  class lg1 orange
+  class lg2 tan
+  s0: No shard
+  s1: Given, not read yet
+  s2: Active
+  s3: Ended
+  s4: Ended on chain, still counted
+  s5: Active, reading late
+  s6: Ran out
+  s7: Key moved
+  s8: Ended on chain, reading late
+  [*] --> s0
+  s0 --> s1: the Key's owner gives the shard
+  s1 --> s2: Keyfleet reads the chain
+  s2 --> s4: the owner or the agent ends it or the Key changes hands
+  s2 --> s5: Keyfleet's last reading gets old
+  s1 --> s3: Keyfleet reads the chain [it ended meanwhile]
+  s1 --> s6: its time runs out
+  s1 --> s7: Keyfleet reads the chain [it ended meanwhile]
+  s4 --> s3: Keyfleet reads the chain
+  s4 --> s8: Keyfleet's last reading gets old
+  s5 --> s2: Keyfleet reads the chain
+  s5 --> s8: the owner or the agent ends it or the Key changes hands
+  s5 --> s6: its time runs out
+  s2 --> s6: its time runs out
+  s4 --> s7: Keyfleet reads the chain
+  s3 --> s6: its time runs out
+  s8 --> s3: Keyfleet reads the chain
+  s8 --> s6: its time runs out
+  s4 --> s6: its time runs out
+  s7 --> s3: Keyfleet reads the chain
+  s8 --> s7: Keyfleet reads the chain
+  s7 --> s6: its time runs out
+  class s0 tan
+  class s1 tan
+  class s2 teal
+  class s3 tan
+  class s4 orange
+  class s5 tan
+  class s6 tan
+  class s7 tan
+  class s8 tan
