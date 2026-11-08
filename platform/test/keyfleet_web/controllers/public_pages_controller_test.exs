@@ -3,6 +3,12 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
 
   alias KeyfleetWeb.PublicDocuments
 
+  test "/agent and /start, where a new agent often looks first, open the Agents page" do
+    for path <- ["/agent", "/start"] do
+      assert redirected_to(get(build_conn(), path)) == "/agents"
+    end
+  end
+
   test "PRIVACY: the policy is on /privacy and does not carry draft placeholders" do
     conn = get(build_conn(), "/privacy")
     body = html_response(conn, 200)
