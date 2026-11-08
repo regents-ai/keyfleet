@@ -323,6 +323,46 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       refute has_element?(view, "#proposal-yes")
     end
 
+    # The vote contract's three times, each named by what it is and in the
+    # order they come: voting ends, a payment may be carried out a day later,
+    # and for 48 hours from then. A settled proposal keeps only the first.
+    test "a proposal names each of its times by what it is", %{conn: conn} do
+      closes_at = ~U[2026-11-08 13:20:06Z]
+
+      for number <- [1, 2] do
+        ProposalHelpers.proposal!(@fleet, number,
+          opened_at: DateTime.add(closes_at, -@day),
+          closes_at: closes_at,
+          execution_expiry: DateTime.add(closes_at, 3 * @day)
+        )
+      end
+
+      ChainViews.put!(
+        on_chain(1, :waiting, e0: 2, late: 5, yes: 6) ++
+          on_chain(2, :cancelled, e0: 2, late: 46, yes: 6, no: 42)
+      )
+
+      times = "section[aria-labelledby='proposal-outcome-title'] dl:last-of-type"
+
+      {:ok, view, _html} = open(conn, "#{@list}/1")
+
+      assert cell_texts(view, "#{times} dt") == [
+               "End of voting",
+               "Carry out from",
+               "Carry out before"
+             ]
+
+      assert cell_texts(view, "#{times} dd") == [
+               "8 November 2026 at 13:20 UTC",
+               "9 November 2026 at 13:20 UTC",
+               "11 November 2026 at 13:20 UTC"
+             ]
+
+      {:ok, view, _html} = open(conn, "#{@list}/2")
+      assert cell_texts(view, "#{times} dt") == ["End of voting"]
+      assert cell_texts(view, "#{times} dd") == ["8 November 2026 at 13:20 UTC"]
+    end
+
     # Only ETH and the fleet's own USDC, known by their addresses, are shown
     # without one. A token anywhere else that calls itself USDC always has its
     # address beside every amount of it.

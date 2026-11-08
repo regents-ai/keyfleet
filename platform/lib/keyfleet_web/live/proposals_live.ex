@@ -516,15 +516,15 @@ defmodule KeyfleetWeb.ProposalsLive do
       </dl>
       <dl class="proposals-facts">
         <div>
-          <dt>Closes</dt>
+          <dt>End of voting</dt>
           <dd id="proposal-closes">{at(@proposal.closes_at)}</dd>
         </div>
         <div :if={@proposal.carry_out_from && not settled?(@on_chain)}>
-          <dt>Opens</dt>
+          <dt>Carry out from</dt>
           <dd id="proposal-carry-out-from">{at(@proposal.carry_out_from)}</dd>
         </div>
         <div :if={not settled?(@on_chain)}>
-          <dt>Deadline</dt>
+          <dt>Carry out before</dt>
           <dd id="proposal-expiry">{at(@proposal.execution_expiry)}</dd>
         </div>
       </dl>
