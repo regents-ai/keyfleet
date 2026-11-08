@@ -13,7 +13,10 @@ defmodule Keyfleet.Notebooks.Space do
   the `notebook_hubs` queue, and one run per project waits at a time. A run
   that made the space and stopped before recording it finds the space again
   by its tag, so a project never gets two. A run still waiting when its
-  project is deleted makes nothing.
+  project is deleted makes nothing. One whose project is deleted while it
+  makes the space records nothing (`Keyfleet.Projects.Project`'s
+  `record_space`): its next try finds the project gone and stops, and the
+  delete run removes the space by its tag.
   """
   use Oban.Worker,
     queue: :notebook_hubs,
