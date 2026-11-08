@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 26.0.0
+  version: 26.1.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -3378,10 +3378,11 @@ paths:
       description: >-
         The transaction that asks again for a Key's random draw of its traits, as the Key page's Ask
         again button does. Anyone may send it while the Key's request was refused. Blocked "Traits
-        drawn" once the draw is made, "Draw on its way" while a request waits, "Its number
-        gives its traits" for a Key dealt its card by number, which never draws, and "Its
-        fleet's deck isn't set yet" until the fleet's deck is on the chain. Nothing is sent
-        here: the signing wallet sends it itself, on Base.
+        drawn" once the draw is made, "Draw on its way" while a request waits, "Wait ended: it
+        never gets traits" once a request's wait was ended, "Its number gives its traits" for a
+        Key dealt its card by number, which never draws, and "Its fleet's deck isn't set yet"
+        until the fleet's deck is on the chain. Nothing is sent here: the signing wallet sends it
+        itself, on Base.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -3391,6 +3392,38 @@ paths:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
           description: The transaction and the Key it asks for
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainKeyStep"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/KeyNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal:
+    post:
+      x-pairing-required: true
+      operationId: buildExpireReveal
+      description: >-
+        The transaction that ends the wait for a Key's random draw that hasn't come 24 hours after
+        its request was accepted, as the Key page's End the wait button does. Anyone may send it.
+        It can't be undone: the Key then never gets traits, and the draws' coordinator is free to
+        be changed again. Blocked "From TIME" until the 24 hours are up, "No draw waiting" while no
+        request waits, "Traits drawn" once the draw is made, "Wait ended: it never gets traits"
+        once the wait was ended, and "Its number gives its traits" for a Key dealt its card by
+        number. Nothing is sent here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/TokenId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction and the Key whose wait it ends
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ChainKeyStep"}

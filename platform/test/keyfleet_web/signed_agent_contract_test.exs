@@ -62,6 +62,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @end_shard "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end"
   @club_claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/club_claim"
   @reveal "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal"
+  @expire_reveal "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal"
   @return_advance "/api/v1/agent/fleets/{fleet_id}/treasury/advances/{advance_id}/return"
   @launch_upkeep "/api/v1/agent/fleets/{fleet_id}/treasury/launch"
   @polls "/api/v1/agent/fleets/{fleet_id}/polls"
@@ -186,6 +187,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @end_shard, [], %{}},
     {"POST", @club_claim, [], %{}},
     {"POST", @reveal, [], %{}},
+    {"POST", @expire_reveal, [], %{}},
     {"POST", @return_advance, [], %{"amount" => "2"}},
     {"POST", @launch_upkeep, [], %{"step" => "release"}},
     {"GET", @dm_inbox, [], nil},
@@ -856,6 +858,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
             @agent_voting,
             @end_shard,
             @reveal,
+            @expire_reveal,
             @return_advance
           ],
           do: {"POST", path, 409}
@@ -1348,17 +1351,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     key = ChainHelpers.onchain_id(@fleet, 2)
     zero = "0x" <> String.duplicate("0", 64)
 
-    draw = fn requested_at ->
+    draw = fn requested_at, expired? ->
       ChainViews.put!([
         {fleet.keys_address, "revealSeed(uint256)", [key], {"bytes32", [zero]}},
         {fleet.keys_address, "revealRequestedAt(uint256)", [key], {"uint64", [requested_at]}},
+        {fleet.keys_address, "revealExpired(uint256)", [key], {"bool", [expired?]}},
         {fleet.keys_address, "fleet(uint256)", [fleet.chain_fleet_id],
          {"address,uint8,uint32,uint32,bytes32",
           [fleet.manager_address, 0, 1, 1, "0x" <> String.duplicate("d", 64)]}}
       ])
     end
 
-    draw.(0)
+    draw.(0, false)
 
     assert %{"token_id" => 2, "transactions" => [step]} =
              answer(c, c.signer, "POST", @reveal, own, %{}, 200).body
@@ -1368,12 +1372,28 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert step["data"] ==
              BuilderCode.append(RegentChain.Call.encode("requestReveal(uint256)", [key]))
 
-    draw.(1)
+    # A request accepted long ago: the draw is on its way, and its wait may end.
+    draw.(1, false)
 
     assert [%{"blocked" => "Draw on its way"}] =
              answer(c, c.signer, "POST", @reveal, own, %{}, 200).body["transactions"]
 
+    assert %{"token_id" => 2, "transactions" => [step]} =
+             answer(c, c.signer, "POST", @expire_reveal, own, %{}, 200).body
+
+    assert {step["name"], step["to"], step["blocked"]} ==
+             {"expire_reveal", fleet.keys_address, nil}
+
+    assert step["data"] ==
+             BuilderCode.append(RegentChain.Call.encode("expireReveal(uint256)", [key]))
+
+    draw.(1, true)
+
+    assert [%{"blocked" => "Wait ended: it never gets traits"}] =
+             answer(c, c.signer, "POST", @reveal, own, %{}, 200).body["transactions"]
+
     answer(c, c.signer, "POST", @reveal, unsold, %{}, 404)
+    answer(c, c.signer, "POST", @expire_reveal, unsold, %{}, 404)
   end
 
   # Regents Club Key 1 waits in the claims contract for the holder of Pass 1,
@@ -1780,6 +1800,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @end_shard},
       {"POST", @club_claim},
       {"POST", @reveal},
+      {"POST", @expire_reveal},
       {"POST", @return_advance},
       {"POST", @launch_upkeep},
       {"GET", @polls},

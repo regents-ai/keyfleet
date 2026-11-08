@@ -304,21 +304,30 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert_push_event(view, "onchain-steps:review", %{
         component_id: "key-profile-reveal-action",
-        review: %{signer: ^signer, steps: [reveal]}
+        review: %{signer: ^signer, steps: [reveal, expire]}
       })
 
       assert reveal.step == "reveal"
       assert reveal.to == Fleets.get_fleet!(@fleet).keys_address
       assert reveal.data == BuilderCode.append(Call.encode("requestReveal(uint256)", [id(12)]))
+      assert expire.step == "expire_reveal"
+      assert expire.data == BuilderCode.append(Call.encode("expireReveal(uint256)", [id(12)]))
 
       assert has_element?(view, "#key-profile-reveal-again[data-onchain-step='reveal']")
       refute has_element?(view, "#key-profile-reveal-again[phx-click]")
       assert text(view, "#key-profile-reveal-again") == "Ask again"
       refute has_element?(view, "#key-profile-reveal-again[disabled]")
 
+      # No draw waits, so there is no wait to end.
+      assert has_element?(view, "#key-profile-reveal-expire[data-onchain-step='expire_reveal']")
+      assert text(view, "#key-profile-reveal-expire") == "End the wait"
+      assert has_element?(view, "#key-profile-reveal-expire[disabled]")
+      assert text(view, "#key-profile-reveal-expire-why") == "No draw waiting"
+
       assert text(view, "#key-profile-reveal-tip") ==
                "A Key’s traits come from a random draw. If the request for it was turned " <>
-                 "down, anyone can ask again."
+                 "down, anyone can ask again. If the draw hasn’t come 24 hours after it was " <>
+                 "asked for, anyone can end the wait, and the Key then never gets traits."
     end
 
     test "Ask again pressed as the wallet becomes active is answered with its step",
@@ -351,7 +360,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       render_hook(panel, "onchain_active_wallet", %{"address" => signer})
       render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "reveal"})
 
-      assert_reply(view, %{send: "reveal", review: %{signer: ^signer, steps: [%{step: "reveal"}]}})
+      assert_reply(view, %{
+        send: "reveal",
+        review: %{signer: ^signer, steps: [%{step: "reveal"}, %{step: "expire_reveal"}]}
+      })
     end
 
     test "a request that was accepted says the draw is on its way", %{conn: conn} do
@@ -360,9 +372,38 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
       render_async(view)
 
-      # Asking again is certain to fail while the draw is on its way.
+      # Asking again is certain to fail while the draw is on its way, and its
+      # wait can't be ended for 24 hours.
       assert has_element?(view, "#key-profile-reveal-again[disabled]")
       assert has_element?(view, "#key-profile-reveal-action", "Draw on its way")
+      assert has_element?(view, "#key-profile-reveal-expire[disabled]")
+      assert text(view, "#key-profile-reveal-expire-why") == "From 16 Jan, 08:00 UTC"
+    end
+
+    test "a draw that hasn't come in 24 hours offers anyone End the wait", %{conn: conn} do
+      signer = wallet("f")
+      draw_answer(1)
+
+      {:ok, view, _html} = conn |> signed_in_as(signer) |> live(@path <> "?key=12")
+      render_async(view)
+      panel = with_target(view, "#key-profile-reveal-action")
+      render_hook(panel, "onchain_active_wallet", %{"address" => signer})
+      render_async(view)
+
+      refute has_element?(view, "#key-profile-reveal-expire[disabled]")
+      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "expire_reveal"})
+      assert_reply(view, %{send: "expire_reveal", review: %{signer: ^signer}})
+    end
+
+    test "a key whose wait was ended says it never gets traits", %{conn: conn} do
+      draw_answer(1, expired?: true)
+
+      {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+      render_async(view)
+
+      assert has_element?(view, "#key-profile-reveal-again[disabled]")
+      assert has_element?(view, "#key-profile-reveal-expire[disabled]")
+      assert text(view, "#key-profile-reveal-again-why") == "Wait ended: it never gets traits"
     end
 
     test "shows while the key is revealing, and goes once its draw is recorded", %{conn: conn} do
@@ -733,16 +774,19 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   defp address_word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
 
   # What the fleet answers for key 12's seed, which it has none of, for when
-  # its request for a draw was accepted, and for its deck, which is set;
-  # anything else is zero.
-  defp draw_answer(requested_at) do
+  # its request for a draw was accepted, whether that request's wait was
+  # ended, and for its deck, which is set; anything else is zero.
+  defp draw_answer(requested_at, opts \\ []) do
     seed = Call.encode("revealSeed(uint256)", [id(12)])
     requested = Call.encode("revealRequestedAt(uint256)", [id(12)])
+    expired = Call.encode("revealExpired(uint256)", [id(12)])
+    expired? = if Keyword.get(opts, :expired?, false), do: 1, else: 0
     record = Call.selector("fleet(uint256)")
 
     rewards_answer(fn
       _to, ^seed, _hash -> {:ok, <<0::256>>}
       _to, ^requested, _hash -> {:ok, <<requested_at::256>>}
+      _to, ^expired, _hash -> {:ok, <<expired?::256>>}
       _to, ^record <> _fleet_id, _hash -> {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
       _to, _data, _hash -> {:ok, <<0::256>>}
     end)

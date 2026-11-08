@@ -7105,6 +7105,57 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "chain_expire_reveal",
+      "title": "End the draw's wait step",
+      "description": "End the wait for a Key's random draw that hasn't come 24 hours after its request was accepted, as the Key page's End the wait button does. Anyone may. It can't be undone: the Key then never gets traits. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "The Key whose wait to end: its exact decimal token id, as a string"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal",
+      "interfaces": {
+        "webmcp": "chain_expire_reveal",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "proposals_create",
       "title": "Propose",
       "description": "Fill the proposal form with these fields and press Propose: opens a vote of every Key on what it does. Fields left out keep what the form shows.",
