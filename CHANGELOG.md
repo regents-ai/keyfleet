@@ -6965,3 +6965,7 @@ Live read at 17:03Z, signed out, headless Chromium: capabilities.json names 2833
 - A shown or hidden project's "Open in the workspace" link, and each part's
   "See all" link, show only to a reader who may read the fleet's workspace.
   Anyone else no longer follows them to the Public place.
+
+## 2026-11-08 — /agent and /start open the Agents page
+
+`/agent` and `/start`, where a new agent often looks first, now open the Agents page (`/agents`) instead of a missing-page answer.
