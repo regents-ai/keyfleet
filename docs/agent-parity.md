@@ -40,7 +40,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   which a wallet signs on the page, the `chain_*` tools, whose steps the agent's own
   wallet signs, and five it has no use for: `agents_pair`, `about`, `docs`,
   `agents_whoami` and `agents_status`, whose answers the identity tools give. Each is the
-  same Ash action, policies and allowance as the signed request (K8).
+  same Ash action, policies and allowance as the signed request (K8). Each app a person
+  connects keeps its own identity and pairs only with its own code, so a second app
+  never takes the first one's pairing (elixir-utils `d9440a4e`, 8 Nov 2026).
 - **CLI**: the command in `cli/commands.json`, matched on route and operation id.
   Released regents-cli 1.10.21 carries every command (K13). Wallet commands answer the steps the
   agent's own wallet sends, built by the same `Keyfleet.WalletSteps` flow as the page's

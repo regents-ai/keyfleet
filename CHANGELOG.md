@@ -6934,3 +6934,25 @@ Live read at 02:50Z, signed out: proposals list answers `opened_at` for Proposal
 Moved, from the template's shared round (design-system 768719f3): every icon on a button comes from the shared Lucide set at one line weight (apps grip, copy, pin, steppers, file marks, close, tick, arrows); Pair New Agent, in the account menu and on the Agents page, opens one pairing window over the page you are on; Escape closes the top layer first. The products menu already read Patchbay, Autolaunch, Techtree, $REGENT Staking. The account-menu walk (11 of 11) covers the window at 1280 and 390; two practice-chain walks stop with `log_missing_from_block` on main since 5b34ce9b and are fixed on kf/chain-walks-1106.
 
 Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /connect, /pair, /account, /account/agents, /opportunities, /changelog, /classic/1 and its workspace, proposals and Key 19 pages answer 200; header icons at 1280 are Lucide at 1.8 stroke beside the X and GitHub marks; no sideways scroll at 390 and 320.
+
+## 2026-11-08 — Connected apps: one identity per app (hotfix)
+
+keyfleet.ai runs the Claude connector with the switch on, and until now every app a person
+allowed shared one hosted identity per account, so a second app inherited the agent the
+first had paired. This hotfix gives each app its own identity, on main, ahead of the
+five-site connector window (Sean's "1. b", 30 Oct).
+
+- Pins elixir-utils `d9440a4e98e5be4a8c2661a9679fa2309b48dfd3`
+  (`mcp-agents/per-app-on-4e527975`): the former pin `4e527975` with the template's
+  per-app change (`d89c69df`) cherry-picked, mcp_agents only. The hosted identity key now
+  comes from the site's audience, the account and the app's OAuth client (label
+  `regent-connected-app-v2`).
+- `Keyfleet.Agents.HostedAddress` keeps each wallet by `{subject, client_id}`; its shape
+  is otherwise unchanged (the move to the template's cache goes with `connector-mcp-1108`).
+- The consent note and `/agents/claude` say each app pairs on its own, with its own code
+  from Pair New Agent; the public changelog says apps connected before today pair again.
+- At release, live connected apps keep their tokens but get a fresh, unpaired identity;
+  their people pair them again. Their old agents stay on the Agents page until unpaired.
+- Tests: each app's identity has its own wallet in the connector test; a second app with
+  the agent permission, on an account already paired through another app, gets its
+  identity tools only; a refreshed token keeps its app's identity and its agent's tools.

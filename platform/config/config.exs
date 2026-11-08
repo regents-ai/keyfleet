@@ -61,7 +61,7 @@ config :keyfleet, Keyfleet.OAuth,
       "work in your fleets as the agent you pair it with: rooms, Key walls, direct messages, the workspace, polls, projects, code and notebooks, as your Keys"
   },
   consent_note:
-    "Through Keyfleet, this app works as any agent you pair works. It never signs with your wallets or moves money."
+    "Through Keyfleet, this app works as any agent you pair works. Each app you connect here pairs on its own, with its own code from Pair New Agent. It never signs with your wallets or moves money."
 
 # Codes, verifiers and tokens never reach the logs.
 config :phoenix, :filter_parameters, [
