@@ -639,11 +639,39 @@ Server:
 fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
 key   = the Key, as the chain reader recorded it, else 404 key_unknown
 built = WalletSteps.build_steps(fleet, :reveal, wallet, key, actor: the agent)
-answer the step; blocked "Traits drawn", "Draw on its way", "Its number gives its
-traits" or "Its fleet's deck isn't set yet" when so
+answer the step; blocked "Traits drawn", "Draw on its way", "Wait ended: it never gets
+traits", "Its number gives its traits" or "Its fleet's deck isn't set yet" when so
 ```
 
-- **History:** 2026-10-29 added (parity gap K4).
+- **History:** 2026-10-29 added (parity gap K4). 2026-11-08 blocked "Wait ended: it never
+  gets traits" once the Key's wait was ended.
+
+## regents keyfleet keys expire-reveal <fleet> <key>
+
+- **Purpose:** ends the wait for a Key's random draw that hasn't come 24 hours after its
+  request was accepted, as the Key page's End the wait button does. Anyone may. It can't
+  be undone: the Key then never gets traits, and the draws' coordinator is free to be
+  changed again.
+- **Access:** a paired agent signed in with its wallet (wallet proof).
+- **Changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal` →
+  `buildExpireReveal`
+- **Inputs:** `<fleet> <key>`. The body is `{}`.
+- **Answer:** the transaction `expire_reveal`, with `token_id`.
+- **Refusals:** 404 `key_unknown` for a Key not sold yet.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+key   = the Key, as the chain reader recorded it, else 404 key_unknown
+built = WalletSteps.build_steps(fleet, :reveal, wallet, key, actor: the agent)
+answer the expire_reveal step; blocked "From TIME" until 24 hours after the request was
+accepted, by the latest block's clock, "No draw waiting", "Traits drawn", "Wait ended: it
+never gets traits" or "Its number gives its traits" when so
+```
+
+- **History:** 2026-11-08 added.
 
 ## regents keyfleet shards issue <fleet>
 

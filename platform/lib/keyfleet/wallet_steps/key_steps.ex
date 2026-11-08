@@ -1,10 +1,11 @@
 defmodule Keyfleet.WalletSteps.KeySteps do
   @moduledoc """
   The steps of a key's own buttons: buying the next key, asking again for a
-  key's random draw, claiming what a key has earned, claiming a Regents Club
-  key waiting for its Pass's holder, claiming for every key a wallet holds
-  or holds a shard of at once, marking keys present,
-  issuing, renewing and ending shards, and turning agent voting on or off.
+  key's random draw or ending a wait for it that ran out, claiming what a
+  key has earned, claiming a Regents Club key waiting for its Pass's holder,
+  claiming for every key a wallet holds or holds a shard of at once, marking
+  keys present, issuing, renewing and ending shards, and turning agent
+  voting on or off.
   `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
   Pages and requests name a fleet's Keys by number; every step names them by
@@ -36,6 +37,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @renew_days 30
   # How long a presence lasts, in seconds.
   @presence_seconds 172_800
+  # How long an accepted request for a key's draw waits before anyone may
+  # end it, in seconds (`KeyfleetKeys.REVEAL_TIMEOUT`).
+  @reveal_timeout_seconds 86_400
 
   @doc false
   def steps(:buy, request) do
@@ -45,22 +49,30 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   end
 
   # Asking again for a key's random draw, which anyone may do while its
-  # request was refused: it has no seed, and no request was ever accepted. A
-  # key dealt its card by number never draws, and the contract refuses it.
+  # request was refused: it has no seed, and no request was ever accepted.
+  # And ending the wait for a draw that hasn't come 24 hours after its
+  # request was accepted, which anyone may do too: the key then never draws.
+  # A key dealt its card by number never draws, and the contract refuses both.
   def steps(:reveal, %{fleet: fleet, token_id: token_id}) do
     figures = %{token_id: token_id}
     onchain = Fleet.onchain_token_id(fleet, token_id)
 
-    step =
+    steps = [
       Review.step(
         "reveal",
         fleet.keys_address,
         Call.encode("requestReveal(uint256)", [onchain])
+      ),
+      Review.step(
+        "expire_reveal",
+        fleet.keys_address,
+        Call.encode("expireReveal(uint256)", [onchain])
       )
+    ]
 
     if Fleet.dealt?(fleet, token_id),
-      do: {:ok, [step], Map.put(figures, :blocked, %{"reveal" => :dealt_by_number})},
-      else: reveal(fleet, onchain, step, figures)
+      do: {:ok, steps, Map.put(figures, :blocked, both(:dealt_by_number))},
+      else: reveal(fleet, onchain, steps, figures)
   end
 
   # One step for each token the ledger pays keys in: it settles the key to
@@ -593,9 +605,10 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
 
-  # Whether the chain has a seed for the key, or a request on its way, and
-  # whether its fleet's deck is set on the chain yet, as the contract checks.
-  defp reveal(fleet, onchain, step, figures) do
+  # Whether the chain has a seed for the key, a request waiting, or a wait
+  # that was ended, and whether its fleet's deck is set on the chain yet, as
+  # the contract checks.
+  defp reveal(fleet, onchain, steps, figures) do
     with {:ok, reads} <- Reads.at_head(),
          {:ok, [_manager, _preset, _type, _size, deck_hash]} <-
            Reads.many(
@@ -614,19 +627,43 @@ defmodule Keyfleet.WalletSteps.KeySteps do
              "revealRequestedAt(uint256)",
              [onchain],
              {:uint, 64}
-           ) do
+           ),
+         {:ok, expired?} <-
+           Reads.one(reads, fleet.keys_address, "revealExpired(uint256)", [onchain], :bool) do
       blocked =
         cond do
-          seed != @no_seed -> %{"reveal" => :revealed}
-          requested_at != 0 -> %{"reveal" => :reveal_requested}
-          deck_hash == @no_seed -> %{"reveal" => :deck_not_set}
-          true -> %{}
+          seed != @no_seed ->
+            both(:revealed)
+
+          expired? ->
+            both(:reveal_expired)
+
+          requested_at != 0 ->
+            asked(Reads.now(reads), requested_at)
+
+          deck_hash == @no_seed ->
+            %{"reveal" => :deck_not_set, "expire_reveal" => :no_draw_waiting}
+
+          true ->
+            %{"expire_reveal" => :no_draw_waiting}
         end
 
-      {:ok, [step], Map.put(figures, :blocked, blocked)}
+      {:ok, steps, Map.put(figures, :blocked, blocked)}
     else
       _unread -> {:problem, :unread, figures}
     end
+  end
+
+  defp both(reason), do: %{"reveal" => reason, "expire_reveal" => reason}
+
+  # A waiting request is never asked again; its wait may be ended from 24
+  # hours after it was accepted, by the latest block's own clock.
+  defp asked(now, requested_at) do
+    ends_from = DateTime.from_unix!(requested_at + @reveal_timeout_seconds)
+
+    if DateTime.before?(now, ends_from),
+      do: %{"reveal" => :reveal_requested, "expire_reveal" => {:expire_from, ends_from}},
+      else: %{"reveal" => :reveal_requested}
   end
 
   # Who holds Regents Club Pass `pass_id`, or nil once it is burned.

@@ -5,9 +5,10 @@ defmodule KeyfleetWeb.AgentChainController do
   proposal out, running the daily split, sending the REGENT staking share,
   turning waiting USDC into REGENT, claiming one key's money or every key's
   at once, buying the next Key, claiming a Regents Club Key with its Pass,
-  asking again for a Key's draw, returning an advance, the token launch's
-  upkeep, and, as a Key's holder, issuing, renewing and ending its shards and
-  turning its shards' voting on or off. Each is built by
+  asking again for a Key's draw or ending a wait for it that ran out,
+  returning an advance, the token launch's upkeep, and, as a Key's holder,
+  issuing, renewing and ending its shards and turning its shards' voting on
+  or off. Each is built by
   `Keyfleet.WalletSteps` for the signing agent's wallet, as the site's
   buttons are built for a person's, from the chain read at the latest block.
 
@@ -99,7 +100,26 @@ defmodule KeyfleetWeb.AgentChainController do
   # Asking again for a Key's random draw, which anyone may do while its
   # request was refused.
   def reveal(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
-    do: answer(conn, fleet_id, :reveal, %{token_id: String.to_integer(token_id)})
+    do:
+      answer(
+        conn,
+        fleet_id,
+        :reveal,
+        %{token_id: String.to_integer(token_id)},
+        &only(&1, "reveal")
+      )
+
+  # Ending the wait for a Key's draw that hasn't come 24 hours after its
+  # request was accepted, which anyone may do. The Key then never gets traits.
+  def expire_reveal(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
+    do:
+      answer(
+        conn,
+        fleet_id,
+        :reveal,
+        %{token_id: String.to_integer(token_id)},
+        &only(&1, "expire_reveal")
+      )
 
   # Part or all of one advance, back to the treasury from the signing wallet,
   # as the treasury page's Return field types it.

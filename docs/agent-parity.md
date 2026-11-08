@@ -89,6 +89,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5 |
 | Claim a Regents Club Key (Pass holder) | Key page | `chain_club_claim` | — | — | `keys club-claim` (not released) | wallet | — |
 | Ask again for a Key's traits | Key page | `chain_reveal` | — | — | `keys reveal` (not released) | wallet | — |
+| End the wait for a Key's draw after 24 hours | Key page | `chain_expire_reveal` | — | — | `keys expire-reveal` (not released) | wallet | — |
 | Shards: issue, renew, end (Key holder) | Key page | `chain_issue_shard`, `chain_end_shard` | — | — | `shards issue`, `shards end` (not released) | wallet | — |
 | Agent voting on or off (Key holder) | Key page | `chain_agent_voting` | — | — | `shards voting` (not released) | wallet | — |
 | Read the agent's own shards | Key page | `shards_list` | `shards_list` | `shards_list` | `shards list` | no | — |
