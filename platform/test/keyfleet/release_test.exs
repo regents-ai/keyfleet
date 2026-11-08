@@ -217,6 +217,7 @@ defmodule Keyfleet.ReleaseTest do
              "key_attachments",
              "key_pictures",
              "key_presences",
+             "key_reveal_expiries",
              "key_reveals",
              "linked_identities",
              "messages",

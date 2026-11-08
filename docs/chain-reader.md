@@ -5,7 +5,8 @@ records what happened in them, in the order the chain made it:
 
 - **The fleet contract** (`Keyfleet`): who holds every key (`OwnershipEpoch`),
   each key's reveal (`KeyRevealed`: the Chainlink VRF request and the seed its
-  traits are drawn from), an asset sent to the fleet by mistake and forwarded
+  traits are drawn from), each key whose wait for its draw was ended, so it
+  never gets traits (`RevealExpired`), an asset sent to the fleet by mistake and forwarded
   to its treasury (`ForwardedToTreasury`) and the protocol share sent to
   REGENT staking (`ProtocolShareSent`).
 - **The vote contract** (`KeyfleetVotes`): every proposal with the calls it
@@ -198,7 +199,9 @@ is no stop. A `KeyRevealed` for a revealed key with a different seed or request
 stops the fleet at the earlier of the recorded reveal's block and the block it
 was read from, and nothing is recorded. Chainlink VRF draws the seed from the
 request's block, so a change in history deep enough to drop that block can
-bring a different seed; that is a real reorg, corrected as below.
+bring a different seed; that is a real reorg, corrected as below. A key's
+`RevealExpired` read again from another block is the ended wait already
+recorded, in the same way.
 
 ## When a stretch is not read
 
@@ -240,6 +243,7 @@ SELECT DISTINCT block_number, block_hash
 FROM (
   SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_attachments
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveals
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveal_expiries
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_presences
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
@@ -327,6 +331,11 @@ ALTER TABLE keyfleet_app.key_reveals DISABLE TRIGGER immutable_key_reveals;
 DELETE FROM keyfleet_app.key_reveals
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 ALTER TABLE keyfleet_app.key_reveals ENABLE TRIGGER immutable_key_reveals;
+
+ALTER TABLE keyfleet_app.key_reveal_expiries DISABLE TRIGGER immutable_key_reveal_expiries;
+DELETE FROM keyfleet_app.key_reveal_expiries
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+ALTER TABLE keyfleet_app.key_reveal_expiries ENABLE TRIGGER immutable_key_reveal_expiries;
 
 ALTER TABLE keyfleet_app.key_presences DISABLE TRIGGER immutable_key_presences;
 DELETE FROM keyfleet_app.key_presences

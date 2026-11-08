@@ -47,7 +47,7 @@ defmodule Keyfleet.Chain.Logs do
   def topics,
     do:
       Enum.concat([
-        [OwnershipLog.topic(), RevealLog.topic()],
+        [OwnershipLog.topic(), RevealLog.topic(), RevealLog.expired_topic()],
         MoneyLog.fleet_topics(),
         VotesLog.topics(),
         ShardsLog.topics(),
