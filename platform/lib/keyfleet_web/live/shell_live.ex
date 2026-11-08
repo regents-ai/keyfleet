@@ -882,7 +882,8 @@ defmodule KeyfleetWeb.ShellLive do
   defp current_account(_access_context), do: nil
 
   # Whether the reader may open the fleet's workspace, as its class was last
-  # read: only then does a project's page link its goals' tasks there.
+  # read: only then does a project's page link every title, "See all" and
+  # "Open in the workspace" there.
   defp reads_workspace?(%{class: class}), do: Access.enough?(class, :read, :workspace)
   defp reads_workspace?(nil), do: false
 
