@@ -4,6 +4,8 @@ defmodule KeyfleetWeb.McpConnectorTest do
   # - who a request runs as follows its token's permissions and its identity's
   #   pairing: the fleet tools only for the agent paired with that same account,
   #   and never a wallet's tools;
+  # - each app a person connects keeps its own identity, kept across a refreshed
+  #   token: a second app of an account paired through the first stays the app;
   # - the account's budget is spent before the sign-in server is asked, so a
   #   request past it never reaches the server, even while that server is down;
   # - a pairing that ends or changes hands while a tool runs replaces the answer;
@@ -27,7 +29,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
   @coming_soon "fleet_tech_accelerant"
   @owner "0x" <> String.duplicate("a", 40)
   @site_key String.duplicate("k", 32)
+  @identity_scope "regent.identity.manage"
   @agent_scopes "regent.identity.manage keyfleet.agent"
+  @wallets __MODULE__.HostedWallets
 
   setup do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
@@ -58,13 +62,13 @@ defmodule KeyfleetWeb.McpConnectorTest do
       actor: %Actors.System{}
     )
 
-    # The hosted identity's wallet is a local signer's, so the same agent can
-    # also sign its own requests to the site.
+    # An app connected with the local signer's wallet keeps it as its hosted
+    # identity's, so the same agent can also sign its own requests to the site.
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
     app = SignedAgentHelpers.serve!(:product, &@endpoint.call(&1, @endpoint.init(&2)))
-    connector_on(signer.address)
+    connector_on()
 
     %{
       signer: signer,
@@ -78,7 +82,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
     test "an identity-only token stays the app, paired or not: identity tools only", c do
       subject = account!()
       pair!(subject, c.signer.address)
-      token = connect!(subject)
+      token = connect!(subject, @identity_scope, c.signer.address)
 
       assert Enum.sort(tool_names(token, c)) == Enum.sort(RegentMCPAgents.Tools.names())
       assert %{"error" => _} = call(token, "polls_list", %{fleet_id: @fleet}, c)
@@ -88,7 +92,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
          c do
       subject = account!()
       pair!(subject, c.signer.address)
-      token = connect!(subject, @agent_scopes)
+      token = connect!(subject, @agent_scopes, c.signer.address)
       listed = tool_names(token, c)
 
       assert "workspace_create" in fleet_tools()
@@ -103,13 +107,41 @@ defmodule KeyfleetWeb.McpConnectorTest do
     test "the agent permission with the identity paired to another account, or to no one, stays the app",
          c do
       subject = account!()
-      token = connect!(subject, @agent_scopes)
+      token = connect!(subject, @agent_scopes, c.signer.address)
 
       assert Enum.sort(tool_names(token, c)) == Enum.sort(RegentMCPAgents.Tools.names())
 
       pair!(account!(), c.signer.address)
       assert Enum.sort(tool_names(token, c)) == Enum.sort(RegentMCPAgents.Tools.names())
       assert %{"error" => _} = call(token, "polls_list", %{fleet_id: @fleet}, c)
+    end
+
+    test "a second app of an account already paired through another app has its identity tools only",
+         c do
+      subject = account!()
+      first = connect!(subject, @agent_scopes, c.signer.address)
+      pair!(subject, c.signer.address)
+      assert "polls_list" in tool_names(first, c)
+
+      # Same account, same name, the agent permission: still not the paired agent.
+      second = connect!(subject, @agent_scopes)
+      assert Enum.sort(tool_names(second, c)) == Enum.sort(RegentMCPAgents.Tools.names())
+      assert %{"error" => _} = call(second, "polls_list", %{fleet_id: @fleet}, c)
+      assert [%{wallet: wallet}] = RegentAgents.list_my_agents!(actor: person(subject))
+      assert String.downcase(wallet) == String.downcase(c.signer.address)
+      assert "polls_list" in tool_names(first, c)
+    end
+
+    test "a refreshed token keeps its app's identity and its agent's tools", c do
+      subject = account!()
+      app = connect_app!(subject, @agent_scopes, c.signer.address)
+      pair!(subject, c.signer.address)
+
+      refreshed = refresh!(app)
+      refute refreshed == app.access
+
+      assert Enum.sort(tool_names(refreshed, c)) ==
+               Enum.sort(RegentMCPAgents.Tools.names() ++ fleet_tools())
     end
 
     test "a request without a token is asked to connect", c do
@@ -231,7 +263,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
     test "replaces the answer when the pairing ends", c do
       subject = account!()
       agent = pair!(subject, c.signer.address)
-      token = connect!(subject, @agent_scopes)
+      token = connect!(subject, @agent_scopes, c.signer.address)
 
       during_polls_list(fn ->
         :ok = RegentAgents.unpair_agent!(agent, actor: person(subject))
@@ -245,7 +277,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
     test "replaces the answer when the identity is paired to someone else meanwhile", c do
       subject = account!()
       agent = pair!(subject, c.signer.address)
-      token = connect!(subject, @agent_scopes)
+      token = connect!(subject, @agent_scopes, c.signer.address)
       other = account!()
 
       during_polls_list(fn ->
@@ -265,7 +297,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   test "each agent tool answers and refuses as its signed request does", c do
     subject = account!()
     pair!(subject, c.signer.address)
-    token = connect!(subject, @agent_scopes)
+    token = connect!(subject, @agent_scopes, c.signer.address)
     manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
 
     calls =
@@ -306,7 +338,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   test "the picture tools set and remove the agent's picture", c do
     subject = account!()
     pair!(subject, c.signer.address)
-    token = connect!(subject, @agent_scopes)
+    token = connect!(subject, @agent_scopes, c.signer.address)
     test = self()
 
     Req.Test.stub(Keyfleet.Agents.AvatarBucket, fn conn ->
@@ -411,7 +443,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   test "a tool naming a coming-soon fleet is refused as its signed request is", c do
     subject = account!()
     pair!(subject, c.signer.address)
-    token = connect!(subject, @agent_scopes)
+    token = connect!(subject, @agent_scopes, c.signer.address)
     manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
 
     for {name, input} <- [
@@ -487,8 +519,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
   # Switches the connector on for one test as config/runtime.exs does with
   # KEYFLEET_CLAUDE_CONNECTOR_ENABLED=true, and starts its sign-in store in
   # this test's transaction; everything is put back after. The hosted signer
-  # answers every account with `wallet`.
-  defp connector_on(wallet) do
+  # answers each app's identity with the wallet it was connected with, or one
+  # of its own.
+  defp connector_on do
     origin = "http://127.0.0.1:4002"
 
     put_env(
@@ -532,7 +565,15 @@ defmodule KeyfleetWeb.McpConnectorTest do
     oauth = Ecto.Adapters.SQL.Sandbox.start_owner!(RegentOAuth.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(oauth) end)
 
+    start_supervised!(%{
+      id: @wallets,
+      start: {Agent, :start_link, [fn -> %{} end, [name: @wallets]]}
+    })
+
     Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+      {:ok, body, conn} = read_body(conn)
+      key = Jason.decode!(body)["identity_key"]
+      wallet = Agent.get(@wallets, &Map.get(&1, key, identity_wallet(key)))
       Req.Test.json(conn, %{"address" => wallet})
     end)
   end
@@ -572,7 +613,12 @@ defmodule KeyfleetWeb.McpConnectorTest do
   defp person(subject), do: %RegentAgents.Person{privy_user_id: subject}
 
   # An app connected by `subject`, as consent leaves it: its access token.
-  defp connect!(subject, scope \\ "regent.identity.manage") do
+  # Given a wallet, the app's hosted identity keeps it.
+  defp connect!(subject, scope, wallet \\ nil),
+    do: connect_app!(subject, scope, wallet).access
+
+  # The same app as its client id and the access and refresh tokens it holds.
+  defp connect_app!(subject, scope, wallet) do
     register =
       conn(:post, "/oauth/register", %{
         "client_name" => "Claude",
@@ -585,10 +631,34 @@ defmodule KeyfleetWeb.McpConnectorTest do
     client = Boruta.ClientsAdapter.get_client(Jason.decode!(register.resp_body)["client_id"])
 
     {:ok, token} =
-      RegentOAuth.AccessTokens.create(%{client: client, sub: subject, scope: scope}, [])
+      RegentOAuth.AccessTokens.create(%{client: client, sub: subject, scope: scope},
+        refresh_token: true
+      )
 
-    token.value
+    if wallet, do: Agent.update(@wallets, &Map.put(&1, key(subject, client.id), wallet))
+    %{client_id: client.id, access: token.value, refresh: token.refresh_token}
   end
+
+  # The access token the token endpoint gives for the app's refresh token.
+  defp refresh!(app) do
+    params = %{
+      "grant_type" => "refresh_token",
+      "client_id" => app.client_id,
+      "refresh_token" => app.refresh,
+      "resource" => RegentOAuth.resource()
+    }
+
+    refreshed =
+      conn(:post, "/oauth/token", params)
+      |> put_req_header("accept", "application/json")
+      |> @endpoint.call([])
+
+    assert refreshed.status == 200, refreshed.resp_body
+    Jason.decode!(refreshed.resp_body)["access_token"]
+  end
+
+  defp key(subject, client), do: RegentMCPAgents.identity_key("keyfleet", subject, client)
+  defp identity_wallet(key), do: "0x" <> binary_part(key, 0, 40)
 
   defp mcp(body, token, c) do
     conn =

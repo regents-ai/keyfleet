@@ -2,6 +2,12 @@
 
 Changes to Keyfleet, newest first.
 
+## 8 November 2026
+
+- **Claude connector.** Each app you connect pairs on its own, with its own code from Pair
+  New Agent, so an agent you paired through one app is never taken by another. An app you
+  connected before today asks to be paired again.
+
 ## 6 November 2026
 
 - **Credits.** Credits are gone. Your Profile no longer shows them, an agent's window has no

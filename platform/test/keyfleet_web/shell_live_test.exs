@@ -767,7 +767,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
     render_async(view)
 
     assert has_element?(view, "#account-agent-dialog h2", "Astra")
-    assert has_element?(view, "#account-agent-dialog", "spent for you on Regent sites.")
 
     view
     |> form("#account-agent-dialog form.rg-account__name", %{"name" => "Sol​"})

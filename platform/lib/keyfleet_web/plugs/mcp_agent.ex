@@ -35,7 +35,9 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   meanwhile is replaced (`agent_not_paired`), so it never carries the former
   person's data. An identity paired with no one, or with someone else, leaves
   the app itself the actor (`Keyfleet.Actors.ConnectedApp`), with its
-  identity tools only. The identity's wallet is read once per account
+  identity tools only. Each app has its own identity, so an app pairs only
+  with a code its person gives it and never takes another app's pairing. The
+  identity's wallet is read once per account and app
   (`Keyfleet.Agents.HostedAddress`), so a call seldom waits on the sign-in
   server; while that server or the pairings can't be read, the request is
   refused with that reason (`siwa_request_failed`, `pairing_unavailable`)

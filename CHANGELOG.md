@@ -7024,3 +7024,34 @@ column is dropped and no production data is touched.
 - Removed tests: the Credits tests and browser walks; tests that asked a removed route ask
   `GET /api/v1/account/points` instead.
 - The `regent_credits` schema and every table and column stay; nothing is migrated.
+
+## 2026-11-08 — One identity per connected app
+
+The template's change of 8 November (ash-template v182 `e0b6ca83`), brought to Keyfleet.
+Built on `kf/credits-out-1106` (`49d2b777`, Keyfleet main `3aa6c79a` with Points and the
+Credits removal), so the connector's tools follow the Credits removal.
+
+- Pins elixir-utils `d89c69df697f81d2a56a43124eada843d1682303`: the hosted identity key
+  now comes from the site's audience, the account and the app's OAuth client (label
+  `regent-connected-app-v2`). A second app the person allows, even with the agent
+  permission, gets its own unpaired identity and pairs only with a code the person gives
+  it; before this it inherited the first app's pairing. design-system `d3845c6d` and
+  ash_postgres `55db7d44` were already the template's.
+- `Keyfleet.Agents.HostedAddress` keeps each wallet by `{subject, client_id}`;
+  `KeyfleetWeb.Plugs.McpAgent` is otherwise unchanged. The connector switch stays as it
+  was.
+- The consent note, `/agents/claude` and the public changelog say each app pairs on its
+  own, with its own code from Pair New Agent.
+- At release, Keyfleet's live connected apps keep their tokens but get a fresh, unpaired
+  identity, and their people pair them again. Their old agents stay on the Agents page
+  until the person unpairs them.
+- Tests: the connector test gives each app's identity its own wallet, or the local
+  signer's when connected with it; a second app with the agent permission, on an
+  account already paired through another app, gets its identity tools only; a refreshed
+  token keeps its app's identity and its agent's tools. The test where the identity is
+  paired to another account keeps a hosted wallet paired elsewhere.
+- Two leftovers of the Credits removal, found by the full check: the API history in
+  `/docs` names the two removed Credits addresses without a method, as it names other
+  removed addresses, so the guide-routes test no longer asks the router for them; the
+  agent window's tests (`ShellLiveTest` and the `account_agents` browser walk) no longer
+  look for the removed spending line.
