@@ -7555,7 +7555,7 @@ components:
             paired: {type: boolean, description: Whether its person is paired with it}
             gas: {type: [boolean, "null"], description: "Whether its wallet can pay to mark its Keys present; null when the chain didn't answer"}
             schedule: {type: boolean, description: Whether a scheduled run has declared its schedule}
-            marked: {type: boolean, description: Whether every Key it can mark is present}
+            marked: {type: boolean, description: "Whether no Key it can mark needs a mark: each is present, or waits for its automatic start, which comes by itself"}
             repeated: {type: boolean, description: "Whether two scheduled runs have confirmed its schedule, and the last came on time"}
             next_step: {type: [string, "null"], description: What to do next; null once all five are true}
         gas: {$ref: "#/components/schemas/WalletGas"}
