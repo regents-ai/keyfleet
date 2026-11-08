@@ -7056,10 +7056,48 @@ Credits removal), so the connector's tools follow the Credits removal.
   agent window's tests (`ShellLiveTest` and the `account_agents` browser walk) no longer
   look for the removed spending line.
 
+## 2026-11-08 — Release: Proposals tab puts idle Keys first
+
+28331751 is live: graph v515 (17:01:22Z), site v516 (17:02:04Z), image registry.fly.io/keyfleet:2833175 (sha256:b1c3bab0c215). Rollback: site v514 and graph v513 (4250f9cf). Change check exit 0 on 28331751 at 16:59Z (Elixir tests in 4 parts: 264, 319, 315 and 323 passed). No migration; API contracts unchanged.
+
+Moved: on the Proposals tab the Present card lists the wallet's idle Keys above Mark present, and its present Keys sit in a closed "Present Keys (N)" dropdown under the button, ahead of the proposals; the dropdown keeps its open state across the panel's 15-second rebuilds and is absent signed out or with no Keys. A Key's own page keeps its one line. A proposal's page names its times Voting ends, Carry-out starts and Carry-out ends, in that order (cherry-picked 5eb570d from claude/project-thread-8vljti, labels shortened to two words). Logic review: ready.
+
+Not checked live: the signed-in idle and present split, which needs a wallet with Keys signed in; the Proposals page tests cover it (43 of 43). No proposal is open now, so live pages show only Voting ends.
+
+Live read at 17:03Z, signed out, headless Chromium: capabilities.json names 28331751; /classic/1/proposals answers 200 with the Present figures and no key list, then Every proposal; Proposals 1 and 2 answer 200 with "Voting ends" alone, as settled proposals do; no sideways scroll and no page errors at 1280, 390 and 320.
+
+## 2026-11-08 — Connected apps: one identity per app (hotfix)
+
+keyfleet.ai runs the Claude connector with the switch on, and until now every app a person
+allowed shared one hosted identity per account, so a second app inherited the agent the
+first had paired. This hotfix gives each app its own identity, on main, ahead of the
+five-site connector window (Sean's "1. b", 30 Oct).
+
+- Pins elixir-utils `d9440a4e98e5be4a8c2661a9679fa2309b48dfd3`
+  (`mcp-agents/per-app-on-4e527975`): the former pin `4e527975` with the template's
+  per-app change (`d89c69df`) cherry-picked, mcp_agents only. The hosted identity key now
+  comes from the site's audience, the account and the app's OAuth client (label
+  `regent-connected-app-v2`).
+- `Keyfleet.Agents.HostedAddress` keeps each wallet by `{subject, client_id}`; its shape
+  is otherwise unchanged (the move to the template's cache goes with `connector-mcp-1108`).
+- The consent note and `/agents/claude` say each app pairs on its own, with its own code
+  from Pair New Agent; the public changelog says apps connected before today pair again.
+- At release, live connected apps keep their tokens but get a fresh, unpaired identity;
+  their people pair them again. Their old agents stay on the Agents page until unpaired.
+- Tests: each app's identity has its own wallet in the connector test; a second app with
+  the agent permission, on an account already paired through another app, gets its
+  identity tools only; a refreshed token keeps its app's identity and its agent's tools.
+- Rollback note: agents paired under the old account-wide identity stay paired, though no
+  app reaches them now. Rolling back past this release (pin `4e527975`) would let every app
+  of an account act as that old agent again, so a rollback of this release is itself a
+  security change.
+
 ## 2026-11-08 — The template's MCP admission, cache and scopes migration
 
 The coordinator's review of `151423b5` asked for the template's own pieces (ash-template
-v182 `e0b6ca83`) in place of Keyfleet's hand-built ones.
+v182 `e0b6ca83`) in place of Keyfleet's hand-built ones. Merges Keyfleet main `5cbbe12e`,
+which carries the per-app identity hotfix above; the elixir-utils pin stays `d89c69df`,
+which has the same per-app change as the hotfix's `d9440a4e` on the Credits-free base.
 
 - `KeyfleetWeb.Plugs.McpAgent` is the template's, adapted only to Keyfleet's
   `SignedAgent`, its actors and its refusal words. Every request carries exactly one

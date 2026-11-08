@@ -323,6 +323,46 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       refute has_element?(view, "#proposal-yes")
     end
 
+    # The vote contract's three times, each named by what it is and in the
+    # order they come: voting ends, a payment may be carried out a day later,
+    # and for 48 hours from then. A settled proposal keeps only the first.
+    test "a proposal names each of its times by what it is", %{conn: conn} do
+      closes_at = ~U[2026-11-08 13:20:06Z]
+
+      for number <- [1, 2] do
+        ProposalHelpers.proposal!(@fleet, number,
+          opened_at: DateTime.add(closes_at, -@day),
+          closes_at: closes_at,
+          execution_expiry: DateTime.add(closes_at, 3 * @day)
+        )
+      end
+
+      ChainViews.put!(
+        on_chain(1, :waiting, e0: 2, late: 5, yes: 6) ++
+          on_chain(2, :cancelled, e0: 2, late: 46, yes: 6, no: 42)
+      )
+
+      times = "section[aria-labelledby='proposal-outcome-title'] dl:last-of-type"
+
+      {:ok, view, _html} = open(conn, "#{@list}/1")
+
+      assert cell_texts(view, "#{times} dt") == [
+               "Voting ends",
+               "Carry-out starts",
+               "Carry-out ends"
+             ]
+
+      assert cell_texts(view, "#{times} dd") == [
+               "8 November 2026 at 13:20 UTC",
+               "9 November 2026 at 13:20 UTC",
+               "11 November 2026 at 13:20 UTC"
+             ]
+
+      {:ok, view, _html} = open(conn, "#{@list}/2")
+      assert cell_texts(view, "#{times} dt") == ["Voting ends"]
+      assert cell_texts(view, "#{times} dd") == ["8 November 2026 at 13:20 UTC"]
+    end
+
     # Only ETH and the fleet's own USDC, known by their addresses, are shown
     # without one. A token anywhere else that calls itself USDC always has its
     # address beside every amount of it.
@@ -719,9 +759,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   describe "the wallet buttons on the list" do
     # Keys 1 and 2 are the holder's; Key 3 is another's, with the holder's
     # shard on it, so the holder may mark it present too.
-    test "the present card marks every key the wallet may, and lists the idle keys", %{
-      conn: conn
-    } do
+    test "the present card marks every key the wallet may, idle keys first and present ones folded",
+         %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, 1..2, @holder)
       ProposalHelpers.keys_sold!(@fleet, [3], @other)
       ChainHelpers.issue_shard!(@fleet, 3, @holder)
@@ -741,11 +780,28 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
       active!(view, "#proposals-present-action", @holder)
 
-      assert lines(view, "#proposals-present-keys li") == [
-               "Key 1 Present until 7 Oct, 13:00 UTC",
+      # The idle keys stand above the button; the present one waits in a
+      # closed dropdown under it, ahead of the proposals.
+      assert lines(view, "#proposals-present-idle li") == [
                "Key 2 Not present",
                "Key 3 Not present"
              ]
+
+      assert has_element?(view, "#proposals-present-active:not([open])", "Present Keys (1)")
+
+      assert lines(view, "#proposals-present-active-keys li") == [
+               "Key 1 Present until 7 Oct, 13:00 UTC"
+             ]
+
+      html = render(view)
+
+      assert [idle, mark, active, proposals] =
+               Enum.map(
+                 ~w(proposals-present-idle proposals-present-mark proposals-present-active proposals-list-title),
+                 &(:binary.match(html, ~s(id="#{&1}")) |> elem(0))
+               )
+
+      assert idle < mark and mark < active and active < proposals
 
       assert has_element?(view, "#proposals-present-figures-present", "1")
 
@@ -771,6 +827,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(view, "#proposals-present-mark[disabled]")
       assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
+      refute has_element?(view, "#proposals-present-active")
       assert has_element?(view, "#proposals-present-figures-present", "0")
     end
 
@@ -1217,6 +1274,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       render_async(view, @async_wait)
 
       assert has_element?(view, "#proposals-present-figures-present", "0")
+      refute has_element?(view, "#proposals-present-active")
       refute has_element?(view, "#proposals-present-action [data-onchain-step]")
       assert pressable?(view, "propose", ["#propose-button"])
 

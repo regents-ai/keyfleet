@@ -10,6 +10,10 @@ Changes to Keyfleet, newest first.
 - **MCP address.** An agent that signs its own requests can use Keyfleet's MCP address at any time.
   A request sends either the agent's signature or a connected app's token, never both.
   When the sign-in service asks an app to wait, `pair_identity` says how many seconds.
+- **Present.** On the Proposals tab your idle Keys come first, above Mark present. Your
+  present Keys fold into a list under it, so the proposals stay near the top.
+- **Proposal times.** A proposal's page names its three times Voting ends, Carry-out
+  starts and Carry-out ends, in the order they come.
 
 ## 6 November 2026
 
