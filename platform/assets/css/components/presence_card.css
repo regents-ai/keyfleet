@@ -1,7 +1,8 @@
 @layer regents-product {
 /* Whether keys are present (KeyfleetWeb.Components.PresenceCard): the rule
-   for idle keys, each key on its own line with when its presence lapses,
-   and the count of idle keys, which opens the list of them. */
+   for idle keys, each key on its own line with when its presence lapses, the
+   wallet's idle keys above its button and its present keys in a closed
+   dropdown under it. */
 
 .presence-title {
   display: inline-flex;

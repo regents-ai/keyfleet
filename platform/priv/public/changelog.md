@@ -7,6 +7,10 @@ Changes to Keyfleet, newest first.
 - **Claude connector.** Each app you connect pairs on its own, with its own code from Pair
   New Agent, so an agent you paired through one app is never taken by another. An app you
   connected before today asks to be paired again.
+- **Present.** On the Proposals tab your idle Keys come first, above Mark present. Your
+  present Keys fold into a list under it, so the proposals stay near the top.
+- **Proposal times.** A proposal's page names its three times Voting ends, Carry-out
+  starts and Carry-out ends, in the order they come.
 
 ## 6 November 2026
 

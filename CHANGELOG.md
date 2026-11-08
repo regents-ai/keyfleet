@@ -6935,6 +6935,16 @@ Moved, from the template's shared round (design-system 768719f3): every icon on 
 
 Live read at 12:58Z, signed out: capabilities.json names 4250f9cf; /, /about, /connect, /pair, /account, /account/agents, /opportunities, /changelog, /classic/1 and its workspace, proposals and Key 19 pages answer 200; header icons at 1280 are Lucide at 1.8 stroke beside the X and GitHub marks; no sideways scroll at 390 and 320.
 
+## 2026-11-08 — Release: Proposals tab puts idle Keys first
+
+28331751 is live: graph v515 (17:01:22Z), site v516 (17:02:04Z), image registry.fly.io/keyfleet:2833175 (sha256:b1c3bab0c215). Rollback: site v514 and graph v513 (4250f9cf). Change check exit 0 on 28331751 at 16:59Z (Elixir tests in 4 parts: 264, 319, 315 and 323 passed). No migration; API contracts unchanged.
+
+Moved: on the Proposals tab the Present card lists the wallet's idle Keys above Mark present, and its present Keys sit in a closed "Present Keys (N)" dropdown under the button, ahead of the proposals; the dropdown keeps its open state across the panel's 15-second rebuilds and is absent signed out or with no Keys. A Key's own page keeps its one line. A proposal's page names its times Voting ends, Carry-out starts and Carry-out ends, in that order (cherry-picked 5eb570d from claude/project-thread-8vljti, labels shortened to two words). Logic review: ready.
+
+Not checked live: the signed-in idle and present split, which needs a wallet with Keys signed in; the Proposals page tests cover it (43 of 43). No proposal is open now, so live pages show only Voting ends.
+
+Live read at 17:03Z, signed out, headless Chromium: capabilities.json names 28331751; /classic/1/proposals answers 200 with the Present figures and no key list, then Every proposal; Proposals 1 and 2 answer 200 with "Voting ends" alone, as settled proposals do; no sideways scroll and no page errors at 1280, 390 and 320.
+
 ## 2026-11-08 — Connected apps: one identity per app (hotfix)
 
 keyfleet.ai runs the Claude connector with the switch on, and until now every app a person
@@ -6956,3 +6966,7 @@ five-site connector window (Sean's "1. b", 30 Oct).
 - Tests: each app's identity has its own wallet in the connector test; a second app with
   the agent permission, on an account already paired through another app, gets its
   identity tools only; a refreshed token keeps its app's identity and its agent's tools.
+- Rollback note: agents paired under the old account-wide identity stay paired, though no
+  app reaches them now. Rolling back past this release (pin `4e527975`) would let every app
+  of an account act as that old agent again, so a rollback of this release is itself a
+  security change.
