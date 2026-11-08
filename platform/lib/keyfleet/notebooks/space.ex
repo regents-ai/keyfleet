@@ -15,8 +15,10 @@ defmodule Keyfleet.Notebooks.Space do
   by its tag, so a project never gets two. A run still waiting when its
   project is deleted makes nothing. One whose project is deleted while it
   makes the space records nothing (`Keyfleet.Projects.Project`'s
-  `record_space`): its next try finds the project gone and stops, and the
-  delete run removes the space by its tag.
+  `record_space`), and its next try finds the project gone and stops. The
+  delete run removes the space by its tag when it looks after the space was
+  made. The one-run limit holds on each machine, so while two machines run,
+  a delete run can look before the space is made and leave it on the hub.
   """
   use Oban.Worker,
     queue: :notebook_hubs,

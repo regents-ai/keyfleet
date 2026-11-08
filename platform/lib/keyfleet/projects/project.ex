@@ -350,8 +350,8 @@ defmodule Keyfleet.Projects.Project do
       change filter(expr(state != :deleted and key == ^arg(:key)))
     end
 
-    # A project deleted while its space was being made records none: its
-    # delete run finds that space by its tag (`Keyfleet.Notebooks.DeleteSpace`).
+    # A project deleted while its space was being made records none; its
+    # delete run looks for that space by its tag (`Keyfleet.Notebooks.DeleteSpace`).
     update :record_space do
       accept [:hub_project_id]
       require_atomic? false
