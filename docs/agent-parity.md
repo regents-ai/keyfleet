@@ -29,7 +29,9 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   instead press the page's own button, so the browser's active Privy wallet signs; the
   `chain_*` tools answer the same steps for the agent's own wallet (K5).
 - **MCP**: hosted `/mcp` for an agent that signs each JSON-RPC POST with its own SIWA
-  key, as it signs its `/api/v1/agent` requests, and sends no token. Once paired it gets
+  key, as it signs its `/api/v1/agent` requests, and sends no token (a token beside the
+  signature is refused as `ambiguous_credentials`); this works with the connector off
+  too. Once paired it gets
   the connector's tools as the paired agent, by the same names, without the identity
   tools (K8).
 - **Connector**: the same `/mcp` added to a Claude account as a custom connector, and

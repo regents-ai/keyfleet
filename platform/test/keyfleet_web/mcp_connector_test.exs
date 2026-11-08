@@ -6,8 +6,14 @@ defmodule KeyfleetWeb.McpConnectorTest do
   #   and never a wallet's tools;
   # - each app a person connects keeps its own identity, kept across a refreshed
   #   token: a second app of an account paired through the first stays the app;
-  # - the account's budget is spent before the sign-in server is asked, so a
-  #   request past it never reaches the server, even while that server is down;
+  # - exactly one credential: a signature beside a token is refused, and while
+  #   connecting apps is off a token is refused and a signed agent is served;
+  # - the identity's wallet is asked for once per account and app, a failed ask
+  #   is not kept, and a signer's wait reaches the tool as the seconds to wait;
+  # - each address spends 120 a minute until a token is checked, a checked token
+  #   its address's 600 and its account's 120, and the account's budget is
+  #   spent before the sign-in server is asked, even while that server is down;
+  # - every answer is private and never kept;
   # - a pairing that ends or changes hands while a tool runs replaces the answer;
   # - each agent tool answers and refuses exactly as its signed request does,
   #   since both run the same code.
@@ -150,6 +156,175 @@ defmodule KeyfleetWeb.McpConnectorTest do
       assert error(refused)["code"] == "connection_required"
       assert [_challenge] = get_resp_header(refused, "www-authenticate")
     end
+
+    test "a signature and a token together are refused", c do
+      pair!(account!(), c.signer.address)
+
+      request =
+        SignedAgentHelpers.sign(
+          c.signer,
+          c.secret,
+          Siwa.Contract.authority(c.app),
+          "POST",
+          "/mcp",
+          Jason.encode!(rpc("tools/list"))
+        )
+
+      both =
+        Req.post!(c.app <> "/mcp",
+          headers:
+            request.headers
+            |> Map.drop(["cookie", "authorization"])
+            |> Map.put("authorization", "Bearer a-token"),
+          body: request.body,
+          retry: false
+        )
+
+      assert both.status == 401
+      assert both.body["error"]["code"] == "ambiguous_credentials"
+    end
+
+    test "while connecting apps is off, a token is refused, a request with neither needs a signature, and a signed agent is served",
+         c do
+      subject = account!()
+      pair!(subject, c.signer.address)
+      token = connect!(subject, @agent_scopes, c.signer.address)
+      put_env(:keyfleet, Keyfleet.OAuth, Keyword.put(oauth_config(), :enabled?, false))
+
+      refused = mcp(rpc("tools/list"), token, c)
+      assert refused.status == 401
+      assert error(refused)["code"] == "delegated_access_not_enabled"
+
+      unsigned = mcp(rpc("tools/list"), nil, c)
+      assert unsigned.status == 401
+      assert error(unsigned)["code"] == "agent_auth_required"
+      assert get_resp_header(unsigned, "www-authenticate") == []
+
+      listed = Enum.map(signed_mcp(c, rpc("tools/list")).body["result"]["tools"], & &1["name"])
+      assert Enum.sort(listed) == Enum.sort(fleet_tools())
+    end
+  end
+
+  describe "the connected app's identity wallet" do
+    test "is asked for once per account and app, not on every call", c do
+      subject = account!()
+      token = connect!(subject, @agent_scopes)
+      count_signer_asks()
+
+      for _ <- 1..3, do: assert(mcp(rpc("ping"), token, c).status == 200)
+      assert signer_asks() == 1
+
+      other_app = connect!(subject, @agent_scopes)
+      for _ <- 1..2, do: assert(mcp(rpc("ping"), other_app, c).status == 200)
+      assert signer_asks() == 1
+    end
+
+    test "while the signer is down, each call is refused and asks again; its first answer is kept",
+         c do
+      token = connect!(account!(), @agent_scopes)
+      test = self()
+
+      Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+        send(test, :signer_asked)
+        conn |> put_status(503) |> Req.Test.json(%{})
+      end)
+
+      for _ <- 1..3 do
+        refused = mcp(rpc("ping"), token, c)
+        assert refused.status == 503
+        assert error(refused)["code"] == "identity_unavailable"
+      end
+
+      assert signer_asks() == 3
+      count_signer_asks()
+
+      for _ <- 1..3, do: assert(mcp(rpc("ping"), token, c).status == 200)
+      assert signer_asks() == 1
+    end
+
+    test "a signer that asks for a wait gives pair_identity the seconds to wait", c do
+      subject = account!()
+      token = connect!(subject, @identity_scope)
+
+      Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+        {:ok, body, conn} = read_body(conn)
+
+        case Jason.decode!(body) do
+          %{"operation" => "register", "identity_key" => key} ->
+            Req.Test.json(conn, %{"address" => identity_wallet(key)})
+
+          %{"operation" => "sign"} ->
+            conn |> put_resp_header("retry-after", "45") |> put_status(429) |> Req.Test.json(%{})
+        end
+      end)
+
+      %{code: code} = RegentAgents.issue_pairing_code!(actor: person(subject))
+
+      assert %{"isError" => true, "content" => [%{"text" => text}]} =
+               result(
+                 call(token, "pair_identity", %{code: code, name: "Claude", harness: "claude"}, c)
+               )
+
+      assert %{"code" => "too_many_requests", "retry_after" => 45} = Jason.decode!(text)["error"]
+      assert RegentAgents.list_my_agents!(actor: person(subject)) == []
+    end
+  end
+
+  describe "the address budgets" do
+    test "a token that isn't this site's spends its address's 120, and one past them is refused before any token is looked up",
+         c do
+      put_env(:keyfleet, :mcp_address_rate_limit, limit: 120, window_seconds: 3600)
+
+      first = mcp(rpc("ping"), "not-this-sites", c)
+      assert first.status == 401
+      assert policies(first) == ["mcp_address"]
+      assert oauth_calls(fn -> mcp(rpc("ping"), "not-this-sites", c) end) > 0
+
+      for _ <- 3..120, do: assert(mcp(rpc("ping"), "not-this-sites", c).status == 401)
+
+      assert oauth_calls(fn ->
+               refused = mcp(rpc("ping"), "not-this-sites", c)
+               assert refused.status == 429
+               assert policies(refused) == ["mcp_address"]
+             end) == 0
+    end
+
+    test "a checked token spends its address's 600 and its account's 120, never the address's 120",
+         c do
+      token = connect!(account!(), @identity_scope)
+      answered = mcp(rpc("ping"), token, c)
+      assert answered.status == 200
+      assert policies(answered) == ["mcp_connected_address", "mcp"]
+    end
+
+    test "every answer is private and never kept, a tool's, a stream's and a refusal", c do
+      token = connect!(account!(), @identity_scope)
+
+      # AshAi streams this answer and names its own cache-control on it.
+      version = "2026-07-28"
+
+      meta = %{
+        "io.modelcontextprotocol/protocolVersion" => version,
+        "io.modelcontextprotocol/clientCapabilities" => %{}
+      }
+
+      stream =
+        mcp(rpc("subscriptions/listen", %{"_meta" => meta}), token, c, [
+          {"mcp-protocol-version", version},
+          {"mcp-method", "subscriptions/listen"}
+        ])
+
+      assert get_resp_header(stream, "content-type") == ["text/event-stream"]
+
+      for answer <- [
+            stream,
+            mcp(rpc("tools/list"), token, c),
+            mcp(rpc("ping"), nil, c),
+            mcp(rpc("ping"), "not-this-sites", c)
+          ] do
+        assert get_resp_header(answer, "cache-control") == ["private, no-store"]
+      end
+    end
   end
 
   # The same address for an agent that signs its own requests with its SIWA
@@ -252,7 +427,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     for refused <- Enum.take(statuses, 120) do
       assert refused.status == 503
-      assert error(refused)["code"] == "siwa_request_failed"
+      assert error(refused)["code"] == "identity_unavailable"
     end
 
     assert List.last(statuses).status == 429
@@ -660,12 +835,16 @@ defmodule KeyfleetWeb.McpConnectorTest do
   defp key(subject, client), do: RegentMCPAgents.identity_key("keyfleet", subject, client)
   defp identity_wallet(key), do: "0x" <> binary_part(key, 0, 40)
 
-  defp mcp(body, token, c) do
+  defp mcp(body, token, c, headers \\ []) do
     conn =
-      conn(:post, "/mcp", Jason.encode!(body))
-      |> Map.put(:remote_ip, c.from)
-      |> put_req_header("content-type", "application/json")
-      |> put_req_header("accept", "application/json, text/event-stream")
+      Enum.reduce(
+        headers,
+        conn(:post, "/mcp", Jason.encode!(body))
+        |> Map.put(:remote_ip, c.from)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream"),
+        fn {name, value}, conn -> put_req_header(conn, name, value) end
+      )
 
     conn = if token, do: put_req_header(conn, "authorization", "Bearer " <> token), else: conn
     @endpoint.call(conn, [])
@@ -727,6 +906,49 @@ defmodule KeyfleetWeb.McpConnectorTest do
       retry: false,
       redirect: false
     )
+  end
+
+  # From here on the hosted signer counts each ask, answering each app's own wallet.
+  defp count_signer_asks do
+    test = self()
+
+    Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+      send(test, :signer_asked)
+      {:ok, body, conn} = read_body(conn)
+      Req.Test.json(conn, %{"address" => identity_wallet(Jason.decode!(body)["identity_key"])})
+    end)
+  end
+
+  defp oauth_config, do: Application.fetch_env!(:keyfleet, Keyfleet.OAuth)
+
+  defp policies(conn) do
+    [header] = get_resp_header(conn, "ratelimit-policy")
+    for [_, policy] <- Regex.scan(~r/"([^"]+)"/, header), do: policy
+  end
+
+  # How many calls the sign-in store took while `fun` ran. It sends nothing to
+  # telemetry, so this process's calls into it are traced, to a process of their
+  # own: a process is never its own tracer.
+  defp oauth_calls(fun) do
+    test = self()
+    tracer = spawn_link(fn -> count_calls(test, 0) end)
+    :erlang.trace_pattern({RegentOAuth.Repo, :_, :_}, true, [])
+    :erlang.trace(test, true, [:call, {:tracer, tracer}])
+    fun.()
+    :erlang.trace(test, false, [:call])
+    :erlang.trace_pattern({RegentOAuth.Repo, :_, :_}, false, [])
+    delivered = :erlang.trace_delivered(test)
+    assert_receive {:trace_delivered, ^test, ^delivered}
+    send(tracer, :done)
+    assert_receive {:calls, calls}
+    calls
+  end
+
+  defp count_calls(test, calls) do
+    receive do
+      {:trace, ^test, :call, {RegentOAuth.Repo, _name, _args}} -> count_calls(test, calls + 1)
+      :done -> send(test, {:calls, calls})
+    end
   end
 
   defp signer_asks do

@@ -297,22 +297,19 @@ defmodule KeyfleetWeb.Router do
     post "/connections/revoke", OAuthController, :revoke_connection, log: false
   end
 
-  # The Claude connector's MCP address: AshAi runs every tool this site's
-  # domains hand it (the identity tools and each fleet tool, by its browser
-  # tool's name), each as its Ash action with its policies, and lists to each
-  # caller only the tools those policies let it run. McpAgent admits the request first: POST /mcp
+  # The hosted MCP address: AshAi runs every tool this site's domains hand it
+  # (the identity tools and each fleet tool, by its browser tool's name), each
+  # as its Ash action with its policies, and lists to each caller only the tools
+  # those policies let it run. McpAgent admits the request first: POST /mcp
   # alone, JSON, one call, no query string and no page from another site, with
-  # a token from the sign-in above. The app is the actor, or, once its identity
-  # is paired and the person allowed the agent permission, that paired agent.
-  # An agent that signs the request with its own SIWA key instead, as it signs
-  # its /api/v1/agent requests, is that agent, admitted as those requests are.
-  # So AshAi's own origin check takes whatever McpAgent let through. Each
-  # connected account gets 120 requests a minute; before that the endpoint
-  # counts a request without a token against the /api per-address budget, and
-  # one with a token against the connector's own per-address ceiling
-  # (`KeyfleetWeb.Endpoint.connector_rate_limit/0`), since every person's
-  # Claude calls from the same servers. It answers 404 while the connector is
-  # off. Nothing is kept between requests. Tool calls carry pairing codes, so
+  # exactly one credential. An agent that signs the request with its own SIWA
+  # key, as it signs its /api/v1/agent requests, is that agent, admitted as
+  # those requests are. A connected app's token from the sign-in above makes the
+  # app the actor, or, once its identity is paired and the person allowed the
+  # agent permission, that paired agent. So AshAi's own origin check takes
+  # whatever McpAgent let through. The endpoint and McpAgent count each address
+  # and each connected account (`KeyfleetWeb.Plugs.McpAgent.limit_address/1`).
+  # Nothing is kept between requests. Tool calls carry pairing codes, so
   # nothing is logged. No `:accepts`: the endpoint has parsed the JSON, and a
   # GET for an event stream must be answered 405 by McpAgent, not 406 here.
   pipeline :mcp do

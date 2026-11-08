@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.RateLimitTest do
   setup %{conn: conn} do
     for {name, release} <- [
           api_rate_limit: [limit: 120, window_seconds: 60],
-          connector_rate_limit: [limit: 6_000, window_seconds: 60]
+          mcp_address_rate_limit: [limit: 120, window_seconds: 60]
         ] do
       budget = Application.fetch_env!(:keyfleet, name)
       Application.put_env(:keyfleet, name, release)
@@ -57,29 +57,20 @@ defmodule KeyfleetWeb.RateLimitTest do
     assert get(conn, "/docs").status == 200
   end
 
-  # Every Claude user's requests come from Claude's own servers. Once that
-  # address has spent the /api budget, a request carrying a token still
-  # reaches the connector, which counts it against its account; one without a
-  # token is refused with the rest of the address's requests.
-  test "a connector request with a token spends its own ceiling, not the /api budget",
+  # The hosted MCP address keeps its own budget for each address: a request
+  # without a token spends it and never the /api one, and one with a token
+  # waits for the token's check (`KeyfleetWeb.McpConnectorTest`), so Claude's
+  # servers, which send every connected person's requests, keep reaching it.
+  test "the MCP address counts each address on its own budget, apart from /api",
        %{conn: conn} do
-    with_token = put_req_header(conn, "authorization", "Bearer made-up")
-
     for path <- ~w(/mcp /mcp/more) do
-      response = post(with_token, path, %{})
-      assert response.status != 429, path
-
-      assert get_resp_header(response, "ratelimit-policy") == [~s("connector";q=6000;w=60)],
-             path
-
       response = post(conn, path, %{})
-      assert get_resp_header(response, "ratelimit-policy") == [~s("default";q=120;w=60)], path
+      assert get_resp_header(response, "ratelimit-policy") == [~s("mcp_address";q=120;w=60)], path
     end
 
     for _n <- 1..120, do: get(conn, "/healthz")
 
-    assert post(conn, "/mcp", %{}).status == 429
-    assert post(conn, "/mcp/more", %{}).status == 429
-    assert post(with_token, "/mcp", %{}).status != 429
+    assert get(conn, "/api/v1/fleets").status == 429
+    refute post(conn, "/mcp", %{}).status == 429
   end
 end

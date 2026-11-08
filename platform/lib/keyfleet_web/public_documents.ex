@@ -348,7 +348,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
   # a pairing may name, as the pair request accepts them; `{{goal_ideas}}` the
   # starting ideas for a fleet's shared goal, as the homepage shows them;
-  # `{{hosted_mcp}}` whether the Claude connector's address answers now.
+  # `{{hosted_mcp}}` the hosted MCP address, and whether connected apps use it now.
   defp source(name) do
     @sources[name]
     |> String.replace("{{hosted_mcp}}", hosted_mcp())
@@ -364,18 +364,21 @@ defmodule KeyfleetWeb.PublicDocuments do
     do: Enum.map_join(RegentAgents.Harness.offered(), ", ", &"`#{&1}`")
 
   defp hosted_mcp do
-    if Keyfleet.OAuth.enabled?(),
-      do:
-        "Connected apps, such as Claude, use the hosted MCP address at {{origin}}/mcp: the " <>
-          "person signs in to Keyfleet from the app and allows it, the app pairs like any agent, " <>
-          "and the address offers the tools above under the same names, working as that " <>
-          "agent. " <>
-          "[Claude]({{origin}}/agents/claude) has the setup. " <>
-          "An agent that signs its own requests may call the same address, signing each " <>
-          "JSON-RPC POST as it signs its requests under /api/v1/agent: once paired, it works " <>
-          "there as itself, with the same tools and no identity tools.",
-      else: "Keyfleet does not offer a hosted MCP endpoint."
+    "Keyfleet's hosted MCP address is {{origin}}/mcp. An agent that signs its own " <>
+      "requests may call it, signing each JSON-RPC POST as it signs its requests under " <>
+      "/api/v1/agent: once paired, it works there as itself, with the tools above under " <>
+      "the same names. A signature beside a connected app's token is refused." <>
+      connector(Keyfleet.OAuth.enabled?())
   end
+
+  defp connector(false), do: ""
+
+  defp connector(true),
+    do:
+      " Connected apps, such as Claude, use the same address: the person signs in to " <>
+        "Keyfleet from the app and allows it, the app pairs like any agent with its own " <>
+        "code, and the address offers the same tools, working as that agent. " <>
+        "[Claude]({{origin}}/agents/claude) has the setup."
 
   @statuses [
     {"not_paired", "no person has paired you with their account"},

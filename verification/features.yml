@@ -1167,19 +1167,30 @@ features:
       sets its last contact on Account (not its check-in light), and the person
       can disconnect it from Connected apps. Each app a person connects keeps
       its own identity and pairs only with its own code, so a second app never
-      takes the first one's pairing. /mcp is the shared
-      RegentMCPAgents.Plug: 401 with the sign-in challenge without a live
-      token, 120 requests a minute per connected account; before that a
-      request without a token spends the /api per-address budget and one with
-      a token the connector's own per-address ceiling of 6,000 a minute, so
-      every person's Claude, calling from the same servers, never shares one
-      120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
-      words. Tokens are stored only as their hash. Claude's guide, its skill,
-      its place on /agents, the sitemap and /connect, the pair request's
-      `claude` harness and the lines in llms.txt and agents.md naming /mcp
-      exist only while the switch is on; off, /agents/claude is not found and
-      /mcp answers 404. Turning it on without the site's hosted signing key
-      stops the boot, naming the setting. Off by default.
+      takes the first one's pairing. /mcp admits a request as the template's
+      McpAgent does: exactly one credential, an agent's own signature or a
+      connected app's token, and both together are refused
+      (`ambiguous_credentials`). Without either it answers 401
+      `connection_required` with the sign-in challenge. Each address has 120
+      requests a minute (`mcp_address`) until a token is checked, and a token
+      is not looked up once its address has spent them; a checked token
+      spends its address's 600 a minute (`mcp_connected_address`) and its
+      account's 120 (`mcp`), so every person's Claude, calling from the same
+      servers, never shares one 120-a-minute bucket. Each app's identity
+      wallet is asked for once per account and app and kept in a local cache;
+      a failed ask is not kept, and the call answers 503
+      `identity_unavailable`. A signer's wait reaches the identity tool as
+      `too_many_requests` with `retry_after`. Every answer is
+      `private, no-store`. 405 for anything but POST. Tokens are stored only
+      as their hash. At release, every public app gains the agent permission
+      it lacks (insert-only). Claude's guide, its skill, its place on /agents,
+      the sitemap and /connect, the pair request's `claude` harness and the
+      connected-app line in llms.txt and agents.md exist only while the switch
+      is on; off, /agents/claude is not found, a token at /mcp answers 401
+      `delegated_access_not_enabled`, a request with neither credential 401
+      `agent_auth_required`, and a signed agent is served as always. Turning
+      it on without the site's hosted signing key stops the boot, naming the
+      setting. Off by default.
     who: agent
     level: protected
     paths:
@@ -1198,10 +1209,14 @@ features:
       - platform/lib/keyfleet_web/live/connect_live.ex
       - platform/lib/keyfleet_web/plugs/mcp_agent.ex
       - platform/lib/keyfleet/agents/hosted_address.ex
+      - platform/lib/keyfleet/accounts/request_rate_limiter.ex
+      - platform/lib/keyfleet/agents/connection.ex
+      - platform/lib/keyfleet_web/tool_errors.ex
       - platform/priv/public/agents/claude.md
       - platform/priv/public/llms.md
       - platform/priv/public/agents.md
       - platform/priv/repo/migrations/20261028180000_add_oauth_provider.exs
+      - platform/priv/repo/migrations/20261108120000_oauth_client_scopes.exs
     entry:
       - route: POST /mcp
       - route: GET /oauth/authorize
@@ -1213,13 +1228,15 @@ features:
       - platform/test/keyfleet_web/router_gate_coverage_test.exs
       - platform/test/keyfleet_web/rate_limit_test.exs
       - platform/test/keyfleet_web/mcp_connector_test.exs
+      - platform/test/keyfleet/oauth_client_scopes_migration_test.exs
     gaps:
       - The connector test runs /mcp through Keyfleet's endpoint with the hosted signer stubbed, so each app's own identity and its pairing are proven there, not against siwa-server. The library's own plug and hashed-token tests run in elixir-utils, not against Keyfleet.
-      - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, /connect?agent=claude, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
+      - Nothing checks the pages both ways - /agents/claude, its skill.md, /agents, the sitemap, /connect?agent=claude, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off. /mcp's own answers with the switch off are in the connector test.
       - Nothing checks that runtime.exs stops the boot without SIWA_HOSTED_SIGNING_KEY, or that the issuer and resource follow PHX_HOST.
       - The migration has not run anywhere. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
       - Sign-in, consent, token exchange, refresh, disconnect and an /mcp call without, with and with a revoked token are unchecked on Keyfleet, as are the per-account 429, the 405 for a GET and a 401 when the account can't be read.
       - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
+      - The client-scopes migration runs only in its test, on a local database.
       - The connector's packages are pinned to elixir-utils main `d89c69df`. The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
       - siwa-server limits what a hosted signer may sign (e9a822d) and holds Keyfleet's entry in v73, not yet deployed.
       - The browser walk does not open the connect step or the Claude guide with the connector on; WebKit is not run on the Mac.

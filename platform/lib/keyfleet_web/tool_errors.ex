@@ -8,8 +8,9 @@ defmodule KeyfleetWeb.ToolErrors do
   (`KeyfleetWeb.AgentTools.Refused`) is that request's body. A workspace
   refusal takes the workspace's words
   (`KeyfleetWeb.WorkspaceRefusal`), with its `details`. A connected app's
-  identity refusal takes this site's own code and words, or, when no answer
-  came, the words every Regent site gives it.
+  identity refusal takes this site's own code and words, the library's
+  `too_many_requests` with `retry_after` when it was asked to wait, or, when no
+  answer came, the words every Regent site gives it.
 
   Input a tool's action cannot take is refused before AshAi runs it
   (`check_input/3`, the router's `tool_argument_transformer`), as the action
@@ -105,6 +106,11 @@ end
 defimpl AshAi.ToToolError, for: Keyfleet.Agents.Connection.Refused do
   def to_tool_error(%{error: %{} = error, retry_after: retry_after}),
     do: KeyfleetWeb.ToolErrors.text(%{error: error}, retry_after)
+
+  def to_tool_error(%{wait: seconds}) when is_integer(seconds) do
+    %{error: error} = RegentMCPAgents.Tools.wait(seconds)
+    KeyfleetWeb.ToolErrors.text(%{error: error}, seconds)
+  end
 
   def to_tool_error(_no_answer), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
 end

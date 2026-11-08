@@ -207,13 +207,20 @@ config :keyfleet, :session_bootstrap_rate_limit, limit: 30, window_seconds: 300
 # One budget per client address for the health check and every /api path.
 config :keyfleet, :api_rate_limit, limit: 120, window_seconds: 60
 
-# Claude connector requests carrying a token, per client address. Claude's
-# servers send every connected person's requests; each person also has 120 a
-# minute of their own at /mcp.
-config :keyfleet, :connector_rate_limit, limit: 6_000, window_seconds: 60
-
-# Each connected account's own budget at /mcp.
+# The hosted MCP address's budgets (`KeyfleetWeb.Plugs.McpAgent`): 120 requests
+# a minute per client address for every request without a checked token; once a
+# connected app's token is checked, 600 a minute for its address, since Claude's
+# servers send every connected person's requests, and 120 a minute for its
+# account.
+config :keyfleet, :mcp_address_rate_limit, limit: 120, window_seconds: 60
+config :keyfleet, :mcp_connected_address_rate_limit, limit: 600, window_seconds: 60
 config :keyfleet, :mcp_rate_limit, limit: 120, window_seconds: 60
+
+# The hosted identity wallet of each account and connected app, which never changes
+# once the sign-in server has given it. One that leaves with a collected generation is asked for again.
+config :keyfleet, Keyfleet.Agents.HostedAddress,
+  gc_interval: :timer.hours(12),
+  max_size: 100_000
 
 # Tries at the early-access form per client address: five in ten minutes.
 config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600

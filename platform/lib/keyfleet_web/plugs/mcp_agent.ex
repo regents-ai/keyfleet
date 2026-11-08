@@ -1,11 +1,10 @@
 defmodule KeyfleetWeb.Plugs.McpAgent do
   @moduledoc """
-  Admits a request to the Claude connector's MCP address, `/mcp`, and says who
-  is calling, before AshAi's router (`AshAi.Mcp.Router`) runs the tool. Cookies
-  are never read. While the connector is off (`Keyfleet.OAuth.enabled?/0`) the
-  address answers 404.
+  Admits a request to the hosted MCP server at `/mcp`, and says who is calling,
+  before AshAi's router (`AshAi.Mcp.Router`) runs the tool. Cookies are never
+  read.
 
-  In order, before the token is looked at:
+  In order, before any credential is looked at:
 
   - a query string is refused (`unsupported_query`);
   - only `POST /mcp` is served: another method is refused with 405, another
@@ -14,54 +13,64 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     included) is refused (`origin_not_allowed`); a request with no `Origin`, as
     MCP clients send, goes on;
   - a body that is not JSON is refused (`unsupported_media_type`), and so is a
-    JSON-RPC batch (`batch_not_supported`).
+    JSON-RPC batch (`batch_not_supported`): one call a request, so one signature
+    covers one call.
 
-  Then the request carries a connected app's token (`Authorization: Bearer`),
-  one this site gave for `/mcp` with the identity permission, as `RegentOAuth`
-  checks it, and spends its account's budget: 120 requests a minute, after the
-  endpoint's ceiling for the connector's addresses. Only the token is read
-  before the budget is spent, since the budget is the token's account's, so a
-  request past it never reaches the sign-in server or the pairings.
+  Before any of this, while the body is still unread, the endpoint counts each
+  address (`limit_address/1`): 120 requests a minute (`mcp_address`) for every
+  request that carries no checked token. A connected app's token joins its
+  address's ceiling of 600 a minute (`mcp_connected_address`) only once
+  `RegentOAuth` has checked it, since Claude's connector calls from Anthropic's
+  shared servers and one address carries many accounts. A token that isn't this
+  site's spends the 120, and once an address has spent them its next token is
+  refused before it is looked up. Each budget is read from the configuration on
+  each request, as the endpoint's are.
 
-  While the app's own identity is paired with that same account and the
-  person allowed Keyfleet's agent permission (`Keyfleet.OAuth.agent_scope/0`),
-  the actor is that paired agent, as an agent signing its own requests would
-  be (`KeyfleetWeb.Plugs.SignedAgent.actor_for/2`, with the token as its
-  `connection`), so AshAi lists and runs the agent's tools under the same
-  policies, and its identity tools besides. Its syncs wait for news under its
-  account (`waiter` in the actions' context), since every person's Claude
-  calls from the same servers. Its pairing is read again just
-  before the answer leaves, and an answer whose pairing ended or changed hands
-  meanwhile is replaced (`agent_not_paired`), so it never carries the former
-  person's data. An identity paired with no one, or with someone else, leaves
-  the app itself the actor (`Keyfleet.Actors.ConnectedApp`), with its
-  identity tools only. Each app has its own identity, so an app pairs only
-  with a code its person gives it and never takes another app's pairing. The
-  identity's wallet is read once per account and app
-  (`Keyfleet.Agents.HostedAddress`), so a call seldom waits on the sign-in
-  server; while that server or the pairings can't be read, the request is
-  refused with that reason (`siwa_request_failed`, `pairing_unavailable`)
-  rather than served as someone it may not be.
+  Then every request carries exactly one credential:
 
-  A request without a token that an agent signed with its own SIWA key, as it
-  signs its requests under `/api/v1/agent`, is that agent once its signature
-  verifies and its pairing admits it, exactly as `KeyfleetWeb.Plugs.SignedAgent`
-  admits a signed request: the same refusals, and the same tools the
-  connector's paired agent gets, without the identity tools, which keep a
-  connected app's hosted identity. The signature covers the exact bytes
-  `KeyfleetWeb.BodyReader` kept. Its syncs wait for news under its client
-  address, as its signed syncs do, and its pairing is read again before the
-  answer leaves, as the connector's is.
+  - An agent's own signature (`Siwa.AgentAuthPlug.signed_request?/1`), over the
+    exact bytes `KeyfleetWeb.BodyReader` kept, is checked as its signed requests
+    under `/api/v1/agent` are, and its pairing admits it as
+    `KeyfleetWeb.Plugs.SignedAgent` admits them: the same refusals, and the
+    paired agent's tools, without the identity tools, which keep a connected
+    app's hosted identity. Its syncs wait for news under its client address, as
+    its signed syncs do.
+  - A connected app's token (`Authorization: Bearer`) must be one this site gave
+    for its `/mcp` address with the identity permission, as `RegentOAuth`
+    checks it, and spends its account's budget. While the app's own identity
+    is paired with that account, the person is here, and they allowed
+    Keyfleet's agent permission (`Keyfleet.OAuth.agent_scope/0`), the actor is
+    that paired agent, as an agent signing its own requests would be
+    (`KeyfleetWeb.Plugs.SignedAgent.actor_for/2`, with the token's principal
+    as its `connection`), so AshAi lists and runs the agent's tools under the
+    same policies and its identity tools besides. Its syncs wait for news
+    under its account, since every person's Claude calls from the same
+    servers. Otherwise the app is the actor (`Keyfleet.Actors.ConnectedApp`)
+    and has its identity tools only. Each app has its own identity, so an app
+    pairs only with a code its person gives it and never takes another app's
+    pairing. The budget is spent first. The identity's wallet is read from the
+    sign-in server once per account and app and kept
+    (`Keyfleet.Agents.HostedAddress`); while it or the pairing can't be read
+    the call is refused (`identity_unavailable`), and the next call asks
+    again. Any other token is asked to connect again, with the
+    `WWW-Authenticate` challenge naming this site's sign-in and both
+    permissions. While connecting apps is off, a token is refused.
+  - Both together are refused as `ambiguous_credentials`.
+  - Neither is refused: while connecting apps is on, as `connection_required`
+    with the challenge, so an app such as Claude starts its sign-in on its first
+    request; while it is off, as `agent_auth_required`.
 
-  A request with neither, or with a token this site didn't give, is asked to
-  connect (`connection_required`), with the `WWW-Authenticate` challenge
-  naming this site's sign-in and both permissions, so an app such as Claude
-  starts its sign-in on its first request.
+  A paired agent's pairing, the signing agent's or the connected app's, is read
+  again just before the answer leaves, and an answer whose pairing ended or
+  changed hands meanwhile is replaced (`agent_not_paired`), so it never carries
+  the former person's data.
 
-  Each answer is private and never kept (`cache-control: private, no-store`).
-  Refusals answer `{"error": {"code", "message", "hint"}}`, the site's one
-  shape; what a tool itself refuses comes back as the tool's error, in the
-  same shape (`KeyfleetWeb.ToolErrors`).
+  Each answer is private and never kept (`cache-control: private, no-store`,
+  set as the answer leaves, so it stands over AshAi's own `no-cache` on a
+  streamed answer). Refusals answer `{"error": {"code", "message", "hint"}}`,
+  the site's one shape; what a tool itself refuses comes back as the tool's
+  error, in the same shape (`KeyfleetWeb.ToolErrors`). Which way each request
+  came in is counted as `[:keyfleet, :mcp, :auth]`.
   """
 
   @behaviour Plug
@@ -69,40 +78,54 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
 
   import Plug.Conn
 
+  alias Keyfleet.Accounts.RequestRateLimiter
   alias Keyfleet.Actors.{Agent, ConnectedApp, Human}
   alias Keyfleet.Agents.HostedAddress
-  alias KeyfleetWeb.ClientAddress
+  alias KeyfleetWeb.{ClientAddress, PublicDocuments}
   alias KeyfleetWeb.Plugs.SignedAgent
-  alias KeyfleetWeb.PublicDocuments
+  alias RegentAgentAccess.RateLimit
+  alias RegentHttp.UnexpectedFailure
 
   @impl true
   def init(opts), do: opts
 
+  @doc """
+  Counts the request against its address before the body is read. One with a
+  token waits for the token's check, unless its address has spent its 120.
+  """
+  def limit_address(conn) do
+    address = address()
+
+    if get_req_header(conn, "authorization") == [] or spent?(conn, address),
+      do: RateLimit.call(conn, address),
+      else: conn
+  end
+
+  defp spent?(conn, %{policy: policy, limit: limit, window: window, key: key}),
+    do: RequestRateLimiter.spent?({policy, key.(conn)}, limit, window)
+
   @impl true
   def call(conn, _opts) do
-    conn = put_resp_header(conn, "cache-control", "private, no-store")
+    conn = register_before_send(conn, &put_resp_header(&1, "cache-control", "private, no-store"))
 
     cond do
-      not Keyfleet.OAuth.enabled?() ->
-        refuse(conn, "not_found")
-
       conn.query_string != "" ->
-        refuse(conn, "unsupported_query")
+        refuse(conn, :none, "unsupported_query")
 
       conn.path_info != ["mcp"] ->
-        refuse(conn, "not_found")
+        refuse(conn, :none, "not_found")
 
       conn.method != "POST" ->
-        conn |> put_resp_header("allow", "POST") |> refuse("method_not_allowed")
+        conn |> put_resp_header("allow", "POST") |> refuse(:none, "method_not_allowed")
 
       not own_origin?(conn) ->
-        refuse(conn, "origin_not_allowed")
+        refuse(conn, :none, "origin_not_allowed")
 
       not json?(conn) ->
-        refuse(conn, "unsupported_media_type")
+        refuse(conn, :none, "unsupported_media_type")
 
       is_list(conn.body_params["_json"]) ->
-        refuse(conn, "batch_not_supported")
+        refuse(conn, :none, "batch_not_supported")
 
       true ->
         caller(conn)
@@ -110,7 +133,16 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   end
 
   @doc false
-  def account(conn), do: conn.private.mcp_principal.subject
+  def account(conn), do: Ash.PlugHelpers.get_actor(conn).principal.subject
+
+  defp caller(conn) do
+    case {Siwa.AgentAuthPlug.signed_request?(conn), get_req_header(conn, "authorization")} do
+      {true, [_ | _]} -> refuse(conn, :both, "ambiguous_credentials")
+      {true, []} -> agent(conn)
+      {false, [_ | _] = token} -> connected_app(conn, token)
+      {false, []} -> no_one(conn)
+    end
+  end
 
   defp own_origin?(conn) do
     case get_req_header(conn, "origin") do
@@ -127,37 +159,16 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     end
   end
 
-  # A token makes the request a connected app's; without one, a signature
-  # makes it the agent's own.
-  defp caller(conn) do
-    cond do
-      get_req_header(conn, "authorization") != [] -> connected_app(conn)
-      Siwa.AgentAuthPlug.signed_request?(conn) -> signed_agent(conn)
-      true -> connect(conn)
-    end
-  end
-
-  defp connected_app(conn) do
-    with ["Bearer " <> bearer] <- get_req_header(conn, "authorization"),
-         {:ok, principal} <-
-           RegentOAuth.verify(bearer, RegentOAuth.resource(), RegentMCPAgents.identity_scope()) do
-      conn
-      |> put_private(:mcp_principal, principal)
-      |> RegentAgentAccess.RateLimit.call(budget())
-      |> as_connected_app(principal)
-    else
-      _no_token_of_ours -> connect(conn)
-    end
-  end
-
   # The agent the signature names, admitted as a signed request is.
-  defp signed_agent(conn) do
-    Siwa.AgentAuthPlug.call(conn,
+  defp agent(conn) do
+    conn
+    |> Siwa.AgentAuthPlug.call(
       client: Keyfleet.SiwaBroker,
       hooks: __MODULE__,
       audience: "keyfleet",
       body: :always
     )
+    |> counted(:siwa_request)
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
@@ -180,47 +191,58 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     conn |> put_status(status) |> Phoenix.Controller.json(body) |> halt()
   end
 
-  # The app's paired identity, when the person allowed it to work here as that
-  # agent; the app itself otherwise. Only the token's own account chooses the
-  # identity, and only a pairing with that same account, whose person is
-  # here, counts.
-  defp as_connected_app(%{halted: true} = conn, _principal), do: conn
-
-  defp as_connected_app(conn, principal) do
-    if Keyfleet.OAuth.agent_scope() in principal.scopes,
-      do: as_agent(conn, principal),
-      else: Ash.PlugHelpers.set_actor(conn, %ConnectedApp{principal: principal})
+  defp connected_app(conn, token) do
+    with true <- Keyfleet.OAuth.enabled?(),
+         ["Bearer " <> bearer] <- token,
+         {:ok, principal} <-
+           RegentOAuth.verify(bearer, RegentOAuth.resource(), RegentMCPAgents.identity_scope()) do
+      conn
+      |> Ash.PlugHelpers.set_actor(%ConnectedApp{principal: principal})
+      |> spend(connected_address())
+      |> spend(budget())
+      |> as_paired_agent(principal)
+      |> counted(:site_oauth)
+    else
+      false -> refuse(conn, :site_oauth, "delegated_access_not_enabled")
+      _not_this_sites -> refuse(conn, :site_oauth, &challenge/1)
+    end
   end
 
-  defp as_agent(conn, %{subject: subject} = principal) do
-    case hosted_agent(principal) do
-      {:ok, %Agent{privy_user_id: ^subject, pairing: %Human{}} = agent} ->
+  defp spend(%{halted: true} = conn, _budget), do: conn
+  defp spend(conn, budget), do: RateLimit.call(conn, budget)
+
+  # Within its account's budget, the app calls as its paired identity when the
+  # person allowed it to work here as that agent; as itself otherwise. Only the
+  # token's own account chooses the identity, and only a pairing with that same
+  # account, whose person is here, counts. An identity or pairing that can't be
+  # read is refused, never taken for an unpaired one.
+  defp as_paired_agent(%{halted: true} = conn, _principal), do: conn
+
+  defp as_paired_agent(conn, %{subject: subject} = principal) do
+    with true <- Keyfleet.OAuth.agent_scope() in principal.scopes,
+         {:ok, address} <- HostedAddress.read(principal),
+         {:ok, %Agent{privy_user_id: ^subject, pairing: %Human{}} = agent} <-
+           SignedAgent.actor_for(address, principal) do
+      conn
+      |> Ash.PlugHelpers.set_actor(agent)
+      |> Ash.PlugHelpers.set_context(%{waiter: {:mcp, subject}})
+      |> register_before_send(&recheck(&1, agent))
+    else
+      false ->
         conn
-        |> Ash.PlugHelpers.set_actor(agent)
-        |> Ash.PlugHelpers.set_context(%{waiter: {:mcp, subject}})
-        |> register_before_send(&recheck(&1, agent))
 
-      # Paired with no one, with someone else, or with a person not here yet.
+      # Paired with someone else, or with a person not here yet.
       {:ok, _not_this_persons} ->
-        Ash.PlugHelpers.set_actor(conn, %ConnectedApp{principal: principal})
+        conn
 
-      {:error, code} ->
-        refuse(conn, code)
-    end
-  end
+      {:error, :not_paired} ->
+        conn
 
-  defp hosted_agent(principal) do
-    case HostedAddress.fetch(principal) do
-      {:ok, address} -> paired(address, principal)
-      {:error, _refused} -> {:error, "siwa_request_failed"}
-    end
-  end
+      {:error, :unavailable} ->
+        refusal(conn, "identity_unavailable")
 
-  defp paired(address, principal) do
-    case SignedAgent.actor_for(address, principal) do
-      {:ok, agent} -> {:ok, agent}
-      {:error, :not_paired} -> {:ok, :not_paired}
-      {:error, _unread} -> {:error, "pairing_unavailable"}
+      {:error, error} ->
+        conn |> UnexpectedFailure.log(error) |> refusal("identity_unavailable")
     end
   end
 
@@ -240,8 +262,8 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
       {:error, :not_paired} ->
         replace(conn, "agent_not_paired")
 
-      {:error, _unread} when conn.status in 200..299 ->
-        replace(conn, "pairing_unavailable")
+      {:error, error} when conn.status in 200..299 ->
+        conn |> UnexpectedFailure.log(error) |> replace("pairing_unavailable")
 
       {:error, _unread} ->
         conn
@@ -261,16 +283,35 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     |> put_resp_content_type("application/json")
   end
 
-  defp connect(conn) do
+  defp no_one(conn) do
+    if Keyfleet.OAuth.enabled?(),
+      do: refuse(conn, :none, &challenge/1),
+      else: refuse(conn, :none, "agent_auth_required")
+  end
+
+  defp challenge(conn) do
     conn
     |> put_resp_header(
       "www-authenticate",
       RegentOAuth.challenge(Enum.join(RegentOAuth.scopes(), " "))
     )
-    |> refuse("connection_required")
+    |> refusal("connection_required")
   end
 
-  defp refuse(conn, code) do
+  # Refused before any token was checked. A request with one spends its address's
+  # 120 here, as one without did in the endpoint.
+  defp refuse(conn, mode, code) when is_binary(code), do: refuse(conn, mode, &refusal(&1, code))
+
+  defp refuse(conn, mode, refusal) do
+    conn =
+      if get_req_header(conn, "authorization") == [],
+        do: conn,
+        else: RateLimit.call(conn, address())
+
+    if conn.halted, do: counted(conn, mode), else: conn |> refusal.() |> counted(mode)
+  end
+
+  defp refusal(conn, code) do
     {status, message, hint} = words(code)
 
     conn
@@ -279,40 +320,61 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     |> halt()
   end
 
-  defp words("not_found"),
-    do: {404, "There is nothing at this address.", "Keyfleet's connector is at #{url()} alone."}
-
   defp words("unsupported_query"),
     do:
-      {400, "The connector's address takes no query string.",
-       "Send the same request to #{url()} with nothing after it."}
+      {400, "The MCP address takes no query string.",
+       "Send the same request to #{url()} with nothing after it. #{guide()}"}
+
+  defp words("not_found"),
+    do:
+      {404, "There is nothing at this address.",
+       "The hosted MCP server is at #{url()} alone. #{guide()}"}
 
   defp words("method_not_allowed"),
     do:
-      {405, "The connector's address takes POST only.",
-       "Send each JSON-RPC call as a POST to #{url()}."}
+      {405, "The MCP address takes POST only.",
+       "Send each JSON-RPC call as a POST to #{url()}. #{guide()}"}
 
   defp words("origin_not_allowed"),
     do:
-      {403, "A page on another site can't call this address.",
-       "Call it from your app, not from a web page on another site."}
+      {403, "A page on another site can't call this server.",
+       "Call it from your agent or app, not from a web page on another site. #{guide()}"}
 
   defp words("unsupported_media_type"),
     do:
-      {415, "The connector's address takes a JSON body only.",
-       "Send one JSON-RPC call with Content-Type: application/json."}
+      {415, "The MCP address takes a JSON body only.",
+       "Send one JSON-RPC call with Content-Type: application/json. #{guide()}"}
 
   defp words("batch_not_supported"),
-    do: {400, "Send one call a request.", "Send each call in its own request."}
+    do:
+      {400, "Send one call a request.",
+       "Send each call in its own request, each signed on its own, then send the request again. #{guide()}"}
 
-  defp words("siwa_request_failed"), do: site_words(503, "siwa_request_failed")
-  defp words("pairing_unavailable"), do: site_words(503, "pairing_unavailable")
-  defp words("agent_not_paired"), do: site_words(403, "agent_not_paired")
+  defp words("ambiguous_credentials"),
+    do:
+      {401, "Send your agent's signature or a connected app's token, not both.",
+       "Leave out the Authorization header to call as your agent, or the signature headers to call as the connected app, then send the request again."}
+
+  defp words("delegated_access_not_enabled"),
+    do:
+      {401, "This site doesn't take a connected app's token yet.",
+       "Call as your agent instead: #{sign_in_how()}"}
 
   defp words("connection_required"),
     do:
-      {401, "Connect Keyfleet to use this address.",
-       "Add #{url()} to your app's connectors, such as Claude's, sign in to Keyfleet and allow both permissions."}
+      {401, "Connect this site, or sign the request as your agent.",
+       "Add #{url()} to your app's connectors, such as Claude's, and approve it on this site, or #{sign_in_how()}"}
+
+  defp words("identity_unavailable"),
+    do:
+      {503, "This connection's identity could not be read right now.",
+       "Try again in a minute. #{guide()}"}
+
+  defp words("agent_auth_required"),
+    do: {401, "This server needs your agent's signature.", sign_in_how()}
+
+  defp words("agent_not_paired"), do: site_words(403, "agent_not_paired")
+  defp words("pairing_unavailable"), do: site_words(503, "pairing_unavailable")
 
   # The words the site's signed requests give the same refusal.
   defp site_words(status, code) do
@@ -322,18 +384,38 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
 
   defp url, do: PublicDocuments.url("/mcp")
 
-  # 120 requests a minute for each connected account, after the endpoint's
-  # ceiling for the connector's addresses. Read on each request, as the
-  # endpoint's budgets are.
-  defp budget do
-    budget = Application.fetch_env!(:keyfleet, :mcp_rate_limit)
+  defp guide, do: "The agent guide at #{PublicDocuments.url("/agents.md")} has the details."
 
-    RegentAgentAccess.RateLimit.init(
-      policy: "mcp",
+  defp sign_in_how,
+    do:
+      "sign each call with your agent's own key, as you sign your requests under /api/v1/agent, as the guide at #{PublicDocuments.url("/agents.md")} sets out, then send the request again."
+
+  # 120 requests a minute for each address until a token is checked.
+  defp address, do: budget("mcp_address", :mcp_address_rate_limit, &ClientAddress.key/1)
+
+  # 600 requests a minute for each address once a connected app's token is checked.
+  defp connected_address,
+    do: budget("mcp_connected_address", :mcp_connected_address_rate_limit, &ClientAddress.key/1)
+
+  # 120 requests a minute for each connected account, after its address's ceiling.
+  defp budget, do: budget("mcp", :mcp_rate_limit, &__MODULE__.account/1)
+
+  defp budget(policy, name, key) do
+    budget = Application.fetch_env!(:keyfleet, name)
+
+    RateLimit.init(
+      policy: policy,
       limit: Keyword.fetch!(budget, :limit),
       window: Keyword.fetch!(budget, :window_seconds),
-      admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
-      key: &__MODULE__.account/1
+      admit: &RequestRateLimiter.admit/3,
+      key: key
     )
+  end
+
+  # Accepted, or refused here, by the agent's sign-in or by the account's budget.
+  defp counted(conn, mode) do
+    outcome = if conn.halted, do: :refused, else: :accepted
+    :telemetry.execute([:keyfleet, :mcp, :auth], %{count: 1}, %{mode: mode, outcome: outcome})
+    conn
   end
 end

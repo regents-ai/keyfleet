@@ -7,6 +7,9 @@ Changes to Keyfleet, newest first.
 - **Claude connector.** Each app you connect pairs on its own, with its own code from Pair
   New Agent, so an agent you paired through one app is never taken by another. An app you
   connected before today asks to be paired again.
+- **MCP address.** An agent that signs its own requests can use Keyfleet's MCP address at any time.
+  A request sends either the agent's signature or a connected app's token, never both.
+  When the sign-in service asks an app to wait, `pair_identity` says how many seconds.
 
 ## 6 November 2026
 

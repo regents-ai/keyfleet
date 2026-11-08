@@ -7055,3 +7055,43 @@ Credits removal), so the connector's tools follow the Credits removal.
   removed addresses, so the guide-routes test no longer asks the router for them; the
   agent window's tests (`ShellLiveTest` and the `account_agents` browser walk) no longer
   look for the removed spending line.
+
+## 2026-11-08 — The template's MCP admission, cache and scopes migration
+
+The coordinator's review of `151423b5` asked for the template's own pieces (ash-template
+v182 `e0b6ca83`) in place of Keyfleet's hand-built ones.
+
+- `KeyfleetWeb.Plugs.McpAgent` is the template's, adapted only to Keyfleet's
+  `SignedAgent`, its actors and its refusal words. Every request carries exactly one
+  credential: a signature and a token together answer 401 `ambiguous_credentials`. With
+  the connector off, a token answers 401 `delegated_access_not_enabled`, a request with
+  neither 401 `agent_auth_required`, and a signed agent is served (before this `/mcp`
+  answered 404 while off). Every tool a signed or paired agent had is kept, the
+  `chain_*` tools included.
+- Budgets: `McpAgent.limit_address/1` replaces the endpoint's connector ceiling
+  (`:connector_rate_limit`, policy `connector`, 6,000 a minute, removed). Each address
+  has 120 requests a minute (`mcp_address`) until a token is checked, and once it has
+  spent them its next token is refused before `RegentOAuth` looks it up
+  (`Keyfleet.Accounts.RequestRateLimiter.spent?/3`). A checked token spends its
+  address's 600 (`mcp_connected_address`), then its account's 120 (`mcp`).
+- `cache-control: private, no-store` is set as each answer leaves, so it stands over
+  AshAi's own header on a stream. Each request's way in is counted as
+  `[:keyfleet, :mcp, :auth]` (`keyfleet.mcp.auth.total`).
+- `Keyfleet.Agents.HostedAddress` is the template's Nebulex local cache
+  (`gc_interval` 12 hours, `max_size` 100,000), keyed by `{subject, client_id}`, keeping
+  only good answers; the hand-built GenServer and ETS table are gone. While the signer
+  can't be read, the call answers 503 `identity_unavailable` (was `siwa_request_failed`).
+- A signer's wait reaches the identity tools as `too_many_requests` with `retry_after`
+  (`Keyfleet.Agents.Connection.Refused` `wait:`).
+- Migration `20261108120000_oauth_client_scopes` gives every public PKCE app the
+  `regent.identity.manage` and `keyfleet.agent` scopes it lacks, insert-only, with a
+  five-second lock timeout, as the template's `20261029220000` does.
+- `RegentAgentAccess.Plug` answers `/mcp` errors in JSON, as `/api`'s.
+- `{{hosted_mcp}}` in llms.txt and agents.md always names `/mcp` for signed agents, and
+  adds the connected-app sentence while the connector is on.
+- Tests: the connector test adds both credentials, the switched-off answers, the
+  identity wallet asked once per account and app, the signer down and its first good
+  answer kept, the signer's wait, the address budgets (an untrusted token past 120 is
+  refused with no token lookup; a checked token's policies) and `private, no-store` on
+  a tool, a stream and refusals. `RateLimitTest` checks the MCP address budget apart from
+  `/api`'s. `OAuthClientScopesMigrationTest` runs the migration on a local database.

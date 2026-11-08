@@ -113,10 +113,11 @@ config :keyfleet, :code,
 config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds: 300
 
 # The same holds for the API budget: every case and the agent contract's own
-# server share the loopback address, and the same for the Claude connector's
-# ceiling. The rate-limit tests put the release budgets back.
+# server share the loopback address, and the same for the hosted MCP address's
+# budgets. The rate-limit tests put the release budgets back.
 config :keyfleet, :api_rate_limit, limit: 100_000, window_seconds: 60
-config :keyfleet, :connector_rate_limit, limit: 100_000, window_seconds: 60
+config :keyfleet, :mcp_address_rate_limit, limit: 100_000, window_seconds: 60
+config :keyfleet, :mcp_connected_address_rate_limit, limit: 100_000, window_seconds: 60
 
 # And for the early-access form. Its own test puts the release 5/600 back.
 config :keyfleet, :early_signup_rate_limit, limit: 100_000, window_seconds: 600

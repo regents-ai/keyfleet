@@ -63,7 +63,7 @@ defmodule Keyfleet.Application do
       # Who was let into a fleet's notebooks or code lately; a key changing
       # hands clears its holder at once, through PubSub.
       Keyfleet.AccessCache,
-      # The wallet of each connected account's hosted identity, read once.
+      # The wallet of each connected app's own identity, asked for once.
       Keyfleet.Agents.HostedAddress,
       # Each paired agent's activity, kept a few minutes for the account menu,
       # and the reads that fetch it.

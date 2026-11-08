@@ -145,6 +145,7 @@ defmodule KeyfleetWeb.Telemetry do
   defp metrics do
     [
       counter("keyfleet.privy.browser_failure.total", tags: [:reason]),
+      counter("keyfleet.mcp.auth.total", tags: [:mode, :outcome]),
       counter("keyfleet.privy.session_refused.total", tags: [:stage, :reason]),
       counter("keyfleet.session_bootstrap.rate_limited.total", tags: [:source]),
       counter("keyfleet.session_authority.absent_row.total"),
