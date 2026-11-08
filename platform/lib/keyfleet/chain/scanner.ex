@@ -287,6 +287,7 @@ defmodule Keyfleet.Chain.Scanner do
 
   defp make_record({:ownership, epoch}), do: Keys.record_epoch(epoch, @record_opts)
   defp make_record({:reveal, reveal}), do: Keys.record_reveal(reveal, @record_opts)
+  defp make_record({:reveal_expiry, expiry}), do: Keys.record_reveal_expiry(expiry, @record_opts)
 
   defp make_record({:proposal, proposal}), do: Proposals.record_proposal(proposal, @record_opts)
   defp make_record({:ballot, vote}), do: Proposals.record_vote(vote, @record_opts)
@@ -333,15 +334,17 @@ defmodule Keyfleet.Chain.Scanner do
   end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
-  # Every key revealed, sold, changing hands, issuing or ending a shard,
-  # turning its agent voting on or off, or having its edits restricted or
-  # allowed in the pass is named once.
+  # Every key revealed or whose draw's wait was ended, sold, changing hands,
+  # issuing or ending a shard, turning its agent voting on or off, or having
+  # its edits restricted or allowed in the pass is named once.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
 
     revealed =
       if now.reveal_seq > before.reveal_seq,
-        do: Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system),
+        do:
+          Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system) ++
+            Keys.reveal_expiries_recorded_since!(fleet_id, before.reveal_seq, actor: @system),
         else: []
 
     owned =

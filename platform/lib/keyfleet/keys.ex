@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
-  Key ownership, reveals, shards, agent voting, presence and edit
-  restrictions projected from contract events, and which Keys have
+  Key ownership, reveals and ended draw waits, shards, agent voting, presence
+  and edit restrictions projected from contract events, and which Keys have
   their card picture.
   """
   use Ash.Domain
@@ -54,6 +54,19 @@ defmodule Keyfleet.Keys do
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
       define :reveals_of_keys, action: :of_keys, args: [:fleet_id, :token_ids]
+    end
+
+    resource Keyfleet.Keys.KeyRevealExpiry do
+      define :record_reveal_expiry, action: :record
+
+      define :get_reveal_expiry,
+        action: :read,
+        get_by: [:fleet_id, :token_id],
+        not_found_error?: false
+
+      define :reveal_expiries_recorded_since,
+        action: :recorded_since,
+        args: [:fleet_id, :after_seq]
     end
 
     resource Keyfleet.Keys.KeyPicture do

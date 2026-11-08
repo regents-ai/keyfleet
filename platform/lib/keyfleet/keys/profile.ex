@@ -142,6 +142,7 @@ defmodule Keyfleet.Keys.Profile do
     holder = current.owner_wallet
     activity = activity(fleet_id, token_id, holder)
     thread = latest_thread(fleet_id, token_id, activity.wall_head)
+    traits = traits(fleet, token_id)
 
     held =
       Keys.keys_held_in_fleet!(fleet_id, [holder], query: [limit: @listed])
@@ -154,7 +155,8 @@ defmodule Keyfleet.Keys.Profile do
       image: Metadata.image(fleet, token_id),
       level: level(fleet_id, token_id),
       issue_price: Presets.issue_price(fleet_id, token_id),
-      traits: traits(fleet, token_id),
+      traits: traits,
+      draw_ended?: is_nil(traits) and Keys.get_reveal_expiry!(fleet_id, token_id) != nil,
       held_since: current.observed_at,
       holder: holder,
       posts_as: posts_as(fleet, token_id),
@@ -197,7 +199,8 @@ defmodule Keyfleet.Keys.Profile do
     do: if(Presets.levelled?(fleet_id), do: Presets.fibonacci_level_of(token_id))
 
   # Each trait the key's card has, in its fleet's order, with the share of
-  # keys that draw it; `nil` while the key is still revealing.
+  # keys that draw it; `nil` while the key is still revealing, or for good
+  # once the wait for its draw was ended (`draw_ended?`).
   defp traits(fleet, token_id) do
     case Keys.card_seed(fleet, token_id) do
       nil ->

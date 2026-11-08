@@ -192,6 +192,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
       image: key.image,
       level: key.level,
       traits: key.traits,
+      draw_ended: key.draw_ended?,
       holder: key.holder,
       held_since: key.held_since,
       changed_hands: key.changed_hands,
