@@ -437,8 +437,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # A key whose request for its random draw was turned down has no traits
-  # until someone asks again, which anyone may do. The chain says whether
-  # the draw is on its way or done, and the button says so while it is.
+  # until someone asks again, which anyone may do. A draw that hasn't come 24
+  # hours after its request was accepted holds the draws' coordinator until
+  # someone ends the wait, which anyone may do too; the key then never gets
+  # traits. The chain says whether the draw is on its way, done or ended, and
+  # each button says so while it can't be pressed.
   defp reveal(assigns) do
     ~H"""
     <section
@@ -449,7 +452,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-reveal-title">
         Traits
         <Regent.Primitives.tip id="key-profile-reveal-tip" label="About drawing traits">
-          A Key’s traits come from a random draw. If the request for it was turned down, anyone can ask again.
+          A Key’s traits come from a random draw. If the request for it was turned down, anyone can ask again. If the draw hasn’t come 24 hours after it was asked for, anyone can end the wait, and the Key then never gets traits.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
@@ -465,6 +468,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="reveal" id="key-profile-reveal-again">
             Ask again
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            panel={panel}
+            step="expire_reveal"
+            id="key-profile-reveal-expire"
+            variant="secondary"
+          >
+            End the wait
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>

@@ -514,6 +514,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/keys/:token_id/shards/end", AgentChainController, :end_shard
     post "/fleets/:fleet_id/keys/:token_id/club_claim", AgentChainController, :club_claim
     post "/fleets/:fleet_id/keys/:token_id/reveal", AgentChainController, :reveal
+    post "/fleets/:fleet_id/keys/:token_id/expire_reveal", AgentChainController, :expire_reveal
     post "/fleets/:fleet_id/graph/board", AgentGraphController, :board
     post "/fleets/:fleet_id/graph/view", AgentGraphController, :view
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object

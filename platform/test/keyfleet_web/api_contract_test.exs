@@ -54,6 +54,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/send",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/unblock",
+             "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/mute",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/reveal",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/shards/end",

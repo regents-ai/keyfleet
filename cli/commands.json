@@ -631,6 +631,33 @@
       ]
     },
     {
+      "command": "keys expire-reveal <fleet> <key>",
+      "description": "Get the transaction that ends the wait for a Key's random draw that hasn't come 24 hours after its request was accepted, for your wallet to send. Anyone may. It can't be undone: the Key then never gets traits.",
+      "operation_id": "buildExpireReveal",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal",
+      "webmcp": "chain_expire_reveal",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "integer",
+          "in": "path",
+          "field": "token_id",
+          "minimum": 1,
+          "description": "The Key whose wait to end."
+        }
+      ]
+    },
+    {
       "command": "shards issue <fleet>",
       "description": "Get the transaction that issues a shard of each Key you name to an agent's wallet, for the days you name, for your wallet to send. Issuing again to a wallet that holds one renews it from now. Only the Keys' holder may send it. Pipe {\"keys\": \"3, 7\", \"wallet\": \"0x...\", \"days\": \"30\"} on stdin.",
       "operation_id": "buildIssueShard",

@@ -214,44 +214,79 @@ defmodule Keyfleet.WalletStepsTest do
     end
   end
 
-  describe "asking again for a key's draw" do
-    defp draw(fleet, seed, requested_at, deck_hash \\ "0x" <> String.duplicate("d", 64)) do
+  describe "asking again for a key's draw, and ending its wait" do
+    defp draw(fleet, seed, requested_at, opts \\ []) do
+      deck_hash = Keyword.get(opts, :deck_hash, "0x" <> String.duplicate("d", 64))
+
       ChainViews.put!([
         {fleet.keys_address, "revealSeed(uint256)", [id(4)], {"bytes32", [seed]}},
         uint(fleet.keys_address, "revealRequestedAt(uint256)", [id(4)], requested_at),
+        {fleet.keys_address, "revealExpired(uint256)", [id(4)],
+         {"bool", [Keyword.get(opts, :expired?, false)]}},
         {fleet.keys_address, "fleet(uint256)", [fleet.chain_fleet_id],
          {"address,uint8,uint32,uint32,bytes32", [fleet.manager_address, 0, 1, 1, deck_hash]}}
       ])
     end
 
+    @zero "0x" <> String.duplicate("0", 64)
+
     test "anyone may ask while no draw was asked for or made", %{fleet: fleet} do
-      zero = "0x" <> String.duplicate("0", 64)
-      draw(fleet, zero, 0)
+      draw(fleet, @zero, 0)
       built = build!(:reveal, token_id: 4)
-      assert built.figures.blocked == %{}
+      assert names(built) == ["reveal", "expire_reveal"]
+      assert built.figures.blocked == %{"expire_reveal" => :no_draw_waiting}
       assert steps(built)["reveal"].to == fleet.keys_address
 
       assert steps(built)["reveal"].data ==
                BuilderCode.append(Call.encode("requestReveal(uint256)", [id(4)]))
 
-      draw(fleet, zero, @now)
-      assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :reveal_requested}
+      draw(fleet, "0x" <> String.duplicate("1", 64), @now - 100)
 
-      draw(fleet, "0x" <> String.duplicate("1", 64), @now)
-      assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :revealed}
+      assert build!(:reveal, token_id: 4).figures.blocked ==
+               %{"reveal" => :revealed, "expire_reveal" => :revealed}
+    end
+
+    test "a waiting draw's wait may be ended from 24 hours after it was asked for",
+         %{fleet: fleet} do
+      asked = @now - 86_400 + 1
+      draw(fleet, @zero, asked)
+      built = build!(:reveal, token_id: 4)
+
+      assert built.figures.blocked == %{
+               "reveal" => :reveal_requested,
+               "expire_reveal" => {:expire_from, DateTime.from_unix!(@now + 1)}
+             }
+
+      assert steps(built)["expire_reveal"].to == fleet.keys_address
+
+      assert steps(built)["expire_reveal"].data ==
+               BuilderCode.append(Call.encode("expireReveal(uint256)", [id(4)]))
+
+      draw(fleet, @zero, @now - 86_400)
+      assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :reveal_requested}
+    end
+
+    test "a key whose wait was ended never draws", %{fleet: fleet} do
+      draw(fleet, @zero, @now - 90_000, expired?: true)
+
+      assert build!(:reveal, token_id: 4).figures.blocked ==
+               %{"reveal" => :reveal_expired, "expire_reveal" => :reveal_expired}
     end
 
     test "nothing is asked while the fleet's deck isn't set on the chain", %{fleet: fleet} do
-      zero = "0x" <> String.duplicate("0", 64)
-      draw(fleet, zero, 0, zero)
-      assert build!(:reveal, token_id: 4).figures.blocked == %{"reveal" => :deck_not_set}
+      draw(fleet, @zero, 0, deck_hash: @zero)
+
+      assert build!(:reveal, token_id: 4).figures.blocked ==
+               %{"reveal" => :deck_not_set, "expire_reveal" => :no_draw_waiting}
     end
 
     test "a key dealt its card by number never draws", %{fleet: fleet} do
       assert fleet.deck_size >= 1
       ChainViews.put!([])
       built = build!(:reveal, token_id: 1)
-      assert built.figures.blocked == %{"reveal" => :dealt_by_number}
+
+      assert built.figures.blocked ==
+               %{"reveal" => :dealt_by_number, "expire_reveal" => :dealt_by_number}
 
       assert steps(built)["reveal"].data ==
                BuilderCode.append(Call.encode("requestReveal(uint256)", [id(1)]))
