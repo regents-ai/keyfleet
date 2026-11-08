@@ -347,9 +347,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(conn, "#{@list}/1")
 
       assert cell_texts(view, "#{times} dt") == [
-               "End of voting",
-               "Carry out from",
-               "Carry out before"
+               "Voting ends",
+               "Carry-out starts",
+               "Carry-out ends"
              ]
 
       assert cell_texts(view, "#{times} dd") == [
@@ -359,7 +359,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ]
 
       {:ok, view, _html} = open(conn, "#{@list}/2")
-      assert cell_texts(view, "#{times} dt") == ["End of voting"]
+      assert cell_texts(view, "#{times} dt") == ["Voting ends"]
       assert cell_texts(view, "#{times} dd") == ["8 November 2026 at 13:20 UTC"]
     end
 

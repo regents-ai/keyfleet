@@ -6,6 +6,8 @@ Changes to Keyfleet, newest first.
 
 - **Present.** On the Proposals tab your idle Keys come first, above Mark present. Your
   present Keys fold into a list under it, so the proposals stay near the top.
+- **Proposal times.** A proposal's page names its three times Voting ends, Carry-out
+  starts and Carry-out ends, in the order they come.
 
 ## 6 November 2026
 
