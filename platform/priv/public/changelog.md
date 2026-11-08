@@ -8,6 +8,11 @@ Changes to Keyfleet, newest first.
   present Keys fold into a list under it, so the proposals stay near the top.
 - **Proposal times.** A proposal's page names its three times Voting ends, Carry-out
   starts and Carry-out ends, in the order they come.
+- **Projects.** On a project's page, titles and workspace links are links only for people who
+  can open the fleet's workspace.
+- **Start.** keyfleet.ai/agent and keyfleet.ai/start open the Agents page.
+- **Draws.** When a Key's draw has not come 24 hours after it was asked for, anyone can end
+  the wait from the Key's page. The Key then never gets traits, and its page says so.
 
 ## 6 November 2026
 
