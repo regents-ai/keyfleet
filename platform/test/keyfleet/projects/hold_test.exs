@@ -2,6 +2,8 @@ defmodule Keyfleet.Projects.HoldTest do
   use ExUnit.Case, async: false
   use Oban.Testing, repo: Keyfleet.Repo
 
+  require Ash.Query
+
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Code
@@ -77,6 +79,25 @@ defmodule Keyfleet.Projects.HoldTest do
     assert_received :created
     assert_received {:deleted, "/api/v1/repos/" <> _}
     assert {:ok, nil} = Code.get_repository(repository, actor: @system)
+  end
+
+  # A project deleted while its notebook space is made: the space job's late
+  # write is refused, so the deleted project keeps no space and queues no
+  # roster run. The delete run finds that space by its tag.
+  test "a notebook space made after its project was deleted is not recorded" do
+    started = Projects.start_project!(@fleet, 20, "late", "Late", actor: owner(20))
+    Projects.archive_project!(@fleet, 20, actor: owner(20))
+    Projects.delete_project!(@fleet, 20, "late", actor: owner(20))
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+             Projects.record_space(started, "proj-late", actor: @system)
+
+    refute_enqueued(worker: Keyfleet.Notebooks.Roster)
+
+    assert [%{state: :deleted, hub_project_id: nil}] =
+             Keyfleet.Projects.Project
+             |> Ash.Query.filter(fleet_id == ^@fleet and name == "late")
+             |> Ash.read!(actor: @system)
   end
 
   # General keeps the fleet's starting goals, first notebooks and first
