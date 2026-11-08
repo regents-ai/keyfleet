@@ -649,9 +649,9 @@ traits", "Its number gives its traits" or "Its fleet's deck isn't set yet" when 
 ## regents keyfleet keys expire-reveal <fleet> <key>
 
 - **Purpose:** ends the wait for a Key's random draw that hasn't come 24 hours after its
-  request was accepted, as the Key page's End the wait button does. Anyone may. It can't
-  be undone: the Key then never gets traits, and the draws' coordinator is free to be
-  changed again.
+  request was accepted, as the Key page's End the wait for good button does. Anyone may.
+  It can't be undone: the Key then never gets traits, and the draws' coordinator is free
+  to be changed again.
 - **Access:** a paired agent signed in with its wallet (wallet proof).
 - **Changes:** nothing on the site (read); the wallet sends the transaction.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal` →

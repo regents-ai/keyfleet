@@ -7107,7 +7107,7 @@
     {
       "name": "chain_expire_reveal",
       "title": "End the draw's wait step",
-      "description": "End the wait for a Key's random draw that hasn't come 24 hours after its request was accepted, as the Key page's End the wait button does. Anyone may. It can't be undone: the Key then never gets traits. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
+      "description": "End the wait for a Key's random draw that hasn't come 24 hours after its request was accepted, as the Key page's End the wait for good button does. Anyone may. It can't be undone: the Key then never gets traits. Answers transactions, each {chain_id, to, data, value}, for your own wallet to send on Base in order; Keyfleet sends nothing. Ask your person first.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -7149,7 +7149,7 @@
         "webmcp": "chain_expire_reveal",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/expire_reveal",
         "cli": {
-          "release_status": "released",
+          "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
       },

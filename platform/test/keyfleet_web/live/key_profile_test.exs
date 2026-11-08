@@ -320,7 +320,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       # No draw waits, so there is no wait to end.
       assert has_element?(view, "#key-profile-reveal-expire[data-onchain-step='expire_reveal']")
-      assert text(view, "#key-profile-reveal-expire") == "End the wait"
+      assert text(view, "#key-profile-reveal-expire") == "End the wait for good"
       assert has_element?(view, "#key-profile-reveal-expire[disabled]")
       assert text(view, "#key-profile-reveal-expire-why") == "No draw waiting"
 
@@ -380,7 +380,9 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-reveal-expire-why") == "From 16 Jan, 08:00 UTC"
     end
 
-    test "a draw that hasn't come in 24 hours offers anyone End the wait", %{conn: conn} do
+    test "a draw that hasn't come in 24 hours offers anyone End the wait for good", %{
+      conn: conn
+    } do
       signer = wallet("f")
       draw_answer(1)
 
