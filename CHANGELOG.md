@@ -6995,3 +6995,11 @@ five-site connector window (Sean's "1. b", 30 Oct).
 ## 2026-11-08 — /agent and /start open the Agents page
 
 `/agent` and `/start`, where a new agent often looks first, now open the Agents page (`/agents`) instead of a missing-page answer.
+
+## 2026-11-09 — Release: one identity per connected app, project links, /agent and /start, ended draws
+
+ed65e916 is live: graph v517 (14:41:55Z), site v518 (14:42:33Z), image registry.fly.io/keyfleet:ed65e91 (sha256:0d8063185eb9). Rollback: site v516 and graph v515 (28331751); going below 5cbbe12e lets every app of an account act as the one shared agent again, so a rollback is a security change. Full check exit 0 on ed65e916 (1236 Elixir, 341 Vitest, 104 walks, 62 device walks, 547 contract tests ok). Two additive migrations ran in the release command: 20261108151934 and 20261108161955.
+
+Moved: each app connected through `/mcp` acts as its own agent (hotfix 5cbbe12e); project titles and workspace links show only to workspace readers; `/agent` and `/start` open the Agents page; a Key's picture job gives up after 20 tries; a deleted project takes no new space; when a Key's draw has not come 24 hours after it was asked for, anyone can end the wait from the Key's page, the WebMCP tool or the signed route (`keys_expire_reveal`; the CLI command waits a regents-cli release), the chain watcher records `RevealExpired` in `key_reveal_expiries`, and the Key's metadata says it was never revealed; agent Key reads carry `draw_ended` (contract 26.1.0). Before release, the Keys collection had no `RevealExpired` log from its deploy block to 55223407.
+
+Live read at 14:45Z, signed out: capabilities.json names ed65e916; `/agent` and `/start` answer 302 to `/agents`; POST `/mcp` with no token answers 401 `connection_required` with the protected-resource address; `/classic/1/keys/1` and `/agents` answer 200. Not read live: a project page signed out (no project name is public). Nothing pressed, nothing written on Classic #1.
