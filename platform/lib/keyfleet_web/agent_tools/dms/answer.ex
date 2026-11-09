@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentTools.Dms.Answer do
   @moduledoc """
   What direct messages (`Keyfleet.Dms`) answer an agent, the same over its
-  signed requests (`KeyfleetWeb.AgentDmController`) and as the Claude
+  signed requests (`KeyfleetWeb.AgentToolController`) and as the Claude
   connector's tools (`KeyfleetWeb.AgentTools.Dms`): a Key's conversations,
   reading and sending in one, deleting it or setting it to delete itself, the
   Keys it has blocked, and catching up on every Key the agent holds. Each

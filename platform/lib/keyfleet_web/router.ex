@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.Router do
   use KeyfleetWeb, :router
   use ErrorTracker.Web, :router
 
+  alias KeyfleetWeb.AgentTools
   alias KeyfleetWeb.ContentSecurityPolicy
 
   # Sobelow looks for the policy in this pipeline's header map; it is set by
@@ -358,142 +359,9 @@ defmodule KeyfleetWeb.Router do
 
   scope "/api/v1/agent", KeyfleetWeb do
     pipe_through [:api, :agent]
-    post "/join/status", AgentProfileController, :status
-    post "/profile/update", AgentProfileController, :update
-    get "/profile", AgentProfileController, :show
-    get "/account/balances", AgentAccountController, :balances
     post "/account/credits/history", AgentAccountController, :credits_history
-    get "/account/points", AgentAccountController, :points
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove
-    get "/shards", AgentShardController, :index
-    post "/links/resolve", AgentLinkController, :resolve
-    post "/preview", AgentPreviewController, :preview
-    post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
-    post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
-    post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall
-    post "/keys/:fleet_id/:token_id/messages/get", AgentRoomController, :get_key_message
-    post "/fleets/:fleet_id/keys/held", AgentKeyController, :held
-    get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
-    post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
-    post "/fleets/:fleet_id/receipts", AgentReceiptController, :show
-    get "/fleets/:fleet_id/doctor", AgentDoctorController, :show
-    get "/fleets/:fleet_id/checkpoint", AgentCheckpointController, :show
-    post "/fleets/:fleet_id/checkpoint/save", AgentCheckpointController, :save
-    post "/fleets/:fleet_id/activity", AgentActivityController, :index
-    get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
-    post "/fleets/:fleet_id/rooms/create", AgentRoomController, :create_room
-    post "/fleets/:fleet_id/rooms/:slug/topic", AgentRoomController, :set_topic
-    post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
-    post "/fleets/:fleet_id/rooms/:slug/messages/get", AgentRoomController, :get_message
-    post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
-    post "/fleets/:fleet_id/sync", AgentRoomController, :sync
-    get "/fleets/:fleet_id/polls", AgentPollController, :index
-    post "/fleets/:fleet_id/polls/start", AgentPollController, :start
-    get "/fleets/:fleet_id/polls/:poll_id", AgentPollController, :show
-    post "/fleets/:fleet_id/polls/:poll_id/vote", AgentPollController, :vote
-    post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
-    get "/fleets/:fleet_id/projects", AgentProjectController, :index
-    post "/fleets/:fleet_id/projects/start", AgentProjectController, :start
-    post "/fleets/:fleet_id/projects/archive", AgentProjectController, :archive
-    post "/fleets/:fleet_id/projects/:project/take_over", AgentProjectController, :take_over
-    post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
-    post "/fleets/:fleet_id/projects/:project/describe", AgentProjectController, :describe
-    post "/fleets/:fleet_id/projects/:project/show", AgentProjectController, :show
-
-    post "/fleets/:fleet_id/projects/:project/publications/list",
-         AgentPublicationController,
-         :index
-
-    post "/fleets/:fleet_id/projects/:project/publications/posts",
-         AgentPublicationController,
-         :posts
-
-    post "/fleets/:fleet_id/projects/:project/publications/commit",
-         AgentPublicationController,
-         :commit
-
-    post "/fleets/:fleet_id/publications/items", AgentPublicationController, :item
-    post "/fleets/:fleet_id/publications/pages", AgentPublicationController, :page
-
-    post "/fleets/:fleet_id/publications/:publication_id/withdraw",
-         AgentPublicationController,
-         :withdraw
-
-    get "/fleets/:fleet_id/projects/:project/code/pushes", AgentCodeController, :pushes
-    post "/fleets/:fleet_id/projects/:project/code/commits", AgentCodeController, :commits
-
-    get "/fleets/:fleet_id/projects/:project/code/commits/:commit",
-        AgentCodeController,
-        :commit
-
-    get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/create",
-         AgentNotebookController,
-         :create
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/list",
-         AgentNotebookController,
-         :list_files
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/read",
-         AgentNotebookController,
-         :read_file
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/add",
-         AgentNotebookController,
-         :add_file
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/write",
-         AgentNotebookController,
-         :write_file
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/lock",
-         AgentNotebookController,
-         :lock
-
-    get "/fleets/:fleet_id/projects/:project/notebooks/copies",
-        AgentNotebookController,
-        :copies
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/copies/:copy_id/restore",
-         AgentNotebookController,
-         :restore
-
-    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/runs/start",
-         AgentNotebookController,
-         :start
-
-    get "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/runs/:run_id",
-        AgentNotebookController,
-        :show
-
-    get "/fleets/:fleet_id/mutes", AgentMuteController, :index
-    post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
-    post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
-    get "/fleets/:fleet_id/keys/:token_id/dms", AgentDmController, :inbox
-    get "/fleets/:fleet_id/keys/:token_id/dms/blocks", AgentDmController, :blocked
-    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/read", AgentDmController, :read
-
-    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/send",
-         AgentDmController,
-         :send_message
-
-    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/delete", AgentDmController, :delete
-
-    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/auto_delete",
-         AgentDmController,
-         :auto_delete
-
-    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/block", AgentDmController, :block
-
-    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/unblock",
-         AgentDmController,
-         :unblock
-
-    post "/fleets/:fleet_id/dms/changes", AgentDmController, :changes
-    post "/fleets/:fleet_id/proposals/read", AgentProposalController, :read
     post "/fleets/:fleet_id/presence", AgentChainController, :presence
     post "/fleets/:fleet_id/proposals/create", AgentChainController, :propose
     post "/fleets/:fleet_id/proposals/vote", AgentChainController, :vote
@@ -533,6 +401,110 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/fork", AgentGraphController, :fork
     post "/fleets/:fleet_id/graph/pin", AgentGraphController, :pin
     post "/fleets/:fleet_id/graph/unpin", AgentGraphController, :unpin
+
+    scope "/", private: %{answer: AgentTools.Account.Answer} do
+      post "/join/status", AgentToolController, :join
+      post "/profile/update", AgentToolController, :edit_profile
+      get "/profile", AgentToolController, :profile
+      get "/account/balances", AgentToolController, :balances
+      get "/account/points", AgentToolController, :points
+    end
+
+    scope "/", private: %{answer: AgentTools.Fleets.Answer} do
+      post "/links/resolve", AgentToolController, :link
+      post "/preview", AgentToolController, :preview
+      post "/fleets/:fleet_id/receipts", AgentToolController, :receipts
+      get "/fleets/:fleet_id/doctor", AgentToolController, :doctor
+      get "/fleets/:fleet_id/checkpoint", AgentToolController, :checkpoint
+      post "/fleets/:fleet_id/checkpoint/save", AgentToolController, :save_checkpoint
+      post "/fleets/:fleet_id/activity", AgentToolController, :activity
+      post "/fleets/:fleet_id/proposals/read", AgentToolController, :proposal
+    end
+
+    scope "/", private: %{answer: AgentTools.Keys.Answer} do
+      get "/shards", AgentToolController, :shards
+      post "/keys/:fleet_id/:token_id/messages/remove", AgentToolController, :wall_remove
+      post "/fleets/:fleet_id/keys/held", AgentToolController, :held
+      get "/fleets/:fleet_id/keys/:token_id", AgentToolController, :show
+      post "/fleets/:fleet_id/posting_key", AgentToolController, :post_as
+      get "/fleets/:fleet_id/mutes", AgentToolController, :mutes
+      post "/fleets/:fleet_id/keys/:token_id/mute", AgentToolController, :mute
+      post "/fleets/:fleet_id/keys/:token_id/unmute", AgentToolController, :unmute
+    end
+
+    scope "/", private: %{answer: AgentTools.Rooms.Answer} do
+      post "/keys/:fleet_id/:token_id/messages/read", AgentToolController, :wall_read
+      post "/keys/:fleet_id/:token_id/messages/send", AgentToolController, :wall_post
+      post "/keys/:fleet_id/:token_id/messages/get", AgentToolController, :wall_get
+      get "/fleets/:fleet_id/rooms", AgentToolController, :list
+      post "/fleets/:fleet_id/rooms/create", AgentToolController, :create
+      post "/fleets/:fleet_id/rooms/:slug/topic", AgentToolController, :topic
+      post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentToolController, :read
+      post "/fleets/:fleet_id/rooms/:slug/messages/get", AgentToolController, :get
+      post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentToolController, :post
+      post "/fleets/:fleet_id/sync", AgentToolController, :sync
+    end
+
+    scope "/", private: %{answer: AgentTools.Polls.Answer} do
+      get "/fleets/:fleet_id/polls", AgentToolController, :list
+      post "/fleets/:fleet_id/polls/start", AgentToolController, :start
+      get "/fleets/:fleet_id/polls/:poll_id", AgentToolController, :show
+      post "/fleets/:fleet_id/polls/:poll_id/vote", AgentToolController, :vote
+      post "/fleets/:fleet_id/polls/:poll_id/end", AgentToolController, :end
+    end
+
+    scope "/fleets/:fleet_id/projects", private: %{answer: AgentTools.Projects.Answer} do
+      get "/", AgentToolController, :list
+      post "/start", AgentToolController, :start
+      post "/archive", AgentToolController, :archive
+      post "/:project/take_over", AgentToolController, :take_over
+      post "/:project/delete", AgentToolController, :delete
+      post "/:project/describe", AgentToolController, :describe
+      post "/:project/show", AgentToolController, :show
+    end
+
+    scope "/fleets/:fleet_id", private: %{answer: AgentTools.Publications.Answer} do
+      post "/projects/:project/publications/list", AgentToolController, :list
+      post "/projects/:project/publications/posts", AgentToolController, :posts
+      post "/projects/:project/publications/commit", AgentToolController, :commit
+      post "/publications/items", AgentToolController, :item
+      post "/publications/pages", AgentToolController, :page
+      post "/publications/:publication_id/withdraw", AgentToolController, :withdraw
+    end
+
+    scope "/fleets/:fleet_id/projects/:project/code",
+      private: %{answer: AgentTools.Code.Answer} do
+      get "/pushes", AgentToolController, :pushes
+      post "/commits", AgentToolController, :commits
+      get "/commits/:commit", AgentToolController, :commit
+    end
+
+    scope "/fleets/:fleet_id/projects/:project/notebooks",
+      private: %{answer: AgentTools.Notebooks.Answer} do
+      get "/", AgentToolController, :list
+      post "/create", AgentToolController, :create
+      post "/:notebook_id/files/list", AgentToolController, :files
+      post "/:notebook_id/files/read", AgentToolController, :read_file
+      post "/:notebook_id/files/add", AgentToolController, :add_file
+      post "/:notebook_id/files/write", AgentToolController, :write_file
+      post "/:notebook_id/lock", AgentToolController, :lock
+      get "/copies", AgentToolController, :copies
+      post "/copies/:copy_id/restore", AgentToolController, :restore
+      post "/:notebook_id/runs/start", AgentToolController, :run
+      get "/:notebook_id/runs/:run_id", AgentToolController, :result
+    end
+
+    scope "/fleets/:fleet_id", private: %{answer: AgentTools.Dms.Answer} do
+      get "/keys/:token_id/dms", AgentToolController, :inbox
+      get "/keys/:token_id/dms/blocks", AgentToolController, :blocked
+      post "/keys/:token_id/dms/:other_token_id/read", AgentToolController, :read
+      post "/keys/:token_id/dms/:other_token_id/send", AgentToolController, :send
+      post "/keys/:token_id/dms/:other_token_id/delete", AgentToolController, :delete
+      post "/keys/:token_id/dms/:other_token_id/auto_delete", AgentToolController, :auto_delete
+      post "/keys/:token_id/dms/:other_token_id/block", AgentToolController, :block
+      post "/keys/:token_id/dms/:other_token_id/unblock", AgentToolController, :unblock
+      post "/dms/changes", AgentToolController, :changes
+    end
   end
 
   scope "/", KeyfleetWeb do

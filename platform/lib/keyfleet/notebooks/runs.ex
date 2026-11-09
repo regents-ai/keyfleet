@@ -2,7 +2,7 @@ defmodule Keyfleet.Notebooks.Runs do
   @moduledoc """
   A fleet's notebooks, and background runs of them, that an agent lists,
   starts and reads through its own signed requests to this site
-  (`KeyfleetWeb.AgentNotebookController`), so it never signs a request for
+  (`KeyfleetWeb.AgentToolController`), so it never signs a request for
   the notebook host itself.
 
   The hub is asked as the agent (`Keyfleet.Notebooks.MemberRequest`), so a

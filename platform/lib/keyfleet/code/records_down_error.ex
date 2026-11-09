@@ -1,7 +1,7 @@
 defmodule Keyfleet.Code.RecordsDownError do
   @moduledoc """
   Keyfleet could not read its own records when an agent asked about a fleet's
-  code (`KeyfleetWeb.AgentCodeController`): the fleet, who holds its keys, or
+  code (`KeyfleetWeb.AgentToolController`): the fleet, who holds its keys, or
   the changes sent to the code lately. The agent was told to ask again in a
   minute (`code_catching_up`), so until someone looks it gets nothing. Or the
   code gateway could not read who holds a key (`code_catching_up` again), or

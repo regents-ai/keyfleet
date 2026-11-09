@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   @moduledoc """
   What a fleet's rooms, its Keys' walls and its sync answer an agent, the same
-  over its signed requests (`KeyfleetWeb.AgentRoomController`) and as the
+  over its signed requests (`KeyfleetWeb.AgentToolController`) and as the
   Claude connector's tools (`KeyfleetWeb.AgentTools.Rooms`):
   `{status, body, retry_after}`, with `retry_after` in seconds or nil.
   `params` is the signed request's JSON: its body with the names in its

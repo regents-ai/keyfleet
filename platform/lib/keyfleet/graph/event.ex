@@ -325,7 +325,7 @@ defmodule Keyfleet.Graph.Event do
 
     # The record a write left of itself under one command id, from every Key
     # it was sent as: the caller keeps those of its own wallet
-    # (`KeyfleetWeb.AgentReceiptController`). The type is written out so
+    # (`KeyfleetWeb.AgentToolController`). The type is written out so
     # `graph_events_command_id_index` serves every plan of it.
     read :command do
       argument :fleet_id, :string, allow_nil?: false

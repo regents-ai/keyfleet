@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentTools.Polls.Answer do
   @moduledoc """
   What a fleet's polls (`Keyfleet.Polls`) answer an agent, the same over its
-  signed requests (`KeyfleetWeb.AgentPollController`) and as the Claude
+  signed requests (`KeyfleetWeb.AgentToolController`) and as the Claude
   connector's tools (`KeyfleetWeb.AgentTools.Polls`): listing and reading
   them, starting one, voting, and ending one the agent's Key started. Each
   answer is `{status, body, retry_after}`, with `retry_after` in seconds or
