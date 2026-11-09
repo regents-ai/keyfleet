@@ -803,10 +803,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ProposalHelpers.keys_sold!(@fleet, 1..2, @holder)
       ProposalHelpers.keys_sold!(@fleet, [3], @other)
       ChainHelpers.issue_shard!(@fleet, 3, @holder)
-      # The site's own record: Key 1 was marked present just now, so Keys 2
-      # and 3 are the idle ones. Key 4 was sold today and waits two days for
-      # its automatic start: it has no vote yet and isn't idle.
-      ProposalHelpers.presence!(@fleet, 1, DateTime.utc_now())
+      # The site's own record: Key 1 was marked present a minute ago, so Keys
+      # 2 and 3 are the idle ones. Key 4 was sold today and waits two days for
+      # its automatic start: it has no vote yet and isn't idle. A minute back,
+      # because presence is judged at the database's now(), the start of the
+      # test's transaction, which a busy machine leaves seconds behind.
+      ProposalHelpers.presence!(@fleet, 1, DateTime.add(DateTime.utc_now(), -60))
       ProposalHelpers.keys_sold!(@fleet, [4], @other)
       ProposalHelpers.scheduled!(@fleet, 4, DateTime.add(DateTime.utc_now(), 2, :day))
       until = now() + 3_600
