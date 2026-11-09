@@ -67,20 +67,23 @@ defmodule Keyfleet.Polls.Changes.CastVote do
     choice = Ash.Changeset.get_attribute(changeset, :choice)
 
     cond do
-      voted?(poll, key) -> :ok
-      not Polls.open?(poll) -> {:error, PollClosedError.exception([])}
-      choice not in poll.choices -> {:error, ChoiceUnknownError.exception(choice: choice)}
-      true -> :ok
-    end
-  end
-
-  # Read past the votes' own policies: whether the Key already voted decides
-  # this vote's answer, and the vote itself was authorized.
-  defp voted?(poll, key),
-    do:
+      # Read past the votes' own policies: whether the Key already voted
+      # decides this vote's answer, and the vote itself was authorized.
       Keyfleet.Polls.Vote
       |> Ash.Query.filter(poll_id == ^poll.id and token_id == ^key)
-      |> Ash.exists?(authorize?: false)
+      |> Ash.exists?(authorize?: false) ->
+        :ok
+
+      not Polls.open?(poll) ->
+        {:error, PollClosedError.exception([])}
+
+      choice not in poll.choices ->
+        {:error, ChoiceUnknownError.exception(choice: choice)}
+
+      true ->
+        :ok
+    end
+  end
 
   defp same_choice(changeset, vote) do
     cond do

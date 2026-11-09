@@ -132,11 +132,15 @@ defmodule Keyfleet.Notebooks.Runs do
            fleet_id
            |> request(subject, :get, notebook <> "/jobs", params: [limit: @jobs])
            |> answer(200),
-         do: find_run(fleet_id, subject, notebook, own_first(jobs, subject), run_id)
+         do:
+           find_run(
+             fleet_id,
+             subject,
+             notebook,
+             Enum.sort_by(jobs, &(&1["created_by"] != subject)),
+             run_id
+           )
   end
-
-  # The agent's own jobs are asked first: most runs it reads are its own.
-  defp own_first(jobs, subject), do: Enum.sort_by(jobs, &(&1["created_by"] != subject))
 
   # The agent's own job for its runs of the notebook, so only it stops them
   # (`Keyfleet.Notebooks.Makers`).

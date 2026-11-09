@@ -230,7 +230,8 @@ defmodule Keyfleet.Keys do
   def identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
     case Agent.refresh(actor) do
       {:ok, actor} ->
-        case held_or_shard(fleet_id, wallet, actor) do
+        case held_identity_key!(fleet_id, [wallet], actor: actor) ||
+               Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id)) do
           %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
           nil -> for_person(actor.pairing, fleet_id)
         end
@@ -294,8 +295,19 @@ defmodule Keyfleet.Keys do
               do: shard
 
         case Enum.uniq_by(Enum.sort_by(held ++ sharded, & &1.token_id), & &1.token_id) do
-          [] -> person_keys(actor.pairing, fleet_id)
-          keys -> Enum.map(keys, &agent_key(&1, wallet))
+          [] ->
+            person_keys(actor.pairing, fleet_id)
+
+          keys ->
+            Enum.map(
+              keys,
+              &%{
+                token_id: &1.token_id,
+                ownership_epoch: &1.ownership_epoch,
+                wallet: wallet,
+                for_person: false
+              }
+            )
         end
 
       _ ->
@@ -719,21 +731,8 @@ defmodule Keyfleet.Keys do
 
   def held_summary(_actor, _fleet_id, _shown), do: nil
 
-  defp agent_key(key, wallet),
-    do: %{
-      token_id: key.token_id,
-      ownership_epoch: key.ownership_epoch,
-      wallet: wallet,
-      for_person: false
-    }
-
   defp person_keys(%Human{} = person, fleet_id),
     do: Enum.map(held_keys(person, fleet_id), &%{&1 | for_person: true})
 
   defp person_keys(_missing, _fleet_id), do: []
-
-  defp held_or_shard(fleet_id, wallet, actor),
-    do:
-      held_identity_key!(fleet_id, [wallet], actor: actor) ||
-        Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))
 end

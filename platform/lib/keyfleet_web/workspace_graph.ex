@@ -280,7 +280,11 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       kind: String.capitalize(kind),
       title: node.title,
       shown_title: shorten(node.title),
-      shape: shape(node.x, node.y),
+      # A card cut at its top left and bottom right corners, as the site's
+      # panels are.
+      shape:
+        "M #{node.x + @cut} #{node.y} H #{node.x + @node_width} V #{node.y + @node_height - @cut} " <>
+          "L #{node.x + @node_width - @cut} #{node.y + @node_height} H #{node.x} V #{node.y + @cut} Z",
       tone: tone,
       standing: Map.get(@standing_names, node.standing),
       owner_key: node.owner_key,
@@ -290,13 +294,6 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       path: WorkspacePage.item_path(fleet_id, node.id)
     }
   end
-
-  # A card cut at its top left and bottom right corners, as the site's panels
-  # are.
-  defp shape(x, y),
-    do:
-      "M #{x + @cut} #{y} H #{x + @node_width} V #{y + @node_height - @cut} " <>
-        "L #{x + @node_width - @cut} #{y + @node_height} H #{x} V #{y + @cut} Z"
 
   defp shorten(nil), do: ""
 

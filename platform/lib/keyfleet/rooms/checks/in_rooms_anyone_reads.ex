@@ -24,20 +24,17 @@ defmodule Keyfleet.Rooms.Checks.InRoomsAnyoneReads do
     fleet_id = Ash.Query.get_argument(query, :fleet_id)
 
     with true <- is_binary(fleet_id),
-         [_ | _] = slugs <- readable(actor, fleet_id) do
+         [_ | _] = slugs <-
+           for(
+             {slug, component} <- Room.read_by_anyone(),
+             Access.allowed?(actor, :read, component, fleet_id),
+             do: slug
+           ) do
       rooms(query.resource, fleet_id, slugs)
     else
       _none -> expr(false)
     end
   end
-
-  defp readable(actor, fleet_id),
-    do:
-      for(
-        {slug, component} <- Room.read_by_anyone(),
-        Access.allowed?(actor, :read, component, fleet_id),
-        do: slug
-      )
 
   defp rooms(Room, _fleet_id, slugs), do: expr(slug in ^slugs)
 

@@ -273,19 +273,16 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
         {:ok, receipts}
 
       {:error, %Ash.Error.Forbidden{}} ->
-        members_only(fleet_id)
+        # Only the fleet's members read its workspace. An agent that isn't one
+        # now has no workspace write to find, and one sent again is refused, so
+        # its posts are answered alone; who the members are can't be told while
+        # the fleet's key ownership is not fresh.
+        if Keyfleet.Chain.fresh?(fleet_id), do: {:ok, []}, else: :refreshing
 
       {:error, error} ->
         {:error, error}
     end
   end
-
-  # Only the fleet's members read its workspace. An agent that isn't one
-  # now has no workspace write to find, and one sent again is refused, so
-  # its posts are answered alone; who the members are can't be told while
-  # the fleet's key ownership is not fresh.
-  defp members_only(fleet_id),
-    do: if(Keyfleet.Chain.fresh?(fleet_id), do: {:ok, []}, else: :refreshing)
 
   defp write_receipt(record) do
     {as_key, _kind, _wallet} = Event.member(record.payload["principal"])

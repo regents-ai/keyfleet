@@ -69,7 +69,10 @@ defmodule Keyfleet.Keys.PresenceTimer do
       %{problem: nil, figures: figures, steps: steps} ->
         left = seconds_left(figures)
         warn_lapsing(fleet, left)
-        if due?(left, figures), do: mark(fleet, chain, steps, wallet, key)
+
+        if not is_map_key(figures.blocked, "present") and
+             Enum.any?(left, &(elem(&1, 1) <= @mark_within)),
+           do: mark(fleet, chain, steps, wallet, key)
 
       %{problem: problem} ->
         Logger.warning("Presence timer read nothing for #{fleet.name}: #{problem}")
@@ -84,9 +87,6 @@ defmodule Keyfleet.Keys.PresenceTimer do
       {token_id, if(until, do: DateTime.diff(until, now), else: 0)}
     end
   end
-
-  defp due?(left, %{blocked: blocked}),
-    do: not is_map_key(blocked, "present") and Enum.any?(left, &(elem(&1, 1) <= @mark_within))
 
   defp mark(fleet, chain, steps, wallet, key) do
     step = Enum.find(steps, &(&1.step == "present"))

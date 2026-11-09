@@ -562,7 +562,11 @@ defmodule KeyfleetWeb.PollsLive do
   """
   def read_polls(socket, :polls, %{"fleet_id" => fleet_id}) do
     socket
-    |> assign(polls_notice: nil, poll_form: start_form(), poll_confirm_end: false)
+    |> assign(
+      polls_notice: nil,
+      poll_form: form(%{"minutes" => "30"}, []),
+      poll_confirm_end: false
+    )
     |> read(fleet_id, nil, :unreadable)
   end
 
@@ -770,7 +774,11 @@ defmodule KeyfleetWeb.PollsLive do
 
     case connected?(socket) && next_close(socket.assigns.polls) do
       ms when is_integer(ms) ->
-        assign(socket, :polls_clock, Process.send_after(self(), :polls_tick, ms + jitter()))
+        assign(
+          socket,
+          :polls_clock,
+          Process.send_after(self(), :polls_tick, ms + :rand.uniform(2_001) - 1)
+        )
 
       _none ->
         socket
@@ -788,8 +796,6 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   defp next_close(_page), do: nil
-
-  defp jitter, do: :rand.uniform(2_001) - 1
 
   defp stop_clock(%{assigns: %{polls_clock: clock}} = socket) when is_reference(clock) do
     Process.cancel_timer(clock)
@@ -964,8 +970,6 @@ defmodule KeyfleetWeb.PollsLive do
     |> Map.filter(fn {_field, value} -> is_binary(value) end)
     |> to_form(as: "poll", errors: errors)
   end
-
-  defp start_form, do: form(%{"minutes" => "30"}, [])
 
   # Each line typed is one choice.
   defp choices(text) when is_binary(text) do

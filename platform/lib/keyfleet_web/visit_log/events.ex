@@ -77,7 +77,8 @@ defmodule KeyfleetWeb.VisitLog.Events do
   end
 
   def handle([:phoenix, :live_view, :handle_event, ending], measurements, metadata, _config) do
-    remember(metadata.socket)
+    # A page's account can change while it is open, so each line reads it afresh.
+    Logger.metadata(actor: VisitLog.actor(metadata.socket.assigns[:access_context]))
     pressed(metadata.socket.view, ending, measurements, metadata)
   end
 
@@ -145,10 +146,6 @@ defmodule KeyfleetWeb.VisitLog.Events do
   defp quiet?(%Plug.Conn{path_info: ["healthz"]}), do: true
   defp quiet?(%Plug.Conn{path_info: ["visit-log"]}), do: true
   defp quiet?(_conn), do: false
-
-  # A page's account can change while it is open, so each line reads it afresh.
-  defp remember(socket),
-    do: Logger.metadata(actor: VisitLog.actor(socket.assigns[:access_context]))
 
   defp answer(%Plug.Conn{status: status}) when status in 200..399, do: "ok"
 

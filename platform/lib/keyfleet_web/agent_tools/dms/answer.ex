@@ -179,17 +179,14 @@ defmodule KeyfleetWeb.AgentTools.Dms.Answer do
       other_token_id: Dms.other_key(conversation, token_id),
       auto_delete_days: conversation.auto_delete_days,
       last_seq: conversation.last_seq,
-      last_message: last_message_json(conversation)
+      last_message: %{
+        seq: conversation.last_seq,
+        body: conversation.last_body,
+        from_token_id: conversation.last_from_token_id,
+        inserted_at: conversation.last_at
+      }
     }
   end
-
-  defp last_message_json(conversation),
-    do: %{
-      seq: conversation.last_seq,
-      body: conversation.last_body,
-      from_token_id: conversation.last_from_token_id,
-      inserted_at: conversation.last_at
-    }
 
   defp message_json(message) do
     message

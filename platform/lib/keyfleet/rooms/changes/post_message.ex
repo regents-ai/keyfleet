@@ -113,7 +113,14 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   defp write_as(changeset, room, actor, kind, %{token_id: as_key, wallet: wallet} = identity) do
     body = Ash.Changeset.get_argument(changeset, :body)
     idempotency_key = Ash.Changeset.get_argument(changeset, :idempotency_key)
-    earlier = earlier_post(room.fleet_id, actor, idempotency_key)
+
+    earlier =
+      Rooms.get_post_under_send_key!(
+        room.fleet_id,
+        Rooms.sender_wallets(actor),
+        idempotency_key,
+        actor: actor
+      )
 
     case author(actor, identity, as_key, author_wallet(earlier, wallet)) do
       nil ->
@@ -138,15 +145,6 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
         )
     end
   end
-
-  defp earlier_post(fleet_id, actor, idempotency_key),
-    do:
-      Rooms.get_post_under_send_key!(
-        fleet_id,
-        Rooms.sender_wallets(actor),
-        idempotency_key,
-        actor: actor
-      )
 
   # A retry is written under the wallet of the first post, so the database
   # hands that post back instead of taking a second one.

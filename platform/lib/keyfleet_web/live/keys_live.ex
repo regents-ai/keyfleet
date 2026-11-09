@@ -333,7 +333,7 @@ defmodule KeyfleetWeb.KeysLive do
           </p>
           <p :if={is_nil(shard.agent)} class="key-name">No agent yet</p>
           <span :if={shard.agent}>{shard.agent.harness}</span>
-          <span>Until {date(shard.expires_at)}</span>
+          <span>Until {Calendar.strftime(shard.expires_at, "%-d %B %Y")}</span>
           <Regent.Primitives.address id={"key-shard-address-#{shard.wallet}"} address={shard.wallet} />
         </div>
 
@@ -358,8 +358,6 @@ defmodule KeyfleetWeb.KeysLive do
     </ul>
     """
   end
-
-  defp date(datetime), do: Calendar.strftime(datetime, "%-d %B %Y")
 
   @doc """
   What someone is told when a change waits on the fleet's key ownership being

@@ -21,14 +21,12 @@ defmodule KeyfleetWeb.AgentWaits do
 
     try do
       fun.(
-        Registry.count_match(__MODULE__, address, :_) <= per_address() and
-          Registry.count(__MODULE__) <= total()
+        Registry.count_match(__MODULE__, address, :_) <=
+          Application.fetch_env!(:keyfleet, :agent_waits_per_address) and
+          Registry.count(__MODULE__) <= Application.fetch_env!(:keyfleet, :agent_waits_total)
       )
     after
       Registry.unregister(__MODULE__, address)
     end
   end
-
-  defp per_address, do: Application.fetch_env!(:keyfleet, :agent_waits_per_address)
-  defp total, do: Application.fetch_env!(:keyfleet, :agent_waits_total)
 end

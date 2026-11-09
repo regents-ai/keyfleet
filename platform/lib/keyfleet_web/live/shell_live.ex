@@ -85,7 +85,11 @@ defmodule KeyfleetWeb.ShellLive do
      |> assign(
        route_spec: nil,
        shell_instance: System.unique_integer([:positive, :monotonic]),
-       get_key: get_key?(),
+       # The header offers a Key while the fleet it is got from is open, as that
+       # fleet's reading every page shares has it (`KeyfleetWeb.FleetNow`), so
+       # the offer costs a page no read. Until the fleet has been read the offer
+       # is left out rather than the page.
+       get_key: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet())),
        load_failed?: false,
        verified_connections: %Read{},
        verified_connections_notice: nil,
@@ -886,13 +890,6 @@ defmodule KeyfleetWeb.ShellLive do
   # "Open in the workspace" there.
   defp reads_workspace?(%{class: class}), do: Access.enough?(class, :read, :workspace)
   defp reads_workspace?(nil), do: false
-
-  # The header offers a Key while the fleet it is got from is open, as that
-  # fleet's reading every page shares has it (`KeyfleetWeb.FleetNow`), so
-  # the offer costs a page no read. Until the fleet has been read the offer
-  # is left out rather than the page.
-  defp get_key?,
-    do: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet()))
 
   # A project's page is read once, as it opens, and carries its title and,
   # once its Key describes it, its description.

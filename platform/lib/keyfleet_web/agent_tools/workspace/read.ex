@@ -44,7 +44,12 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
          {:ok, _shown} <- shown(projects, args[:project], fleet_id),
          {:ok, graph} <- Graph.workspace_graph(fleet_id, filter, opts) do
       {:ok,
-       Map.update!(graph, :nodes, fn nodes -> Enum.map(nodes, &graph_node(&1, fleet_id)) end)}
+       Map.update!(graph, :nodes, fn nodes ->
+         Enum.map(
+           nodes,
+           &Map.put(&1, :url, Endpoint.url() <> WorkspacePage.item_path(fleet_id, &1.id))
+         )
+       end)}
     end
   end
 
@@ -228,9 +233,6 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
       %{repository: repository, hash: hash, clone_url: Code.agent_clone_url(repository)}
     end
   end
-
-  defp graph_node(node, fleet_id),
-    do: Map.put(node, :url, Endpoint.url() <> WorkspacePage.item_path(fleet_id, node.id))
 
   defp goal(object, fleet_id) do
     %{

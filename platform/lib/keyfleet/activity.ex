@@ -274,9 +274,14 @@ defmodule Keyfleet.Activity do
     |> order()
     |> Enum.with_index()
     |> Enum.filter(fn {source, _rank} -> streams[source].entries != [] end)
-    |> Enum.max_by(fn {source, rank} -> {stamp(hd(streams[source].entries).at), -rank} end, fn ->
-      nil
-    end)
+    |> Enum.max_by(
+      fn {source, rank} ->
+        {DateTime.to_unix(hd(streams[source].entries).at, :microsecond), -rank}
+      end,
+      fn ->
+        nil
+      end
+    )
     |> case do
       nil -> nil
       {source, _rank} -> source
@@ -291,8 +296,6 @@ defmodule Keyfleet.Activity do
       do: nil,
       else: Map.new(streams, fn {source, s} -> {source, s.position} end)
   end
-
-  defp stamp(at), do: DateTime.to_unix(at, :microsecond)
 
   # Reading: each source answers its entries newest first, whether it has
   # more beyond them, and, for a source kept in record order, the place just
@@ -550,17 +553,20 @@ defmodule Keyfleet.Activity do
         [tasks_entry(run) | group_work(rest)]
 
       first.kind in @repeated ->
-        {run, rest} = take_run(rest, first, &same_change?(&1, first), & &1.at)
+        {run, rest} =
+          take_run(
+            rest,
+            first,
+            &(&1.kind == first.kind and &1.facts.by == first.facts.by and type(&1) == type(first)),
+            & &1.at
+          )
+
         [changes_entry(run) | group_work(rest)]
 
       true ->
         [first | group_work(rest)]
     end
   end
-
-  defp same_change?(entry, first),
-    do:
-      entry.kind == first.kind and entry.facts.by == first.facts.by and type(entry) == type(first)
 
   # Every item's id starts with its type, as in "task#4".
   defp type(%{facts: %{item: {:item, id}}}), do: id |> String.split("#") |> hd()

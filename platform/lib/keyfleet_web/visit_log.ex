@@ -232,7 +232,10 @@ defmodule KeyfleetWeb.VisitLog do
         if Regex.match?(@visit, visit), do: {conn, visit}, else: start(conn)
 
       nil ->
-        if page?(conn), do: start(conn), else: {conn, nil}
+        # Only a browser opening a page asks for HTML; health checks and API calls don't.
+        if conn |> get_req_header("accept") |> Enum.any?(&String.contains?(&1, "text/html")),
+          do: start(conn),
+          else: {conn, nil}
     end
   end
 
@@ -296,10 +299,6 @@ defmodule KeyfleetWeb.VisitLog do
   end
 
   defp source(_nothing), do: nil
-
-  # Only a browser opening a page asks for HTML; health checks and API calls don't.
-  defp page?(conn),
-    do: conn |> get_req_header("accept") |> Enum.any?(&String.contains?(&1, "text/html"))
 
   defp surface(%Plug.Conn{path_info: ["mcp" | _]}), do: {"mcp", nil}
 

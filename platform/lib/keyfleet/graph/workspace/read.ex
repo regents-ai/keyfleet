@@ -77,7 +77,11 @@ defmodule Keyfleet.Graph.Workspace.Read do
           linked: linked(fleet_id, id, page, opts),
           rerun_check: rerun_check(object),
           watermark: watermark,
-          agents: Agents.names_by_wallet([creator(object.sys) | joiners(object.sys)])
+          agents:
+            Agents.names_by_wallet([
+              agent_wallet(object.sys["created_by"])
+              | object.sys |> Map.get("joined", []) |> Enum.map(&agent_wallet/1)
+            ])
         }
     end
   end
@@ -237,10 +241,6 @@ defmodule Keyfleet.Graph.Workspace.Read do
   end
 
   defp rerun_check(_object), do: nil
-
-  defp creator(%{"created_by" => by}), do: agent_wallet(by)
-
-  defp joiners(sys), do: sys |> Map.get("joined", []) |> Enum.map(&agent_wallet/1)
 
   defp agent_wallet(%{"kind" => "agent", "wallet" => wallet}), do: wallet
   defp agent_wallet(_person), do: nil

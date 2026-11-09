@@ -52,7 +52,7 @@ defmodule KeyfleetWeb.ShareCard do
   def image(path) do
     case Enum.find(fleets(), &fleet_page?(path, &1)) do
       nil ->
-        {static(), @site_alt}
+        {url(~p"/images/keyfleet-share.png"), @site_alt}
 
       fleet_id ->
         figures = held(fleet_id)
@@ -60,8 +60,6 @@ defmodule KeyfleetWeb.ShareCard do
         {address, alt(fleet_id, figures)}
     end
   end
-
-  defp static, do: url(~p"/images/keyfleet-share.png")
 
   defp fleet_page?(path, fleet_id) do
     under = Fleets.path(fleet_id)

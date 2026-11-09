@@ -49,7 +49,11 @@ defmodule Keyfleet.Treasury.OverdueCheck do
     end
 
     with [_ | _] = late <-
-           late(readings, &owed_since/1, @owed_late) do
+           late(
+             readings,
+             fn {_fleet, reading} -> reading.protocol_share_owed_since end,
+             @owed_late
+           ) do
       OverdueError.report(
         "The protocol share has been owed to REGENT staking for more than a day: " <>
           "#{named(late)}. Anyone may send it from the fleet's Treasury tab."
@@ -90,8 +94,6 @@ defmodule Keyfleet.Treasury.OverdueCheck do
       {false, _unknown} -> nil
     end
   end
-
-  defp owed_since({_fleet, reading}), do: reading.protocol_share_owed_since
 
   # USDC has waited since it was first read waiting, or since a piece of it
   # last turned into REGENT, whichever is later.

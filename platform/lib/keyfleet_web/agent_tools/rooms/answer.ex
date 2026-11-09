@@ -390,7 +390,17 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   defp sync_json(synced, check_in, yours, muted, refused_code) do
     %{
       rooms: Enum.map(synced.rooms, &synced_room_json(&1, muted, refused_code)),
-      keys: Enum.map(synced.keys, &synced_wall_json(&1, muted)),
+      keys:
+        Enum.map(
+          synced.keys,
+          &%{
+            token_id: &1.token_id,
+            head_seq: &1.head_seq,
+            cursor: &1.cursor,
+            messages:
+              &1.messages |> Rooms.unmuted(muted) |> Enum.map(fn m -> RoomJSON.message(m) end)
+          }
+        ),
       graph: synced.graph,
       proposals: %{
         synced.proposals
@@ -437,14 +447,6 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       head_seq: room.head_seq,
       cursor: room.cursor,
       messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
-    }
-
-  defp synced_wall_json(wall, muted),
-    do: %{
-      token_id: wall.token_id,
-      head_seq: wall.head_seq,
-      cursor: wall.cursor,
-      messages: wall.messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
     }
 
   # The work waiting on the agent's Key, the whole fleet's or one project's:

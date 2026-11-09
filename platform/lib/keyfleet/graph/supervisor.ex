@@ -63,14 +63,16 @@ defmodule Keyfleet.Graph.Supervisor do
         %{
           id: :writers,
           type: :supervisor,
-          start: {Supervisor, :start_link, [writers, writers_options(writers)]}
+          start:
+            {Supervisor, :start_link,
+             [
+               writers,
+               # Three restarts per fleet in five seconds; see the moduledoc.
+               [strategy: :one_for_one, max_restarts: 3 * length(writers), max_seconds: 5]
+             ]}
         }
       ],
       strategy: :one_for_one
     )
   end
-
-  # Three restarts per fleet in five seconds; see the moduledoc.
-  defp writers_options(writers),
-    do: [strategy: :one_for_one, max_restarts: 3 * length(writers), max_seconds: 5]
 end

@@ -615,8 +615,6 @@ defmodule KeyfleetWeb.RoomsLive do
   defp standing(socket, fleet_id),
     do: {ShellLive.may_read?(socket, fleet_id, :rooms), ShellLive.reads_as(socket, fleet_id)}
 
-  defp list_rooms!(fleet_id, opts), do: Rooms.list_rooms!(fleet_id, [load: [:fleet]] ++ opts)
-
   # The rooms the reader is shown, and what the page shows of the one it is
   # on. A member is shown every room; anyone else the Public room alone, so any other
   # address is a room for keys only to them, whether or not the fleet has it.
@@ -749,7 +747,7 @@ defmodule KeyfleetWeb.RoomsLive do
          {key?, opts}
        ) do
     actor = ShellLive.human_actor(socket)
-    rooms = list_rooms!(fleet_id, opts)
+    rooms = Rooms.list_rooms!(fleet_id, [load: [:fleet]] ++ opts)
 
     shown =
       show_rooms(
