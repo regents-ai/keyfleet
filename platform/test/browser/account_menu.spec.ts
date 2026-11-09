@@ -114,16 +114,17 @@ for (const width of [1280, 390]) {
       expect(drawn.x + drawn.width).toBeLessThanOrEqual(width)
 
       // A choice closes the list and shows that agent's message; the window
-      // keeps its height whatever is chosen (founder, 2026-10-07).
+      // keeps its height whatever is chosen (founder, 2026-10-07), to within
+      // the half pixel a browser's sub-pixel layout can differ by.
       const before = await height()
       await box.getByRole("radio", {name: "Hermes", exact: true}).locator("xpath=ancestor::label").click()
       await expect(list).not.toHaveAttribute("open", "")
       await expect(box.locator("pre")).toContainText(/Pairing code:\s*\S{12,}/)
-      expect(await height()).toBe(before)
+      expect(await height()).toBeCloseTo(before, 0)
       await list.locator("summary").click()
       await box.getByRole("radio", {name: "Dots", exact: true}).locator("xpath=ancestor::label").click()
       await expect(box.locator("pre")).toContainText(/Pairing code:\s*\S{12,}/)
-      expect(await height()).toBe(before)
+      expect(await height()).toBeCloseTo(before, 0)
 
       await window.getByRole("button", {name: "Close"}).click()
       await expect(window).toBeHidden()
