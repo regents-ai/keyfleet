@@ -51,28 +51,28 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
          {:ok, body} <- run(op, params, actor, subject, space) do
       {200, body, nil}
     else
-      {:hub, false} -> refusal(404, "notebooks_not_found")
+      {:hub, false} -> Refusal.answer(404, "notebooks_not_found")
       %ClosedError{} = closed -> closed(closed)
       {:error, %ClosedError{} = closed} -> closed(closed)
-      {:restricted, true} -> refusal(403, "notebooks_edits_restricted")
-      {:error, :edits_restricted} -> refusal(403, "notebooks_edits_restricted")
-      {:error, :not_maker} -> refusal(403, "notebooks_maker_only")
-      {:profile, {:ok, nil}} -> refusal(403, "notebooks_agent_profile")
-      {:profile, {:error, _error}} -> refusal(503, "notebooks_unavailable")
-      {:error, :not_holder} -> refusal(403, "notebooks_not_holder")
-      {:error, :not_found} -> refusal(404, "notebook_run_not_found")
-      {:error, :runs_full} -> refusal(429, "notebook_runs_full")
-      {:error, :file_not_found} -> refusal(404, "notebook_file_not_found")
-      {:error, :copy_not_found} -> refusal(404, "notebook_copy_not_found")
-      {:error, :conflict} -> refusal(409, "notebook_file_conflict")
-      {:error, :refused} -> refusal(422, "notebook_file_refused")
-      {:error, :files_full} -> refusal(422, "notebook_files_full")
-      {:error, :too_large} -> refusal(422, "notebook_file_too_large")
-      {:error, :not_text} -> refusal(422, "notebook_file_not_text")
-      {:error, :catching_up} -> refusal(503, "notebooks_catching_up")
-      {:error, :setting_up} -> refusal(503, "notebooks_setting_up")
-      {:space, nil} -> refusal(503, "notebooks_setting_up")
-      {:error, :unavailable} -> refusal(503, "notebooks_unavailable")
+      {:restricted, true} -> Refusal.answer(403, "notebooks_edits_restricted")
+      {:error, :edits_restricted} -> Refusal.answer(403, "notebooks_edits_restricted")
+      {:error, :not_maker} -> Refusal.answer(403, "notebooks_maker_only")
+      {:profile, {:ok, nil}} -> Refusal.answer(403, "notebooks_agent_profile")
+      {:profile, {:error, _error}} -> Refusal.answer(503, "notebooks_unavailable")
+      {:error, :not_holder} -> Refusal.answer(403, "notebooks_not_holder")
+      {:error, :not_found} -> Refusal.answer(404, "notebook_run_not_found")
+      {:error, :runs_full} -> Refusal.answer(429, "notebook_runs_full")
+      {:error, :file_not_found} -> Refusal.answer(404, "notebook_file_not_found")
+      {:error, :copy_not_found} -> Refusal.answer(404, "notebook_copy_not_found")
+      {:error, :conflict} -> Refusal.answer(409, "notebook_file_conflict")
+      {:error, :refused} -> Refusal.answer(422, "notebook_file_refused")
+      {:error, :files_full} -> Refusal.answer(422, "notebook_files_full")
+      {:error, :too_large} -> Refusal.answer(422, "notebook_file_too_large")
+      {:error, :not_text} -> Refusal.answer(422, "notebook_file_not_text")
+      {:error, :catching_up} -> Refusal.answer(503, "notebooks_catching_up")
+      {:error, :setting_up} -> Refusal.answer(503, "notebooks_setting_up")
+      {:space, nil} -> Refusal.answer(503, "notebooks_setting_up")
+      {:error, :unavailable} -> Refusal.answer(503, "notebooks_unavailable")
       # Runs started on the notebook host and here share one allowance.
       {:limited, seconds} -> {429, Refusal.body("notebook_runs_limit_reached"), seconds}
     end
@@ -151,8 +151,6 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   end
 
   defp edited(refused, _actor, _fleet_id), do: refused
-
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
   # An archived project's notebooks are read, and only an active project's
   # changed.

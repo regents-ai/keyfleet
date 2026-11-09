@@ -513,6 +513,20 @@ defmodule KeyfleetWeb.Refusal do
   def json(conn, status, code),
     do: conn |> Plug.Conn.put_status(status) |> Phoenix.Controller.json(body(code))
 
+  @doc "An agent tool's answer refusing with `status` and `code`, naming no wait."
+  def answer(status, code), do: {status, body(code), nil}
+
+  @doc """
+  An agent tool's answer to an action only the fleet's Key holders may take:
+  `code` with 403, or 503 `ownership_refreshing` while the fleet's Key
+  ownership is being read, as who holds a Key can't be told then.
+  """
+  def holders_only(fleet_id, code) do
+    if Keyfleet.Chain.fresh?(fleet_id),
+      do: answer(403, code),
+      else: answer(503, "ownership_refreshing")
+  end
+
   @doc "The body refusing a request with `code`."
   def body(code) do
     {message, hint} = Map.fetch!(@refusals, code)

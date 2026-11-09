@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
 
     case Rooms.create_room(input, actor: actor) do
       {:ok, room} -> {201, %{room: RoomJSON.room(room)}, nil}
-      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(fleet_id, error, actor)
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.holders_only(fleet_id, not_member(actor))
       {:error, error} -> refuse_room(error)
     end
   end
@@ -80,7 +80,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
 
     case Rooms.name_open_room(fleet_id, slug, topic, actor: actor) do
       {:ok, room} -> ok(%{room: RoomJSON.room(room)})
-      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(fleet_id, error, actor)
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.holders_only(fleet_id, not_member(actor))
       {:error, error} -> refuse_topic(error)
     end
   end
@@ -111,7 +111,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       )
     else
       nil -> room_unknown()
-      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(fleet_id, error, actor)
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.holders_only(fleet_id, not_member(actor))
       {:error, error} -> refuse(error, actor)
     end
   end
@@ -130,8 +130,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       placed(%{room: RoomJSON.room(room)}, posts, seq, fleet_id, actor)
     else
       nil -> room_unknown()
-      :post_unknown -> refusal(404, "post_unknown")
-      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(fleet_id, error, actor)
+      :post_unknown -> Refusal.answer(404, "post_unknown")
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.holders_only(fleet_id, not_member(actor))
       {:error, error} -> refuse(error, actor)
     end
   end
@@ -184,7 +184,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       place = %{thread: %{token_id: String.to_integer(token_id)}}
       placed(place, posts, seq, fleet_id, actor)
     else
-      :post_unknown -> refusal(404, "post_unknown")
+      :post_unknown -> Refusal.answer(404, "post_unknown")
       {:error, error} -> refuse(error, actor)
     end
   end
@@ -257,14 +257,17 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         {:error, bytes} -> over_budget(bytes)
       end
     else
-      {:error, %Ash.Error.Forbidden{}} -> members_only(fleet_id)
-      {:error, error} -> refuse(error, actor)
+      # A sync carries the workspace's changes, which only the fleet's members
+      # read.
+      {:error, %Ash.Error.Forbidden{}} ->
+        Refusal.holders_only(fleet_id, "workspace_members_only")
+
+      {:error, error} ->
+        refuse(error, actor)
     end
   end
 
   defp ok(body), do: {200, body, nil}
-
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
   defp room_place(%{"seq" => seq}, _fleet_id, _slug, _actor), do: {:ok, seq}
 
@@ -330,17 +333,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         )
 
       _no_post ->
-        refusal(404, "post_unknown")
+        Refusal.answer(404, "post_unknown")
     end
-  end
-
-  # A sync carries the workspace's changes, which only the fleet's members
-  # read. Who they are can't be read while the fleet's key ownership is not
-  # fresh.
-  defp members_only(fleet_id) do
-    if Keyfleet.Chain.fresh?(fleet_id),
-      do: refusal(403, "workspace_members_only"),
-      else: refreshing()
   end
 
   # A post answers with how many others posted since the sender's Key last
@@ -358,8 +352,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   end
 
   # Standing cannot be read while the fleet's key ownership is not fresh.
-  defp sent(fleet_id, {:error, %Ash.Error.Forbidden{} = error}, actor),
-    do: refuse_forbidden(fleet_id, error, actor)
+  defp sent(fleet_id, {:error, %Ash.Error.Forbidden{}}, actor),
+    do: Refusal.holders_only(fleet_id, not_member(actor))
 
   defp sent(_fleet_id, {:error, error}, actor), do: refuse(error, actor)
 
@@ -524,12 +518,6 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
     }
   end
 
-  # Who reads beyond the rooms anyone reads, posts, names and creates rooms is
-  # the fleet's keys, which cannot be told while the fleet's key ownership is
-  # not fresh.
-  defp refuse_forbidden(fleet_id, error, actor),
-    do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(error, actor), else: refreshing())
-
   # The code a room refused inside a sync answer carries: the one a refusal of
   # that room alone would answer with.
   defp refused_code(fleet_id, actor),
@@ -537,7 +525,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
 
   # An agent with no standing of its own that is paired with a person is told
   # what keeps it from writing as them.
-  defp refuse(%Ash.Error.Forbidden{}, actor), do: refusal(403, not_member(actor))
+  defp refuse(%Ash.Error.Forbidden{}, actor), do: Refusal.answer(403, not_member(actor))
 
   defp refuse(%RoomUnknownError{}, _actor), do: room_unknown()
 
@@ -548,62 +536,62 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
     refuse_named(named, error)
   end
 
-  defp refuse(_error, _actor), do: refusal(422, "invalid_message")
+  defp refuse(_error, _actor), do: Refusal.answer(422, "invalid_message")
 
-  defp refuse_named(%UnknownFleetError{}, _error), do: refusal(404, "fleet_unknown")
+  defp refuse_named(%UnknownFleetError{}, _error), do: Refusal.answer(404, "fleet_unknown")
   defp refuse_named(%RoomUnknownError{}, _error), do: room_unknown()
 
   defp refuse_named(%KeyUnknownError{fleet_id: fleet_id, token_id: token_id}, _error),
     do: {404, Refusal.key_unknown(fleet_id, token_id), nil}
 
-  defp refuse_named(%NoAgentProfileError{}, _error), do: refusal(404, "profile_not_found")
-  defp refuse_named(%SendConflictError{}, _error), do: refusal(422, "idempotency_conflict")
-  defp refuse_named(%ReplyOutsideRoomError{}, _error), do: refusal(422, "reply_not_here")
-  defp refuse_named(%QuoteUnknownError{}, _error), do: refusal(422, "quote_unknown")
-  defp refuse_named(%QuoteDiffersError{}, _error), do: refusal(422, "quote_differs")
+  defp refuse_named(%NoAgentProfileError{}, _error), do: Refusal.answer(404, "profile_not_found")
+  defp refuse_named(%SendConflictError{}, _error), do: Refusal.answer(422, "idempotency_conflict")
+  defp refuse_named(%ReplyOutsideRoomError{}, _error), do: Refusal.answer(422, "reply_not_here")
+  defp refuse_named(%QuoteUnknownError{}, _error), do: Refusal.answer(422, "quote_unknown")
+  defp refuse_named(%QuoteDiffersError{}, _error), do: Refusal.answer(422, "quote_differs")
 
   defp refuse_named(%PostLimitError{retry_after: seconds}, _error),
     do: {429, Refusal.body("post_limit_reached"), seconds}
 
   defp refuse_named(nil, error) do
     if Rooms.taken?(error, :quote_request_id),
-      do: refusal(409, "already_quoted"),
-      else: refusal(422, "invalid_message")
+      do: Refusal.answer(409, "already_quoted"),
+      else: Refusal.answer(422, "invalid_message")
   end
 
   defp refuse_room(%Ash.Error.Invalid{errors: errors} = error) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        refusal(404, "fleet_unknown")
+        Refusal.answer(404, "fleet_unknown")
 
       Enum.any?(errors, &match?(%CreatedRoomLimitError{}, &1)) ->
-        refusal(409, "room_limit_reached")
+        Refusal.answer(409, "room_limit_reached")
 
       Enum.any?(errors, &match?(%OwnRoomLimitError{}, &1)) ->
-        refusal(409, "own_room_limit_reached")
+        Refusal.answer(409, "own_room_limit_reached")
 
       Rooms.taken?(error, :slug) ->
-        refusal(409, "room_taken")
+        Refusal.answer(409, "room_taken")
 
       Rooms.taken?(error, :name) ->
         name_taken()
 
       true ->
-        refusal(422, "invalid_room")
+        Refusal.answer(422, "invalid_room")
     end
   end
 
-  defp refuse_room(_error), do: refusal(422, "invalid_room")
+  defp refuse_room(_error), do: Refusal.answer(422, "invalid_room")
 
   defp refuse_topic(%RoomUnknownError{}), do: room_unknown()
 
   defp refuse_topic(%Ash.Error.Invalid{errors: errors} = error) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        refusal(404, "fleet_unknown")
+        Refusal.answer(404, "fleet_unknown")
 
       Enum.any?(errors, &match?(%{field: :kind}, &1)) ->
-        refusal(422, "room_not_open")
+        Refusal.answer(422, "room_not_open")
 
       Rooms.taken?(error, :name) ->
         name_taken()
@@ -612,19 +600,17 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         {429, Refusal.body("rename_too_soon"), too_soon.retry_after}
 
       true ->
-        refusal(422, "invalid_topic")
+        Refusal.answer(422, "invalid_topic")
     end
   end
 
-  defp refuse_topic(_error), do: refusal(422, "invalid_topic")
+  defp refuse_topic(_error), do: Refusal.answer(422, "invalid_topic")
 
   # Another room of the fleet already goes by this name.
-  defp name_taken, do: refusal(409, "name_taken")
+  defp name_taken, do: Refusal.answer(409, "name_taken")
 
   defp not_member(%Agent{pairing: :person_not_here}), do: "person_not_here"
   defp not_member(%Agent{}), do: "not_a_member"
 
-  defp refreshing, do: refusal(503, "ownership_refreshing")
-
-  defp room_unknown, do: refusal(404, "room_unknown")
+  defp room_unknown, do: Refusal.answer(404, "room_unknown")
 end

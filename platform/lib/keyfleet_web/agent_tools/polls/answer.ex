@@ -28,10 +28,10 @@ defmodule KeyfleetWeb.AgentTools.Polls.Answer do
   def answer(op, %{"fleet_id" => fleet_id} = params, actor, _waiter) do
     cond do
       fleet_id not in Keyfleet.Fleets.catalog_ids() ->
-        {404, Refusal.body("fleet_unknown"), nil}
+        Refusal.answer(404, "fleet_unknown")
 
       not Keyfleet.Chain.fresh?(fleet_id) ->
-        {503, Refusal.body("ownership_refreshing"), nil}
+        Refusal.answer(503, "ownership_refreshing")
 
       true ->
         run(op, params, actor)

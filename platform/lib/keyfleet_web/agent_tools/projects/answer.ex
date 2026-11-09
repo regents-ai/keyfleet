@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
          projects: Enum.map(projects, &project(&1, yours))
        }, nil}
     else
-      {:ok, nil} -> {404, Refusal.body("fleet_unknown"), nil}
+      {:ok, nil} -> Refusal.answer(404, "fleet_unknown")
       {:error, error} -> refuse(fleet_id, error)
     end
   end
@@ -100,11 +100,8 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
     }
   end
 
-  defp refuse(fleet_id, %Ash.Error.Forbidden{}) do
-    if Keyfleet.Chain.fresh?(fleet_id),
-      do: {403, Refusal.body("not_a_key_holder"), nil},
-      else: {503, Refusal.body("ownership_refreshing"), nil}
-  end
+  defp refuse(fleet_id, %Ash.Error.Forbidden{}),
+    do: Refusal.holders_only(fleet_id, "not_a_key_holder")
 
   defp refuse(_fleet_id, %{errors: errors}) do
     {status, body} = Enum.find_value(errors, &named/1) || {422, Refusal.body("project_invalid")}

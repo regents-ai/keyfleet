@@ -18,15 +18,15 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
   def answer(:fleets, _params, _actor, _waiter) do
     case directory(&Directory.list/0) do
       {:ok, fleets} -> ok(DirectoryJSON.index(%{fleets: fleets, generated_at: now()}))
-      {:error, _failure} -> refusal(503, "directory_unavailable")
+      {:error, _failure} -> Refusal.answer(503, "directory_unavailable")
     end
   end
 
   def answer(:fleet, %{"fleet_id" => fleet_id}, _actor, _waiter) do
     case directory(fn -> Directory.fleet(fleet_id) end) do
       {:ok, fleet} -> ok(DirectoryJSON.show(%{fleet: fleet, generated_at: now()}))
-      :unknown -> refusal(404, "fleet_unknown")
-      {:error, _failure} -> refusal(503, "directory_unavailable")
+      :unknown -> Refusal.answer(404, "fleet_unknown")
+      {:error, _failure} -> Refusal.answer(503, "directory_unavailable")
     end
   end
 
@@ -35,9 +35,9 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
          {:ok, pulse} <- Keyfleet.WorkspacePulse.read(fleet_id, after_seq) do
       ok(pulse)
     else
-      :error -> refusal(400, "invalid_pulse_cursor")
-      :unknown -> refusal(404, "fleet_unknown")
-      {:error, _error} -> refusal(503, "graph_unavailable")
+      :error -> Refusal.answer(400, "invalid_pulse_cursor")
+      :unknown -> Refusal.answer(404, "fleet_unknown")
+      {:error, _error} -> Refusal.answer(503, "graph_unavailable")
     end
   end
 
@@ -46,9 +46,9 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
          {:ok, %{} = result} <- PageRead.run("proposals", fn -> listing(fleet_id, before) end) do
       ok(result)
     else
-      :error -> refusal(400, "invalid_proposal_cursor")
-      {:ok, :unknown} -> refusal(404, "fleet_unknown")
-      {:error, _failure} -> refusal(503, "proposals_unavailable")
+      :error -> Refusal.answer(400, "invalid_proposal_cursor")
+      {:ok, :unknown} -> Refusal.answer(404, "fleet_unknown")
+      {:error, _failure} -> Refusal.answer(503, "proposals_unavailable")
     end
   end
 
@@ -56,14 +56,13 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
   # is unavailable for now.
   def answer(:treasury, %{"fleet_id" => fleet_id}, _actor, _waiter) do
     case PageRead.run("treasury", fn -> treasury(fleet_id) end) do
-      {:ok, nil} -> refusal(404, "fleet_unknown")
+      {:ok, nil} -> Refusal.answer(404, "fleet_unknown")
       {:ok, page} -> ok(treasury_json(fleet_id, page))
-      {:error, _failure} -> refusal(503, "treasury_unavailable")
+      {:error, _failure} -> Refusal.answer(503, "treasury_unavailable")
     end
   end
 
   defp ok(body), do: {200, body, nil}
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
   # A read that fails outright is unavailable too, like a count that can't be
   # read.

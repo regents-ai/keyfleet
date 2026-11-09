@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.AgentTools.Publications.Answer do
   def answer(op, %{"fleet_id" => fleet_id} = params, actor, _waiter) do
     case run(op, params, actor) do
       {:ok, body} -> {200, body, nil}
-      {:refused, status, code} -> {status, Refusal.body(code), nil}
+      {:refused, status, code} -> Refusal.answer(status, code)
       {:error, error} -> refuse(fleet_id, error)
     end
   end
@@ -109,11 +109,8 @@ defmodule KeyfleetWeb.AgentTools.Publications.Answer do
     }
   end
 
-  defp refuse(fleet_id, %Ash.Error.Forbidden{}) do
-    if Keyfleet.Chain.fresh?(fleet_id),
-      do: {403, Refusal.body("not_a_key_holder"), nil},
-      else: {503, Refusal.body("ownership_refreshing"), nil}
-  end
+  defp refuse(fleet_id, %Ash.Error.Forbidden{}),
+    do: Refusal.holders_only(fleet_id, "not_a_key_holder")
 
   defp refuse(_fleet_id, %{errors: errors}) do
     {status, body} = Enum.find_value(errors, &refusal/1) || {422, Refusal.body("publish_invalid")}

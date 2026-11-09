@@ -35,8 +35,8 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
           end
       })
     else
-      {:ok, nil} -> refusal(404, "fleet_unknown")
-      {:project, {:ok, nil}} -> refusal(404, "project_unknown")
+      {:ok, nil} -> Refusal.answer(404, "fleet_unknown")
+      {:project, {:ok, nil}} -> Refusal.answer(404, "project_unknown")
       {:project, failed} -> refused(fleet_id, failed)
       failed -> refused(fleet_id, failed)
     end
@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
             refused(fleet_id, {:error, %Ash.Error.Forbidden{}})
 
           %{commits: :unreadable} ->
-            refusal(503, "code_unavailable")
+            Refusal.answer(503, "code_unavailable")
 
           history ->
             ok(%{
@@ -64,10 +64,10 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
         end
 
       {:refused, status, code} ->
-        refusal(status, code)
+        Refusal.answer(status, code)
     end
   rescue
-    NotFoundError -> refusal(404, "history_page_unknown")
+    NotFoundError -> Refusal.answer(404, "history_page_unknown")
   end
 
   def answer(:commit, %{"fleet_id" => fleet_id} = params, actor, _waiter) do
@@ -77,20 +77,19 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
         |> WorkspacePage.commit(repository, params["commit"], actor)
         |> case do
           %{members_only?: true} -> refused(fleet_id, {:error, %Ash.Error.Forbidden{}})
-          %{change: :unreadable} -> refusal(503, "code_unavailable")
-          %{change: :not_found} -> refusal(404, "commit_unknown")
+          %{change: :unreadable} -> Refusal.answer(503, "code_unavailable")
+          %{change: :not_found} -> Refusal.answer(404, "commit_unknown")
           commit -> ok(commit_body(commit))
         end
 
       {:refused, status, code} ->
-        refusal(status, code)
+        Refusal.answer(status, code)
     end
   rescue
-    NotFoundError -> refusal(404, "commit_unknown")
+    NotFoundError -> Refusal.answer(404, "commit_unknown")
   end
 
   defp ok(body), do: {200, body, nil}
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
   defp repository(fleet_id, project) do
     case Fleets.get_fleet(fleet_id, actor: %System{}) do
@@ -162,11 +161,8 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
   defp sent_by(sent),
     do: %{token_id: sent.token_id, agent_name: sent.agent, ref: sent.ref, pushed_at: sent.at}
 
-  defp refused(fleet_id, {:error, %Ash.Error.Forbidden{}}) do
-    if Keyfleet.Chain.fresh?(fleet_id),
-      do: refusal(403, "code_not_holder"),
-      else: refusal(503, "ownership_refreshing")
-  end
+  defp refused(fleet_id, {:error, %Ash.Error.Forbidden{}}),
+    do: Refusal.holders_only(fleet_id, "code_not_holder")
 
   defp refused(fleet_id, {:error, error}) do
     Keyfleet.Code.RecordsDownError.report(
@@ -174,6 +170,6 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
         inspect(error.__struct__)
     )
 
-    refusal(503, "code_catching_up")
+    Refusal.answer(503, "code_catching_up")
   end
 end

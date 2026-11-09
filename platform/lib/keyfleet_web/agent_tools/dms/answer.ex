@@ -200,43 +200,38 @@ defmodule KeyfleetWeb.AgentTools.Dms.Answer do
   defp agent_profile_json(profile),
     do: Map.take(profile, [:id, :name, :declared_harness, :current_status])
 
-  defp refuse(:conversation_unknown, _fleet_id, _actor), do: refusal(404, "conversation_unknown")
+  defp refuse(:conversation_unknown, _fleet_id, _actor),
+    do: Refusal.answer(404, "conversation_unknown")
 
-  # Who holds a Key cannot be read while the fleet's key ownership is not fresh.
-  defp refuse({:error, %Ash.Error.Forbidden{}}, fleet_id, actor) do
-    if Keyfleet.Chain.fresh?(fleet_id),
-      do: refusal(403, not_holder(actor)),
-      else: refusal(503, "ownership_refreshing")
-  end
+  defp refuse({:error, %Ash.Error.Forbidden{}}, fleet_id, actor),
+    do: Refusal.holders_only(fleet_id, not_holder(actor))
 
   defp refuse({:error, %Ash.Error.Invalid{errors: errors}}, _fleet_id, _actor) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        refusal(404, "fleet_unknown")
+        Refusal.answer(404, "fleet_unknown")
 
       unknown = Enum.find(errors, &match?(%KeyUnknownError{}, &1)) ->
         {404, Refusal.key_unknown(unknown.fleet_id, unknown.token_id), nil}
 
       Enum.any?(errors, &match?(%NoAgentProfileError{}, &1)) ->
-        refusal(404, "profile_not_found")
+        Refusal.answer(404, "profile_not_found")
 
       Enum.any?(errors, &match?(%SameKeyError{}, &1)) ->
-        refusal(422, "same_key")
+        Refusal.answer(422, "same_key")
 
       Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
-        refusal(422, "idempotency_conflict")
+        Refusal.answer(422, "idempotency_conflict")
 
       limit = Enum.find(errors, &match?(%SendLimitError{}, &1)) ->
         {429, Refusal.body("dm_limit_reached"), limit.retry_after}
 
       true ->
-        refusal(422, "invalid_dm")
+        Refusal.answer(422, "invalid_dm")
     end
   end
 
-  defp refuse(_error, _fleet_id, _actor), do: refusal(422, "invalid_dm")
-
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
+  defp refuse(_error, _fleet_id, _actor), do: Refusal.answer(422, "invalid_dm")
 
   # An agent paired with a person, with no Key of its own, is told what keeps
   # it from acting as theirs.

@@ -98,8 +98,8 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
         build: Application.fetch_env!(:keyfleet, :build)
       })
     else
-      nil -> refusal(404, "fleet_unknown")
-      {:error, _error} -> refusal(503, "profile_unavailable")
+      nil -> Refusal.answer(404, "fleet_unknown")
+      {:error, _error} -> Refusal.answer(503, "profile_unavailable")
     end
   end
 
@@ -127,8 +127,8 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
       %{items: items, cursor: next} = Activity.page(fleet_id, cursor, actor: actor)
       ok(%{items: items, has_more: next != nil, cursor: sealed(fleet_id, next)})
     else
-      nil -> refusal(404, "fleet_unknown")
-      :error -> refusal(422, "activity_cursor_unknown")
+      nil -> Refusal.answer(404, "fleet_unknown")
+      :error -> Refusal.answer(422, "activity_cursor_unknown")
     end
   end
 
@@ -139,9 +139,9 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
       receipts = List.wrap(post) ++ writes
       ok(%{idempotency_key: key, executed: receipts != [], receipts: receipts})
     else
-      nil -> refusal(404, "fleet_unknown")
-      :refreshing -> refusal(503, "ownership_refreshing")
-      {:error, _error} -> refusal(503, "graph_unavailable")
+      nil -> Refusal.answer(404, "fleet_unknown")
+      :refreshing -> Refusal.answer(503, "ownership_refreshing")
+      {:error, _error} -> Refusal.answer(503, "graph_unavailable")
     end
   end
 
@@ -149,7 +149,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     %{"number" => number, "votes_after_seq" => after_seq} = params
 
     case Fleets.get_fleet!(fleet_id) do
-      nil -> refusal(404, "fleet_unknown")
+      nil -> Refusal.answer(404, "fleet_unknown")
       _fleet -> proposal(fleet_id, number, after_seq)
     end
   end
@@ -157,7 +157,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   def answer(:link, %{"url" => url}, actor, _waiter) do
     case Links.resolve(url, actor) do
       {:ok, link} -> ok(Map.put(link, :url, url))
-      :unknown -> refusal(422, "link_unknown")
+      :unknown -> Refusal.answer(422, "link_unknown")
     end
   end
 
@@ -167,7 +167,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
         ok(preview)
 
       :tool_unknown ->
-        refusal(422, "preview_tool_unknown")
+        Refusal.answer(422, "preview_tool_unknown")
 
       {:missing, names} ->
         hint =
@@ -178,12 +178,11 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   end
 
   defp ok(body), do: {200, body, nil}
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
   defp proposal(fleet_id, number, after_seq) do
     case Proposals.get_by_number(fleet_id, number) do
       nil ->
-        refusal(404, "proposal_unknown")
+        Refusal.answer(404, "proposal_unknown")
 
       proposal ->
         {votes, more?} = Proposals.votes_after(proposal.id, after_seq, @votes_page)
@@ -214,10 +213,10 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
            }), nil}
 
         {:error, _error} ->
-          refusal(503, "checkpoint_unavailable")
+          Refusal.answer(503, "checkpoint_unavailable")
       end
     else
-      refusal(404, "fleet_unknown")
+      Refusal.answer(404, "fleet_unknown")
     end
   end
 

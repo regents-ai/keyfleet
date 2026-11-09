@@ -23,7 +23,6 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   """
 
   alias Keyfleet.Actors.Agent
-  alias Keyfleet.Chain
   alias Keyfleet.Dms.Checks.KeyHolder
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
@@ -48,8 +47,8 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
          %{issued?: true} = key <- Profile.read(fleet_id, token_id, nil) do
       ok(%{key: key_json(key, token_id in KeyHolder.held(actor, fleet_id))})
     else
-      nil -> refusal(404, "fleet_unknown")
-      {:error, :invalid_token_id} -> refusal(422, "invalid_request")
+      nil -> Refusal.answer(404, "fleet_unknown")
+      {:error, :invalid_token_id} -> Refusal.answer(422, "invalid_request")
       %{issued?: false, token_id: token_id} -> {404, Refusal.key_unknown(fleet_id, token_id), nil}
     end
   end
@@ -60,7 +59,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
 
     case Fleets.get_fleet!(fleet_id) do
       nil ->
-        refusal(404, "fleet_unknown")
+        Refusal.answer(404, "fleet_unknown")
 
       %{} ->
         keys = Keys.keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
@@ -87,10 +86,11 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
         }
       })
     else
-      nil -> refusal(404, "fleet_unknown")
-      {:error, :invalid_token_id} -> refusal(422, "invalid_request")
-      {:error, %Ash.Error.Forbidden{}} -> refuse_holder(fleet_id)
-      {:error, %Ash.Error.Invalid{}} -> refusal(404, "wall_post_unknown")
+      nil -> Refusal.answer(404, "fleet_unknown")
+      {:error, :invalid_token_id} -> Refusal.answer(422, "invalid_request")
+      # Only whoever acts as the Key now takes a post off its wall.
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.holders_only(fleet_id, "not_your_key")
+      {:error, %Ash.Error.Invalid{}} -> Refusal.answer(404, "wall_post_unknown")
     end
   end
 
@@ -101,9 +101,9 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
          {:ok, choice} <- Keys.choose_posting_key(fleet_id, token_id, actor: actor) do
       ok(%{posting_key: %{fleet_id: choice.fleet_id, token_id: choice.token_id}})
     else
-      nil -> refusal(404, "fleet_unknown")
-      {:error, %Ash.Error.Forbidden{}} -> refusal(403, "person_not_here")
-      {:error, %Ash.Error.Invalid{}} -> refusal(409, "key_not_held")
+      nil -> Refusal.answer(404, "fleet_unknown")
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.answer(403, "person_not_here")
+      {:error, %Ash.Error.Invalid{}} -> Refusal.answer(409, "key_not_held")
     end
   end
 
@@ -114,7 +114,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
          {:ok, _mute} <- Rooms.mute_key(fleet_id, token_id, actor: actor) do
       mutes(fleet_id, actor)
     else
-      {:error, :invalid_token_id} -> refusal(422, "invalid_request")
+      {:error, :invalid_token_id} -> Refusal.answer(422, "invalid_request")
       {:error, error} -> refuse_mute(error)
     end
   end
@@ -124,7 +124,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
          {:ok, _mute} <- Rooms.unmute_key(fleet_id, token_id, actor: actor) do
       mutes(fleet_id, actor)
     else
-      {:error, :invalid_token_id} -> refusal(422, "invalid_request")
+      {:error, :invalid_token_id} -> Refusal.answer(422, "invalid_request")
       {:error, error} -> refuse_mute(error)
     end
   end
@@ -139,15 +139,6 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   end
 
   defp ok(body), do: {200, body, nil}
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
-
-  # Only whoever acts as the Key now takes a post off its wall, and nobody does
-  # while the fleet's Key ownership is being read.
-  defp refuse_holder(fleet_id) do
-    if Chain.fresh?(fleet_id),
-      do: refusal(403, "not_your_key"),
-      else: refusal(503, "ownership_refreshing")
-  end
 
   defp token_id(value) when is_binary(value) do
     case Integer.parse(value) do
@@ -171,13 +162,13 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   defp refuse_mute(%Ash.Error.Invalid{errors: errors} = error) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        refusal(404, "fleet_unknown")
+        Refusal.answer(404, "fleet_unknown")
 
       unknown = Enum.find(errors, &match?(%KeyUnknownError{}, &1)) ->
         {404, Refusal.key_unknown(unknown.fleet_id, unknown.token_id), nil}
 
       Enum.any?(errors, &match?(%MuteLimitError{}, &1)) ->
-        refusal(409, "mute_limit_reached")
+        Refusal.answer(409, "mute_limit_reached")
 
       true ->
         raise error

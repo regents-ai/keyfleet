@@ -58,15 +58,15 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   def answer(:join, %{"name" => name, "declared_harness" => harness}, actor, _waiter) do
     case Agents.ensure_profile(%{name: name, declared_harness: harness}, actor: actor) do
       {:ok, profile} -> profile(profile)
-      {:error, _error} -> refusal(422, "invalid_profile")
+      {:error, _error} -> Refusal.answer(422, "invalid_profile")
     end
   end
 
   def answer(:profile, _params, actor, _waiter) do
     case Agents.get_my_profile(actor: actor) do
-      {:ok, nil} -> refusal(404, "profile_not_found")
+      {:ok, nil} -> Refusal.answer(404, "profile_not_found")
       {:ok, profile} -> profile(profile)
-      {:error, _error} -> refusal(503, "profile_unavailable")
+      {:error, _error} -> Refusal.answer(503, "profile_unavailable")
     end
   end
 
@@ -75,8 +75,8 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
          {:ok, profile} <- Agents.edit_my_profile(profile, params, actor: actor) do
       profile(profile)
     else
-      {:ok, nil} -> refusal(404, "profile_not_found")
-      {:error, _error} -> refusal(422, "invalid_profile")
+      {:ok, nil} -> Refusal.answer(404, "profile_not_found")
+      {:error, _error} -> Refusal.answer(422, "invalid_profile")
     end
   end
 
@@ -90,14 +90,14 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
         |> ok()
 
       {:error, _error} ->
-        refusal(503, "account_unavailable")
+        Refusal.answer(503, "account_unavailable")
     end
   end
 
   # Newest first; `after` is the previous page's pagination.next_cursor.
   def answer(:credits_history, %{"after" => cursor}, _actor, _waiter)
       when not is_binary(cursor),
-      do: refusal(422, "invalid_cursor")
+      do: Refusal.answer(422, "invalid_cursor")
 
   def answer(:credits_history, params, actor, _waiter) do
     args =
@@ -115,13 +115,13 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
 
       {:error, error} ->
         if cursor_error?(error),
-          do: refusal(422, "invalid_cursor"),
-          else: refusal(503, "account_unavailable")
+          do: Refusal.answer(422, "invalid_cursor"),
+          else: Refusal.answer(503, "account_unavailable")
     end
   end
 
   def answer(:points, _params, %{human_account_id: nil}, _waiter),
-    do: refusal(403, "person_not_here")
+    do: Refusal.answer(403, "person_not_here")
 
   def answer(:points, _params, actor, _waiter) do
     case RegentPoints.summary(actor: actor) do
@@ -151,7 +151,7 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
         |> ok()
 
       {:error, _error} ->
-        refusal(503, "account_unavailable")
+        Refusal.answer(503, "account_unavailable")
     end
   end
 
@@ -174,9 +174,9 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
       })
     else
       {:limited, seconds} -> limited(seconds)
-      :error -> refusal(422, "invalid_avatar")
-      {:ok, nil} -> refusal(404, "profile_not_found")
-      {:error, _error} -> refusal(503, "profile_unavailable")
+      :error -> Refusal.answer(422, "invalid_avatar")
+      {:ok, nil} -> Refusal.answer(404, "profile_not_found")
+      {:error, _error} -> Refusal.answer(503, "profile_unavailable")
     end
   end
 
@@ -187,10 +187,10 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
          {:ok, upload} <- upload(ticket, params["content_type"]) do
       case Base.decode64(params["bytes_base64"], ignore: :whitespace, padding: false) do
         {:ok, bytes} -> keep(upload, bytes)
-        :error -> refusal(422, "invalid_request")
+        :error -> Refusal.answer(422, "invalid_request")
       end
     else
-      :not_here -> refusal(401, "avatar_upload_expired")
+      :not_here -> Refusal.answer(401, "avatar_upload_expired")
       refused -> refused
     end
   end
@@ -198,13 +198,13 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   def answer(:avatar_remove, _params, actor, _waiter) do
     case Agents.get_my_profile(actor: actor) do
       {:ok, nil} ->
-        refusal(404, "profile_not_found")
+        Refusal.answer(404, "profile_not_found")
 
       {:ok, profile} ->
         ok(%{avatar_url: Avatar.url(Agents.remove_avatar!(profile, actor: actor))})
 
       {:error, _error} ->
-        refusal(503, "profile_unavailable")
+        Refusal.answer(503, "profile_unavailable")
     end
   end
 
@@ -225,10 +225,10 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
          {:type, true} <- {:type, content_type == declared.content_type} do
       {:ok, %{actor: actor, profile_id: profile_id, declared: declared}}
     else
-      {:error, _reason} -> refusal(401, "avatar_upload_expired")
-      {:paired, false} -> refusal(403, "agent_not_paired")
+      {:error, _reason} -> Refusal.answer(401, "avatar_upload_expired")
+      {:paired, false} -> Refusal.answer(403, "agent_not_paired")
       {:limited, seconds} -> limited(seconds)
-      {:type, false} -> refusal(422, "avatar_mismatch")
+      {:type, false} -> Refusal.answer(422, "avatar_mismatch")
     end
   end
 
@@ -239,22 +239,22 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   """
   @spec keep(map(), binary() | :too_large | :unreadable) ::
           {pos_integer(), map(), pos_integer() | nil}
-  def keep(_upload, :too_large), do: refusal(413, "request_too_large")
-  def keep(_upload, :unreadable), do: refusal(503, "avatar_unavailable")
+  def keep(_upload, :too_large), do: Refusal.answer(413, "request_too_large")
+  def keep(_upload, :unreadable), do: Refusal.answer(503, "avatar_unavailable")
 
   def keep(upload, bytes) do
     if byte_size(bytes) > Avatar.max_bytes(),
-      do: refusal(413, "request_too_large"),
+      do: Refusal.answer(413, "request_too_large"),
       else: store(upload, bytes)
   end
 
   defp store(%{actor: actor, profile_id: profile_id, declared: declared}, bytes) do
     case Agents.store_avatar(actor, profile_id, declared, bytes) do
       {:ok, profile} -> ok(%{avatar_url: Avatar.url(profile)})
-      {:error, :mismatch} -> refusal(422, "avatar_mismatch")
-      {:error, :unreadable} -> refusal(422, "invalid_avatar")
-      {:error, :profile_not_found} -> refusal(404, "profile_not_found")
-      {:error, _reason} -> refusal(503, "avatar_unavailable")
+      {:error, :mismatch} -> Refusal.answer(422, "avatar_mismatch")
+      {:error, :unreadable} -> Refusal.answer(422, "invalid_avatar")
+      {:error, :profile_not_found} -> Refusal.answer(404, "profile_not_found")
+      {:error, _reason} -> Refusal.answer(503, "avatar_unavailable")
     end
   end
 
@@ -282,7 +282,6 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   defp limited(seconds), do: {429, Refusal.body("avatar_limit_reached"), seconds}
 
   defp ok(body), do: {200, body, nil}
-  defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
   defp profile(profile) do
     profile
