@@ -49,14 +49,19 @@ defmodule Keyfleet.Graph.Projector do
   def await(fleet_id, run_id, seq) do
     # The projector may run on another machine; see `Keyfleet.Graph.Writer`.
     case :pg.get_members(Keyfleet.Graph.Processes, {__MODULE__, fleet_id}) do
-      [pid] -> GenServer.call(pid, {:await, run_id, seq}, wait())
-      [] -> 0
+      [pid] ->
+        GenServer.call(
+          pid,
+          {:await, run_id, seq},
+          Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :projection_wait)
+        )
+
+      [] ->
+        0
     end
   catch
     :exit, _reason -> 0
   end
-
-  defp wait, do: Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :projection_wait)
 
   @impl true
   def init(opts) do
@@ -148,23 +153,21 @@ defmodule Keyfleet.Graph.Projector do
       {:graph_head, fleet_id, run_id, watermark}
     )
 
-    if run_id != state.run_id or notable_since?(fleet_id, state.watermark),
-      do:
-        Phoenix.PubSub.broadcast(
-          Keyfleet.PubSub,
-          Graph.notable_topic(fleet_id),
-          {:graph_notable, fleet_id}
-        )
+    # Tell pages when the newest change the activity shows anyone was copied
+    # after the watermark. A notice is only a hint, so a read that fails sends
+    # none.
+    if run_id != state.run_id or
+         match?(
+           {:ok, [%{seq: seq}]} when seq > state.watermark,
+           Graph.notable_before(fleet_id, nil, 1)
+         ),
+       do:
+         Phoenix.PubSub.broadcast(
+           Keyfleet.PubSub,
+           Graph.notable_topic(fleet_id),
+           {:graph_notable, fleet_id}
+         )
   end
-
-  # Whether the newest change the activity shows anyone was copied after
-  # `watermark`. A notice is only a hint, so a read that fails sends none.
-  defp notable_since?(fleet_id, watermark),
-    do:
-      match?(
-        {:ok, [%{seq: seq}]} when seq > watermark,
-        Graph.notable_before(fleet_id, nil, 1)
-      )
 
   # The kind of failure only: the same one repeats every round until it clears.
   defp short(reason) when is_atom(reason), do: Atom.to_string(reason)

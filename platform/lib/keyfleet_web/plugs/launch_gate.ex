@@ -103,7 +103,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   defp closed(conn) do
     cond do
-      page?(conn) -> to_early(conn)
+      page?(conn) -> send_to(conn, "/early")
       json_address?(conn.path_info) -> conn |> unavailable() |> Refusal.json(503, "not_open_yet")
       true -> conn |> unavailable() |> markdown_line()
     end
@@ -112,7 +112,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   # A page is what a browser opens: a GET of an address that names no file and
   # isn't one programs read, asked for as HTML.
   defp page?(%Plug.Conn{method: method, path_info: path} = conn) when method in ["GET", "HEAD"],
-    do: not json_address?(path) and not file?(path) and html?(conn)
+    do: not json_address?(path) and Path.extname(List.last(path, "")) == "" and html?(conn)
 
   defp page?(_conn), do: false
 
@@ -121,14 +121,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
       Path.extname(List.last(path, "")) == ".json"
   end
 
-  defp file?(path), do: Path.extname(List.last(path, "")) != ""
-
   defp html?(conn) do
     formats = [{"html", "text", "html"}, {"md", "text", "markdown"}]
     RegentAgentAccess.negotiate(get_req_header(conn, "accept"), formats) == "html"
   end
-
-  defp to_early(conn), do: send_to(conn, "/early")
 
   # Not kept by browsers: the switch can change between two requests.
   defp send_to(conn, path) do

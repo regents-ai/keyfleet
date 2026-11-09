@@ -42,15 +42,11 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
   end
 
   defp limit(changeset, actor) do
-    if persons_own?(changeset),
-      do: limit_person(changeset, actor),
-      else: limit_agent(changeset, actor)
+    if Ash.Changeset.get_attribute(changeset, :author_kind) == :human and
+         is_nil(Ash.Changeset.get_attribute(changeset, :via_agent_profile_id)),
+       do: limit_person(changeset, actor),
+       else: limit_agent(changeset, actor)
   end
-
-  defp persons_own?(changeset),
-    do:
-      Ash.Changeset.get_attribute(changeset, :author_kind) == :human and
-        is_nil(Ash.Changeset.get_attribute(changeset, :via_agent_profile_id))
 
   defp limit_person(changeset, actor) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)

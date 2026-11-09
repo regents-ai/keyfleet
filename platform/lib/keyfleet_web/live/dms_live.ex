@@ -301,7 +301,9 @@ defmodule KeyfleetWeb.DmsLive do
     ~H"""
     <ul :if={@conversations != []} class="dms-list">
       <li :for={conversation <- @conversations} id={"dms-conversation-#{conversation.id}"}>
-        <.link patch={conversation_path(@dms, Dms.other_key(conversation, @dms.token_id))}>
+        <.link patch={
+          KeyLinks.dm_path(@dms.fleet_id, @dms.token_id, Dms.other_key(conversation, @dms.token_id))
+        }>
           Key {Rules.grouped(Dms.other_key(conversation, @dms.token_id))}
           <span
             class="rooms-unread"
@@ -369,9 +371,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp inbox_path(%{fleet_id: fleet_id, token_id: token_id}),
     do: KeyLinks.dms_path(fleet_id, token_id)
-
-  defp conversation_path(%{fleet_id: fleet_id, token_id: token_id}, other_token_id),
-    do: KeyLinks.dm_path(fleet_id, token_id, other_token_id)
 
   # A conversation has something new when its last message came from the
   # other Key and is past how far the person has read it.

@@ -313,7 +313,8 @@ defmodule Keyfleet.Rooms do
       topic(fleet_id, class),
       Keyfleet.Graph.topic(fleet_id, class),
       Keyfleet.Proposals.topic(fleet_id),
-      Keyfleet.Keys.topic(fleet_id) | inbox_topics(fleet_id, places, actor)
+      Keyfleet.Keys.topic(fleet_id)
+      | dm_topics(fleet_id, places.dms, actor) ++ quote_topics(fleet_id, places.quotes, actor)
     ]
   end
 
@@ -353,9 +354,6 @@ defmodule Keyfleet.Rooms do
 
   defp sync_quotes(_fleet_id, nil, _actor), do: {:ok, nil}
   defp sync_quotes(fleet_id, after_seq, actor), do: quote_changes(fleet_id, after_seq, actor)
-
-  defp inbox_topics(fleet_id, places, actor),
-    do: dm_topics(fleet_id, places.dms, actor) ++ quote_topics(fleet_id, places.quotes, actor)
 
   defp dm_topics(_fleet_id, nil, _actor), do: []
   defp dm_topics(fleet_id, _cursors, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
@@ -416,7 +414,13 @@ defmodule Keyfleet.Rooms do
         if news?(synced),
           do: {:ok, synced},
           else:
-            await_news(fleet_id, read, synced, System.monotonic_time(:millisecond) + wait_ms())
+            await_news(
+              fleet_id,
+              read,
+              synced,
+              System.monotonic_time(:millisecond) +
+                Application.fetch_env!(:keyfleet, :agent_wait_ms)
+            )
       end
     after
       Enum.each(topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
@@ -515,8 +519,6 @@ defmodule Keyfleet.Rooms do
       0 -> :ok
     end
   end
-
-  defp wait_ms, do: Application.fetch_env!(:keyfleet, :agent_wait_ms)
 
   # The caller's class is read once, and the rooms it is shown are the ones it
   # may read. The posts are then read before the heads. A post is only ever

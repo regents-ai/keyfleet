@@ -1541,7 +1541,9 @@ defmodule KeyfleetWeb.FleetLive do
         show_without_keys(socket, :unreadable, params, place)
 
       figures ->
-        feed = feed_on_return(shown, wanted)
+        # The feed's lines leave the page with the hall, so coming back from
+        # another view draws them again.
+        feed = if(shown != :hall and wanted == :hall, do: :redrawn, else: :kept)
         show_open(socket, fleet, figures, params, place, feed, actor)
     end
   end
@@ -1652,11 +1654,6 @@ defmodule KeyfleetWeb.FleetLive do
     |> assign(activity: nil, activity_refresh: nil)
     |> stream(:activity, [], reset: true)
   end
-
-  # The feed's lines leave the page with the hall, so coming back from
-  # another view draws them again.
-  defp feed_on_return(shown, wanted),
-    do: if(shown != :hall and wanted == :hall, do: :redrawn, else: :kept)
 
   @doc """
   What the signed-in person has sent their agent to quote in the fleet, with

@@ -16,7 +16,10 @@ defmodule Keyfleet.Rooms.Changes.NameRoom do
     if Ash.Changeset.changing_attribute?(changeset, :topic) do
       changeset
       |> Ash.Changeset.before_action(&say_so(&1, actor))
-      |> Ash.Changeset.after_action(&with_line/2)
+      # The room is answered with the line counted in its head.
+      |> Ash.Changeset.after_action(fn changeset, room ->
+        {:ok, %{room | head_seq: changeset.context.naming_line.seq}}
+      end)
     else
       changeset
     end
@@ -46,8 +49,4 @@ defmodule Keyfleet.Rooms.Changes.NameRoom do
         Ash.Changeset.add_error(changeset, error)
     end
   end
-
-  # The room is answered with the line counted in its head.
-  defp with_line(changeset, room),
-    do: {:ok, %{room | head_seq: changeset.context.naming_line.seq}}
 end

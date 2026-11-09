@@ -53,14 +53,15 @@ defmodule KeyfleetWeb.ToolErrors do
   end
 
   defp checked(%Ash.ActionInput{resource: resource, action: %{name: action}} = input, arguments) do
-    errors = if shaped?(input), do: opened(input) ++ input.errors, else: input.errors
+    # The input has the shape a signed request needs when every refusal it
+    # has is the workspace's own.
+    errors =
+      if Enum.all?(input.errors, &WorkspaceRefusal.for_error/1),
+        do: opened(input) ++ input.errors,
+        else: input.errors
+
     if errors == [], do: {:ok, arguments}, else: {:error, refused(resource, action, errors)}
   end
-
-  # The input has the shape a signed request needs: every refusal it has is
-  # the workspace's own.
-  defp shaped?(%Ash.ActionInput{errors: errors}),
-    do: Enum.all?(errors, &WorkspaceRefusal.for_error/1)
 
   defp opened(%Ash.ActionInput{resource: resource} = input) do
     fleet_id = Ash.ActionInput.get_argument(input, :fleet_id)

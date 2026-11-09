@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
       terms: fleet.terms,
       agents: Enum.map(fleet.agents, &agent/1),
       projects: fleet.projects,
-      rooms: Enum.map(fleet.rooms, &linked(fleet, &1)),
+      rooms: Enum.map(fleet.rooms, &Map.put(&1, :url, room_url(fleet.id, &1.slug))),
       recent_posts: Enum.map(fleet.recent_posts, &post(fleet, &1))
     })
   end
@@ -86,8 +86,6 @@ defmodule KeyfleetWeb.DirectoryJSON do
   defp agent(agent), do: Map.delete(agent, :avatar_src)
 
   defp post(fleet, post), do: Map.put(post, :url, room_url(fleet.id, post.room))
-
-  defp linked(fleet, room), do: Map.put(room, :url, room_url(fleet.id, room.slug))
 
   defp room_url(fleet_id, slug),
     do: PublicDocuments.url(KeyLinks.room_path(fleet_id, slug))

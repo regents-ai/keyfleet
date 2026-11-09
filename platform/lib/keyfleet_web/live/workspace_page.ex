@@ -584,7 +584,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     |> Map.put(
       :rooms,
       if(you,
-        do: for(room <- Rooms.list_rooms!(fleet.id, opts), do: room_choice(room)),
+        do:
+          for(
+            room <- Rooms.list_rooms!(fleet.id, opts),
+            do: %{slug: room.slug, label: RoomsLive.room_label(room)}
+          ),
         else: []
       )
     )
@@ -749,8 +753,6 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp public_value(field, value) when is_map_key(@choices, field), do: choice(field, value)
   defp public_value(_field, value), do: value(value)
 
-  defp room_choice(room), do: %{slug: room.slug, label: RoomsLive.room_label(room)}
-
   # Whose a pin is to the member reading: only its pinner lifts it.
   defp whose(pin, actor),
     do: if(pin.human_account_id == actor.human_account_id, do: :mine, else: :theirs)
@@ -822,7 +824,10 @@ defmodule KeyfleetWeb.WorkspacePage do
 
           agents =
             agent_names(
-              [creator_wallet(object.sys) | joined_wallets(object.sys)] ++
+              [
+                creator_wallet(object.sys)
+                | Enum.map(joined(object.sys), &agent_wallet(&1["kind"], &1["wallet"]))
+              ] ++
                 Enum.map(history, &actor_wallet/1)
             )
 
@@ -1320,14 +1325,23 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp file(repository, path, at) do
     case Code.file(repository, path, at) do
-      {:ok, :too_large} -> {:file, :too_large}
-      {:ok, bytes} -> {:file, if(text?(bytes), do: bytes, else: :not_text)}
-      :not_found -> raise NotFoundError
-      {:error, error} -> unreadable_code(repository, error)
+      {:ok, :too_large} ->
+        {:file, :too_large}
+
+      {:ok, bytes} ->
+        {:file,
+         if(String.valid?(bytes) and not String.contains?(bytes, <<0>>),
+           do: bytes,
+           else: :not_text
+         )}
+
+      :not_found ->
+        raise NotFoundError
+
+      {:error, error} ->
+        unreadable_code(repository, error)
     end
   end
-
-  defp text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
 
   defp unreadable_code(repository, error) do
     Logger.warning("The repository #{repository} could not be read: #{reason(error)}")
@@ -2200,8 +2214,6 @@ defmodule KeyfleetWeb.WorkspacePage do
   # Who joined a goal, in the order they joined, each told as the key it
   # joined as with the name of its agent.
   defp joined(sys), do: Map.get(sys, "joined", [])
-
-  defp joined_wallets(sys), do: Enum.map(joined(sys), &agent_wallet(&1["kind"], &1["wallet"]))
 
   defp joined_field(sys, agents) do
     case joined(sys) do

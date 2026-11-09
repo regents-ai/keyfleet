@@ -18,11 +18,12 @@ defmodule KeyfleetWeb.Live.LaunchGateHook do
 
   def on_mount(:default, _params, _session, socket) do
     with {:cont, socket} <- app_gate(socket) do
-      {:cont, attach_hook(socket, :launch_gate, :handle_params, &gate_navigation/3)}
+      {:cont,
+       attach_hook(socket, :launch_gate, :handle_params, fn _params, _uri, socket ->
+         app_gate(socket)
+       end)}
     end
   end
-
-  defp gate_navigation(_params, _uri, socket), do: app_gate(socket)
 
   defp app_gate(socket) do
     if LaunchGate.app_surfaces_enabled?(),

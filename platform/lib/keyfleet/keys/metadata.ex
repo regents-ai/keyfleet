@@ -50,7 +50,11 @@ defmodule Keyfleet.Keys.Metadata do
   def for_key(token_id) do
     with true <- token_id =~ @token_id,
          token_id = String.to_integer(token_id),
-         %Fleet{} = fleet <- fleet_of(token_id),
+         %Fleet{} = fleet <-
+           Enum.find(
+             Fleets.list_deployed_fleets!(),
+             &match?({:ok, _number}, Fleet.key_number(&1, token_id))
+           ),
          {:ok, number} <- Fleet.key_number(fleet, token_id),
          %{} <- Keys.current_key!(fleet.id, number) do
       key = %{fleet: fleet, token_id: number}
@@ -109,13 +113,6 @@ defmodule Keyfleet.Keys.Metadata do
 
   defp cid(nil), do: @interim_pass_cid
   defp cid(%{cid: cid}), do: cid
-
-  defp fleet_of(token_id),
-    do:
-      Enum.find(
-        Fleets.list_deployed_fleets!(),
-        &match?({:ok, _number}, Fleet.key_number(&1, token_id))
-      )
 
   defp unrevealed(%{fleet: fleet, token_id: token_id} = key, nil) do
     {:revealing,

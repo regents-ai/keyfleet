@@ -22,7 +22,7 @@ defmodule Keyfleet.Code.ReceivePack do
 
       for line <- [command | rest],
           [_old, new, ref] <- [String.split(String.trim_trailing(line), " ")],
-          ref in done and not deletion?(new),
+          ref in done and not (new =~ ~r/\A0+\z/),
           do: %{ref: ref, head: new}
     else
       _unreadable -> []
@@ -44,8 +44,6 @@ defmodule Keyfleet.Code.ReceivePack do
       lines(response)
     end
   end
-
-  defp deletion?(head), do: head =~ ~r/\A0+\z/
 
   # The packet lines up to the first flush packet, or `:error` when they
   # don't reach one.

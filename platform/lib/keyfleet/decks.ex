@@ -96,12 +96,11 @@ defmodule Keyfleet.Decks do
 
     %{"fleet" => fleet, "table" => table_hash, "cards" => [_ | _] = cards} = Jason.decode!(bytes)
 
-    unless is_binary(fleet) and fleet != "" and Enum.all?([table_hash | cards], &word?/1) do
+    unless is_binary(fleet) and fleet != "" and
+             Enum.all?([table_hash | cards], &(is_binary(&1) and &1 =~ ~r/\A0x[0-9a-f]{64}\z/)) do
       raise "the deck at #{path} needs a fleet, and a table hash and cards of 32 bytes of hex"
     end
 
     %{fleet: fleet, table: table_hash, cards: List.to_tuple(cards)}
   end
-
-  defp word?(value), do: is_binary(value) and value =~ ~r/\A0x[0-9a-f]{64}\z/
 end

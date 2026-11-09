@@ -584,7 +584,11 @@ defmodule Keyfleet.Notebooks do
   `{:error, :unavailable}` when membership can't be read now.
   """
   def copies(fleet_id, actor, subject, project) do
-    case KeyActor.membership(actor, fleet_id, check_timeout()) do
+    case KeyActor.membership(
+           actor,
+           fleet_id,
+           Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
+         ) do
       {:ok, %{token_id: key}} ->
         {:ok, kept_copies(fleet_id, subject, project, key)}
 
@@ -675,6 +679,4 @@ defmodule Keyfleet.Notebooks do
       {:error, _error} -> {:error, :unavailable}
     end
   end
-
-  defp check_timeout, do: Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 end

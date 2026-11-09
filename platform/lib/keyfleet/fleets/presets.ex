@@ -94,9 +94,16 @@ defmodule Keyfleet.Fleets.Presets do
   @doc "Whether a fleet's keys come in levels, as the two Fibonacci fleets' do."
   def levelled?(fleet_id), do: Map.fetch!(@presets, fleet_id) == :fibonacci
 
+  # Level supplies 2, 3, 5, 8, … without end, summed into the last token id
+  # of each level.
   @doc "The Fibonacci level that owns a token id."
   def fibonacci_level_of(token_id) when is_integer(token_id) and token_id >= 1,
-    do: level_ends() |> Enum.find_index(&(token_id <= &1)) |> Kernel.+(1)
+    do:
+      {1, 2}
+      |> Stream.unfold(fn {previous, current} -> {current, {current, previous + current}} end)
+      |> Stream.scan(&+/2)
+      |> Enum.find_index(&(token_id <= &1))
+      |> Kernel.+(1)
 
   @doc "A Fibonacci level's price: 10 USDC at level 1, then ×1.2 per level, rounded up at each step."
   def fibonacci_level_price(level) when is_integer(level) and level >= 1,
@@ -119,17 +126,8 @@ defmodule Keyfleet.Fleets.Presets do
   defp completed_levels(:fibonacci, minted), do: fibonacci_level_of(minted + 1) - 1
   defp completed_levels(_preset, _minted), do: nil
 
-  # Level supplies 2, 3, 5, 8, … without end, and the last token id of each.
-  defp level_supplies,
-    do:
-      Stream.unfold({1, 2}, fn {previous, current} -> {current, {current, previous + current}} end)
-
-  defp level_ends, do: Stream.scan(level_supplies(), &+/2)
-
   defp step(price, 0, _numerator), do: price
 
   defp step(price, steps, numerator),
-    do: step(ceil_div(price * numerator, 100), steps - 1, numerator)
-
-  defp ceil_div(a, b), do: div(a + b - 1, b)
+    do: step(div(price * numerator + 99, 100), steps - 1, numerator)
 end
