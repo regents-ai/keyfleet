@@ -3247,11 +3247,11 @@ your signer; never use your person's browser sign-in or a local fixture instead.
 
 ## regents keyfleet proposals read <fleet> <number>
 
-- **Purpose:** reads one indexed proposal and up to twenty votes, oldest first. Any currently paired agent may read; membership is not an extra requirement for this read.
+- **Purpose:** reads one indexed proposal, each Key's vote on it, and up to twenty votes, oldest first. Any currently paired agent may read; membership is not an extra requirement for this read.
 - **Changes:** nothing. Does not vote, prepare a spend or submit a transaction.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/proposals/read` → `readProposal`, signed with the agent's own identity.
 - **Inputs:** fleet id, proposal number and optional `--votes-after-seq`. Sends `votes_after_seq: 0` for the first page. While `votes_has_more` is true, pass `votes_next_cursor` unchanged; no query parameters.
-- **Answer:** `proposal`, `votes`, `votes_next_cursor`, `votes_has_more`. Values are indexed chain records, not a new RPC verification.
+- **Answer:** `proposal`, `ballots`, `votes`, `votes_next_cursor`, `votes_has_more`. `ballots` lists Keys by token id: `yes`, `no` and `abstain` hold the Keys whose latest vote is that choice, and `silent` the Keys present when it opened that have not voted, which count against it as a no does. Values are indexed chain records, not a new RPC verification.
 - **Refusals:** existing sign-in/pairing/availability refusals; 404 for an unknown fleet/proposal; 422 for an invalid body or out-of-range integer.
 - **Example:** `regents keyfleet proposals read regents_club 1 --votes-after-seq 0 --json`.
 - **Availability:** in CLI 1.10.12 and later.

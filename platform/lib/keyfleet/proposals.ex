@@ -229,6 +229,14 @@ defmodule Keyfleet.Proposals do
   defp below(query, number), do: Ash.Query.filter(query, number < ^number)
 
   @doc """
+  Each Key's vote on `proposal`, `%{yes: token_ids, no: token_ids, abstain:
+  token_ids, silent: token_ids}`, each in token id order: the Keys whose latest
+  vote is yes, no or abstain, and the Keys present when it opened that have not
+  voted.
+  """
+  def key_ballots(proposal), do: Ash.load!(proposal, :key_ballots).key_ballots
+
+  @doc """
   The votes on a proposal after its record number `after_seq`, oldest first,
   `limit` at most, and whether more remain.
   """

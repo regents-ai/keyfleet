@@ -8,7 +8,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   vote now, its shared money once it is on chain (the latest reading of its
   treasury, its daily split, the advances still out and its latest money in
   and out), the votes carried out lately, and its sales so far.
-  `detail/3` is one proposal with its votes, fifty to a page, its calls in
+  `detail/3` is one proposal with its votes, fifty to a page, each Key's
+  latest vote and the Keys counted that have not voted, its calls in
   plain words and exactly as carrying it out sends them, and where it stands as the vote contract says at the latest
   block: its status, the keys counted and each tally, never worked out here.
   Once the fleet is on chain, each carries the network its wallet buttons
@@ -168,7 +169,10 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp first_detail(proposal, page, held, fleet, reads) do
     if settled?(page, held) do
-      Map.merge(page, Map.take(held, [:on_chain, :votes, :agents, :more_votes, :first_votes]))
+      Map.merge(
+        page,
+        Map.take(held, [:on_chain, :votes, :ballots, :agents, :more_votes, :first_votes])
+      )
     else
       page
       |> Map.merge(votes(proposal, 0))
@@ -199,6 +203,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
     %{
       votes: Enum.map(votes, &vote/1),
+      ballots: Proposals.key_ballots(proposal),
       agents: WorkspacePage.agent_names([proposal.proposer | Enum.map(votes, & &1.voter)]),
       more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
       first_votes: if(votes_after > 0, do: path.([]))

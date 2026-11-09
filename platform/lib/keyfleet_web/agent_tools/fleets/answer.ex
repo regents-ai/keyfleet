@@ -190,6 +190,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
 
         ok(%{
           proposal: ProposalJSON.detail(proposal, Proposals.status(proposal)),
+          ballots: Proposals.key_ballots(proposal),
           votes: Enum.map(votes, &ProposalJSON.vote/1),
           votes_next_cursor:
             votes |> List.last(%{record_seq: after_seq}) |> Map.fetch!(:record_seq),

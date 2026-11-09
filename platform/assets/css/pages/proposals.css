@@ -321,8 +321,8 @@
   color: var(--color-fg-muted);
 }
 
-/* The yes share: a bar filled to the share of Keys counted that voted yes,
-   with a tick at the 60% a proposal needs. */
+/* The vote so far: a bar filled to the shares of Keys counted that voted yes
+   and no, with a tick at the 60% a proposal needs, then each count. */
 .proposals-share {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -335,9 +335,34 @@
   position: relative;
   grid-column: 1 / -1;
   height: 0.375rem;
-  background:
-    linear-gradient(var(--color-success), var(--color-success)) 0 0 / var(--yes) 100% no-repeat,
-    var(--color-border);
+  background: linear-gradient(
+    to right,
+    var(--color-success) 0 var(--yes),
+    var(--ash-accent-warm) var(--yes) calc(var(--yes) + var(--no)),
+    var(--color-border) calc(var(--yes) + var(--no))
+  );
+}
+
+.proposals-share__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+  margin: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+}
+
+.proposals-share__counts > [data-side="yes"] {
+  color: var(--color-success);
+}
+
+.proposals-share__counts > [data-side="no"] {
+  color: var(--ash-accent-warm);
+}
+
+.proposals-share__counts > :is([data-side="abstain"], [data-side="silent"]) {
+  color: var(--color-fg-muted);
 }
 
 .proposals-share__bar::after {
@@ -351,6 +376,52 @@
 
 .proposals-share > :not(.proposals-share__bar) {
   grid-row: 2;
+}
+
+/* Each Key's vote: one row for each choice, its Keys wrapping beside it. */
+.proposals-ballots {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+}
+
+.proposals-ballots > div {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.proposals-ballots dt {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.proposals-ballots [data-side="yes"] dt {
+  color: var(--color-success);
+}
+
+.proposals-ballots [data-side="no"] dt {
+  color: var(--ash-accent-warm);
+}
+
+.proposals-ballots dd {
+  margin: 0;
+}
+
+.proposals-ballot-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+}
+
+.proposals-ballot-keys li {
+  white-space: nowrap;
 }
 
 .proposals-address {

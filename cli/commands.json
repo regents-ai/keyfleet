@@ -3975,7 +3975,7 @@
     },
     {
       "command": "proposals read <fleet> <number>",
-      "description": "Read a proposal and its votes; never votes or submits a transaction. Pass votes_next_cursor as --votes-after-seq while votes_has_more is true.",
+      "description": "Read a proposal, each Key's vote on it and its votes; never votes or submits a transaction. Pass votes_next_cursor as --votes-after-seq while votes_has_more is true.",
       "operation_id": "readProposal",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/read",

@@ -696,8 +696,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     ProposalHelpers.vote!(@fleet, 1, @owner, :no, [1])
     proposal = %{"number" => 1, "votes_after_seq" => 0}
 
-    assert %{"status" => "open", "no_votes" => 1} =
-             answer(c, c.signer, "POST", @proposal, @address, proposal, 200).body["proposal"]
+    read = answer(c, c.signer, "POST", @proposal, @address, proposal, 200).body
+    assert %{"status" => "open", "no_votes" => 1} = read["proposal"]
+    # Each Key's vote by choice, as the proposal page lists them.
+    assert read["ballots"] == %{"yes" => [], "no" => [1], "abstain" => [], "silent" => []}
 
     answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 99}, 404)
     answer(c, c.signer, "POST", @proposal, @address, %{proposal | "number" => 0}, 422)

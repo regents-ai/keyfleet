@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
     end
 
     action :proposal, :map do
-      description "One proposal and up to 20 of its votes, after a place in them."
+      description "One proposal, each Key's vote on it, and up to 20 of its votes, after a place in them."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :number, :integer, allow_nil?: false, constraints: [min: 1, max: @top]
       argument :votes_after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @top]

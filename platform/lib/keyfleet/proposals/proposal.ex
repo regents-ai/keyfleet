@@ -11,7 +11,9 @@ defmodule Keyfleet.Proposals.Proposal do
 
   Every key has one vote, and its latest is the one that counts, so
   `yes_keys`, `no_keys` and `abstain_keys` count the keys whose latest vote
-  is that choice. `late_keys` counts the keys that voted without having been
+  is that choice. `key_ballots` lists those keys by choice, and the keys present
+  when it opened that have not voted as `silent`. `late_keys`
+  counts the keys that voted without having been
   present when it opened, which the contract adds to the keys it needs more
   than half of. Where it stands is
   `Keyfleet.Proposals.status/2`.
@@ -298,6 +300,16 @@ defmodule Keyfleet.Proposals.Proposal do
     end
 
     calculate :late_keys, :integer, Keyfleet.Proposals.Calculations.LateKeys, public?: true
+
+    calculate :key_ballots, :map, Keyfleet.Proposals.Calculations.KeyBallots,
+      public?: true,
+      constraints: [
+        fields:
+          for(
+            choice <- [:yes, :no, :abstain, :silent],
+            do: {choice, [type: {:array, :integer}, allow_nil?: false]}
+          )
+      ]
   end
 
   identities do

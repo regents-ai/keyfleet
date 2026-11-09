@@ -113,15 +113,18 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                {"1", "Open"}
              ]
 
-      # Each card says its kind, and how its vote stands as a share of the Keys counted.
+      # Each card says its kind and each count of its vote: the Keys that voted
+      # yes, no and abstain, and the Keys counted that have not voted.
       assert text(view, ~s([data-proposal="3"] .proposals-type)) == "Decision"
-      assert text(view, ~s([data-proposal="3"] #proposals-share-3)) == "60% yes"
+      assert lines(view, "#proposals-share-3 li") == ["3 yes", "1 no", "1 abstain"]
       assert text(view, ~s([data-proposal="3"] .proposals-share .proposals-detail)) == "of 5 Keys"
 
       assert has_element?(
                view,
-               ~s([data-proposal="3"] .proposals-share[title="3 yes, 1 no, 1 abstain, of 5 Keys counted"])
+               ~s([data-proposal="3"] .proposals-share[title="3 yes, 1 no, 1 abstain, 0 not voted, of 5 Keys counted"])
              )
+
+      assert lines(view, "#proposals-share-6 li") == ["0 yes", "0 no", "3 not voted"]
 
       assert has_element?(view, ~s([data-proposal="3"] .proposals-when), "hours left")
 
@@ -191,6 +194,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       # A proposal of more than one kind of call says so on the list.
       {:ok, list, _html} = open(conn, @list)
       assert text(list, ~s([data-proposal="1"] .proposals-type)) == "Several actions"
+      # The wallet a call names shows as every address does, with its copy icon.
+      assert has_element?(list, "#proposals-action-1-0-copy[data-copy-text='#{paid}']")
 
       {:ok, view, _html} = open(conn, "#{@list}/1")
 
@@ -199,6 +204,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposal-no", "1 Key")
       assert has_element?(view, "#proposal-abstain", "2 Keys")
       assert has_element?(view, "#proposal-counted", "60 Keys")
+      assert has_element?(view, "#proposal-silent", "6 Keys")
 
       assert has_element?(
                view,
@@ -242,6 +248,17 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Unknown",
                unknown
              ]
+
+      # Each Key's vote, by choice, each Key leading to its page.
+      assert length(lines(view, "#proposal-ballots-yes li")) == 51
+      assert lines(view, "#proposal-ballots-no li") == ["Key 52"]
+      assert lines(view, "#proposal-ballots-abstain li") == ["Key 53", "Key 54"]
+      assert text(view, "#proposal-ballots-silent") == "None"
+
+      assert has_element?(
+               view,
+               ~s(#proposal-ballots-no a[href="#{Keyfleet.Fleets.path(@fleet)}/keys/52"])
+             )
 
       assert length(lines(view, "#proposal-votes li")) == 50
       # A voter's wallet shows as every address does: short, then in full.
@@ -535,7 +552,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(
                view,
-               ~s(.proposals-share[title="2 yes, 0 no, 0 abstain, of 2 Keys counted"])
+               ~s(.proposals-share[title="2 yes, 0 no, 0 abstain, 0 not voted, of 2 Keys counted"])
              )
 
       assert has_element?(view, "#proposal-left", "hours left")

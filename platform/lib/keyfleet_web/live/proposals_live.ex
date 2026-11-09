@@ -39,6 +39,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.FleetProposals
+  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProposalsPage
@@ -163,9 +164,16 @@ defmodule KeyfleetWeb.ProposalsLive do
                 Proposal {proposal.number}
               </.link>
             </h3>
-            <p :for={action <- proposal.actions} class="proposals-card-action">
+            <p
+              :for={{action, index} <- Enum.with_index(proposal.actions)}
+              class="proposals-card-action"
+            >
               {action.text}
-              <span :if={action.address}>{RegentFormat.short_address(action.address)}</span>
+              <Regent.Primitives.address
+                :if={action.address}
+                id={"proposals-action-#{proposal.number}-#{index}"}
+                address={action.address}
+              />
             </p>
             <p :if={proposal.text} class="proposals-words proposals-words--short">
               {proposal.text}
@@ -347,6 +355,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </section>
 
         <.standing on_chain={@page.on_chain} proposal={@page.proposal} />
+        <.ballots fleet_id={@page.fleet_id} ballots={@page.ballots} />
 
         <section
           :if={@page.deployed?}
@@ -407,7 +416,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </section>
 
         <section class="proposals-panel proposals-votes" aria-labelledby="proposal-votes-title">
-          <h2 id="proposal-votes-title">Votes</h2>
+          <h2 id="proposal-votes-title">History</h2>
           <Regent.Primitives.empty_state
             :if={@page.votes == [] and is_nil(@page.first_votes)}
             id="proposal-no-votes"
@@ -503,6 +512,17 @@ defmodule KeyfleetWeb.ProposalsLive do
           </dd>
         </div>
         <div>
+          <dt>Not voted</dt>
+          <dd id="proposal-silent">
+            <Count.count
+              id="proposal-silent-count"
+              value={@on_chain.counted - @on_chain.yes - @on_chain.no - @on_chain.abstain}
+              one="Key"
+              many="Keys"
+            />
+          </dd>
+        </div>
+        <div>
           <dt>
             Keys counted
             <Regent.Primitives.tip id="proposal-counted-tip" label="About Keys counted">
@@ -526,6 +546,48 @@ defmodule KeyfleetWeb.ProposalsLive do
         <div :if={not settled?(@on_chain)}>
           <dt>Carry-out ends</dt>
           <dd id="proposal-expiry">{at(@proposal.execution_expiry)}</dd>
+        </div>
+      </dl>
+    </section>
+    """
+  end
+
+  attr :fleet_id, :string, required: true
+  attr :ballots, :map, required: true, doc: "`Keyfleet.Proposals.key_ballots/1`"
+
+  # Each Key's vote, from the votes recorded: the Keys whose latest vote is
+  # each choice, and the Keys present when it opened that have not voted.
+  defp ballots(assigns) do
+    assigns =
+      assign(assigns,
+        sides:
+          for(
+            {side, word} <- [yes: "Yes", no: "No", abstain: "Abstain", silent: "Not voted"],
+            do: {side, word, Map.fetch!(assigns.ballots, side)}
+          )
+      )
+
+    ~H"""
+    <section id="proposal-ballots" class="proposals-panel" aria-labelledby="proposal-ballots-title">
+      <h2 id="proposal-ballots-title">
+        Votes
+        <Regent.Primitives.tip id="proposal-ballots-tip" label="About votes">
+          Each Key’s latest vote: a Key may vote again, and only its latest counts. Keys present when the proposal opened that have not voted count against it, as a No does.
+        </Regent.Primitives.tip>
+      </h2>
+      <dl class="proposals-ballots">
+        <div :for={{side, word, keys} <- @sides} data-side={side}>
+          <dt>{word} <span class="proposals-detail">{Rules.grouped(length(keys))}</span></dt>
+          <dd id={"proposal-ballots-#{side}"}>
+            <ul :if={keys != []} class="proposals-ballot-keys">
+              <li :for={token_id <- keys} data-key={token_id}>
+                <.link navigate={KeyLinks.page_path(@fleet_id, token_id)}>
+                  Key {Rules.grouped(token_id)}
+                </.link>
+              </li>
+            </ul>
+            <span :if={keys == []} class="proposals-detail">None</span>
+          </dd>
         </div>
       </dl>
     </section>
@@ -1073,9 +1135,16 @@ defmodule KeyfleetWeb.ProposalsLive do
               format="hours"
             />
           </p>
-          <p :for={action <- proposal.actions} class="proposals-card-action">
+          <p
+            :for={{action, index} <- Enum.with_index(proposal.actions)}
+            class="proposals-card-action"
+          >
             {action.text}
-            <span :if={action.address}>{RegentFormat.short_address(action.address)}</span>
+            <Regent.Primitives.address
+              :if={action.address}
+              id={"open-proposal-#{proposal.number}-action-#{index}"}
+              address={action.address}
+            />
           </p>
           <.vote_tally yes={proposal.yes} no={proposal.no} abstain={proposal.abstain} />
           <p class="open-proposal__count">
@@ -1316,23 +1385,52 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :id, :string, required: true
   attr :votes, :map, required: true, doc: "a proposal's `yes`, `no`, `abstain` and `counted` Keys"
 
-  # How a proposal's vote stands at a glance: the share of the Keys counted
-  # that voted yes, as a bar with the 60% it needs marked on it, and the
-  # whole tally on hover. The share rolls when votes arrive.
+  # How a proposal's vote stands at a glance: the Keys counted that voted yes
+  # and no, as a bar with the 60% it needs marked on it, then each count: No
+  # is the Keys that voted no, and the counted Keys that have not voted are
+  # counted on their own. The whole tally shows on hover, and the counts roll
+  # when votes arrive.
   defp yes_share(assigns) do
     %{yes: yes, no: no, abstain: abstain, counted: counted} = assigns.votes
+    share = fn keys -> if counted > 0, do: min(div(keys * 100, counted), 100), else: 0 end
+    silent = counted - yes - no - abstain
 
     assigns =
       assign(assigns,
+        yes: yes,
+        no: no,
+        abstain: abstain,
+        silent: silent,
         counted: counted,
-        share: if(counted > 0, do: min(div(yes * 100, counted), 100), else: 0),
-        tally: "#{yes} yes, #{no} no, #{abstain} abstain, of #{Rules.keys(counted)} counted"
+        yes_share: share.(yes),
+        no_share: share.(yes + no) - share.(yes),
+        tally:
+          "#{yes} yes, #{no} no, #{abstain} abstain, #{silent} not voted, " <>
+            "of #{Rules.keys(counted)} counted"
       )
 
     ~H"""
     <div class="proposals-share" title={@tally}>
-      <span class="proposals-share__bar" style={"--yes: #{@share}%"} aria-hidden="true"></span>
-      <span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@share}</span>% yes</span>
+      <span
+        class="proposals-share__bar"
+        style={"--yes: #{@yes_share}%; --no: #{@no_share}%"}
+        aria-hidden="true"
+      ></span>
+      <ul
+        id={@id}
+        class="proposals-share__counts"
+        phx-hook="MotionCount"
+        data-variant={Motion.standard("count")}
+      >
+        <li data-side="yes"><span data-count>{Rules.grouped(@yes)}</span> yes</li>
+        <li data-side="no"><span data-count>{Rules.grouped(@no)}</span> no</li>
+        <li :if={@abstain > 0} data-side="abstain">
+          <span data-count>{Rules.grouped(@abstain)}</span> abstain
+        </li>
+        <li :if={@silent > 0} data-side="silent">
+          <span data-count>{Rules.grouped(@silent)}</span> not voted
+        </li>
+      </ul>
       <span class="proposals-detail">of {Rules.keys(@counted)}</span>
     </div>
     """

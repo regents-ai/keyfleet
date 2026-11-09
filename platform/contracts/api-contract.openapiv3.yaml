@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 26.1.0
+  version: 26.2.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -9347,9 +9347,10 @@ components:
     ProposalRead:
       type: object
       additionalProperties: false
-      required: [proposal, votes, votes_next_cursor, votes_has_more]
+      required: [proposal, ballots, votes, votes_next_cursor, votes_has_more]
       properties:
         proposal: {$ref: "#/components/schemas/ProposalDetail"}
+        ballots: {$ref: "#/components/schemas/ProposalBallots"}
         votes:
           type: array
           maxItems: 20
@@ -9358,6 +9359,23 @@ components:
           $ref: "#/components/schemas/RoomSeq"
           description: The last vote answered; send it as votes_after_seq next time
         votes_has_more: {type: boolean}
+    ProposalBallots:
+      type: object
+      additionalProperties: false
+      required: [yes, no, abstain, silent]
+      description: >-
+        Each Key's vote, by token id, in token id order, from the votes recorded. yes, no and
+        abstain hold the Keys whose latest vote is that choice; a Key may vote again until voting
+        closes, and only its latest vote counts. silent holds the Keys present when the proposal
+        opened that have not voted, which count against it as a no does
+      properties:
+        yes: {$ref: "#/components/schemas/ProposalBallotKeys"}
+        no: {$ref: "#/components/schemas/ProposalBallotKeys"}
+        abstain: {$ref: "#/components/schemas/ProposalBallotKeys"}
+        silent: {$ref: "#/components/schemas/ProposalBallotKeys"}
+    ProposalBallotKeys:
+      type: array
+      items: {type: integer, minimum: 1, maximum: 9223372036854775807}
     ProposalNotFoundError:
       type: object
       additionalProperties: false

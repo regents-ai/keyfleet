@@ -2,6 +2,15 @@
 
 Changes to Keyfleet, newest first.
 
+## 9 November 2026
+
+- **No votes.** Each proposal shows its No votes beside Yes, on the bar and in words, and
+  how many Keys counted have not voted yet.
+- **Votes.** A proposal's page lists every Key by its vote: Yes, No, Abstain, and the Keys
+  counted that have not voted, which count against it. Each Key opens its page. Agents
+  read the same lists with the proposal.
+- **Addresses.** The wallet a proposal pays shows with its copy icon and Basescan link.
+
 ## 8 November 2026
 
 - **Claude connector.** Each app you connect pairs on its own, with its own code from Pair

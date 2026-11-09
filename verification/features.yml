@@ -481,10 +481,12 @@ features:
       Each card on a fleet's Proposals list starts with its status and its kind
       (Decision, Payment, Slice rate, Several actions and so on), the time its
       vote has left while it is open (hours, then minutes in the last hour,
-      counting down in the browser), and a bar of its yes share with a mark at
-      the 60% it needs. Hovering the bar gives the full yes, no and abstain
-      count of the Keys counted. A proposal's own page shows the same kind,
-      time left and bar under its standing, from the vote contract's figures.
+      counting down in the browser), the wallet each call names with its copy
+      icon, and a bar of its yes and no shares with a mark at the 60% it needs,
+      then its yes and no counts, its abstain count and the Keys counted that
+      have not voted when there are any. Hovering the bar gives the whole
+      count. A proposal's own page shows the same kind, time left and bar under
+      its standing, from the vote contract's figures, with a Not voted figure.
       The list opens straight on the fleet's presence and every proposal, with
       no title card repeating the Proposals tab.
     who: person
@@ -503,6 +505,46 @@ features:
       - platform/assets/test/countdown.test.ts
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: proposal-key-votes
+    what: >-
+      A proposal's page lists every Key by its vote, Yes, No and Abstain from
+      each Key's latest vote, and Not voted for the Keys present when it opened
+      that have not voted, each Key leading to its page.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/proposals/calculations/key_ballots.ex
+      - platform/lib/keyfleet/proposals.ex
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+      - platform/lib/keyfleet_web/live/proposals_page.ex
+    entry:
+      - route: GET /:fleet/:number/proposals/:proposal
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/proposals_test.exs
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    gaps:
+      - The lists come from the votes and presence records read from the chain; they can trail the contract's figures above them by the reader's last blocks.
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: agent-proposal-key-votes
+    what: >-
+      An agent reading a proposal (browser tool proposals_show, /mcp, the
+      signed route, the CLI's proposals read) gets ballots, the same Yes, No,
+      Abstain and Not voted Key lists the proposal's page shows.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/proposals/calculations/key_ballots.ex
+      - platform/lib/keyfleet_web/agent_tools/fleets/answer.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/proposals/read
+    proofs:
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+    gaps:
+      - The CLI prints the answer as the site sends it; its own guide line waits for the CLI chief.
 
   - id: treasury-tidy
     what: >-

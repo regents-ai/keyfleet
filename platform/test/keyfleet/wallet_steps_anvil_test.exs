@@ -257,8 +257,8 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       {:ok, list, _html} = live(conn, ProposalsPage.list_path(@fleet_id))
 
       assert cards(list) == [
-               {"2", "Cancelled", "0 yes, 0 no, 0 abstain, of 2 Keys counted"},
-               {"1", "Carried out", "2 yes, 0 no, 0 abstain, of 2 Keys counted"}
+               {"2", "Cancelled", "0 yes, 0 no, 0 abstain, 2 not voted, of 2 Keys counted"},
+               {"1", "Carried out", "2 yes, 0 no, 0 abstain, 0 not voted, of 2 Keys counted"}
              ]
 
       {:ok, carried, _html} = live(conn, ProposalsPage.detail_path(@fleet_id, 1))
