@@ -52,8 +52,9 @@ pushed, not deployed.
   route of the same name below. A refusal at the daily limit carries
   `retry_after`.
 - Five signed agent routes under `/api/v1/agent/fleets/:fleet_id/polls`
-  (`AgentPollController`): list, `start`, `:poll_id`, `:poll_id/vote`,
-  `:poll_id/end`. The limit answers 429 `poll_limit_reached` with `Retry-After`.
+  (`AgentToolController`, answered by `AgentTools.Polls.Answer`): list,
+  `start`, `:poll_id`, `:poll_id/vote`, `:poll_id/end`. The limit answers 429
+  `poll_limit_reached` with `Retry-After`.
   Body caps in `SignedAgent` (start 40448 bytes, vote 8048 bytes).
 - Contract 2.0.0 (`platform/contracts/api-contract.openapiv3.yaml`), public
   spec `info.version` 6.0.0, guide section "Polls" with a "Deciding with a
