@@ -562,6 +562,28 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              end)
     end
 
+    # A vote cast just before voting closed can reach the records after a
+    # reading that already found the proposal settled on chain.
+    test "a vote recorded after its proposal settled reaches the page with the next reading", %{
+      conn: conn
+    } do
+      opened = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.add(-2 * @day)
+      for key <- 1..3, do: ProposalHelpers.presence!(@fleet, key, DateTime.add(opened, -7_200))
+      closed!(1, opened_at: opened, opening_count: 3)
+      votes!(1, no: [1])
+      ChainViews.put!(on_chain(1, :rejected, e0: 3, no: 2))
+
+      {:ok, view, _html} = open(conn, "#{@list}/1")
+      assert has_element?(view, "#proposal-no", "2 Keys")
+      assert lines(view, "#proposal-ballots-no li") == ["Key 1"]
+
+      votes!(1, no: [2])
+      FleetProposals.read(@fleet)
+
+      assert shows?(fn -> lines(view, "#proposal-ballots-no li") == ["Key 1", "Key 2"] end)
+      assert lines(view, "#proposal-ballots-silent li") == ["Key 3"]
+    end
+
     test "balances read reach an open Treasury page with the fleet's next reading", %{
       conn: conn
     } do

@@ -126,8 +126,9 @@ defmodule KeyfleetWeb.ProposalsPage do
   proposal on that list, by number, each as `detail/3` reads it.
 
   `held` answers the proposal's page from the last reading, or nil. A
-  proposal that was already settled then, on its records and on chain, keeps
-  the votes and the standing read then, since neither can change; the rest
+  proposal that was already settled then, on its records and on chain, with
+  every vote the contract counted in its records, keeps the votes, each Key's
+  vote and the standing read then, since none can change; the rest
   of its page, its tally and what its calls come to at today's balance, is
   read again. Every other proposal on the list has its votes read again and
   its standing read at the latest block, at one block for all of them.
@@ -182,11 +183,22 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp settled?(%{proposal: %{status: status}}, %{
          proposal: %{status: held},
-         on_chain: %{status: on_chain}
+         on_chain: %{status: on_chain} = tally,
+         ballots: ballots
        }),
-       do: status in @settled and held in @settled and on_chain in @settled
+       do:
+         status in @settled and held in @settled and on_chain in @settled and
+           recorded?(ballots, tally)
 
   defp settled?(_page, _held), do: false
+
+  # Every vote the contract counted is in the records: a vote cast just before
+  # voting closed can reach them after a reading that found it settled.
+  defp recorded?(ballots, tally) do
+    length(ballots.yes) == tally.yes and length(ballots.no) == tally.no and
+      length(ballots.abstain) == tally.abstain and
+      length(ballots.silent) == tally.counted - tally.yes - tally.no - tally.abstain
+  end
 
   # A proposal's page but for its votes and where it stands on chain.
   defp shown(proposal, fleet, reading, assets, balances) do
