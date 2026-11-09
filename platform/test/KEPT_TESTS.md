@@ -146,6 +146,7 @@ in it and its next step.
 | an agent pairs with a code from regents.sh and checks in, signed for Keyfleet (now also asks whoami before and after) | `KeyfleetWeb.SharedAgentPairingTest` | whoami answers `not_paired` before pairing and `paired` after, each with this site's `allowed` list and next step. |
 | an agent paired by a person with no Keyfleet account checks in to person_not_here (now also asks whoami) | `KeyfleetWeb.SharedAgentPairingTest` | whoami answers `person_not_here` until the person signs in here. |
 | every agent document lists what whoami allows in each status and its next step | `KeyfleetWeb.WhatYouCanDoTest` | `/llms.txt` and `/agents.md` say exactly what whoami answers. |
+| every guide naming a regents-cli release names the pinned commit and one digest | `KeyfleetWeb.PublicGuideCliReleaseTest` | Every guide that installs regents-cli names one release, the Makefile's `REGENTS_CLI_REV` and one wheel digest; on 9 Nov 2026 `/llms.txt` named another commit and a digest PyPI never published (fixed in 4ecb351d). |
 
 ## Visit lines
 
