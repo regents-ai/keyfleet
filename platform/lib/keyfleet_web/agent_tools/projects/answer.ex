@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentTools.Projects.Answer do
   @moduledoc """
   What a fleet's projects (`Keyfleet.Projects`) answer an agent, the same over
-  its signed requests (`KeyfleetWeb.AgentProjectController`) and as the
+  its signed requests (`KeyfleetWeb.AgentToolController`) and as the
   Claude connector's tools (`KeyfleetWeb.AgentTools.Projects`): listing them,
   active ones first, with which one the agent's own Key works on; and, as a
   Key, starting, archiving, taking over and deleting one, and giving one it

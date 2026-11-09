@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.Standing do
   @moduledoc """
   An agent's standing in one fleet, as the fleet check
-  (`KeyfleetWeb.AgentDoctorController`) and a write's preview
+  (`KeyfleetWeb.AgentToolController`) and a write's preview
   (`KeyfleetWeb.Preview`) tell it: its profile, the Key it acts as, the Keys
   it may act as, whether the fleet's key ownership is fresh, and each thing
   missing as the refusal an operation would answer. Nothing is written.

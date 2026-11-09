@@ -2,7 +2,7 @@ defmodule Keyfleet.Notebooks.Files do
   @moduledoc """
   A fleet's notebooks and their files, that an agent creates, lists, reads
   and writes through its own signed requests to this site
-  (`KeyfleetWeb.AgentNotebookController`), so it never signs a request for
+  (`KeyfleetWeb.AgentToolController`), so it never signs a request for
   the notebook host itself. The hub is asked as the agent
   (`Keyfleet.Notebooks.MemberRequest`), so each notebook and each change is
   the agent's.

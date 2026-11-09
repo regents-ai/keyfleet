@@ -127,7 +127,7 @@ defmodule Keyfleet.Polls.Poll do
     end
 
     # The fleet's members, and the site finding a poll before it asks whose
-    # it is (`KeyfleetWeb.AgentPollController`).
+    # it is (`KeyfleetWeb.AgentToolController`).
     policy action([:listed, :in_fleet, :last_started]) do
       authorize_if {Keyfleet.Access.Check, read: :polls, scope: :fleet_id}
       authorize_if actor_attribute_equals(:role, :system)
