@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.Vitals do
   @moduledoc """
   Visitors' own page timings: the Core Web Vitals their browsers measured on
   this site's pages, sent once as a page is left (`assets/js/vitals.ts`, taken
-  in by `KeyfleetWeb.VitalsController`). Each report becomes a few numbers in
+  in by `KeyfleetWeb.BeaconController`). Each report becomes a few numbers in
   the Prometheus histograms `KeyfleetWeb.Telemetry` exports. Nothing is saved,
   and no report names a person, an address or a Key.
 

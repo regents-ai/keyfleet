@@ -92,7 +92,7 @@
 14	test/keyfleet/key_thread_race_test.exs
 14	test/keyfleet_web/router_gate_coverage_test.exs
 12	test/keyfleet/accounts/linked_identity_test.exs
-9	test/keyfleet_web/controllers/launch_steps_controller_test.exs
+9	test/keyfleet_web/controllers/beacon_controller_test.exs
 6	test/keyfleet_web/activity_lines_test.exs
 6	test/keyfleet_web/content_negotiation_test.exs
 6	test/keyfleet_web/plugs/parsers_test.exs

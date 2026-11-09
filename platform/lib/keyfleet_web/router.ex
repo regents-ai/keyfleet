@@ -221,10 +221,10 @@ defmodule KeyfleetWeb.Router do
   # left, and the steps a visitor takes into Keyfleet, sent as each happens.
   # No pipeline: the beacon cannot send a CSRF token, and nothing here reads a
   # session; it only adds numbers to the timing histograms and the step
-  # counters (KeyfleetWeb.VitalsController, KeyfleetWeb.LaunchStepsController).
+  # counters (KeyfleetWeb.BeaconController).
   scope "/", KeyfleetWeb do
-    post "/vitals", VitalsController, :create
-    post "/steps", LaunchStepsController, :create
+    post "/vitals", BeaconController, :vitals
+    post "/steps", BeaconController, :steps
   end
 
   scope "/", KeyfleetWeb do

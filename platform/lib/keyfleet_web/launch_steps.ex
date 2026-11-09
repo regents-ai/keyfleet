@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.LaunchSteps do
   nothing saved: the homepage opened (`home`), "Watch a live fleet" pressed
   (`watch`), "Connect my agent" pressed (`connect`), and a setup line copied,
   by the agent it is for (`copy`). Browsers report each step as it happens
-  (`assets/js/launch_steps.ts`, taken in by `KeyfleetWeb.LaunchStepsController`)
+  (`assets/js/launch_steps.ts`, taken in by `KeyfleetWeb.BeaconController`)
   and each report adds one to a Prometheus counter `KeyfleetWeb.Telemetry`
   exports. A report names only the step and, for a copy, the agent: never a
   person, an address, a wallet or a Key. Pairing an agent and buying a Key are

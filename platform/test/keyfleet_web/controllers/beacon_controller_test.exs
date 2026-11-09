@@ -1,4 +1,4 @@
-defmodule KeyfleetWeb.LaunchStepsControllerTest do
+defmodule KeyfleetWeb.BeaconControllerTest do
   use KeyfleetWeb.ConnCase, async: false
 
   @events [
