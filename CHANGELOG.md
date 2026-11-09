@@ -7003,3 +7003,11 @@ ed65e916 is live: graph v517 (14:41:55Z), site v518 (14:42:33Z), image registry.
 Moved: each app connected through `/mcp` acts as its own agent (hotfix 5cbbe12e); project titles and workspace links show only to workspace readers; `/agent` and `/start` open the Agents page; a Key's picture job gives up after 20 tries; a deleted project takes no new space; when a Key's draw has not come 24 hours after it was asked for, anyone can end the wait from the Key's page, the WebMCP tool or the signed route (`keys_expire_reveal`; the CLI command waits a regents-cli release), the chain watcher records `RevealExpired` in `key_reveal_expiries`, and the Key's metadata says it was never revealed; agent Key reads carry `draw_ended` (contract 26.1.0). Before release, the Keys collection had no `RevealExpired` log from its deploy block to 55223407.
 
 Live read at 14:45Z, signed out: capabilities.json names ed65e916; `/agent` and `/start` answer 302 to `/agents`; POST `/mcp` with no token answers 401 `connection_required` with the protected-resource address; `/classic/1/keys/1` and `/agents` answer 200. Not read live: a project page signed out (no project name is public). Nothing pressed, nothing written on Classic #1.
+
+## 2026-11-09 — Release: llms.txt names the CLI release it installs
+
+4ecb351d is live: graph v519 (15:04:03Z), site v520 (15:04:42Z), image registry.fly.io/keyfleet:4ecb351 (sha256:fc7618ed6c35). Rollback: site v518 and graph v517 (ed65e916). `make check-change` exit 0 on 4ecb351d (Elixir 268, 324, 319 and 325 in four parts, no failures). No migration; API contracts unchanged.
+
+Moved: `/llms.txt` named regents-cli 1.10.24 as source commit 0b08d4a2 with a wheel SHA256 PyPI does not publish; it now names fd325437 (the v1.10.24 tag and the Makefile's `REGENTS_CLI_REV`) and 6310687234c5b0b5b9304973232e6ef3b0d08853f84ec9e4c82304fef979dc01, as `/agents.md` already did.
+
+Live read at 15:07Z, signed out: capabilities.json names 4ecb351d; `/llms.txt` and `/agents.md` answer 200 with the new commit and digest and neither old one.
