@@ -183,9 +183,6 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   @doc "The tone an item is drawn in, by its standing."
   def tone(standing), do: Map.get(@tones, standing, :plain)
 
-  @doc "The name of a tone, as the key under the picture shows it."
-  def tone_name(tone), do: Keyword.fetch!(@tone_names, tone)
-
   # Columns first, then each column's order, then each item's point.
   defp place(nodes, edges) do
     neighbours = neighbours(edges)

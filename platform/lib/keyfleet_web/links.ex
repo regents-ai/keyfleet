@@ -64,6 +64,14 @@ defmodule KeyfleetWeb.Links do
     end
   end
 
+  # A Key's profile opens over its fleet's page (`KeyfleetWeb.KeyLinks.key_path/3`),
+  # whatever else the address keeps beside it.
+  defp fleet_page(fleet_id, [], %{"key" => token_id} = query) do
+    if Regex.match?(@key, token_id),
+      do: key_page(fleet_id, token_id, []),
+      else: fleet_page(fleet_id, [], Map.delete(query, "key"))
+  end
+
   defp fleet_page(fleet_id, [], %{"room" => slug}),
     do: link(fleet_id, "room", %{slug: slug}, {"rooms_messages", "rooms read"})
 
@@ -81,7 +89,13 @@ defmodule KeyfleetWeb.Links do
 
   defp fleet_page(fleet_id, ["code", repository, "commits", hash], _query) do
     with {:ok, project} <- project_of(fleet_id, repository) do
-      link(fleet_id, "commit", code(repository, project, %{hash: hash}), nil)
+      link(
+        fleet_id,
+        "commit",
+        code(repository, project, %{hash: hash}),
+        {"code_commit", "code commit"},
+        %{commit: hash}
+      )
     end
   end
 

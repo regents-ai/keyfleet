@@ -697,8 +697,8 @@ defmodule Keyfleet.Keys do
 
   @doc """
   The fleet's keys a person's wallets hold: the lowest `shown` of them by
-  number, the lowest of all (who the person is in the fleet, `identity/2`) and
-  how many they hold, as `%{first: token_id, token_ids: token_ids, count: count}`,
+  number, the lowest of all (who the person is in the fleet unless they chose
+  another Key to write as, `identity/2`) and how many they hold, as `%{first: token_id, token_ids: token_ids, count: count}`,
   or `nil` for someone holding none. Reads `shown` keys and a count, however
   many the person holds.
   """

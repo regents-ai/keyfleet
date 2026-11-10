@@ -906,7 +906,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h3 :if={@actor} id="proposals-share-title">
         Staking share
         <Regent.Primitives.tip id="proposals-share-tip" label="About the Staking share">
-          10% of every key sale is set aside for REGENT staking. Anyone can send it.
+          10% of every Key sale is set aside for REGENT staking. Anyone can send it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component

@@ -403,7 +403,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-claim-title">
         Claim
         <Regent.Primitives.tip id="key-profile-claim-tip" label="About claiming">
-          The Daily Treasury Slice to Keys shared with this key waits here until claimed. It is always paid to the key’s holder, and a shard of the key can claim it for them.
+          The Daily Treasury Slice to Keys shared with this Key waits here until claimed. It is always paid to the Key’s holder, and a shard of the Key can claim it for them.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
@@ -501,9 +501,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
       aria-labelledby="key-profile-club-claim-title"
     >
       <h3 id="key-profile-club-claim-title">
-        Waiting for Pass {Rules.grouped(@profile.token_id)}
+        Unclaimed
         <Regent.Primitives.tip id="key-profile-club-claim-tip" label="About claiming this Key">
-          Whoever holds Regents Club Pass {Rules.grouped(@profile.token_id)} can claim this Key at any time, with everything it has earned while it waited. If that Pass is burned, the Key stays here for good.
+          The holder of Regents Club Pass {Rules.grouped(@profile.token_id)} can claim this Key at any time, with everything it has earned while it waited. If that Pass is burned, the Key stays here for good.
         </Regent.Primitives.tip>
       </h3>
       <.live_component

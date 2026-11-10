@@ -14,8 +14,8 @@ defmodule Keyfleet.Proposals.Proposal do
   is that choice. `key_ballots` lists those keys by choice, and the keys present
   when it opened that have not voted as `silent`. `late_keys`
   counts the keys that voted without having been
-  present when it opened, which the contract adds to the keys it needs more
-  than half of. Where it stands is
+  present when it opened, which the contract adds to the keys it needs 60%
+  of. Where it stands is
   `Keyfleet.Proposals.status/2`.
 
   Its place on the chain is the `ProposalCreated` log's. `record_seq` is the

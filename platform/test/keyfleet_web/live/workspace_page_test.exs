@@ -564,7 +564,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert fields == [
                {"Approach tried", "Paged through the archive."},
-               {"Reason it didn’t work", "It needs a login."}
+               {"Reason", "It needs a login."}
              ]
 
       assert has_element?(
@@ -2121,7 +2121,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert_patch(view, map.(second))
     end
 
-    test "has small panels under the stage: workstream, Keys at work, Docs and Code",
+    test "has small panels under the stage: workstream, Active Keys, Docs and Code",
          %{conn: conn} do
       doing =
         create(@fleet, "task", %{"title" => "Draft", "progress" => "doing", "assignee_key" => 4})

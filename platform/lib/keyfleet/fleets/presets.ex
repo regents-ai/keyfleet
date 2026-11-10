@@ -73,13 +73,16 @@ defmodule Keyfleet.Fleets.Presets do
   @doc """
   What the fleet's contract charged, or will charge, for key `token_id` when
   it is sold, in atomic USDC: the price `progress/2` offered once the key
-  before it had sold. `nil` for a Regents Club Key, which is given.
+  before it had sold. `nil` for a Regents Club Key, which is given, and for a
+  number past the last Key the fleet can ever have.
   """
   def issue_price(fleet_id, token_id) when is_integer(token_id) and token_id >= 1 do
-    case preset(fleet_id) do
-      :regents_club -> nil
-      preset -> next_price(preset, token_id - 1)
-    end
+    preset = preset(fleet_id)
+    supply = preset_supply(preset)
+
+    if preset == :regents_club or (supply != nil and token_id > supply),
+      do: nil,
+      else: next_price(preset, token_id - 1)
   end
 
   @doc "A fleet's preset: `:fibonacci`, `:classic`, `:accelerant` or `:regents_club`."

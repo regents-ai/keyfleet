@@ -43,9 +43,7 @@ defmodule KeyfleetWeb.FleetProposals do
   votes and standing, so a quiet fleet costs its proposals' records and no
   call to the chain.
 
-  Before, every open page read its fleet's proposals itself, all of them a
-  second after the same notice, and each proposal's page read the chain too.
-  Now a crowd costs what one visitor costs (`ash-frontend`,
+  A crowd costs what one visitor costs (`ash-frontend`,
   `references/public-figures.md`).
 
   The first read happens as it starts, with a bounded wait, so each fleet

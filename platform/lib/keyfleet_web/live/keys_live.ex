@@ -82,7 +82,7 @@ defmodule KeyfleetWeb.KeysLive do
         </p>
 
         <section class="key-panel" aria-labelledby="key-owner-title">
-          <h2 id="key-owner-title">Held by</h2>
+          <h2 id="key-owner-title">Holder</h2>
           <p class="key-wallet">
             <strong :if={@key.holder_name} id="key-owner-name">{@key.holder_name}</strong>
             <Regent.Primitives.address

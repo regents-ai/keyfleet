@@ -21,7 +21,8 @@ defmodule Keyfleet.Notebooks.Roster do
   again when an issued shard runs out (`Keyfleet.Notebooks.Changes.UpdateRoster`),
   and for every fleet every ten minutes (`Keyfleet.Notebooks.Reconcile`). Every step is safe to repeat, and a
   run that fails part way is run again from the start. While the fleet's key
-  ownership is still being read, it waits.
+  ownership is still being read, a run ends without changing the hub, and the
+  next ten-minute run takes it up.
 
   Runs go one at a time (the `notebook_hubs` queue runs one job). One run per
   fleet waits to start at a time; a change made while one runs queues the
@@ -52,7 +53,7 @@ defmodule Keyfleet.Notebooks.Roster do
 
       :ok
     else
-      {:error, %OwnershipRefreshingError{}} -> {:snooze, 15}
+      {:error, %OwnershipRefreshingError{}} -> {:cancel, :ownership_refreshing}
       other -> other
     end
   end

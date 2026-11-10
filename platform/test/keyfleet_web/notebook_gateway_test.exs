@@ -674,6 +674,16 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
            }
   end
 
+  # Costly failure: while a fleet's ownership is being read again, every
+  # ten-minute run leaves one more waiting run behind, each waking every few
+  # seconds on the one-at-a-time hub queue.
+  test "a run while the fleet's ownership is being read again ends, and leaves the hub alone" do
+    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
+
+    assert {:cancel, :ownership_refreshing} = perform_job(Roster, %{fleet_id: @fleet})
+    refute_received {:hub, "POST", "/api/v1/projects/proj-fleet/members", _, _}
+  end
+
   # Costly failure: an agent whose shard has run out keeps working in the
   # fleet's notebooks until the next ten-minute check, and a run booked for
   # that moment holds back the run a key changing hands needs now.

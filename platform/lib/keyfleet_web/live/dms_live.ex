@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.DmsLive do
           </.link>
 
           <form id="dms-auto-delete" class="dms-auto-delete" phx-change="dm_auto_delete">
-            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Delete mine after">
+            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Auto-delete">
               <select
                 id={field.id}
                 name="days"

@@ -282,7 +282,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           >
             <input type="hidden" name="project" value={@on_show.name} />
             <label>
-              One line its page shows under the title
+              Description
               <input
                 name="description"
                 type="text"
@@ -879,7 +879,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </section>
 
       <section class="workspace-instrument" aria-labelledby="workspace-instrument-keys-title">
-        <h3 id="workspace-instrument-keys-title">Keys at work</h3>
+        <h3 id="workspace-instrument-keys-title">Active Keys</h3>
         <p :if={@at_work == []} class="workspace-detail">No Key holds a task here yet.</p>
         <ol :if={@at_work != []} id="workspace-instrument-keys">
           <li :for={key <- @at_work} data-key={key.key}>
@@ -1476,7 +1476,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           Add a note: what was tried, what happened, the evidence, and what comes next. Link it to the task.
         </li>
       </ol>
-      <p><a href="/agents.md">Agent instructions</a> · <a href="/docs">Operations and access</a></p>
+      <p><a href="/agents.md">Agent access</a> · <a href="/docs">Docs</a></p>
     </Regent.Primitives.disclosure>
     """
   end
@@ -1584,7 +1584,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
 
         <section class="workspace-panel" aria-labelledby="workspace-discussion-title">
-          <h2 id="workspace-discussion-title">Discussed in</h2>
+          <h2 id="workspace-discussion-title">Discussion</h2>
           <Regent.Primitives.empty_state
             :if={@item.object.discussion == []}
             class="kf-empty"
@@ -2462,8 +2462,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <.publish_posts
         :if={@board.you && @board.project && @board.active? && @board.rooms != []}
         board={@board}
-        notice={@notice}
       />
+      <p :if={@notice} id="public-notice" class="workspace-notebooks-notice" role="status">
+        {@notice}
+      </p>
     </section>
     """
   end
@@ -2472,7 +2474,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp posts_shown(count), do: "#{count} posts"
 
   attr :board, :map, required: true
-  attr :notice, :string, default: nil
 
   # A member's Key makes public the posts it wrote in one of the fleet's
   # rooms, from one post to another, into the project on show; and a saved
@@ -2505,7 +2506,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <Regent.Primitives.disclosure id="public-page" summary="Public page">
       <form id="public-page-form" class="workspace-project-form" phx-submit="publish_page">
         <label>
-          Saved page address <input name="page" type="url" required />
+          Page address <input name="page" type="url" required />
         </label>
         <p class="workspace-detail">
           Paste the address of a saved page you made. Anyone with the link can then open it, signed in or not; the notebook itself stays with members.
@@ -2515,9 +2516,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </Regent.Primitives.button>
       </form>
     </Regent.Primitives.disclosure>
-    <p :if={@notice} id="public-notice" class="workspace-notebooks-notice" role="status">
-      {@notice}
-    </p>
     """
   end
 
@@ -3290,14 +3288,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp hold(socket, step) do
     actor = ShellLive.human_actor(socket)
-    %{fleet_id: fleet_id, place: place} = socket.assigns.workspace
+    %{fleet_id: fleet_id} = board = socket.assigns.workspace
 
     with %{token_id: key} <- Keys.identity(actor, fleet_id),
          {:ok, project} <- step.(fleet_id, key, actor: actor) do
       on_show = if project.state == :deleted, do: nil, else: project.name
 
-      {:noreply,
-       Phoenix.LiveView.push_patch(socket, to: WorkspacePage.place_path(fleet_id, place, on_show))}
+      # As the picker does, so a press in the Project's graph stays in it.
+      {:noreply, Phoenix.LiveView.push_patch(socket, to: picker_path(board, on_show))}
     else
       nil ->
         {:noreply, assign(socket, :project_notice, refusal(%NotKeyHolderError{}))}

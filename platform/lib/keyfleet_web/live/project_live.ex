@@ -83,7 +83,7 @@ defmodule KeyfleetWeb.ProjectLive do
         <.part
           workspace?={@workspace?}
           id="project-work"
-          title="Recent work"
+          title="Recent Work"
           part={@project.parts.work}
           more={@project.workspace_path}
           empty="No work yet."

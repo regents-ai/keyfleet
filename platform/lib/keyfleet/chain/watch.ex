@@ -33,18 +33,25 @@ defmodule Keyfleet.Chain.Watch do
   """
   @impl ChainRefresh
   def refresh(chain_id) do
+    soon = DateTime.add(DateTime.utc_now(), ChainRefresh.gap_s())
+
     Keyfleet.Fleets.list_deployed_fleets!()
     |> Enum.filter(&(&1.chain_id == chain_id))
-    |> Enum.flat_map(&[soon(&1), ReadBalances.new(%{fleet_id: &1.id})])
-    |> Enum.each(&Oban.insert!/1)
+    |> Enum.each(fn fleet ->
+      %{fleet_id: fleet.id} |> ReadFleet.new() |> Oban.insert!() |> bring_forward(soon)
+      Oban.insert!(ReadBalances.new(%{fleet_id: fleet.id}))
+    end)
   end
 
-  defp soon(fleet) do
-    ReadFleet.new(%{fleet_id: fleet.id},
-      schedule_in: ChainRefresh.gap_s(),
-      replace: [scheduled: [:scheduled_at], retryable: [:scheduled_at]]
-    )
+  # A waiting history read due later than `soon` moves to `soon`; one due
+  # sooner keeps its time, so presses that keep coming never put the read off.
+  defp bring_forward(%Oban.Job{state: state, scheduled_at: at} = job, soon)
+       when state in ["scheduled", "retryable"] do
+    if DateTime.after?(at, soon), do: {:ok, _job} = Oban.update_job(job, %{scheduled_at: soon})
+    :ok
   end
+
+  defp bring_forward(%Oban.Job{}, _soon), do: :ok
 
   defp read([], _rpc_url), do: :ok
 

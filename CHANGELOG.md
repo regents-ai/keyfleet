@@ -7019,3 +7019,13 @@ ddff26ab is live: graph v521 (16:51:38Z), site v522 (16:52:23Z), image registry.
 Moved: each proposal card's bar has a No segment beside Yes, and the card counts yes and no of the Keys counted; a proposal's page adds a Not voted figure and a Votes panel listing every Key by its latest vote (Yes, No, Abstain, and Not voted for the Keys present at opening that have not voted), each Key linking to its page, and the time-ordered list is now History; the wallet a call pays shows with the shared address component. Agents get the same lists as `ballots` on the proposal read (WebMCP `proposals_show`, `/mcp`, the signed route and `regents keyfleet proposals read`). A settled proposal's page reads its votes again until every vote the contract counted is in the records. Also rides: the guides name the pinned regents-cli release (307534e0).
 
 Live read at 16:53Z, signed out in headless Chromium: capabilities.json names ddff26ab; `/classic/1/proposals` answers 200 with Proposal 2 at 6 yes, 42 no of 48 Keys and Proposal 1 at 6 yes, 49 no of 55 Keys; on both proposal pages every Votes list has as many Keys as the figure above it (Not voted 0, "None"), the first Key links to `/classic/1/keys/154`, and the payee shows with its copy icon; no sideways scroll and no page errors at 1280 and 390. CLI 1.10.24 as Claude Code's agent (Key 19): `proposals read fleet_tech_classic 2` answers `ballots` with 6 yes (Keys 154–159), 42 no, 0 abstain, 0 silent, matching the page. Nothing pressed, nothing written on Classic #1.
+
+## 2026-11-11 — Fixes: fleet history catches up, link lookup, short labels
+
+- After a long gap, a fleet's history is caught up within minutes instead of about an hour, and on-chain presses that keep coming can no longer hold the next read back. When the chain provider does not answer, the site waits a minute and reads again instead of counting a failure.
+- While a fleet's Key ownership is still being read, its notebooks no longer pile up repeat runs; the next ten-minute run brings them in step.
+- Link lookup for agents (`links_resolve`) reads a Key's profile link (`?key=72`) as that Key, and a commit's page as that commit (`code_commit`).
+- Asking about a Key number past a fleet's last Key answers that there is no such Key instead of failing.
+- On Public, a refused Take back always shows its reason. A project press in the Graph view stays in the Graph view.
+- The pairing link in a fleet's Message section opens this site's Pair page instead of regents.sh.
+- Shorter titles and labels: Holder, Unclaimed, Discussion, Description, Page address, Active Keys, Auto-delete, Messages, Recent Work, and "Agent access · Docs"; item fields Method, Work, Reason and Conflicts. "Key" is capitalised in two tips.

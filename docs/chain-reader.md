@@ -103,9 +103,12 @@ Seeing that these ran, running them again and stopping them is in
 `docs/recurring-jobs.md`.
 
 Each pass reads the head, reads again the last 300 blocks it already recorded
-(about a minute of Base at five blocks a second, from Denim on 5 November 2026), then records what happened after them up to the
-head, in stretches of at most 10,000 blocks. A stretch is one request for all
-the contracts above.
+(about a minute of Base at five blocks a second, from Denim on 5 November 2026), then records what happened after them, one
+stretch of at most 10,000 blocks a pass. A stretch is one request for all
+the contracts above. A pass that ends still behind the head it read is followed
+by the next a second later, so a long gap is caught up in minutes; once caught
+up, the next pass is five minutes on. A node that does not answer is a
+minute's wait, not a failure.
 
 ## Turning it on
 

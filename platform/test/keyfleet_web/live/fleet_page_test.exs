@@ -1395,7 +1395,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       read_now()
       {:ok, view, _html} = live(conn, @path)
       assert text(view, "#fleet-quote h2") == "Message"
-      assert has_element?(view, ~s(#fleet-quote a[href="https://regents.sh"]))
+      assert has_element?(view, ~s(#fleet-quote a[href="/pair"]), "Pair an agent")
       refute has_element?(view, "#fleet-quote-form")
 
       {:ok, signed_out, _html} = live(build_conn(), @path)

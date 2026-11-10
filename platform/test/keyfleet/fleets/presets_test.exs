@@ -78,6 +78,15 @@ defmodule Keyfleet.Fleets.PresetsTest do
     assert %{next_price: nil, next_token_id: nil} = Presets.progress("fleet_tech_classic", 1_024)
   end
 
+  # Costly failure: an agent asking about a Key number no fleet will ever have
+  # gets a crash where "no such Key" belongs.
+  test "a number past a fleet's last Key has no price" do
+    assert Presets.issue_price("fleet_tech_classic", 1_025) == nil
+    assert Presets.issue_price("fleet_tech_accelerant", 2_001) == nil
+    assert Presets.issue_price("regents_club", 1_999) == nil
+    assert is_integer(Presets.issue_price("fibonacci_syndicate", 50_000))
+  end
+
   # A key's price is what the fleet asked for it once the key before it sold.
   test "a key was issued for the price the fleet offered it at, at every level's edges" do
     edges =

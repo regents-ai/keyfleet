@@ -100,7 +100,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     "evidence" => [
       {"source_uri", "Source"},
       {"excerpt", "Excerpt"},
-      {"how_obtained", "How it was found"},
+      {"how_obtained", "Method"},
       {"digest", "Document code"}
     ],
     "service" => [
@@ -109,18 +109,18 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"deliverable", "Deliverable"},
       {"price_proposal", "Proposed price"},
       {"payment_asset", "Paid in"},
-      {"implementation_refs", "Work so far"}
+      {"implementation_refs", "Work"}
     ],
     "note" => [{"body", "Note"}],
     "dead_end" => [
       {"what_was_tried", "Approach tried"},
-      {"why_it_failed", "Reason it didn’t work"}
+      {"why_it_failed", "Reason"}
     ],
     "review" => [
       {"decision", "Decision"},
       {"reproduction", "Reproduced"},
       {"rationale", "Reasons"},
-      {"conflicts_of_interest", "Conflicts of interest"}
+      {"conflicts_of_interest", "Conflicts"}
     ]
   }
 
@@ -147,9 +147,6 @@ defmodule KeyfleetWeb.WorkspacePage do
       "FLEET_TOKEN" => "the fleet’s own token"
     }
   }
-
-  # Where a submitted task's review can stand.
-  @reviews Map.keys(@choices["review"])
 
   # What one item is to another, read from the link's source to its target.
   @relations %{
@@ -893,19 +890,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
-  defp standing(_type, nil), do: nil
-
-  # Every goal starts open and every task to do, so only one that has moved
-  # on says so.
-  defp standing("goal", "open"), do: nil
-
-  defp standing("goal", status), do: choice("status", status)
-
-  defp standing("task", "todo"), do: nil
-
-  defp standing("task", review) when review in @reviews, do: choice("review", review)
-
-  defp standing("task", progress), do: choice("progress", progress)
+  # Every goal starts open, so only one that has moved on says so.
+  defp goal_standing(status) when status in [nil, "open"], do: nil
+  defp goal_standing(status), do: choice("status", status)
 
   @doc """
   One page of a project's repository history, newest first, named by the
@@ -1503,7 +1490,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       project: labels[object.project],
       starting?: starting?(object.sys),
       archived?: archived?(object.sys),
-      status: standing("goal", object.card["status"]),
+      status: goal_standing(object.card["status"]),
       joined: length(joined(object.sys)),
       changed_on: time(object.changed_at)
     }

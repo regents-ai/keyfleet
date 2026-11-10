@@ -48,12 +48,6 @@ defmodule Keyfleet.Treasury.AssetDetails do
       argument :fleet_id, :string, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id))
     end
-
-    read :of_assets do
-      argument :fleet_id, :string, allow_nil?: false
-      argument :assets, {:array, :string}, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and asset in ^arg(:assets))
-    end
   end
 
   policies do

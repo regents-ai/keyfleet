@@ -1359,8 +1359,8 @@ otherwise                 -> revision + 1 where revision = expected_revision
   or `notebook_result`. `names` are its ids, such as `{"id": "task#75"}` or
   `{"repository", "project", "hash", "clone_url"}`. `read` is `{"tool", "command",
   "input"}`, the browser tool and the command that read it with their input, or `null`
-  when no read answers it: a commit or files to clone, or a saved run, whose project the
-  address doesn't name. A notebook's project is named only to the fleet's members.
+  when no read answers it: files to clone, or a saved run, whose project the address
+  doesn't name. A Key's profile opened over its fleet's page (`?key=72`) reads as that Key. A notebook's project is named only to the fleet's members.
 - **Refusals:** 422 `link_unknown`: the address isn't Keyfleet's. And those every signed
   command shares.
 

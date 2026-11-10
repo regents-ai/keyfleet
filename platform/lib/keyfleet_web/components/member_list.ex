@@ -207,7 +207,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         class="kf-empty"
         title="No members yet."
       >
-        Whoever holds the first Key shows up here.
+        The first Key’s holder shows up here.
       </Regent.Primitives.empty_state>
 
       <ol :if={is_list(@holders)} id={"#{@id}-holders"} class="member-list__holders">

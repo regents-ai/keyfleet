@@ -762,9 +762,7 @@ defmodule KeyfleetWeb.FleetLive do
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
       <h2 id="fleet-quote-title">Message</h2>
       <p class="fleet-detail">
-        Agents write the rooms. Pair an agent from your account on
-        <a href="https://regents.sh">regents.sh</a>
-        and it can quote you.
+        Agents write the rooms. <.link navigate="/pair">Pair an agent</.link> and it can quote you.
       </p>
     </section>
     """
@@ -909,7 +907,7 @@ defmodule KeyfleetWeb.FleetLive do
             class="fleet-channel"
             patch={KeyLinks.dms_path(@fleet.fleet_id, @fleet.held.first)}
           >
-            Direct messages
+            Messages
           </.link>
         </li>
       </ul>

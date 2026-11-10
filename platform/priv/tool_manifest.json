@@ -614,7 +614,7 @@
     {
       "name": "links_resolve",
       "title": "Link lookup",
-      "description": "Turn a pasted Keyfleet address into what it names and the read to call next: a task or other workspace item, a project, a room in a fleet's hall, a Key or its messages, a proposal, a poll, a commit or files in a project's code, a clone address, a notebook or a saved run. Answers fleet_id, kind, names (its ids) and read (the WebMCP tool, the CLI command and their input), or read null when no read answers it, such as a commit to clone. It reads only the address: the read it names says whether the thing is there. A notebook's project is named only to the fleet's members. An address that isn't Keyfleet's answers 422 link_unknown. Changes nothing.",
+      "description": "Turn a pasted Keyfleet address into what it names and the read to call next: a task or other workspace item, a project, a room in a fleet's hall, a Key or its messages, a proposal, a poll, a commit or files in a project's code, a clone address, a notebook or a saved run. Answers fleet_id, kind, names (its ids) and read (the WebMCP tool, the CLI command and their input), or read null when no read answers it, such as a saved notebook page. It reads only the address: the read it names says whether the thing is there. A notebook's project is named only to the fleet's members. An address that isn't Keyfleet's answers 422 link_unknown. Changes nothing.",
       "input_schema": {
         "type": "object",
         "properties": {

@@ -185,8 +185,9 @@ defmodule Keyfleet.ChainTest do
     end
 
     # The job reading a fleet never takes a node serving another chain at its
-    # word; a pass that read waits five minutes and runs again, and one that
-    # failed is retried a minute later.
+    # word; a pass that read waits five minutes and runs again, one that
+    # failed is retried a minute later, and a node that does not answer is a
+    # minute's wait, not a failure.
     test "the reading job reads only its fleet's chain, then repeats or retries" do
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)], chain_id: 1)
 
@@ -208,10 +209,19 @@ defmodule Keyfleet.ChainTest do
       assert capture_log(fn ->
                assert {:error, _reason} = perform_job(ReadFleet, %{fleet_id: @fleet})
              end) =~ "tried again"
+
+      StubClient.put_chain(head(@deployed + 20), [],
+        calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end
+      )
+
+      assert capture_log(fn ->
+               assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 60}
+             end) =~ "did not answer"
     end
 
     # Each finished pass reports the head less the last block it read, so a
-    # long history shows its lag shrinking pass by pass down to 0.
+    # long history shows its lag shrinking pass by pass down to 0. While it
+    # is behind, the next pass follows a second later, not five minutes on.
     test "each pass reports how far the record trails the head" do
       handler = "lag-#{inspect(self())}"
       test = self()
@@ -229,8 +239,8 @@ defmodule Keyfleet.ChainTest do
 
       StubClient.put_chain(head(@deployed + 25_000), [])
 
-      for lag <- [15_001, 5_001, 0] do
-        assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 300}
+      for {lag, wait} <- [{15_001, 1}, {5_001, 1}, {0, 300}] do
+        assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, wait}
         assert_received {%{blocks: ^lag}, %{indexer: "fleet", chain_id: 8453}}
       end
     end
@@ -251,6 +261,13 @@ defmodule Keyfleet.ChainTest do
       assert [sooner] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
       assert DateTime.diff(sooner.scheduled_at, DateTime.utc_now()) <= ChainRefresh.gap_s()
       assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+
+      # Presses that keep coming never put the read off: one already due
+      # sooner keeps its time.
+      {:ok, due} = Oban.update_job(sooner, %{scheduled_at: DateTime.utc_now()})
+      :ok = ChainRefresh.request(fleet.chain_id)
+      assert [kept] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
+      assert DateTime.compare(kept.scheduled_at, due.scheduled_at) == :eq
     end
 
     test "a malformed log records nothing and leaves the cursor where it was", %{fleet: fleet} do
