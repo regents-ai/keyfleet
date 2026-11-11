@@ -5,14 +5,21 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   as its page shows it (`:show`), the Keys a wallet holds (`:held`), taking a
   post off the wall of a Key it acts
   as (`:wall_remove`), choosing the Key its person writes as (`:post_as`),
-  its own mutes (`:mutes`, `:mute`, `:unmute`) and its active shards
-  (`:shards`). Each answer is `{status, body, nil}`; `params` is the signed
-  request's JSON, its body with the names in its address.
+  which of its person's agents is on which of their Keys (`:agents`,
+  `:assign_agent`), its own mutes (`:mutes`, `:mute`, `:unmute`) and its
+  active shards (`:shards`). Each answer is `{status, body, nil}`; `params`
+  is the signed request's JSON, its body with the names in its address.
 
   The page is what anyone reads on the site: who holds the Key and since when,
   the Key its holder writes as, the other Keys they hold, its card's traits,
   its wall and room posts, its votes, and the agents with a shard of it.
   `yours` says whether the agent acts as the Key now (`Keyfleet.Keys.held_keys/2`).
+
+  The person's Keys in a fleet are read as their Account page lists them:
+  each Key their wallets hold now with the agent on it, those with an agent
+  first, then by number, beside the agents paired with them now, and the Key
+  the calling agent is on as `yours` (`Keyfleet.Keys.AgentKey`). Putting an
+  agent on a Key, or taking it off, answers them as they stand after it.
 
   A mute changes nothing for anyone else, and each mute request answers the
   agent's mutes in the fleet as they stand after it. A shard list has one
@@ -23,12 +30,14 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   """
 
   alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
   alias Keyfleet.Dms.Checks.KeyHolder
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys
+  alias Keyfleet.Keys.Errors.AgentUnknownError
   alias Keyfleet.Keys.Profile
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.KeyUnknownError
@@ -107,6 +116,27 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
     end
   end
 
+  def answer(:agents, %{"fleet_id" => fleet_id}, actor, _waiter) do
+    case Fleets.get_fleet!(fleet_id) do
+      nil -> refusal(404, "fleet_unknown")
+      %{} -> agent_keys(fleet_id, actor)
+    end
+  end
+
+  # One of the person's agents goes on one of their Keys, or the Key's agent
+  # comes off when none is named, as their Account page does it.
+  def answer(:assign_agent, %{"fleet_id" => fleet_id, "token_id" => token_id} = params, actor, _) do
+    with %{} <- Fleets.get_fleet!(fleet_id),
+         {:ok, _assigned} <-
+           Keys.assign_agent(fleet_id, token_id, params["agent_wallet"], actor: actor) do
+      agent_keys(fleet_id, actor)
+    else
+      nil -> refusal(404, "fleet_unknown")
+      {:error, %Ash.Error.Forbidden{}} -> refusal(403, "person_not_here")
+      {:error, %Ash.Error.Invalid{errors: errors}} -> refuse_assign(errors)
+    end
+  end
+
   def answer(:mutes, %{"fleet_id" => fleet_id}, actor, _waiter), do: mutes(fleet_id, actor)
 
   def answer(:mute, %{"fleet_id" => fleet_id, "token_id" => token_id}, actor, _waiter) do
@@ -157,6 +187,36 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   end
 
   defp token_id(_value), do: {:error, :invalid_token_id}
+
+  defp refuse_assign(errors) do
+    if Enum.any?(errors, &match?(%AgentUnknownError{}, &1)),
+      do: refusal(409, "agent_unknown"),
+      else: refusal(409, "key_not_held")
+  end
+
+  defp agent_keys(fleet_id, %Agent{pairing: %Human{wallet_addresses: wallets}} = actor) do
+    agents = Keys.person_agents(actor)
+    on_keys = Keys.agents_on_keys(actor, agents)
+    {:ok, yours} = Keys.assigned_key(actor, fleet_id, actor: actor)
+
+    keys =
+      for key <- Keys.keys_held_in_fleet!(fleet_id, wallets, actor: actor),
+          do: %{token_id: key.token_id, agent: paired_json(on_keys[{fleet_id, key.token_id}])}
+
+    ok(%{
+      agent_keys: %{
+        fleet_id: fleet_id,
+        keys: Enum.sort_by(keys, &{&1.agent == nil, &1.token_id}),
+        agents: Enum.map(agents, &paired_json/1),
+        yours: yours && yours.token_id
+      }
+    })
+  end
+
+  defp agent_keys(_fleet_id, _person_not_here), do: refusal(403, "person_not_here")
+
+  defp paired_json(nil), do: nil
+  defp paired_json(agent), do: %{name: agent.name, wallet: agent.wallet}
 
   defp mutes(fleet_id, actor) do
     case Rooms.mutes_in_fleet(fleet_id, actor: actor) do

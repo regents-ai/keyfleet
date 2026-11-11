@@ -1,8 +1,7 @@
 import {expect, test, type Page} from "@playwright/test"
 import {newAgent, pairPerson, useCode} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {issueShard, prepareFleet, sellKey} from "./support/fleet_chain"
-import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
+import {prepareFleet, sellKey} from "./support/fleet_chain"
 
 // A person manages their paired agents on the Agents page, as on regents.sh:
 // See what it has done opens the agent's window, Done closes it, and Unpair,
@@ -82,17 +81,18 @@ test("on a 320 px phone, each account tab is a whole thumb wide, the open one is
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
 })
 
-// Once an agent pairs, the person is offered a shard of their own Key for it:
-// the link opens that Key's page at the agent's own shard press, and the press
-// reaches the wallet. With the shard on the chain, the agent's row names the
-// Key.
-test("an agent that pairs is offered a shard of the person's Key, and its row then names the Key", async ({page}) => {
+// Once an agent pairs, the person is led to Your Keys on the Account page,
+// where choosing the agent for one of their Keys saves it at once and lists
+// that Key first, with the agent on it. The agent's row then names the Key,
+// and the page keeps to a 320 px screen.
+test("an agent that pairs is put on the person's Key from Your Keys, and its row then names the Key", async ({page}) => {
   const fleet = "fleet_tech_classic"
   const me = "0x1111111111111111111111111111111111111111"
   prepareFleet(fleet)
   sellKey(fleet, me)
+  const key = sellKey(fleet, me)
   const agent = newAgent()
-  const name = `Shard ${agent.slice(2, 8)}`
+  const name = `Keyed ${agent.slice(2, 8)}`
   const errors = await signIn(page)
   await openAgents(page)
 
@@ -108,28 +108,26 @@ test("an agent that pairs is offered a shard of the person's Key, and its row th
   const [, code] = (await message.innerText()).match(/Pairing code:\s*(\S+)/)!
   useCode(agent, code, name)
 
-  const give = page.locator("#shell-pairing-box-give-shard")
-  await expect(give).toHaveText(`Give ${name} a shard`)
+  const assign = page.locator("#shell-pairing-box-assign-key")
+  await expect(assign).toHaveText(`Assign ${name} a Key`)
   expect((await next.boundingBox())!.height).toBe(before)
-  await expect(page.locator("#account-agents li", {hasText: name}).getByRole("link", {name: "Give it a shard"})).toBeVisible()
+  await expect(page.locator("#account-agents li", {hasText: name}).getByRole("link", {name: "Assign a Key"})).toBeVisible()
 
-  await give.click()
+  await assign.click()
   await expect(page.locator("#shell-pairing")).toBeHidden()
-  const press = page.locator(`#key-issue-${agent}-button`)
-  await expect(page.locator(`#key-issue-${agent}`)).toContainText(name)
-  await expect(press).toBeInViewport()
-  const key = Number(new URL(page.url()).pathname.split("/").pop())
-  expect(new URL(page.url()).pathname).toBe(`/classic/1/keys/${key}`)
-  await useStandInWallet(page, me)
-  await press.click()
-  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
-  const [{transaction}] = await sentByStandIn(page)
-  expect(transaction.data.toLowerCase()).toContain(agent.slice(2))
+  expect(new URL(page.url()).pathname).toBe("/account")
+  const keys = page.locator(`#account-key-agents-${fleet}`)
+  await keys.getByRole("combobox", {name: `Agent on Key ${key}`, exact: true}).selectOption({label: name})
+  await expect(page.locator(`#account-key-agents-${fleet}-notice`)).toHaveText(`${name} is on Key ${key} now.`)
+  await expect(keys.locator("li").first()).toHaveId(`account-key-agents-${fleet}-${key}`)
 
-  issueShard(fleet, key, agent, 30)
+  await page.setViewportSize({width: 320, height: 640})
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  await page.setViewportSize({width: 1280, height: 800})
+
   await openAgents(page)
   const row = page.locator("#account-agents li", {hasText: name})
   await expect(row.getByRole("link", {name: `Classic #1 Key ${key}`})).toHaveAttribute("href", `/classic/1/keys/${key}`)
-  await expect(row.getByRole("link", {name: "Give it a shard"})).toHaveCount(0)
+  await expect(row.getByRole("link", {name: "Assign a Key"})).toHaveCount(0)
   expect(errors).toEqual([])
 })

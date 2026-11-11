@@ -868,13 +868,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       ChainHelpers.seed_cursor!(@fleet)
       account = register_account("agent-keys", @person)
       issue!(@fleet, 1, @person)
-
-      %{code: code} =
-        RegentAgents.issue_pairing_code!(
-          actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
-        )
-
-      RegentAgents.pair_agent!(code, "Astra", :hermes, actor: %RegentAgents.Agent{wallet: @agent})
+      pair_agent!("did:privy:agent-keys", "Astra", @agent)
       %{account: account}
     end
 
@@ -883,8 +877,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
       assert has_element?(
                view,
-               ~s(#account-agents li a[href="/classic/1/keys/1#key-issue-#{@agent}"]),
-               "Give it a shard"
+               ~s(#account-agents li a[href="/account#account-keys"]),
+               "Assign a Key"
              )
 
       ChainHelpers.issue_shard!(@fleet, 1, @agent)
@@ -893,7 +887,84 @@ defmodule KeyfleetWeb.ShellLiveTest do
       render(view)
 
       assert has_element?(view, ~s(#account-agents li a[href="/classic/1/keys/1"]), "Key 1")
-      refute has_element?(view, "#account-agents li", "Give it a shard")
+      refute has_element?(view, "#account-agents li", "Assign a Key")
+    end
+
+    test "the Account page puts an agent on a Key, lists it first, and the Agents page names it",
+         c do
+      issue!(@fleet, 2, @person)
+      pair_agent!("did:privy:agent-keys", "Bolt", @second)
+
+      {view, html} = open_account(c.conn, c.account)
+      list = "#account-key-agents-#{@fleet}"
+
+      assert keys_listed(html) == ["/classic/1?key=1", "/classic/1?key=2"]
+      assert has_element?(view, "#{list}-2 select option[selected]", "None")
+
+      view
+      |> element("#{list}-2-form")
+      |> render_change(%{"token_id" => "2", "agent" => @second})
+
+      assert has_element?(view, "#{list}-notice[role=status]", "Bolt is on Key 2 now.")
+      assert keys_listed(render(view)) == ["/classic/1?key=2", "/classic/1?key=1"]
+      assert has_element?(view, "#{list}-2.account-keys__key--agent option[selected]", "Bolt")
+      assert has_element?(view, "#{list}-1 select option[selected]", "None")
+
+      bolt = agent!(@second)
+      assert %{token_id: 2, for_person: true} = Keys.identity(bolt, @fleet)
+      assert %{token_id: 1, for_person: true} = Keys.identity(agent!(@agent), @fleet)
+
+      # A wallet no agent of theirs has changes nothing and says so.
+      view
+      |> element("#{list}-1-form")
+      |> render_change(%{"token_id" => "1", "agent" => "0x" <> String.duplicate("9", 40)})
+
+      assert has_element?(view, "#{list}-notice[role=alert]", "Reload")
+      assert has_element?(view, "#{list}-1 select option[selected]", "None")
+      assert %{token_id: 2} = Keys.identity(bolt, @fleet)
+
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
+      bolt_row = element(view, "#account-agents li", "Bolt")
+      assert render(bolt_row) =~ ~s(href="/classic/1/keys/2")
+      assert has_element?(view, "#account-agents li", "Assign a Key")
+
+      {view, _html} = open_account(c.conn, c.account)
+
+      view
+      |> element("#{list}-2-form")
+      |> render_change(%{"token_id" => "2", "agent" => ""})
+
+      assert has_element?(view, "#{list}-notice", "Key 2 has no agent now.")
+      assert keys_listed(render(view)) == ["/classic/1?key=1", "/classic/1?key=2"]
+      assert %{token_id: 1} = Keys.identity(bolt, @fleet)
+    end
+
+    test "once an agent pairs, the pairing window leads to putting it on a Key", c do
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
+      html = view |> element("#shell-pairing-box") |> render_change(%{"harness" => "codex"})
+      [_, code] = Regex.run(~r/Pairing code: (\S+)/, html)
+
+      RegentAgents.pair_agent!(code, "Cleo", :codex, actor: %RegentAgents.Agent{wallet: @second})
+      send(view.pid, :agents_changed)
+      # The page hands the change to the pairing box, which reads afresh.
+      render(view)
+
+      assert has_element?(
+               view,
+               ~s(#shell-pairing-box-assign-key[href="/account#account-keys"]),
+               "Assign Cleo a Key"
+             )
+    end
+
+    test "with no paired agent, the Account page lists the Keys alone", c do
+      account = register_account("agent-keys-none", "0x" <> String.duplicate("5", 40))
+      issue!(@fleet, 3, "0x" <> String.duplicate("5", 40))
+
+      {view, _html} = open_account(c.conn, account)
+
+      assert has_element?(view, "#account-key-agents-#{@fleet}-3 a", "Key 3")
+      refute has_element?(view, "#account-key-agents-#{@fleet}-3 select")
+      refute has_element?(view, "#account-key-agents-#{@fleet}-notice")
     end
 
     test "Keys that can't be read leave the page up and say so on the agent's row", c do
@@ -1007,6 +1078,26 @@ defmodule KeyfleetWeb.ShellLiveTest do
         "ON CONFLICT (human_account_id) DO UPDATE SET wallet_address = $2, ens_name = $3, lookup_state = $4",
       [account.id, wallet, name, state]
     )
+  end
+
+  defp pair_agent!(privy_user_id, name, wallet) do
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(actor: %RegentAgents.Person{privy_user_id: privy_user_id})
+
+    RegentAgents.pair_agent!(code, name, :hermes, actor: %RegentAgents.Agent{wallet: wallet})
+  end
+
+  # The agent as a signed request finds it, with its pairing.
+  defp agent!(wallet) do
+    {:ok, agent} =
+      Keyfleet.Agents.with_pairing(%Keyfleet.Actors.Agent{
+        wallet_address: wallet,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      })
+
+    agent
   end
 
   defp register_account(suffix, wallet) do

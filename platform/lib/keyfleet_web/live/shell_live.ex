@@ -98,6 +98,7 @@ defmodule KeyfleetWeb.ShellLive do
        project_confirm_delete: false,
        connection_outcome: nil,
        held_keys: [],
+       key_agents: AccountLive.key_agents(nil),
        slices: %Read{},
        pair_start: nil,
        project_page: nil,
@@ -464,15 +465,18 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired. The account menu and the pairing window follow on
-  # every page, the Agents page's list on that page, the setup list on a
-  # fleet's page, and the agents' states and shard presses on the person's own
-  # Key's page.
+  # every page, the Agents page's list on that page, the agents on the
+  # person's Keys on the Account page, the setup list on a fleet's page, and
+  # the agents' states and shard presses on the person's own Key's page.
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
     socket = socket |> setup_changed() |> agent_setup_changed() |> KeysLive.agents_changed()
 
     case socket.assigns.route_spec.route_id do
+      :account ->
+        {:noreply, read_key_agents(socket)}
+
       :account_agents ->
         send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
         {:noreply, socket}
@@ -485,6 +489,16 @@ defmodule KeyfleetWeb.ShellLive do
         {:noreply, socket}
     end
   end
+
+  # An agent went onto or off one of the person's Keys on the Account page,
+  # which lists its Keys again, those with an agent first.
+  defp notice(
+         {KeyfleetWeb.KeyAgentChoice, :changed},
+         %{assigns: %{route_spec: %{route_id: :account}}} = socket
+       ),
+       do: {:noreply, read_key_agents(socket)}
+
+  defp notice({KeyfleetWeb.KeyAgentChoice, :changed}, socket), do: {:noreply, socket}
 
   # A Points award or correction landed for this account; the Points page follows.
   defp notice(
@@ -728,6 +742,7 @@ defmodule KeyfleetWeb.ShellLive do
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
           held_keys={@held_keys}
+          key_agents={@key_agents}
           slices={@slices}
           lease={@session_lease}
           actor={actor(@access_context)}
@@ -1433,12 +1448,19 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_account_page(socket, %{route_id: :account}) do
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
+    |> read_key_agents()
     |> read_slices()
     |> check_ens(current_account(socket.assigns.access_context))
   end
 
   defp load_account_page(socket, _route_spec),
-    do: socket |> assign(:held_keys, []) |> Read.clear(:slices)
+    do:
+      socket
+      |> assign(held_keys: [], key_agents: AccountLive.key_agents(nil))
+      |> Read.clear(:slices)
+
+  defp read_key_agents(socket),
+    do: assign(socket, :key_agents, AccountLive.key_agents(human_actor(socket)))
 
   defp read_slices(%{assigns: %{held_keys: []}} = socket), do: Read.clear(socket, :slices)
 

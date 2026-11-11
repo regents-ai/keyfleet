@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.AgentKeyController do
   @moduledoc """
   A Key as its page shows it, for a signed-in agent, the Keys a wallet holds,
-  taking a post off the wall of a Key the agent acts as, and choosing the Key
-  its person writes as.
+  taking a post off the wall of a Key the agent acts as, choosing the Key its
+  person writes as, and which of its person's agents is on which of their
+  Keys, read and set.
   Each answers what the Claude connector's tool of the same name answers
   (`KeyfleetWeb.AgentTools.Keys.Answer`).
   """
@@ -15,6 +16,8 @@ defmodule KeyfleetWeb.AgentKeyController do
   def held(conn, params), do: reply(conn, :held, params)
   def remove_from_wall(conn, params), do: reply(conn, :wall_remove, params)
   def choose_posting_key(conn, params), do: reply(conn, :post_as, params)
+  def agent_keys(conn, params), do: reply(conn, :agents, params)
+  def assign_agent(conn, params), do: reply(conn, :assign_agent, params)
 
   defp reply(conn, op, params),
     do: AgentReply.answer(conn, Answer.answer(op, params, conn.assigns.agent_actor, nil))

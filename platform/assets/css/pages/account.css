@@ -140,6 +140,51 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A fleet's Keys and, under them, the line saying an agent change saved. */
+.account-keys__keys {
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* Once the person has paired an agent, each Key is a row of its own, the
+   agent on it at the row's end, wrapping under the Key on a narrow screen. */
+.account-keys__list--agents {
+  display: grid;
+}
+
+.account-keys__list--agents li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  padding-block: 0.4rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.account-keys__list--agents li > a {
+  margin-inline-end: auto;
+}
+
+.account-keys__key--agent > a {
+  border-color: var(--ash-line-strong);
+}
+
+.account-keys__agent {
+  flex: 0 1 14rem;
+  min-inline-size: 0;
+}
+
+.account-keys__agent .rg-field {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-keys__agent label {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
 /* The Key a person posts as where they hold several. Its line under the
    choice keeps its height whether or not it says anything. */
 .account-keys__posting {
@@ -313,6 +358,11 @@ div.verified-connections__notice p {
     justify-self: start;
   }
 
+  /* A Key's agent spans the row it wraps onto. */
+  .account-keys__agent {
+    flex: 1 1 12rem;
+  }
+
   /* "Copy message" and "Make a new code" fill the row they wrap onto. */
   .rg-account__pair-actions > .rg-button {
     flex: 1 1 auto;
@@ -366,7 +416,7 @@ div.verified-connections__notice p {
   overflow-wrap: anywhere;
 }
 
-/* Give It a Shard appears under the pairing box once an agent pairs; its line
+/* Assign a Key appears under the pairing box once an agent pairs; its line
    keeps a button's height before, so the page below never moves. */
 .account-pairing-next {
   min-block-size: 2.75rem;

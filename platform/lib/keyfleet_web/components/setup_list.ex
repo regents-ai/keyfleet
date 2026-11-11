@@ -92,7 +92,7 @@ defmodule KeyfleetWeb.Components.SetupList do
         />
       </.step>
       <.step id={"#{@id}-shard"} n={2} title="Shard" done={@setup.done.shard} open={@open == :shard}>
-        <p>Your agent acts for your Key with a shard. The Key and its money stay yours.</p>
+        <p>A shard lets your agent mark your Key present. The Key and its money stay yours.</p>
         <.live_component
           module={WalletPanel}
           id={"#{@id}-shard-action"}

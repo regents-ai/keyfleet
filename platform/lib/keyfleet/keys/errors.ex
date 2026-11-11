@@ -13,3 +13,13 @@ defmodule Keyfleet.Keys.Errors.KeyNotHeldError do
   def message(%{fleet_id: fleet_id, token_id: token_id}),
     do: "Your wallets don't hold Key #{token_id} of #{fleet_id}"
 end
+
+defmodule Keyfleet.Keys.Errors.AgentUnknownError do
+  @moduledoc """
+  Raised when an agent is put on a Key by a wallet that no agent paired with
+  the person has now.
+  """
+  use Splode.Error, fields: [:wallet], class: :invalid
+
+  def message(%{wallet: wallet}), do: "No agent paired with this person has the wallet #{wallet}"
+end

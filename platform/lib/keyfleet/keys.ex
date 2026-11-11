@@ -135,6 +135,15 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :human_account_ids]
     end
 
+    resource Keyfleet.Keys.AgentKey do
+      define :assign_agent,
+        action: :assign,
+        args: [:fleet_id, :token_id, {:optional, :agent_wallet}]
+
+      define :agent_keys_of_person, action: :of_person
+      define :assigned_agent_key, action: :of_agent, args: [:fleet_id], not_found_error?: false
+    end
+
     resource Keyfleet.Keys.EditsRestriction do
       define :record_edits_restriction, action: :record
 
@@ -213,13 +222,16 @@ defmodule Keyfleet.Keys do
   person is the key they chose to write as on the Account page while their
   wallets hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key
   their wallets hold, and `wallet` is the one holding it. An agent is the
-  highest-ranked key its wallet holds, or else the highest-ranked key it holds
-  an active shard of, and `wallet` is its own. Everything either writes in the
-  fleet is written as that key.
+  highest-ranked key its wallet holds, with its own wallet; else the key its
+  person put it on (`Keyfleet.Keys.AgentKey`), while their wallets hold it and
+  this pairing lasts, with `for_person: true` and the person's wallet holding
+  it; else the highest-ranked key it holds an active shard of, with its own
+  wallet. Everything either writes in the fleet is written as that key.
 
-  An agent with neither, paired with a person whose account is here (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
-  `for_person: true`: what it writes there is the person's, marked as the
-  agent's.
+  An agent with none of these, paired with a person whose account is here
+  (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
+  `for_person: true`. Whatever an agent writes with `for_person: true` is the
+  person's, marked as the agent's.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
     case chosen_key(actor, fleet_id) || held_identity_key!(fleet_id, wallets, actor: actor) do
@@ -228,20 +240,129 @@ defmodule Keyfleet.Keys do
     end
   end
 
-  def identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
+  def identity(%Agent{} = actor, fleet_id) do
     case Agent.refresh(actor) do
-      {:ok, actor} ->
-        case held_or_shard(fleet_id, wallet, actor) do
-          %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
-          nil -> for_person(actor.pairing, fleet_id)
-        end
-
-      _ ->
-        nil
+      {:ok, actor} -> agent_identity(actor, fleet_id)
+      _ -> nil
     end
   end
 
   def identity(_actor, _fleet_id), do: nil
+
+  # Its own Key, then the Key its person put it on, then a shard, then its
+  # person's Key.
+  defp agent_identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
+    case held_identity_key!(fleet_id, [wallet], actor: actor) do
+      %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
+      nil -> assigned_identity(actor, fleet_id)
+    end
+  end
+
+  defp assigned_identity(actor, fleet_id) do
+    case assigned_key!(actor, fleet_id) do
+      %{token_id: token_id, owner_wallet: owner} ->
+        %{token_id: token_id, wallet: owner, for_person: true}
+
+      nil ->
+        shard_identity(actor, fleet_id)
+    end
+  end
+
+  defp shard_identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
+    case active_shard_in(fleet_id, wallet, actor) do
+      %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
+      nil -> for_person(actor.pairing, fleet_id)
+    end
+  end
+
+  @doc """
+  The key `agent`'s person put it on in the fleet (`Keyfleet.Keys.AgentKey`),
+  as that key's current ownership record, while one of the person's wallets
+  holds it: `{:ok, key}`, `{:ok, nil}` when there is none, or
+  `{:error, error}`. Read by the agent's pairing as `agent` carries it, so
+  ask with one `Keyfleet.Actors.Agent.refresh/1` gave. `opts` are each
+  read's, the actor included.
+  """
+  def assigned_key(agent, fleet_id, opts)
+
+  def assigned_key(%Agent{pairing: %Human{wallet_addresses: wallets}}, fleet_id, opts) do
+    with {:ok, %{token_id: token_id}} <- assigned_agent_key(fleet_id, opts),
+         {:ok, %{owner_wallet: owner} = key} <- current_key(fleet_id, token_id, opts) do
+      {:ok, if(owner in wallets, do: key)}
+    end
+  end
+
+  def assigned_key(_agent, _fleet_id, _opts), do: {:ok, nil}
+
+  defp assigned_key!(agent, fleet_id) do
+    case assigned_key(agent, fleet_id, actor: agent) do
+      {:ok, key} -> key
+      {:error, error} -> raise Ash.Error.to_error_class(error)
+    end
+  end
+
+  @doc """
+  The Privy user of the person `actor` speaks for: a signed-in person's own,
+  or the person a paired agent is paired with. `{:ok, privy_user_id}`, or
+  `:error` for anyone else.
+  """
+  def person_privy_id(%Agent{pairing: %Human{}, privy_user_id: person}) when is_binary(person),
+    do: {:ok, person}
+
+  def person_privy_id(%Human{human_account_id: account_id}) do
+    case Keyfleet.Accounts.accounts_by_ids!([account_id], actor: %Keyfleet.Actors.System{}) do
+      [%{privy_user_id: person}] -> {:ok, person}
+      _no_account -> :error
+    end
+  end
+
+  def person_privy_id(_actor), do: :error
+
+  @doc """
+  The agents paired with the person `actor` speaks for now, oldest pairing
+  first, each `%{id: pairing_id, name: name, wallet: wallet}`
+  (`RegentAgents.pairing_histories/1`); none for anyone else.
+  """
+  def person_agents(actor) do
+    with {:ok, person} <- person_privy_id(actor),
+         {:ok, pairings} <- RegentAgents.pairing_histories(person) do
+      for %{revoked_at: nil} = pairing <- pairings, do: Map.take(pairing, [:id, :name, :wallet])
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
+  Which of the person's `agents` (each with its pairing `id`, as
+  `person_agents/1` gives them) is on each of the Keys their wallets hold now
+  (`Keyfleet.Keys.AgentKey`), as `%{{fleet_id, token_id} => agent}`, read in
+  one go for every fleet, for the person or an agent paired with them. A Key
+  that has left their wallets, or whose agent has since been unpaired, is
+  left out.
+  """
+  def agents_on_keys(actor, agents) do
+    case {person_wallets(actor), agents} do
+      {[], _agents} -> %{}
+      {_wallets, []} -> %{}
+      {wallets, agents} -> agents_on_held_keys(actor, wallets, agents)
+    end
+  end
+
+  defp agents_on_held_keys(actor, wallets, agents) do
+    by_id = Map.new(agents, &{&1.id, &1})
+    held = MapSet.new(keys_held_everywhere!(wallets, actor: actor), &{&1.fleet_id, &1.token_id})
+
+    for assigned <- agent_keys_of_person!(actor: actor),
+        key = {assigned.fleet_id, assigned.token_id},
+        MapSet.member?(held, key),
+        agent = by_id[assigned.paired_agent_id],
+        into: %{},
+        do: {key, agent}
+  end
+
+  defp person_wallets(%Human{wallet_addresses: wallets}), do: wallets
+  defp person_wallets(%Agent{pairing: %Human{wallet_addresses: wallets}}), do: wallets
+  defp person_wallets(_actor), do: []
 
   # The key the person chose to write as, while one of their wallets holds it.
   defp chosen_key(%Human{wallet_addresses: wallets} = actor, fleet_id) do
@@ -269,8 +390,11 @@ defmodule Keyfleet.Keys do
   the epoch being the key's current one, by the same rule
   as `identity/2`: a person is every key their wallets hold, with the wallet
   holding it; an agent is every key its wallet holds and every key it holds an
-  active shard of, with its own wallet; an agent with neither, paired with a
-  person here, is that person's keys, `for_person: true`.
+  active shard of, with its own wallet, and the key its person put it on
+  while their wallets hold it, `for_person: true` with the wallet holding it;
+  an agent with none of these, paired with a person here, is that person's
+  keys, `for_person: true`. So an agent on a key acts as that key alone, and
+  agents on different keys stay apart.
   Nobody else is any key. Direct messages read and send as these keys
   (`Keyfleet.Dms`): a key's new holder sees only messages from when they got it.
   """
@@ -284,27 +408,34 @@ defmodule Keyfleet.Keys do
         }
   end
 
-  def held_keys(%Agent{wallet_address: wallet} = actor, fleet_id) do
+  def held_keys(%Agent{} = actor, fleet_id) do
     case Agent.refresh(actor) do
-      {:ok, actor} ->
-        held = keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
-
-        sharded =
-          for shard <- active_shards_held_by!(wallet, actor: actor),
-              shard.fleet_id == fleet_id,
-              do: shard
-
-        case Enum.uniq_by(Enum.sort_by(held ++ sharded, & &1.token_id), & &1.token_id) do
-          [] -> person_keys(actor.pairing, fleet_id)
-          keys -> Enum.map(keys, &agent_key(&1, wallet))
-        end
-
-      _ ->
-        []
+      {:ok, actor} -> agent_keys(actor, fleet_id)
+      _ -> []
     end
   end
 
   def held_keys(_actor, _fleet_id), do: []
+
+  # Its own Keys, the Key its person put it on and its shards' Keys, each
+  # once, lowest first, with the wallet holding it; else its person's Keys.
+  defp agent_keys(%Agent{wallet_address: wallet} = actor, fleet_id) do
+    held = for key <- keys_held_in_fleet!(fleet_id, [wallet], actor: actor), do: {key, wallet}
+    assigned = for key <- List.wrap(assigned_key!(actor, fleet_id)), do: {key, key.owner_wallet}
+
+    sharded =
+      for shard <- active_shards_held_by!(wallet, actor: actor),
+          shard.fleet_id == fleet_id,
+          do: {shard, wallet}
+
+    (held ++ assigned ++ sharded)
+    |> Enum.sort_by(&elem(&1, 0).token_id)
+    |> Enum.uniq_by(&elem(&1, 0).token_id)
+    |> case do
+      [] -> person_keys(actor.pairing, fleet_id)
+      keys -> Enum.map(keys, fn {key, owner} -> agent_key(key, owner, owner != wallet) end)
+    end
+  end
 
   @doc """
   Each of `token_ids`' last presence record in the fleet, as `%{token_id =>
@@ -543,7 +674,9 @@ defmodule Keyfleet.Keys do
   counts them. `face` is the key they chose to write as while their wallets
   hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key their
   wallets hold, as `identity/2` picks it; `owner` is their main address and
-  `owned` how many of the fleet's keys their addresses hold together.
+  `owned` how many of the fleet's keys their addresses hold together. It is
+  the holder's: an agent they put on another of their keys
+  (`Keyfleet.Keys.AgentKey`) writes as that key, and the holder's face stays.
   """
   def faces(_fleet_id, []), do: %{}
 
@@ -720,12 +853,12 @@ defmodule Keyfleet.Keys do
 
   def held_summary(_actor, _fleet_id, _shown), do: nil
 
-  defp agent_key(key, wallet),
+  defp agent_key(key, wallet, for_person?),
     do: %{
       token_id: key.token_id,
       ownership_epoch: key.ownership_epoch,
       wallet: wallet,
-      for_person: false
+      for_person: for_person?
     }
 
   defp person_keys(%Human{} = person, fleet_id),
@@ -733,8 +866,6 @@ defmodule Keyfleet.Keys do
 
   defp person_keys(_missing, _fleet_id), do: []
 
-  defp held_or_shard(fleet_id, wallet, actor),
-    do:
-      held_identity_key!(fleet_id, [wallet], actor: actor) ||
-        Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))
+  defp active_shard_in(fleet_id, wallet, actor),
+    do: Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))
 end

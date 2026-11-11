@@ -2,9 +2,9 @@ defmodule KeyfleetWeb.PostingKeyChoice do
   @moduledoc """
   On the Account page, under the Keys a person's wallets hold in one fleet:
   the Key they post as there, changed by choosing another
-  (`Keyfleet.Keys.PostingKey`). What their agents write in the fleet for them
-  is written as it too. The page shows it only where they hold more than one
-  Key.
+  (`Keyfleet.Keys.PostingKey`). What their agents on no Key of theirs
+  (`Keyfleet.Keys.AgentKey`) write in the fleet for them is written as it too.
+  The page shows it only where they hold more than one Key.
 
   The host passes `account` (the signed-in account), its `session_lease` as
   `lease`, the fleet as `fleet_id` and the Keys held there as `token_ids`.
@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.PostingKeyChoice do
             Key {token_id}
           </option>
         </select>
-        <:hint>Your agents post here as this Key.</:hint>
+        <:hint>Your agents not on a Key post here as this Key.</:hint>
       </Regent.Primitives.field>
       <p
         id={"#{@id}-notice"}

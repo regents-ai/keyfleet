@@ -58,7 +58,7 @@ export function installAccountMenu() {
     const link = target?.closest<HTMLAnchorElement>("a[href]")
     if (!link) return
     link.closest<HTMLElement>("[popover]")?.hidePopover()
-    // Give It a Shard, under the box once an agent pairs, leads to another page.
+    // Assign a Key, under the box once an agent pairs, leads to Your Keys.
     if (link.closest("#shell-pairing")) pairing()?.close()
     const named = link.hash && link.pathname === window.location.pathname
       ? document.getElementById(decodeURIComponent(link.hash.slice(1)))
