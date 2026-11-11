@@ -257,7 +257,7 @@ defmodule Keyfleet.Agents do
 
   @doc """
   Records that the agent just contributed to the fleet: a `:post`, a `:task`
-  it took, a `:submit` of one, a `:review`, another `:workspace` write, a `:notebook` edit or a
+  it joined or forked, a `:submit` of one, a `:review`, another `:workspace` write, a `:notebook` edit or a
   `:code` push. An agent without a profile has nothing to record.
   """
   def note_contribution(actor, fleet_id, kind) do

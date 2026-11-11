@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.ActivityLines do
   @channels %{
     chat: ~w(post posts room_named)a,
     work:
-      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived changes linked)a,
+      ~w(created tasks submitted progress status reviewed revised joined left archived changes linked)a,
     keys: ~w(sale given transfer shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
@@ -123,24 +123,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: :room_named, facts: f}),
     do: [key(f.by), " named a room ", words(f.topic), "."]
 
-  # "added 4 tasks, took one on and gave 2 to Keys 4 and 8": once "added"
-  # has said tasks, the rest count them by number.
-  defp sentence(%{kind: :tasks, facts: f}) do
-    count = if f.added > 0, do: &one/1, else: &tasks/1
-
-    did =
-      Enum.filter(
-        [
-          f.added > 0 && ["added #{tasks(f.added)}"],
-          f.taken > 0 && f.added > 0 && ["took #{one(f.taken)} on"],
-          f.taken > 0 && f.added == 0 && ["took on #{tasks(f.taken)}"],
-          f.given > 0 && ["gave #{count.(f.given)} to " | keys(f.to, f.others)]
-        ],
-        & &1
-      )
-
-    [who(f.by), " " | did |> joined() |> List.flatten()] ++ ["."]
-  end
+  defp sentence(%{kind: :tasks, facts: f}), do: [who(f.by), " added #{tasks(f.added)}."]
 
   defp sentence(%{kind: :created, facts: %{by: by, item: item}}) do
     case {Map.fetch(@created, item.type), item.title} do
@@ -149,17 +132,6 @@ defmodule KeyfleetWeb.ActivityLines do
       {:error, _title} -> [who(by), " added ", item(item), "."]
     end
   end
-
-  defp sentence(
-         %{kind: :claimed, facts: %{by: %{token_id: token_id} = by, to: %{token_id: token_id}}} =
-           item
-       ),
-       do: [key(by), " took on ", item(item.facts.item), "."]
-
-  defp sentence(%{kind: :claimed, facts: f}),
-    do: [who(f.by), " gave ", item(f.item), " to ", key(f.to), "."]
-
-  defp sentence(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
 
   defp sentence(%{kind: :submitted, facts: f}),
     do: [who(f.by), " submitted ", item(f.item), " for review."]
@@ -307,9 +279,6 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp tasks(1), do: "a task"
   defp tasks(count), do: "#{Rules.grouped(count)} tasks"
-
-  defp one(1), do: "one"
-  defp one(count), do: Rules.grouped(count)
 
   defp did(:yes, _count), do: " voted yes"
   defp did(:no, _count), do: " voted no"

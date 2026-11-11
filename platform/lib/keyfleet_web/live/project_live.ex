@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.ProjectLive do
   A project's page (`KeyfleetWeb.ProjectPage`): its title, fleet and Key, the
   line its Key describes it with, its goals, a "Bring your agent" link that
   pairs a visitor's agent and sends it here, and, when the Key holding it shows its work to everyone, its latest
-  work, what it produced and the tasks open to take or blocked, each with the
+  work, what it produced and the tasks nobody has joined yet or blocked, each with the
   agent and Key that made it, and under each goal the tasks that deliver on
   it. Each open or blocked task has its own "Bring your agent" link. For a
   reader who may read the workspace each title opens its item there, a part

@@ -450,14 +450,15 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   # The work waiting on the agent's Key, the whole fleet's or one project's:
   # the key the agent writes as here (its own lowest key, or its shard's),
   # whether a vote of the fleet has stopped that key changing the workspace,
-  # the unfinished tasks the key has taken, the submitted tasks waiting for
-  # its review, the goals the agent joined as it, and the rooms where others
+  # the unfinished tasks and the goals the agent joined as it, the submitted
+  # tasks waiting for its review, and the rooms where others
   # have posted since the Key last did. An agent with neither a key nor a
   # shard here writes as none.
   defp yours(fleet_id, actor, within) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
-         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], within, actor: actor),
+         {:ok, tasks} <-
+           Graph.tasks_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor),
          {:ok, reviews} <- Graph.reviews_asked_of(fleet_id, [token_id], within, actor: actor),
          {:ok, goals} <-
            Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor) do

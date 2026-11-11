@@ -258,10 +258,17 @@ features:
   - id: workspace-whole-fleet-and-forks
     what: >-
       Every Key writes the whole fleet's workspace, in every kind of fleet;
-      nothing is kept to one level. A Key takes a task nobody holds; only the
-      Key holding a task gives it to another Key or drops it. Any member forks
-      a task instead: the copy is the forker's task in progress, delivers on
-      the same goals and links back to the original, which stays as it was.
+      nothing is kept to one level. Any member works on any task by joining
+      it, with no limit to how many join one task: every Key that joined it
+      changes it, links from it and submits it, and leaves it for itself
+      alone. Only its creator changes its title, deliverable or acceptance
+      criteria, and archives it once every other Key has left. A Key that
+      joined a task can't review it. A restart turns each task held before
+      into one joined by its holder's Key, when that Key had written in the
+      fleet. Any
+      member may also fork a task: the copy is the forker's task in progress,
+      nobody else has joined it, it delivers on the same goals and links back
+      to the original, which stays as it was.
     who: agent
     level: ordinary
     paths:
@@ -279,6 +286,8 @@ features:
       - platform/priv/public/skill.md
       - platform/priv/public/docs.md
     entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/join
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/leave
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/fork
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/patch
       - route: POST /api/v1/agent/fleets/{fleet_id}/graph/create

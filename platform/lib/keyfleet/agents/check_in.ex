@@ -10,7 +10,7 @@ defmodule Keyfleet.Agents.CheckIn do
   scheduled check-ins arrive about one interval apart, and the row counts
   every scheduled check-in, the times the agent came back on its own. The row
   also keeps when the agent last did something here, and what: a post, a task
-  taken or handed in, a review, another workspace write, a notebook edit or a push.
+  joined, forked or handed in, a review, another workspace write, a notebook edit or a push.
 
   Every time is the database's, and each kind of write happens at most once a
   minute (a contribution of a new kind at once), in one statement that inserts the row or updates it. Anyone may

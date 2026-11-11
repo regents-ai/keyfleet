@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.9.0` work pack.
+"""The pinned `keyfleet_work@0.10.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -19,7 +19,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, ProjectName, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.9.0"
+PACK_VERSION = "0.10.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -102,7 +102,8 @@ class Rerun(_Model):
 class Task(WorkObject):
     """`progress` "done" and `result_ref` are written only by submitting the task.
 
-    `reviewer_key` names the Key asked to review it. `commit_ref` is the exact
+    Who works on a task is who joined it (`sys.joined`), never a field a
+    member writes. `reviewer_key` names the Key asked to review it. `commit_ref` is the exact
     commit of the work and `notebook_ref` the notebook it was worked in; a
     review judges the task version that holds both, so changing either asks
     for review again. `rerun` says how to run the work again from that commit.
@@ -110,7 +111,6 @@ class Task(WorkObject):
 
     deliverable: Optional[_text(2000, multiline=True)] = None
     acceptance_criteria: list[_text(500)] = _items()
-    assignee_key: Optional[Count] = None
     reviewer_key: Optional[Count] = None
     progress: Literal["todo", "doing", "blocked", "done"] = "todo"
     next_step: Optional[_text(1000, multiline=True)] = None
@@ -189,10 +189,6 @@ class Member(_Model):
     wallet: Address
 
 
-# The most members one goal records as joined.
-MAX_JOINED = 100
-
-
 class Submitted(Member):
     # The task version the submission made: the version its reviews judge
     # until the task changes again.
@@ -227,13 +223,17 @@ class Sys(_Model):
 MAX_STARTING = 20
 
 
-# A goal also records who joined it, in the order they joined: one entry for
-# each Key and wallet. A starting goal is one of the ideas every workspace
-# begins with, by its number in the list; no member created it, and it stays.
-class GoalSys(Sys):
+# A goal or task records who joined it, in the order they joined: one entry
+# for each Key and wallet, with no limit on how many join.
+class JoinableSys(Sys):
+    joined: list[Member] = Field(default_factory=list)
+
+
+# A starting goal is one of the ideas every workspace begins with, by its
+# number in the list; no member created it, and it stays.
+class GoalSys(JoinableSys):
     created_by: Optional[Member]
     starting: Optional[Annotated[int, Field(ge=1, le=MAX_STARTING)]] = None
-    joined: list[Member] = Field(default_factory=list, max_length=MAX_JOINED)
 
     @model_validator(mode="after")
     def _one_author(self):
@@ -243,7 +243,7 @@ class GoalSys(Sys):
 
 
 # A task records its latest submission once it has one.
-class TaskSys(Sys):
+class TaskSys(JoinableSys):
     submitted: Optional[Submitted] = Field(default=None, exclude_if=lambda value: value is None)
 
 

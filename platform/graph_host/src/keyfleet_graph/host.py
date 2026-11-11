@@ -31,7 +31,6 @@ from pydantic_core import from_json
 from keyfleet_graph import protocol
 from keyfleet_graph.pack import (
     GENERAL,
-    MAX_JOINED,
     MAX_STARTING,
     MEMBER_MODELS,
     PACK,
@@ -53,6 +52,11 @@ STARTING_ACTOR = "keyfleet:starting_goals"
 # The name on the writes that put a workspace's items made before projects
 # into `general`. The release after the one that adds projects removes them.
 PROJECTS_ACTOR = "keyfleet:projects"
+# The name on the writes that turn each task's one holder into the first Key
+# to have joined it. The release after the one that adds task joins removes them.
+JOINS_ACTOR = "keyfleet:joins"
+# The fields of a task only the Key that created it changes: what the task is.
+CREATOR_FIELDS = frozenset({"title", "deliverable", "acceptance_criteria"})
 # A `changes` page stops at this many bytes of encoded events, or after the
 # first event when that one alone is larger.
 CHANGES_PAGE_BYTES = 512 * 1024
@@ -112,6 +116,7 @@ class Host:
             self.log_id = self._log_id()
             self.runtime.load_pack(PACK)
             self._into_general()
+            self._into_joined()
             self._keep_starting_goals(starting_goals)
             self._settle()
         self._ledger = {
@@ -212,7 +217,7 @@ class Host:
         member = MEMBER_MODELS.get(body.type)
         if member is None:
             raise _invalid("type", f"unknown object type {body.type!r}")
-        _check_fields(member, body.data.keys(), body.data, command, None)
+        _check_fields(member, body.data.keys(), body.data)
         record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.project)})
 
         def apply(reactions: Reactions) -> dict:
@@ -226,8 +231,9 @@ class Host:
         _check_active(command, _project(obj))
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
-        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command, obj)
-        _check_owner(obj, command, taking=_taking(obj, body, command))
+        fields = set(body.set) | set(body.unset)
+        _check_fields(MEMBER_MODELS[obj.type], fields, body.set)
+        _check_owner(obj, command, fields)
         merged = {**obj.data, **body.set}
         for field in body.unset:
             merged.pop(field, None)
@@ -312,50 +318,47 @@ class Host:
         return apply
 
     def _plan_join(self, command: Command, body: protocol.JoinBody) -> Callable[[Reactions], dict]:
-        goal = self._goal(command, body.id)
+        """Adds the acting Key and wallet to a goal or task, however many have joined it."""
+        obj = self._joinable(command, body.id)
         member = _member(command)
-        recorded = goal.data["sys"].get("joined", [])
+        recorded = obj.data["sys"]["joined"]
         joined = _unlapsed(recorded, member)
         if any(_same_member(entry, member) for entry in joined):
             if joined == recorded:
-                return lambda _reactions: {"id": goal.id, "version": goal.version}
-            return self._rejoined(command, goal, joined)
-        if len(joined) >= MAX_JOINED:
-            raise _invalid("id", f"the goal has the most members it can record, {MAX_JOINED}")
-        return self._rejoined(command, goal, [*joined, member])
+                return lambda _reactions: {"id": obj.id, "version": obj.version}
+            return self._rejoined(command, obj, joined)
+        return self._rejoined(command, obj, [*joined, member])
 
     def _plan_leave(self, command: Command, body: protocol.LeaveBody) -> Callable[[Reactions], dict]:
-        goal = self._goal(command, body.id)
+        obj = self._joinable(command, body.id)
         member = _member(command)
-        recorded = goal.data["sys"].get("joined", [])
+        recorded = obj.data["sys"]["joined"]
         joined = [entry for entry in _unlapsed(recorded, member) if not _same_member(entry, member)]
         if joined == recorded:
-            return lambda _reactions: {"id": goal.id, "version": goal.version}
-        return self._rejoined(command, goal, joined)
+            return lambda _reactions: {"id": obj.id, "version": obj.version}
+        return self._rejoined(command, obj, joined)
 
-    def _rejoined(self, command: Command, goal, joined: list) -> Callable[[Reactions], dict]:
-        record = {**goal.data, "sys": {**goal.data["sys"], "joined": joined}}
-        sys = _validate(RECORD_MODELS["goal"], record)["sys"]
+    def _rejoined(self, command: Command, obj, joined: list) -> Callable[[Reactions], dict]:
+        record = {**obj.data, "sys": {**obj.data["sys"], "joined": joined}}
+        sys = _validate(RECORD_MODELS[obj.type], record)["sys"]
 
         def apply(_reactions: Reactions) -> dict:
-            self.graph.patch_object(goal.id, {"sys": sys}, actor=command.principal)
-            return {"id": goal.id, "version": self.graph.get_object(goal.id).version}
+            self.graph.patch_object(obj.id, {"sys": sys}, actor=command.principal)
+            return {"id": obj.id, "version": self.graph.get_object(obj.id).version}
 
         return apply
 
     def _plan_submit(self, command: Command, body: protocol.SubmitBody) -> Callable[[Reactions], dict]:
         """Marks a task done for review, with its result and the evidence it rests on, in one write.
 
-        The task becomes the acting Key's; one held by another Key is refused.
-        Each evidence item is linked as something the task `produces`. A
+        The Key that created the task or one that joined it submits it. Each evidence item is linked as something the task `produces`. A
         submission is only a claim: whether the work is accepted is for its
         reviews to say.
         """
         task = self._task(command, body.id, "id")
         _check_active(command, _project(task))
         _check_version(task, body.expected_version)
-        key = command.auth.key.token_id
-        _check_holder(task, key, key)
+        _check_owner(task, command)
         evidence = list(dict.fromkeys(body.evidence))
         if body.result_ref is None and not evidence:
             raise _invalid("evidence", "a submission names its result, its evidence or both")
@@ -369,7 +372,6 @@ class Host:
         merged = {
             **task.data,
             "progress": "done",
-            "assignee_key": key,
             "result_ref": body.result_ref,
             "sys": {**task.data["sys"], "submitted": submitted},
         }
@@ -396,7 +398,8 @@ class Host:
         A review binds itself to that version, to who submitted it, to each
         piece of its evidence as it then stood and to the commit the task then
         named; it may say whether the reviewer reproduced the work from it. The Key or wallet that submitted
-        the task cannot review it, and a Key reviews each version once. Whether
+        the task cannot review it, nor can a Key that joined it, as it worked on it; a Key reviews each
+        version once. Whether
         two different Keys belong to different people is not something the
         graph knows, so a review never claims it.
         """
@@ -412,6 +415,12 @@ class Host:
             raise Refusal(
                 "self_review",
                 "the Key or wallet that submitted a task cannot review it",
+                {"submitted_by": submitted_by},
+            )
+        if _has_joined(task, command):
+            raise Refusal(
+                "self_review",
+                "a Key that joined a task worked on it, so it cannot review it",
                 {"submitted_by": submitted_by},
             )
         for rel in self.graph.relations(target=task.id, type="reviews"):
@@ -446,17 +455,17 @@ class Host:
         return apply
 
     def _plan_fork(self, command: Command, body: protocol.ForkBody) -> Callable[[Reactions], dict]:
-        """Copies a task for the acting Key to work on, in progress and theirs.
+        """Copies a task as the acting Key's own, in progress.
 
         The fork stays in the task's project and keeps its title, deliverable, acceptance criteria and discussion, implements
         the same goals and services, and links to the task with `forks`. The
-        task forked is left as it was, its holder included: forking is how a
-        member works on a task another Key holds.
+        task forked is left as it was, and so is who joined it: forking makes
+        a member's own copy, where joining works on the task itself.
         """
         task = self._task(command, body.id, "id")
         _check_active(command, _project(task))
         copied = {field: task.data[field] for field in ("title", "deliverable", "acceptance_criteria", "discussion") if task.data.get(field)}
-        member = {**copied, "assignee_key": command.auth.key.token_id, "progress": "doing"}
+        member = {**copied, "progress": "doing"}
         record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command, _project(task))})
         implements = [
             target.id
@@ -493,6 +502,33 @@ class Host:
             patch = self.graph.propose_patch(obj.id, "replace", record, proposed_by=PROJECTS_ACTOR)
             self.graph.apply_patch(patch.id, approved_by=PROJECTS_ACTOR)
 
+    def _into_joined(self) -> None:
+        """Makes each task's one holder the first Key to have joined it, once.
+
+        A task made before task joins names its holder by Key number alone.
+        Each such task is rewritten whole by one replace: the number goes, and
+        `sys.joined` lists the holder as the Key and wallet of the last command
+        that Key wrote in this fleet, or no one when it never wrote one. All of
+        it commits in the startup transaction, or none of it. The release after the one that adds task joins removes this step.
+        """
+        authors = {
+            event.payload["auth"]["key"]["token_id"]: event.payload["auth"]
+            for event in self.graph.events
+            if event.type == LEDGER_EVENT
+        }
+        for obj in self.graph.query("task"):
+            if "assignee_key" not in obj.data:
+                continue
+            data = {field: value for field, value in obj.data.items() if field != "assignee_key"}
+            auth = authors.get(obj.data["assignee_key"])
+            joined = [] if auth is None else [_auth_member(auth)]
+            record = _validate(RECORD_MODELS["task"], {**data, "sys": {**data["sys"], "joined": joined}})
+            patch = self.graph.propose_patch(obj.id, "replace", record, proposed_by=JOINS_ACTOR)
+            self.graph.apply_patch(patch.id, approved_by=JOINS_ACTOR)
+            # Each rewrite settles before the next, so any number of tasks
+            # fits the settling quantum.
+            self._settle()
+
     # ---------- starting goals ----------
 
     def _keep_starting_goals(self, goals: list[StartingGoal]) -> None:
@@ -527,12 +563,12 @@ class Host:
 
     # ---------- state helpers ----------
 
-    def _goal(self, command: Command, object_id: str):
-        goal = self._live(command, object_id, "id")
-        if goal.type != "goal":
-            raise _invalid("id", f"only a goal can be joined, not a {goal.type}")
-        _check_active(command, _project(goal))
-        return goal
+    def _joinable(self, command: Command, object_id: str):
+        obj = self._live(command, object_id, "id")
+        if obj.type not in ("goal", "task"):
+            raise _invalid("id", f"only a goal or a task can be joined, not a {obj.type}")
+        _check_active(command, _project(obj))
+        return obj
 
     # An object of a project the command does not list belongs to a deleted
     # project, and is not found.
@@ -730,7 +766,7 @@ def _check_not_starting(obj) -> None:
 
 
 
-def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command, current) -> None:
+def _check_fields(member: type[BaseModel], fields, values: dict[str, Any]) -> None:
     unknown = sorted(field for field in fields if field not in member.model_fields)
     if unknown:
         raise Refusal(
@@ -744,36 +780,6 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
             "a task is marked done, with its result, only by submitting it",
             {"fields": sorted({"result_ref", "progress"} & set(fields))},
         )
-    if "assignee_key" in fields:
-        _check_holder(current, values.get("assignee_key"), command.auth.key.token_id)
-
-
-# A member takes an untaken task by setting it to their own Key. Only the Key
-# holding a task gives it to another Key or drops it; a task another Key holds
-# can be forked instead.
-def _check_holder(task, assignee: Optional[int], key: int) -> None:
-    holder = task.data.get("assignee_key") if task else None
-    if holder not in (None, key):
-        raise Refusal(
-            "forbidden_field",
-            "the task is held by another Key: only its holder gives it away or drops it, so fork it instead",
-            {"fields": ["assignee_key"], "assignee_key": holder},
-        )
-    if holder is None and assignee not in (None, key):
-        raise Refusal(
-            "forbidden_field",
-            "an untaken task is taken only by the acting Key",
-            {"fields": ["assignee_key"]},
-        )
-
-
-# An item belongs to the Key holding it, for a held task, and otherwise to the
-# Key that created it. Only its owner changes it or links from it; anyone else
-# forks it, or links their own item to it. The one change anyone may make is
-# taking an untaken task as their own.
-def _owner(obj) -> Optional[int]:
-    holder = obj.data.get("assignee_key") if obj.type == "task" else None
-    return _creator(obj) if holder is None else holder
 
 
 def _creator(obj) -> Optional[int]:
@@ -781,36 +787,68 @@ def _creator(obj) -> Optional[int]:
     return None if created_by is None else created_by["key"]["token_id"]
 
 
-def _taking(obj, body: protocol.PatchBody, command: Command) -> bool:
-    return (
-        obj.type == "task"
-        and obj.data.get("assignee_key") is None
-        and set(body.set) == {"assignee_key"}
-        and not body.unset
-        and body.set["assignee_key"] == command.auth.key.token_id
+# The Keys that joined an object, each once, in the order they first joined.
+def _joined_keys(obj) -> list[int]:
+    return list(dict.fromkeys(entry["key"]["token_id"] for entry in obj.data["sys"].get("joined", [])))
+
+
+# Whether the acting Key, at its current ownership, joined the object.
+def _has_joined(obj, command: Command) -> bool:
+    member = _member(command)
+    return any(
+        entry["key"] == member["key"] and entry["ownership_epoch"] == member["ownership_epoch"]
+        for entry in obj.data["sys"].get("joined", [])
     )
 
 
-def _check_owner(obj, command: Command, *, taking: bool = False) -> None:
-    owner = _owner(obj)
-    if owner != command.auth.key.token_id and not taking:
+# An item belongs to the Key that created it, and a task also to every Key
+# that joined it. Only they change it or link from it, and only the creator
+# changes what a task is (`CREATOR_FIELDS`); anyone else joins the task first,
+# forks it, or links their own item to it.
+def _check_owner(obj, command: Command, fields=frozenset()) -> None:
+    key = command.auth.key.token_id
+    creator = _creator(obj)
+    if creator == key:
+        return
+    if obj.type != "task":
         raise Refusal(
             "not_owner",
-            "only the Key this belongs to changes it or links from it: fork it, or link your own item to it",
-            {"id": obj.id, "owner_key": owner},
+            "only the Key that created this changes it or links from it: fork it, or link your own item to it",
+            {"id": obj.id, "owner_key": creator},
+        )
+    if not _has_joined(obj, command):
+        raise Refusal(
+            "not_owner",
+            "only the Key that created this task, or one that joined it, changes it or links from it: join it first",
+            {"id": obj.id, "owner_key": creator, "joined_keys": _joined_keys(obj)},
+        )
+    named = sorted(CREATOR_FIELDS & set(fields))
+    if named:
+        raise Refusal(
+            "not_owner",
+            "only the Key that created this task changes its title, deliverable or acceptance criteria",
+            {"id": obj.id, "owner_key": creator, "fields": named},
         )
 
 
 # Archiving takes an item away from everyone, so only the Key that created it
-# archives it, and a task only once no other Key holds it.
+# archives it, and a task only once every other Key that joined it has left.
 def _check_archiver(obj, command: Command) -> None:
     key = command.auth.key.token_id
-    holder = obj.data.get("assignee_key") if obj.type == "task" else None
-    if _creator(obj) != key or holder not in (None, key):
+    creator = _creator(obj)
+    if creator != key:
         raise Refusal(
             "not_owner",
-            "only the Key that created this archives it, once no other Key holds it: fork it instead",
-            {"id": obj.id, "owner_key": _owner(obj)},
+            "only the Key that created this archives it",
+            {"id": obj.id, "owner_key": creator},
+        )
+    others = [joined for joined in _joined_keys(obj) if joined != key] if obj.type == "task" else []
+    if others:
+        keys = ", ".join(f"#{joined}" for joined in others)
+        raise Refusal(
+            "still_joined",
+            f"other Keys are still working on this task ({keys}): it is archived once each has left it, which each does with leave",
+            {"id": obj.id, "joined_keys": others},
         )
 
 
@@ -839,12 +877,16 @@ def _sys(command: Command, project: str) -> dict[str, Any]:
 
 
 def _member(command: Command) -> dict[str, Any]:
-    auth = command.auth
+    return _auth_member(command.auth.model_dump(mode="json"))
+
+
+# A member as the audited auth of one command names it.
+def _auth_member(auth: dict[str, Any]) -> dict[str, Any]:
     return {
-        "key": auth.key.model_dump(mode="json"),
-        "ownership_epoch": auth.ownership_epoch,
-        "kind": auth.kind,
-        "wallet": auth.operator_wallet,
+        "key": auth["key"],
+        "ownership_epoch": auth["ownership_epoch"],
+        "kind": auth["kind"],
+        "wallet": auth["operator_wallet"],
     }
 
 
