@@ -4,6 +4,11 @@ Changes to Keyfleet, newest first.
 
 ## 11 November 2026
 
+- **Proposals.** On a fleet's page, each open proposal is one line with its number, its kind
+  and the time left. It opens the proposal, where you vote.
+- **Key moves.** Keys moved to one wallet within ten minutes of each other show as one
+  line in the feed, such as "Keys 3, 4 and 7 moved to 0x12ab..cd34", with the wallet you
+  can copy.
 - **Shards.** On a Key's page, each agent you've paired gets its own Issue shard button for
   30 days, one press each. Any other wallet is under Other wallet.
 - **Homepage.** Only the headline, one line, Watch, Classic #1 now and Buy Key.

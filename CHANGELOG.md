@@ -7250,3 +7250,32 @@ walks `key_shards.spec.ts` (a paired agent's shard issued in one press and
 seen landing), `copy_buttons.spec.ts`, `account_agents.spec.ts`,
 `setup_list.spec.ts`, `fleet_motion.spec.ts`, `homepage.spec.ts`,
 `launch_steps.spec.ts` and `agents_page.spec.ts`.
+
+## 2026-11-11 — Open proposals as one line each; transfers to one wallet as one line
+
+Step 5 of `docs/plans/2026-11-11-human-experience.md` (rows 11 and 12).
+
+- Hall: each open proposal is one line above the feed, its number, its kind
+  and the time left, opening it in the Proposals tab, where the vote is cast
+  (`KeyfleetWeb.ProposalsLive.open_lines/1`, `#hall-proposals`). The hall no
+  longer carries ballots or tallies; the workspace's list of open proposals
+  (`open_list/1`) is unchanged. Nothing shows while nothing is open.
+- Feed: transfers next to each other that moved Keys to one wallet, each
+  within ten minutes of the one after it, are one line, "Keys 3, 4 and 7
+  moved to 0x3333..3333", the wallet drawn by `Regent.Primitives.address`
+  (`KeyfleetWeb.FeedLines`). Ten minutes because the chain is read every five
+  and every record of one read shares its time, so a batch split over two
+  reads stays one line. A transfer that joins the newest line updates it in
+  place; Show earlier joins a run a page cut. "Key N changed hands." is gone.
+- Grouping is for the page only: `Keyfleet.Activity.page/3` and every agent
+  answer still carry one `transfer` item per Key. The page reads the wallet
+  each transfer went to with `Keyfleet.Activity.receivers/2`
+  (`KeyAttachment` read `by_record_seq`), and the shared reading for
+  visitors carries it as `feed.receivers`.
+- No migration; no production data. The API contract and the tool list are
+  unchanged.
+
+Check: `platform/test/keyfleet_web/feed_lines_test.exs`,
+`platform/test/keyfleet_web/activity_lines_test.exs`,
+`platform/test/keyfleet_web/live/fleet_page_test.exs` and the browser walk
+`fleet_motion.spec.ts`.
