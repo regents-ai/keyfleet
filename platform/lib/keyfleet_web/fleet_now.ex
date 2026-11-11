@@ -9,10 +9,11 @@ defmodule KeyfleetWeb.FleetNow do
     * `deployed?`, `current?` and `minted`: how far it has sold, as far as its
       Key history has been read (`Keyfleet.Chain.minted/2`, `fresh?/1`);
     * `feed`: the first page of its activity with no actor
-      (`Keyfleet.Activity.page/3`), its items and the cursor for the page
-      after them, and `faces`: who holds each Key that acted in them, the Key
-      they write as and how many Keys they hold (`Keyfleet.Keys.faces/2`), for the city's
-      discs;
+      (`Keyfleet.Activity.page/3`), its items, the cursor for the page after
+      them and `receivers`, the wallet each transfer among them went to
+      (`Keyfleet.Activity.receivers/2`), for the hall's lines; and `faces`:
+      who holds each Key that acted in them, the Key they write as and how
+      many Keys they hold (`Keyfleet.Keys.faces/2`), for the city's discs;
     * `recent_work`: "Recent Work", each of its projects by title with the titles
       of its open goals (`KeyfleetWeb.FleetPage.read_recent_work/1`);
     * `goal`: the title of its most recently changed open goal, and
@@ -165,7 +166,7 @@ defmodule KeyfleetWeb.FleetNow do
       chain_id: if(deployed?, do: recorded.chain_id),
       current?: deployed? and Chain.fresh?(fleet_id),
       minted: if(deployed?, do: minted!(fleet_id), else: 0),
-      feed: %{items: items, cursor: cursor},
+      feed: %{items: items, cursor: cursor, receivers: Activity.receivers(fleet_id, items)},
       faces: Keys.faces(fleet_id, HarbourCrew.keys(items)),
       recent_work: FleetPage.read_recent_work(fleet_id),
       goal: goal(fleet_id),
