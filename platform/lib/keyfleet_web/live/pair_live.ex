@@ -1,9 +1,10 @@
 defmodule KeyfleetWeb.PairLive do
   @moduledoc """
   Pair New Agent as a page of its own: `/pair?to=<path>`, where `to` is a page
-  on this site, as a project's "Bring your agent" links open it. A person pairs their agent in the same pairing box as the
-  pairing window's (`KeyfleetWeb.PairingBox`), and the message they paste sends the
-  agent to that page once it is paired. A link with no `to`, or one that is not
+  on this site, as a project's "Bring your agent" links open it. A person pairs
+  their agent in the same pairing box as the pairing window's
+  (`KeyfleetWeb.PairingBox`), and the message they paste sends the agent to that
+  page once it is paired. A link with no `to`, or one that is not
   a page on this site, opens plain pairing.
   """
   use KeyfleetWeb, :html
