@@ -48,17 +48,13 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   const below = await belowFirstScreen(page, buy)
   test.info().annotations.push({type: "Buy Key below the first screen", description: `${below}px`})
   await expectComfortable(page, errors)
-
-  // Classic #1's own "Buy Key" waits for the sale too, with the same reason.
-  await expect(page.locator("#home-classic-buy")).toHaveAttribute("aria-disabled", "true")
-  await expect(page.locator("#home-classic-why")).toHaveText("Sales open soon")
   await expectConnected(page)
 })
 
 test("Classic #1's page says its sales open soon and leads back to the fleets", async ({page}) => {
   const errors = watchErrors(page)
   await visit(page, "/")
-  await page.locator("#home-classic-public").click()
+  await page.locator("#home-watch").click()
 
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expectConnected(page)
@@ -71,7 +67,7 @@ test("Classic #1's page says its sales open soon and leads back to the fleets", 
   await expectComfortable(page, errors)
 
   await back.click()
-  await expect(page).toHaveURL(/\/(#home-classic)?$/)
+  await expect(page).toHaveURL(/\/$/)
   await expect(page.locator("#public-home")).toBeVisible()
   await expectConnected(page)
 })

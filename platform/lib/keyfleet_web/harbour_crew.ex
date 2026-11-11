@@ -14,9 +14,8 @@ defmodule KeyfleetWeb.HarbourCrew do
   most recent, twenty-four at most. A ship keeps its ink on every sea, and
   carries its holder's address, how many of the fleet's Keys they hold, and
   their Keys' last few actions for its card. The sea behind the app's pages
-  (`KeyfleetWeb.HarbourSeaLive`) and the homepage's seas
-  (`KeyfleetWeb.HomeLive`) draw them here from each fleet's activity and its
-  agents here: as anyone reads them, from the readings every open page shares
+  (`KeyfleetWeb.HarbourSeaLive`) draws them here from each fleet's activity
+  and its agents here: as anyone reads them, from the readings every open page shares
   (`KeyfleetWeb.FleetNow`, `Keyfleet.Agents.Here`), or as a member reads them.
   """
 

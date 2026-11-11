@@ -1,11 +1,9 @@
 import {expect, test, type Page} from "@playwright/test"
 
 // Each step a visitor takes into Keyfleet is reported once as it happens
-// (assets/js/launch_steps.ts): the homepage opened, each way in pressed, and a
-// homepage's setup line copied. A browser a program drives
-// reports nothing, so these pages are told they are a visitor's.
-
-test.use({permissions: ["clipboard-read", "clipboard-write"]})
+// (assets/js/launch_steps.ts): the homepage opened and its "Watch" pressed. A
+// browser a program drives reports nothing, so these pages are told they are
+// a visitor's.
 
 test.beforeEach(async ({page}) => {
   await page.addInitScript(() => Object.defineProperty(navigator, "webdriver", {get: () => false}))
@@ -29,7 +27,7 @@ async function connected(page: Page) {
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
 }
 
-test("the homepage and each way in are counted once", async ({page}) => {
+test("the homepage and its Watch are counted once each time", async ({page}) => {
   const {sent, answers} = reports(page)
 
   await page.goto("/")
@@ -53,11 +51,11 @@ test("the homepage and each way in are counted once", async ({page}) => {
   await page.goBack()
   await expect(page).toHaveURL(/\/$/)
   await connected(page)
-  await page.locator("#home-connect").click()
+  await page.locator("#home-watch").click()
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expect
     .poll(() => sent)
-    .toEqual([{step: "home"}, {step: "watch"}, {step: "home"}, {step: "connect"}])
+    .toEqual([{step: "home"}, {step: "watch"}, {step: "home"}, {step: "watch"}])
   await expect.poll(() => answers).toEqual([204, 204, 204, 204])
 })
 

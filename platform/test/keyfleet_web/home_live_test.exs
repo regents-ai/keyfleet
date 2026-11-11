@@ -3,9 +3,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, ProposalHelpers, SharedReading}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
-  alias KeyfleetWeb.{FleetNow, KeyLinks}
+  alias KeyfleetWeb.FleetNow
   alias Phoenix.Socket.Broadcast
 
   # Invariants covered:
@@ -20,30 +20,19 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   line under the button and the card's tag name the Key on offer and its
   #   price after the Keys sold
   # - once every Classic Key is sold, the button can't be pressed and says so
-  # - top to bottom the page holds Classic's hero, Classic Keyfleet, what a
-  #   fleet can use and the starting ideas, and the Markdown homepage the same
   # - a Classic read that fails is said to have failed and never shown as zero
   # - a burst of notices is answered by one read of each fleet it names, for
   #   every open homepage at once, and a post taken off a wall reads its fleet
   #   again
-  # - Classic's sea draws the ships of the one reading every open page shares,
-  #   from the first render; the page reads no ships of its own, a new reading
-  #   reaches the open page, and pressing a ship opens its Key
-  # - the command box shows the homepage instruction whole and copies exactly
-  #   what it shows
-  # - the page leads with the headline and what a fleet gives an agent; the
-  #   Markdown homepage carries them with the tagline as Sean wrote it, says
-  #   Classic opens soon until it does, then links its page
-  # - "Watch a live fleet" and "Connect my agent" both open Classic #1's own
-  #   page, where Buy Key and the setup list bring an agent in; Classic #1's
-  #   figures each keep their own name: Keys sold out of all, the agents here,
-  #   the next Key's price and the goal it is working on, which links its
-  #   workspace
+  # - the page is the hero alone: the headline and what a fleet gives an
+  #   agent; the Markdown homepage carries them with the tagline as Sean wrote
+  #   it and Classic Keyfleet, says Classic opens soon until it does, then
+  #   links its page
+  # - "Watch" opens Classic #1's own page; Classic #1's figures each keep their
+  #   own name: Keys sold out of all, the agents here, the next Key's price
+  #   and the goal it is working on, which links its workspace
   # - launch-gate: internal links stay on the fleets' maps and workspaces, the
   #   account page, the public documents, or anchors that exist
-  # - the page ends with the starting ideas for a shared goal as Sean wrote
-  #   them, each link to another site opening in a new tab, and the Markdown
-  #   homepage carries the same section
   # - signed in, the header's name opens the account menu, with Sign out,
   #   Manage Account, the account's agents and Pair New Agent opening the
   #   pairing window, and an agent paired while the page is open shows in it;
@@ -197,7 +186,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     read_fleets()
 
     {:ok, view, _html} = live(conn, "/")
-    view |> element("button#home-classic-buy") |> render_click()
+    view |> element("button#home-buy-key") |> render_click()
 
     assert text(view, "#buy-key-title") == "Buy Key"
     assert has_element?(view, "dialog#buy-key #buy-key-cards.key-cards")
@@ -289,50 +278,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
   end
 
-  # R-20261019-home-ships-shared: each open homepage read the fleets' ships
-  # again for every burst of notices, and drew its seas empty until it had.
-  describe "Classic's sea" do
-    test "draws the ships of the one shared reading from the first render", %{conn: conn} do
-      proposal!(1, 7)
-      read_fleets()
-
-      static = conn |> get("/") |> html_response(200)
-      assert crew(static, "#home-classic-sea") == [7]
-
-      {:ok, _view, html} = live(conn, "/")
-      assert crew(html, "#home-classic-sea") == [7]
-    end
-
-    test "takes new ships only from the shared reading, and a ship opens its card",
-         %{conn: conn} do
-      proposal!(1, 7)
-      read_fleets()
-      {:ok, view, _html} = live(conn, "/")
-
-      # Saved, but not yet in the reading: the page reads no ships of its own.
-      proposal!(2, 9)
-      assert crew(render(view), "#home-classic-sea") == [7]
-
-      # Both proposals were seen in the same moment, so their order is not told.
-      FleetNow.read(@classic)
-      assert Enum.sort(crew(render(view), "#home-classic-sea")) == [7, 9]
-
-      render_hook(view, "open_ship", %{"id" => "#{@classic}:9"})
-
-      assert has_element?(
-               view,
-               "#harbour-agent a[href='#{KeyLinks.page_path(@classic, 9)}']",
-               "View"
-             )
-
-      render_hook(view, "close_agent", %{})
-      refute has_element?(view, "#harbour-agent")
-    end
-  end
-
-  test "the page and the Markdown homepage lead with the headline, and the Markdown with Sean's tagline",
+  test "the page is the hero, and it and the Markdown homepage lead with the headline, the Markdown with Sean's tagline",
        %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
+    {:ok, view, html} = live(conn, "/")
+    assert attribute(html, "main section[id]", "id") == ["home-hero"]
     assert text(view, "#home-title") == "A persistent team for your AI agent."
 
     assert text(view, "#home-lead") ==
@@ -348,8 +297,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
              ["Classic Keyfleet"],
-             ["Fleet Tools"],
-             ["Shared Goals"],
              ["More"]
            ]
 
@@ -359,7 +306,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
   end
 
-  test "both ways in open Classic #1's page, over Classic #1's figures", %{conn: conn} do
+  test "Watch opens Classic #1's page, over Classic #1's figures", %{conn: conn} do
     for token_id <- 1..2, do: issue!(@classic, token_id)
     Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
     read_fleets()
@@ -368,13 +315,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, html} = live(conn, "/")
 
     assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
-    assert text(view, "#home-watch") == "Watch a live fleet"
-    assert attribute(html, "a#home-connect", "href") == ["/classic/1"]
-    assert text(view, "#home-connect") == "Connect my agent"
-    # Each press is counted by the step it names (assets/js/launch_steps.ts).
+    assert text(view, "#home-watch") == "Watch"
+    # A press is counted by the step it names (assets/js/launch_steps.ts).
     assert attribute(html, "a#home-watch", "data-step") == ["watch"]
-    assert attribute(html, "a#home-connect", "data-step") == ["connect"]
-    assert text(view, "#home-watch-note") == "No wallet needed to watch."
 
     assert text(view, "#home-hero-fleet") == "Classic #1 now"
 
@@ -406,63 +349,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     [section | _] = String.split(section, "\n## ", parts: 2)
     assert section =~ "Sales open soon."
     refute section =~ "Live activity"
-  end
-
-  @idea_titles [
-    "Plan a service that earns stablecoins.",
-    "Compete on Yukon.",
-    "Tackle the OpenAI math dataset.",
-    "Launch a Revstake token on Autolaunch.",
-    "Launch a Memestock token on Autolaunch.",
-    "Participate in IMD.",
-    "Compete in OpenEnv Arena.",
-    "Discover other agent arenas."
-  ]
-
-  @idea_links [
-    "https://www.onedollaraudit.com/",
-    "https://yukon.org/",
-    "https://huggingface.co/datasets/FineEnvs/openai-math",
-    "https://autolaunch.sh/",
-    "https://autolaunch.sh/",
-    "https://imd.fun/",
-    "https://openenvarena-arena.hf.space/"
-  ]
-
-  test "the page ends with the starting ideas for a shared goal, as written, and so does the Markdown homepage",
-       %{conn: conn} do
-    {:ok, view, html} = live(conn, "/")
-
-    assert attribute(html, "main section[id]", "id") ==
-             ~w(home-hero home-classic home-integrations home-goal-ideas)
-
-    assert text(view, "#home-goal-ideas-title") ==
-             "Shared Goals"
-
-    assert text(view, ".rl-ideas__intro") ==
-             "Every idea is optional. Choose a goal that fits your fleet's interests and strengths, or propose something entirely new."
-
-    titles = for n <- 1..8, do: text(view, "#home-goal-idea-#{n} h3")
-    assert titles == @idea_titles
-
-    assert text(view, "#home-goal-idea-1 p") ==
-             "Research a customer problem and create a business plan for an agent-operated service paid in stablecoins. Study One Dollar Audit as prior art."
-
-    assert text(view, ".rl-ideas__closing") =~
-             ~r/\AFind your collective edge\. Each agent brings different strengths: .+ than any member could alone\.\z/
-
-    assert attribute(html, "#home-goal-ideas a", "href") == @idea_links
-    assert Enum.uniq(attribute(html, "#home-goal-ideas a", "target")) == ["_blank"]
-    assert Enum.uniq(attribute(html, "#home-goal-ideas a", "rel")) == ["noopener noreferrer"]
-
-    markdown =
-      build_conn() |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
-
-    [_, section] =
-      String.split(markdown, "\n## Shared Goals\n", parts: 2)
-
-    assert section =~ "\n2. **Compete on [Yukon](https://yukon.org/).** Choose a leaderboard"
-    assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
   @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
@@ -503,14 +389,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     )
   end
 
-  # Proposal `number`, by the holder of Key `token_id` alone, which sails the
-  # Key's ship to the castle.
-  defp proposal!(number, token_id) do
-    holder = ProposalHelpers.wallet(Integer.to_string(token_id))
-    ProposalHelpers.keys_sold!(@classic, [token_id], holder)
-    ProposalHelpers.proposal!(@classic, number, %{proposer: holder})
-  end
-
   # What the homepage's producer does as the site starts and on each pass.
   defp read_fleets, do: FleetNow.read(@classic)
 
@@ -518,18 +396,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
   defp first_read(fleet_id) do
     SharedReading.delete(FleetNow.key(fleet_id))
     FleetNow.read(fleet_id)
-  end
-
-  # The Keys of the ships a sea's hook is handed, in order.
-  defp crew(html, sea) do
-    [json] =
-      html
-      |> LazyHTML.from_document()
-      |> LazyHTML.query(sea)
-      |> LazyHTML.attribute("data-harbour-crew")
-
-    for %{"id" => id} <- Jason.decode!(json),
-        do: id |> String.split(":") |> List.last() |> String.to_integer()
   end
 
   defp text(view, selector) do

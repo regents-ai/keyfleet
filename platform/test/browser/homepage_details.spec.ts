@@ -1,6 +1,6 @@
 import {devices, expect, test, type Locator, type Page} from "@playwright/test"
 
-// The homepage's hero, its Key card decks and the links around it, on a desktop and
+// The homepage's hero, its next Key's card and the links around it, on a desktop and
 // on a touch phone 390 wide (Playwright's Pixel 7 at that width). homepage.spec.ts
 // reads the page itself.
 
@@ -251,63 +251,4 @@ test.describe("on a desktop", () => {
     expect(loops, "loops forever").toBe(0)
     expect(shows).toEqual(Array(100).fill(100))
   })
-
-  // Classic's deck turns only while it is on screen.
-  test("Classic's deck of Key cards turns only while on screen", async ({page}) => {
-    await page.setViewportSize({width: 1280, height: 700})
-    await page.goto("/")
-    await live(page)
-    const deck = page.locator("#home-classic-cards")
-    await expect(deck).not.toHaveAttribute("data-cards-turning")
-    await deck.scrollIntoViewIfNeeded()
-    await expect(deck).toHaveAttribute("data-cards-turning")
-    await page.evaluate(() => window.scrollTo(0, 0))
-    await expect(deck).not.toHaveAttribute("data-cards-turning")
-  })
 })
-
-// Classic's line sits beside its cards from a 390 phone up, and above them on
-// the narrowest phones; in both themes nothing in the section spills past it
-// or runs under anything else, and both buttons fit a thumb.
-for (const scheme of ["light", "dark"]) {
-  for (const width of [320, 390, 1024, 1440]) {
-    test(`Classic's cards, line and buttons fit at ${width} wide in the ${scheme} theme`, async ({page}) => {
-      await page.context().addCookies([{name: "regent_theme", value: scheme, url: test.info().project.use.baseURL as string}])
-      await page.setViewportSize({width, height: 900})
-      await page.goto("/")
-      await live(page)
-      await expect(page.locator("html")).toHaveAttribute("data-theme", scheme)
-
-      const section = page.locator("#home-classic")
-      await section.scrollIntoViewIfNeeded()
-      const box = async (id: string) => (await page.locator(id).boundingBox())!
-      const [copy, title, sheet, line, publicView, buy] = await Promise.all(
-        ["#home-classic .rl-fleet__copy", "#home-classic-title", "#home-classic-cards", "#home-classic-join", "#home-classic-public", "#home-classic-buy"].map(box),
-      )
-      // The card itself, inside the clear room its sheet keeps for the art that
-      // rises out of it: 37 of 320 on the left, 40 on the right, 30 above, 26 below.
-      const scale = sheet.width / 320
-      const cards = {x: sheet.x + 37 * scale, y: sheet.y + 30 * scale, width: sheet.width - 77 * scale, height: sheet.height - 56 * scale}
-
-      for (const [name, part] of Object.entries({title, cards, line, publicView, buy})) {
-        expect.soft(Math.round(part.x), `${name} starts inside the column`).toBeGreaterThanOrEqual(Math.round(copy.x))
-        expect.soft(Math.round(part.x + part.width), `${name} ends inside the column`).toBeLessThanOrEqual(Math.round(copy.x + copy.width))
-      }
-      expect(await page.evaluate(() => document.documentElement.scrollWidth), "no sideways scroll").toBeLessThanOrEqual(width)
-
-      if (width === 320) {
-        expect(Math.round(line.y + line.height), "line above the cards").toBeLessThanOrEqual(Math.round(cards.y))
-      } else {
-        expect(Math.round(line.x), "line beside the cards").toBeGreaterThanOrEqual(Math.round(cards.x + cards.width))
-      }
-      const below = Math.max(cards.y + cards.height, line.y + line.height)
-      expect(Math.round(Math.min(publicView.y, buy.y)), "buttons under the cards and line").toBeGreaterThanOrEqual(Math.round(below))
-      expect(Math.round(cards.y), "cards under the name").toBeGreaterThanOrEqual(Math.round(title.y + title.height))
-      for (const button of [publicView, buy]) {
-        expect.soft(Math.round(button.height), "button tall").toBeGreaterThanOrEqual(44)
-        expect.soft(Math.round(button.width), "button wide").toBeGreaterThanOrEqual(44)
-      }
-      await section.screenshot({path: test.info().outputPath(`classic-${width}-${scheme}.png`)})
-    })
-  }
-}

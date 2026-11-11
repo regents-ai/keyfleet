@@ -344,7 +344,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   # is what an agent may do in each status, as whoami tells it; `{{tools}}` is the
   # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
   # a pairing may name, as the pair request accepts them; `{{goal_ideas}}` the
-  # starting ideas for a fleet's shared goal, as the homepage shows them;
+  # starting ideas for a fleet's shared goal, as every agent guide ends with them;
   # `{{hosted_mcp}}` whether the Claude connector's address answers now.
   defp source(name) do
     @sources[name]

@@ -352,7 +352,7 @@ defmodule KeyfleetWeb.Telemetry do
       counter("keyfleet.launch.steps.total",
         event_name: [:keyfleet, :launch, :step],
         tags: [:step],
-        description: "Steps in: home opened, watch or connect pressed"
+        description: "Steps in: home opened, watch pressed"
       ),
       counter("keyfleet.launch.refused.total",
         event_name: [:keyfleet, :launch, :refused],

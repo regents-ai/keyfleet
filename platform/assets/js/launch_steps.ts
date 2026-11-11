@@ -1,9 +1,9 @@
 // The steps a visitor takes into Keyfleet, each sent to this site once as it
 // happens and counted there with nothing saved (KeyfleetWeb.LaunchSteps): the
-// homepage opened, and "Watch a live fleet" or "Connect my agent" pressed. A
-// report names only the step: no person, address, wallet or Key.
+// homepage opened, and its "Watch" pressed. A report names only the step: no
+// person, address, wallet or Key.
 
-type Report = {step: "home" | "watch" | "connect"}
+type Report = {step: "home" | "watch"}
 
 export function installLaunchSteps(): void {
   // A browser a program drives, such as a test or a crawler,
@@ -26,8 +26,7 @@ export function installLaunchSteps(): void {
     "click",
     event => {
       const link = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-step]") : null
-      const step = link?.dataset.step
-      if (step === "watch" || step === "connect") send({step})
+      if (link?.dataset.step === "watch") send({step: "watch"})
     },
     true,
   )

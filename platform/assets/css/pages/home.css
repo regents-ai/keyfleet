@@ -1,6 +1,5 @@
-/* Homepage-only composition: Classic #1 with "Buy Key", the box saying
-   how a fleet runs itself and what a fleet can use. The
-   legal pages share the .rl-root colours and spacing. */
+/* Homepage-only composition: the hero, with Classic #1's figures and "Buy
+   Key". The legal pages share the .rl-root colours and spacing. */
 @layer regents-product {
   .rl-root {
     /* The colours the GPU pictures read, per theme. */
@@ -30,7 +29,7 @@
   }
 
 
-  /* The hero. Wide: the headline, the ways in and Classic #1's figures in
+  /* The hero. Wide: the headline, "Watch" and Classic #1's figures in
      the left half, "Buy Key" centred in the right half. Narrow: the headline
      down to the figures, then the button. The hex field sits behind all of
      it. */
@@ -48,7 +47,6 @@
   .rl-hero__accent { color: var(--ash-accent-warm); }
   .rl-hero__lead { max-inline-size: 34ch; color: var(--rl-muted); font-size: clamp(1.0625rem, 1rem + .35vw, 1.25rem); line-height: 1.45; text-wrap: pretty; }
   .rl-hero__ways { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
-  .rl-hero__note { color: var(--rl-muted); font-size: .875rem; }
 
   /* Classic #1 as it is now: its label, its figures and the goal it is working on. */
   .rl-now { display: grid; gap: var(--space-1); padding-block-start: var(--space-3); }
@@ -132,8 +130,7 @@
   /* While the sale is closed the button reads as off: the inert grey fill and
      muted ink a disabled button has, set through the colours the button
      paints with. It stays focusable, so its preview and its reason are too. */
-  .rl-buy__button[aria-disabled="true"],
-  .rl-fleet__closed[aria-disabled="true"] {
+  .rl-buy__button[aria-disabled="true"] {
     --color-accent: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
     --color-fg-on-accent: var(--color-fg-muted);
     cursor: default;
@@ -183,7 +180,7 @@
   }
 
   /* The hero settles in once as the page first paints: the field, the
-     headline, the ways in, the figures and the Key, one after another.
+     headline, "Watch", the figures and the Key, one after another.
      It plays from the stylesheet, so it runs before the page connects and
      never replays when the page updates. Less motion, and it is simply there.
      The Key only rises, never starting unseen, so a slow phone counts it as
@@ -199,110 +196,6 @@
     .rl-hero .rl-hero__lead { animation-delay: 90ms; }
     .rl-hero .rl-hero__ways { animation-delay: 120ms; }
     .rl-hero .rl-now { animation-delay: 150ms; }
-  }
-
-  /* Classic Keyfleet: its city beside what it is, the cards turning over and
-     its buttons. */
-  .rl-fleet {
-    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
-    padding: var(--rg-panel-padding);
-  }
-
-  /* A fleet's city on the ground it stands on in each theme. Until the GPU's
-     first frame lands, and where there is none, the box shows the city still. */
-  .rl-sea {
-    position: relative; overflow: hidden; min-width: 0; aspect-ratio: 16 / 10;
-    border: 1px solid var(--hairline-strong);
-    background: #0e0e0e url("/images/home/city-dark.webp") 50% 50% / cover no-repeat;
-  }
-  :root[data-theme="light"] .rl-sea { background-color: #e5e3d2; background-image: url("/images/home/city-light.webp"); }
-  .rl-sea__stage { position: absolute; inset: 0; color: var(--color-fg); }
-  /* A drag across the city turns it; a drag up or down still scrolls the page. */
-  .rl-sea__stage canvas {
-    position: absolute; inset: 0; display: block; inline-size: 100%; block-size: 100%;
-    opacity: 0; transition: opacity 600ms ease; touch-action: pan-y; cursor: grab;
-  }
-  .rl-sea__stage[data-harbour-dragging] canvas { cursor: grabbing; }
-  .rl-sea[data-harbour-ready="true"] canvas { opacity: 1; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .rl-sea__stage canvas { transition: none; }
-  }
-  /* The name at the top; under it the cards with the line beside them, then
-     the buttons. Wide, the column is as tall as the city: the name lines up
-     with its top edge and the buttons with its bottom edge, and the cards
-     grow with the column so the two fill that height. */
-  .rl-fleet__copy {
-    container-type: inline-size;
-    display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-4);
-    min-width: 0;
-  }
-  .rl-fleet__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-fleet__offer {
-    display: grid; grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "cards line" "actions actions";
-    align-items: start; gap: var(--space-3) var(--space-4);
-  }
-  .rl-fleet__line { grid-area: line; max-inline-size: 36ch; color: var(--rl-muted); font-size: clamp(1rem, .95rem + .25vw, 1.125rem); line-height: 1.5; text-wrap: pretty; }
-  .rl-fleet__actions { grid-area: actions; display: flex; flex-wrap: wrap; gap: var(--space-2); }
-  /* On the narrowest phones the line goes above the cards rather than
-     squeezing beside them. */
-  @container (max-width: 18rem) {
-    .rl-fleet__offer { grid-template-columns: minmax(0, 1fr); grid-template-areas: "line" "cards" "actions"; }
-  }
-  .rl-fleet__why { grid-column: 1 / -1; margin: 0; color: var(--rl-muted); font-size: .875rem; }
-
-  @media (min-width: 64rem) {
-    .rl-fleet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
-    .rl-fleet .rl-sea { align-self: stretch; inline-size: 100%; }
-  }
-
-  /* Fleet Tools: three tiles across, two on a tablet, one on a
-     phone, ruled on a shared grid; a last tile alone keeps its width. */
-  .rl-integrations { display: grid; gap: var(--space-4); padding: var(--rg-panel-padding); }
-  .rl-integrations > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-integration-tiles {
-    display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
-    border-block-start: 1px solid var(--rl-line); border-inline-start: 1px solid var(--rl-line);
-  }
-  .rl-integration-tiles > li {
-    display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3);
-    border-block-end: 1px solid var(--rl-line); border-inline-end: 1px solid var(--rl-line);
-  }
-  .rl-integration-tiles h3 { font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
-  .rl-integration-tiles p { color: var(--rl-muted); font-size: .9375rem; line-height: 1.45; }
-  @media (min-width: 40rem) {
-    .rl-integration-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (min-width: 64rem) {
-    .rl-integration-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  }
-
-  /* Starting ideas for a shared goal: numbered tiles on the same ruled grid,
-     four across on a wide screen, two on a tablet, one on a phone. Links to
-     other sites are underlined in the text around them. */
-  .rl-ideas { display: grid; gap: var(--space-4); padding: var(--rg-panel-padding); }
-  .rl-ideas > h2 { max-inline-size: 24ch; font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-ideas__intro, .rl-ideas__closing { max-inline-size: 60ch; font-size: 1rem; line-height: 1.5; }
-  .rl-ideas__intro { color: var(--rl-muted); }
-  .rl-ideas__closing strong { font-weight: 500; }
-  .rl-ideas a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .2em; }
-  .rl-ideas__tiles {
-    display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
-    border-block-start: 1px solid var(--rl-line); border-inline-start: 1px solid var(--rl-line);
-  }
-  .rl-ideas__tiles > li {
-    display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3);
-    border-block-end: 1px solid var(--rl-line); border-inline-end: 1px solid var(--rl-line);
-  }
-  .rl-ideas__n { color: var(--rl-muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
-  .rl-ideas__tiles h3 { font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
-  .rl-ideas__tiles p { color: var(--rl-muted); font-size: .9375rem; line-height: 1.45; }
-  @media (min-width: 40rem) {
-    .rl-ideas__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (min-width: 80rem) {
-    .rl-ideas__tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
 
   /* On a phone the card stays small enough that its button shows with it. */
@@ -332,15 +225,10 @@
 /* Outside the layer, because the button's edge ink is drawn by an unlayered
    rule: while the sale is closed the edge takes the same inert grey as the
    fill, in both themes. */
-:root .rl-buy .rl-buy__button[aria-disabled="true"]::after,
-:root .rl-fleet .rl-fleet__closed[aria-disabled="true"]::after {
+:root .rl-buy .rl-buy__button[aria-disabled="true"]::after {
   --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
   --rg-button-cut-ink: transparent;
 }
-
-/* A button that leaves for another site carries the arrow in its words, so
-   it drops the chevron, which an unlayered rule draws. */
-.rl-fleet .rl-fleet__out::after { content: none; }
 
 /* Outside the layer, because the header's own rules are unlayered. Here the
    header sits in the page rather than the app's grid, so the brand only fills
@@ -350,28 +238,3 @@
    left. */
 .rl-root #shell-header .shell-brand { height: auto; }
 .rl-root #shell-header .account-control > .rg-button { margin-inline-end: var(--space-1); }
-
-/* Classic's cards and buttons, outside the layer because the cards' size and
-   the buttons' height are set by unlayered rules. Each card on the sheet has
-   clear room around it for the art that rises out of some of them: 37 of its
-   320 wide on the left, 30 above, 26 below. The margins take that room back,
-   so the card's edge lines up with the name and sits a row's gap above the
-   buttons. Wide, the cards take the height the city leaves under the name
-   and above the buttons. */
-.rl-fleet .key-cards {
-  --cards: clamp(9rem, 30cqi, 15rem);
-  grid-area: cards; inline-size: var(--cards);
-  margin: calc(var(--cards) * -30 / 320) calc(var(--cards) * -40 / 320) calc(var(--cards) * -26 / 320) calc(var(--cards) * -37 / 320);
-}
-@container (max-width: 18rem) {
-  .rl-fleet .key-cards { --cards: 11rem; }
-}
-@media (min-width: 64rem) {
-  .rl-fleet .key-cards { --cards: clamp(9rem, 58cqi - 9rem, 18rem); }
-}
-/* Larger than a standard button. On a phone the two share the row, or each
-   takes the full width when they no longer fit side by side. */
-.rl-fleet .rl-fleet__actions > .rg-button { min-block-size: 3rem; padding-inline: var(--space-3); font-size: 1.0625rem; }
-@media (max-width: 47.99rem) {
-  .rl-fleet .rl-fleet__actions > .rg-button { flex: 1 1 auto; padding-inline: var(--space-2); }
-}

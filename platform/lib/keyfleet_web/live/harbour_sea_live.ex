@@ -536,8 +536,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   @doc """
   A ship's card: its name and Key, the address of its holder to copy and how
   many Keys they hold, their Keys' last few actions, and the Key's page. It
-  opens as it is rendered and closes with its X, Escape or a new page. The
-  homepage opens it for Classic's ships too.
+  opens as it is rendered and closes with its X, Escape or a new page.
   """
   def agent_card(assigns) do
     ~H"""

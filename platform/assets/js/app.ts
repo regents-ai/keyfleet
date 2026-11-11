@@ -31,7 +31,7 @@ import {AccountWallets} from "./hooks/account_wallets"
 import {Countdown} from "./hooks/countdown"
 import {FleetTabs} from "./hooks/fleet_tabs"
 import {FleetPreview} from "./hooks/fleet_preview"
-import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
+import {HarbourSea} from "./hooks/harbour_sea"
 import {PlacesChart} from "./hooks/places_chart"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
@@ -341,7 +341,6 @@ const hooks = {
   Countdown,
   FleetTabs,
   FleetPreview,
-  FleetSea,
   HarbourSea,
   HexField,
   HolographicCard,

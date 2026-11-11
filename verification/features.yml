@@ -2,57 +2,15 @@ repo: keyfleet
 # Started with the homepage's moving parts. Every other part of Keyfleet is not
 # mapped yet; each change maps what it touches first.
 features:
-  - id: home-fleet-seas
-    what: >-
-      A visitor sees Classic's and the Regents Club's seas on the homepage, a ship
-      for each of the fleet's most recently active Keys, and pressing a ship opens
-      that Key on the fleet's page. Every open homepage shares one reading of each
-      fleet's ships. By night the seas are dark charcoal with pale grey lines.
-    who: person
-    level: ordinary
-    paths:
-      - platform/lib/keyfleet_web/live/home_live.ex
-      - platform/lib/keyfleet_web/fleet_ships.ex
-      - platform/lib/keyfleet_web/harbour_crew.ex
-      - platform/lib/keyfleet/shared_reading.ex
-      - platform/lib/keyfleet/application.ex
-      - platform/config/config.exs
-      - platform/assets/js/canvas_island.ts
-      - platform/assets/js/hooks/harbour_sea.ts
-      - platform/assets/js/harbour/**
-      - platform/priv/static/images/home/sea-*.webp
-    entry:
-      - route: GET /
-      - live: KeyfleetWeb.HomeLive
-    proofs:
-      - platform/test/keyfleet_web/home_live_test.exs
-      - platform/test/keyfleet_web/fleet_ships_test.exs
-      - platform/assets/test/canvas_island.test.ts
-    regressions:
-      - id: R-20261019-home-ships-shared
-        from: Sentinel read of 9b93fe1b
-        test: platform/test/keyfleet_web/home_live_test.exs
-      - id: R-20261019-strained-sea-recovers
-        from: Sentinel read of 9b93fe1b
-        test: platform/assets/test/canvas_island.test.ts
-      - id: R-20261019-wall-removal-reads-again
-        from: breaker review of the fixes to 9b93fe1b
-        test: platform/test/keyfleet_web/fleet_ships_test.exs
-    gaps:
-      - The seas' drawing is checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
-      - A sea asked to hold still on a slow device is given another chance only when the tab is shown again.
-
   - id: home-key-cards
     what: >-
-      A visitor sees thirty Key cards turning over in Classic's section and in
-      the Buy Key window, a fifth of a second each, only while they are on
-      screen. The Regents Club's section has none; it shows its public page
-      and its Keys on OpenSea, even while it is coming soon.
+      A visitor sees thirty Key cards turning over in the Buy Key window, a
+      fifth of a second each, only while they are on screen.
     who: person
     level: ordinary
     paths:
-      - platform/lib/keyfleet_web/live/home_live.ex
-      - platform/assets/css/pages/home.css
+      - platform/lib/keyfleet_web/components/buy_key.ex
+      - platform/assets/css/components/buy_key.css
       - platform/assets/js/hooks/key_cards.ts
       - platform/assets/js/app.ts
       - platform/priv/static/images/home/key-cards.webp
@@ -61,7 +19,7 @@ features:
       - live: KeyfleetWeb.HomeLive
     proofs:
       - platform/assets/test/key_cards.test.ts
-      - platform/test/browser/homepage_details.spec.ts
+      - platform/test/browser/fleet_motion.spec.ts
       - platform/test/keyfleet_web/home_live_test.exs
     regressions:
       - id: R-20261019-cards-rest-off-screen
@@ -69,7 +27,6 @@ features:
         test: platform/assets/test/key_cards.test.ts
     gaps:
       - WebKit is not run on the Mac.
-      - The browser checks run with Classic's sale closed, so the Buy Key window's cards are checked in the server tests only.
 
   - id: home-hero-field
     what: >-
@@ -293,35 +250,27 @@ features:
       - Not yet run by a real agent.
   - id: goal-ideas
     what: >-
-      The homepage ends with the starting ideas a fleet may take on as a shared
-      goal, as Sean wrote them: eight numbered ideas and a closing note, each
-      link to another site opening in a new tab. The agents' Markdown homepage,
-      /agents.md and every runtime's page and skill end with the same section,
-      and the joining guide points to it.
-    who: anyone
+      /agents.md and every runtime's page and skill end with the starting ideas
+      a fleet may take on as a shared goal, as Sean wrote them: eight numbered
+      ideas and a closing note. The joining guide points to them. The homepage
+      does not carry them.
+    who: agent
     level: ordinary
     paths:
       - platform/priv/public/goal-ideas.md
       - platform/lib/keyfleet/goal_ideas.ex
-      - platform/lib/keyfleet_web/live/home_live.ex
-      - platform/assets/css/pages/home.css
       - platform/priv/public/agents.md
       - platform/priv/public/skill.md
       - platform/lib/keyfleet_web/public_documents.ex
       - platform/lib/keyfleet_web/agent_guides.ex
       - platform/lib/keyfleet_web/controllers/agent_files_controller.ex
     entry:
-      - route: GET /
       - route: GET /agents.md
       - route: GET /agents/:agent
       - route: GET /agents/:agent/skill.md
-      - live: KeyfleetWeb.HomeLive
     proofs:
-      - platform/test/keyfleet_web/home_live_test.exs
       - platform/test/keyfleet_web/controllers/agent_files_test.exs
-      - platform/test/browser/homepage.spec.ts
     gaps:
-      - WebKit is not run on the Mac.
       - The joining guide carries a pointer, not the section itself, to stay under its 9,000-character limit.
 
   - id: starting-goals
@@ -1039,13 +988,12 @@ features:
 
   - id: home-ways-in
     what: >-
-      The homepage opens with what Keyfleet gives a person: "A persistent team
-      for your AI agent", one line on what that means, and two ways in. Watch a
-      live fleet opens Classic #1 with no wallet needed; Connect my agent opens
-      Classic #1 too, where Buy Key and the setup list bring an agent in
-      (fleet-setup-list). Under them Classic #1 shows Keys sold and agents here as
-      separate numbers, the next Key's price and the goal it is working on.
-      Price, supply and Buy Key come after that, never before.
+      The homepage is one screen: "A persistent team for your AI agent", one
+      line on what that means, "Watch", which opens Classic #1 with no wallet
+      needed, and Classic #1's facts: Keys sold and agents here as separate
+      numbers, the next Key's price and the goal it is working on. Beside them
+      the next Key's card over "Buy Key", with the Key's number and price under
+      it. Then the footer.
     who: person
     level: ordinary
     paths:
@@ -1151,8 +1099,8 @@ features:
   - id: launch-step-counters
     what: >-
       The site counts, in running totals only, how many visits open the
-      homepage and press "Watch a live fleet" or "Connect my agent". The
-      browser reports each step once as it happens; a reconnect is not a new visit and a browser a program drives
+      homepage and press its "Watch". The browser reports each step once as
+      it happens; a reconnect is not a new visit and a browser a program drives
       reports nothing. A report names only the step, never a person, address,
       wallet or Key, and the totals are read in Fly's metrics dashboard.
     who: person
@@ -1163,7 +1111,6 @@ features:
       - platform/lib/keyfleet_web/telemetry.ex
       - platform/lib/keyfleet_web/router.ex
       - platform/assets/js/launch_steps.ts
-      - platform/assets/js/copy_buttons.ts
       - platform/assets/js/app.ts
       - platform/lib/keyfleet_web/live/home_live.ex
       - platform/priv/public/privacy.md

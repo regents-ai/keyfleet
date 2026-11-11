@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.LaunchStepsControllerTest do
   end
 
   test "counts each way in by its name", %{conn: conn, ref: ref} do
-    for step <- ~w(home watch connect) do
+    for step <- ~w(home watch) do
       assert report(conn, ~s({"step":"#{step}"})).status == 204
       assert_received {[:keyfleet, :launch, :step], ^ref, %{count: 1}, %{step: ^step}}
     end

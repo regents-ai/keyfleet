@@ -455,39 +455,3 @@ export const HarbourSea = {
     this.controller = undefined
   },
 }
-
-type FleetSeaHook = {
-  el: HTMLElement
-  controller?: HarbourSeaController
-  pushEvent(event: string, payload: object): void
-  liveSocket: {js(): {navigate(href: string): void}}
-}
-
-/**
- * A fleet's city in its section of the homepage, its discs that fleet's Keys.
- * Pressing a disc asks the page to open that Key's profile on the fleet's page,
- * and pressing a district opens where it leads on the fleet's pages.
- */
-export const FleetSea = {
-  mounted(this: FleetSeaHook) {
-    this.controller = createHarbourSeaController(
-      this.el,
-      id => this.pushEvent("open_ship", {id}),
-      path => this.liveSocket.js().navigate(path),
-    )
-    this.controller.mount()
-  },
-  updated(this: FleetSeaHook) {
-    this.controller?.sync()
-  },
-  disconnected(this: FleetSeaHook) {
-    this.controller?.pause()
-  },
-  reconnected(this: FleetSeaHook) {
-    this.controller?.resume()
-  },
-  destroyed(this: FleetSeaHook) {
-    this.controller?.destroy()
-    this.controller = undefined
-  },
-}

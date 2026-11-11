@@ -56,6 +56,8 @@ test("a pointer press squishes its control and rises a dialog, all ending clean"
 
   await page.locator("#fleet-get-key").click()
   await expect(page.locator("dialog#buy-key")).toBeVisible()
+  // Its Key cards turn while they are on screen (KeyCards).
+  await expect(page.locator("#buy-key-cards")).toHaveAttribute("data-cards-turning")
   await expect.poll(() => moved(page, "#fleet-get-key")).toBe(true)
   await expect.poll(() => moved(page, "dialog#buy-key")).toBe(true)
   await page.keyboard.press("Escape")
