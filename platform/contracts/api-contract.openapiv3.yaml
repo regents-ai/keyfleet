@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 27.0.0
+  version: 28.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -429,10 +429,10 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/account/points:
+  /api/v1/account/points:
     get:
-      operationId: getAgentPoints
-      description: Read shared Points as decimal strings, daily allowances and reduced history entries. Does not activate earning or award Points.
+      operationId: getAccountPoints
+      description: Read your person's Points as decimal text, what they earned today and yesterday, their place, the actions still open, daily limits, the leaderboard by name or wallet, recent entries with who earned each and whether it counted, and period bonuses. note says when earning is off. Does not activate earning or award Points.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       responses:
@@ -5494,31 +5494,86 @@ components:
     AgentAccountPoints:
       type: object
       additionalProperties: false
-      required: [points, earned_today, pending, daily_allowances, entries, more]
+      required: [points, earned_today, earned_yesterday, rank, activity_being_verified, to_do, daily_limits, leaderboard, entries, period_bonuses, more]
       properties:
-        points: {type: string, description: Decimal Points balance truncated to at most two decimal places}
-        earned_today: {type: string, description: Decimal Points earned today truncated to at most two decimal places}
-        pending: {type: integer, minimum: 0}
-        daily_allowances:
+        points: {type: string, description: "Decimal Points total; a whole number has no \".00\""}
+        earned_today: {type: string, description: Decimal Points earned today}
+        earned_yesterday: {type: string, description: Decimal Points earned yesterday}
+        rank: {type: [integer, "null"], minimum: 1, description: "Your person's place on the board; accounts level on points share a place; null with no Points"}
+        activity_being_verified: {type: integer, minimum: 0, description: Actions still being checked}
+        to_do:
+          type: array
+          description: The actions this site lists, the ones done once first, then the daily ones
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, repeats, points, done, left, today]
+            properties:
+              label: {type: string}
+              repeats: {type: string, enum: [once, daily]}
+              points: {type: [string, boolean], description: "The Points it earns, such as \"10\"; false until earning opens"}
+              done: {type: boolean}
+              left: {type: boolean, description: True while the action can still earn, today for a daily one}
+              today:
+                description: For a daily action that counts more than once a day, how many times it counted today; else null
+                oneOf:
+                  - type: "null"
+                  - type: object
+                    additionalProperties: false
+                    required: [done, of]
+                    properties:
+                      done: {type: integer, minimum: 0}
+                      of: {type: integer, minimum: 2}
+        daily_limits:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [scope, remaining]
+            required: [name, limit, remaining]
             properties:
-              scope: {type: string}
-              remaining: {type: string, description: Decimal Points allowance remaining}
+              name: {type: string}
+              limit: {type: string, description: Decimal Points a day}
+              remaining: {type: string, description: Decimal Points left today}
+        leaderboard:
+          type: array
+          maxItems: 10
+          description: The ten highest totals
+          items:
+            type: object
+            additionalProperties: false
+            required: [rank, name, wallet, ens_name, points, you]
+            properties:
+              rank: {type: integer, minimum: 1}
+              name: {type: [string, "null"], description: "The person's display name; null when they show by their wallet"}
+              wallet: {type: [string, "null"], pattern: '^0x[0-9a-fA-F]{40}$'}
+              ens_name: {type: [string, "null"], description: The wallet's ENS name, shown in place of the address}
+              points: {type: string}
+              you: {type: boolean, description: True on your person's row}
         entries:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [points, source, by, earned_at]
+            required: [label, points, status, allowance_reduction, by, agent, earned_at]
             properties:
-              points: {type: string, description: Signed decimal Points change truncated to at most two decimal places}
-              source: {type: string}
-              by: {type: string, enum: [human, agent]}
+              label: {type: string}
+              points: {type: string, description: Signed decimal Points change}
+              status: {type: string, enum: [counted, allowance_reached, correction]}
+              allowance_reduction: {type: string, description: Decimal Points the daily limit cut from it}
+              by: {type: string, enum: [agent, person]}
+              agent: {type: [string, "null"], description: "The agent's name; null when your person earned it"}
               earned_at: {type: string, format: date-time}
+        period_bonuses:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [period, points, nft_count, bonus_percent]
+            properties:
+              period: {type: integer, minimum: 1}
+              points: {type: string}
+              nft_count: {type: integer, minimum: 0}
+              bonus_percent: {type: integer, minimum: 0}
         more: {type: boolean, description: More entries exist beyond this summary}
         note: {type: string, description: Present when no Points earning rules are active}
     CodeNotHolderError:

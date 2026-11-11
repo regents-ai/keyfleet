@@ -3965,10 +3965,10 @@
     },
     {
       "command": "account points",
-      "description": "Read your person's Points, today's total and recent entries, as decimal text. Changes nothing.",
-      "operation_id": "getAgentPoints",
+      "description": "Read your person's Points, what they earned today and yesterday, their place, the actions still open, daily limits, the leaderboard by name or wallet and recent entries, each saying who earned it and whether it counted. Changes nothing.",
+      "operation_id": "getAccountPoints",
       "method": "GET",
-      "path": "/api/v1/agent/account/points",
+      "path": "/api/v1/account/points",
       "webmcp": "account_points",
       "authority": "paired_agent",
       "effect": "read"

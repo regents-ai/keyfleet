@@ -2,6 +2,12 @@
 
 Changes to Keyfleet, newest first.
 
+## 11 November 2026
+
+- **Points.** Your Points page is redrawn: your total with today and yesterday, what is
+  left to do, the leaderboard and the period bonus. Nothing earns until Points opens.
+- **Leaderboard.** Someone with no name shows by their wallet, which you can copy.
+
 ## 9 November 2026
 
 - **No votes.** Each proposal shows its No votes beside Yes, on the bar and in words, and

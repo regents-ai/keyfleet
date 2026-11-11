@@ -29,9 +29,11 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   alias Keyfleet.Agents
   alias Keyfleet.Agents.Avatar
   alias Keyfleet.Limits
-  alias KeyfleetWeb.{Endpoint, Refusal}
+  alias Keyfleet.Points.Board
+  alias Keyfleet.SharedReading
+  alias KeyfleetWeb.{Endpoint, PointsEntries, Refusal}
   alias RegentAgents.HumanBacking
-  alias RegentPoints.{Amount, Rules}
+  alias RegentPoints.Rules
 
   @points_off "Earning Points is off on this site."
   @spending_off "Approving agent spending is off on this site."
@@ -123,35 +125,19 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   def answer(:points, _params, %{human_account_id: nil}, _waiter),
     do: refusal(403, "person_not_here")
 
+  # The same figures the Points page shows, the board included: unavailable
+  # until the board every reader shares has been read once.
   def answer(:points, _params, actor, _waiter) do
-    case RegentPoints.summary(actor: actor) do
-      {:ok, summary} ->
-        %{
-          points: Amount.format(summary.balance_micro),
-          earned_today: Amount.format(summary.earned_today_micro),
-          pending: summary.pending,
-          daily_allowances:
-            Enum.map(
-              summary.allowances,
-              &%{scope: &1.scope, remaining: Amount.format(&1.remaining)}
-            ),
-          entries:
-            Enum.map(
-              summary.entries,
-              &%{
-                points: Amount.format(&1.points_micro_delta),
-                source: &1.source_app,
-                by: &1.actor_kind,
-                earned_at: &1.earned_at
-              }
-            ),
-          more: summary.more?
-        }
-        |> with_note(Rules.active() == [], @points_off)
-        |> ok()
+    with {:ok, summary} <- RegentPoints.summary(actor: actor),
+         {:ok, %{reading: %{} = board}} <- SharedReading.fetch(Board.key()) do
+      open? = Rules.active() != []
 
-      {:error, _error} ->
-        refusal(503, "account_unavailable")
+      summary
+      |> PointsEntries.answer(board, actor.human_account_id, open?)
+      |> with_note(!open?, @points_off)
+      |> ok()
+    else
+      _unavailable -> refusal(503, "account_unavailable")
     end
   end
 

@@ -19,9 +19,11 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.Points.Board
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Muter
+  alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
     AccountLive,
@@ -104,6 +106,8 @@ defmodule KeyfleetWeb.ShellLive do
        credits_topic: nil,
        points: %Read{},
        points_bonus: %Read{},
+       points_board: %Read{},
+       hearing_board?: false,
        points_topic: nil,
        points_earning: [],
        fleet: nil,
@@ -192,6 +196,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_project(route_spec, params)
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
+       |> hear_board(route_spec)
        |> load_points(route_spec)
        |> read_class(params)
        |> follow_keys(keys_fleets(route_spec, params))
@@ -500,6 +505,15 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice(%{topic: "points:" <> _, payload: :points_changed}, socket),
     do: {:noreply, socket}
 
+  # The board every signed-in reader shares was read again.
+  defp notice(
+         {:shared_reading, {:points_board, _program}},
+         %{assigns: %{route_spec: %{route_id: :points}}} = socket
+       ),
+       do: {:noreply, read_points_board(socket)}
+
+  defp notice({:shared_reading, {:points_board, _program}}, socket), do: {:noreply, socket}
+
   defp notice(%Broadcast{event: event} = notice, socket)
        when event in ["dm_head", "dm_deleted"],
        do: DmsLive.handle_info(notice, socket)
@@ -723,6 +737,7 @@ defmodule KeyfleetWeb.ShellLive do
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           points={@points}
+          board={@points_board}
           bonus={@points_bonus}
           earning={@points_earning}
         />
@@ -1463,37 +1478,89 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp follow_credits(socket, _account), do: socket
 
-  # The NFT tier is read from Base once per page open, never on each award notice.
+  # The page hears the shared Points board while the Points page is open, and
+  # not elsewhere.
+  defp hear_board(socket, %{route_id: route}) do
+    hearing? = socket.assigns.hearing_board?
+    wanted? = route == :points
+
+    if connected?(socket) and hearing? != wanted? do
+      if wanted?,
+        do: SharedReading.subscribe(Board.key()),
+        else: SharedReading.unsubscribe(Board.key())
+
+      assign(socket, :hearing_board?, wanted?)
+    else
+      socket
+    end
+  end
+
+  # The NFT tier is read from Base once per page open, never on each award
+  # notice, and not at all while nothing earns.
   defp load_points(socket, %{route_id: :points}) do
     socket
     |> assign(:points_earning, RegentPoints.Rules.active())
     |> follow_points()
     |> read_points()
+    |> read_points_board()
     |> read_points_bonus()
   end
 
   defp load_points(socket, _route_spec),
-    do: socket |> Read.clear(:points) |> Read.clear(:points_bonus)
+    do: socket |> Read.clear(:points) |> Read.clear(:points_board) |> Read.clear(:points_bonus)
 
   defp read_points(socket) do
     case human_actor(socket) do
       %Human{} = actor ->
-        Read.start(socket, :points, actor.human_account_id, fn -> PointsLive.summary(actor) end)
+        Read.now(socket, :points, actor.human_account_id, fn ->
+          RegentPoints.summary(actor: actor)
+        end)
 
       nil ->
         Read.clear(socket, :points)
     end
   end
 
+  # The board every signed-in reader shares (Keyfleet.Points.Board). The
+  # reader's own row and place are found from it, and their own total, as the
+  # page renders.
+  defp read_points_board(socket) do
+    case human_actor(socket) do
+      %Human{} -> assign(socket, :points_board, board_read(SharedReading.fetch(Board.key())))
+      nil -> Read.clear(socket, :points_board)
+    end
+  end
+
+  # Loading until the board is first read, an error when that first read failed,
+  # and behind while the last read failed.
+  defp board_read(:error), do: %Read{state: :loading}
+  defp board_read({:ok, %{reading: nil}}), do: %Read{state: :error, error: :not_read}
+
+  defp board_read({:ok, %{reading: board, at: at, degraded?: true}}),
+    do: %Read{state: :stale, value: board, read_at: at, error: :not_read}
+
+  defp board_read({:ok, %{reading: board, at: at}}),
+    do: %Read{state: :ready, value: board, read_at: at}
+
+  defp read_points_bonus(%{assigns: %{points_earning: []}} = socket),
+    do: Read.clear(socket, :points_bonus)
+
   defp read_points_bonus(socket) do
     case human_actor(socket) do
-      %Human{} = actor ->
-        Read.start(socket, :points_bonus, actor.human_account_id, fn ->
-          PointsLive.bonus(actor)
-        end)
+      %Human{human_account_id: id} ->
+        Read.start(socket, :points_bonus, id, fn -> points_bonus(id) end)
 
       nil ->
         Read.clear(socket, :points_bonus)
+    end
+  end
+
+  # The NFT tier the account's wallets hold now, read from Base and never saved,
+  # counted against the account's allowance of wallet reads.
+  defp points_bonus(id) do
+    case Keyfleet.Limits.spend(:wallet_read, {:human, id}) do
+      :ok -> RegentPoints.Bonus.current(id)
+      :limited -> {:error, :limited}
     end
   end
 

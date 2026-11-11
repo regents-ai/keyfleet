@@ -70,7 +70,7 @@ def agent_routes(text):
             path = found.group(1)
         elif not line.startswith("  "):
             path = None
-        elif path and path.startswith(("/api/v1/agent/", "/api/agents/v1/")):
+        elif path and path.startswith(("/api/v1/agent/", "/api/v1/account/", "/api/agents/v1/")):
             if found := re.match(r"    (get|post|put|patch|delete):$", line):
                 yield route(found.group(1).upper(), path)
 

@@ -186,7 +186,6 @@ config :keyfleet,
     Keyfleet.Fleets,
     Keyfleet.Rooms,
     Keyfleet.Polls,
-    Keyfleet.Points,
     Keyfleet.Dms,
     Keyfleet.Agents,
     Keyfleet.Keys,
@@ -243,7 +242,9 @@ config :keyfleet, :limits,
   # Pushes to one fleet's code as one wallet: two a minute, past steady work.
   code_pushes: [limit: 120, window_seconds: 3600],
   # A person's presses of the Treasury's refresh: one every 30 seconds (Sean, 20 October 2026).
-  treasury_refresh: [limit: 1, window_seconds: 30]
+  treasury_refresh: [limit: 1, window_seconds: 30],
+  # A person's reads of their wallets on Base, such as the Points page's NFT bonus.
+  wallet_read: [limit: 30, window_seconds: 60]
 
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
@@ -320,7 +321,8 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_proposals"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_treasury"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "share_card"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}}
     ]
   ],
   pruner: [max_age: {7, :days}],

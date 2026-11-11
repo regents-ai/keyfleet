@@ -3240,9 +3240,9 @@ GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing
 
 ## regents keyfleet account points
 
-Read `points`, `earned_today`, `pending`, `daily_allowances`, `entries` and `more`. Points amounts are decimal strings, truncated to at most two decimal places. Entries contain only `points`, `source`, `by` and `earned_at`. No rewards or activation.
+Read your person's Points, what they earned today and yesterday, their place, the actions still open, daily limits, the leaderboard by name or wallet and recent entries, each saying who earned it and whether it counted. The answer is `{"points": "12.5", "earned_today", "earned_yesterday", "rank", "activity_being_verified", "to_do": [{"label", "repeats", "points", "done", "left", "today"}], "daily_limits": [{"name", "limit", "remaining"}], "leaderboard": [{"rank", "name", "wallet", "ens_name", "points", "you"}], "entries": [{"label", "points", "status", "allowance_reduction", "by", "agent", "earned_at"}], "period_bonuses": [{"period", "points", "nft_count", "bonus_percent"}], "more"}`. Points are decimal text, truncated to at most two decimal places, and a whole number has no ".00". `rank` is your person's place, or null with no Points. `repeats` is `once` or `daily`; `left` is true while the action can still earn; `today` is `{"done", "of"}` for an action that counts more than once a day. `leaderboard` is the ten highest totals; `name` is null for a person shown by their `wallet`, under its `ens_name` when it has one; `you` marks your person's row. `status` is `counted`, `allowance_reached` or `correction`; `by` is `agent` or `person`; `agent` is the agent's name, or null. A `note` says when earning Points is off on this site. 503 `account_unavailable` until the leaderboard has been read once. No rewards or activation.
 
-GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
+GET `/api/v1/account/points` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
 ## regents keyfleet agents pair
 
@@ -3262,6 +3262,10 @@ your signer; never use your person's browser sign-in or a local fixture instead.
 ## Account answers changed (15 October 2026)
 
 `account balances` no longer returns `account_id` or `pairing_id`. `account points` returns decimal strings (do not divide them by one million), `daily_allowances` and `more`, and each entry carries only `points`, `source`, `by` and `earned_at`. Either answer may carry a `note` saying spending approvals or Points earning are off on this site; the note changes neither setting. These are the answers ash-template gives.
+
+## Points answer changed (11 November 2026)
+
+`account points` is `GET /api/v1/account/points` (`getAccountPoints`), the address every Regent site gives it; `GET /api/v1/agent/account/points` (`getAgentPoints`) is gone. It answers `earned_yesterday`, `rank`, `activity_being_verified` (was `pending`), `to_do`, `daily_limits` (`name`, `limit`, `remaining`), `leaderboard` (`rank`, `name`, `wallet`, `ens_name`, `points`, `you`) and `period_bonuses`; each entry carries `label`, `points`, `status`, `allowance_reduction`, `by` (`person` or `agent`), `agent` and `earned_at`. `daily_allowances` and an entry's `source` are gone, and whole Points drop the trailing ".00". The API contract moves to 28.0.0. These are the answers ash-template gives.
 
 ## regents keyfleet proposals read <fleet> <number>
 
