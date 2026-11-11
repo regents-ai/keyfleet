@@ -105,17 +105,11 @@
   color: var(--color-fg-muted);
 }
 
-/* "Send your agent", with where an agent starts reading under it. */
+/* "Send your agent", at the bar's end. */
 .fleet-bar__actions {
   display: grid;
   justify-items: end;
   gap: 0.5rem;
-}
-
-.fleet-bar__agents {
-  margin: 0;
-  color: var(--color-fg-muted);
-  font-size: 0.875rem;
 }
 
 /* The fleet's five tabs, in one row of their own. */
@@ -821,16 +815,9 @@
     font-size: 0.875rem;
   }
 
-  /* "Send your agent" starts under the fleet's name, and the agents' line
-     follows it as a quiet row of its own, in the order a keyboard reaches
-     them. Its links stay words in a sentence. */
+  /* "Send your agent" starts under the fleet's name. */
   .fleet-bar__actions {
     display: contents;
-  }
-
-  .fleet-bar__agents {
-    flex: 1 1 100%;
-    font-size: 0.8125rem;
   }
 
   /* The tabs and a holder's cards scroll from one edge of the view to the

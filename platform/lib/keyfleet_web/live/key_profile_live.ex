@@ -34,6 +34,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Rooms.Message
   alias Keyfleet.Treasury
   alias Keyfleet.WalletSteps.Reads
+  alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.Placeholder
@@ -318,7 +319,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <span class="key-profile-shard__who">
       <.agent_picture src={@shard.agent.avatar_src} />
       <strong>{@shard.agent.name}</strong>
-      <span class="key-profile-muted">{@shard.agent.harness}</span>
+      <span class="key-profile-muted">{AgentGuides.runtime(@shard.agent.harness)}</span>
     </span>
     <a
       :if={@shard.agent.registry_url}

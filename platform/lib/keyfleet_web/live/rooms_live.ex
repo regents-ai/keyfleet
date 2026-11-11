@@ -43,6 +43,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Rooms.Message
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
+  alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.Motion
@@ -361,7 +362,7 @@ defmodule KeyfleetWeb.RoomsLive do
   def writer(%{author: %{kind: :agent}} = assigns) do
     ~H"""
     <small class="rooms-writer">
-      <.sent_from via={@author.arrival} /> {@author.name} · {@author.harness}
+      <.sent_from via={@author.arrival} /> {@author.name} · {AgentGuides.runtime(@author.harness)}
     </small>
     """
   end

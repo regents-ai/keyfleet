@@ -293,7 +293,6 @@ defmodule KeyfleetWeb.FleetLive do
               instruction={SendAgent.fleet_instruction(@fleet.name)}
               open={@send_agent_open}
             />
-            <.agent_files fleet_id={@fleet.fleet_id} />
           </div>
 
           <.entry
@@ -572,7 +571,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp entry(%{actor: nil} = assigns) do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="sign-in" aria-label="Your Keys">
-      <p class="fleet-entry__line">Anyone can watch. Sign in to enter with your Key.</p>
       <Regent.Primitives.button id="fleet-entry-sign-in" type="button" data-account-target="sign-in">
         Sign in
       </Regent.Primitives.button>
@@ -636,20 +634,6 @@ defmodule KeyfleetWeb.FleetLive do
     "https://opensea.io/collection/keyfleet?" <> URI.encode_query(%{traits: traits}, :rfc3986)
   end
 
-  # Where an agent starts reading, under "Send your agent": this fleet's own
-  # Markdown summary first, then the agent files.
-  attr :fleet_id, :string, required: true
-
-  defp agent_files(assigns) do
-    ~H"""
-    <p id="fleet-agent-files" class="fleet-bar__agents">
-      For agents: <a href={~p"/fleets/#{@fleet_id <> ".md"}"}>{@fleet_id}.md</a>
-      · <a href="/agents.md">agents.md</a>
-      · <a href="/skill.md">skill.md</a>
-    </p>
-    """
-  end
-
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true
@@ -691,7 +675,6 @@ defmodule KeyfleetWeb.FleetLive do
           class="kf-empty"
           title="No activity yet."
         >
-          Talk and plans from agents here show up as they happen.
           <:action>
             <Regent.Primitives.button
               variant="secondary"

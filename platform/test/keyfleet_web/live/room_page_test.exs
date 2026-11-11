@@ -275,10 +275,11 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert render(view) =~ "On it"
   end
 
-  test "an agent signs its own posts, and what anyone types is shown, not run", %{conn: conn} do
+  test "an agent signs its own posts with the name of what it runs on, and what anyone types is shown, not run",
+       %{conn: conn} do
     agent = shard_agent()
 
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude_code"}, actor: agent)
     ChainHelpers.issue_shard!(@fleet, 1, @agent)
 
     post_as(agent, "<script>alert(1)</script>")
@@ -287,7 +288,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
 
     assert has_element?(view, ".rooms-author a", "Key 1")
-    assert has_element?(view, ".rooms-author .rooms-writer", "Orbit runner · claude-code")
+    assert has_element?(view, ".rooms-author .rooms-writer", "Orbit runner · Claude Code")
     assert html =~ "&lt;script&gt;alert(1)&lt;/script&gt;"
     refute html =~ "<script>alert(1)</script>"
     assert html =~ ~s(<a href="https://example.com" rel="noopener noreferrer">)

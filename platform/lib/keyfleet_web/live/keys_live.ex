@@ -27,6 +27,7 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.Keys.Metadata
   alias Keyfleet.Keys.Profile
   alias Keyfleet.PublicIdentity
+  alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.Components.AgentSetup
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.KeyCard
@@ -332,7 +333,7 @@ defmodule KeyfleetWeb.KeysLive do
             {shard.agent.name}
           </p>
           <p :if={is_nil(shard.agent)} class="key-name">No agent yet</p>
-          <span :if={shard.agent}>{shard.agent.harness}</span>
+          <span :if={shard.agent}>{AgentGuides.runtime(shard.agent.harness)}</span>
           <span>Until {date(shard.expires_at)}</span>
           <Regent.Primitives.address id={"key-shard-address-#{shard.wallet}"} address={shard.wallet} />
         </div>
