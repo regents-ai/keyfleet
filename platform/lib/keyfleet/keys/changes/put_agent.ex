@@ -1,9 +1,10 @@
 defmodule Keyfleet.Keys.Changes.PutAgent do
   @moduledoc """
   Puts the agent the write names by its wallet on the Key, or takes the Key's
-  agent off when it names none, inside the write's own transaction once the
-  policy has let it through (`Keyfleet.Keys.AgentKey`). The Key the named
-  agent was on in the fleet, if another, loses it.
+  agent off when it names none (the person's alone, by the policy), inside the
+  write's own transaction once the policy has let it through
+  (`Keyfleet.Keys.AgentKey`). The Key the named agent was on in the fleet, if
+  another, loses it.
 
   Every write locks what it rests on in one order, so two at once for the
   same person, a swap included, run one after the other and never wait on
@@ -12,6 +13,12 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
   with the person (`RegentAgents.Authority.lock_current/3`), whose id is what
   is kept. Then the person's rows the write changes in the fleet, the Key's
   and the named agent's, lowest Key first.
+
+  An agent writing changes no agent's place: once they are locked, it is
+  refused (`PersonOnlyError`) if the Key has another agent paired now, or the
+  named agent has a row on another Key, even one the person no longer holds,
+  so only the person's write takes an agent off a Key (`:release`). Naming no
+  agent is the person's alone, by the policy.
 
   A Key with no row when they are locked is written only if no other write
   has given it an agent since; one that has loses the race and answers
@@ -26,7 +33,7 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Keys
   alias Keyfleet.Keys.AgentKey
-  alias Keyfleet.Keys.Errors.{AgentUnknownError, NotPairedError}
+  alias Keyfleet.Keys.Errors.{AgentUnknownError, NotPairedError, PersonOnlyError}
   alias RegentAgents.Authority
 
   @impl true
@@ -44,6 +51,7 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
 
     with {:ok, pairing_id} <- lock_pairings(actor, wallet),
          {:ok, rows} <- lock_rows(changeset, actor, pairing_id),
+         :ok <- moves_no_agent(actor, rows, token_id, pairing_id),
          :ok <- release(rows, token_id, pairing_id, actor) do
       changeset
       |> Ash.Changeset.force_change_attribute(:paired_agent_id, pairing_id)
@@ -121,9 +129,32 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
     |> Ash.read(actor: actor)
   end
 
-  # The named agent comes off the other Key it was on in this fleet.
+  # An agent puts an agent that is on no Key onto a Key with none: the named
+  # agent has no row on another Key, and the Key's row, if any, has no agent
+  # or one no longer paired. So an agent's write never takes one off.
+  defp moves_no_agent(%Agent{}, rows, token_id, pairing_id) do
+    places_changed = &(moved?(&1, token_id, pairing_id) or replaced?(&1, token_id, pairing_id))
+
+    if Enum.any?(rows, places_changed),
+      do: {:error, PersonOnlyError.exception([])},
+      else: :ok
+  end
+
+  defp moves_no_agent(_person, _rows, _token_id, _pairing_id), do: :ok
+
+  defp moved?(row, token_id, pairing_id),
+    do: row.token_id != token_id and row.paired_agent_id == pairing_id
+
+  defp replaced?(%{token_id: token_id, paired_agent_id: id}, token_id, pairing_id)
+       when id not in [nil, pairing_id],
+       do: Authority.active_episode?(Keyfleet.Repo, id)
+
+  defp replaced?(_row, _token_id, _pairing_id), do: false
+
+  # The named agent comes off the other Key it was on in this fleet, which
+  # only the person's write does.
   defp release(rows, token_id, pairing_id, actor) do
-    case Enum.find(rows, &(&1.token_id != token_id and &1.paired_agent_id == pairing_id)) do
+    case Enum.find(rows, &moved?(&1, token_id, pairing_id)) do
       nil -> :ok
       row -> Ash.destroy(row, action: :release, actor: actor)
     end

@@ -20,6 +20,10 @@ defmodule Keyfleet.Keys.AgentKey do
   is saved: unpairing an agent ends its place on a Key, and pairing it again
   starts with none. Only its own person, or their agent, sets it, and only on
   a Key the person's wallets hold now (`Keyfleet.Keys.Validations.HeldByPerson`).
+  Only the person takes an agent off a Key or moves one they put on a Key,
+  even one they no longer hold; an agent of theirs puts an agent that is on no
+  Key in the fleet, itself included, onto a Key with none
+  (`Keyfleet.Keys.Errors.PersonOnlyError` otherwise).
   Two writes at once run one after the other (`Keyfleet.Keys.Changes.PutAgent`).
   Each reads only their own person's; which Key any agent is on is read by
   trusted code alone, through `Keyfleet.Keys.assigned_keys/2`.
@@ -59,8 +63,8 @@ defmodule Keyfleet.Keys.AgentKey do
     end
 
     # The agent the person's other Key in the fleet had, taken off it when
-    # the agent goes onto another (`Keyfleet.Keys.Changes.PutAgent`), read
-    # from the person's own rows.
+    # the person puts the agent onto another (`Keyfleet.Keys.Changes.PutAgent`),
+    # read from the person's own rows.
     destroy :release do
       require_atomic? false
     end
@@ -99,11 +103,26 @@ defmodule Keyfleet.Keys.AgentKey do
   # the person's account (`Keyfleet.Actors.Agent`'s `human_account_id`), as
   # `Keyfleet.Keys.Checks.ActsForPerson` asks; nobody else does.
   policies do
-    policy action([:assign, :of_person]) do
+    # Only the person takes a Key's agent off. An agent names an agent to put
+    # on, and is refused under lock if that would move one or replace one
+    # (`Keyfleet.Keys.Changes.PutAgent`), so it never reaches `:release`.
+    policy action(:assign) do
+      forbid_unless expr(not is_nil(^actor(:human_account_id)))
+      authorize_if actor_attribute_equals(:role, :human)
+      authorize_if expr(not is_nil(^arg(:agent_wallet)))
+    end
+
+    policy action(:of_person) do
       authorize_if expr(not is_nil(^actor(:human_account_id)))
     end
 
-    policy action([:read, :release]) do
+    policy action(:read) do
+      authorize_if expr(human_account_id == ^actor(:human_account_id))
+    end
+
+    # Only the person takes an agent off a Key, moving it or not.
+    policy action(:release) do
+      forbid_unless actor_attribute_equals(:role, :human)
       authorize_if expr(human_account_id == ^actor(:human_account_id))
     end
 

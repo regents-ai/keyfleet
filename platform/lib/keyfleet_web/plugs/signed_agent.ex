@@ -1312,7 +1312,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_posting_key_body(_params), do: :invalid
 
   # Putting an agent on a Key names the Key, and the agent by its wallet;
-  # naming no agent takes the Key's agent off.
+  # naming none, taking the Key's agent off, is refused past here as the
+  # person's alone.
   defp check_agent_key_body(%{"agent_wallet" => wallet} = params) do
     if is_binary(wallet) and Regex.match?(@wallet, wallet),
       do: check_posting_key_body(Map.delete(params, "agent_wallet")),

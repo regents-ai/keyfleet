@@ -1239,21 +1239,23 @@ answer keys (with an agent first, then by number), agents and yours
 
 ## regents keyfleet keys assign-agent <fleet> <key>
 
-- **Purpose:** puts one of the agent's person's paired agents on one of their Keys in the
-  fleet, or takes the Key's agent off, as the person's Account page does.
+- **Purpose:** puts one of the agent's person's paired agents that is on no Key in the
+  fleet, itself included, onto one of their Keys there that has no agent. Only the person
+  moves an agent that is on a Key or takes one off, under Your Keys on their Account page.
 - **Access:** a paired agent signed in with its wallet (wallet proof), whose person has
   signed in on this site.
 - **Changes:** which of the person's agents is on the Key (write). An agent is on at most
-  one Key in a fleet and a Key has at most one agent, so the agent leaves any other Key it
-  was on there, and the Key's agent before leaves it.
+  one Key in a fleet and a Key has at most one agent.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/agent_keys/assign` → `assignAgentKey`
 - **Inputs:** `<fleet>`, `<key>` (body `token_id`), one of the Keys the person's wallets
   hold in the fleet now, and `--agent WALLET` (body `agent_wallet`), the wallet of one of
-  the agents paired with the person now; leave it out to take the Key's agent off.
+  the agents paired with the person now.
 - **Answer:** as `keys agents` answers, with the change made.
-- **Refusals:** 403 `person_not_here`; 409 `key_not_held`: the person's wallets don't hold
-  this Key now; 409 `agent_unknown`: no agent paired with the person now has that wallet;
-  409 `agent_keys_changed`: another change to this Key's agent was saved first, so read
+- **Refusals:** 403 `person_not_here`; 403 `person_only`: the agent named is on another Key,
+  even one the person no longer holds, the Key has another agent, or `--agent` was left
+  out, and only the person makes that change; 409 `key_not_held`: the person's wallets don't hold this Key
+  now; 409 `agent_unknown`: no agent paired with the person now has that wallet; 409
+  `agent_keys_changed`: another change to this Key's agent was saved first, so read
   `keys agents` again and send it again if it still applies; and those every writing
   command shares. A refused request changes nothing.
 
@@ -1262,14 +1264,16 @@ Server:
 ```text
 Keys.assign_agent(fleet, key, agent_wallet) as the agent, for its paired person
   the person hasn't signed in here -> 403 person_not_here
+  no agent_wallet -> 403 person_only
   the person's wallets don't hold the Key now -> 409 key_not_held
   in one transaction, locking in one order so two writes at once run in turn:
     lock the signing agent's pairing and the named agent's, in wallet order
       the signing agent is no longer paired -> 403 agent_not_paired
       no pairing of the person's now has agent_wallet -> 409 agent_unknown
     lock the person's rows for this Key and the named agent's Key, lowest first
-    take the agent off its other Key in the fleet, and put it on this one (or
-    none) in place of the Key's agent
+      the Key has another agent paired now -> 403 person_only
+      the named agent is on another Key, held or not -> 403 person_only
+    put the agent on this Key
       a Key with no row was given an agent by another write meanwhile
         -> 409 agent_keys_changed
 answer as keys agents
