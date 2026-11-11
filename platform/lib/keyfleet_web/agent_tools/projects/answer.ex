@@ -91,7 +91,8 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
   defp your_key(actor, fleet_id),
     do: with(%{token_id: token_id} <- Keys.identity(actor, fleet_id), do: token_id)
 
-  # A Key's own project is the active one it holds.
+  # A Key's own project is the active one it holds; with no Key, none is.
+  defp yours?(_project, nil), do: false
   defp yours?(project, key), do: project.state == :active and project.key == key
 
   defp project(project, key) do

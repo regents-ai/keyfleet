@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.AgentWalkTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Projects, Rooms}
+  alias KeyfleetWeb.AgentTools.Projects.Answer
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -18,6 +19,8 @@ defmodule KeyfleetWeb.AgentWalkTest do
   @notebook "nb-0123456789abcdef"
   @person "0x" <> String.duplicate("b", 40)
   @subject "did:privy:test-walk-person"
+  @keyless "0x" <> String.duplicate("d", 40)
+  @keyless_subject "did:privy:test-walk-keyless"
 
   setup do
     owner =
@@ -158,6 +161,32 @@ defmodule KeyfleetWeb.AgentWalkTest do
     # The result, reported in a room.
     report = %{body: "Added log/walk.md to Walk log.", idempotency_key: "report"}
     assert {201, _report} = step(agent, "POST", "#{fleet}/rooms/welcome/messages/send", report)
+  end
+
+  # Costly failure: an agent with no Key in the fleet is told a shared project,
+  # which no Key holds, is its own.
+  test "an actor with no Key in the fleet has no project of its own", %{agent: agent} do
+    # An agent whose person holds no Key here is refused the list, with the way on.
+    Keyfleet.Accounts.register_verified!(@keyless_subject, @keyless, [@keyless], actor: %System{})
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(
+        actor: %RegentAgents.Person{privy_user_id: @keyless_subject}
+      )
+
+    pairing = %{code: code, name: "Keyless", harness: "claude_code"}
+    assert {201, _paired} = step(agent, "POST", "/api/agents/v1/pair", pairing)
+
+    assert {403, refused} = step(agent, "GET", "/api/v1/agent/fleets/#{@fleet}/projects")
+    assert next_step?(refused, "not_a_key_holder")
+
+    # An actor the list lets in can still have no Key when the answer reads it, as
+    # the system actor never has one: no project is its own.
+    assert {200, %{your_key: nil, your_project: nil, projects: [_ | _] = projects}, nil} =
+             Answer.answer(:list, %{"fleet_id" => @fleet}, %System{}, nil)
+
+    assert Enum.any?(projects, &(&1.state == :active and &1.key == nil))
+    refute Enum.any?(projects, & &1.yours)
   end
 
   # A refusal with `code` that says what to do next.
