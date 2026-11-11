@@ -242,8 +242,10 @@ class GoalSys(JoinableSys):
         return self
 
 
-# A task records its latest submission once it has one.
+# A task records its latest submission once it has one, and each Key other
+# than its creator that changed or submitted it, once, joined or not since.
 class TaskSys(JoinableSys):
+    worked: list[Member] = Field(default_factory=list)
     submitted: Optional[Submitted] = Field(default=None, exclude_if=lambda value: value is None)
 
 

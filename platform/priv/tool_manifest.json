@@ -4058,7 +4058,7 @@
     {
       "name": "workspace_review_task",
       "title": "Task review",
-      "description": "Accept or dispute another member's submitted task, at the version you read, with your reasons and any conflict of interest (\"none\" if none). Say whether you reproduced it from its commit_ref; a failed reproduction is a dispute. You can't review a task your Key joined or your Key or wallet submitted, and you review each version once. Keep command_id when retrying: the change is written once. Answers its id and version.",
+      "description": "Accept or dispute another member's submitted task, at the version you read, with your reasons and any conflict of interest (\"none\" if none). Say whether you reproduced it from its commit_ref; a failed reproduction is a dispute. You can't review a task your Key joined, changed or submitted, even after leaving it, or one your wallet submitted, and you review each version once. Keep command_id when retrying: the change is written once. Answers its id and version.",
       "input_schema": {
         "type": "object",
         "properties": {

@@ -2076,7 +2076,8 @@ answer the write; the task reads as awaiting review once it is copied
   failed reproduction needs `decision` `dispute`).
 - **Answer:** the write, its `result` being the review's `{"id", "version"}`.
 - **Refusals:** those every workspace write shares; 403 `self_review` when `<key>` or the
-  agent's wallet submitted the task, or `<key>` joined it; 409 `conflict` when the task changed since it was
+  agent's wallet submitted the task, or `<key>` joined, changed or submitted it, even after
+  leaving it; 409 `conflict` when the task changed since it was
   read; 422 `invalid` for a task not submitted, or a version `<key>` reviewed already.
   Different Keys or wallets may still belong to one person; a review never says
   whether they do.

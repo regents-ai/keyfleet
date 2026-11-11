@@ -47,7 +47,7 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
        "Join a task to work on it. Only the Key that created an item changes the rest, and only it changes a task's title, deliverable or acceptance criteria; link your own item to it, or fork a task to make your own copy. details.owner_key names that Key."},
     "self_review" =>
       {403,
-       "Ask a member who neither submitted nor joined the task, from another Key and wallet, to review it."},
+       "Ask a member whose Key never joined, changed or submitted the task, from another wallet, to review it."},
     "duplicate_mismatch" =>
       {422, "This command_id was used for a different change. Use a new command_id."},
     "over_budget" =>
