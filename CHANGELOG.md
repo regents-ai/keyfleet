@@ -7092,3 +7092,5 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
   a faded orange when not done or not known yet. Each dot opens a few words
   on what it is and how to put it right; the header's tip is gone. Marked
   says a Key waiting for its automatic start needs no mark.
+- Check: `test/browser/setup_list.spec.ts` walks a purchase to "You're in", then
+  the setup list from Pair to Present until it is gone.

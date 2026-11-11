@@ -1094,9 +1094,10 @@ features:
     proofs:
       - platform/test/keyfleet/agents/upkeep_test.exs
       - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/browser/setup_list.spec.ts
     gaps:
-      - No test pairs an agent while the page is open; the list reads again on the same notice a check-in sends, which is tested.
-      - The Shard press and Buy are the existing wallet flows; nothing walks them from the setup list or the Buy Key window in a browser. WebKit is not run on the Mac.
+      - A check-in and a Key marked present tell no open page, so Daily run and Present tick only when the page is next read or another notice comes; the browser walk reads the page again for those two.
+      - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
 
   - id: agent-setup-dots
     what: >-

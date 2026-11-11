@@ -80,6 +80,9 @@ export const issueShard = (fleet: string, key: number, wallet: string, days: num
 export const endShard = (fleet: string, key: number, wallet: string, by: string) =>
   void call("end_shard!", [fleet, key, wallet, by])
 
+/** The chain records every Key `owner` holds in the fleet marked present just now. */
+export const markPresent = (fleet: string, owner: string) => void call("present!", [fleet, owner])
+
 /** `owner` has allowed every fleet `atoms` USDC from now on. */
 export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [owner, atoms])
 

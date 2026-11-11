@@ -22,7 +22,8 @@ defmodule Keyfleet.BrowserChain do
   was accepted until `refuse_draw!/3` says it was turned down. A wallet has
   allowed a fleet the USDC `allow!/2` names, and none until then. A step a
   page's wallet sent is on the chain once `land!/3` puts it on the server's
-  `Keyfleet.TestChainNode`.
+  `Keyfleet.TestChainNode`. A Key is marked present once `present!/2` logs
+  it.
   """
 
   alias Keyfleet.Actors.Agent
@@ -68,6 +69,7 @@ defmodule Keyfleet.BrowserChain do
   @shard_is_active Call.selector("isActive(uint256,address)")
   @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
   @shard_ended Event.topic0("ShardEnded(uint256,address,address)")
+  @present Event.topic0("Present(uint256,uint64,uint64,uint64)")
   # A plain wallet signed in on Base, where the keys are.
   @agent %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
@@ -345,6 +347,30 @@ defmodule Keyfleet.BrowserChain do
           0
         )
       ]
+    end)
+  end
+
+  @doc """
+  Every Key `owner` holds in the fleet was marked present just now, as an
+  agent's daily mark logs it on the fleet's vote contract.
+  """
+  def present!(fleet_id, owner) do
+    keys = Keys.keys_held_in_fleet!(fleet_id, [owner], actor: @system)
+    at = DateTime.to_unix(DateTime.utc_now())
+
+    pass!(fleet_id, fn fleet, block ->
+      keys
+      |> Enum.with_index()
+      |> Enum.map(fn {key, index} ->
+        log(
+          fleet.votes_address,
+          [@present, word(key.token_id)],
+          word_data([at, block, key.ownership_epoch]),
+          fleet.id,
+          block,
+          index
+        )
+      end)
     end)
   end
 

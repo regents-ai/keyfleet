@@ -14,6 +14,7 @@ defmodule Keyfleet.BrowserAgents do
   """
 
   alias Keyfleet.Actors.Agent
+  alias Keyfleet.Agents
   alias Keyfleet.Capabilities
   alias Keyfleet.PairingHelpers
   alias KeyfleetWeb.SignedAgentHelpers
@@ -118,20 +119,35 @@ defmodule Keyfleet.BrowserAgents do
     )
   end
 
-  @doc "Pairs `agent` with the person whose wallet is `person`, making their account first."
-  def pair!(agent, person) do
-    PairingHelpers.pair!(
-      %Agent{
-        wallet_address: agent,
-        chain_id: 8453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      },
-      [person]
-    )
+  @doc """
+  `agent`'s daily run checks in with the fleet, as a sync from its scheduled
+  run does, with a profile of its own made the first time. Like a real
+  check-in, it tells no open page.
+  """
+  def check_in!(agent, fleet_id) do
+    {:ok, actor} = Agents.with_pairing(agent_actor(agent))
+    Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"}, actor: actor)
+
+    {:ok, _check_ins} =
+      Agents.check_in(actor, fleet_id, %{"kind" => "scheduled", "every_minutes" => 1440})
 
     :ok
   end
+
+  @doc "Pairs `agent` with the person whose wallet is `person`, making their account first."
+  def pair!(agent, person) do
+    PairingHelpers.pair!(agent_actor(agent), [person])
+    :ok
+  end
+
+  # `agent` signed in on Base, where the Keys are.
+  defp agent_actor(agent),
+    do: %Agent{
+      wallet_address: agent,
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp verify(conn, secret) do
     {:ok, raw, conn} = Plug.Conn.read_body(conn)
