@@ -7294,7 +7294,10 @@ and `fleet_map.spec.ts:156` fail on main as they do here.
   (`KeyfleetWeb.Components.VerifiedConnections`), the posting-Key hint
   (`KeyfleetWeb.PostingKeyChoice`), the agents' "Once paired, an agent may"
   tip line (`KeyfleetWeb.AgentsPanel`), the Points total's line and the
-  Points bonus tip. `KeyfleetWeb.Components.PageHead` loses its tip slot.
+  Points bonus tip. The bonus rule it carried (which NFTs count and how the
+  30-day period bonus applies) moves to the Points section of
+  `platform/priv/public/docs.md`. `KeyfleetWeb.Components.PageHead` loses its
+  tip slot.
   Headings, empty states with their action and the words beside a disabled
   on-chain button stay. Sentences drawn by the shared `Regent.*` components
   are unchanged.
