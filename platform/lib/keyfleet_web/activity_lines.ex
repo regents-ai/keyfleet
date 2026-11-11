@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.ActivityLines do
   @moduledoc """
   Tells an item of a fleet's activity (`Keyfleet.Activity`) as one plain
-  sentence.
+  line, in the style of an activity list: a sentence with no closing full
+  stop, "Key 68 moved to 0xac95..4315".
 
   `parts/1` answers the sentence as a list of parts: the site's own words as
   text, and everything a member wrote or chose as one of
@@ -24,9 +25,6 @@ defmodule KeyfleetWeb.ActivityLines do
   the one way every page writes them, "Key 1,234".
 
   `text/1` joins the parts for a web page, which escapes them itself.
-  `markdown/1` joins them for Markdown, passing every member's words through
-  `KeyfleetWeb.DirectoryMD.inline/2`, so none of them can act as Markdown
-  either.
   """
 
   alias Keyfleet.Fleets.Rules
@@ -81,15 +79,8 @@ defmodule KeyfleetWeb.ActivityLines do
   # The Keys a moved line names before counting the rest.
   @listed 3
 
-  # How long words the site didn't write may run in Markdown, by what they
-  # are.
-  @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160}
-
-  @doc "The item as one sentence for a web page."
+  @doc "The item as one line for a web page."
   def text(item), do: item |> parts() |> Enum.map_join(&shown/1)
-
-  @doc "The item as one sentence of Markdown, with every member's words escaped."
-  def markdown(item), do: item |> parts() |> Enum.map_join(&marked/1)
 
   @doc "The item as a list of parts; see the module documentation."
   def parts(item), do: item |> sentence() |> opening()
@@ -125,7 +116,7 @@ defmodule KeyfleetWeb.ActivityLines do
   end
 
   defp sentence(%{kind: :room_named, facts: f}),
-    do: [key(f.by), " named a room ", words(f.topic), "."]
+    do: [key(f.by), " named a room ", words(f.topic)]
 
   # "added 4 tasks, took one on and gave 2 to Keys 4 and 8": once "added"
   # has said tasks, the rest count them by number.
@@ -143,14 +134,14 @@ defmodule KeyfleetWeb.ActivityLines do
         & &1
       )
 
-    [who(f.by), " " | did |> joined() |> List.flatten()] ++ ["."]
+    [who(f.by), " " | did |> joined() |> List.flatten()]
   end
 
   defp sentence(%{kind: :created, facts: %{by: by, item: item}}) do
     case {Map.fetch(@created, item.type), item.title} do
-      {{:ok, did}, nil} -> [who(by), did, "."]
-      {{:ok, did}, _title} -> [who(by), did, ": ", item(item) | confidence(item)] ++ ["."]
-      {:error, _title} -> [who(by), " added ", item(item), "."]
+      {{:ok, did}, nil} -> [who(by), did]
+      {{:ok, did}, _title} -> [who(by), did, ": ", item(item) | confidence(item)]
+      {:error, _title} -> [who(by), " added ", item(item)]
     end
   end
 
@@ -158,52 +149,52 @@ defmodule KeyfleetWeb.ActivityLines do
          %{kind: :claimed, facts: %{by: %{token_id: token_id} = by, to: %{token_id: token_id}}} =
            item
        ),
-       do: [key(by), " took on ", item(item.facts.item), "."]
+       do: [key(by), " took on ", item(item.facts.item)]
 
   defp sentence(%{kind: :claimed, facts: f}),
-    do: [who(f.by), " gave ", item(f.item), " to ", key(f.to), "."]
+    do: [who(f.by), " gave ", item(f.item), " to ", key(f.to)]
 
-  defp sentence(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
+  defp sentence(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again"]
 
   defp sentence(%{kind: :submitted, facts: f}),
-    do: [who(f.by), " submitted ", item(f.item), " for review."]
+    do: [who(f.by), " submitted ", item(f.item), " for review"]
 
   defp sentence(%{kind: :reviewed, facts: %{decision: "accept"} = f}),
-    do: [who(f.by), " accepted ", item(f.item), "."]
+    do: [who(f.by), " accepted ", item(f.item)]
 
   defp sentence(%{kind: :reviewed, facts: %{decision: "dispute"} = f}),
-    do: [who(f.by), " disputed ", item(f.item), "."]
+    do: [who(f.by), " disputed ", item(f.item)]
 
   defp sentence(%{kind: :progress, facts: f}),
-    do: [who(f.by), " marked ", item(f.item), " " <> choice("progress", f.progress) <> "."]
+    do: [who(f.by), " marked ", item(f.item), " " <> choice("progress", f.progress)]
 
   defp sentence(%{kind: :status, facts: %{status: "open"} = f}),
-    do: [who(f.by), " reopened ", item(f.item), "."]
+    do: [who(f.by), " reopened ", item(f.item)]
 
   defp sentence(%{kind: :status, facts: f}),
-    do: [who(f.by), " marked ", item(f.item), " #{f.status}."]
+    do: [who(f.by), " marked ", item(f.item), " #{f.status}"]
 
-  defp sentence(%{kind: :revised, facts: f}), do: [who(f.by), " revised ", item(f.item), "."]
-  defp sentence(%{kind: :joined, facts: f}), do: [who(f.by), " joined ", item(f.item), "."]
-  defp sentence(%{kind: :left, facts: f}), do: [who(f.by), " left ", item(f.item), "."]
-  defp sentence(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item), "."]
+  defp sentence(%{kind: :revised, facts: f}), do: [who(f.by), " revised ", item(f.item)]
+  defp sentence(%{kind: :joined, facts: f}), do: [who(f.by), " joined ", item(f.item)]
+  defp sentence(%{kind: :left, facts: f}), do: [who(f.by), " left ", item(f.item)]
+  defp sentence(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item)]
 
   defp sentence(%{kind: :changes, facts: f}) do
     {did, rest} = Map.fetch!(@changes, f.change)
-    [who(f.by), did, "#{Rules.grouped(f.count)} #{Map.get(@plural, f.type, "items")}#{rest}."]
+    [who(f.by), did, "#{Rules.grouped(f.count)} #{Map.get(@plural, f.type, "items")}#{rest}"]
   end
 
   defp sentence(%{kind: :linked, facts: %{relation: "supports"} = f}),
-    do: [who(f.by), " backed ", item(f.target), " with ", item(f.source), "."]
+    do: [who(f.by), " backed ", item(f.target), " with ", item(f.source)]
 
   defp sentence(%{kind: :linked, facts: %{relation: "contradicts"} = f}),
-    do: [who(f.by), " raised a problem with ", item(f.target), ": ", item(f.source), "."]
+    do: [who(f.by), " raised a problem with ", item(f.target), ": ", item(f.source)]
 
   defp sentence(%{kind: :linked, facts: %{relation: "produces"} = f}),
-    do: [item(f.source), " produced ", item(f.target), "."]
+    do: [item(f.source), " produced ", item(f.target)]
 
   defp sentence(%{kind: kind, facts: %{token_ids: [token_id]}}) when kind in [:sale, :given],
-    do: ["Key #{Rules.grouped(token_id)} was #{@first_owner[kind]}."]
+    do: ["Key #{Rules.grouped(token_id)} was #{@first_owner[kind]}"]
 
   defp sentence(%{kind: kind, facts: %{token_ids: [first | _] = token_ids}})
        when kind in [:sale, :given] do
@@ -214,32 +205,31 @@ defmodule KeyfleetWeb.ActivityLines do
         do: "Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}",
         else: Rules.keys(length(token_ids))
 
-    ["#{keys} were #{@first_owner[kind]}."]
+    ["#{keys} were #{@first_owner[kind]}"]
   end
 
   # A run of transfers to one wallet (`KeyfleetWeb.FeedLines`).
   defp sentence(%{kind: :moved, facts: f}),
-    do: moved(f.token_ids) ++ [" moved to ", {:address, f.to}, "."]
+    do: moved(f.token_ids) ++ [" moved to ", {:address, f.to}]
 
   defp sentence(%{kind: :shard_issued, facts: f}),
     do: [
       shard_holder(f),
       " holds a shard of Key #{Rules.grouped(f.token_id)} until " <>
-        Calendar.strftime(f.expires_at, "%-d %B %Y") <> "."
+        Calendar.strftime(f.expires_at, "%-d %B %Y")
     ]
 
   defp sentence(%{kind: :shard_ended, facts: %{stepped_down?: true} = f}),
-    do: [shard_holder(f), " stepped down from its shard of Key #{Rules.grouped(f.token_id)}."]
+    do: [shard_holder(f), " stepped down from its shard of Key #{Rules.grouped(f.token_id)}"]
 
   defp sentence(%{kind: :shard_ended, facts: f}),
     do: [
       "The owner of Key #{Rules.grouped(f.token_id)} ended the shard of ",
-      shard_holder(f),
-      "."
+      shard_holder(f)
     ]
 
   defp sentence(%{kind: :proposed, facts: f}),
-    do: [holder(f.proposer), " put ", proposal(f), " to a vote."]
+    do: [holder(f.proposer), " put ", proposal(f), " to a vote"]
 
   defp sentence(%{kind: :votes, facts: f}) do
     votes =
@@ -248,10 +238,10 @@ defmodule KeyfleetWeb.ActivityLines do
       |> Enum.intersperse([" and "])
       |> List.flatten()
 
-    votes ++ [" on ", proposal(f), "."]
+    votes ++ [" on ", proposal(f)]
   end
 
-  defp sentence(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out."]
+  defp sentence(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out"]
 
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"
@@ -363,27 +353,11 @@ defmodule KeyfleetWeb.ActivityLines do
   defp shown({:quote, text}), do: "“#{plain(text)}”"
   defp shown({:proposal, number}), do: proposal_name(number)
 
-  defp marked(text) when is_binary(text), do: text
-  defp marked({:key, token_id, nil}), do: key_name(token_id, nil)
-
-  defp marked({:key, token_id, agent}),
-    do: said(agent, :key) <> " (Key #{Rules.grouped(token_id)})"
-
-  defp marked({:item, _id, title}), do: said(title, :item)
-  defp marked({:room, _slug, name}), do: said(name, :room)
-  defp marked({:agent, name}), do: said(name, :agent)
-  defp marked({:address, wallet}), do: RegentFormat.short_address(wallet)
-  defp marked({:quote, text}), do: said(text, :quote)
-  defp marked({:proposal, number}), do: proposal_name(number)
-
-  defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
-
   @doc """
   A member's quoted words as a web page shows them: Markdown's heading
   hashes, bold and code marks dropped, and a link as its words. Posts are
   written in Markdown and quoted from their start, so a quote can carry marks
-  that only mean something in the full post. The Markdown reading keeps them,
-  escaped.
+  that only mean something in the full post.
   """
   def plain(text) do
     text

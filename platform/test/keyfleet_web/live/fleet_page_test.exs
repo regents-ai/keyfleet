@@ -1743,12 +1743,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       line = ~s(#fleet-feed-list li[data-kind="executed"])
       assert has_element?(view, ~s(#{line} a[data-proposal="1"]))
-      assert text(view, "#{line} .activity-line__text") =~ "Proposal 1 was carried out."
+      assert text(view, "#{line} .activity-line__text") =~ "Proposal 1 was carried out"
 
       proposed = ~s(#fleet-feed-list li[data-kind="proposed"])
       wallet = ProposalHelpers.wallet("f")
       assert has_element?(view, ~s(#{proposed} .rg-address [data-copy-text="#{wallet}"]))
-      assert text(view, "#{proposed} .activity-line__text") =~ "put Proposal 1 to a vote."
+      assert text(view, "#{proposed} .activity-line__text") =~ "put Proposal 1 to a vote"
     end
 
     # Each proposal a vote can still change is one line above the hall,
@@ -1803,6 +1803,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                "Keys 3, 4 and 7 moved to 0x3333..3333"
 
       assert has_element?(view, ~s(##{line} .rg-address [data-copy-text="#{heir}"]))
+
+      # The line ends on the wallet and its icons, with no full stop after them.
+      refute text(view, "##{line} .activity-line__text")
+             |> String.trim()
+             |> String.ends_with?(".")
 
       move!(9, heir)
       send(view.pid, {:refresh_activity, @fleet})
@@ -1888,8 +1893,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       view |> element("#fleet-feed-earlier") |> render_click()
       lines = text(view, "#fleet-feed-list")
 
-      assert lines =~ "added a task: “Map every plate”."
-      assert lines =~ "backed “Survey the hull” with “Map every plate”."
+      assert lines =~ "added a task: “Map every plate”"
+      assert lines =~ "backed “Survey the hull” with “Map every plate”"
     end
 
     # Each channel narrows the feed to its kind of line and marks itself
