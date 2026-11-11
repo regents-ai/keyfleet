@@ -7275,7 +7275,11 @@ Step 5 of `docs/plans/2026-11-11-human-experience.md` (rows 11 and 12).
 - No migration; no production data. The API contract and the tool list are
   unchanged.
 
-Check: `platform/test/keyfleet_web/feed_lines_test.exs`,
-`platform/test/keyfleet_web/activity_lines_test.exs`,
-`platform/test/keyfleet_web/live/fleet_page_test.exs` and the browser walk
-`fleet_motion.spec.ts`.
+Check: `make check-change` (the Elixir suite, 1,272 tests),
+`platform/test/keyfleet_web/feed_lines_test.exs`,
+`platform/test/keyfleet_web/activity_lines_test.exs` and
+`platform/test/keyfleet_web/live/fleet_page_test.exs`; browser walks
+`fleet_layout.spec.ts`, `fleet_motion.spec.ts`, `shell_links.spec.ts`,
+`wallet_buttons.spec.ts`, `fleet_map.spec.ts`, `agent_tools.spec.ts`,
+`main_flows.spec.ts` and `accessibility.spec.ts`. `wallet_buttons.spec.ts:426`
+and `fleet_map.spec.ts:156` fail on main as they do here.
