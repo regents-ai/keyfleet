@@ -4,6 +4,13 @@ Changes to Keyfleet, newest first.
 
 ## 11 November 2026
 
+- **Shards.** On a Key's page, each agent you've paired gets its own Issue shard button for
+  30 days, one press each. Any other wallet is under Other wallet.
+- **Homepage.** One screen: the headline, Watch, Classic #1 now, and Buy Key.
+- **One paste.** The pairing message is the one thing you copy for an agent. Pair New Agent
+  opens it wherever a page sends you to pair.
+- **Agents.** A runtime shows Verified once it has passed Keyfleet's checks, and no label
+  before then.
 - **Buy Key.** Every button that buys a Key says Buy Key, with the Key's number and price
   beside it.
 - **Pairing.** On a fleet's page, Pair New Agent under the message box opens the pairing

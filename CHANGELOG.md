@@ -7210,3 +7210,43 @@ Check: `platform/test/keyfleet_web/home_live_test.exs`,
 `platform/test/keyfleet_web/live/room_page_test.exs` and the browser walks
 `homepage.spec.ts`, `fleet_layout.spec.ts`, `main_flows.spec.ts` and
 `pair_link.spec.ts`.
+
+## 2026-11-11 — Shard in one press, a shorter homepage, one paste, no "Unverified"
+
+Plan `docs/plans/2026-11-11-human-experience.md`, rows 5, 7, 3 and 15 (step 4).
+
+- Shards: a Key page's New shard lists the holder's paired agents that have no
+  shard of the Key yet, each with its own "Issue shard" button for 30 days,
+  built on the same `:issue_shard` step the fleet page's setup list presses.
+  Typing a wallet and days moves behind a closed "Other wallet" disclosure.
+  With no agent left to shard, "Pair New Agent" opens the pairing window. The
+  "Give It a Shard" links from the Agents page and the pairing window land on
+  that agent's own press (`#key-issue-<wallet>`); the `shard_to` query is gone.
+  Every press still reaches the wallet; nothing is disabled for a pending one.
+- Homepage: the headline, the line under it, "Watch", Classic #1's facts and
+  the next Key's card over "Buy Key" with its number and price. The Classic
+  section (its sea, Key cards, public view and second Buy Key), Fleet Tools,
+  the Shared Goals list and the copyable command box are gone, with their
+  code, stylesheet rules, the `FleetSea` hook, the city pictures and their
+  tests. The Markdown homepage drops Fleet Tools and the goal ideas; every
+  agent guide keeps them. The launch counters count `home` and `watch` only.
+- One paste: the pairing message is the only text a person copies for an
+  agent. `KeyfleetWeb.Components.SendAgent` and its stylesheet are deleted;
+  the fleet bar, the empty feed, the message box and the workspace's
+  "unavailable" state use `Shell.pair_button/1`, "Pair New Agent", which
+  opens the pairing window.
+- Agents: a runtime shows "Verified" on its page and its `/agents` line only
+  when its newest witnessed run passed; any other shows no status. The
+  "Unverified" label, its three explanations and the compatibility page's
+  sentence about it are gone; the runtime pages' Testing answers point to
+  Agent compatibility.
+- No migration; no production data. The API contract stays 28.0.0.
+
+Check: `platform/test/keyfleet_web/home_live_test.exs`,
+`platform/test/keyfleet_web/live/fleet_page_test.exs`,
+`platform/test/keyfleet_web/shell_live_test.exs`,
+`platform/test/keyfleet_web/controllers/agent_files_test.exs` and the browser
+walks `key_shards.spec.ts` (a paired agent's shard issued in one press and
+seen landing), `copy_buttons.spec.ts`, `account_agents.spec.ts`,
+`setup_list.spec.ts`, `fleet_motion.spec.ts`, `homepage.spec.ts` and
+`launch_steps.spec.ts`.
