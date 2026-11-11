@@ -5166,7 +5166,7 @@ components:
               - {$ref: "#/components/schemas/FleetComingSoonError"}
     WorkspaceConflict:
       description: >-
-        conflict: the object changed since the version the caller named; details carry the current version and the object as it now stands. still_joined: other Keys are still working on the task its creator asked to archive; details.joined_keys names them, and the task is archived once each has left it. project_archived: the item's project is archived and takes no writes of any kind; nothing was written, and details.active names the active projects, where new work goes. request_replayed: the sign-in service has seen this signed request before; sign it again and send it.
+        conflict: the object changed since the version the caller named; details carry the current version and the object as it now stands. project_archived: the item's project is archived and takes no writes of any kind; nothing was written, and details.active names the active projects, where new work goes. request_replayed: the sign-in service has seen this signed request before; sign it again and send it.
       content:
         application/json:
           schema:
@@ -5607,7 +5607,7 @@ components:
           properties:
             code:
               type: string
-              enum: [bad_request, not_found, conflict, still_joined, invalid, forbidden_field, not_owner, self_review, duplicate_mismatch, fleet_unknown, project_unknown, project_archived, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached, pin_target_unknown, pin_unknown, pin_not_yours, notebooks_unavailable, code_unavailable]
+              enum: [bad_request, not_found, conflict, invalid, forbidden_field, not_owner, self_review, duplicate_mismatch, fleet_unknown, project_unknown, project_archived, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached, pin_target_unknown, pin_unknown, pin_not_yours, notebooks_unavailable, code_unavailable]
             message: {type: string}
             hint: {type: string}
             details: {type: object}

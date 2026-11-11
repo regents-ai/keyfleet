@@ -35,9 +35,6 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
     "conflict" =>
       {409,
        "details.object is the item as it is now. Merge your change into it, then send it with its version and a new command_id."},
-    "still_joined" =>
-      {409,
-       "Each Key in details.joined_keys leaves the task itself, with leave. Ask them in the fleet's rooms, then archive it again once they have."},
     "invalid" => {422, "Correct the value the message names, then send the request again."},
     "forbidden_field" =>
       {422,
