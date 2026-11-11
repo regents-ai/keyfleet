@@ -8,11 +8,12 @@ defmodule KeyfleetWeb.WalletPanel do
   The steps are built on the server by `Keyfleet.WalletSteps` for the one
   wallet that may send them: Privy's active wallet, when the signed-in account
   links it. The page receives them before anyone presses. With another wallet
-  active, the figures are built for the account's own wallet, a note names
-  both, and a press sends nothing and says why. Signed out, nothing is built;
-  the Key on sale, the daily split's preview, presence and the launch still
-  show their figures, read from the chain the same way, and all but Buy
-  without their buttons.
+  active, or none, the figures are built for the account's own wallet without
+  its network fee, which no press pays, and a press sends nothing and names
+  the wallet to open; another wallet active is named in a note too. Signed
+  out, nothing is built; the Key on sale, the daily split's preview, presence
+  and the launch still show their figures, read from the chain the same way,
+  and all but Buy without their buttons.
 
   Nothing here disables, hides or holds back a button while anything is
   pending: every press reaches the wallet, and the contract decides. The one
@@ -429,6 +430,7 @@ defmodule KeyfleetWeb.WalletPanel do
       signer: wallet,
       component_id: assigns.id,
       params: %{
+        sending: wallet == assigns.signer,
         inputs: assigns.inputs,
         proposal: assigns.proposal,
         token_id: assigns.token_id,

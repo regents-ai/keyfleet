@@ -16,7 +16,9 @@ defmodule Keyfleet.WalletSteps.Build do
   comes back when a later build no longer names it. Every flow's transactions
   are also named `:no_eth_for_gas` here, in one place, when the signer pays
   its own network fee and holds less ETH than any transaction costs
-  (`Keyfleet.WalletSteps.Reads.short_of_gas?/2`). Nothing else holds a press
+  (`Keyfleet.WalletSteps.Reads.short_of_gas?/2`), unless `sending` is false:
+  the steps then only show the figures of a wallet no press is sent from, so
+  its ETH says nothing about a press. Nothing else holds a press
   back: a pending transaction, a repeat press, or one that only might be
   refused always reaches the wallet, and the contract decides.
 
@@ -98,14 +100,16 @@ defmodule Keyfleet.WalletSteps.Build do
           {:problem, problem, figures} -> {[], figures, problem}
         end
 
-      figures = no_eth_for_gas(steps, signer, Map.put_new(figures, :blocked, %{}))
+      fee_payer = if Map.get(arguments, :sending, true), do: signer
+      figures = no_eth_for_gas(steps, fee_payer, Map.put_new(figures, :blocked, %{}))
       {:ok, request, %{steps: steps, figures: figures, problem: problem}}
     end
   end
 
   # A signer that pays its own fee with less ETH than any transaction costs
-  # can send none of the group's transactions. A signature costs nothing, and
-  # a code or balance the chain didn't answer holds nothing back.
+  # can send none of the group's transactions. A signature costs nothing, a
+  # wallet no press is sent from pays nothing, and a code or balance the chain
+  # didn't answer holds nothing back.
   defp no_eth_for_gas(_steps, nil, figures), do: figures
 
   defp no_eth_for_gas(steps, signer, figures) do

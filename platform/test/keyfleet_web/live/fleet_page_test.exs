@@ -758,6 +758,38 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to 0xaaaa..aaaa. Nothing was sent."
     end
 
+    # Costly failure: with no wallet of the account open, or another wallet
+    # open, Buy says the account's wallet can't pay the network fee, though
+    # the press is never sent from it.
+    test "the network fee holds Buy back only for the wallet that sends", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0, base_fee: 1_000_000)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+
+      for wallet <- [nil, @stranger] do
+        active!(view, wallet)
+        refute has_element?(view, "#buy-key-approve[disabled]")
+        assert text(view, "#buy-key-button-why") == "Approve USDC first"
+      end
+
+      press_fails!(view, "wallet_unavailable")
+      assert text(view, "#buy-key-order-press-note") =~ "Switch to 0xaaaa..aaaa."
+
+      active!(view, nil)
+      press_fails!(view, "wallet_unavailable")
+      assert text(view, "#buy-key-order-press-note") =~ "Open 0xaaaa..aaaa there"
+
+      active!(view, @owner)
+      assert has_element?(view, "#buy-key-approve[disabled]")
+      assert text(view, "#buy-key-button-why") == "Not enough ETH for the network fee"
+
+      press_fails!(view, "wallet_unavailable")
+      assert text(view, "#buy-key-order-press-note") =~ "Switch it to 0xaaaa..aaaa"
+    end
+
     # Costly failure: a press on the wallet panel is acted on for a sign-in
     # that has already ended elsewhere.
     test "a press after the sign-in ended elsewhere does nothing and the page moves to sign-in",
@@ -2109,10 +2141,17 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     render_async(view, 3_000)
   end
 
+  defp press_fails!(view, reason) do
+    view
+    |> with_target("#buy-key-order")
+    |> render_hook("step_failed", %{"step" => "buy", "reason" => reason})
+  end
+
   # The chain the buy steps read: the Keys sold (150 unless `:minted` says),
   # the next Key's price (Key 151's unless `:price` says; `:sold_out` when the
   # manager refuses to price one), sales open since long ago, and the
-  # wallet's USDC allowance to the fleet.
+  # wallet's USDC allowance to the fleet, at a base fee of `:base_fee` (none
+  # unless it says).
   defp chain!(opts) do
     selectors = %{
       allowance: Call.selector("allowance(address,address)"),
@@ -2121,7 +2160,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       price: Call.selector("nextPrice()")
     }
 
-    StubClient.put_chain(chain_head(1_000), [],
+    head = %{chain_head(1_000) | base_fee: Keyword.get(opts, :base_fee, 0)}
+
+    StubClient.put_chain(head, [],
       calls: fn _to, data, _hash -> answer(data, selectors, opts) end
     )
   end

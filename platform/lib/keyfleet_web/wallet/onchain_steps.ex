@@ -132,8 +132,10 @@ defmodule KeyfleetWeb.OnchainSteps do
       reason == "step_unknown" ->
         "This can't be sent as it stands. Check the details above, then press again. Nothing was sent."
 
+      # The wallet app answered for another account than the one the steps
+      # were built for: it is open on another wallet, or changed during the press.
       true ->
-        "Your wallet changed during the press, so nothing was sent. Press again."
+        "Your wallet app is on a different wallet, so nothing was sent. Switch it to #{short(signer(linked, active))}, then press again."
     end
   end
 
