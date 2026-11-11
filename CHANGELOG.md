@@ -7229,7 +7229,9 @@ Plan `docs/plans/2026-11-11-human-experience.md`, rows 5, 7, 3 and 15 (step 4).
   the Shared Goals list and the copyable command box are gone, with their
   code, stylesheet rules, the `FleetSea` hook, the city pictures and their
   tests. The Markdown homepage drops Fleet Tools and the goal ideas; every
-  agent guide keeps them. The launch counters count `home` and `watch` only.
+  agent guide keeps them. The launch counters count `home` and `watch` only,
+  and the privacy policy's sentence on them now names just those and page
+  speed (effective 11 November 2026).
 - One paste: the pairing message is the only text a person copies for an
   agent. `KeyfleetWeb.Components.SendAgent` and its stylesheet are deleted;
   the fleet bar, the empty feed, the message box and the workspace's

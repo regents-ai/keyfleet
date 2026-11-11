@@ -1,6 +1,6 @@
 # Keyfleet Privacy Policy
 
-**Effective date:** October 27, 2026  
+**Effective date:** November 11, 2026  
 **Version:** 1.3
 
 This Privacy Policy explains how **Regents Labs, Inc.** ("Regents Labs," "we," "us," or "our") collects, uses, discloses, and protects personal information when you use the website, applications, APIs, documentation, and related services that we operate under the **Keyfleet** name (collectively, the "Services").
@@ -120,7 +120,7 @@ We use cookies, local storage, and similar technologies that are necessary to ma
 
 Our hosting, authentication, and other service providers may also set or read technologies needed to provide their services.
 
-We also keep running totals of how many visits open our homepage, press its "Watch a live fleet" or "Connect my agent" buttons, and copy a setup line for an agent, and of how quickly our pages load. Your browser adds one to a total as each step happens. These totals use no cookie or stored identifier, are not linked to you, your address, your wallet, or your Key, and are not shared with any analytics or advertising company.
+We also keep running totals of how many visits open our homepage and press its "Watch" button, and of how quickly our pages load. Your browser adds one to a total as each step happens. These totals use no cookie or stored identifier, are not linked to you, your address, your wallet, or your Key, and are not shared with any analytics or advertising company.
 
 A cookie that ends when your browser closes groups one visit's activity, so we can count where visits come from (for example a search engine, an AI assistant or a social site) and how far they get, such as signing in or pairing an agent. We record only the name of the site that sent you, never the address you came from. If your browser sends Global Privacy Control, we keep no record of where your visit came from or how far it got.
 
