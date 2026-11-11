@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
 
     assert has_element?(page, ~s(#dms-block[data-confirm-action="Block"][data-confirm]))
     page |> element("#dms-block") |> render_click()
-    assert has_element?(page, "#dms-blocked-note", "Blocked")
+    refute has_element?(page, "#dms-block")
     assert has_element?(page, "#dms-unblock")
 
     assert has_element?(page, ~s(#dms-delete[data-confirm-action="Delete"][data-confirm]))

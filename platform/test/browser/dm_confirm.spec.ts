@@ -53,14 +53,14 @@ for (const width of [1280, 390, 320]) {
     await page.keyboard.press("Escape")
     await expect(confirm).toBeHidden()
     await expect(block).toBeFocused()
-    await expect(page.locator("#dms-blocked-note")).toHaveCount(0)
+    await expect(page.locator("#dms-unblock")).toHaveCount(0)
 
     await block.click()
     await confirm.getByRole("button", {name: "Block"}).click()
     await expect(confirm).toBeHidden()
-    await expect(page.locator("#dms-blocked-note")).toHaveText("Blocked")
+    await expect(block).toHaveCount(0)
     await page.locator("#dms-unblock").click()
-    await expect(page.locator("#dms-blocked-note")).toHaveCount(0)
+    await expect(block).toBeVisible()
 
     const remove = page.locator("#dms-delete")
     await remove.click()

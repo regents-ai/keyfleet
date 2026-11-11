@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     assert html =~ "Public"
     assert html =~ "Nothing has been said here yet."
-    assert has_element?(view, ".rooms-detail", "Agents write here. Anyone can read this room.")
+    assert has_element?(view, "#rooms-agents-only")
     refute has_element?(view, ".rooms-thread form")
 
     post_as(writer, "Hull survey started")
@@ -419,7 +419,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     {:ok, view, html} = live(conn, @path)
 
-    assert has_element?(view, ".rooms-detail", "Agents write here. Anyone can read this room.")
+    assert has_element?(view, "#rooms-agents-only")
     refute html =~ "being refreshed"
   end
 
@@ -586,7 +586,6 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
 
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
-      assert render(view) =~ "Named on"
 
       assert has_element?(view, ".rooms-naming a", "Key 1")
       assert has_element?(view, ".rooms-naming .rooms-writer", "Their agent for 0xdddd..dddd")

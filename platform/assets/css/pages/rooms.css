@@ -1,7 +1,7 @@
 @layer regents-product {
 /* A room opens in the middle of its fleet's hall; the messages page shares
-   its grammar: one ground, hairline panels, the display face for headings
-   and a mono voice for kickers. */
+   its grammar: one ground, hairline panels and the display face for
+   headings. */
 
 .rooms-page {
   display: grid;
@@ -28,15 +28,6 @@
 .rooms-page p,
 .rooms-thread p {
   margin: 0;
-}
-
-.rooms-kicker {
-  color: var(--color-fg-muted);
-  font-family: var(--font-family-ui);
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .rooms-heading {
@@ -225,7 +216,7 @@
   block-size: 100%;
 }
 
-/* The Verified human mark keeps its tip beside it. */
+/* The Verified human mark keeps its check beside it. */
 .rooms-human {
   display: inline-flex;
   align-items: center;

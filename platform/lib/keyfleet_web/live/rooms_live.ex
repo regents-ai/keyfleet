@@ -97,9 +97,6 @@ defmodule KeyfleetWeb.RoomsLive do
             true -> "Keys only"
           end}
         </h2>
-        <p :if={@room.topic} class="rooms-detail">
-          Named on <KeyfleetWeb.Time.local id="rooms-named-at" at={@room.topic_set_at} as={:stamp} />
-        </p>
       </header>
 
       <section
@@ -109,7 +106,6 @@ defmodule KeyfleetWeb.RoomsLive do
         aria-labelledby="rooms-muted-title"
       >
         <h3 id="rooms-muted-title">Muted Keys</h3>
-        <p class="rooms-detail">Only you stop seeing their posts.</p>
         <ul>
           <li :for={token_id <- Enum.sort(@room.muted)} id={"rooms-muted-#{token_id}"}>
             Key {Rules.grouped(token_id)}
@@ -125,8 +121,6 @@ defmodule KeyfleetWeb.RoomsLive do
           </li>
         </ul>
       </section>
-
-      <p :if={is_nil(@room.room_id) and @room.key?}>Choose one of this fleet’s rooms instead.</p>
 
       <div :if={is_nil(@room.room_id) and not @room.key?} id="rooms-locked">
         <.notice notice={@notice} />
@@ -256,25 +250,8 @@ defmodule KeyfleetWeb.RoomsLive do
           </Regent.Primitives.button>
         </div>
 
-        <.footnote
-          :if={@room.people?}
-          class="rooms-detail"
-          text="Anyone signed in writes here. Anyone can read this room."
-          tip_id="rooms-who-posts"
-          tip_label="About who writes here"
-        >
-          People write here with a Key or without one, and so do agents paired with a person. A post written as a Key shows which one.
-        </.footnote>
-
-        <.footnote
-          :if={not @room.people?}
-          class="rooms-detail"
-          text={"Agents write here." <> if(@room.public, do: " Anyone can read this room.", else: "")}
-          tip_id="rooms-who-posts"
-          tip_label="About who writes here"
-        >
-          Agents holding this fleet’s Keys or a shard of one write in its rooms, and so do agents paired with a Key holder. To be quoted, ask your agent from the right of this page.
-        </.footnote>
+        <p :if={@room.people?} class="rooms-detail">Anyone can read this room.</p>
+        <p :if={not @room.people?} id="rooms-agents-only" class="rooms-detail">Agents only</p>
       </div>
     </section>
     """
@@ -329,21 +306,19 @@ defmodule KeyfleetWeb.RoomsLive do
     </.link>
     <.agent_picture :if={@message.author.picture} src={@message.author.picture} />
     <.writer id={"rooms-writer-#{@message.id}"} author={@message.author} />
-    <small :if={@message.quoting?} class="rooms-writer">Quoting its person</small>
-    <.verified_human :if={@message.author.human_backed} id={"rooms-human-#{@message.id}"} />
+    <small :if={@message.quoting?} class="rooms-writer">
+      <span aria-hidden="true">“</span>
+      <span class="visually-hidden">Quoting its person</span>
+    </small>
+    <.verified_human :if={@message.author.human_backed} />
     """
   end
-
-  attr :id, :string, required: true
 
   @doc "The mark beside an agent's name when a verified person stands behind it."
   def verified_human(assigns) do
     ~H"""
     <small class="rooms-writer rooms-human">
       <Regent.Icons.icon name="check" /> Verified human
-      <Regent.Primitives.tip id={@id} label="About Verified human">
-        A real person verified with World ID stands behind this agent. Who they are stays private.
-      </Regent.Primitives.tip>
     </small>
     """
   end
@@ -679,10 +654,7 @@ defmodule KeyfleetWeb.RoomsLive do
       kind: room && room.kind,
       public: room != nil and room.public,
       people?: room != nil and room.slug == Room.people_slug(),
-      name: room && room_label(room),
-      topic: room && room.topic,
-      topic_set_by: room && room.topic_set_by,
-      topic_set_at: room && room.topic_set_at
+      name: room && room_label(room)
     })
   end
 

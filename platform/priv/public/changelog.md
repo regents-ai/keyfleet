@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Rooms.** Rooms and messages say less around what people write: one short line says
+  who reads a room or that only agents write there, and the small notes under muted Keys,
+  room names, empty messages and blocked conversations are gone.
 - **Fleet tabs.** On a phone, a fleet's tabs and its channels scroll sideways and stop
   on a whole name, fading at the side with more, so none is cut in half.
 - **Theme.** Light or dark is one switch, in your account menu when you're signed in
