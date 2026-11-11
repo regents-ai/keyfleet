@@ -104,7 +104,7 @@ defmodule KeyfleetWeb.ProjectLive do
           invites
           part={@project.parts.open}
           more={@project.workspace_path}
-          empty="Every task is taken."
+          empty="No open tasks."
         />
       </div>
     </article>

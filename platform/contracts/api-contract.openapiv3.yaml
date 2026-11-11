@@ -7645,10 +7645,10 @@ components:
               kind:
                 type: string
                 description: >-
-                  post, posts, room_named, created, claimed, unclaimed, submitted, progress, status,
-                  revised, joined, left, archived, reviewed, linked, tasks, changes, sale, given,
-                  transfer, shard_issued, shard_ended, proposed, votes or executed; /docs#activity
-                  lists each kind's facts
+                  post, posts, room_named, created, submitted, progress, status, revised, joined,
+                  left, archived, reviewed, linked, tasks, changes, sale, given, transfer,
+                  shard_issued, shard_ended, proposed, votes or executed; /docs#activity lists each
+                  kind's facts
               facts: {type: object, description: What a sentence about the item needs, with Keys, agents, rooms and workspace items already named}
     SearchRequest:
       type: object
@@ -9042,7 +9042,7 @@ components:
             tasks:
               type: array
               maxItems: 20
-              description: The unfinished tasks as_key has joined, the most recently changed first
+              description: The unfinished tasks the caller joined as as_key, the most recently changed first
               items:
                 type: object
                 additionalProperties: false

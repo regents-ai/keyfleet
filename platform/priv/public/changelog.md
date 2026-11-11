@@ -2,6 +2,11 @@
 
 Changes to Keyfleet, newest first.
 
+## 12 November 2026
+
+- **Tasks.** Any Key joins any task and works on it beside the others. Only its creator
+  changes what it asks for or archives it, and a Key that worked on a task never reviews it.
+
 ## 11 November 2026
 
 - **Account.** Account pages show their titles and your details, with no extra lines of
