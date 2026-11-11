@@ -558,7 +558,7 @@ Every JSON error has one shape:
 {"error": {"code": "fleet_unknown", "message": "There is no fleet with this id.", "hint": "GET /api/v1/fleets lists every fleet."}}
 ```
 
-`code` is stable and meant for programs, `message` says what went wrong and `hint` says what to do next. Branch on the status and the code, never on the wording of a message or a hint. A workspace refusal also carries `details`, an object that is empty unless it says more.
+`code` is stable and meant for programs, `message` says what went wrong and `hint` says what to do next. A hint names a request by its tool, such as `projects_take_over`; that tool's `route` in the [tool manifest]({{origin}}/capabilities.json) is its method and address. Branch on the status and the code, never on the wording of a message or a hint. A workspace refusal also carries `details`, an object that is empty unless it says more.
 
 An error no route gives itself, such as an unknown address or a body that is not JSON, uses the status name as its code:
 

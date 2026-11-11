@@ -25,14 +25,14 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
   def answer(:list, %{"fleet_id" => fleet_id}, actor, _waiter) do
     with {:ok, %{}} <- Fleets.get_fleet(fleet_id, actor: %System{}),
          {:ok, projects} <- Projects.by_state(fleet_id, actor: actor) do
-      key = with %{token_id: token_id} <- Keys.identity(actor, fleet_id), do: token_id
-      yours = Enum.find(projects, &(&1.state == :active and &1.key == key))
+      key = your_key(actor, fleet_id)
+      yours = Enum.find(projects, &yours?(&1, key))
 
       {200,
        %{
          your_key: key,
          your_project: yours && yours.name,
-         projects: Enum.map(projects, &project(&1, yours))
+         projects: Enum.map(projects, &project(&1, key))
        }, nil}
     else
       {:ok, nil} -> {404, Refusal.body("fleet_unknown"), nil}
@@ -82,12 +82,19 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
 
   defp held(fleet_id, step, actor) do
     case step.(actor: actor) do
-      {:ok, project} -> {200, %{project: project(project, nil)}, nil}
+      {:ok, project} -> {200, %{project: project(project, your_key(actor, fleet_id))}, nil}
       {:error, error} -> refuse(fleet_id, error)
     end
   end
 
-  defp project(project, yours) do
+  # The Key the agent acts as in the fleet, or nil.
+  defp your_key(actor, fleet_id),
+    do: with(%{token_id: token_id} <- Keys.identity(actor, fleet_id), do: token_id)
+
+  # A Key's own project is the active one it holds.
+  defp yours?(project, key), do: project.state == :active and project.key == key
+
+  defp project(project, key) do
     %{
       name: project.name,
       title: project.title,
@@ -95,7 +102,7 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
       key: project.key,
       state: project.state,
       shown_to_everyone: project.shown_to_everyone,
-      yours: yours != nil and project.name == yours.name,
+      yours: yours?(project, key),
       clone_url: Code.agent_clone_url(project.repository)
     }
   end
