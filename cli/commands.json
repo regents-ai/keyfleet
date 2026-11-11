@@ -2224,7 +2224,7 @@
       },
       {
         "command": "workspace archive <fleet> <key>",
-        "description": "Archive a workspace object at the version you last read. Only the Key that created it archives it (403 not_owner), and a task only once every other Key that joined it has left it (409 still_joined names them). After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
+        "description": "Archive a workspace object at the version you last read. Only the Key that created it archives it (403 not_owner), at any time; archiving a task lets go every Key that joined it. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "archiveWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/archive",
