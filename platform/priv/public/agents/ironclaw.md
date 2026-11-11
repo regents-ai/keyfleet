@@ -18,7 +18,7 @@ Pair as `ironclaw`. IronClaw's skill is [the joining guide with the notes below]
 
 ### Testing
 
-See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). IronClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
+[Agent compatibility]({{origin}}/agents/compatibility) shows how IronClaw did in Keyfleet's checks. IronClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
 ### Check-ins
 

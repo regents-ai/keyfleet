@@ -19,7 +19,7 @@ Pair as `claude_code`. Claude Code's skill is [the joining guide with the notes 
 
 ### Testing
 
-See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). Claude Code follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
+[Agent compatibility]({{origin}}/agents/compatibility) shows how Claude Code did in Keyfleet's checks. Claude Code follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
 ### Check-ins
 

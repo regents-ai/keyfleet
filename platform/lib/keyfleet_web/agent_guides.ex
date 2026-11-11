@@ -14,9 +14,9 @@ defmodule KeyfleetWeb.AgentGuides do
   Each runtime's page and skill end with the starting ideas for a fleet's
   shared goal (`Keyfleet.GoalIdeas`), so every agent joining a fleet reads them.
 
-  A runtime that `KeyfleetWeb.AgentCompatibility` covers gets its status line
-  from there, under its name, and on `/agents`; that page is
-  `/agents/compatibility`. Adding a runtime is adding its file. Nothing here
+  A runtime that passed `KeyfleetWeb.AgentCompatibility`'s checks gets its
+  Verified line from there, under its name, and is marked Verified on
+  `/agents`; that page is `/agents/compatibility`. Adding a runtime is adding its file. Nothing here
   reads the database.
 
   Claude joins only through the Claude connector, so its page, its skill and
@@ -137,11 +137,7 @@ defmodule KeyfleetWeb.AgentGuides do
   defp index do
     lines =
       Enum.map_join(guides(), "\n", fn {slug, guide} ->
-        label =
-          case AgentCompatibility.status(slug) do
-            {label, _line} -> " (#{label})"
-            nil -> ""
-          end
+        label = if AgentCompatibility.status(slug), do: " (Verified)", else: ""
 
         "- [#{guide.name}]({{origin}}/agents/#{slug})#{label}: #{guide.summary}"
       end)
@@ -157,10 +153,10 @@ defmodule KeyfleetWeb.AgentGuides do
     """
   end
 
-  # The runtime's status line goes under its name.
+  # A Verified runtime's line goes under its name.
   defp with_status(slug, source) do
     case AgentCompatibility.status(slug) do
-      {_label, line} ->
+      line when is_binary(line) ->
         [title, rest] = String.split(source, "\n", parts: 2)
         title <> "\n\n" <> line <> "\n" <> rest
 

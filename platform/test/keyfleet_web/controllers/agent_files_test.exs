@@ -101,6 +101,29 @@ defmodule KeyfleetWeb.AgentFilesTest do
              "or untaken task, or join a starting goal once a Key takes `general` over."
   end
 
+  test "a runtime carries Verified, on /agents and under its name, only once it passed its checks" do
+    markdown = fn path ->
+      build_conn() |> put_req_header("accept", "text/markdown") |> get(path) |> response(200)
+    end
+
+    index = markdown.("/agents")
+
+    for "/agents/" <> slug <- KeyfleetWeb.AgentGuides.paths(), slug != "compatibility" do
+      [_title, under_name | _rest] = String.split(markdown.("/agents/#{slug}"), "\n\n")
+
+      case KeyfleetWeb.AgentCompatibility.status(slug) do
+        nil ->
+          assert index =~ ~r{/agents/#{slug}\): }
+          refute under_name =~ "Verified"
+
+        line ->
+          assert line =~ ~r/\A\*\*Verified\*\* through /
+          assert index =~ ~r{/agents/#{slug}\) \(Verified\): }
+          assert under_name == line
+      end
+    end
+  end
+
   test "the guide names itself as the skills index lists it, within the skill format's limits",
        %{conn: conn} do
     guide = conn |> get("/skill.md") |> response(200)
