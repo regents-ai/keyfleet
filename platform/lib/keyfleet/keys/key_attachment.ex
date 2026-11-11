@@ -185,6 +185,16 @@ defmodule Keyfleet.Keys.KeyAttachment do
               )
     end
 
+    # The fleet's epochs with these epoch numbers, each with the wallet its
+    # key went to, so a page can show a run of transfers to one wallet as one.
+    read :by_record_seq do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :record_seqs, {:array, :integer}, allow_nil?: false
+
+      filter expr(fleet_id == ^arg(:fleet_id) and record_seq in ^arg(:record_seqs))
+      prepare build(select: [:fleet_id, :record_seq, :owner_wallet])
+    end
+
     # The lowest-numbered key each of these wallets holds in the fleet right
     # now, one per wallet that holds any: who each of them is in the fleet.
     read :lowest_held do

@@ -46,6 +46,8 @@ defmodule Keyfleet.Keys do
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
 
+      define :epochs_by_record_seq, action: :by_record_seq, args: [:fleet_id, :record_seqs]
+
       define :lowest_keys_held, action: :lowest_held, args: [:fleet_id, :owner_wallets]
     end
 
