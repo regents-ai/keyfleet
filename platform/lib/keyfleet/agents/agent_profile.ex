@@ -368,14 +368,16 @@ defmodule Keyfleet.Agents.AgentProfile do
       argument :fleet_ids, {:array, :string}, allow_nil?: false
     end
 
-    # The key the agent acts as in the fleet, by the same rule as `:here`:
-    # the lowest-numbered key its wallet holds, else the key of the active
-    # shard it holds (a wallet holds one shard in a fleet at a time), else the
-    # key the person it is paired with writes as.
+    # The key the agent acts as in the fleet, by the same rule as
+    # `Keyfleet.Keys.identity/2`: the lowest-numbered key its wallet holds,
+    # else the key its person put it on, else the key of the active shard it
+    # holds (a wallet holds one shard in a fleet at a time), else the key the
+    # person it is paired with writes as.
     calculate :key,
               :integer,
               expr(
                 held_key(fleet_ids: [^arg(:fleet_id)]) ||
+                  assigned_key(fleet_ids: [^arg(:fleet_id)]) ||
                   min(shards,
                     field: :token_id,
                     query: [filter: expr(fleet_id == ^arg(:fleet_id) and active?)]
@@ -383,6 +385,44 @@ defmodule Keyfleet.Agents.AgentProfile do
               ) do
       argument :fleet_id, :string, allow_nil?: false
       public? true
+    end
+
+    # The key the person this agent is paired with put it on
+    # (`Keyfleet.Keys.AgentKey`), by its current pairing, while any of the
+    # person's wallets holds it. Read in SQL, as `:paired_key` is, and for the
+    # same reasons; only the key's number leaves here.
+    calculate :assigned_key,
+              :integer,
+              expr(
+                fragment(
+                  """
+                  (SELECT min(held.token_id)
+                   FROM regent_agents.paired_agents AS pairing
+                   JOIN regent_names.platform_human_users AS account
+                     ON account.privy_user_id = pairing.privy_user_id
+                   JOIN keyfleet_app.agent_keys AS assigned
+                     ON assigned.paired_agent_id = pairing.id
+                     AND assigned.human_account_id = account.id
+                   JOIN keyfleet_app.key_attachments AS held
+                     ON held.fleet_id = assigned.fleet_id
+                     AND held.token_id = assigned.token_id
+                     AND held.ownership_epoch = (
+                       SELECT max(epoch.ownership_epoch)
+                       FROM keyfleet_app.key_attachments AS epoch
+                       WHERE epoch.fleet_id = held.fleet_id AND epoch.token_id = held.token_id
+                     )
+                   WHERE pairing.wallet = ? AND assigned.fleet_id = ANY(?)
+                     AND held.owner_wallet IN (
+                       SELECT lower(linked.wallet)
+                       FROM unnest(account.wallet_address || account.wallet_addresses)
+                         AS linked(wallet)
+                     ))
+                  """,
+                  wallet_address,
+                  ^arg(:fleet_ids)
+                )
+              ) do
+      argument :fleet_ids, {:array, :string}, allow_nil?: false
     end
 
     # The lowest-numbered of the fleets' keys the agent's own wallet holds

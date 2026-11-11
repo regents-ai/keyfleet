@@ -1,10 +1,13 @@
 defmodule Keyfleet.Graph.Checks.KeyActor do
   @moduledoc """
   Who may write a fleet's workspace as one of its keys: the person or agent
-  whose wallet owns that key today, an agent holding an active shard of it
-  whose wallet owns none of the fleet's keys, or an agent holding neither in
-  the fleet that is paired with the person who owns the key today (`Keyfleet.Actors.Agent`'s `pairing`). A paired agent writes as its
-  person's key, marked as its own: the stamp is the agent's, with its wallet.
+  whose wallet owns that key today; an agent whose wallet owns none of the
+  fleet's keys, when its person put it on that key and owns it today
+  (`Keyfleet.Keys.AgentKey`) or when it holds an active shard of it; or an
+  agent on none of the fleet's keys and holding no shard there that is paired
+  with the person who owns the key today (`Keyfleet.Actors.Agent`'s
+  `pairing`). A paired agent writes as its person's key, marked as its own:
+  the stamp is the agent's, with its wallet.
   This is the rule rooms and direct messages use (`Keyfleet.Keys.identity/2`).
   Nobody writes as a key whose edits a vote of the fleet has restricted, its
   owner included.
@@ -218,14 +221,27 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     read = [actor: actor] ++ opts
 
     with {:ok, nil} <- Keys.held_identity_key(key.fleet_id, [wallet], read),
-         {:ok, %{} = shard} <- Keys.active_shard(key.fleet_id, key.token_id, wallet, read) do
-      {:ok, agent_stamp(shard.ownership_epoch, actor)}
+         {:ok, assigned} <- Keys.assigned_key(actor, key.fleet_id, read),
+         {:ok, shard} <- Keys.active_shard(key.fleet_id, key.token_id, wallet, read) do
+      acting_for(actor, key, assigned, shard, read)
     else
-      {:ok, nil} -> paired_holding(actor, key, read)
       {:ok, _held} -> not_a_holder(key.fleet_id, key.token_id)
       error -> error
     end
   end
+
+  # The key its person put it on, or a key it holds a shard of. An agent on
+  # a key acts as no other key of its person's.
+  defp acting_for(actor, %{token_id: token_id} = key, %{token_id: token_id}, _shard, _read),
+    do: {:ok, agent_stamp(key.ownership_epoch, actor)}
+
+  defp acting_for(actor, _key, _assigned, %{} = shard, _read),
+    do: {:ok, agent_stamp(shard.ownership_epoch, actor)}
+
+  defp acting_for(actor, key, nil, nil, read), do: paired_holding(actor, key, read)
+
+  defp acting_for(_actor, key, _assigned, nil, _read),
+    do: not_a_holder(key.fleet_id, key.token_id)
 
   # An agent with a shard of any of the fleet's keys acts as that, never as
   # its person.

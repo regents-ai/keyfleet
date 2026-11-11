@@ -783,7 +783,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   end
 
   # Key 20 is e's, and Your agent on its page shows the agent paired with e,
-  # which acts for the Key once given a shard of it.
+  # which can mark the Key present once given a shard of it.
   test "a holder with no agent paired has no agent row on the Key's page", %{conn: conn} do
     {:ok, view, _html} = conn |> signed_in_as(wallet("e")) |> live(@key_20)
 
@@ -814,9 +814,9 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert words == [
                "Paired. This agent is paired with your account.",
-               "Gas. Nothing to pay for until it acts for a Key. Give it a shard.",
+               "Gas. Nothing to pay for until it holds a shard of your Key.",
                "Schedule. No daily run yet. Ask your agent to schedule one.",
-               "Marked. It acts for no Key yet. Give it a shard.",
+               "Marked. It holds no shard yet. A shard lets it mark your Keys present.",
                "Repeated. Its daily run hasn’t come back on time yet. Check after its next run."
              ]
     end
@@ -840,14 +840,14 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
                "Paired. This agent is paired with your account.",
                "Gas. Its wallet has the ETH on Base to mark your Keys.",
                "Schedule. Its daily run is scheduled.",
-               "Marked. Every Key it acts for is present, or waits for its automatic start.",
+               "Marked. Every Key it can mark is present, or waits for its automatic start.",
                "Repeated. Its daily run keeps arriving on time."
              ]
 
       refute has_element?(view, "#key-agent-setup .agent-setup__wrong")
     end
 
-    test "an agent out of ETH, acting for a Key that lapsed, says how to put each right", %{
+    test "an agent out of ETH, with a shard of a lapsed Key, says how to put each right", %{
       conn: conn,
       agent: agent
     } do
@@ -862,7 +862,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert gas == "Gas. Its wallet is out of ETH. Send it ETH on Base."
 
       assert marked ==
-               "Marked. A Key it acts for isn’t present. Ask your agent to mark it, or mark it yourself."
+               "Marked. A Key it can mark isn’t present. Ask your agent to mark it, or mark it yourself."
     end
 
     # The agent's check-in reaches the open page itself; the chain reader's

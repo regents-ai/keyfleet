@@ -252,7 +252,9 @@ defmodule Keyfleet.MixProject do
         # with that Run. Agents pinning as their person add one: the Pin record's
         # ActsForPerson check. The connector's pin and unpin add one: Workspace
         # with that Run beside its Read. Ended draw waits add one: the
-        # KeyRevealExpiry record, with its domain.
+        # KeyRevealExpiry record, with its domain. Agents on their person's Keys
+        # add one: the AgentKey record, with its domain; its policies read the
+        # actor in expressions, so they add no check.
         "xref graph --label compile-connected --fail-above 129",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",

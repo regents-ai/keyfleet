@@ -2,9 +2,10 @@ defmodule KeyfleetWeb.AgentTools.Keys do
   @moduledoc """
   Keys as an agent reads and keeps them: a Key as its page shows it
   (`show`), the Keys a wallet holds (`held`), taking a post off the wall of a Key it acts as (`wall_remove`),
-  choosing the Key its person writes as (`post_as`), its own mutes (`mutes`,
-  `mute`, `unmute`) and its active shards (`shards`). Each takes what its
-  signed request takes, checked as that request's body is, and answers and
+  choosing the Key its person writes as (`post_as`), which of its person's
+  agents is on which of their Keys (`agents`, `assign_agent`), its own mutes
+  (`mutes`, `mute`, `unmute`) and its active shards (`shards`). Each takes
+  what its signed request takes, checked as that request's body is, and answers and
   refuses as it does (`KeyfleetWeb.AgentTools.Run`,
   `KeyfleetWeb.AgentTools.Keys.Answer`). Only an agent runs them, never a
   connected app on its own; the Keys' own policies decide what it does.
@@ -58,6 +59,24 @@ defmodule KeyfleetWeb.AgentTools.Keys do
         constraints: [min: 1, max: 9_007_199_254_740_991]
 
       run {Run, tool: "keys_post_as"}
+    end
+
+    action :agents, :map do
+      description "Your person's Keys in a fleet, the agent on each and their paired agents."
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+      run {Run, tool: "keys_agents"}
+    end
+
+    action :assign_agent, :map do
+      description "Puts one of your person's agents on one of their Keys in a fleet, or takes it off."
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+
+      argument :token_id, :integer,
+        allow_nil?: false,
+        constraints: [min: 1, max: 9_007_199_254_740_991]
+
+      argument :agent_wallet, :string, constraints: [match: ~r/\A0x[0-9a-fA-F]{40}\z/]
+      run {Run, tool: "keys_assign_agent"}
     end
 
     action :mutes, :map do

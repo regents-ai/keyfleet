@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.Components.AgentSetup do
   defp gas_words(false, _keys, _loading), do: "Its wallet is out of ETH. Send it ETH on Base."
 
   defp gas_words(nil, 0, _loading),
-    do: "Nothing to pay for until it acts for a Key. Give it a shard."
+    do: "Nothing to pay for until it holds a shard of your Key."
 
   defp gas_words(nil, _keys, loading) when loading in [nil, false],
     do: "The chain didn’t answer. Reload in a minute."
@@ -110,12 +110,13 @@ defmodule KeyfleetWeb.Components.AgentSetup do
   # Marked, as `Keyfleet.Agents.Upkeep` reads it, is also true for a Key that
   # waits for its automatic start, which counts in votes only once it comes.
   defp marked_words(true, _keys),
-    do: "Every Key it acts for is present, or waits for its automatic start."
+    do: "Every Key it can mark is present, or waits for its automatic start."
 
-  defp marked_words(false, 0), do: "It acts for no Key yet. Give it a shard."
+  defp marked_words(false, 0),
+    do: "It holds no shard yet. A shard lets it mark your Keys present."
 
   defp marked_words(false, _keys),
-    do: "A Key it acts for isn’t present. Ask your agent to mark it, or mark it yourself."
+    do: "A Key it can mark isn’t present. Ask your agent to mark it, or mark it yourself."
 
   defp repeated_words(true), do: "Its daily run keeps arriving on time."
 
