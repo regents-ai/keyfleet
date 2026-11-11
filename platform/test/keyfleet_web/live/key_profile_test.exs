@@ -1,15 +1,18 @@
 defmodule KeyfleetWeb.Live.KeyProfileTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  import Keyfleet.ProposalHelpers, only: [wallet: 1]
+  import Keyfleet.ProposalHelpers, only: [presence!: 3, scheduled!: 3, wallet: 1]
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
+  alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
   alias KeyfleetWeb.FleetNow
@@ -21,6 +24,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   @fleet "fibonacci_cascade"
   @path "/cascade/1"
   @members_path @path <> "?view=members"
+  @key_20 @path <> "/keys/20"
   @system %Actors.System{}
   @rewards "0x" <> String.duplicate("8", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
@@ -776,9 +780,104 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
   end
 
+  # Key 20 is e's, and Your agent on its page shows the agent paired with e,
+  # which acts for the Key once given a shard of it.
+  describe "Your agent on the Key's page" do
+    setup do
+      agent = PairingHelpers.agent_for!(%Actors.Human{wallet_addresses: [wallet("e")]})
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      %{agent: agent, conn: conn}
+    end
+
+    test "a holder with no agent paired has no agent row" do
+      {:ok, view, _html} = build_conn() |> signed_in_as(wallet("e")) |> live(@key_20)
+
+      assert has_element?(view, "#key-agent-setup[hidden]")
+      refute has_element?(view, "#key-agent-setup .agent-setup__agent")
+    end
+
+    test "a newly paired agent has Paired done, and each other dot says what to do", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert text(view, "#key-agent-setup .agent-setup__name") == "Test agent"
+      {states, words} = Enum.unzip(dots(view))
+      assert states == ~w(yes unknown no no no)
+
+      assert words == [
+               "Paired. This agent is paired with your account.",
+               "Gas. Nothing to pay for until it acts for a Key. Give it a shard.",
+               "Schedule. No daily run yet. Ask your agent to schedule one.",
+               "Marked. It acts for no Key yet. Give it a shard.",
+               "Repeated. Its daily run hasn’t come back on time yet. Check after its next run."
+             ]
+    end
+
+    # Marked reads a Key waiting for its automatic start as needing no mark,
+    # as the setup list's Present step does.
+    test "every dot is done once the run repeats, the wallet has ETH and the Key waits to start",
+         %{conn: conn, agent: agent} do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      scheduled!(@fleet, 20, DateTime.add(DateTime.utc_now(:second), 3_600))
+      repeating!(agent)
+      agent_chain!(balances: %{agent.wallet_address => 10 ** 18})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      {states, words} = Enum.unzip(dots(view))
+      assert states == ~w(yes yes yes yes yes)
+
+      assert words == [
+               "Paired. This agent is paired with your account.",
+               "Gas. Its wallet has the ETH on Base to mark your Keys.",
+               "Schedule. Its daily run is scheduled.",
+               "Marked. Every Key it acts for is present, or waits for its automatic start.",
+               "Repeated. Its daily run keeps arriving on time."
+             ]
+
+      refute has_element?(view, "#key-agent-setup .agent-setup__wrong")
+    end
+
+    test "an agent out of ETH, acting for a Key that lapsed, says how to put each right", %{
+      conn: conn,
+      agent: agent
+    } do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      presence!(@fleet, 20, DateTime.add(DateTime.utc_now(:second), -3, :day))
+      agent_chain!(balances: %{agent.wallet_address => 0})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert [_paired, {"no", gas}, _schedule, {"no", marked}, _repeated] = dots(view)
+      assert gas == "Gas. Its wallet is out of ETH. Send it ETH on Base."
+
+      assert marked ==
+               "Marked. A Key it acts for isn’t present. Ask your agent to mark it, or mark it yourself."
+    end
+
+    test "Gas is not known when the chain doesn't answer, and says to look again", %{
+      conn: conn,
+      agent: agent
+    } do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      agent_chain!(codes: %{agent.wallet_address => {:error, :timeout}})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert [_paired, gas | _rest] = dots(view)
+      assert gas == {"unknown", "Gas. The chain didn’t answer. Reload in a minute."}
+    end
+  end
+
   # What the fleet's contracts answer, at a head the chain has. Its reward
-  # ledger pays out `assets`, USDC alone unless a test names others.
-  defp rewards_answer(calls, assets \\ [@usdc]) do
+  # ledger pays out `assets`, USDC alone unless a test names others; `chain`
+  # adds to what the chain holds, such as `:balances`.
+  defp rewards_answer(calls, assets \\ [@usdc], chain \\ []) do
     StubClient.put_chain(
       %{
         number: 1_000,
@@ -787,14 +886,45 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
         base_fee: 0
       },
       [],
-      calls: fn
+      Keyword.put(chain, :calls, fn
         @rewards, @reward_assets, _hash ->
           {:ok, <<32::256, length(assets)::256>> <> Enum.map_join(assets, &address_word/1)}
 
         to, data, hash ->
           calls.(to, data, hash)
-      end
+      end)
     )
+  end
+
+  # The chain as the setup gives it, holding what `chain` says for the
+  # agent's wallet: its ETH, or the chain's answer for its code.
+  defp agent_chain!(chain),
+    do: rewards_answer(fn _to, _data, _hash -> {:ok, <<0::256>>} end, [@usdc], chain)
+
+  # Two scheduled check-ins half an hour apart: the agent's run is scheduled,
+  # confirmed and on time.
+  defp repeating!(agent) do
+    run = %{"kind" => "scheduled", "every_minutes" => 30}
+    {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - interval '30 minutes', counted_scheduled_at = counted_scheduled_at - interval '30 minutes'"
+    )
+
+    {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+  end
+
+  # The agent's dots on the Key's page, each as its state and the words it opens.
+  defp dots(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#key-agent-setup .agent-setup__states > li")
+    |> Enum.map(fn dot ->
+      [state] = LazyHTML.attribute(dot, "data-state")
+      words = dot |> LazyHTML.query(".rg-tip-body") |> LazyHTML.text() |> String.split()
+      {state, Enum.join(words, " ")}
+    end)
   end
 
   defp address_word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)

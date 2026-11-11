@@ -7080,11 +7080,14 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
   list above every view: Pair, Shard, Daily run and Present, each ticked from
   what is recorded, with a line on whether their Keys count in votes and
   until when. Pair holds the pairing box; Shard is one press that gives the
-  agent paired last a 30-day shard of every Key held here. The list leaves
-  once all four are done. The Workspace's setup dots are gone.
+  agent paired last a 30-day shard of every Key held here. Present is done
+  when every Key is present or waits for its automatic start, the same as
+  the Marked dot. The list leaves once all four are done. The Workspace's
+  setup dots are gone.
 - The Connect page is removed. The homepage's Connect my agent opens
-  Classic #1, and the sitemap and About no longer name the old page; the
-  count of copied setup lines keeps only the homepage's line.
+  Classic #1, and the sitemap and About no longer name the old page. A
+  copied homepage setup line is now counted as one more step in, named
+  only by the step.
 - On a Key's page, Your agent shows bigger dots: a bright green when done,
   a faded orange when not done or not known yet. Each dot opens a few words
   on what it is and how to put it right; the header's tip is gone. Marked

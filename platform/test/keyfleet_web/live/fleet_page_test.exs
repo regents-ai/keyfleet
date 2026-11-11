@@ -682,6 +682,47 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key-button[disabled]")
     end
 
+    # A Buy that lands says so under the buttons, with the way on to setting
+    # up an agent, and Buy stays pressable, quieter, for another Key.
+    test "a Buy that lands says You're in, with Set up your agent", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 45_150_000)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+      active!(view, @owner)
+      assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
+      refute has_element?(view, "#buy-key-in")
+      assert has_element?(view, "#buy-key-button.rg-button--primary")
+
+      hash = "0x" <> String.duplicate("4", 64)
+      TestChainNode.land!(hash, review, buy, "0x1")
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "buy",
+        "transaction_hash" => hash
+      })
+
+      render_async(view, 3_000)
+
+      assert has_element?(view, "#buy-key-in[role=status] > strong", "You’re in")
+
+      assert text(view, "#buy-key-in > span") ==
+               "Your Key is in your wallet. Next, set up your agent."
+
+      assert has_element?(view, "#buy-key-setup", "Set up your agent")
+      assert has_element?(view, "#buy-key-button.rg-button--secondary")
+      refute has_element?(view, "#buy-key-button[disabled]")
+
+      # Set up your agent closes the window and opens the fleet's page.
+      assert [["push", %{"event" => "close_buy_key"}], ["navigate", %{"href" => @path}]] =
+               click_commands(view, "#buy-key-setup")
+    end
+
     # Skill rule 3: another wallet open in the wallet app keeps the figures
     # on the account's own wallet, names both, and gets no steps to send.
     test "a wallet the account doesn't link is named, and nothing is built for it", %{conn: conn} do
@@ -896,6 +937,71 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "dialog#buy-key")
       assert text(view, "#buy-key-sold") == "0 of 1,024"
       assert has_element?(view, "dialog#buy-key #buy-key-button[data-onchain-step=buy]")
+    end
+  end
+
+  describe "the setup list" do
+    setup do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      :ok
+    end
+
+    test "a holder with no agent sees Pair open, and the steps after it closed", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+
+      refute has_element?(view, "#fleet-setup[hidden]")
+      assert text(view, "#fleet-setup-votes") == "0 of 150 Keys count in votes."
+      assert open_step(view) == "fleet-setup-pair"
+      assert has_element?(view, "#fleet-setup-pair .setup-list__body #fleet-setup-pairing")
+      refute has_element?(view, "#fleet-setup li[data-done]")
+    end
+
+    test "someone who holds none of the fleet's Keys has no setup list" do
+      did = "did:privy:fleet-page:stranger"
+      account = Accounts.register_verified!(did, @stranger, [@stranger], actor: %Actors.System{})
+      conn = init_test_session(build_conn(), %{human_account_id: account.id})
+      {:ok, view, _html} = live(conn, @path)
+
+      assert has_element?(view, "#fleet-setup[hidden]")
+      refute has_element?(view, "#fleet-setup li")
+    end
+
+    # The list reads again on each notice, opens the next step not done, and
+    # leaves once all four are. The page passes each notice on to the list,
+    # which draws after the render that follows.
+    test "each step closes as its records arrive, and the list goes once all four are done" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      {:ok, view, _html} = live(conn, @path)
+
+      assert has_element?(view, "#fleet-setup-pair[data-done]")
+      assert open_step(view) == "fleet-setup-shard"
+      assert has_element?(view, "#fleet-setup-shard-button", "Give Test agent a shard")
+
+      ChainHelpers.issue_shard!(@fleet, 1, agent.wallet_address)
+      send(view.pid, {:keys_changed, @fleet, [1]})
+      render(view)
+      assert open_step(view) == "fleet-setup-run"
+
+      {:ok, _check_in} =
+        Keyfleet.Agents.check_in(agent, @fleet, %{"kind" => "scheduled", "every_minutes" => 1440})
+
+      send(view.pid, :agents_changed)
+      render(view)
+      assert open_step(view) == "fleet-setup-present"
+
+      # Key 1 counts in votes now; Key 2 waits for its automatic start, which
+      # needs no mark either.
+      now = DateTime.utc_now(:second)
+      ProposalHelpers.presence!(@fleet, 1, now)
+      ProposalHelpers.scheduled!(@fleet, 2, DateTime.add(now, 3_600))
+      for token_id <- 3..@issued, do: ProposalHelpers.presence!(@fleet, token_id, now)
+      send(view.pid, {:keys_changed, @fleet, [1]})
+      render(view)
+
+      assert has_element?(view, "#fleet-setup[hidden]")
+      refute has_element?(view, "#fleet-setup li")
     end
   end
 
@@ -2200,6 +2306,18 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#fleet-feed-list > li")
     |> LazyHTML.attribute("id")
+  end
+
+  # The setup list's open step, by id: the one step marked current, and the
+  # only one showing what to do.
+  defp open_step(view) do
+    list = view |> render() |> LazyHTML.from_fragment()
+    current = LazyHTML.query(list, ~s(#fleet-setup li[aria-current="step"]))
+
+    assert [open] = LazyHTML.attribute(current, "id")
+    assert Enum.count(LazyHTML.query(list, "#fleet-setup .setup-list__body")) == 1
+    assert Enum.count(LazyHTML.query(list, "##{open} > .setup-list__body")) == 1
+    open
   end
 
   # The page commands a button runs when pressed.
