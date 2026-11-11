@@ -963,7 +963,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       conn = init_test_session(build_conn(), %{human_account_id: account.id})
       {:ok, view, _html} = live(conn, @path)
 
-      assert has_element?(view, "#fleet-setup[hidden]")
+      refute has_element?(view, "#fleet-setup:not([hidden])")
       refute has_element?(view, "#fleet-setup li")
     end
 

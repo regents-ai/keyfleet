@@ -782,18 +782,22 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   # Key 20 is e's, and Your agent on its page shows the agent paired with e,
   # which acts for the Key once given a shard of it.
+  test "a holder with no agent paired has no agent row on the Key's page", %{conn: conn} do
+    {:ok, view, _html} = conn |> signed_in_as(wallet("e")) |> live(@key_20)
+
+    assert has_element?(view, "#key-agent-setup[hidden]")
+    refute has_element?(view, "#key-agent-setup .agent-setup__agent")
+  end
+
   describe "Your agent on the Key's page" do
-    setup do
-      agent = PairingHelpers.agent_for!(%Actors.Human{wallet_addresses: [wallet("e")]})
-      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
-      %{agent: agent, conn: conn}
-    end
-
-    test "a holder with no agent paired has no agent row" do
-      {:ok, view, _html} = build_conn() |> signed_in_as(wallet("e")) |> live(@key_20)
-
-      assert has_element?(view, "#key-agent-setup[hidden]")
-      refute has_element?(view, "#key-agent-setup .agent-setup__agent")
+    # Signed in as e, with an agent paired with that account
+    # (`PairingHelpers.pair!/2` pairs with the account named after the first
+    # wallet).
+    setup %{conn: conn} do
+      did = "did:privy:test-" <> wallet("e")
+      account = Accounts.register_verified!(did, wallet("e"), [wallet("e")], actor: @system)
+      agent = PairingHelpers.agent_for!(Actors.Human.for_account(account))
+      %{agent: agent, conn: init_test_session(conn, %{human_account_id: account.id})}
     end
 
     test "a newly paired agent has Paired done, and each other dot says what to do", %{
