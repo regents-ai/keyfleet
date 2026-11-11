@@ -6,7 +6,8 @@ defmodule Keyfleet.Proposals.Calculations.LateKeys do
   chain order, is a renewal or an automatic start at or before the opening
   and less than 48 hours before it. A Key whose last record is its change of
   hands, or that has none, was not. The contract adds each such Key, once, to
-  the voters a proposal needs 60% of.
+  the voters a proposal needs 60% of. `Keyfleet.Proposals.Calculations.KeyBallots`
+  spells out the same rule, and a change to it changes both.
   """
 
   use Ash.Resource.Calculation

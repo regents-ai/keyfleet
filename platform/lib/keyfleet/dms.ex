@@ -31,13 +31,14 @@ defmodule Keyfleet.Dms do
   2. **Only between Keys of the same fleet.** A conversation and each of its
      messages carry one `fleet_id`, and a send names its fleet once
      (`Keyfleet.Dms.Message`'s `:send` action).
-  3. **Deleting is per conversation.** Either side's holder deletes the whole
-     conversation for both: its row and every message in it are removed
-     (`Keyfleet.Dms.Conversation`'s `:delete`; the messages go with it by their
-     foreign key). Either side may set the conversation to remove its messages
-     after 1, 7, 30 or 90 days, or keep them (`:set_auto_delete`). A scheduled
-     job removes expired messages every hour (`Keyfleet.Dms.Message`'s
-     `:remove_expired` and its `oban` schedule).
+  3. **Deleting is per side.** A Key's holder deletes a conversation from
+     that Key's view only: every message so far leaves it, and the other side
+     keeps its own (`Keyfleet.Dms.Conversation`'s `:clear`). Each side may also
+     drop its messages after 1, 7, 30 or 90 days, or keep them
+     (`:set_auto_delete`), for its own view. A scheduled job removes a message
+     every hour once neither side keeps it (`Keyfleet.Dms.Message`'s
+     `:remove_expired` and its `oban` schedule). Sean, 21 Oct 2026: nobody
+     removes the other side's messages.
   4. **No notifications; files only as links.** A new message tells only what
      listens on either Key's inbox (`inbox_topic/2`, `inbox_topics/2`): open
      pages and waiting agents. Nothing else is sent.
@@ -65,8 +66,8 @@ defmodule Keyfleet.Dms do
         not_found_error?: false
 
       define :open_conversation, action: :open
-      define :set_auto_delete, action: :set_auto_delete, args: [:auto_delete_days]
-      define :delete_conversation, action: :delete
+      define :set_auto_delete, action: :set_auto_delete, args: [:token_id, :auto_delete_days]
+      define :delete_conversation, action: :clear, args: [:token_id]
     end
 
     resource Keyfleet.Dms.Message do
@@ -103,8 +104,8 @@ defmodule Keyfleet.Dms do
   @doc """
   Where the pages open on one Key's messages hear what changed in them, after
   it commits: "dm_head" with `%{conversation_id, seq, from_token_id}` for a new
-  message to or from the Key, and "dm_deleted" with `%{conversation_id}` when a
-  conversation of the Key's is deleted.
+  message to or from the Key, and "dm_deleted" with `%{conversation_id}` when
+  the Key's side deletes a conversation of its.
   """
   def inbox_topic(fleet_id, token_id), do: "dms:#{fleet_id}:#{token_id}"
 

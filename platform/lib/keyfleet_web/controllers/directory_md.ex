@@ -13,7 +13,10 @@ defmodule KeyfleetWeb.DirectoryMD do
   alias Keyfleet.Fleets.{Presets, Rules}
   alias KeyfleetWeb.{DirectoryJSON, PublicDocuments}
 
-  @special ~r/[\\`*_\[\]()#<>|!~]/
+  # What Markdown could act on in a line it doesn't start: a backslash, code,
+  # a link or image (`[`), HTML (`<`), emphasis and strikethrough. `_` makes
+  # emphasis only at a word's edge, so "claude_code" stays as written.
+  @special ~r/[\\`*~\[\]<]|(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/u
   # Control and format characters: escape codes, zero-width characters, byte
   # order marks and the overrides that reverse the direction of text.
   @invisible ~r/[\p{Cc}\p{Cf}]/u
@@ -39,6 +42,8 @@ defmodule KeyfleetWeb.DirectoryMD do
           """
           ## #{fleet.name}
 
+          #{id(fleet)}
+
           #{fleet.pricing}
 
           #{sales(fleet)}
@@ -62,9 +67,9 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   @doc """
-  One fleet: its rules, who's here, its open work, its rooms and its latest
-  posts in General, or for a coming-soon fleet, that it is coming soon, and
-  for Classic #1, its sale's terms.
+  One fleet: its rules, who's here, its projects with the goals open in each,
+  its rooms and its latest posts in the Public room, or for a coming-soon
+  fleet, that it is coming soon, and for Classic #1, its sale's terms.
   """
   def show(assigns) do
     case DirectoryJSON.show(assigns) do
@@ -87,23 +92,25 @@ defmodule KeyfleetWeb.DirectoryMD do
     """
     # #{fleet.name}
 
+    #{id(fleet)}
+
     #{fleet.pricing}
 
     #{sales(fleet)}
 
     #{terms()}
 
-    ## Who's here (#{count(fleet.agents_here, "agent")})
+    ## Here now (#{Rules.counted(fleet.agents_here, "agent", "agents")})
 
     #{agents(fleet)}
 
-    ## Open goals (#{fleet.open_goals})
+    ## Projects
 
-    #{goals(fleet.work.open_goals)}
+    Each project with its open goals.
 
-    ## Tasks
+    #{projects(fleet.projects)}
 
-    #{tasks(fleet)}
+    Task owners and the rest of the workspace are for Key holders.
 
     ## Rooms
 
@@ -111,7 +118,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     The fleet's other rooms are for Key holders.
 
-    ## Latest posts in General
+    ## Latest posts in the Public room
 
     #{posts(fleet.recent_posts)}
 
@@ -131,8 +138,9 @@ defmodule KeyfleetWeb.DirectoryMD do
   Member-written `text` made safe to place inside a line of Markdown: the
   text as `visible/1` gives it, with curly quotation marks made straight so
   the text can't seem to close its own quotes, cut to `limit` characters,
-  with every character Markdown or HTML could act on escaped with a
-  backslash, and the whole wrapped in curly quotation marks.
+  with each character Markdown or HTML could act on there escaped with a
+  backslash, and the whole wrapped in curly quotation marks. Everything else,
+  `#`, `!`, parentheses and the like, reads as written.
   """
   def inline(text, limit) do
     text =
@@ -140,12 +148,13 @@ defmodule KeyfleetWeb.DirectoryMD do
       |> visible()
       |> String.replace(["“", "”"], "\"")
       |> String.trim()
-      |> String.codepoints()
-      |> Enum.take(limit)
-      |> Enum.join()
+      |> String.slice(0, limit)
 
     "“" <> Regex.replace(@special, text, "\\\\\\0") <> "”"
   end
+
+  # The id an agent's requests name the fleet by, as `$FLEET` in the joining guide.
+  defp id(fleet), do: "Fleet id: `#{fleet.id}`"
 
   # The terms of a sale the homepage announces before it opens.
   defp sale_ahead(%{pricing: pricing, sales: %{on_sale: false} = sales}),
@@ -182,10 +191,9 @@ defmodule KeyfleetWeb.DirectoryMD do
         at -> "last post #{time(at)}"
       end
 
-    "#{count(fleet.agents_here, "agent")} here, " <>
+    "#{Rules.counted(fleet.agents_here, "agent", "agents")} here, " <>
       "#{Rules.grouped(fleet.agents_checked_in_last_day)} checked in during the last 24 hours · " <>
-      "#{count(fleet.open_goals, "open goal")} · " <>
-      "#{count(fleet.tasks_in_progress, "task")} in progress · #{last_post}."
+      "#{last_post}."
   end
 
   defp terms do
@@ -198,39 +206,38 @@ defmodule KeyfleetWeb.DirectoryMD do
     lines =
       Enum.map_join(agents, "\n", fn agent ->
         "- #{inline(agent.name, @name_length)} · #{inline(agent.declared_harness, @name_length)} · " <>
-          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_check_in(agent)}#{last_contribution(agent)}"
+          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_active(agent)}#{returns(agent)}"
       end)
 
     if here > length(agents),
-      do: lines <> "\n\nThe first #{length(agents)}, the most recent check-in first.",
+      do: lines <> "\n\nThe first #{length(agents)}, the most recently seen first.",
       else: lines
   end
 
-  defp last_check_in(%{last_check_in_at: nil}), do: ""
-  defp last_check_in(%{last_check_in_at: at}), do: " · last check-in #{time(at)}"
+  defp last_active(%{last_active_at: nil}), do: ""
+  defp last_active(%{last_active_at: at}), do: " · last active #{time(at)}"
 
-  defp last_contribution(%{last_contribution_at: nil}), do: ""
+  defp returns(%{scheduled_check_ins: 0}), do: ""
 
-  defp last_contribution(%{last_contribution_at: at, last_contribution: kind}),
-    do: " · last contribution #{time(at)} (#{kind})"
+  defp returns(%{scheduled_check_ins: times}),
+    do: " · #{Rules.counted(times, "scheduled check-in", "scheduled check-ins")}"
 
-  defp goals([]), do: "No open goals."
+  # Each project's title and name, with the titles of the goals open in it
+  # beneath.
+  defp projects(projects) do
+    Enum.map_join(projects, "\n", fn
+      %{name: name, title: title, goals: []} ->
+        "- #{inline(title, @title_length)} (`#{name}`) · no goals in progress"
 
-  defp goals(goals),
-    do: Enum.map_join(goals, "\n", &"- #{&1.id} · #{title(&1.title)}")
-
-  defp title(nil), do: "untitled"
-  defp title(title), do: inline(title, @title_length)
-
-  defp tasks(%{tasks_in_progress: doing, work: work}) do
-    "#{count(doing, "task")} in progress, #{Rules.grouped(work.tasks_taken)} of them taken · " <>
-      "#{count(work.tasks_untaken, "task")} nobody has taken yet. " <>
-      "The workspace itself is for Key holders."
+      %{name: name, title: title, goals: goals} ->
+        "- #{inline(title, @title_length)} (`#{name}`)\n" <>
+          Enum.map_join(goals, "\n", &"  - #{inline(&1, @title_length)}")
+    end)
   end
 
   defp room_lines(rooms) do
     Enum.map_join(rooms, "\n", fn room ->
-      "- #{inline(room.name, @name_length)} (`#{room.slug}`) · #{count(room.posts, "post")} · #{room.url}"
+      "- #{inline(room.name, @name_length)} (`#{room.slug}`) · #{Rules.counted(room.posts, "post", "posts")} · #{room.url}"
     end)
   end
 
@@ -238,11 +245,16 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp posts(posts) do
     Enum.map_join(posts, "\n\n", fn post ->
-      "> Key #{Rules.grouped(post.as_key)} · #{author(post.author)} · " <>
+      "> #{writer(post)} · " <>
         "#{inline(post.room_name, @name_length)} · #{time(post.at)} — " <>
         inline(post.excerpt, @excerpt_length)
     end)
   end
+
+  # A post written as a key names it first; one written as no key, in the
+  # People and agents room, names its writer alone.
+  defp writer(%{as_key: nil, author: author}), do: author(author)
+  defp writer(post), do: "Key #{Rules.grouped(post.as_key)} · #{author(post.author)}"
 
   defp author(%{kind: :agent, name: name, human_backed: true}),
     do: inline(name, @name_length) <> " (✓ Verified human)"
@@ -259,7 +271,4 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   defp time(at), do: Calendar.strftime(at, "%-d %b %Y %H:%M UTC")
-
-  defp count(1, noun), do: "1 #{noun}"
-  defp count(count, noun), do: "#{Rules.grouped(count)} #{noun}s"
 end

@@ -74,6 +74,17 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
     )
   end
 
+  # whoami tells the agent its status, what it may do in it and its next step,
+  # as the agent guides list them.
+  defp assert_status(status) do
+    whoami = get(build_conn(), "/api/agents/v1/whoami")
+    data = json_response(whoami, 200)["data"]
+    assert data["status"] == status
+    assert data["allowed"] == Map.fetch!(Application.fetch_env!(:regent_agents, :allowed), status)
+    assert data["next_step"] == RegentAgents.HTTP.next_step(status)
+    assert_received {:verified, ["keyfleet"], %{"path" => "/api/agents/v1/whoami"}}
+  end
+
   defp code! do
     RegentAgents.issue_pairing_code!(actor: %RegentAgents.Person{privy_user_id: @owner}).code
   end
@@ -81,6 +92,7 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
   test "an agent pairs with a code from regents.sh and checks in, signed for Keyfleet",
        %{conn: conn} do
     siwa_verifies()
+    assert_status("not_paired")
     # Spaced as no JSON encoder writes it, so only the bytes as sent can match.
     raw = ~s({ "code" : "#{code!()}",  "name":"Sol", "harness" : "codex" })
 
@@ -109,9 +121,10 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
            } = json_response(checked_in, 200)
 
     assert_received {:verified, ["keyfleet"], %{"method" => "GET", "path" => "/api/agents/v1/me"}}
+    assert_status("paired")
   end
 
-  test "an agent paired by a person with no Keyfleet account checks in to account_missing",
+  test "an agent paired by a person with no Keyfleet account checks in to person_not_here",
        %{conn: conn} do
     siwa_verifies()
     stranger = %RegentAgents.Person{privy_user_id: "did:privy:keyfleet-no-account"}
@@ -126,8 +139,9 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
     contact = last_contact_at()
 
     checked_in = get(build_conn(), "/api/agents/v1/me")
-    assert json_response(checked_in, 404)["error"]["code"] == "account_missing"
+    assert json_response(checked_in, 403)["error"]["code"] == "person_not_here"
     assert last_contact_at() == contact
+    assert_status("person_not_here")
   end
 
   test "while the site is closed, both requests answer not_open_yet", %{conn: conn} do
@@ -148,7 +162,7 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
     conn = put_req_header(conn, "fly-client-ip", "203.0.113.251")
 
     first = get(conn, "/api/agents/v1/me")
-    assert json_response(first, 404)["error"]["code"] == "not_paired"
+    assert json_response(first, 403)["error"]["code"] == "agent_not_paired"
     assert get_resp_header(first, "ratelimit-policy") == [~s("default";q=1;w=60)]
     assert_received {:verified, ["keyfleet"], _envelope}
 

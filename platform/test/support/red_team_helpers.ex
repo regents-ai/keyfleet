@@ -94,7 +94,15 @@ defmodule KeyfleetWeb.RedTeamHelpers do
   `nil` for a read. Returns the `Req.Response`.
   """
   def send_signed(ctx, signer, method, path, body \\ nil) do
-    request = SignedAgentHelpers.sign(signer, ctx.secret, method, path, body && Jason.encode!(body))
+    request =
+      SignedAgentHelpers.sign(
+        signer,
+        ctx.secret,
+        Siwa.Contract.authority(ctx.app),
+        method,
+        path,
+        body && Jason.encode!(body)
+      )
 
     Req.request!(
       method: verb(method),

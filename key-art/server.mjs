@@ -1,6 +1,7 @@
 // The key-art service: draws one key's card as a PNG for the site's picture job.
 // POST /draw with {"seed", "top_line", "table"} answers the picture (200, image/png), why the
-// body is unreadable (400, JSON) or why it could not be drawn (422, JSON). GET /healthz answers 200 while the browser is up. Every
+// body is unreadable (400, JSON) or why it could not be drawn (422, JSON). GET /healthz answers 200 once the browser is up
+// and 503 while it starts. Every
 // other GET serves the drawing page in dist/, which this server's own browser opens.
 import {createServer} from "node:http"
 import {readFile} from "node:fs/promises"
@@ -14,11 +15,24 @@ const MAX_BODY = 4096
 const DRAW_TIMEOUT = 120_000
 
 // WebGPU on the CPU: the machine has no graphics chip, so Chromium draws with SwiftShader.
-const browser = await chromium.launch({
-  args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-webgpu-adapter=swiftshader", "--disable-vulkan-surface"],
+// The browser starts while the server already listens: a sleeping machine is woken by a
+// draw, and Fly's proxy gives up on a machine that takes longer than the browser's start
+// to accept a connection. The waking draw waits for the browser instead.
+let browserUp = false
+const browser = chromium
+  .launch({
+    args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-webgpu-adapter=swiftshader", "--disable-vulkan-surface"],
+  })
+  .then(started => {
+    browserUp = true
+    // A browser that dies takes the service with it; the machine restarts it.
+    started.on("disconnected", () => process.exit(1))
+    return started
+  })
+browser.catch(error => {
+  console.error("key-art could not start its browser:", error)
+  process.exit(1)
 })
-// A browser that dies takes the service with it; the machine restarts it.
-browser.on("disconnected", () => process.exit(1))
 
 const reply = (res, status, type, body) => {
   res.writeHead(status, {"content-type": type, "content-length": Buffer.byteLength(body)})
@@ -43,7 +57,7 @@ async function readJson(req) {
 
 // Each card is drawn on a fresh page, so the same key always gives the same bytes.
 async function drawCard({seed, top_line, table}) {
-  const page = await browser.newPage()
+  const page = await (await browser).newPage()
   try {
     const asked = new URLSearchParams({seed, top: top_line, table})
     await page.goto(`http://127.0.0.1:${PORT}/still.html#${asked}`)
@@ -70,7 +84,8 @@ async function serveFile(res, path) {
 const server = createServer(async (req, res) => {
   try {
     const {pathname} = new URL(req.url, "http://key-art")
-    if (req.method === "GET" && pathname === "/healthz") return replyJson(res, 200, {ok: true})
+    if (req.method === "GET" && pathname === "/healthz")
+      return browserUp ? replyJson(res, 200, {ok: true}) : replyJson(res, 503, {error: "browser starting"})
     if (req.method === "GET") return await serveFile(res, pathname)
     if (req.method !== "POST" || pathname !== "/draw") return replyJson(res, 404, {error: "not found"})
 

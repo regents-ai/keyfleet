@@ -1,7 +1,11 @@
+# gcc:15.2.0-bookworm
 FROM docker.io/library/gcc@sha256:9ca91b05c7b07d2979f16413e8b2cd6ec8a7c80ffca4121ccab0aeba33f90460 AS native
-FROM docker.io/hexpm/elixir@sha256:d21e3b8bab8bc2e8d51eb4bb03b1d73aad6b91c5c90b3ecc778eb5d136c2e3e6 AS elixir
-FROM docker.io/library/node@sha256:5aea649bacdc35e8e20571131c4f3547477dfe66e677d45c005af6dbd1edfaa7 AS node
-FROM docker.io/library/debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS slim
+# hexpm/elixir:1.20.4-erlang-29.1.2-debian-bookworm-20261020-slim
+FROM docker.io/hexpm/elixir@sha256:11ab449084960993491cdc3493be292464c5a63e8f753ed2afe351486471b69a AS elixir
+# node:26.12.0-bookworm-slim
+FROM docker.io/library/node@sha256:298992629d69bbd5b2b03ad57094d8e4fcb3a8eeb7c4e25d29de656519568913 AS node
+# debian:bookworm-20261020-slim
+FROM docker.io/library/debian@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8 AS slim
 FROM ghcr.io/astral-sh/uv@sha256:95f2aa1fe59274951cfe9b0cbc7972e879ff1004bc8945d130a32eb0dbd85945 AS uv
 
 FROM native AS assets
@@ -32,17 +36,24 @@ RUN mix local.hex 2.5.1 --force && \
   mix local.rebar rebar3 https://builds.hex.pm/installs/1.18.4/rebar3-3.25.1-otp-28 \
     --sha512 992fd755b7926fae455e5e07d9d195f4d3e7f181609eed1b9cabfe548624df10d148cd4b59bda40bebb185d3d68f9a9fd68a70b294101c8ad9cf0fadcc683d24 \
     --force
+
+# Layers run from what changes least to what changes most, so an ordinary
+# release rebuilds only the application's own files. The page packages change
+# only with package-lock.json, and copying them takes over a minute, so they
+# come first. The dependencies read only the compile-time configuration;
+# runtime.exs joins the application's own files.
+COPY --from=assets /workspace/platform/node_modules node_modules
 COPY platform/mix.exs platform/mix.lock ./
-COPY platform/config config
+COPY platform/config/config.exs platform/config/prod.exs config/
 RUN mix deps.get --only prod --check-locked && mix deps.compile
 
+COPY platform/config/runtime.exs config/
 COPY platform/lib lib
 COPY platform/priv priv
 COPY platform/rel rel
 COPY platform/assets assets
 COPY platform/contracts contracts
 COPY cli/commands.json /workspace/cli/commands.json
-COPY --from=assets /workspace/platform/node_modules node_modules
 RUN mix compile && mix assets.deploy && mix release
 
 # The graph host: a standalone CPython and the packages uv.lock pins, installed
@@ -94,14 +105,21 @@ RUN set -eu; \
 
 FROM slim AS app
 
+# The commit this image is built from, which /capabilities.json reports.
+ARG SOURCE_COMMIT
+RUN test -n "$SOURCE_COMMIT"
+ENV SOURCE_COMMIT=$SOURCE_COMMIT
+
 # The builder image sets this and the slim base does not. Without it the VM
 # runs with latin1 name encoding, which Elixir warns about at boot.
 ENV LANG=C.UTF-8
 ENV HOME=/app
 WORKDIR /app
 
+# OTP opens libsctp when it starts and prints a warning on every boot and every
+# `bin/keyfleet rpc` without it, which spoils the answer `make release` reads.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends coreutils \
+  && apt-get install -y --no-install-recommends coreutils libsctp1 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime-support /runtime-support/libcrypto.so.3 /usr/lib/
@@ -121,4 +139,5 @@ USER app
 
 EXPOSE 4000
 
-CMD ["/app/bin/keyfleet", "start"]
+# The site machine; fly.toml starts the graph machine with /app/bin/graph.
+CMD ["/app/bin/site"]

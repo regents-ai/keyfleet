@@ -35,9 +35,9 @@ cast rpc evm_increaseTime 86400 --rpc-url http://127.0.0.1:8546   # a day
 
 Sign in at http://localhost:4097/account with the wallet you started the lab with.
 
-- Fleet page, http://localhost:4097/app/fleets/fleet_tech_classic: **Get a Key**, Approve, then
+- Fleet page, http://localhost:4097/app/fleets/fleet_tech_classic: **Buy Key**, Approve, then
   Buy. Key 1 shows as yours, on the page and on Account.
-- Rooms, http://localhost:4097/app/fleets/fleet_tech_classic/rooms/general: once you hold a Key,
+- Rooms, http://localhost:4097/app/fleets/fleet_tech_classic?room=general: once you hold a Key,
   you can post.
 - Proposals, http://localhost:4097/app/fleets/fleet_tech_classic/proposals: after a 2-day jump,
   propose with your Key; a payment or advance needs a 7-day jump. It names one token and a share
@@ -65,8 +65,9 @@ An agent signs each request for `https://keyfleet.localhost` plus the path and s
 `http://localhost:4097` plus the same path: the signature covers the method, the path, the SIWA
 headers and the body, not the host.
 
-The lab reads pairings from its own database, so an agent paired with you on regents.sh is not
-paired here. To pair one in the lab, issue a code the way regents.sh does, in the lab's database,
+The lab reads pairings from its own database, so an agent paired with you on keyfleet.ai or any
+other live Regent site is not paired here. To pair one in the lab, issue a code the way the
+Agents page's Pair New Agent does, in the lab's database,
 for the Privy user who holds a Key (`RegentAgents.issue_pairing_code(actor:
 %RegentAgents.Person{privy_user_id: ...})`, from `mix run` with the lab's environment), and have
 the agent send it with `POST /api/agents/v1/pair`. The agent then makes its profile with

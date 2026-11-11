@@ -45,9 +45,8 @@ const U = (v: number): number => v * PXU
 export const KW = 680
 export const KH = 260
 
-/** The card's lettering, the same two faces as the site's own pages. */
-export const DISPLAY_FONT = "'Bricolage Grotesque Variable'"
-export const LABEL_FONT = "'IBM Plex Mono'"
+/** The card's lettering: the site's own face, which comes in one weight. */
+const lettering = (px: number): string => `400 ${px}px 'Geist Serif'`
 
 const clamp = (v: number, a: number, b: number): number => Math.min(b, Math.max(a, v))
 
@@ -166,9 +165,7 @@ async function svgCanvas(svg: string, w: number, h: number): Promise<HTMLCanvasE
   return c
 }
 function fontsReady(): Promise<unknown> {
-  return Promise.all([`700 40px ${DISPLAY_FONT}`, `600 20px ${LABEL_FONT}`].map(f => document.fonts.load(f))).then(
-    () => document.fonts.ready,
-  )
+  return document.fonts.load(lettering(40)).then(() => document.fonts.ready)
 }
 /** Text centred on x, with `track` px between letters. */
 function spaced(g: Ctx, text: string, x: number, y: number, track: number): void {
@@ -1169,7 +1166,7 @@ const PASS_TRACK = 4
 const CLUB_ENAMEL = "#101013"
 function passMarkBox(): {x: number; y: number; w: number; h: number} {
   const g = g2d(canvas(1, 1))
-  g.font = `700 ${PASS_PX}px ${DISPLAY_FONT}`
+  g.font = lettering(PASS_PX)
   const width = (word: string): number => [...word].reduce((sum, ch) => sum + g.measureText(ch).width, 0) + PASS_TRACK * (word.length - 1)
   const w = Math.max(...PASS.map(width))
   const cb = crownBox()
@@ -1257,12 +1254,12 @@ function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string
   const title = mask(g => {
     g.textAlign = "left"
     g.textBaseline = "middle"
-    g.font = `700 34px ${DISPLAY_FONT}`
+    g.font = lettering(34)
     spaced(g, "KEYFLEET", TW / 2, titleY, 7)
-    g.font = `600 17px ${LABEL_FONT}`
+    g.font = lettering(17)
     spaced(g, topLine, TW / 2, titleY + (pl.title < 0 ? 36 : -36), 3)
     if (look === "regentsClub") {
-      g.font = `700 ${PASS_PX}px ${DISPLAY_FONT}`
+      g.font = lettering(PASS_PX)
       PASS.forEach((word, row) => spaced(g, word, passBox.x + passBox.w / 2, passBox.y + passBox.h * (row ? 0.78 : 0.22), PASS_TRACK))
     }
   })

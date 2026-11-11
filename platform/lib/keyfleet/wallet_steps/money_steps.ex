@@ -19,6 +19,9 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
   # The USDC token's decimals, which the manager refuses to be deployed
   # without.
   @usdc_decimals 6
+  @usdc_unit 1_000_000
+  # The most USDC the REGENT buyer turns in one piece.
+  @piece_usdc 250_000_000
 
   @doc false
   def steps(:run_split, %{fleet: fleet}) do
@@ -30,8 +33,10 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
          {:ok, bps} <- uint.(reads, "dailySplitBps()"),
          {:ok, last_run_at} <- uint.(reads, "lastRunAt()"),
          {:ok, next_run_at} <- uint.(reads, "nextRunAt()"),
+         # The split pays only Keys sold at least 2 days ago, as the treasury
+         # counts them.
          {:ok, keys} <-
-           Reads.one(reads, fleet.manager_address, "totalMinted()", [], {:uint, 256}),
+           Reads.one(reads, fleet.manager_address, "matureKeys()", [], {:uint, 256}),
          {:ok, preview} <- Reads.each(assets, &preview(reads, fleet, &1, bps, keys)) do
       opens_at = if next_run_at > 0, do: DateTime.from_unix!(next_run_at)
 
@@ -65,14 +70,15 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
 
     with {:ok, reads} <- reads(figures),
          {:ok, [operator, asset, outstanding, _purpose]} <- advance(reads, fleet, id, figures),
-         asset = named_asset(fleet, asset),
+         asset = advanced_asset(fleet, asset),
          figures =
            Map.merge(figures, %{operator: operator, asset: asset, outstanding: outstanding}),
+         {:ok, decimals} <- decimals(asset, figures),
          {:ok, amount} <-
            Build.typed(
              inputs,
              "amount",
-             &Typed.amount(&1, asset.decimals || 0, Typed.largest_uint256()),
+             &Typed.amount(&1, decimals, Typed.largest_uint256()),
              figures
            ),
          figures = Map.put(figures, :amount, amount),
@@ -134,16 +140,17 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
              "amount",
              &Typed.amount(&1, @usdc_decimals, Typed.largest_uint256()),
              figures
-           ) do
+           ),
+         {:ok, blocked} <- convert_too_big(reads, buyer, amount, figures.blocked) do
       {:ok, [Review.step("convert", buyer, Call.encode("convert(uint256)", [amount]))],
-       Map.put(figures, :amount, amount)}
+       figures |> Map.put(:amount, amount) |> Map.put(:blocked, blocked)}
     else
       {:problem, problem, figures} -> {:problem, problem, figures}
       _unread -> {:problem, :unread, %{blocked: %{}}}
     end
   end
 
-  # Only an empty line, or a piece not open yet, is sure to fail.
+  # An empty line, or a piece not open yet, is sure to fail.
   defp convert_blocked(_reads, 0, _opens_at), do: %{"convert" => :nothing_queued}
 
   defp convert_blocked(reads, _in_line, opens_at) do
@@ -151,6 +158,45 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
       do: %{"convert" => {:opens_at, opens_at}},
       else: %{}
   end
+
+  # Otherwise the piece itself is tried at the head block: the buyer refuses one
+  # that moves the route's price by more than 1%, so a piece too big for the
+  # pools right now is sure to fail. A smaller one may not be, and the reason
+  # names the most whole USDC the buyer takes now, or nil when it takes none.
+  defp convert_too_big(_reads, _buyer, _amount, blocked) when blocked != %{}, do: {:ok, blocked}
+
+  defp convert_too_big(reads, buyer, amount, blocked) do
+    case piece_goes_through?(reads, buyer, amount) do
+      {:ok, true} ->
+        {:ok, blocked}
+
+      {:ok, false} ->
+        top = min(div(amount - 1, @usdc_unit), div(@piece_usdc, @usdc_unit))
+
+        with {:ok, largest} <- largest_piece(reads, buyer, 1, top, nil),
+             do: {:ok, %{"convert" => {:too_big, largest}}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # The most whole USDC from `low` to `high` the buyer takes now, by halving:
+  # a piece goes through or not by its size alone.
+  defp largest_piece(_reads, _buyer, low, high, found) when low > high, do: {:ok, found}
+
+  defp largest_piece(reads, buyer, low, high, found) do
+    middle = div(low + high, 2)
+
+    case piece_goes_through?(reads, buyer, middle * @usdc_unit) do
+      {:ok, true} -> largest_piece(reads, buyer, middle + 1, high, middle * @usdc_unit)
+      {:ok, false} -> largest_piece(reads, buyer, low, middle - 1, found)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp piece_goes_through?(reads, buyer, amount),
+    do: Reads.goes_through?(reads, buyer, "convert(uint256)", [amount])
 
   defp approve(fleet, asset, amount),
     do:
@@ -244,6 +290,18 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
           {:uint, 256}
         )
   end
+
+  # The advance's asset, with the symbol and decimals it reported, as the
+  # treasury page types a return of all of it: any token the fleet recorded,
+  # held now or not.
+  defp advanced_asset(fleet, asset) do
+    {symbol, decimals} = Map.get(Treasury.assets(fleet).details, asset, {nil, nil})
+    %{address: asset, symbol: symbol, decimals: decimals}
+  end
+
+  # An amount of a token that never said its decimals can't be read.
+  defp decimals(%{decimals: nil}, figures), do: {:problem, :decimals_unknown, figures}
+  defp decimals(%{decimals: decimals}, _figures), do: {:ok, decimals}
 
   defp named(fleet, preview), do: Enum.map(preview, &Map.merge(named_asset(fleet, &1.asset), &1))
 

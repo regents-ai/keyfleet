@@ -203,11 +203,12 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
     }
 
     /// @dev Both committed manifests carry the five founding fleets in founding order with the
-    /// NFTs lane's deck fingerprints, 1,000 cards each and 1,998 for the Regents Club, and
+    /// founding deck fingerprints, 1,024 cards for Classic #1, 1,000 for the next three and 1,998
+    /// for the Regents Club, and
     /// profiles the managers accept.
     function test_committedManifestsCarryTheFoundingDecks() public view {
         bytes32[5] memory decks = [
-            bytes32(0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7),
+            bytes32(0x985aa7794cdd1bfdf90d9b68ae557e3e32e343077303ba55d6d7005a981c5818),
             0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706,
             0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d,
             0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66,
@@ -220,7 +221,7 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
                 KeyfleetManifest.FoundingFleet memory fleet = manifest.founding[index];
                 assertTrue(fleet.preset == keys.foundingPreset(index + 1), "Founding order");
                 assertEq(fleet.deckHash, decks[index], "Deck fingerprint");
-                assertEq(fleet.deckSize, index == 4 ? 1998 : 1000, "Deck size");
+                assertEq(fleet.deckSize, index == 0 ? 1024 : index == 4 ? 1998 : 1000, "Deck size");
                 assertGt(bytes(fleet.profile.name).length, 0, "Named");
             }
         }

@@ -75,10 +75,10 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     valid = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
 
-    for {method, path} <- [
-          {:get, @update_path},
-          {:post, @update_path <> "?id=forged"},
-          {:post, "/api/v1/agent/profile/%75pdate"}
+    for {method, path, status} <- [
+          {:get, @update_path, 405},
+          {:post, @update_path <> "?id=forged", 401},
+          {:post, "/api/v1/agent/profile/%75pdate", 404}
         ] do
       assert Req.request!(
                method: method,
@@ -87,7 +87,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                body: valid.body,
                retry: false,
                redirect: false
-             ).status == 401
+             ).status == status
     end
 
     refute_receive {:broker_payload, _}
@@ -149,6 +149,14 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert oversized.status == 413
     refute_receive {:broker_payload, _}
+  end
+
+  test "a profile update body changed after signing is refused", c do
+    request = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
+    response = send_request(c, %{request | body: ~s({"name":"Changed"})})
+
+    assert response.status == 401
+    assert response.body == %{"error" => SignedAgentHelpers.refusal()}
   end
 
   test "verification transport never retries or follows redirects", c do
@@ -217,12 +225,13 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       assert Jason.decode!(refusal.resp_body) == refused("duplicate_proof")
     end
 
-    for {method, path} <- [
-          {:get, @path},
-          {:put, @path},
-          {:post, @path <> "?name=x"},
-          {:post, "/api/v1/agent/other"},
-          {:post, "/api/v1/%61gent/join/status"}
+    # A wrong method or address is told so, never that the sign-in failed.
+    for {method, path, status} <- [
+          {:get, @path, 405},
+          {:put, @path, 405},
+          {:post, @path <> "?name=x", 401},
+          {:post, "/api/v1/agent/other", 404},
+          {:post, "/api/v1/%61gent/join/status", 404}
         ] do
       assert Req.request!(
                method: method,
@@ -231,7 +240,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                body: @body,
                retry: false,
                redirect: false
-             ).status == 401
+             ).status == status
     end
 
     queried =
@@ -249,7 +258,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, %{
              signed
              | headers: Map.put(signed.headers, "content-type", "text/plain")
-           }).status == 401
+           }).status == 415
 
     refute_receive {:broker_payload, _}
     assert send_request(c, signed).status == 200
@@ -473,7 +482,17 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   end
 
   defp signed(c, body, audience \\ "keyfleet", chain \\ 8453, path \\ @path),
-    do: SignedAgentHelpers.sign(c.signer, c.secret, "POST", path, body, audience, chain)
+    do:
+      SignedAgentHelpers.sign(
+        c.signer,
+        c.secret,
+        Siwa.Contract.authority(c.app),
+        "POST",
+        path,
+        body,
+        audience,
+        chain
+      )
 
   defp send_request(c, request),
     do:

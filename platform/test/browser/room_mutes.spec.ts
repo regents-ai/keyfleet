@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {prepareFleet, sayInGeneral} from "./support/fleet_chain"
+import {prepareFleet, sayInPublic} from "./support/fleet_chain"
 
 // Someone signed in mutes a key from one of its posts in a room. Its posts
 // leave that page and every other page they have open, the key is listed
@@ -8,7 +8,7 @@ import {prepareFleet, sayInGeneral} from "./support/fleet_chain"
 // writes posts of its own, so a retried worker's posts are never mistaken for
 // them.
 const fleet = "fleet_tech_classic"
-const room = `/classic/1/rooms/general`
+const room = `/classic/1?room=general`
 const loud = "0x7777777777777777777777777777777777777777"
 const quiet = "0x8888888888888888888888888888888888888888"
 
@@ -29,8 +29,8 @@ async function openRoom(page: Page) {
 test("a key muted on one page is hidden on every page of the same person, and comes back when unmuted", async ({page, context}) => {
   const loudText = said("Buy my fan art, every hour.")
   const quietText = said("Survey notes are in the workspace.")
-  const loudKey = sayInGeneral(fleet, loud, loudText)
-  sayInGeneral(fleet, quiet, quietText)
+  const loudKey = sayInPublic(fleet, loud, loudText)
+  sayInPublic(fleet, quiet, quietText)
 
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   const errors = await openRoom(page)
@@ -38,12 +38,12 @@ test("a key muted on one page is hidden on every page of the same person, and co
   await installAuthenticatedPrivy(other, "valid")
   const otherErrors = await openRoom(other)
 
-  const loudPost = (on: Page) => on.getByText(loudText)
-  const quietPost = (on: Page) => on.getByText(quietText)
+  const loudPost = (on: Page) => on.locator("#rooms-thread").getByText(loudText)
+  const quietPost = (on: Page) => on.locator("#rooms-thread").getByText(quietText)
   await expect(loudPost(page)).toBeVisible()
   await expect(page.locator("#rooms-muted")).toHaveCount(0)
 
-  await page.getByRole("button", {name: `Mute Key #${loudKey}`}).first().click()
+  await page.getByRole("button", {name: `Mute Key ${loudKey}`}).first().click()
 
   for (const on of [page, other]) {
     await expect(loudPost(on)).toHaveCount(0)
@@ -64,10 +64,10 @@ test("a key muted on one page is hidden on every page of the same person, and co
 
 test("a visitor who is not signed in is offered no mute", async ({page}) => {
   const text = said("Buy my fan art, every hour.")
-  sayInGeneral(fleet, loud, text)
+  sayInPublic(fleet, loud, text)
   const errors = await openRoom(page)
 
-  await expect(page.getByText(text)).toBeVisible()
+  await expect(page.locator("#rooms-thread").getByText(text)).toBeVisible()
   await expect(page.getByRole("button", {name: /Mute Key/})).toHaveCount(0)
   expect(errors).toEqual([])
 })

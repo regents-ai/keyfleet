@@ -14,7 +14,7 @@ does not count.
 
 | Data | Where | How it comes back |
 | --- | --- | --- |
-| Each fleet's work graph | `/data/graph/<fleet id>.sqlite` on the volume `keyfleet_graph`, attached to the one `keyfleet` machine `d891115dbe7098` (performance-2x, `iad`) | A Fly volume snapshot restored onto a new volume |
+| Each fleet's work graph | `/data/graph/<fleet id>.sqlite` on the volume `keyfleet_graph`, attached to the `keyfleet` graph machine `d891115dbe7098` (`iad`) | A Fly volume snapshot restored onto a new volume |
 | The fleets' code | `/data/repos` and the store's identity key `/data/keys/identity.pem` on the volume `keyfleet_code_data` of the app `keyfleet-code` | A Fly volume snapshot restored onto a new volume |
 | Everything else: fleets, rooms, messages, notebook results, pairings, sign-in | Fly Managed Postgres cluster `dzx6qo6xqzvojpv5` (`regents-platform-prod`), schema `keyfleet_app` | A point-in-time restore into a new cluster |
 | The code store's own records (repositories, pushes) | The database its `DATABASE_URL` secret names | The same restore, when that database is on the same cluster; `check` says which |
@@ -133,7 +133,7 @@ integrity check.`; then, against the repositories `check` listed,
 
 ```
 identity key: present
-<owner>/<fleet id>.git ok <refs>
+<owner>/<repository>.git ok <refs>
 repositories: <n>
 The code store's key and every live repository came back.
 ```
@@ -202,7 +202,7 @@ scripts/restore-drill.sh cleanup --live
 
 Expect the two drill machines and volumes destroyed, `Removing the restored
 cluster keyfleet-drill-<time>`, the health line and `fly status` showing only
-`d891115dbe7098`. The snapshots from step 2 expire with the volume's snapshot
+the graph machine `d891115dbe7098` and the site machine. The snapshots from step 2 expire with the volume's snapshot
 retention. Run cleanup even when a step failed: it removes whatever the drill
 recorded making, finding the restored cluster by the name `restore-db` records
 before it asks Fly.
@@ -233,15 +233,21 @@ lists the current ones. No migration was added between `602443c8` and the
 release stack's tip, so v78's code meets the tables it knows. The script lists
 any migration the live release carries that the target does not, and asks
 before going on. It deploys only a completed release, with the `fly.toml` of
-the target's own commit. By hand it is
+the target's own commit, to the graph machine and then the site machine, as
+`scripts/deploy.sh` releases. By hand it is
 
 ```sh
 git show <target commit>:platform/fly.toml > /tmp/fly.toml
-fly deploy --app keyfleet --config /tmp/fly.toml --image <the target's Docker Image> --ha=false
+fly deploy --app keyfleet --config /tmp/fly.toml --image <the target's Docker Image> --ha=false --process-groups graph
+fly deploy --app keyfleet --config /tmp/fly.toml --image <the target's Docker Image> --ha=false --process-groups site --strategy bluegreen
 ```
 
 then `https://keyfleet.ai/healthz` answers 200 and `fly status --app keyfleet`
 shows the target's image.
+
+A target from before the site and graph machines were split (21 October
+2026) has one machine in its `fly.toml`; going back to one is the split's own
+rollback, in the deploy checklist's "Two machines" section.
 
 ## A real loss (not the drill)
 
@@ -250,13 +256,13 @@ yet, and each needs Sean's typed go naming it.
 
 - **The graph volume.** Fork the damaged volume to keep it
   (`fly volumes fork <id> --name keyfleet_graph_lost --app keyfleet`), stop
-  and destroy the machine, destroy the damaged volume, create `keyfleet_graph`
-  from the chosen snapshot (`fly volumes create keyfleet_graph --snapshot-id
-  <vs_…> --region iad --size <GB> --app keyfleet`), then release with
-  `scripts/deploy.sh production`, which creates one machine on it. The new
-  machine has a new id; update `LIVE_MACHINE` here and in the script.
+  and destroy the graph machine, destroy the damaged volume, create
+  `keyfleet_graph` from the chosen snapshot (`fly volumes create keyfleet_graph
+  --snapshot-id <vs_…> --region iad --size <GB> --app keyfleet`), then release
+  with `scripts/deploy.sh production`, which creates the graph machine on it.
+  The new machine has a new id; update `LIVE_MACHINE` here and in the script.
 - **The code store volume.** The same, in `keyfleet-code`, with
-  `keyfleet_code_data`, deployed from the Twigpine checkout
+  `keyfleet_code_data`, deployed from the code store's checkout, `repos/keyfleet-code`
   (`infra/keyfleet/README.md`, "Deploy on Fly").
 - **The database.** A point-in-time restore makes a new cluster with a new id
   and host. Keyfleet admits only `dzx6qo6xqzvojpv5`, and every Regents site

@@ -1,7 +1,8 @@
 import type {Address, Hash, Hex} from "viem"
 
 import type {Hook} from "../hook_composition"
-import {offerPageTool, type PressButton} from "../page_tools"
+import type {PressButton} from "../page_tools"
+import {report} from "../visit_log"
 import {activeEthereumWallet} from "../wallet_actions/connected_wallet"
 import {
   failure,
@@ -39,7 +40,7 @@ type OnchainStepsHook = Hook & {
   review?: Review
   clicked?: (event: Event) => void
   pressButton?: PressButton
-  tool?: AbortController
+  tool?: Promise<AbortController | undefined>
   refresh?: () => void
   walletChanged?: () => void
 }
@@ -89,8 +90,7 @@ export const OnchainSteps: Hook = {
           return await press(this.review, name, push)
         }
         const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
-        // The server never heard the press, so it cannot say why; the page does.
-        if (result?.status !== "fulfilled") return lostPress(this.el)
+        if (result?.status !== "fulfilled") return lostPress(this.el, name)
         const reply = result.value.reply as {review?: Review; send?: string}
         if (reply.review && reply.send) {
           heard()
@@ -99,7 +99,7 @@ export const OnchainSteps: Hook = {
         push("step_failed", {step: name, reason: "step_unknown"})
         return {reason: "step_unknown"}
       } catch {
-        return lostPress(this.el)
+        return lostPress(this.el, name)
       } finally {
         release()
         // The press may have spent funds or changed what the wallet allows.
@@ -107,9 +107,12 @@ export const OnchainSteps: Hook = {
       }
     }
 
+    // Signed out, a button carries the page's sign-in mark, and its press
+    // opens sign-in instead (auth_lazy.ts).
     this.clicked = event => {
       const button = (event.target as Element | null)?.closest<HTMLElement>("[data-onchain-step]")
       if (!button?.dataset.onchainStep || !this.el.contains(button)) return
+      if (button.dataset.accountTarget === "sign-in") return
       void this.pressButton!(button, formInputs(this.el))
     }
     this.el.addEventListener("click", this.clicked)
@@ -129,11 +132,16 @@ export const OnchainSteps: Hook = {
     }
     window.dispatchEvent(new CustomEvent("ash:wallet-sync"))
 
-    this.tool = offerPageTool(this.el, (button, form) => this.pressButton!(button, {...formInputs(this.el), ...form}))
+    // Only a browser with its own agent loads the tools.
+    if ("modelContext" in document) {
+      this.tool = import("../page_tools").then(({offerPageTool}) =>
+        offerPageTool(this.el, (button, form) => this.pressButton!(button, {...formInputs(this.el), ...form})),
+      )
+    }
   },
 
   destroyed(this: OnchainStepsHook) {
-    this.tool?.abort()
+    void this.tool?.then(registration => registration?.abort())
     if (this.clicked) this.el.removeEventListener("click", this.clicked)
     if (this.walletChanged) window.removeEventListener("ash:wallet-state", this.walletChanged)
     if (this.refresh) {
@@ -224,8 +232,11 @@ function lost(root: HTMLElement, shown: boolean): void {
 }
 
 // A press that could not reach the server: the page says so, and so does the answer.
-function lostPress(root: HTMLElement): "lost" {
+// The server never heard the press, so it cannot say why; the page does, and
+// reports it.
+function lostPress(root: HTMLElement, step: string): "lost" {
   lost(root, true)
+  report({name: "press.unsent", where: step, outcome: "lost"})
   return "lost"
 }
 

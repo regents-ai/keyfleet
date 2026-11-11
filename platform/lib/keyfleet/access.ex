@@ -18,9 +18,9 @@ defmodule Keyfleet.Access do
   disagree with the table.
 
   A rule narrower than a class stands beside the class check, never in its
-  place: only agents write in rooms, only the Key that started a poll ends it,
+  place: only agents write in the members' rooms, only the Key that started a poll ends it,
   a direct message is read by the Key it names. What belongs to one person,
-  their mutes, quote requests, Credits, agents and settings, is theirs alone
+  their mutes, quote requests, agents and settings, is theirs alone
   and is not in the table. What the server writes for itself is not here
   either.
 
@@ -29,11 +29,13 @@ defmodule Keyfleet.Access do
   `scope` is a fleet's id. A member holds one of the fleet's Keys, holds an
   active shard of one, or is an agent paired with a person who holds one
   (`Keyfleet.Keys.identity/2`), read from the site's own record of who holds
-  each Key. The chain reader keeps that record. While it has not read the
-  fleet within two minutes, or is 300 blocks or more behind, or is reading a
-  stretch again (`Keyfleet.Chain.fresh?/1`), nobody is a member: a holding
-  that may be out of date grants nothing. So a member's standing is never
-  more than two minutes behind the chain. Nothing here is stored for a person:
+  each Key. The chain reader keeps that record, reading every five minutes and
+  ten seconds after a Keyfleet page's own on-chain step lands. While it has
+  not read the fleet within seven minutes, or is 3,000 blocks or more behind, or
+  is reading a stretch again (`Keyfleet.Chain.fresh?/1`), nobody is a member:
+  a holding that may be out of date grants nothing. So a member's standing is
+  never more than seven minutes behind the chain, and about ten seconds behind
+  a Key moved with Keyfleet's own buttons. Nothing here is stored for a person:
   a Key changing hands moves membership with it on the next question.
   Whatever moves value still reads the chain at its latest block.
   """
@@ -44,8 +46,11 @@ defmodule Keyfleet.Access do
   @classes [:public, :person, :member]
 
   @components %{
-    # The one room of a fleet anyone reads. It is written as any room is.
+    # The Public room, read by anyone and written as any room is.
     general_room: %{read: :public, write: :member},
+    # The People and agents room, which anyone reads and anyone signed in writes,
+    # with a Key or without one.
+    people_room: %{read: :public, write: :person},
     # Every other room: that it exists, what it is called and what is said in it.
     rooms: %{read: :member, write: :member},
     # Each Key's own thread.
@@ -53,7 +58,9 @@ defmodule Keyfleet.Access do
     # Which branches and tags moved in the fleet's code, and who moved them.
     code: %{read: :member, write: :member},
     # The fleet's workspace, but for what its activity shows anyone.
-    workspace: %{read: :member, write: :member}
+    workspace: %{read: :member, write: :member},
+    # The fleet's polls, their questions, choices, notes and results.
+    polls: %{read: :member, write: :member}
   }
 
   # What is written by the same act as another component is written by the
@@ -101,8 +108,7 @@ defmodule Keyfleet.Access do
   def allowed?(actor, action, component, scope) when action in [:read, :write] do
     case needed(action, component) do
       :public -> true
-      :person -> person?(actor)
-      :member -> member?(actor, scope)
+      needed -> rank(class(actor, scope)) >= rank(needed)
     end
   end
 

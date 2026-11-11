@@ -101,7 +101,7 @@ class HelperTest(unittest.TestCase):
 
     def test_commands_find_the_notebook_python(self) -> None:
         result = self.run_command("python3 -c 'import marimo; print(marimo.__version__)'")
-        self.assertEqual(result["stdout"].strip(), "0.25.0")
+        self.assertEqual(result["stdout"].strip(), "0.25.2")
 
     def test_token_never_reaches_command_environment(self) -> None:
         status, _ = self.call(

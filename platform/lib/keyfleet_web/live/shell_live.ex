@@ -19,22 +19,27 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
-  alias Keyfleet.Notebooks
+  alias Keyfleet.Points.Board
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Muter
+  alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
     AccountLive,
     CodePassword,
     DmsLive,
     FleetLive,
+    FleetNow,
     KeyMap,
     KeyProfileLive,
     KeysLive,
     PageRead,
+    PairLive,
     PointsLive,
     PollsLive,
+    ProjectLive,
+    ProjectPage,
     ProposalsLive,
     Read,
     RoomsLive,
@@ -43,17 +48,25 @@ defmodule KeyfleetWeb.ShellLive do
     WorkspaceLive
   }
 
-  alias KeyfleetWeb.Components.Reading
+  alias KeyfleetWeb.Components.{AgentSetup, BuyKey, Reading, SetupList}
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
 
   # The events each area's page sends, which that area's module answers.
-  @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready keymap_pictures find_keys select_key validate_quote send_quote)
-  @room_events ~w(mute_key unmute_key)
-  @key_profile_events ~w(post_to_key remove_from_wall close_key)
+  @fleet_events ~w(activity_earlier open_pass_key keymap_ready keymap_pictures find_keys select_key validate_quote send_quote)
+  @room_events ~w(mute_key unmute_key post_to_room)
+  @key_profile_events ~w(post_to_key confirm_remove_from_wall cancel_remove_from_wall remove_from_wall close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
-  @poll_events ~w(start_poll end_poll cast_vote)
+  @poll_events ~w(start_poll confirm_end_poll cancel_end_poll end_poll cast_vote)
+  @sign_in_events ~w(open_notebooks get_code_password)
+  @workspace_events ~w(pin unpin project_start project_archive project_take_over confirm_project_delete cancel_project_delete project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
+
+  # The routes that show a fleet's workspace and its votes.
+  @workspace_routes [:workspace, :workspace_item, :code_commit, :code_history, :code_files]
+  @proposals_routes [:proposals, :proposal, :treasury]
+
+  @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
   @impl true
   def mount(_params, _session, socket) do
@@ -80,21 +93,26 @@ defmodule KeyfleetWeb.ShellLive do
        notebooks_notice: nil,
        code_password: nil,
        code_notice: nil,
+       project_notice: nil,
+       publish_notice: nil,
+       project_confirm_delete: false,
        connection_outcome: nil,
        held_keys: [],
-       paired_agents: %Read{},
+       slices: %Read{},
+       pair_start: nil,
+       project_page: nil,
        agents_topic: nil,
-       credits: %Read{},
-       credits_topic: nil,
        points: %Read{},
        points_bonus: %Read{},
+       points_board: %Read{},
+       hearing_board?: false,
        points_topic: nil,
        points_earning: [],
        fleet: nil,
        fleet_params: nil,
        fleet_place: :fleet,
        fleet_class: nil,
-       keys_topic: nil,
+       keys_topics: [],
        activity: nil,
        activity_refresh: nil,
        key_profile: nil,
@@ -115,18 +133,20 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_params: nil,
        proposals_topic: nil,
        proposals_refresh?: false,
+       treasury_reread: 0,
+       treasury_resting: nil,
        polls: nil,
        polls_topics: [],
        polls_clock: nil,
        poll_form: nil,
        polls_notice: nil,
+       poll_confirm_end: false,
        shared: %{},
-       send_agent_open: false,
+       buy_key: nil,
        pass_note: nil,
        quotes: nil
      )
-     |> read_credits(current_account(socket.assigns.access_context))
-     |> follow_credits(current_account(socket.assigns.access_context))}
+     |> follow_agents(current_account(socket.assigns.access_context))}
   end
 
   # A page that couldn't be loaded may have started listening to what it was
@@ -151,8 +171,8 @@ defmodule KeyfleetWeb.ShellLive do
       {:error, _failure} ->
         {:noreply,
          socket
-         |> assign(route_spec: route_spec, load_failed?: true, send_agent_open: false)
-         |> assign(PublicDocuments.page(route_spec.route_id))}
+         |> assign(route_spec: route_spec, load_failed?: true)
+         |> assign(PublicDocuments.page(route_spec, params))}
     end
   end
 
@@ -160,19 +180,22 @@ defmodule KeyfleetWeb.ShellLive do
     if coming_soon_inside?(route_spec, params) do
       {:noreply, push_patch(socket, to: Fleets.path(route_spec.fleet_id), replace: true)}
     else
-      # Going anywhere, back and forward included, closes "Send your agent",
-      # and leaves the room or conversation on show read as far as it was shown.
+      # Going anywhere, back and forward included, leaves the room or
+      # conversation on show read as far as it was shown.
       {:noreply,
        socket
        |> RoomsLive.leave()
        |> DmsLive.leave()
-       |> assign(route_spec: route_spec, send_agent_open: false)
-       |> assign(PublicDocuments.page(route_spec.route_id))
+       |> assign(route_spec: route_spec)
+       |> assign(:pair_start, PairLive.start(params))
+       |> assign(PublicDocuments.page(route_spec, params))
+       |> load_project(route_spec, params)
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
+       |> hear_board(route_spec)
        |> load_points(route_spec)
        |> read_class(params)
-       |> follow_keys(keys_fleet(route_spec, params))
+       |> follow_keys(keys_fleets(route_spec, params))
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
        |> load_key(route_spec, params)
@@ -218,14 +241,16 @@ defmodule KeyfleetWeb.ShellLive do
   defp name_fleet(params, %{fleet_id: nil}), do: params
   defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
 
-  # A coming-soon fleet has only its own page: its rooms, workspace,
-  # proposals, treasury and polls open with the fleet.
+  # A coming-soon fleet has only its own page: its workspace, proposals,
+  # treasury and polls open with the fleet, and its hall opens no room.
   defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
-              :rooms,
               :workspace,
               :workspace_item,
               :code_commit,
+              :code_history,
+              :code_files,
+              :project,
               :proposals,
               :proposal,
               :treasury,
@@ -236,12 +261,37 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp coming_soon_inside?(_route_spec, _params), do: false
 
+  # A press that can't be finished because the site's records can't be read
+  # leaves the page as it was and says so, until a press goes through. Opening
+  # the notebooks and getting a git password sign the person in elsewhere, so
+  # they are answered as before.
   @impl true
-  def handle_event(
-        "request_verified_connection",
-        %{"action" => action, "provider" => provider},
-        socket
-      ) do
+  def handle_event(event, params, socket) when event in @sign_in_events,
+    do: press(event, params, socket)
+
+  def handle_event(event, params, socket) do
+    case PageRead.run("app", fn -> press(event, params, socket) end) do
+      {:ok, {:noreply, socket}} -> {:noreply, clear_flash(socket, :error)}
+      {:ok, {:reply, reply, socket}} -> {:reply, reply, clear_flash(socket, :error)}
+      {:error, _failure} -> {:noreply, put_flash(socket, :error, @press_failed)}
+    end
+  end
+
+  # A notice the page can't answer because the site's records can't be read
+  # leaves the page as it was; the next notice or visit reads again.
+  @impl true
+  def handle_info(message, socket) do
+    case PageRead.run("app", fn -> notice(message, socket) end) do
+      {:ok, answer} -> answer
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
+
+  defp press(
+         "request_verified_connection",
+         %{"action" => action, "provider" => provider},
+         socket
+       ) do
     with %Human{} <- human_actor(socket),
          {:ok, provider} <- Providers.parse(provider),
          {:ok, request} <-
@@ -266,48 +316,33 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The outcome is judged against the connections read after the provider came
   # back, so it waits for that read to land.
-  def handle_event("refresh_verified_connections", params, socket) do
+  defp press("refresh_verified_connections", params, socket) do
     {:noreply,
      socket
      |> assign(connection_outcome: params, verified_connections_notice: nil)
      |> read_verified_connections()}
   end
 
-  # The fleet's notebooks open on their own address, signed in by a link that
-  # works once; only a holder of one of the fleet's keys gets one.
-  def handle_event("open_notebooks", _params, socket) do
-    with %Human{} = actor <- human_actor(socket),
-         {:ok, url} <-
-           Notebooks.open(
-             actor,
-             socket.assigns.session_lineage,
-             socket.assigns.workspace.fleet_id
-           ) do
-      {:noreply, redirect(socket, external: url)}
-    else
+  # The fleet's notebooks open on their own address, signed in by a code that
+  # works once, which Keyfleet's notebook page sends there
+  # (`KeyfleetWeb.NotebookOpenController`); only a holder of one of the
+  # fleet's keys gets one.
+  defp press("open_notebooks", _params, socket) do
+    case human_actor(socket) do
+      %Human{} ->
+        {:noreply,
+         redirect(socket,
+           to: ~p"/fleets/#{socket.assigns.workspace.fleet_id}/notebooks/open?#{[to: "/"]}"
+         )}
+
       nil ->
         {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
-
-      {:error, :signed_out} ->
-        {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
-
-      {:error, :not_holder} ->
-        {:noreply,
-         assign(socket,
-           notebooks_notice: "Only holders of this fleet’s Keys can open its notebooks."
-         )}
-
-      {:error, _error} ->
-        {:noreply,
-         assign(socket,
-           notebooks_notice: "The notebooks can’t be opened right now. Try again in a minute."
-         )}
     end
   end
 
   # A git password for the fleet's code, for a holder of one of its keys; it
   # ends when this sign-in does.
-  def handle_event("get_code_password", _params, socket) do
+  defp press("get_code_password", _params, socket) do
     with %Human{} = actor <- human_actor(socket),
          {:ok, %{password: password, expires_at: expires_at}} <-
            CodePassword.for_person(
@@ -317,10 +352,7 @@ defmodule KeyfleetWeb.ShellLive do
            ) do
       {:noreply,
        assign(socket,
-         code_password: %{
-           password: password,
-           until: Calendar.strftime(expires_at, "%-d %B at %H:%M UTC")
-         },
+         code_password: %{password: password, until: expires_at},
          code_notice: nil
        )}
     else
@@ -342,181 +374,286 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  def handle_event(event, params, socket) when event in @room_events,
+  # "Buy Key" in the header and on a fleet page open
+  # the "Buy Key" window for a fleet that sells its Keys, drawn from the
+  # fleet's reading every page shares and drawn again as it changes.
+  defp press("open_buy_key", %{"fleet" => fleet_id}, socket) do
+    if fleet_id in Fleets.catalog_ids() and not Presets.given?(fleet_id) do
+      {:noreply,
+       socket
+       |> SharedFigures.follow(:buy_key, [FleetNow.key(fleet_id)])
+       |> assign(:buy_key, BuyKey.sale(fleet_id))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp press("close_buy_key", _params, socket),
+    do: {:noreply, socket |> SharedFigures.follow(:buy_key, []) |> assign(:buy_key, nil)}
+
+  defp press(event, params, socket) when event in @workspace_events,
+    do: WorkspaceLive.handle_event(event, params, socket)
+
+  defp press(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @key_profile_events,
+  defp press(event, params, socket) when event in @key_profile_events,
     do: KeyProfileLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @fleet_events,
+  defp press(event, params, socket) when event in @fleet_events,
     do: FleetLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @dm_events,
+  defp press(event, params, socket) when event in @dm_events,
     do: DmsLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @poll_events,
+  defp press(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
 
-  # The person's Credits balance changed on any Regent site: a purchase, a
-  # gift, a hold or its close.
-  @impl true
-  def handle_info(:credits_changed, socket) do
-    account = current_account(socket.assigns.access_context)
-    {:noreply, read_credits(socket, account)}
+  # The Treasury's refresh, once every 30 seconds for each person: by
+  # account when signed in, by visit when not.
+  defp press("refresh_treasury", _params, socket) do
+    who =
+      case current_account(socket.assigns.access_context) do
+        nil -> {:visit, socket.id}
+        account -> {:account, account.id}
+      end
+
+    {:noreply, ProposalsLive.refresh_treasury(socket, who)}
   end
+
+  # A press no page sends changes nothing.
+  defp press(_event, _params, socket), do: {:noreply, socket}
+
+  # The Treasury's refresh may be pressed again, whatever the page shows now.
+  defp notice({:treasury_refresh_ready, rest}, socket),
+    do: {:noreply, ProposalsLive.refresh_ready(socket, rest)}
 
   # A page that couldn't be loaded shows nothing else that a notice could
   # change; the header's balance still follows.
-  def handle_info(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
+  defp notice(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
+
+  # A new post of the room anyone reads, published whole on that room's own
+  # topic (`Keyfleet.Rooms.Message.topic/2`), which the hall listens to while
+  # the Public room is open in it, and shows as it came.
+  defp notice(%Broadcast{topic: "public:room:" <> _} = notice, socket),
+    do: RoomsLive.handle_info(notice, socket)
 
   # A notice that the open room has taken a post it is not showing yet is only a
   # nudge to look again. The new posts are read back from the room itself, and
   # a room shown as for keys only looks again at whether the reader may read
-  # it; the place the notice names is never shown.
-  def handle_info(
-        %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
-        %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
-      )
-      when seq > last_seq,
-      do: {:noreply, RoomsLive.show_new_posts(socket)}
+  # it; the place the notice names is never shown. The Public room's posts come whole
+  # just before their head, so a page of the Public room is level with the head when
+  # it arrives and reads nothing; only a post whose notice was lost leaves it
+  # behind. A member's hall reads its feed, hidden under the room, again.
+  defp notice(
+         %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
+         %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
+       )
+       when seq > last_seq do
+    socket = RoomsLive.show_new_posts(socket)
+    {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
+  end
 
-  # The page only hears about the rooms of the fleet it shows. The rooms page
-  # marks the room in its list as having something new.
-  def handle_info(%Broadcast{event: "room_head", payload: head}, socket) do
+  # The page only hears about the rooms of the fleet it shows. The hall marks
+  # the room in its list as having something new when a room is open, and a
+  # member's hall reads its feed again.
+  defp notice(%Broadcast{event: "room_head", payload: head}, socket) do
     socket = RoomsLive.note_head(socket, head)
     {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
-  # corrected or unpaired.
-  def handle_info(:agents_changed, socket) do
-    if socket.assigns.route_spec.route_id == :account,
-      do: send_update(KeyfleetWeb.PairingBox, id: "account-agents-pair", agents_changed: true)
+  # corrected or unpaired. The account menu and the pairing window follow on
+  # every page, the Agents page's list on that page, the setup list on a
+  # fleet's page, and the agents' states and shard presses on the person's own
+  # Key's page.
+  defp notice(:agents_changed, socket) do
+    send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
+    socket = socket |> setup_changed() |> agent_setup_changed() |> KeysLive.agents_changed()
 
-    account = current_account(socket.assigns.access_context)
-    {:noreply, read_paired_agents(socket, account)}
+    case socket.assigns.route_spec.route_id do
+      :account_agents ->
+        send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
+        {:noreply, socket}
+
+      :pair ->
+        send_update(KeyfleetWeb.PairingBox, id: "pair-pairing-box", agents_changed: true)
+        {:noreply, socket}
+
+      _other ->
+        {:noreply, socket}
+    end
   end
 
   # A Points award or correction landed for this account; the Points page follows.
-  def handle_info(
-        %{topic: "points:" <> _, payload: :points_changed},
-        %{assigns: %{route_spec: %{route_id: :points}}} = socket
-      ),
-      do: {:noreply, read_points(socket)}
+  defp notice(
+         %{topic: "points:" <> _, payload: :points_changed},
+         %{assigns: %{route_spec: %{route_id: :points}}} = socket
+       ),
+       do: {:noreply, read_points(socket)}
 
-  def handle_info(%{topic: "points:" <> _, payload: :points_changed}, socket),
+  defp notice(%{topic: "points:" <> _, payload: :points_changed}, socket),
     do: {:noreply, socket}
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["dm_head", "dm_deleted"],
-      do: DmsLive.handle_info(notice, socket)
+  # The board every signed-in reader shares was read again.
+  defp notice(
+         {:shared_reading, {:points_board, _program}},
+         %{assigns: %{route_spec: %{route_id: :points}}} = socket
+       ),
+       do: {:noreply, read_points_board(socket)}
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["key_activity", "wall_removed"],
-      do: KeyProfileLive.handle_info(notice, socket)
+  defp notice({:shared_reading, {:points_board, _program}}, socket), do: {:noreply, socket}
 
-  def handle_info(%Broadcast{event: "rooms_changed"} = notice, socket),
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["dm_head", "dm_deleted"],
+       do: DmsLive.handle_info(notice, socket)
+
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["key_activity", "wall_removed"],
+       do: KeyProfileLive.handle_info(notice, socket)
+
+  defp notice(%Broadcast{event: "rooms_changed"} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["poll_changed", "polls_changed"],
-      do: PollsLive.handle_info(notice, socket)
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["poll_changed", "polls_changed"],
+       do: PollsLive.handle_info(notice, socket)
 
-  def handle_info(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
+  defp notice(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
 
   # A mute added or taken away hides or shows that key's posts in the room on
   # show and in the open key's thread.
-  def handle_info(
-        %Broadcast{event: "mutes_changed", payload: %{fleet_id: fleet_id}} = notice,
-        socket
-      ) do
+  defp notice(
+         %Broadcast{event: "mutes_changed", payload: %{fleet_id: fleet_id}} = notice,
+         socket
+       ) do
     {:noreply, socket} = RoomsLive.handle_info(notice, socket)
     {:noreply, KeyProfileLive.show_unmuted(socket, fleet_id)}
   end
 
   # Keys changed in a fleet. What the reader may read of the fleet in the
   # address is read again first, and the page moves to what that class hears.
-  def handle_info({:keys_changed, fleet_id, token_ids}, socket),
-    do: socket |> reread_class(fleet_id) |> keys_changed(fleet_id, token_ids)
+  # The class read stands, with what it hears, when the page can't be read again.
+  defp notice({:keys_changed, fleet_id, token_ids}, socket) do
+    socket = socket |> reread_class(fleet_id) |> setup_changed()
+
+    case PageRead.run("app", fn -> keys_changed(socket, fleet_id, token_ids) end) do
+      {:ok, answer} -> answer
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
+
+  # Keys in a fleet were marked present: one notice for each pass of the chain
+  # reader that recorded any. Only what shows presence reads again: the fleet's
+  # setup list, when one of the Keys is the person's, and on the person's own
+  # Key's page their agents' states.
+  defp notice({:keys_present, fleet_id, token_ids}, socket) do
+    case socket.assigns do
+      %{fleet: %{fleet_id: ^fleet_id}} ->
+        send_update(SetupList, id: "fleet-setup", present: token_ids)
+        {:noreply, socket}
+
+      %{key: %{fleet_id: ^fleet_id}} ->
+        {:noreply, agent_setup_changed(socket)}
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
 
   # A notice that the open fleet's workspace has moved past what the page last
   # read is only a nudge to read it again, once, a moment later: the notices
   # that come in the meantime are answered by that one read.
-  def handle_info(
-        {:graph_head, fleet_id, run_id, watermark},
-        %{assigns: %{workspace: %{fleet_id: fleet_id, seen: seen}}} = socket
-      ),
-      do: {:noreply, WorkspaceLive.refresh_soon(socket, seen, run_id, watermark)}
+  defp notice(
+         {:graph_head, fleet_id, run_id, watermark},
+         %{assigns: %{workspace: %{fleet_id: fleet_id, seen: seen}}} = socket
+       ),
+       do: {:noreply, WorkspaceLive.refresh_soon(socket, seen, run_id, watermark)}
 
-  def handle_info({:graph_head, fleet_id, _run_id, _watermark}, socket),
+  defp notice({:graph_head, fleet_id, _run_id, _watermark}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   # What anyone hears of the workspace: the fleet's activity has a new change
   # of it to show.
-  def handle_info(
-        {:graph_notable, fleet_id},
-        %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, WorkspaceLive.refresh_later(socket)}
+  defp notice(
+         {:graph_notable, fleet_id},
+         %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
+       ),
+       do: {:noreply, WorkspaceLive.refresh_later(socket)}
 
-  def handle_info({:graph_notable, fleet_id}, socket),
+  defp notice({:graph_notable, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
-  def handle_info(:refresh_workspace = message, socket),
+  defp notice(:refresh_workspace = message, socket),
     do: WorkspaceLive.handle_info(message, socket)
 
   # Changes sent to the open fleet's code show in its workspace a moment later.
-  def handle_info(
-        {:code_pushed, fleet_id},
-        %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, WorkspaceLive.refresh_later(socket)}
+  defp notice(
+         {:code_pushed, fleet_id},
+         %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
+       ),
+       do: {:noreply, WorkspaceLive.refresh_later(socket)}
 
-  def handle_info({:code_pushed, _fleet_id}, socket), do: {:noreply, socket}
+  defp notice({:code_pushed, _fleet_id}, socket), do: {:noreply, socket}
 
   # A notice that the open fleet's proposal records or balances changed is a
   # nudge to read its page again, once, a moment later, like the workspace's.
-  def handle_info(
-        {notice, fleet_id},
-        %{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket
-      )
-      when notice in [:proposals_changed, :balances_changed],
-      do: {:noreply, ProposalsLive.refresh_soon(socket)}
+  defp notice(
+         {notice, fleet_id},
+         %{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket
+       )
+       when notice in [:proposals_changed, :balances_changed],
+       do: {:noreply, ProposalsLive.refresh_soon(socket)}
 
   # Votes recorded in the fleet move the open key's two vote figures.
-  def handle_info(
-        {:proposals_changed, fleet_id},
-        %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true}}} = socket
-      ) do
+  defp notice(
+         {:proposals_changed, fleet_id},
+         %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true}}} = socket
+       ) do
     {:noreply,
      socket
      |> KeyProfileLive.refresh_votes()
      |> FleetLive.refresh_activity_soon(fleet_id)}
   end
 
-  def handle_info({:proposals_changed, fleet_id}, socket),
+  defp notice({:proposals_changed, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
-  # A new reading of the fleet's balances, every minute, may carry
+  # A new reading of the fleet's balances, every five minutes, may carry
   # income, so the open key's rewards are read again with it.
-  def handle_info(
-        {:balances_changed, fleet_id},
-        %{assigns: %{key_profile: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, KeyProfileLive.refresh_rewards(socket)}
+  defp notice(
+         {:balances_changed, fleet_id},
+         %{assigns: %{key_profile: %{fleet_id: fleet_id}}} = socket
+       ),
+       do: {:noreply, KeyProfileLive.refresh_rewards(socket)}
 
-  def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
+  defp notice({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
 
-  def handle_info(:refresh_proposals = message, socket),
+  defp notice(:refresh_proposals = message, socket),
     do: ProposalsLive.handle_info(message, socket)
+
+  defp notice({:onchain_landed, fleet_id}, socket),
+    do: {:noreply, socket |> setup_changed() |> ProposalsLive.onchain_landed(fleet_id)}
 
   # A reading every page shares has changed: the part of the page showing it
   # draws it again.
-  def handle_info({:shared_reading, key}, socket),
-    do: {:noreply, socket |> FleetLive.shared_changed(key) |> KeyProfileLive.shared_changed(key)}
+  defp notice({:shared_reading, key}, socket),
+    do:
+      {:noreply,
+       socket
+       |> FleetLive.shared_changed(key)
+       |> KeyProfileLive.shared_changed(key)
+       |> ProposalsLive.shared_changed(key)
+       |> buy_key_changed(key)}
 
-  def handle_info({:refresh_activity, _fleet_id} = message, socket),
+  defp notice({:refresh_activity, _fleet_id} = message, socket),
     do: FleetLive.handle_info(message, socket)
+
+  defp buy_key_changed(%{assigns: %{buy_key: %{id: fleet_id}}} = socket, {:fleet_now, fleet_id}),
+    do: assign(socket, :buy_key, BuyKey.sale(fleet_id))
+
+  defp buy_key_changed(socket, _key), do: socket
 
   @impl true
   def handle_async({Read, _name, _generation} = name, result, socket) do
@@ -526,6 +663,9 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_async(:rewards, result, socket),
     do: KeyProfileLive.handle_async(:rewards, result, socket)
 
+  def handle_async(:slice, result, socket),
+    do: KeyProfileLive.handle_async(:slice, result, socket)
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -534,17 +674,26 @@ defmodule KeyfleetWeb.ShellLive do
       account_control={@account_control}
       shell_instance={@shell_instance}
       get_key={@get_key}
-      credits={signed_in_credits(@access_context, @credits)}
     >
-      <:credits_panel :if={signed_in_credits(@access_context, @credits)}>
+      <:agents :if={current_account(@access_context)}>
         <.live_component
-          module={KeyfleetWeb.CreditsPanel}
-          id="credits-panel"
+          module={KeyfleetWeb.MenuAgents}
+          id="shell-agents"
           lease={@session_lease}
           account={current_account(@access_context)}
-          credits={@credits}
         />
-      </:credits_panel>
+      </:agents>
+      <:buy_key :if={@buy_key}>
+        <BuyKey.window sale={@buy_key} actor={actor(@access_context)} lease={@session_lease} />
+      </:buy_key>
+      <:pairing_panel :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.PairingBox}
+          id="shell-pairing-box"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+        />
+      </:pairing_panel>
       <:content :if={@load_failed?}>
         <article id="page-load-failed" class="fleet-page">
           <section class="fleet-panel">
@@ -559,15 +708,36 @@ defmodule KeyfleetWeb.ShellLive do
           path={@route_spec.destination}
         />
 
+        <ProjectLive.page
+          :if={@route_spec.route_id == :project}
+          project={@project_page}
+          workspace?={reads_workspace?(@fleet_class)}
+        />
+
+        <PairLive.page
+          :if={@route_spec.route_id == :pair}
+          account={current_account(@access_context)}
+          lease={@session_lease}
+          start={@pair_start}
+          signed_out_reason={@signed_out_reason}
+        />
+
         <AccountLive.profile
           :if={@route_spec.route_id == :account}
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
-          lease={@session_lease}
           held_keys={@held_keys}
-          paired_agents={@paired_agents}
-          credits={@credits}
+          slices={@slices}
+          lease={@session_lease}
+          actor={actor(@access_context)}
+        />
+
+        <AccountLive.agents
+          :if={@route_spec.route_id == :account_agents}
+          account={current_account(@access_context)}
+          signed_out_reason={@signed_out_reason}
+          lease={@session_lease}
         />
 
         <PointsLive.page
@@ -575,6 +745,7 @@ defmodule KeyfleetWeb.ShellLive do
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           points={@points}
+          board={@points_board}
           bonus={@points_bonus}
           earning={@points_earning}
         />
@@ -598,6 +769,7 @@ defmodule KeyfleetWeb.ShellLive do
           place={fleet_place(@route_spec.route_id)}
           fleet={@fleet}
           actor={actor(@access_context)}
+          account={current_account(@access_context)}
           lease={@session_lease}
           params={@fleet_params}
           profile={@key_profile}
@@ -605,9 +777,11 @@ defmodule KeyfleetWeb.ShellLive do
           activity={@streams.activity}
           who={@streams.fleet_who}
           now={FleetLive.now_shown(@activity)}
-          send_agent_open={@send_agent_open}
           pass_note={@pass_note}
           quotes={@quotes}
+          room={@room}
+          posts={@streams.posts}
+          room_notice={@room_notice}
         >
           <WorkspaceLive.board
             :if={@route_spec.route_id == :workspace}
@@ -615,19 +789,40 @@ defmodule KeyfleetWeb.ShellLive do
             notebooks_notice={@notebooks_notice}
             code_password={@code_password}
             code_notice={@code_notice}
+            project_notice={@project_notice}
+            publish_notice={@publish_notice}
+            project_confirm_delete={@project_confirm_delete}
             signed_out?={is_nil(actor(@access_context))}
           />
           <WorkspaceLive.item
             :if={@route_spec.route_id == :workspace_item}
             item={@workspace}
+            publish_notice={@publish_notice}
             signed_out?={is_nil(actor(@access_context))}
           />
-          <WorkspaceLive.commit :if={@route_spec.route_id == :code_commit} commit={@workspace} />
+          <WorkspaceLive.commit
+            :if={@route_spec.route_id == :code_commit}
+            commit={@workspace}
+            publish_notice={@publish_notice}
+            signed_out?={is_nil(actor(@access_context))}
+          />
+          <WorkspaceLive.history
+            :if={@route_spec.route_id == :code_history}
+            history={@workspace}
+            signed_out?={is_nil(actor(@access_context))}
+          />
+          <WorkspaceLive.files
+            :if={@route_spec.route_id == :code_files}
+            files={@workspace}
+            signed_out?={is_nil(actor(@access_context))}
+          />
           <TreasuryLive.page
             :if={@route_spec.route_id == :treasury}
             page={@proposals}
             actor={actor(@access_context)}
             lease={@session_lease}
+            reread={@treasury_reread}
+            resting?={@treasury_resting != nil}
           />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
@@ -661,13 +856,6 @@ defmodule KeyfleetWeb.ShellLive do
           confirm_delete={@dm_confirm_delete}
         />
 
-        <RoomsLive.page
-          :if={@route_spec.route_id == :rooms}
-          room={@room}
-          posts={@streams.posts}
-          notice={@room_notice}
-        />
-
         <PollsLive.list
           :if={@route_spec.route_id == :polls}
           page={@polls}
@@ -678,6 +866,7 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :poll}
           page={@polls}
           notice={@polls_notice}
+          confirm_end={@poll_confirm_end}
         />
       </:content>
     </.shell>
@@ -690,28 +879,44 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_place(:treasury), do: :treasury
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
 
-  defp fleet_place(route_id) when route_id in [:workspace, :workspace_item, :code_commit],
-    do: :workspace
+  defp fleet_place(route_id)
+       when route_id in [:workspace, :workspace_item, :code_commit, :code_history, :code_files],
+       do: :workspace
 
   defp fleet_place(_route_id), do: nil
 
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
 
-  # The header offers a Key while the fleet it is got from is open. A failed
-  # read leaves the offer out rather than the page.
-  defp get_key? do
-    case PageRead.run("header", fn -> get_key_fleet() in Fleets.open_fleet_ids() end) do
-      {:ok, open?} -> open?
-      {:error, _failure} -> false
-    end
+  # Whether the reader may open the fleet's workspace, as its class was last
+  # read: only then does a project's page link every title, "See all" and
+  # "Open in the workspace" there.
+  defp reads_workspace?(%{class: class}), do: Access.enough?(class, :read, :workspace)
+  defp reads_workspace?(nil), do: false
+
+  # The header offers a Key while the fleet it is got from is open, as that
+  # fleet's reading every page shares has it (`KeyfleetWeb.FleetNow`), so
+  # the offer costs a page no read. Until the fleet has been read the offer
+  # is left out rather than the page.
+  defp get_key?,
+    do: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet()))
+
+  # A project's page is read once, as it opens, and carries its title and,
+  # once its Key describes it, its description.
+  defp load_project(socket, %{route_id: :project}, %{
+         "fleet_id" => fleet_id,
+         "project" => name
+       }) do
+    project = ProjectPage.read(fleet_id, name)
+
+    assign(socket,
+      project_page: project,
+      page_title: project.title <> " · " <> project.fleet_name,
+      page_description: project.description || socket.assigns.page_description
+    )
   end
 
-  # A sign-in that ends while the page is open withdraws the account, and its
-  # balance and the Buy Credits panel go with it. While signed in, the panel and
-  # its wallet buttons are there whatever the reading.
-  defp signed_in_credits(access_context, credits),
-    do: current_account(access_context) && credits
+  defp load_project(socket, _route_spec, _params), do: assign(socket, :project_page, nil)
 
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key
@@ -723,15 +928,17 @@ defmodule KeyfleetWeb.ShellLive do
               :workspace,
               :workspace_item,
               :code_commit,
+              :code_history,
+              :code_files,
               :proposals,
               :proposal
             ] do
     shown = socket.assigns.fleet
 
     socket
-    |> listen_to(fleet_id)
-    |> follow_workspace(fleet_id)
-    |> follow_proposals(fleet_id)
+    |> listen_to(rooms_heard(socket, params, fleet_id))
+    |> follow_workspace(workspace_heard(socket, route_id, fleet_id))
+    |> follow_proposals(proposals_heard(socket, route_id, params, fleet_id))
     |> FleetLive.read_fleet(params, fleet_place(route_id))
     |> FleetLive.tell_map_chosen(shown)
   end
@@ -751,12 +958,71 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:fleet_who, [], reset: true)
       |> stream(:activity, [], reset: true)
 
+  # What a page of the fleet hears of its rooms, workspace and votes besides
+  # its Keys: a page showing one of them hears it (a room open in the hall
+  # hears the rooms), and a member's page hears
+  # them all, since a member's feed is read again on each. Anyone else's
+  # hall is drawn from the fleet's reading every such page shares
+  # (`KeyfleetWeb.FleetNow`), which hears them once for all of those pages,
+  # so their page hears only what a Key open over it shows: its wall, in
+  # the rooms, and its votes and rewards. Each gives the fleet heard, or nil.
+  defp rooms_heard(socket, params, fleet_id) do
+    if fleet_id &&
+         (member?(socket, fleet_id) or Map.has_key?(params, "key") or
+            Map.has_key?(params, "room")),
+       do: fleet_id
+  end
+
+  defp workspace_heard(socket, route_id, fleet_id),
+    do: if(fleet_id && (route_id in @workspace_routes or member?(socket, fleet_id)), do: fleet_id)
+
+  defp proposals_heard(socket, route_id, params, fleet_id) do
+    if fleet_id &&
+         (route_id in @proposals_routes or member?(socket, fleet_id) or
+            Map.has_key?(params, "key")),
+       do: fleet_id
+  end
+
+  # A fleet's page holds the new owner's setup list (`SetupList`), which reads
+  # its steps again when the person's agents, the fleet's Keys or a step sent
+  # from it change. Its pairing box follows a pairing as the others do.
+  defp setup_changed(%{assigns: %{fleet: %{fleet_id: _}}} = socket) do
+    send_update(SetupList, id: "fleet-setup", changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "fleet-setup-pairing", agents_changed: true)
+    socket
+  end
+
+  defp setup_changed(socket), do: socket
+
+  # The person's own Key's page holds their agents' states (`AgentSetup`),
+  # which read again when an agent checks in or Keys are marked present.
+  defp agent_setup_changed(%{assigns: %{key: %{owner?: true}}} = socket) do
+    send_update(AgentSetup, id: "key-agent-setup", changed: true)
+    socket
+  end
+
+  defp agent_setup_changed(socket), do: socket
+
+  # Keys changed in an open fleet while the Agents page is on show: its
+  # agents' Keys are read afresh, so a shard just issued names its Key.
+  defp keys_changed(
+         %{assigns: %{route_spec: %{route_id: :account_agents}}} = socket,
+         _fleet_id,
+         _ids
+       ) do
+    send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", keys_changed: true)
+    {:noreply, socket}
+  end
+
   # Keys changed in the fleet on show: its sales figures and the key on offer
   # are read again, and its Member List when it is on show (the agents here
   # come from the readings every page shares, `Keyfleet.Agents.Here`), the
   # open key's profile when the key or one of its holder's changed, and the
   # map is told the changed keys' marks, or told to load again when too many
-  # changed to list.
+  # changed to list, and who may read the room open in the hall is read
+  # afresh. A hall drawn from the fleet's reading reads only the
+  # reader's own Keys and profile; its figures come with the reading, and
+  # it shows no map, which reads its Keys afresh when it is next shown.
   defp keys_changed(
          %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true}}} = socket,
          fleet_id,
@@ -769,13 +1035,11 @@ defmodule KeyfleetWeb.ShellLive do
       |> KeyProfileLive.refresh_key_profile(token_ids)
       |> FleetLive.refresh_activity_soon(fleet_id)
       |> workspace_standing_changed(fleet_id)
+      |> RoomsLive.recheck_standing()
 
-    progress = socket.assigns.fleet.progress
-
-    case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
-      :reset -> {:noreply, push_event(socket, "keymap:reset", %{})}
-      {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
-    end
+    if FleetLive.from_reading?(socket),
+      do: {:noreply, socket},
+      else: tell_map_changed(socket, fleet_id, token_ids)
   end
 
   # Keys changed in the fleet whose polls are on show: who takes part as which
@@ -783,8 +1047,8 @@ defmodule KeyfleetWeb.ShellLive do
   defp keys_changed(%{assigns: %{polls: %{fleet_id: fleet_id}}} = socket, fleet_id, _token_ids),
     do: {:noreply, PollsLive.refresh(socket)}
 
-  # Keys changed in the fleet whose room is on show: who may read and post
-  # there is read afresh.
+  # Keys changed in a fleet not yet on sale whose room is open in its hall:
+  # who may read it is read afresh.
   defp keys_changed(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket, fleet_id, _token_ids),
     do: {:noreply, RoomsLive.recheck_standing(socket)}
 
@@ -806,6 +1070,15 @@ defmodule KeyfleetWeb.ShellLive do
        |> KeysLive.refresh_key(fleet_id, token_ids)
        |> FleetLive.refresh_activity_soon(fleet_id)}
 
+  defp tell_map_changed(socket, fleet_id, token_ids) do
+    progress = socket.assigns.fleet.progress
+
+    case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
+      :reset -> {:noreply, push_event(socket, "keymap:reset", %{})}
+      {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
+    end
+  end
+
   # Whether the reader may read the fleet's workspace on show is read afresh.
   defp workspace_standing_changed(
          %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket,
@@ -826,9 +1099,13 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_class(socket, fleet_id),
     do: %{fleet_id: fleet_id, class: Access.class(human_actor(socket), fleet_id)}
 
-  # The class read again, and with a new one the page leaves what the old
-  # one heard of the fleet's rooms and workspace for what the new one hears.
-  defp reread_class(%{assigns: %{fleet_class: %{fleet_id: fleet_id} = was}} = socket, fleet_id) do
+  @doc """
+  The class of `fleet_id`, the fleet in the address, read again. With a new
+  one the page leaves what the old one heard of the fleet's rooms, workspace
+  and votes for what the new one hears, and the fleet's hall moves to how the
+  new one sees it.
+  """
+  def reread_class(%{assigns: %{fleet_class: %{fleet_id: fleet_id} = was}} = socket, fleet_id) do
     case fleet_class(socket, fleet_id) do
       ^was ->
         socket
@@ -836,33 +1113,78 @@ defmodule KeyfleetWeb.ShellLive do
       now ->
         socket
         |> assign(:fleet_class, now)
-        |> listen_to(socket.assigns.room_topic && fleet_id)
-        |> follow_workspace(socket.assigns.workspace_topics not in [nil, []] && fleet_id)
+        |> hear_as_class()
+        |> FleetLive.class_changed(fleet_id)
+        |> KeyProfileLive.class_changed(fleet_id)
     end
   end
 
-  defp reread_class(socket, _fleet_id), do: socket
+  def reread_class(socket, _fleet_id), do: socket
+
+  # A page of the fleet hears what `rooms_heard/3` and the rest say its
+  # class hears, each class on its own topic.
+  defp hear_as_class(%{assigns: %{route_spec: %{route_id: route_id}}} = socket) do
+    on_show = fleet_on_show(socket)
+    params = socket.assigns.fleet_params || %{}
+
+    socket
+    |> listen_to(rooms_heard(socket, params, on_show))
+    |> follow_workspace(workspace_heard(socket, route_id, on_show))
+    |> follow_proposals(proposals_heard(socket, route_id, params, on_show))
+  end
 
   # The class of the fleet in the address, as it was last read.
   defp class(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: class}}}, fleet_id),
     do: class
 
+  @doc """
+  The options that read `fleet_id`, the fleet in the address, as the reader
+  with the class last read, so its policies don't read the class again.
+  """
+  def reads_as(socket, fleet_id) do
+    actor = human_actor(socket)
+    [actor: actor, context: Access.context(actor, fleet_id, class(socket, fleet_id))]
+  end
+
+  @doc "Whether the reader is a member of `fleet_id`, the fleet in the address, as last read."
+  def member?(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: :member}}}, fleet_id),
+    do: true
+
+  def member?(_socket, _fleet_id), do: false
+
+  @doc """
+  Whether the reader may read `component` (`Keyfleet.Access`) of `fleet_id`,
+  the fleet in the address, as last read.
+  """
+  def may_read?(
+        %{assigns: %{fleet_class: %{fleet_id: fleet_id, class: class}}},
+        fleet_id,
+        component
+      ),
+      do: Access.enough?(class, :read, component)
+
+  def may_read?(_socket, _fleet_id, _component), do: false
+
   # The fleet whose keys the page on show follows: the fleet's own page, one
-  # of its keys' pages, one of its rooms, its workspace, or its polls.
-  defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
+  # of its keys' pages, its workspace, or its polls.
+  defp keys_fleets(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
               :fleet,
               :keys,
-              :rooms,
               :workspace,
               :workspace_item,
               :code_commit,
+              :code_history,
+              :code_files,
               :polls,
               :poll
             ],
-       do: fleet_id
+       do: [fleet_id]
 
-  defp keys_fleet(_route_spec, _params), do: nil
+  # The Agents page shows the Keys the person's agents hold shards of, in
+  # every open fleet.
+  defp keys_fleets(%{route_id: :account_agents}, _params), do: Fleets.open_fleet_ids()
+  defp keys_fleets(_route_spec, _params), do: []
 
   # A person signed in hears when their own mutes change, on any of their
   # pages, for as long as the page is open.
@@ -872,14 +1194,14 @@ defmodule KeyfleetWeb.ShellLive do
     socket
   end
 
-  # One subscription to the keys of the fleet on show, dropped on the way out.
-  defp follow_keys(socket, fleet_id) do
-    topic = fleet_id && Keys.topic(fleet_id)
+  # One subscription to the keys of each fleet on show, dropped on the way out.
+  defp follow_keys(socket, fleet_ids) do
+    topics = Enum.map(fleet_ids, &Keys.topic/1)
 
-    if connected?(socket) and topic != socket.assigns.keys_topic do
-      stop_listening(socket.assigns.keys_topic)
-      start_listening(topic)
-      assign(socket, :keys_topic, topic)
+    if connected?(socket) and topics != socket.assigns.keys_topics do
+      Enum.each(socket.assigns.keys_topics, &stop_listening/1)
+      Enum.each(topics, &start_listening/1)
+      assign(socket, :keys_topics, topics)
     else
       socket
     end
@@ -899,9 +1221,8 @@ defmodule KeyfleetWeb.ShellLive do
       |> assign(:key_profile, nil)
       |> stream(:key_thread, [], reset: true)
 
-  defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
-    assign(socket, :key, KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)))
-  end
+  defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}),
+    do: assign(socket, :key, KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)))
 
   defp load_key(socket, _route_spec, _params), do: assign(socket, :key, nil)
 
@@ -942,18 +1263,23 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  # The page starts listening before it reads, so a post that lands while it
-  # loads still reaches it; a notice for a post it already read is passed over.
-  defp load_room(socket, %{route_id: :rooms}, %{"fleet_id" => fleet_id, "slug" => slug}) do
-    socket
-    |> listen_to(fleet_id)
-    |> RoomsLive.read_room(fleet_id, slug)
-  end
+  # The room named in the address opens in the middle of its fleet's hall.
+  # The fleet's page has already started listening to the fleet's rooms
+  # (`rooms_heard/3`), so a post that lands while it loads still reaches it;
+  # a notice for a post it already read is passed over.
+  defp load_room(
+         %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false}}} = socket,
+         %{route_id: :fleet},
+         %{"fleet_id" => fleet_id, "room" => slug} = params
+       )
+       when is_binary(slug) and not is_map_key(params, "view"),
+       do: RoomsLive.read_room(socket, fleet_id, slug)
 
-  # A fleet's page keeps listening to the fleet's rooms.
-  defp load_room(socket, _route_spec, _params) do
+  # A fleet's page keeps listening to the fleet's rooms, as its reader's
+  # class hears them (`rooms_heard/3`).
+  defp load_room(socket, _route_spec, params) do
     socket
-    |> listen_to(fleet_on_show(socket))
+    |> listen_to(rooms_heard(socket, params, fleet_on_show(socket)))
     |> assign(room: nil, room_notice: nil)
   end
 
@@ -984,22 +1310,26 @@ defmodule KeyfleetWeb.ShellLive do
   # The page starts listening before it reads, so a change that lands while it
   # loads still reaches it. Each visit, reconnection included, reads afresh.
   defp load_workspace(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
-       when route_id in [:workspace, :workspace_item, :code_commit] do
+       when route_id in [:workspace, :workspace_item, :code_commit, :code_history, :code_files] do
     socket
     |> follow_workspace(fleet_id)
     |> assign(
       workspace_params: params,
       notebooks_notice: nil,
       code_password: nil,
-      code_notice: nil
+      code_notice: nil,
+      project_notice: nil,
+      publish_notice: nil,
+      project_confirm_delete: false
     )
     |> WorkspaceLive.read_workspace()
   end
 
-  # A fleet's page keeps hearing about the fleet's workspace.
-  defp load_workspace(socket, _route_spec, _params) do
+  # A fleet's page keeps hearing about the fleet's workspace, as its
+  # reader's class hears it (`workspace_heard/3`).
+  defp load_workspace(socket, %{route_id: route_id}, _params) do
     socket
-    |> follow_workspace(fleet_on_show(socket))
+    |> follow_workspace(workspace_heard(socket, route_id, fleet_on_show(socket)))
     |> assign(workspace: nil, workspace_params: nil)
   end
 
@@ -1026,16 +1356,19 @@ defmodule KeyfleetWeb.ShellLive do
   # loads still reach it. Each visit, reconnection included, reads afresh.
   defp load_proposals(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
        when route_id in [:proposals, :proposal, :treasury] do
+    socket = assign(socket, :proposals_params, params)
+
     socket
-    |> follow_proposals(fleet_id)
-    |> assign(:proposals_params, params)
+    |> follow_proposals(if ProposalsLive.for_visit?(socket), do: fleet_id)
     |> ProposalsLive.read_proposals()
   end
 
-  # A fleet's page keeps hearing about the fleet's votes.
-  defp load_proposals(socket, _route_spec, _params) do
+  # A fleet's page keeps hearing about the fleet's votes, as its reader's
+  # class hears them (`proposals_heard/4`).
+  defp load_proposals(socket, %{route_id: route_id}, params) do
     socket
-    |> follow_proposals(fleet_on_show(socket))
+    |> follow_proposals(proposals_heard(socket, route_id, params, fleet_on_show(socket)))
+    |> SharedFigures.follow(:proposals, [])
     |> assign(proposals: nil, proposals_params: nil)
   end
 
@@ -1098,24 +1431,28 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp load_account_page(socket, %{route_id: :account}) do
-    account = current_account(socket.assigns.access_context)
-
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
-    |> read_paired_agents(account)
-    |> follow_agents(account)
+    |> read_slices()
+    |> check_ens(current_account(socket.assigns.access_context))
   end
 
-  defp load_account_page(socket, _route_spec), do: assign(socket, :held_keys, [])
+  defp load_account_page(socket, _route_spec),
+    do: socket |> assign(:held_keys, []) |> Read.clear(:slices)
 
-  # The agents are read beside the page, so a failed read leaves the rest of
-  # the account page working.
-  defp read_paired_agents(socket, %{privy_user_id: person} = account),
-    do: Read.start(socket, :paired_agents, person, fn -> AccountLive.paired_agents(account) end)
+  defp read_slices(%{assigns: %{held_keys: []}} = socket), do: Read.clear(socket, :slices)
 
-  defp read_paired_agents(socket, nil), do: Read.clear(socket, :paired_agents)
+  defp read_slices(%{assigns: %{held_keys: held_keys}} = socket),
+    do: Read.start(socket, :slices, held_keys, fn -> AccountLive.slices(held_keys) end)
 
-  # Hears when the person's agents change, once per page.
+  # Only the connected page asks, so the first render does not ask again a
+  # moment before it.
+  defp check_ens(socket, account) do
+    if connected?(socket), do: AccountLive.check_ens(account)
+    socket
+  end
+
+  # Hears when the person's agents change, for the account menu on every page.
   defp follow_agents(%{assigns: %{agents_topic: nil}} = socket, %{privy_user_id: person}) do
     if connected?(socket) do
       topic = RegentAgents.topic(person)
@@ -1128,59 +1465,89 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp follow_agents(socket, _account), do: socket
 
-  # Credits and Points are read beside the page too, each with its own loading
-  # and could-not-be-read state. Credits are read on every page: the header's
-  # balance and the Buy Credits panel behind it go wherever a signed-in person
-  # goes.
-  defp read_credits(socket, %{privy_user_id: person} = account),
-    do: Read.start(socket, :credits, person, fn -> AccountLive.credits(account) end)
+  # The page hears the shared Points board while the Points page is open, and
+  # not elsewhere.
+  defp hear_board(socket, %{route_id: route}) do
+    hearing? = socket.assigns.hearing_board?
+    wanted? = route == :points
 
-  defp read_credits(socket, nil), do: Read.clear(socket, :credits)
+    if connected?(socket) and hearing? != wanted? do
+      if wanted?,
+        do: SharedReading.subscribe(Board.key()),
+        else: SharedReading.unsubscribe(Board.key())
 
-  # Hears when the person's Credits balance changes, once per page.
-  defp follow_credits(%{assigns: %{credits_topic: nil}} = socket, %{privy_user_id: person}) do
-    if connected?(socket) do
-      topic = RegentCredits.topic(person)
-      :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
-      assign(socket, :credits_topic, topic)
+      assign(socket, :hearing_board?, wanted?)
     else
       socket
     end
   end
 
-  defp follow_credits(socket, _account), do: socket
-
-  # The NFT tier is read from Base once per page open, never on each award notice.
+  # The NFT tier is read from Base once per page open, never on each award
+  # notice, and not at all while nothing earns.
   defp load_points(socket, %{route_id: :points}) do
     socket
     |> assign(:points_earning, RegentPoints.Rules.active())
     |> follow_points()
     |> read_points()
+    |> read_points_board()
     |> read_points_bonus()
   end
 
   defp load_points(socket, _route_spec),
-    do: socket |> Read.clear(:points) |> Read.clear(:points_bonus)
+    do: socket |> Read.clear(:points) |> Read.clear(:points_board) |> Read.clear(:points_bonus)
 
   defp read_points(socket) do
     case human_actor(socket) do
       %Human{} = actor ->
-        Read.start(socket, :points, actor.human_account_id, fn -> PointsLive.summary(actor) end)
+        Read.now(socket, :points, actor.human_account_id, fn ->
+          RegentPoints.summary(actor: actor)
+        end)
 
       nil ->
         Read.clear(socket, :points)
     end
   end
 
+  # The board every signed-in reader shares (Keyfleet.Points.Board). The
+  # reader's own row and place are found from it, and their own total, as the
+  # page renders.
+  defp read_points_board(socket) do
+    case human_actor(socket) do
+      %Human{} -> assign(socket, :points_board, board_read(SharedReading.fetch(Board.key())))
+      nil -> Read.clear(socket, :points_board)
+    end
+  end
+
+  # Loading until the board is first read, an error when that first read failed,
+  # and behind while the last read failed.
+  defp board_read(:error), do: %Read{state: :loading}
+  defp board_read({:ok, %{reading: nil}}), do: %Read{state: :error, error: :not_read}
+
+  defp board_read({:ok, %{reading: board, at: at, degraded?: true}}),
+    do: %Read{state: :stale, value: board, read_at: at, error: :not_read}
+
+  defp board_read({:ok, %{reading: board, at: at}}),
+    do: %Read{state: :ready, value: board, read_at: at}
+
+  defp read_points_bonus(%{assigns: %{points_earning: []}} = socket),
+    do: Read.clear(socket, :points_bonus)
+
   defp read_points_bonus(socket) do
     case human_actor(socket) do
-      %Human{} = actor ->
-        Read.start(socket, :points_bonus, actor.human_account_id, fn ->
-          PointsLive.bonus(actor)
-        end)
+      %Human{human_account_id: id} ->
+        Read.start(socket, :points_bonus, id, fn -> points_bonus(id) end)
 
       nil ->
         Read.clear(socket, :points_bonus)
+    end
+  end
+
+  # The NFT tier the account's wallets hold now, read from Base and never saved,
+  # counted against the account's allowance of wallet reads.
+  defp points_bonus(id) do
+    case Keyfleet.Limits.spend(:wallet_read, {:human, id}) do
+      :ok -> RegentPoints.Bonus.current(id)
+      :limited -> {:error, :limited}
     end
   end
 

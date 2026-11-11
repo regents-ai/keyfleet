@@ -1,6 +1,10 @@
+/* The app fills the screen edge to edge: the menu stands against the screen's
+   left edge and the page runs to its right edge. */
 #app-shell {
   position: relative;
   isolation: isolate;
+  inline-size: 100%;
+  border-inline: 0;
   display: grid;
   grid-template: auto minmax(0, 1fr) / var(--rg-rail-width) minmax(0, 1fr);
   min-width: 0;
@@ -17,7 +21,7 @@
   position: absolute;
   inset-block-start: 0.5rem;
   inset-inline-start: 0.5rem;
-  z-index: 20;
+  z-index: var(--rg-layer-skip);
   padding: 0.5rem 0.75rem;
   background: var(--color-bg);
   color: var(--color-fg);
@@ -41,7 +45,7 @@
 /* One hairline grid: the header draws the line under it, the sidebar the line
    beside it, and nothing floats. */
 #shell-header {
-  z-index: 4;
+  z-index: var(--rg-layer-header);
   display: flex;
   grid-column: 1 / -1;
   align-items: stretch;
@@ -83,6 +87,11 @@
   position: relative;
 }
 
+/* The account menu hangs from the account button. */
+#account-chip {
+  anchor-name: --rg-account-menu;
+}
+
 /* Every header control is a bordered cell, as the marketing header's tabs are. */
 .shell-brand,
 .account-chip,
@@ -113,9 +122,23 @@
   align-items: center;
 }
 
-/* The name only shows who is signed in; it is not a control. */
 .account-chip {
   min-width: 0;
+  font: inherit;
+}
+
+/* Signed in, the name opens the account menu, drawn as the header cell it was
+   rather than as a plain button; on a page without the menu it only shows who
+   is signed in. */
+#shell-header button.account-chip {
+  padding: 0.45rem 0.85rem;
+  border: 0;
+  border-inline-start: 1px solid var(--color-border);
+  background: transparent;
+  color: inherit;
+}
+
+span.account-chip {
   cursor: default;
 }
 
@@ -142,8 +165,10 @@
 
 @media (hover: hover) {
   .shell-brand:hover,
+  button.account-chip:hover,
   .mobile-menu-button:hover {
     background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+    color: var(--color-fg);
   }
 }
 
@@ -172,8 +197,7 @@
   object-fit: cover;
 }
 
-/* Dark is the default; light shows once chosen, or before any choice on a
-   device that asks for light. */
+/* The mark for each theme. */
 .shell-brand__mark-light {
   display: none;
 }
@@ -186,16 +210,6 @@
   display: none;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .shell-brand__mark-light {
-    display: block;
-  }
-
-  :root:not([data-theme]) .shell-brand__mark-dark {
-    display: none;
-  }
-}
-
 .mobile-menu-button {
   display: none;
 }
@@ -206,7 +220,6 @@
 }
 
 #shell-sidebar {
-  z-index: 2;
   min-height: 0;
   overflow: auto;
   border-inline-end: 1px solid var(--color-border);
@@ -229,7 +242,6 @@
    words and case as the header. */
 #shell-sidebar li > a,
 #shell-sidebar li > button,
-#shell-sidebar li > span,
 #shell-sidebar [data-tree] > a {
   display: flex;
   align-items: center;
@@ -284,6 +296,7 @@
   color: var(--color-fg);
 }
 
+/* The page fills the screen and scrolls as one, with the footer after it. */
 #app-shell-scroller {
   min-width: 0;
   min-height: 0;
@@ -305,7 +318,9 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
+  justify-content: center;
   min-height: 3rem;
+  min-inline-size: 2.75rem;
   color: var(--color-fg-muted);
   text-decoration: none;
 }
@@ -313,64 +328,6 @@
 .shell-tabs a[aria-current="page"] {
   color: var(--color-fg);
   box-shadow: inset 0 -2px var(--palette-tangerine-tango);
-}
-
-/* The header's Credits balance, which opens Buy Credits. It sits here, outside
-   the product layer, so it wins over the site's plain button rules. */
-#app-shell .shell-credits {
-  min-width: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-  align-self: center;
-  min-height: 2.75rem;
-  margin-inline-end: var(--space-1);
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-fg);
-  font: inherit;
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  #app-shell .shell-credits:hover {
-    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
-  }
-}
-
-/* The Buy Credits dialog's close button, square in the dialog's top right
-   corner, and kept there while the dialog scrolls. Its margins give back the
-   room it takes, so the panel keeps its place. It sits here, outside the
-   product layer, so it wins over the shared button's padding. */
-.shell-credits-dialog__close {
-  position: sticky;
-  inset-block-start: calc(-1 * var(--shell-credits-pad-top));
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-height: 0;
-  margin-block: calc(-1 * var(--shell-credits-pad-top))
-    calc(var(--shell-credits-pad-top) - 2.75rem);
-  margin-inline: auto calc(-1 * var(--shell-credits-pad-side));
-  padding: 0;
-  border: 0;
-  border-radius: 0 calc(1.25rem - 1px) 0 0.75rem;
-}
-
-.shell-credits-dialog__close svg {
-  width: 1.5rem;
-  height: 1.5rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
 }
 
 #route-content {
@@ -450,7 +407,7 @@
   #shell-sidebar {
     position: fixed;
     inset: var(--shell-header-bottom) auto 0 0;
-    z-index: 5;
+    z-index: var(--rg-layer-panel);
     display: none;
     width: min(20rem, calc(100% - 3rem));
     border-inline-end: 1px solid var(--ash-line-strong);
@@ -479,7 +436,7 @@
   .shell-menu-scrim {
     position: fixed;
     inset: var(--shell-header-bottom) 0 0;
-    z-index: 4;
+    z-index: var(--rg-layer-shade);
     display: block;
     min-width: 0;
     min-height: 0;
@@ -493,7 +450,7 @@
     display: none;
   }
 
-  /* Four tabs fit a 320px phone without the strip scrolling. */
+  /* Four tabs fit a 320px phone; past that the strip scrolls on its own. */
   .shell-tabs {
     gap: 0.625rem;
     padding-inline: 1rem;
@@ -516,11 +473,12 @@
 .shell-get-key > .rg-button { margin: var(--space-1); height: auto; white-space: nowrap; }
 @media (min-width: 48rem) and (max-width: 63.99rem) {
   #app-shell { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
-  #shell-sidebar { border-inline-end: 0; border-block-end: 1px solid var(--color-border); }
+  #shell-sidebar { grid-area: 2 / 1; border-inline-end: 0; border-block-end: 1px solid var(--color-border); }
+  #app-shell-scroller { grid-area: 3 / 1; }
   #shell-sidebar ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 47.99rem) {
-  /* One row on a phone: brand, Menu, theme, Get a Key, account. The X and GitHub
+  /* One row on a phone: brand, Menu, theme, Buy Key, account. The X and GitHub
      links stay reachable in the footer, so the header never wraps over content. */
   #shell-header { flex-wrap: nowrap; }
   #shell-header .rl-header-links { display: none; }
@@ -529,10 +487,9 @@
   /* The name keeps its 6rem cap and shrinks to an ellipsis, so the picture
      stays inside the cap instead of spilling past the screen edge. */
   #shell-header .account-chip .account-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  /* With a picture, or beside the Credits balance, the name is for screen
-     readers only; the account page shows it. */
-  #shell-header .account-chip .account-avatar + .account-name,
-  #shell-header:has(.shell-credits) .account-chip .account-name {
+  /* With a picture, the name is for screen readers only; the account page
+     shows it. */
+  #shell-header .account-chip .account-avatar + .account-name {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -540,8 +497,6 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  /* With nothing left to show, the chip takes no room. */
-  #shell-header:has(.shell-credits) .account-chip:not(:has(.account-avatar)) { padding-inline: 0; border-inline-start: 0; }
   /* Header buttons stand 3rem tall in the 3.5rem row, 0.5rem apart, and the last
      keeps the same 0.5rem from the frame's right edge as the crown keeps from its
      left. */
@@ -549,25 +504,363 @@
   .shell-get-key > .rg-button { font-size: .75rem; margin: 4px var(--space-1) 4px 0; padding: var(--space-1) .5rem; gap: .375rem; }
   /* The crown keeps its size; only the name beside it gives way. */
   #shell-header .shell-brand__mark { flex: none; }
-  /* Signed in, the Credits balance joins the row without its unit: the
-     controls keep their size and the brand's name gives way first. */
-  #app-shell .shell-credits {
-    flex: 0 0 auto;
-    padding-inline: 0.5rem;
-    font-size: 0.8rem;
-  }
-  #app-shell .shell-credits__unit { display: none; }
   #shell-header .theme-control,
   #shell-header .shell-get-key,
   #shell-header .account-control,
   #shell-header .account-chip { flex: 0 0 auto; }
-  /* Beside the balance there is no room for Sign out as well; it stays on the
-     Account page, one tap away in the Menu. */
-  #shell-header:has(.shell-credits) .account-control [data-account-target="sign-out"] { display: none; }
+  #shell-header button.account-chip { padding-inline: 0.5rem; }
 }
 @media (max-width: 22.49rem) {
-  /* A 320px phone has no room for the theme switch beside Get a Key or the
-     balance; the device's own light or dark setting applies until the screen
-     is wider. */
-  #shell-header:has(.shell-get-key, .shell-credits) .theme-control { display: none; }
+  /* A 320px phone has no room for the theme switch beside Buy Key; the
+     device's own light or dark setting applies until the screen is wider. */
+  #shell-header:has(.shell-get-key) .theme-control { display: none; }
+}
+
+/* ---- Header marks ---- */
+
+/* The theme switch, the nine-dot menu, X and GitHub stand evenly apart, with a
+   hairline after the theme switch and after the nine-dot menu. Under a mouse
+   each mark keeps its own size with an even gap between; under a finger each
+   fills a 2.75rem press target with nothing between them. */
+#shell-header .theme-control {
+  margin-inline-end: 0;
+}
+
+#shell-header .rl-header-links,
+.regent-footer__social {
+  gap: var(--space-3);
+}
+
+#shell-header .theme-control + .rl-header-links::before,
+.rl-header-links__rule {
+  content: "";
+  flex: none;
+  width: 1px;
+  height: 1.25rem;
+  background: var(--hairline-strong);
+}
+
+/* The theme switch sits outside the marks' row, so its hairline brings its own
+   gap before it. */
+#shell-header .theme-control + .rl-header-links::before {
+  margin-inline-start: var(--space-3);
+}
+
+@media (hover: hover) {
+  :is(#shell-header .rl-header-links, .regent-footer__social) > a:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+/* ---- Regents Products ---- */
+
+/* The nine-dot button, as the template's is, without the plain button's border
+   and fill, in the same ink as the X and GitHub marks beside it. */
+:is(.rl-header-links, .regent-footer__social) .shell-tool {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shell-tool .shell-icon--apps {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* On a touch screen every mark, the nine dots included, keeps a full finger's
+   press area. */
+@media (pointer: coarse) {
+  #shell-header .rl-header-links,
+  .regent-footer__social {
+    gap: 0;
+  }
+
+  #shell-header .theme-control + .rl-header-links::before,
+  .rl-header-links__rule {
+    margin-inline: 0.5rem;
+  }
+
+  :is(#shell-header .rl-header-links, .regent-footer__social) > a,
+  :is(.rl-header-links, .regent-footer__social) .shell-tool {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
+
+/* The Regents crown beside the nine dots, on its charcoal tile, the size of
+   the marks beside it. */
+.shell-regents-crown .shell-apps__tile {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+}
+
+.rl-header-links .shell-regents-crown .shell-apps__crown {
+  display: block;
+  width: 70%;
+  height: auto;
+}
+
+/* ---- $REGENT ---- */
+
+/* The crown opens the $REGENT menu, as regents.sh's does: hung under the crown,
+   its right edge lined up with the crown's, on the page's own surface, so it
+   reads in light and dark alike. The gap above the panel belongs to the menu,
+   so a mouse moving down onto it never leaves the menu. */
+.rl-token-menu {
+  position: relative;
+  z-index: var(--rg-layer-tip);
+  display: flex;
+}
+
+.rl-token-menu > summary {
+  list-style: none;
+}
+
+.rl-token-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.rl-token-menu-panel {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-end: 0;
+  width: 12rem;
+  padding-block-start: 0.75rem;
+}
+
+.rl-token-menu-content {
+  display: grid;
+  padding: 0.5rem;
+  border: 1px solid var(--hairline);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  box-shadow: var(--rg-layer-tip-shadow);
+}
+
+.rl-token-menu :is(a, button):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* The $REGENT heading doubles as the copy-the-contract-address control: a
+   quiet button, its words centred over the two links, as tall as each link. */
+.rl-token-copy {
+  min-height: 2.75rem;
+}
+
+.rl-token-copy .rg-copy__idle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.rl-token-copy .rg-copy__copied {
+  color: var(--color-success);
+}
+
+.rl-token-copy .rl-token-copy__icon {
+  inline-size: 0.95em;
+  block-size: 0.95em;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.rl-token-copy:hover .rl-token-copy__icon {
+  opacity: 1;
+}
+
+/* Buy on Uniswap and View Chart: Tangerine words on the panel, a full row each. */
+.rg-button.rl-token-link {
+  --rg-cut-control: 0px;
+  --rg-p-accent: var(--color-surface);
+  --rg-p-on-accent: var(--palette-tangerine-tango);
+  --rg-button-border-color: transparent;
+  --rg-shimmer-color: color-mix(in srgb, var(--palette-tangerine-tango) 40%, transparent);
+  --rg-shimmer-duration: 1.6s;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem;
+  border-radius: 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+  white-space: nowrap;
+  justify-content: flex-start;
+  text-align: start;
+}
+
+.rg-button.rl-token-link::after {
+  content: none;
+}
+
+@media (hover: hover) {
+  .shell-tool:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+.shell-apps-button:has(+ .shell-apps:popover-open) {
+  background: var(--ash-panel-strong);
+}
+
+/* A name for the icon, shown on hover and on keyboard focus: under it in the
+   header, over it in the footer. */
+.shell-tool__tip {
+  position: absolute;
+  inset-block-start: calc(100% + 0.35rem);
+  inset-inline-start: 50%;
+  z-index: var(--rg-layer-tip);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.regent-footer .shell-tool__tip {
+  inset-block: auto calc(100% + 0.35rem);
+}
+
+.shell-tool:focus-visible > .shell-tool__tip {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .shell-tool:hover > .shell-tool__tip {
+    opacity: 1;
+  }
+}
+
+.shell-apps-button:has(+ .shell-apps:popover-open) > .shell-tool__tip {
+  opacity: 0;
+}
+
+/* The panel hangs from its button, as the template's does: straight under it,
+   its right edge lined up with the button's. In the footer, where the screen
+   ends first, it opens above. The browser places it above everything else and
+   closes it on Escape or a press outside. */
+#shell-token-menu-apps-button { anchor-name: --shell-token-menu-apps; }
+#shell-token-menu-apps { position-anchor: --shell-token-menu-apps; }
+#footer-brand-links-apps-button { anchor-name: --footer-brand-links-apps; }
+#footer-brand-links-apps { position-anchor: --footer-brand-links-apps; }
+
+.shell-apps {
+  position: fixed;
+  inset: anchor(bottom) anchor(right) auto auto;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  width: min(21rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  margin: 0.25rem 0 0;
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-family: var(--font-family-ui);
+  line-height: 1.4;
+}
+
+.shell-apps h2 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-family-title);
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+.shell-apps ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-apps a {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 0.25rem;
+  color: inherit;
+  font-size: 0.85rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.shell-apps a:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .shell-apps a:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+.shell-apps__tile {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 1px solid var(--ash-line-strong);
+}
+
+.shell-apps .shell-apps__crown {
+  display: block;
+  width: 70%;
+  height: auto;
+}
+
+/* Each product's crown in its own pair of the four brand colours. */
+.shell-apps__tile[data-tone="patchbay"] {
+  background: var(--palette-platinum);
+  color: var(--palette-charcoal);
+}
+
+.shell-apps__tile[data-tone="autolaunch"] {
+  background: var(--palette-tangerine-tango);
+  color: var(--palette-charcoal);
+}
+
+.shell-apps__tile[data-tone="techtree"] {
+  background: var(--palette-powder-blue);
+  color: var(--palette-charcoal);
+}
+
+.shell-apps__tile[data-tone="protocol"] {
+  background: var(--palette-charcoal);
+  color: var(--palette-tangerine-tango);
+}
+
+/* On a phone the panel spans the screen, still straight under or over its
+   button. */
+@media (max-width: 47.99rem) {
+  .shell-apps {
+    inset: anchor(bottom) 0.5rem auto;
+    position-try-fallbacks: flip-block;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-tool__tip {
+    transition: none;
+  }
 }

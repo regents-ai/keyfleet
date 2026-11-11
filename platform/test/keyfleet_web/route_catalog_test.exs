@@ -7,10 +7,12 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   # Every fleet has the same pages under its own address.
   @fleet_pages [
     "",
-    "/rooms/:slug",
     "/workspace",
     "/workspace/:object_id",
     "/code/:repository/commits/:commit",
+    "/code/:repository/commits",
+    "/code/:repository/files",
+    "/projects/:project",
     "/proposals",
     "/proposals/:number",
     "/treasury",
@@ -24,10 +26,12 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   @paths [
            "/",
            "/account",
+           "/account/agents",
            "/account/points",
            "/account/wallets",
            "/account/connections",
            "/about",
+           "/pair",
            "/opportunities"
          ] ++
            for(
@@ -47,7 +51,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       |> Phoenix.Router.routes()
       |> Enum.filter(&(&1.verb == :get and &1.plug == Phoenix.LiveView.Plug))
       # Compile-disabled in production, the workshop has its own loopback gate;
-      # the saved errors are ErrorTracker's own pages, for Credits admins only.
+      # the saved errors are ErrorTracker's own pages, for the site's admins only.
       |> Enum.reject(fn route ->
         pipes = Phoenix.Router.route_info(Router, "GET", route.path, "localhost").pipe_through
         :local_showcase in pipes or :errors_admin in pipes
@@ -161,18 +165,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.local_state == %{}
   end
 
-  test "the product sidebar names Classic, links the Regents Club, and Account on every product route" do
+  test "the product sidebar links Classic, then Account, on every product route" do
     for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
       assert RouteCatalog.fetch!(entry.path_pattern, sample_params(entry)).sidebar_model ==
                %RouteCatalog.SidebarModel{
                  id: :product,
                  targets: [
-                   %RouteCatalog.NameOnly{label: "Classic #1"},
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Regents Club",
-                     path: "/app/fleets/regents_club"
-                   },
+                   %RouteTarget{route_id: :fleet, label: "Classic #1", path: "/classic/1"},
                    %RouteTarget{route_id: :account, label: "Account", path: "/account"}
                  ]
                }
@@ -208,13 +207,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 72
+    assert length(decoded["routes"]) == 84
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) ==
-             ~w(home account points wallets connections about opportunities) ++
+             ~w(home account account_agents points wallets connections about pair opportunities) ++
                List.flatten(
                  List.duplicate(
-                   ~w(fleet rooms workspace workspace_item code_commit proposals proposal treasury polls poll keys dms dm),
+                   ~w(fleet workspace workspace_item code_commit code_history code_files project proposals proposal treasury polls poll keys dms dm),
                    5
                  )
                )
@@ -233,9 +232,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
              when is_binary(path) and is_binary(route_id) ->
                true
 
-             %{"type" => "name", "label" => label} when is_binary(label) ->
-               true
-
              _target ->
                false
            end)
@@ -245,6 +241,62 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert %{"destination" => "/classic/1/keys/:token_id"} =
              Enum.find(decoded["routes"], &(&1["route_id"] == "keys"))
+  end
+
+  test "every page of a fleet names that fleet in its title and its description" do
+    for entry <- RouteCatalog.entries(), entry.fleet_id do
+      fleet = Keyfleet.Fleets.name(entry.fleet_id)
+      spec = RouteCatalog.fetch!(entry.path_pattern, sample_params(entry))
+
+      assert [page_title: title, page_description: description] =
+               KeyfleetWeb.PublicDocuments.page(spec, sample_params(entry))
+
+      assert title =~ fleet, entry.path_pattern
+      assert description =~ fleet, entry.path_pattern
+    end
+
+    assert [page_title: "Proposal 3 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(
+               RouteCatalog.fetch!("/classic/1/proposals/:number", %{"number" => "3"}),
+               %{"number" => "3"}
+             )
+
+    assert [page_title: "Dead end 4 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(
+               RouteCatalog.fetch!("/classic/1/workspace/:object_id", %{
+                 "object_id" => "dead_end#4"
+               }),
+               %{"object_id" => "dead_end#4"}
+             )
+
+    commit = "3f2a9c81d0e4" <> String.duplicate("0", 28)
+    code_commit = "/classic/1/code/:repository/commits/:commit"
+    commit_params = %{"repository" => "fleet_tech_classic", "commit" => commit}
+
+    assert [page_title: "Commit 3f2a9c81d0e4 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(
+               RouteCatalog.fetch!(code_commit, commit_params),
+               commit_params
+             )
+
+    files = RouteCatalog.fetch!("/classic/1/code/:repository/files", commit_params)
+
+    assert [page_title: "README.md · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(files, %{"path" => "docs/README.md"})
+
+    assert [page_title: "Code · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(files, %{})
+
+    dm_params = %{"token_id" => "12", "other_token_id" => "1000"}
+    dm = RouteCatalog.fetch!("/classic/1/keys/:token_id/dms/:other_token_id", dm_params)
+
+    assert [page_title: "Key 12 and Key 1,000 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(dm, dm_params)
+
+    inbox = RouteCatalog.fetch!("/classic/1/keys/:token_id/dms", dm_params)
+
+    assert [page_title: "Messages · Key 12 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(inbox, dm_params)
   end
 
   defp sample_params(%{parameter_schema: schema}) do
@@ -258,6 +310,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       {:poll_id, _type} -> {"poll_id", "3f1c6c2e-8a4b-4d2a-9b1e-0c5d7e9f1a2b"}
       {:repository, _type} -> {"repository", "fibonacci_syndicate"}
       {:commit, _type} -> {"commit", String.duplicate("a", 40)}
+      {:project, _type} -> {"project", "virtual-cell"}
     end)
   end
 end

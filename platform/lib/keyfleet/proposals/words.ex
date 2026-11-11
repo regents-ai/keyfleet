@@ -12,7 +12,8 @@ defmodule Keyfleet.Proposals.Words do
   and with none when nobody saved them.
 
   The same words saved again keep the first save. Anyone may read them. A
-  person may save them only so often (`Keyfleet.Proposals.Changes.LimitWords`).
+  person or an agent may save them only so often
+  (`Keyfleet.Proposals.Changes.LimitWords`).
   """
   use Ash.Resource,
     domain: Keyfleet.Proposals,

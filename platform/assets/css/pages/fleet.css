@@ -1,14 +1,17 @@
 @layer regents-product {
 /* The fleet page: a slim bar with the fleet's name, who is here, Send your
-   agent and the fleet's places (Hall, Map, Treasury); one way in under it;
-   then the hall (channels, feed and the fleet now), the map filling the rest
-   of the screen, or the list of Keys, with "Get a Key" opening over any of
-   them. The key page's grammar carries over: one
-   ground, hairline panels, the display face for headings. */
+   agent, one way in and the fleet's tabs; then the hall (channels, feed and
+   the fleet now), the map filling the rest of the screen, or the list of
+   Keys. The key page's grammar carries over: one ground, hairline panels,
+   the display face for headings. */
+
+/* A fleet's page fills what the header leaves, and its view the page, so the
+   view reaches the screen's foot whatever the header's height. */
+#route-content:has(> .fleet-page > .fleet-view) {
+  display: grid;
+}
 
 .fleet-page {
-  /* The shell's header and the page's padding above and below the view. */
-  --fleet-view-top: calc(4rem + 1px + 2 * var(--rg-panel-padding));
   display: grid;
   gap: 1.5rem;
   min-width: 0;
@@ -39,20 +42,19 @@
 
 .fleet-view {
   display: grid;
-  grid-template-rows: auto auto minmax(20rem, 1fr);
-  min-height: calc(100dvh - var(--fleet-view-top));
-}
-
-/* The Treasury, Proposals and the Workspace have no way in under the bar, so
-   their stage takes the second row and no empty row is left under it. */
-.fleet-view:is([data-view="treasury"], [data-view="proposals"], [data-view="workspace"]) {
+  /* One column as wide as the page: rows that scroll sideways, like the tabs
+     and a holder's cards, never push the view past the page's edge. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(20rem, 1fr);
 }
 
 /* The hall's columns scroll on their own, like a chat app's, so the view
-   keeps to the screen. */
-.fleet-view[data-view="hall"] {
-  height: calc(100dvh - var(--fleet-view-top));
+   keeps to the screen: the stage takes no height from what it holds, only the
+   rest of the view. On a screen too short for the bar, the way in and the
+   hall's 20rem together, the view grows and the page scrolls, so nothing runs
+   past the view's edge. */
+.fleet-view[data-view="hall"] > .fleet-stage {
+  contain: size;
 }
 
 /* The bar */
@@ -75,6 +77,23 @@
   min-width: 0;
 }
 
+/* The city's button stands before the name, centred on it, with the fleet's
+   figures under the name. */
+.fleet-bar__title:has(> .harbour-sea__lift) {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+
+.fleet-bar__title > .harbour-sea__lift {
+  grid-row: 1;
+  align-self: center;
+  margin-inline-start: calc(-1 * (2.75rem - 1.75rem) / 2);
+}
+
+.fleet-bar__title:has(> .harbour-sea__lift) > :not(.harbour-sea__lift) {
+  grid-column: 2;
+}
+
 .fleet-bar__title h1 {
   font-size: clamp(1.5rem, 3vw, 2.25rem);
   line-height: 1.05;
@@ -86,17 +105,11 @@
   color: var(--color-fg-muted);
 }
 
-/* "Send your agent", with where an agent starts reading under it. */
+/* Pair New Agent, at the bar’s end. */
 .fleet-bar__actions {
   display: grid;
   justify-items: end;
   gap: 0.5rem;
-}
-
-.fleet-bar__agents {
-  margin: 0;
-  color: var(--color-fg-muted);
-  font-size: 0.875rem;
 }
 
 /* The fleet's five tabs, in one row of their own. */
@@ -107,27 +120,54 @@
   gap: 0.25rem;
 }
 
-/* The view on show is marked under its button. */
-.fleet-bar__nav [aria-current="page"] {
+/* The view on show is marked under its button, on the button's fill so the
+   fill does not cover it. */
+.fleet-tab-count {
+  margin-inline-start: 0.35em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.fleet-bar__nav [aria-current="page"]::before {
   box-shadow: inset 0 -3px 0 var(--ash-accent);
 }
 
-.fleet-about[hidden],
-.fleet-buy-offer[hidden] {
-  display: none;
+/* Once the page is live, one mark does that instead: the kit's tabs put it
+   under the open tab and glide it to the next one picked. */
+.fleet-bar__nav {
+  position: relative;
 }
 
-/* The way in: one line and one action, with where agents start beside it. */
+.fleet-bar__ink {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100px;
+  height: 3px;
+  background: var(--ash-accent);
+  transform-origin: 0 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.fleet-bar__nav[data-ink-ready] .fleet-bar__ink {
+  visibility: visible;
+}
+
+.fleet-bar__nav[data-ink-ready] [aria-current="page"]::before {
+  box-shadow: none;
+}
+
+/* The way in, in the bar above the tabs: one line and one action. */
 
 .fleet-entry {
   display: flex;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1rem;
   /* A long row of cards scrolls inside the section; it never widens the view. */
   min-inline-size: 0;
-  padding: 0.75rem var(--rg-panel-padding);
-  border-block-end: 1px solid var(--color-border);
 }
 
 .fleet-entry__line {
@@ -176,6 +216,7 @@
 }
 
 .fleet-entry__card {
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 0.25rem;
@@ -209,6 +250,64 @@
   border-color: var(--color-fg);
 }
 
+/* Under a pointer, a card's picture rises a little, like a card picked up. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .fleet-entry__card :is(img, .fleet-entry__blank) {
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
+  .fleet-entry__card:hover :is(img, .fleet-entry__blank) {
+    transform: translateY(-3px);
+  }
+}
+
+/* Your own Keys, above the tabs, are twice the size, and each names its Key
+   over the foot of its card, under a pointer or keyboard focus only. */
+#fleet-entry-cards .fleet-entry__card img,
+#fleet-entry-cards .fleet-entry__blank {
+  inline-size: 6rem;
+}
+
+.fleet-entry__name {
+  position: absolute;
+  inset-block-end: 0.25rem;
+  inset-inline: 0.25rem;
+  padding: 0.2rem 0.25rem;
+  background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Keyboard focus shows the name at once; only a pointer fades it in. */
+.fleet-entry__card:focus-visible > .fleet-entry__name {
+  opacity: 1;
+}
+
+/* A card whose picture isn't drawn yet names its Key in its middle at all times. */
+.fleet-entry__blank + .fleet-entry__name {
+  inset-block: 0;
+  display: grid;
+  place-items: center;
+  background: none;
+  color: var(--color-fg-muted);
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .fleet-entry__card:hover > .fleet-entry__name {
+    opacity: 1;
+    transition: opacity var(--duration-fast) var(--ease-out);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleet-entry__card:hover > .fleet-entry__name {
+    transition: none;
+  }
+}
+
 .fleet-entry__more {
   align-self: center;
   padding-inline: 0.5rem;
@@ -233,22 +332,100 @@
 .fleet-hall {
   display: grid;
   grid-template-columns: 12rem minmax(0, 1fr) 20rem;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
 
 .fleet-hall > * {
+  grid-row: 1 / -1;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
 }
 
+/* The right column: what is open to a vote, above the fleet now. */
+.fleet-hall > .hall-proposals {
+  grid-column: 3;
+  grid-row: 1;
+  overflow: visible;
+}
+
+/* One line for each proposal still open, opening it in the Proposals tab.
+   A run of them scrolls in its own room, so it never pushes the page away. */
+.hall-proposals {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem var(--rg-panel-padding);
+  border-inline-start: 1px solid var(--color-border);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.hall-proposals h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.2;
+}
+
+.hall-proposals__list {
+  display: grid;
+  max-block-size: min(12rem, 30vh);
+  margin: 0 -0.5rem;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.hall-proposal {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 2.25rem;
+  padding-inline: 0.5rem;
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.hall-proposal:hover {
+  background: var(--ash-panel-strong);
+}
+
+.hall-proposal__number {
+  flex: none;
+}
+
+.hall-proposal__kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hall-proposal__left {
+  flex: none;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.fleet-hall > .fleet-rail {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+/* Scrolled past its last room, the list hands the scroll on to the page, so
+   the page's footer comes into view. */
 .fleet-channels {
   display: grid;
   align-content: start;
   gap: 0.25rem;
   padding: 0.75rem 0.5rem;
   border-inline-end: 1px solid var(--color-border);
+  overscroll-behavior: auto;
 }
 
 /* Small labels rather than the display face the page's other headings use. */
@@ -285,14 +462,36 @@
   background: var(--ash-panel-strong);
 }
 
-.fleet-channel[aria-pressed="true"] {
+.fleet-channel[aria-pressed="true"],
+.fleet-channel[aria-current="page"] {
   background: var(--ash-panel-strong);
   box-shadow: inset 3px 0 0 var(--ash-accent);
+}
+
+/* While a room is open the feed is hidden, so no kind of line shows as
+   picked: the open room alone is marked. */
+.fleet-hall[data-room] .fleet-channel[aria-pressed="true"] {
+  background: none;
+  box-shadow: none;
+}
+
+/* A room with posts the reader hasn't seen shows a small dot after its name. */
+.fleet-channel__unread {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-start: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-fg);
 }
 
 .fleet-channels__empty {
   padding: 0 0.5rem;
   color: var(--color-fg-muted);
+}
+
+/* While a room is open in its place, the feed stays on the page, hidden. */
+.fleet-feed[hidden] {
+  display: none;
 }
 
 .fleet-feed {
@@ -314,8 +513,11 @@
   border-inline-start: 1px solid var(--color-border);
 }
 
+/* Each section's title stands a clear step above what it heads: the one
+   weight the title face has, so size does the work. */
 .fleet-rail h2 {
-  font-size: 1.05rem;
+  font-size: 1.3rem;
+  line-height: 1.2;
 }
 
 /* A person's words for their agent to quote, and where each was quoted. */
@@ -335,6 +537,7 @@
   resize: vertical;
 }
 
+.fleet-quote > .rg-button,
 .fleet-quote form > .rg-button {
   justify-self: start;
 }
@@ -363,54 +566,6 @@
 
 .fleet-quote__sent q {
   overflow-wrap: anywhere;
-}
-
-/* The Key on offer, at the top of the panel: its number and price in one
-   line, with Approve and Buy straight under it. */
-
-#buy-key-order {
-  display: grid;
-  gap: 0.75rem;
-  justify-items: start;
-  max-width: 34rem;
-  min-width: 0;
-}
-
-/* What a buyer should know, under the buttons, spans the panel. */
-#buy-key-order > .fleet-risks,
-#buy-key-order > .fleet-detail {
-  justify-self: stretch;
-}
-
-.fleet-buy-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.fleet-buy-offer {
-  white-space: nowrap;
-}
-
-/* While "Get a Key" is open, the Key on offer is marked on the map as a
-   chosen Key is, and the note under the map names it in the same line. */
-.key-map-selected__offer {
-  display: none;
-}
-
-.fleet-stage:has(#fleet-about:not([hidden])) .km-tile[data-state~="next"] {
-  --km-face: var(--palette-tangerine-tango);
-  color: var(--palette-charcoal);
-}
-
-.fleet-stage:has(#fleet-about:not([hidden])) .key-map-selected__offer {
-  display: inline;
-}
-
-.fleet-stage:has(#fleet-about:not([hidden])) .key-map-selected__chosen {
-  display: none;
 }
 
 /* The map, filling the rest of the view */
@@ -474,6 +629,25 @@
 
 .fleet-soon p {
   color: var(--color-fg-muted);
+}
+
+/* What the fleet will sell: each fact's label over its value, side by side. */
+.fleet-soon__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+}
+
+.fleet-soon__facts dt {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.fleet-soon__facts dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
 }
 
 #fleet-soon .fleet-unsold {
@@ -547,62 +721,8 @@
   font-size: 0.875rem;
 }
 
-/* Get a Key */
-
-.fleet-about {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  z-index: 2;
-  display: grid;
-  align-content: start;
-  gap: 1.25rem;
-  width: min(26rem, 100%);
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: var(--rg-panel-padding);
-  border-inline-start: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
-}
-
-.fleet-about__heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.fleet-about__close {
-  flex: none;
-}
-
-.fleet-about h2 {
-  font-size: 1.35rem;
-  line-height: 1.1;
-}
-
-.fleet-about section {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.fleet-about h3 {
-  font-size: 1.05rem;
-}
-
 .fleet-detail {
   color: var(--color-fg-muted);
-}
-
-/* The Buy panel's line keeps its space while empty, so the words appearing
-   never move the buttons a buyer is about to press. */
-.fleet-buy-order .wallet-panel-line {
-  min-block-size: 1.5em;
-}
-
-.fleet-buy-order .wallet-panel-line[hidden] {
-  display: block;
-  visibility: hidden;
 }
 
 /* Approve and Buy carry 1 and 2 while both are showing. */
@@ -616,6 +736,37 @@
   border: 1px solid currentColor;
   font-size: 0.75rem;
   line-height: 1;
+}
+
+/* Right above Approve, on a line of its own: the choice to approve without
+   limit. */
+.fleet-unlimited {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.fleet-unlimited[hidden] {
+  display: none;
+}
+
+.fleet-unlimited label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.fleet-unlimited input {
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: 0;
+  accent-color: var(--color-fg);
+}
+
+.fleet-unlimited label:has(input:disabled) {
+  cursor: default;
+  color: var(--color-fg-muted);
 }
 
 /* The list of keys, and a missing fleet */
@@ -661,16 +812,21 @@
 @media (max-width: 64rem) {
   /* Narrower than a laptop, the hall is one column that scrolls with the
      page: the channels as a row, then the feed, then the fleet now. */
-  .fleet-view[data-view="hall"] {
-    height: auto;
+  .fleet-view[data-view="hall"] > .fleet-stage {
+    contain: none;
   }
 
   .fleet-hall {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     height: auto;
   }
 
-  .fleet-hall > * {
+  .fleet-hall > *,
+  .fleet-hall > .hall-proposals,
+  .fleet-hall > .fleet-rail {
+    grid-column: auto;
+    grid-row: auto;
     overflow: visible;
   }
 
@@ -701,6 +857,10 @@
     display: none;
   }
 
+  .hall-proposals {
+    border-inline-start: 0;
+  }
+
   .fleet-rail {
     border-inline-start: 0;
     border-block-start: 1px solid var(--color-border);
@@ -708,17 +868,9 @@
 }
 
 @media (max-width: 47.99rem) {
-  .fleet-page {
-    --fleet-view-top: calc(var(--shell-header-bottom) + 2rem);
-  }
-
   .fleet-bar {
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
-  }
-
-  .fleet-entry {
-    padding: 0.75rem 1rem;
+    padding-block: 0.75rem;
   }
 
   /* Smaller on a phone, so the bar leaves the map more room. */
@@ -728,10 +880,9 @@
     font-size: 0.875rem;
   }
 
-  /* "Send your agent" starts under the fleet's name, not under the end of
-     the agents' line. */
+  /* Pair New Agent starts under the fleet’s name. */
   .fleet-bar__actions {
-    justify-items: start;
+    display: contents;
   }
 
   /* The tabs and a holder's cards scroll from one edge of the view to the
@@ -739,8 +890,14 @@
      still lines up with the words above it. */
   .fleet-bar__nav,
   .fleet-entry > .fleet-entry__cards {
-    margin-inline: calc(-1 * var(--space-2));
-    padding-inline: var(--space-2);
+    margin-inline: calc(-1 * var(--rg-panel-padding));
+    padding-inline: var(--rg-panel-padding);
+  }
+
+  /* "You hold 2 Keys." stands over the cards, so the row has the view's
+     whole width. */
+  .fleet-entry__line {
+    flex-basis: 100%;
   }
 
   /* The way in's one action spans the view. */
@@ -749,7 +906,8 @@
   }
 
   /* The Pass number's label sits above its field, and Open its Key beside it
-     while the field keeps room for a number. */
+     while the field keeps room for a number; under it, it spans the view as
+     the way in's other actions do. */
   .fleet-entry__pass {
     flex: 1 1 100%;
   }
@@ -759,11 +917,27 @@
     flex-basis: 100%;
   }
 
-  .fleet-entry__pass input {
+  .fleet-entry__pass input,
+  .fleet-entry__pass .rg-button {
     flex-grow: 1;
   }
 
+  /* The room a request was quoted in is a full finger's height. */
+  .fleet-quote__sent a {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    min-height: 2.75rem;
+  }
+
+  /* Each channel is a full finger wide and tall, "All" too. */
   .fleet-channel {
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .hall-proposal {
     min-height: 2.75rem;
   }
 
@@ -771,28 +945,6 @@
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
-  }
-
-  /* On a phone the panel opens over the whole page under the site's header,
-     inside the page's frame, so the Key on offer and its Buy button are at
-     the top of the screen. */
-  .fleet-about {
-    position: fixed;
-    inset: var(--shell-header-bottom) calc(var(--rg-page-gutter) + 1px) 0;
-    z-index: 3;
-    width: auto;
-    border-inline-start: 0;
-  }
-
-  /* The panel is narrower than the Key on offer's whole line, so the level
-     moves under the number and price rather than off the panel's edge. */
-  .fleet-buy-offer {
-    white-space: normal;
-  }
-
-  #buy-key-price,
-  #buy-key-level {
-    white-space: nowrap;
   }
 
   /* The coming-soon note keeps the bar's margin from the view's edges, and
@@ -809,7 +961,7 @@
   /* The map is given the height to show rows of Keys between its tools and
      its notes. */
   .fleet-view[data-view="map"] {
-    grid-template-rows: auto auto minmax(34rem, 1fr);
+    grid-template-rows: auto minmax(34rem, 1fr);
   }
 
   /* On a phone the tools are one compact row that scrolls sideways, and
@@ -818,7 +970,7 @@
     flex-wrap: nowrap;
     gap: 0.375rem;
     overflow-x: auto;
-    padding: 0.375rem var(--space-2);
+    padding: 0.375rem var(--rg-panel-padding);
     scrollbar-width: none;
   }
 
@@ -827,22 +979,12 @@
   }
 
   .fleet-map-notes {
-    padding-inline: var(--space-2);
+    padding-inline: var(--rg-panel-padding);
   }
 
   .fleet-map-find input {
     flex: none;
     inline-size: 10rem;
-  }
-
-  /* The directions stay for screen readers; on a phone the map is the page. */
-  #key-map-help {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 }
 
@@ -875,6 +1017,85 @@
   }
 }
 
+/* Where a row scrolls sideways (the tabs, the feed's channels, a holder's
+   cards, a phone's rooms), it fades out at an edge while more of the row
+   waits past it, and runs crisp to an edge it has reached. A row that fits
+   has no fade. */
+@property --fleet-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fleet-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes fleet-row-fade {
+  0% { --fleet-fade-start: 0px; --fleet-fade-end: 2rem; }
+  20%, 80% { --fleet-fade-start: 2rem; --fleet-fade-end: 2rem; }
+  100% { --fleet-fade-start: 2rem; --fleet-fade-end: 0px; }
+}
+
+/* While rooms lie below the list's foot, a "…" stands there; it fades as the
+   list reaches its end, and a list with nothing below never shows it. */
+@keyframes fleet-more-below {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media (min-width: 64.01rem) {
+    /* A pseudo-element scrolls nothing itself, so the list names its own
+       scroll for the "…" to follow. */
+    .fleet-channels {
+      scroll-timeline: --fleet-channels block;
+    }
+
+    .fleet-channels::after {
+      content: "…";
+      position: sticky;
+      inset-block-end: -0.75rem;
+      margin-block: -1.5rem -0.75rem;
+      padding-block: 0.75rem 0.25rem;
+      background: linear-gradient(transparent, var(--color-surface) 60%);
+      color: var(--color-fg-muted);
+      line-height: 1;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      animation: fleet-more-below linear both;
+      animation-timeline: --fleet-channels;
+    }
+  }
+
+  .fleet-bar__nav,
+  .fleet-channels,
+  .fleet-entry__cards {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fleet-fade-start),
+      #000 calc(100% - var(--fleet-fade-end)),
+      transparent
+    );
+    animation: fleet-row-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+/* On a phone the map's "i" opens its directions above it, centred across
+   the screen, so they fit inside the screen's edges on the narrowest phone.
+   This sits outside the product layer, so it wins over the tip's own place. */
+@media (max-width: 47.99rem) {
+  .fleet-map-notes .rg-tip-body {
+    position-area: block-start span-all;
+    justify-self: center;
+  }
+}
+
 /* The feed's channels are buttons drawn as a chat app's sidebar rows. This
    sits outside the product layer, so it wins over the site's plain button
    rules. */
@@ -888,6 +1109,10 @@
 #fleet-channels button.fleet-channel:hover,
 #fleet-channels button.fleet-channel[aria-pressed="true"] {
   background: var(--ash-panel-strong);
+}
+
+#fleet-hall[data-room] #fleet-channels button.fleet-channel[aria-pressed="true"]:not(:hover) {
+  background: none;
 }
 
 /* The Keys tab's Grid and List, as one pill with the one on show filled. */

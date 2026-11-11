@@ -7,8 +7,9 @@ defmodule Keyfleet.ChainTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.{OwnershipLog, ReadFleet, Scanner, StubClient}
+  alias Keyfleet.Chain.{OwnershipLog, ReadBalances, ReadFleet, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.ChainRefresh
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Release
@@ -40,8 +41,9 @@ defmodule Keyfleet.ChainTest do
       refute Chain.fresh?(@fleet)
 
       for {attrs, fresh?} <- [
-            {%{observed_at: DateTime.add(DateTime.utc_now(), -121, :second)}, false},
-            {%{head_block: 1_300, next_block: 1_000}, false},
+            {%{observed_at: DateTime.add(DateTime.utc_now(), -421, :second)}, false},
+            {%{observed_at: DateTime.add(DateTime.utc_now(), -360, :second)}, true},
+            {%{head_block: 4_000, next_block: 1_000}, false},
             {%{}, true},
             {%{rescan_from: 900}, false}
           ] do
@@ -144,9 +146,48 @@ defmodule Keyfleet.ChainTest do
       assert Keys.current_key!(@fleet, 2) == nil
     end
 
+    # Through the real client: a node answering the log request with HTTP 429
+    # is asked for those logs once, and the pass ends where it began, rather
+    # than being asked again for each half of the range.
+    test "a node asking for fewer requests is asked for the logs once", %{fleet: fleet} do
+      config = Application.fetch_env!(:keyfleet, Chain)
+      on_exit(fn -> Application.put_env(:keyfleet, Chain, config) end)
+      test_pid = self()
+
+      node!(config, fn
+        "eth_getBlockByNumber" ->
+          {200,
+           %{
+             "number" => "0x" <> Integer.to_string(@deployed + 100, 16),
+             "hash" => "0x" <> String.duplicate("f", 64),
+             "timestamp" => "0x6553f100",
+             "baseFeePerGas" => "0x0"
+           }}
+
+        "eth_call" ->
+          {200, "0x" <> String.duplicate("0", 24) <> String.duplicate("b0", 20)}
+
+        "eth_getLogs" ->
+          send(test_pid, :logs_asked)
+          {429, nil}
+      end)
+
+      log =
+        capture_log(fn ->
+          assert Scanner.step(fleet, Keyfleet.Chain.RpcClient) ==
+                   {:error, {:block_unanswered, @deployed, :chain_busy}}
+        end)
+
+      assert_received :logs_asked
+      refute_received :logs_asked
+      assert log =~ "429"
+      assert next_block() == @deployed
+    end
+
     # The job reading a fleet never takes a node serving another chain at its
-    # word; a pass that read waits a few seconds and runs again, and one that
-    # failed is retried after a wait.
+    # word; a pass that read waits five minutes and runs again, one that
+    # failed is retried a minute later, and a node that does not answer is a
+    # minute's wait, not a failure.
     test "the reading job reads only its fleet's chain, then repeats or retries" do
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)], chain_id: 1)
 
@@ -159,7 +200,7 @@ defmodule Keyfleet.ChainTest do
       assert current_keys() == []
 
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
-      assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 4}
+      assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 300}
       assert [%{token_id: 1}] = current_keys()
 
       malformed = %{log(2, 1, "b", @deployed + 12, 0) | "data" => "0x01"}
@@ -168,9 +209,67 @@ defmodule Keyfleet.ChainTest do
       assert capture_log(fn ->
                assert {:error, _reason} = perform_job(ReadFleet, %{fleet_id: @fleet})
              end) =~ "tried again"
+
+      StubClient.put_chain(head(@deployed + 20), [],
+        calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end
+      )
+
+      assert capture_log(fn ->
+               assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 60}
+             end) =~ "did not answer"
+    end
+
+    # Each finished pass reports the head less the last block it read, so a
+    # long history shows its lag shrinking pass by pass down to 0. While it
+    # is behind, the next pass follows a second later, not five minutes on.
+    test "each pass reports how far the record trails the head" do
+      handler = "lag-#{inspect(self())}"
+      test = self()
+
+      :telemetry.attach(
+        handler,
+        [:keyfleet, :indexer, :lag],
+        fn _event, blocks, labels, nil ->
+          send(test, {blocks, labels})
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+
+      StubClient.put_chain(head(@deployed + 25_000), [])
+
+      for {lag, wait} <- [{15_001, 1}, {5_001, 1}, {0, 300}] do
+        assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, wait}
+        assert_received {%{blocks: ^lag}, %{indexer: "fleet", chain_id: 8453}}
+      end
     end
 
     # One log the reader cannot make sense of holds the whole range back.
+    # A person's on-chain press that lands brings the fleet's next history read
+    # forward to ten seconds from now and reads its balances at once; a press
+    # on another chain leaves the fleet's turn where it was.
+    test "a landed press brings the fleet's next reading forward", %{fleet: fleet} do
+      Oban.insert!(ReadFleet.new(%{fleet_id: @fleet}, schedule_in: 300))
+
+      :ok = ChainRefresh.request(fleet.chain_id + 1)
+      assert [waiting] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
+      assert DateTime.diff(waiting.scheduled_at, DateTime.utc_now()) > 200
+      refute_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+
+      :ok = ChainRefresh.request(fleet.chain_id)
+      assert [sooner] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
+      assert DateTime.diff(sooner.scheduled_at, DateTime.utc_now()) <= ChainRefresh.gap_s()
+      assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+
+      # Presses that keep coming never put the read off: one already due
+      # sooner keeps its time.
+      {:ok, due} = Oban.update_job(sooner, %{scheduled_at: DateTime.utc_now()})
+      :ok = ChainRefresh.request(fleet.chain_id)
+      assert [kept] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
+      assert DateTime.compare(kept.scheduled_at, due.scheduled_at) == :eq
+    end
+
     test "a malformed log records nothing and leaves the cursor where it was", %{fleet: fleet} do
       malformed = %{log(2, 1, "b", @deployed + 4, 0) | "data" => "0x01"}
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0), malformed])
@@ -287,9 +386,9 @@ defmodule Keyfleet.ChainTest do
       assert owner == wallet("a")
     end
 
-    # The second reading covers the 30 blocks below the cursor and no more, and
+    # The second reading covers the 300 blocks below the cursor and no more, and
     # never reaches below the deployment for a fleet younger than that.
-    test "the second reading spans the last 30 blocks, from the deployment at the earliest", %{
+    test "the second reading spans the last 300 blocks, from the deployment at the earliest", %{
       fleet: fleet
     } do
       StubClient.put_chain(head(@deployed + 5), [log(1, 1, "a", @deployed, 0)])
@@ -302,17 +401,17 @@ defmodule Keyfleet.ChainTest do
       end)
 
       Chain.clear_divergence!(@fleet)
-      edge = [log(2, 1, "b", @deployed + 170, 0), log(3, 1, "c", @deployed + 171, 0)]
-      StubClient.put_chain(head(@deployed + 200), [log(1, 1, "a", @deployed, 0) | edge])
+      edge = [log(2, 1, "b", @deployed + 1_700, 0), log(3, 1, "c", @deployed + 1_701, 0)]
+      StubClient.put_chain(head(@deployed + 2_000), [log(1, 1, "a", @deployed, 0) | edge])
       assert Scanner.step(fleet, StubClient) == :ok
-      assert next_block() == @deployed + 201
+      assert next_block() == @deployed + 2_001
 
-      StubClient.put_chain(head(@deployed + 201), [log(1, 1, "a", @deployed, 0)],
-        block_hashes: %{(@deployed + 170) => @new_hash, (@deployed + 171) => @new_hash}
+      StubClient.put_chain(head(@deployed + 2_001), [log(1, 1, "a", @deployed, 0)],
+        block_hashes: %{(@deployed + 1_700) => @new_hash, (@deployed + 1_701) => @new_hash}
       )
 
       capture_log(fn ->
-        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 171}
+        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 1_701}
       end)
     end
   end
@@ -357,8 +456,8 @@ defmodule Keyfleet.ChainTest do
       assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
       assert Enum.map(Fleets.list_deployed_fleets!(), & &1.id) == ["fleet_tech_classic"]
 
-      own = ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
-      assert Enum.take(slugs("fleet_tech_classic"), 10) == own
+      own = ~w(welcome general people business voting coding open-1 open-2 open-3 open-4 open-5)
+      assert Enum.take(slugs("fleet_tech_classic"), 11) == own
       assert slugs("fibonacci_cascade") == []
 
       # A coming-soon fleet recorded later opens with its rooms, and the
@@ -370,7 +469,7 @@ defmodule Keyfleet.ChainTest do
       cascade = Fleets.get_fleet!("fibonacci_cascade")
       assert cascade.votes_address == "0x" <> String.duplicate("e1", 20)
       refute Fleets.coming_soon?("fibonacci_cascade", cascade)
-      assert Enum.take(slugs("fibonacci_cascade"), 10) == own
+      assert Enum.take(slugs("fibonacci_cascade"), 11) == own
       assert Fleets.get_fleet!("fleet_tech_classic") == classic
 
       bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
@@ -580,6 +679,37 @@ defmodule Keyfleet.ChainTest do
     after
       0 -> Enum.reverse(writes)
     end
+  end
+
+  # Points the app's node address at a local server answering each JSON-RPC
+  # method with `answer.(method)`: an HTTP status and, for 200, the result.
+  defp node!(config, answer) do
+    plug = fn conn, _opts ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+      case answer.(Jason.decode!(body)["method"]) do
+        {200, result} ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.send_resp(200, Jason.encode!(%{jsonrpc: "2.0", id: 1, result: result}))
+
+        {status, nil} ->
+          Plug.Conn.send_resp(conn, status, "")
+      end
+    end
+
+    pid =
+      start_supervised!(
+        Supervisor.child_spec({Bandit, plug: plug, ip: {127, 0, 0, 1}, port: 0}, id: make_ref())
+      )
+
+    {:ok, {_address, port}} = ThousandIsland.listener_info(pid)
+
+    Application.put_env(
+      :keyfleet,
+      Chain,
+      Keyword.put(config, :rpc_url, "http://127.0.0.1:#{port}")
+    )
   end
 
   defp head(number),

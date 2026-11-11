@@ -21,6 +21,7 @@ defmodule Keyfleet.WalletSteps.Steps do
     :buy,
     :reveal,
     :claim,
+    :claim_all,
     :club_claim,
     :present,
     :issue_shard,
@@ -57,6 +58,12 @@ defmodule Keyfleet.WalletSteps.Steps do
       argument :proposal, :integer, constraints: [min: 1]
       argument :token_id, :integer, constraints: [min: 1]
       argument :advance_id, :integer, constraints: [min: 1]
+
+      argument :sending, :boolean,
+        allow_nil?: false,
+        default: true,
+        description:
+          "Whether a press sends from the signer now; false when the steps only show the figures of a wallet that isn't open."
 
       validate present(:proposal), where: argument_in(:flow, [:ballot, :cancel, :carry_out])
 

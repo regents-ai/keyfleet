@@ -11,7 +11,6 @@ defmodule KeyfleetWeb.TreasuryLive do
 
   alias Keyfleet.Authority
   alias Keyfleet.Fleets.Rules
-  alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
@@ -19,6 +18,8 @@ defmodule KeyfleetWeb.TreasuryLive do
   attr :page, :any, required: true, doc: "the Treasury page as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+  attr :reread, :integer, required: true, doc: "counts the times its figures were asked for again"
+  attr :resting?, :boolean, required: true, doc: "whether its refresh waits to be pressed again"
 
   # Drawn inside the fleet's page, under its name and bar (`KeyfleetWeb.FleetLive`).
   def page(%{page: :unreadable} = assigns) do
@@ -30,6 +31,9 @@ defmodule KeyfleetWeb.TreasuryLive do
     </article>
     """
   end
+
+  def page(%{page: %{fleet_name: nil}} = assigns),
+    do: ~H|<ProposalsLive.missing_fleet id="treasury-page" />|
 
   def page(assigns) do
     ~H"""
@@ -49,6 +53,8 @@ defmodule KeyfleetWeb.TreasuryLive do
         page={@page}
         actor={@actor}
         lease={@lease}
+        reread={@reread}
+        resting?={@resting?}
       />
 
       <%!-- A fleet not yet on chain has no treasury to show. --%>
@@ -74,7 +80,7 @@ defmodule KeyfleetWeb.TreasuryLive do
         class="proposals-panel"
         aria-labelledby="treasury-carried-title"
       >
-        <h2 id="treasury-carried-title">Votes carried out</h2>
+        <h2 id="treasury-carried-title">Executed votes</h2>
         <Regent.Primitives.empty_state
           :if={@page.carried == []}
           id="treasury-carried-empty"
@@ -103,54 +109,22 @@ defmodule KeyfleetWeb.TreasuryLive do
       </section>
 
       <section id="treasury-rules" class="proposals-panel" aria-labelledby="treasury-rules-title">
-        <h2 id="treasury-rules-title">Permissions & contracts</h2>
-        <dl class="treasury-permissions">
-          <div :for={row <- Authority.treasury_rows()}>
-            <dt>{row.what}</dt>
-            <dd>{row.who}<span class="proposals-detail">{Authority.needs(row)}</span></dd>
-          </div>
-        </dl>
-        <p class="proposals-detail">Each action asks the acting wallet to approve and send it.</p>
+        <h2 id="treasury-rules-title">Contracts</h2>
         <div :if={@page.manager_address} class="proposals-address">
           <span>Manager</span>
-          <code title={@page.manager_address}>{RegentFormat.short_address(@page.manager_address)}</code>
-          <Regent.Primitives.copy_button
-            id="fleet-manager-copy"
-            text={@page.manager_address}
-            variant="quiet"
-            aria-label="Copy manager address"
-            title="Copy manager address"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              aria-hidden="true"
-            ><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></svg>
-          </Regent.Primitives.copy_button>
-          <a
-            id="fleet-contract-link"
-            href={AddressLinks.basescan(@page.manager_address)}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="View manager on BaseScan"
-            title="View verified manager on BaseScan"
-          ><svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            aria-hidden="true"
-          ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
+          <Regent.Primitives.address id="fleet-manager" address={@page.manager_address} />
         </div>
+        <Regent.Primitives.disclosure id="treasury-permissions-more" summary="Permissions">
+          <dl class="treasury-permissions">
+            <div :for={row <- Authority.treasury_rows()}>
+              <dt>{row.what}</dt>
+              <dd>{row.who}<span class="proposals-detail">{Authority.needs(row)}</span></dd>
+            </div>
+          </dl>
+        </Regent.Primitives.disclosure>
         <Regent.Primitives.disclosure
           id="treasury-fleet-details"
-          summary="Fleet details & token launch"
+          summary="Fleet details"
         >
           <p>{Rules.pricing(@page.fleet_id)}</p>
           <.progress :if={@page.deployed?} page={@page} />
@@ -233,9 +207,10 @@ defmodule KeyfleetWeb.TreasuryLive do
             <div>
               <dt>Token</dt>
               <dd>
-                <code title={WalletPanel.figures(panel).token}>
-                  {RegentFormat.short_address(WalletPanel.figures(panel).token)}
-                </code>
+                <Regent.Primitives.address
+                  id="fleet-launch-token"
+                  address={WalletPanel.figures(panel).token}
+                />
               </dd>
             </div>
             <div>

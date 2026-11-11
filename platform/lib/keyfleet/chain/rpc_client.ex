@@ -1,5 +1,12 @@
 defmodule Keyfleet.Chain.RpcClient do
-  @moduledoc "`Keyfleet.Chain.Client` over JSON-RPC to the node at `KEYFLEET_RPC_URL`."
+  @moduledoc """
+  `Keyfleet.Chain.Client` over JSON-RPC to the node at `KEYFLEET_RPC_URL`.
+
+  Every request the node does not answer, or answers with an error other than
+  the contract refusing the call, is logged and counted in
+  `health.chain_request_failures.total` (`KeyfleetWeb.Telemetry`) under the
+  scope "fleet", so Sentinel warns while the node keeps failing.
+  """
   @behaviour Keyfleet.Chain.Client
 
   require Logger
@@ -17,7 +24,7 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
-  # Base makes a `latest` block about every two seconds; nothing here waits
+  # Base makes five `latest` blocks a second from Denim; nothing here waits
   # for `safe` or `finalized`.
   @impl true
   def head do
@@ -120,6 +127,9 @@ defmodule Keyfleet.Chain.RpcClient do
     end
   end
 
+  # A node asking for fewer requests (HTTP 429) is `:chain_busy`, so a reader
+  # asks it nothing more this pass; any other failure to answer is
+  # `:chain_unavailable`.
   defp request(method, params) do
     case JsonRpc.request(method, params) do
       {:ok, result} ->
@@ -128,8 +138,14 @@ defmodule Keyfleet.Chain.RpcClient do
       {:error, {:rpc_error, error}} ->
         refused_or_failed(method, error)
 
+      {:error, {:unavailable, %{status: 429} = detail}} ->
+        Logger.warning("chain read failed #{inspect(Map.put(detail, :method, method))}")
+        count_failure(method, "http_429")
+        {:error, :chain_busy}
+
       {:error, {:unavailable, detail}} ->
         Logger.warning("chain read failed #{inspect(Map.put(detail, :method, method))}")
+        count_failure(method, class(detail))
         {:error, :chain_unavailable}
     end
   end
@@ -144,9 +160,30 @@ defmodule Keyfleet.Chain.RpcClient do
         "chain read failed #{inspect(%{method: method, code: error.code, message: error.message})}"
       )
 
+      count_failure(method, "rpc")
       {:error, :chain_unavailable}
     end
   end
+
+  # The fleets live on the one wallet chain, which the node serves.
+  defp count_failure(method, class) do
+    [chain_id] = :keyfleet |> Application.fetch_env!(:wallet_chains) |> Map.keys()
+
+    :telemetry.execute([:keyfleet, :chain, :failure], %{count: 1}, %{
+      method: method,
+      class: class,
+      chain_id: chain_id,
+      scope: "fleet"
+    })
+  end
+
+  defp class(%{status: status}), do: "http_#{status}"
+
+  defp class(%{reason: %Req.TransportError{reason: reason}})
+       when reason in [:timeout, :connect_timeout],
+       do: "timeout"
+
+  defp class(%{reason: _transport}), do: "transport"
 
   defp hex_quantity(value), do: "0x" <> (value |> Integer.to_string(16) |> String.downcase())
 end

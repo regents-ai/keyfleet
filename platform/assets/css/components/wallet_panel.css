@@ -24,6 +24,17 @@
   gap: 0.75rem;
 }
 
+/* Approve and the step it allows are one size: each spans the group, one
+   above the other, with any reason under its button. */
+.wallet-panel-buttons:has([data-onchain-step="approve"]) {
+  justify-self: stretch;
+}
+
+.wallet-panel-buttons:has([data-onchain-step="approve"]) > :is(.rg-button, .wallet-panel-step),
+.wallet-panel-buttons:has([data-onchain-step="approve"]) .wallet-panel-step > .rg-button {
+  flex: 1 1 100%;
+}
+
 /* A button the chain's own state makes certain to fail stays in view,
    disabled, with a few words beside it saying why. */
 .wallet-panel-step {
@@ -73,4 +84,26 @@
 .wallet-panel-sent li[data-state="unknown"] {
   border-inline-start-color: var(--ash-accent-warm);
 }
+}
+
+/* Outside the layer, because the button's paint is drawn by unlayered rules:
+   a step that has landed, as Approve once it has, is greyed with a green edge
+   all the way round. */
+:root .wallet-panel .wallet-panel-buttons .rg-button.rg-button[data-onchain-step][data-done] {
+  color: var(--color-fg-muted);
+}
+
+:root .wallet-panel .wallet-panel-buttons .rg-button.rg-button[data-onchain-step][data-done]::before {
+  --rg-button-edge-ink: var(--color-success);
+  --rg-button-cut-ink: var(--color-success);
+  --rg-button-cut-gap: 0px;
+  background-color: color-mix(in srgb, var(--color-fg) 12%, var(--color-surface));
+  background-size:
+    var(--rg-cut-control) var(--rg-cut-control), var(--rg-cut-control) var(--rg-cut-control),
+    calc(100% - var(--rg-cut-control) + 1px) 1px, 1px calc(100% - var(--rg-cut-control) + 1px),
+    calc(100% - var(--rg-cut-control) + 1px) 1px, 1px calc(100% - var(--rg-cut-control) + 1px);
+}
+
+:root .wallet-panel .wallet-panel-buttons .rg-button.rg-button[data-onchain-step][data-done]::after {
+  content: none;
 }

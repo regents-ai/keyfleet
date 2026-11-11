@@ -16,8 +16,8 @@
 #
 # Nothing here is a code fix: the static review found no exploitable in-repo
 # vulnerability. The probes lock the controls in; the dynamic items are handed
-# to the Mac. Residual risk lives in dependencies (siwa, RegentPrivy,
-# RegentCredits) and on-chain, named per check.
+# to the Mac. Residual risk lives in dependencies (siwa, RegentPrivy) and
+# on-chain, named per check.
 
 meta:
   date: "2026-10-17"
@@ -57,17 +57,17 @@ checks:
 
   - id: RT-MASS-ASSIGN
     category: access_control
-    attack: "A profile update sets a protected field (role, human_account_id, pairing_id, credits_admin, standing)."
+    attack: "A profile update sets a protected field (role, human_account_id, pairing_id, admin, standing)."
     control: "signed_agent.ex:83,506-507 (@editable allow-list); agents/agent_profile.ex:44-51 accept; wallet_address/human_id set from actor, not input"
     probe: "test/keyfleet_web/security/access_control_probes_test.exs — RT-MASS-ASSIGN"
     disable_toggle: "Add a field (e.g. \"role\") to @editable in signed_agent.ex or to the agent_profile :update accept list."
     verdict: safe_by_code
     needs_dynamic: false
 
-  - id: RT-ROLE-CREDITS-ADMIN
+  - id: RT-ROLE-ADMIN
     category: access_control
-    attack: "Gain Credits-admin (/admin/errors, treasury switch) via a client-reachable action."
-    control: "errors_admin.ex:63-82 — membership is the REGENT_CREDITS_ADMINS deploy env matched to privy_user_id; no stored role, no client write path (access.ex:133-141)"
+    attack: "Gain site-admin (/admin/errors) via a client-reachable action."
+    control: "errors_admin.ex — membership is config :keyfleet, :admins, set from the REGENT_CREDITS_ADMINS deploy env and matched to privy_user_id; no stored role, no client write path"
     probe: "no runnable client attack exists (env-config membership); asserted by absence — see analysis doc"
     disable_toggle: "n/a (would require inventing a client-writable admin attribute)"
     verdict: safe_by_code
@@ -141,10 +141,19 @@ checks:
 
   - id: RT-QUOTA-POSTS
     category: limit_flow
-    attack: "Exceed the per-person page-post quota (300/hr) from the client."
-    control: "rooms/changes/limit_page_posts.ex:44-67 counts from the DB in a before_action"
-    probe: "existing room tests; documented minor race (limit_page_posts.ex:12-16)"
-    disable_toggle: "Remove the LimitPagePosts change from the action."
+    attack: "Exceed a Key's post quota (300/hr for people, 300/hr per agent wallet) from the client or by rotating addresses."
+    control: "rooms/changes/limit_posts.ex: people's posts counted from the DB under an advisory lock on the fleet and Key; each agent wallet spends the :agent_posts allowance for the Key (Keyfleet.Limits)"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-QUOTA-POSTS"
+    disable_toggle: "Remove the LimitPosts change from :send_message or :send_to_key."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-QUOTA-WRITES
+    category: limit_flow
+    attack: "Flood a fleet's workspace with writes as one wallet, rotating addresses to dodge the per-address budget."
+    control: "agent_graph_controller.ex spends the :graph_writes allowance per {fleet, wallet} (Keyfleet.Limits) before any write reaches the fleet's writer"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-QUOTA-WRITES"
+    disable_toggle: "Drop the Limits.admit(:graph_writes, ...) step from AgentGraphController."
     verdict: safe_by_code
     needs_dynamic: false
 
@@ -157,16 +166,6 @@ checks:
     verdict: safe_by_code
     needs_dynamic: true
     dynamic_note: "Under the sandbox all callers share one connection and serialize; true parallel timing needs a non-sandboxed DB on the Mac."
-
-  - id: RT-CREDIT-SPEND
-    category: limit_flow
-    attack: "Double-spend credits/points at near-zero balance via a concurrency burst."
-    control: "OUT OF REPO — all credit/point debit lives in RegentCredits / RegentPoints (git pins). The in-repo agent API only reads balances and builds unsigned transactions."
-    probe: "no in-repo probe possible; Mac: seed a 1-credit balance, race the RegentCredits spend action on a non-sandboxed DB, assert exactly one succeeds"
-    disable_toggle: "n/a in repo"
-    verdict: needs_dynamic
-    needs_dynamic: true
-    dynamic_note: "Debit atomicity (transaction/locking/unique constraint) is a dependency concern — confirm against RegentCredits live."
 
   - id: RT-GRAPH-NEST
     category: limit_flow
@@ -219,7 +218,7 @@ checks:
   - id: RT-REDIRECT
     category: injection
     attack: "Open redirect to an attacker origin via a post-login or notebook-open destination."
-    control: "notebooks.ex:148-150 destination?/1 (only '/' or a strict saved-output path) + server-built fleet host; notebook_open_controller.ex:20 / shell_live.ex:261; Privy sign-in returns JSON with no reflected return_to"
+    control: "notebooks.ex:148-150 destination?/1 (only '/' or a strict saved-output path) + server-built fleet host; notebook_open_controller.ex:20 / shell_live.ex:261; the notebook gateway passes a hub's Location on only when it is relative or on the fleet's own notebook host; Privy sign-in returns JSON with no reflected return_to"
     probe: "test/keyfleet_web/security/injection_probes_test.exs — RT-REDIRECT (destination? guard)"
     disable_toggle: "Make destination?/1 return true for arbitrary strings."
     verdict: safe_by_code

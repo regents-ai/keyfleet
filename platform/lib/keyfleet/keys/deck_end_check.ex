@@ -1,28 +1,28 @@
 defmodule Keyfleet.Keys.DeckEndCheck do
   @moduledoc """
   Every hour (`config :keyfleet, Oban, cron:`): saves with the site's errors
-  (`Keyfleet.Keys.DeckEnding`) each deployed fleet that has sold at least
+  (`Keyfleet.Keys.DeckEndingError`) each deployed fleet that has sold at least
   100 fewer Keys than its deck holds and no more than the deck, when it can
-  sell Keys past its deck. Classic #1 is named from its 900th Key until its
+  sell Keys past its deck. Accelerant #1 is named from its 900th Key until its
   1,000th; its 1,001st is the first to draw its card with Chainlink
   randomness, so the Regents Safe readies the randomness subscription in that
   window (`docs/deployment.md`).
 
   It is one error naming every such fleet, saved again every hour while any
-  fleet is in its window. A fleet whose supply is its deck, as the Regents
-  Club's is, never draws and is never named.
+  fleet is in its window. A fleet whose supply is its deck, as Classic
+  #1's and the Regents Club's are, never draws and is never named.
   """
   use Oban.Worker, queue: :default, max_attempts: 1
 
   alias Keyfleet.Fleets.{Presets, Rules}
-  alias Keyfleet.Keys.DeckEnding
+  alias Keyfleet.Keys.DeckEndingError
 
   @warning 100
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     with [_ | _] = ending <- ending() do
-      DeckEnding.report(
+      DeckEndingError.report(
         "Keys past the deck draw their card with Chainlink randomness soon: #{named(ending)}. " <>
           "Before the first of them sells, the Regents Safe adds the Key collection as a " <>
           "consumer of the randomness subscription and funds it in ETH (docs/deployment.md); " <>

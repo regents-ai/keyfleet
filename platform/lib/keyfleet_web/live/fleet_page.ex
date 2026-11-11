@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.FleetPage do
   @moduledoc """
   What a fleet's page reads: the reader's own keys, the key on offer, the key
-  the map has chosen, and the hall's feed with what the fleet is trying now.
+  the map has chosen, and the hall's feed with what the fleet is recent work.
   """
 
   alias Keyfleet.Activity
@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.FleetPage do
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Metadata
-  alias KeyfleetWeb.ActivityLines
+  alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.KeyMap
 
   # How many of a holder's cards the way in shows.
@@ -55,25 +55,41 @@ defmodule KeyfleetWeb.FleetPage do
   def chosen_key(_progress, _key), do: nil
 
   @doc """
-  "Trying now", beside the hall's feed: the fleet's open goals and
-  the work on them, with the key on each task named.
+  "Recent Work", beside the hall's feed and on a visitor's workspace: each of
+  the fleet's projects with its open goals, as `Keyfleet.Graph.shown/1`
+  reads them, every title as it can be seen. A title with nothing to see
+  reads "A project" or "A goal".
   """
-  def read_trying_now(fleet_id), do: fleet_id |> Graph.trying_now() |> ActivityLines.trying_now()
+  def read_recent_work(fleet_id) do
+    for project <- Graph.shown(fleet_id) do
+      %{
+        title: seen(project.title, "A project"),
+        goals: Enum.map(project.goals, &seen(&1, "A goal"))
+      }
+    end
+  end
+
+  defp seen(title, untitled) do
+    case title |> DirectoryMD.visible() |> String.trim() do
+      "" -> untitled
+      title -> title
+    end
+  end
 
   @doc """
-  The first `wanted` pages of the hall's feed, newest first, as `actor`
-  reads them (`Keyfleet.Activity.page/3`): the items, the cursor for the
-  page after them and how many pages were read.
+  The first `wanted` pages of the hall's feed, newest first, read with
+  `read_as`, the options `Keyfleet.Activity.page/3` takes besides `:limit`:
+  the items, the cursor for the page after them and how many pages were read.
   """
-  def activity_pages(fleet_id, wanted, actor),
-    do: activity_pages(fleet_id, actor, nil, wanted, [])
+  def activity_pages(fleet_id, wanted, read_as),
+    do: activity_pages(fleet_id, read_as, nil, wanted, [])
 
-  defp activity_pages(fleet_id, actor, cursor, wanted, read) do
-    %{items: items, cursor: next} = Activity.page(fleet_id, cursor, actor: actor)
+  defp activity_pages(fleet_id, read_as, cursor, wanted, read) do
+    %{items: items, cursor: next} = Activity.page(fleet_id, cursor, read_as)
     read = [items | read]
 
     if next != nil and length(read) < wanted,
-      do: activity_pages(fleet_id, actor, next, wanted, read),
+      do: activity_pages(fleet_id, read_as, next, wanted, read),
       else: {read |> Enum.reverse() |> Enum.concat(), next, length(read)}
   end
 end

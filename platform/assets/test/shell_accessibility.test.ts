@@ -6,21 +6,31 @@ type Hook = Record<string, ((...args: unknown[]) => unknown) | undefined>
 const captured = vi.hoisted(() => ({hooks: {} as Record<string, Hook>}))
 
 vi.mock("phoenix", () => ({Socket: class Socket {}}))
-vi.mock("phoenix_html", () => ({}))
 vi.mock("phoenix-colocated/keyfleet", () => ({hooks: {}}))
 vi.mock("../js/auth_lazy", () => ({
   browserCsrfToken: () => "csrf-token",
+  holdAdoptionWhileLeaving: vi.fn(),
   holdSocketDuringCookieRotation: vi.fn(),
   installAccountAuthLazyLoader: vi.fn(),
   installCrossTabCsrf: vi.fn(),
   retireRefusedSession: vi.fn(),
 }))
 vi.mock("../js/motion", () => ({mountMotion: vi.fn()}))
+vi.mock("../js/page_progress", () => ({installPageProgress: vi.fn()}))
+// The account menu is walked in the browser (test/browser/account_menu.spec.ts).
+vi.mock("../js/account_menu", () => ({
+  arriveAt: vi.fn(),
+  hashTarget: () => null,
+  installAccountMenu: vi.fn(),
+}))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
-vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, ShellViews: {}}))
+vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, MotionTabs: {}, ShellViews: {}}))
 vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
+vi.mock("../js/hooks/harbour_sea", () => ({HarbourSea: {}}))
 vi.mock("../js/hooks/home_hero", () => ({HexField: {}, NextKeyCard: {}}))
+vi.mock("../js/hooks/key_card", () => ({KeyCardTurn: {}}))
+vi.mock("../js/hooks/places_chart", () => ({PlacesChart: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(

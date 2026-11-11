@@ -1,9 +1,11 @@
 defmodule Keyfleet.WalletSteps.KeySteps do
   @moduledoc """
   The steps of a key's own buttons: buying the next key, asking again for a
-  key's random draw, claiming what a key has earned, claiming a Regents Club
-  key waiting for its Pass's holder, marking keys present,
-  issuing, renewing and ending shards, and turning agent voting on or off.
+  key's random draw or ending a wait for it that ran out, claiming what a
+  key has earned, claiming a Regents Club key waiting for its Pass's holder,
+  claiming for every key a wallet holds or holds a shard of at once, marking
+  keys present, issuing, renewing and ending shards, and turning agent
+  voting on or off.
   `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
   Pages and requests name a fleet's Keys by number; every step names them by
@@ -20,14 +22,24 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # block's own clock, so a wallet's computer running fast or slow doesn't
   # shorten or stretch it.
   @purchase_seconds 600
+  # How far above the next Key's price, in percent, a purchase may still go
+  # through: Keys sold first in a rush move the price up a little each, and
+  # the buyer gets the next Key left at or under this.
+  @purchase_headroom_percent 5
+  # The most a purchase may cost is rounded up to a whole cent.
+  @cent 10_000
+  # The approval a buyer who ticks Unlimited gives: the most a USDC allowance
+  # can hold.
+  @unlimited 2 ** 256 - 1
   # A key's seed before its random draw arrives.
   @no_seed "0x" <> String.duplicate("0", 64)
   # How long a renewed shard lasts, in days.
   @renew_days 30
-  # How many lapsed presences one press of Continue clears.
-  @sweep_limit 256
   # How long a presence lasts, in seconds.
   @presence_seconds 172_800
+  # How long an accepted request for a key's draw waits before anyone may
+  # end it, in seconds (`KeyfleetKeys.REVEAL_TIMEOUT`).
+  @reveal_timeout_seconds 86_400
 
   @doc false
   def steps(:buy, request) do
@@ -38,39 +50,29 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   # Asking again for a key's random draw, which anyone may do while its
   # request was refused: it has no seed, and no request was ever accepted.
+  # And ending the wait for a draw that hasn't come 24 hours after its
+  # request was accepted, which anyone may do too: the key then never draws.
+  # A key dealt its card by number never draws, and the contract refuses both.
   def steps(:reveal, %{fleet: fleet, token_id: token_id}) do
     figures = %{token_id: token_id}
     onchain = Fleet.onchain_token_id(fleet, token_id)
 
-    step =
+    steps = [
       Review.step(
         "reveal",
         fleet.keys_address,
         Call.encode("requestReveal(uint256)", [onchain])
+      ),
+      Review.step(
+        "expire_reveal",
+        fleet.keys_address,
+        Call.encode("expireReveal(uint256)", [onchain])
       )
+    ]
 
-    with {:ok, reads} <- Reads.at_head(),
-         {:ok, seed} <-
-           Reads.one(reads, fleet.keys_address, "revealSeed(uint256)", [onchain], :bytes32),
-         {:ok, requested_at} <-
-           Reads.one(
-             reads,
-             fleet.keys_address,
-             "revealRequestedAt(uint256)",
-             [onchain],
-             {:uint, 64}
-           ) do
-      blocked =
-        cond do
-          seed != @no_seed -> %{"reveal" => :revealed}
-          requested_at != 0 -> %{"reveal" => :reveal_requested}
-          true -> %{}
-        end
-
-      {:ok, [step], Map.put(figures, :blocked, blocked)}
-    else
-      _unread -> {:problem, :unread, figures}
-    end
+    if Fleet.dealt?(fleet, token_id),
+      do: {:ok, steps, Map.put(figures, :blocked, both(:dealt_by_number))},
+      else: reveal(fleet, onchain, steps, figures)
   end
 
   # One step for each token the ledger pays keys in: it settles the key to
@@ -108,6 +110,46 @@ defmodule Keyfleet.WalletSteps.KeySteps do
        %{token_id: token_id, holder: holder, waiting: named(fleet, waiting), blocked: blocked}}
     else
       _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # One step for each token the ledger pays keys in, claiming for every key
+  # the signer holds or holds an active shard of at once: it settles each key
+  # to its holder and pays each holder, and the signer's own credit. Only keys
+  # the signer may act for are named, since the ledger refuses the whole claim
+  # for any other. A token with nothing waiting for any of them, or for the
+  # signer, is certain to be refused.
+  def steps(:claim_all, %{fleet: fleet, signer: signer}) do
+    candidates = Build.own_keys(fleet, signer)
+
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, assets} <-
+           Reads.one(reads, fleet.rewards_address, "rewardAssets()", [], {:array, :address}),
+         {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "isActive"),
+         keys = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
+         payees = Enum.uniq([signer | Enum.map(keys, &elem(standing[&1], 0))]),
+         {:ok, waiting} <-
+           Reads.each(assets, &waiting_for_keys(reads, fleet, &1, keys, payees)) do
+      onchain = Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
+
+      steps =
+        Enum.map(
+          waiting,
+          &Review.step(
+            "claim-#{&1.asset}",
+            fleet.rewards_address,
+            Call.encode("claim(uint256[],address[])", [onchain, [&1.asset]])
+          )
+        )
+
+      blocked =
+        for %{asset: asset, amount: 0} <- waiting,
+            into: %{},
+            do: {"claim-#{asset}", :nothing_to_claim}
+
+      {:ok, steps, %{keys: keys, waiting: named(fleet, waiting), blocked: blocked}}
+    else
+      _unread -> {:problem, :unread, %{keys: [], waiting: []}}
     end
   end
 
@@ -154,34 +196,27 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # Key is present whoever is looking. A Key sold less than two days ago can't
   # be marked yet, and the vote contract refuses a call naming one, so only
   # the Keys old enough are named; with none old enough the press is certain
-  # to fail. Continue clears presences that have lapsed, which anyone may do.
-  # A visitor holds no Keys.
+  # to fail. A visitor holds no Keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
     candidates = present_candidates(fleet, signer, token_id)
-    figures = %{keys: [], maintenance?: false}
+    figures = %{keys: []}
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "isActive"),
          keys = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
          {:ok, presence} <-
-           Reads.each(if(token_id, do: [token_id], else: keys), &presence(reads, fleet, &1)),
-         {:ok, maintenance?} <- maintenance?(reads, fleet) do
+           Reads.each(if(token_id, do: [token_id], else: keys), &presence(reads, fleet, &1)) do
       ready = for %{token_id: key, mature?: true} <- presence, key in keys, do: key
       onchain = Enum.map(ready, &Fleet.onchain_token_id(fleet, &1))
 
       steps = [
-        Review.step("present", fleet.votes_address, Call.encode("present(uint256[])", [onchain])),
-        Review.step(
-          "sweep",
-          fleet.votes_address,
-          Call.encode("sweepExpired(uint256)", [@sweep_limit])
-        )
+        Review.step("present", fleet.votes_address, Call.encode("present(uint256[])", [onchain]))
       ]
 
       {:ok, steps,
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
-         maintenance?: maintenance?,
+         ready: ready,
          blocked: present_blocked(keys, ready, token_id)
        }}
     else
@@ -311,28 +346,38 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # the Key and price from these same figures. The manager refuses to price
   # the next Key only once every Key is sold (Regents Club Keys, never priced,
   # are turned away before this), so a refusal means there is nothing left to
-  # buy. The wallet approves exactly the price when its USDC allowance to the
-  # manager is below it, and until it does the purchase is certain to fail, as
-  # it is before the fleet's sales open; the purchase names the price as its
-  # most, so a Key that has since cost more is refused and no USDC is taken.
+  # buy. The purchase never names a Key: the manager sells whichever Key is
+  # next when it lands, at that Key's price. So a buyer who loses a rush for
+  # the Key on offer gets the next one left, as long as its price is within
+  # the most the purchase names, the price plus @purchase_headroom_percent;
+  # past that it is refused and no USDC is taken. The wallet approves that
+  # most when its USDC allowance to the manager is below it, or without limit
+  # when the buyer ticks Unlimited, and until it does the purchase is certain
+  # to fail, as it is before the fleet's sales open.
   # Founding fleets ask nothing of buyers, so the purchase carries no proof.
   # A visitor sees the same figures, with no allowance and nothing to send.
-  defp buy(%{fleet: fleet, signer: signer}) do
+  defp buy(%{fleet: fleet, signer: signer, inputs: inputs}) do
+    unlimited? = Build.field(inputs, "unlimited") == "true"
     manager = &Reads.one(&1, fleet.manager_address, &2, [], {:uint, 256})
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, minted} <- manager.(reads, "totalMinted()") do
       case manager.(reads, "nextPrice()") do
-        {:ok, price} -> offer(reads, fleet, signer, %{token_id: minted + 1, price: price})
-        {:error, :reverted} -> {:problem, :sold_out, %{max_supply: minted}}
-        {:error, _unread} -> {:problem, :unread, %{approve?: nil}}
+        {:ok, price} ->
+          offer(reads, fleet, signer, unlimited?, %{token_id: minted + 1, price: price})
+
+        {:error, :reverted} ->
+          {:problem, :sold_out, %{max_supply: minted}}
+
+        {:error, _unread} ->
+          {:problem, :unread, %{approve?: nil}}
       end
     else
       _unread -> {:problem, :unread, %{approve?: nil}}
     end
   end
 
-  defp offer(reads, fleet, signer, %{price: price} = figures) do
+  defp offer(reads, fleet, signer, unlimited?, %{price: price} = figures) do
     with {:ok, opens_at} <-
            Reads.one(
              reads,
@@ -343,7 +388,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
            ),
          {:ok, allowance} <- allowance(reads, fleet, signer) do
       now = DateTime.to_unix(Reads.now(reads))
-      approve? = allowance != nil and allowance < price
+      max_price = max_price(price)
+      approve? = allowance != nil and allowance < max_price
 
       blocked =
         cond do
@@ -357,11 +403,18 @@ defmodule Keyfleet.WalletSteps.KeySteps do
             %{}
         end
 
-      {:ok, purchase(fleet, signer, price, now + @purchase_seconds, approve?),
-       Map.merge(figures, %{approve?: approve?, blocked: blocked})}
+      approval = if unlimited?, do: @unlimited, else: max_price
+
+      {:ok, purchase(fleet, signer, approval, max_price, now + @purchase_seconds, approve?),
+       Map.merge(figures, %{max_price: max_price, approve?: approve?, blocked: blocked})}
     else
       _unread -> {:problem, :unread, Map.put(figures, :approve?, nil)}
     end
+  end
+
+  defp max_price(price) do
+    whole = 100 * @cent
+    div(price * (100 + @purchase_headroom_percent) + whole - 1, whole) * @cent
   end
 
   # The wallet's USDC allowance to the manager; a visitor has none to read.
@@ -377,21 +430,26 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         {:uint, 256}
       )
 
-  defp purchase(_fleet, nil, _price, _deadline, _approve?), do: []
+  defp purchase(_fleet, nil, _approval, _max_price, _deadline, _approve?), do: []
 
-  defp purchase(fleet, signer, price, deadline, approve?) do
+  defp purchase(fleet, signer, approval, max_price, deadline, approve?) do
     approve =
       Review.step(
         "approve",
         fleet.usdc_address,
-        Call.encode("approve(address,uint256)", [fleet.manager_address, price])
+        Call.encode("approve(address,uint256)", [fleet.manager_address, approval])
       )
 
     buy =
       Review.step(
         "buy",
         fleet.manager_address,
-        Call.encode("purchase(address,uint256,uint256,bytes32[])", [signer, price, deadline, []])
+        Call.encode("purchase(address,uint256,uint256,bytes32[])", [
+          signer,
+          max_price,
+          deadline,
+          []
+        ])
       )
 
     if approve?, do: [approve, buy], else: [buy]
@@ -425,6 +483,34 @@ defmodule Keyfleet.WalletSteps.KeySteps do
          {:ok, held} <- credit.(holder),
          {:ok, own} <- if(signer == holder, do: {:ok, 0}, else: credit.(signer)) do
       {:ok, %{asset: asset, amount: accrued + held + own}}
+    end
+  end
+
+  # What a claim of one asset for many keys would pay: what each key has
+  # accrued, which settles to its holder, and the credit of each payee, the
+  # signer and every holder of those keys.
+  defp waiting_for_keys(reads, fleet, asset, keys, payees) do
+    accrued =
+      &Reads.one(
+        reads,
+        fleet.rewards_address,
+        "accrued(address,uint256)",
+        [asset, Fleet.onchain_token_id(fleet, &1)],
+        {:uint, 256}
+      )
+
+    credit =
+      &Reads.one(
+        reads,
+        fleet.rewards_address,
+        "credits(address,address)",
+        [asset, &1],
+        {:uint, 256}
+      )
+
+    with {:ok, accrued} <- Reads.each(keys, accrued),
+         {:ok, credits} <- Reads.each(payees, credit) do
+      {:ok, %{asset: asset, amount: Enum.sum(accrued) + Enum.sum(credits)}}
     end
   end
 
@@ -479,18 +565,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     end
   end
 
-  # Whether lapsed presences are waiting to be cleared: a proposal clears up
-  # to 256 itself and is refused while more are left. Asked of the vote
-  # contract by simulating a Continue that clears none.
-  defp maintenance?(reads, fleet) do
-    with {:ok, [_moved, due?]} <-
-           Reads.many(reads, fleet.votes_address, "sweepExpired(uint256)", [0], [
-             {:uint, 256},
-             :bool
-           ]),
-         do: {:ok, due?}
-  end
-
   # Whether the signer holds every key named, read at the head.
   defp owned?(reads, fleet, signer, keys, figures) do
     case Reads.each(keys, &Reads.holder(reads, fleet, &1)) do
@@ -530,6 +604,67 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     do: Call.encode("setAgentVoting(uint256[],bool)", [onchain(fleet, keys), on])
 
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
+
+  # Whether the chain has a seed for the key, a request waiting, or a wait
+  # that was ended, and whether its fleet's deck is set on the chain yet, as
+  # the contract checks.
+  defp reveal(fleet, onchain, steps, figures) do
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, [_manager, _preset, _type, _size, deck_hash]} <-
+           Reads.many(
+             reads,
+             fleet.keys_address,
+             "fleet(uint256)",
+             [fleet.chain_fleet_id],
+             [:address, {:uint, 8}, {:uint, 32}, {:uint, 32}, :bytes32]
+           ),
+         {:ok, seed} <-
+           Reads.one(reads, fleet.keys_address, "revealSeed(uint256)", [onchain], :bytes32),
+         {:ok, requested_at} <-
+           Reads.one(
+             reads,
+             fleet.keys_address,
+             "revealRequestedAt(uint256)",
+             [onchain],
+             {:uint, 64}
+           ),
+         {:ok, expired?} <-
+           Reads.one(reads, fleet.keys_address, "revealExpired(uint256)", [onchain], :bool) do
+      blocked =
+        cond do
+          seed != @no_seed ->
+            both(:revealed)
+
+          expired? ->
+            both(:reveal_expired)
+
+          requested_at != 0 ->
+            asked(Reads.now(reads), requested_at)
+
+          deck_hash == @no_seed ->
+            %{"reveal" => :deck_not_set, "expire_reveal" => :no_draw_waiting}
+
+          true ->
+            %{"expire_reveal" => :no_draw_waiting}
+        end
+
+      {:ok, steps, Map.put(figures, :blocked, blocked)}
+    else
+      _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  defp both(reason), do: %{"reveal" => reason, "expire_reveal" => reason}
+
+  # A waiting request is never asked again; its wait may be ended from 24
+  # hours after it was accepted, by the latest block's own clock.
+  defp asked(now, requested_at) do
+    ends_from = DateTime.from_unix!(requested_at + @reveal_timeout_seconds)
+
+    if DateTime.before?(now, ends_from),
+      do: %{"reveal" => :reveal_requested, "expire_reveal" => {:expire_from, ends_from}},
+      else: %{"reveal" => :reveal_requested}
+  end
 
   # Who holds Regents Club Pass `pass_id`, or nil once it is burned.
   defp pass_holder(reads, pass, pass_id) do

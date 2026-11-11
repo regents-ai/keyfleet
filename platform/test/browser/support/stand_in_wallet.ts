@@ -27,7 +27,7 @@ export async function useStandInWallet(page: Page, address: string, answer: Answ
     async ({address, answer}) => {
       const script = document.querySelector<HTMLScriptElement>('script[type=module][src*="/assets/js/app"]')!.src
       const source = await (await fetch(script)).text()
-      const chunks = [...source.matchAll(/from "(\.\/chunk-[A-Z0-9]+\.js)"/g)].map(match => new URL(match[1], script).href)
+      const chunks = [...source.matchAll(/from "(\.\/chunks\/chunk-[A-Z0-9]+\.js)"/g)].map(match => new URL(match[1], script).href)
 
       for (const chunk of chunks) {
         const module = await import(chunk)

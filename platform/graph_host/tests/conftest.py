@@ -10,7 +10,7 @@ WALLET = "0x" + "a1" * 20
 CONTRACT = "0x" + "b2" * 20
 
 
-def command(command_id, *, token_id=17, scopes=("fleet",), wallet=WALLET, contract=CONTRACT):
+def command(command_id, *, token_id=17, wallet=WALLET, contract=CONTRACT, projects=None):
     auth = {
         "key": {"chain_id": 8453, "contract": contract, "token_id": token_id},
         "ownership_epoch": 3,
@@ -23,8 +23,8 @@ def command(command_id, *, token_id=17, scopes=("fleet",), wallet=WALLET, contra
     return {
         "id": command_id,
         "principal": f"member:8453:{contract}:{token_id}@3/agent:{wallet}",
-        "writable_scopes": list(scopes),
         "auth": auth,
+        "projects": {"general": "active"} if projects is None else projects,
     }
 
 
@@ -38,10 +38,11 @@ def request(op, body, cmd=None, req="r1"):
 class HostProcess:
     """The real host as the port runs it, optionally with a patch applied first."""
 
-    def __init__(self, db, *, patch="", fleet="fleet_a"):
+    def __init__(self, db, *, patch="", fleet="fleet_a", starting_goals=()):
         script = f"{patch}\nfrom keyfleet_graph.__main__ import main\nmain()\n"
+        goals = json.dumps(list(starting_goals))
         self.proc = subprocess.Popen(
-            [sys.executable, "-c", script, "--fleet", fleet, "--db", str(db)],
+            [sys.executable, "-c", script, "--fleet", fleet, "--db", str(db), "--starting-goals", goals],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

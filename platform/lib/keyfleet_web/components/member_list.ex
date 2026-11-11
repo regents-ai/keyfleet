@@ -5,9 +5,11 @@ defmodule KeyfleetWeb.Components.MemberList do
   account, with the Keys at every address it links counted together; Keys at
   an address no account links make a card of their own. Each card names the
   person (their chosen name over their short main address, else their ENS
-  name, else their short main address), how many Keys they hold with the lowest as small cards opening
-  each Key, their connected X, GitHub and Farcaster accounts, and whether they
-  are active: a Key of theirs can vote now, as the Treasury counts presence.
+  name, else their short main address), how many Keys they hold as small cards
+  opening each Key, the Key they post as first in a slot of its own and then
+  their lowest, their connected X, GitHub and Farcaster accounts, and whether
+  they are active: a Key of theirs can vote now, as the Treasury counts
+  presence.
   `club_claims` is the address the Regents Club's Keys wait at for their Pass
   holders, left out of the list; nil for a fleet with none.
 
@@ -89,32 +91,52 @@ defmodule KeyfleetWeb.Components.MemberList do
   defp cards(fleet_id, deck, holders) do
     wallets = Enum.flat_map(holders, & &1.wallets)
     held = Keys.lowest_held(fleet_id, wallets, @cards_shown)
-    pictures = pictures(deck, held |> Map.values() |> List.flatten())
+
+    lowest =
+      Map.new(
+        holders,
+        &{&1.wallets,
+         &1.wallets |> Enum.flat_map(fn w -> Map.get(held, w, []) end) |> Enum.sort()}
+      )
+
+    faces = Keys.faces(fleet_id, for({_own, [first | _rest]} <- lowest, do: first))
+
+    shown =
+      Map.new(lowest, fn {own, [first | _rest] = keys} ->
+        face = Map.fetch!(faces, first).face
+        {own, Enum.take([face | List.delete(keys, face)], @cards_shown)}
+      end)
+
+    pictures = pictures(deck, shown |> Map.values() |> List.flatten())
     present = Keys.present_holders(fleet_id, wallets)
+    idle = Keys.idle_holders(fleet_id, wallets)
     last_active = Keys.last_active(fleet_id, wallets)
     accounts = accounts(holders)
     connections = connections(Map.keys(accounts))
 
     for %{account_id: account_id, wallets: own, count: count} <- holders do
       account = accounts[account_id]
-      {name, address} = who(account, own)
-
-      shown =
-        own |> Enum.flat_map(&Map.get(held, &1, [])) |> Enum.sort() |> Enum.take(@cards_shown)
+      {name, address, label} = who(account, own)
+      [face | _rest] = shown = shown[own]
 
       %{
         id: card_id(account, own),
         count: count,
         name: name,
         address: address,
+        label: label,
         connections: Map.get(connections, account_id, []),
-        present?: Enum.any?(own, &MapSet.member?(present, &1)),
+        status: status(own, present, idle),
         last_active:
           own
           |> Enum.map(&last_active[&1])
           |> Enum.reject(&is_nil/1)
           |> Enum.max(DateTime, fn -> nil end),
-        cards: for(token_id <- shown, do: %{token_id: token_id, image: pictures[token_id]}),
+        cards:
+          for(
+            token_id <- shown,
+            do: %{token_id: token_id, image: pictures[token_id], face?: token_id == face}
+          ),
         more: count - length(shown)
       }
     end
@@ -157,21 +179,10 @@ defmodule KeyfleetWeb.Components.MemberList do
 
   defp card_id(_account, [wallet | _rest]), do: wallet
 
-  # A name the person typed is shown over their short main address, so it never
-  # passes for an ENS name; an ENS name, or a bare address, is shown alone.
+  # Returns the typed name, the main address and the ENS name.
   defp who(account, own) do
-    address = RegentFormat.short_address(card_id(account, own))
-
-    cond do
-      chosen = account && PublicIdentity.name(%{display_name: account.display_name}) ->
-        {chosen, address}
-
-      ens = account && PublicIdentity.name(%{ens_name: account.ens_name}) ->
-        {ens, nil}
-
-      true ->
-        {address, nil}
-    end
+    {chosen, ens} = PublicIdentity.holder(account)
+    {chosen, card_id(account, own), ens}
   end
 
   # A connection is shown only with the account name it links to.
@@ -196,7 +207,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         class="kf-empty"
         title="No members yet."
       >
-        Whoever holds the first Key shows up here.
+        The first Key’s holder shows up here.
       </Regent.Primitives.empty_state>
 
       <ol :if={is_list(@holders)} id={"#{@id}-holders"} class="member-list__holders">
@@ -206,16 +217,26 @@ defmodule KeyfleetWeb.Components.MemberList do
           class="member-card"
         >
           <p class="member-card__who">
-            <strong>{holder.name}</strong>
-            <span :if={holder.address}>{holder.address}</span>
+            <strong :if={holder.name}>{holder.name}</strong>
+            <Regent.Primitives.address
+              id={"#{@id}-holder-#{holder.id}-address"}
+              class={!holder.name && "member-card__identity"}
+              address={holder.address}
+              label={holder.label}
+            />
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
-          <p class="member-card__status" data-present={holder.present? && "true"}>
-            {if holder.present?, do: "Active", else: "Idle"} · {seen(holder.last_active, @now)}
+          <p class="member-card__status" data-present={holder.status == :active && "true"}>
+            {status_words(holder.status)}
+            <.seen
+              :if={holder.last_active}
+              id={"#{@id}-holder-#{holder.id}-seen"}
+              at={holder.last_active}
+              now={@now}
+            />
           </p>
-          <p class="member-card__connections">
+          <p :if={holder.connections != []} class="member-card__connections">
             <span class="member-card__label">Connections</span>
-            <span :if={holder.connections == []}>None</span>
             <a
               :for={link <- holder.connections}
               href={link.url}
@@ -226,7 +247,8 @@ defmodule KeyfleetWeb.Components.MemberList do
             </a>
           </p>
           <ul class="fleet-entry__cards member-card__cards" aria-label="Keys held" tabindex="0">
-            <li :for={card <- holder.cards}>
+            <li :for={card <- holder.cards} class={card.face? && "member-card__face"}>
+              <span :if={card.face?} class="member-card__face-label">Posts as</span>
               <.link
                 id={"#{@id}-card-#{card.token_id}"}
                 class="fleet-entry__card"
@@ -265,12 +287,41 @@ defmodule KeyfleetWeb.Components.MemberList do
     """
   end
 
-  defp seen(nil, _now), do: "never active"
+  # Active when one of the holder's Keys has a vote now, Idle when none has and
+  # one has lost it, and otherwise waiting: every Key is new and its
+  # automatic start, 2 days after its sale, is still to come.
+  defp status(wallets, present, idle) do
+    cond do
+      Enum.any?(wallets, &MapSet.member?(present, &1)) -> :active
+      Enum.any?(wallets, &MapSet.member?(idle, &1)) -> :idle
+      true -> :waiting
+    end
+  end
 
-  defp seen(at, now) do
-    if DateTime.diff(now, at) < @online_for,
-      do: "online now",
-      else: "last active #{KeyfleetWeb.Time.moment(at, now)}"
+  defp status_words(:active), do: "Active"
+  defp status_words(:idle), do: "Idle"
+  defp status_words(:waiting), do: "Waiting to start"
+
+  attr :id, :string, required: true
+  attr :at, DateTime, required: true
+  attr :now, DateTime, required: true
+
+  defp seen(assigns) do
+    assigns = assign(assigns, :online?, DateTime.diff(assigns.now, assigns.at) < @online_for)
+
+    ~H"""
+    ·
+    <%= if @online? do %>
+      online now
+    <% else %>
+      last active
+      <KeyfleetWeb.Time.local
+        id={@id}
+        at={@at}
+        as={:moment}
+      />
+    <% end %>
+    """
   end
 
   defp page_path(fleet_id, 1), do: KeyLinks.members_path(fleet_id)

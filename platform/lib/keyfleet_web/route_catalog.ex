@@ -6,7 +6,6 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   alias __MODULE__.{
     Entry,
-    NameOnly,
     RouteTarget,
     SidebarModel,
     Spec
@@ -21,8 +20,11 @@ defmodule KeyfleetWeb.RouteCatalog do
   @number ~r/\A[1-9][0-9]{0,17}\z/
   # A poll is named by its id, a UUID in lower case.
   @poll_id ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
-  # A repository of a fleet's code is named by the fleet's id.
-  @repository ~r/\A[a-z0-9_]{1,64}\z/
+  # A project's repository is named by its fleet's id, then, for any project
+  # but `general`, a hyphen and the project's name.
+  @repository ~r/\A[a-z0-9_]{1,64}(-[a-z0-9]+)*\z/
+  # A project is named as `Keyfleet.Projects.Project` names it.
+  @project ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/
   # A commit is named by its full hash, as git writes it.
   @commit ~r/\A([0-9a-f]{40}|[0-9a-f]{64})\z/
 
@@ -40,6 +42,13 @@ defmodule KeyfleetWeb.RouteCatalog do
       parameter_schema: %{},
       reserved_values: %{},
       route_spec_id: :account
+    },
+    %Entry{
+      path_pattern: "/account/agents",
+      live_action: :account_agents,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :account_agents
     },
     %Entry{
       path_pattern: "/account/points",
@@ -70,6 +79,13 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :about
     },
     %Entry{
+      path_pattern: "/pair",
+      live_action: :pair,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :pair
+    },
+    %Entry{
       path_pattern: "/opportunities",
       live_action: :opportunities,
       parameter_schema: %{},
@@ -79,16 +95,18 @@ defmodule KeyfleetWeb.RouteCatalog do
   ]
 
   # The pages every fleet has, each under the fleet's own address
-  # (`Keyfleet.Fleets.path/1`): the fleet's page itself, then its rooms,
-  # workspace, proposals, treasury and polls, and each of its Keys' pages and
-  # messages.
+  # (`Keyfleet.Fleets.path/1`): the fleet's page itself, whose hall also opens
+  # its rooms (`?room=`), then its workspace and its code, each project's page,
+  # proposals, treasury and polls, and each of its Keys' pages and messages.
   @fleet_pages [
     {"", :fleet, %{}},
-    {"/rooms/:slug", :rooms, %{slug: :slug}},
     {"/workspace", :workspace, %{}},
     {"/workspace/:object_id", :workspace_item, %{object_id: :object_id}},
     {"/code/:repository/commits/:commit", :code_commit,
      %{repository: :repository, commit: :commit}},
+    {"/code/:repository/commits", :code_history, %{repository: :repository}},
+    {"/code/:repository/files", :code_files, %{repository: :repository}},
+    {"/projects/:project", :project, %{project: :project}},
     {"/proposals", :proposals, %{}},
     {"/proposals/:number", :proposal, %{number: :number}},
     {"/treasury", :treasury, %{}},
@@ -117,25 +135,32 @@ defmodule KeyfleetWeb.RouteCatalog do
   @specs %{
     home: {:home, nil, nil, "Keyfleet", "/", [], :home, %{}},
     account: {:account, :product, "Keyfleet", "Profile", "/", [:profile_actions], :product, %{}},
+    account_agents:
+      {:account_agents, :product, "Keyfleet", "Agents", "/", [:profile_actions], :product, %{}},
     points: {:points, :product, "Keyfleet", "Points", "/", [:profile_actions], :product, %{}},
     wallets: {:wallets, :product, "Keyfleet", "Wallets", "/", [:profile_actions], :product, %{}},
     connections:
       {:connections, :product, "Keyfleet", "Connections", "/", [:profile_actions], :product, %{}},
     about: {:about, :product, "Keyfleet", "About", "/", [:profile_actions], :product, %{}},
+    pair: {:pair, :product, "Keyfleet", "Pair New Agent", "/", [:profile_actions], :product, %{}},
     opportunities:
-      {:opportunities, :product, "Keyfleet", "What a fleet can take on", "/", [:profile_actions],
-       :product, %{}},
+      {:opportunities, :product, "Keyfleet", "Opportunities", "/", [:profile_actions], :product,
+       %{}},
     fleet: {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, %{}},
     keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, %{}},
     dms: {:dms, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
     dm: {:dm, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
-    rooms: {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, %{}},
     workspace:
       {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     workspace_item:
       {:workspace_item, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     code_commit:
       {:code_commit, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
+    code_history:
+      {:code_history, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
+    code_files:
+      {:code_files, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
+    project: {:project, :product, "Keyfleet", "Project", "/", [:profile_actions], :product, %{}},
     proposals:
       {:proposals, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, %{}},
     proposal:
@@ -149,6 +174,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   # The account's views, each its own page under one tab bar.
   @account_tabs [
     %RouteTarget{route_id: :account, label: "Profile", path: "/account"},
+    %RouteTarget{route_id: :account_agents, label: "Agents", path: "/account/agents"},
     %RouteTarget{route_id: :points, label: "Points", path: "/account/points"},
     %RouteTarget{route_id: :wallets, label: "Wallets", path: "/account/wallets"},
     %RouteTarget{route_id: :connections, label: "Connections", path: "/account/connections"}
@@ -203,6 +229,9 @@ defmodule KeyfleetWeb.RouteCatalog do
   defp valid_parameter?(:repository, value),
     do: is_binary(value) and Regex.match?(@repository, value)
 
+  defp valid_parameter?(:project, value),
+    do: is_binary(value) and String.length(value) <= 32 and Regex.match?(@project, value)
+
   defp valid_parameter?(:commit, value), do: is_binary(value) and Regex.match?(@commit, value)
 
   defp build_spec(route_spec_id, destination, fleet_id) do
@@ -231,16 +260,11 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
-  # The fleets the sidebar shows, as a link to the fleet's page or as its name
-  # alone, then the account page.
+  # The fleets the sidebar links to, each to the fleet's page, then the account page.
   defp sidebar_model(:product) do
     fleets =
-      for %{sidebar: shown, name: name, path: path} <- Fleets.catalog(), shown != nil do
-        case shown do
-          :link -> %RouteTarget{route_id: :fleet, label: name, path: path}
-          :name -> %NameOnly{label: name}
-        end
-      end
+      for %{sidebar: :link, name: name, path: path} <- Fleets.catalog(),
+          do: %RouteTarget{route_id: :fleet, label: name, path: path}
 
     %SidebarModel{
       id: :product,
@@ -276,8 +300,6 @@ defmodule KeyfleetWeb.RouteCatalog do
   defp sidebar_handoff(sidebar) do
     %{"id" => sidebar.id, "targets" => Enum.map(sidebar.targets, &target_handoff/1)}
   end
-
-  defp target_handoff(%NameOnly{label: label}), do: %{"type" => "name", "label" => label}
 
   defp target_handoff(%RouteTarget{} = target) do
     %{

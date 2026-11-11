@@ -93,6 +93,28 @@ test.describe("a key's profile", () => {
     expect(errors).toEqual([])
   })
 
+  test("the Key on sale opens the Buy Key window above it, and closing the window comes back to it", async ({page}) => {
+    const next = sellKey(fleet, me) + 1
+    const errors = await signIn(page)
+    await openFleet(page, `?key=${next}`)
+    await expect(page.locator("#key-profile-next-title")).toHaveText("On sale")
+
+    await page.locator("#key-profile-buy").click()
+    const sale = page.locator("dialog#buy-key")
+    await expect(sale.locator("#buy-key-title")).toBeFocused()
+    await expect(sale.locator("#buy-key-button [data-press-label]")).toHaveText("Buy Key")
+    await expect(sale.locator("#buy-key-number")).toHaveText(next.toLocaleString("en-US"))
+    await expect(profile(page)).toBeVisible()
+
+    // Escape closes the window on top alone, and focus goes back to Buy Key.
+    await page.keyboard.press("Escape")
+    await expect(sale).toHaveCount(0)
+    await expect(profile(page)).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`[?&]key=${next}$`))
+    await expect(page.locator("#key-profile-buy")).toBeFocused()
+    expect(errors).toEqual([])
+  })
+
   test("a message someone else writes to the key appears without a reload", async ({browser, page}) => {
     const key = sellKey(fleet, me)
     sellKey(fleet, otherAccount)

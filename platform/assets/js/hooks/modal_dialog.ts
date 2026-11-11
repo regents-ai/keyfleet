@@ -1,3 +1,4 @@
+import {SIGN_IN_CLOSED_EVENT} from "../auth_lazy"
 import type {Hook} from "../hook_composition"
 
 interface ModalDialogHook {
@@ -5,6 +6,7 @@ interface ModalDialogHook {
   pushEventTo(target: HTMLElement, event: string, payload: Record<string, never>): void
   opener?: string
   shown?: string
+  signInClosed?: () => void
 }
 
 const focusable =
@@ -16,14 +18,25 @@ const focusable =
 // starts afresh.
 let pressed: string | undefined
 
+// Whether the last press was a pointer's, not a key's: focus handed back
+// after a pointer closes a dialog shows no ring, and after a key it does.
+let pointerPress = false
+
 export function watchPresses(doc: Document) {
   doc.addEventListener("click", notePress, true)
-  doc.addEventListener("keydown", forgetPress, true)
+  doc.addEventListener("keydown", noteKey, true)
   doc.defaultView?.addEventListener("popstate", forgetPress)
 }
 
+// A click a key made, Enter or Space on a button, counts no presses.
 function notePress(event: MouseEvent) {
   pressed = (event.target as Element | null)?.closest?.("a[id], button[id], [tabindex][id]")?.id
+  pointerPress = event.detail > 0
+}
+
+function noteKey() {
+  forgetPress()
+  pointerPress = false
 }
 
 function forgetPress() {
@@ -48,14 +61,43 @@ export function stepTab(event: KeyboardEvent, controls: HTMLElement[], active: E
   controls[(from + step + controls.length) % controls.length].focus()
 }
 
+// The dialogs open in the page, bottom first, in the order they opened.
+const stack: HTMLDialogElement[] = []
+
+// The control inside a dialog that last opened sign-in.
+let signIn: HTMLElement | undefined
+
+// Every dialog in the page steps down from being a modal, so the sign-in
+// window above them can be used: a modal one would hold the page, sign-in
+// with it, out of reach, whichever dialog sign-in was opened from.
+function stepDown() {
+  for (const dialog of stack) {
+    if (!dialog.matches(":modal")) continue
+    dialog.close()
+    dialog.show()
+  }
+}
+
+// Every dialog is a modal again, above the page, bottom first so the one on
+// top stays on top. Says whether any had stepped down.
+function stepUp() {
+  if (stack.every(dialog => dialog.matches(":modal"))) return false
+  for (const dialog of stack) {
+    dialog.close()
+    dialog.showModal()
+  }
+  return true
+}
+
 // A <dialog> the page opens as a modal for as long as it is in the page. It
 // opens with focus on its title, and on its title again when it comes to show
 // something else. Closing it asks the page to take it away: by going back when
 // `data-close` is "back", or else by sending `data-close-event` to whichever
-// part of the page drew it. Once it has
-// gone, focus returns to whatever opened it. Signing in from inside it
-// lets the sign-in window above it be used, and a press back inside makes it
-// modal again.
+// part of the page drew it. Once it has gone, focus returns to whatever opened
+// it, with its ring only when a key closed it. Signing in from inside it lets
+// the sign-in window above every dialog be used; once that window has gone
+// without signing in, or on a press back inside a dialog, they are all modals
+// again, above the page, and focus is back on the control that opened sign-in.
 export const ModalDialog: Hook = {
   mounted(this: ModalDialogHook) {
     const dialog = this.el
@@ -72,32 +114,36 @@ export const ModalDialog: Hook = {
     dialog.addEventListener("keydown", event => stepTab(event, visibleControls(dialog), document.activeElement))
 
     dialog.addEventListener("click", event => {
-      if (!(event.target as Element).closest("[data-account-target='sign-in']")) return
-      if (!dialog.matches(":modal")) return
-      dialog.close()
-      dialog.show()
+      const control = (event.target as Element).closest<HTMLElement>("[data-account-target='sign-in']")
+      if (!control || !dialog.matches(":modal")) return
+      signIn = control
+      stepDown()
     })
 
-    dialog.addEventListener("pointerdown", () => {
-      if (dialog.matches(":modal")) return
-      dialog.close()
-      dialog.showModal()
-    })
+    dialog.addEventListener("pointerdown", stepUp)
+
+    this.signInClosed = () => {
+      if (stepUp()) signIn?.focus()
+    }
+    window.addEventListener(SIGN_IN_CLOSED_EVENT, this.signInClosed)
 
     if (!dialog.open) dialog.showModal()
+    stack.push(dialog)
     focusTitle(dialog)
   },
 
   updated(this: ModalDialogHook) {
     if (this.el.dataset.shown === this.shown) return
     this.shown = this.el.dataset.shown
-    this.el.scrollTop = 0
+    this.el.querySelector(".rg-dialog__body")?.scrollTo({top: 0})
     this.el.querySelector<HTMLElement>("[data-modal-scroll]")?.scrollTo({top: 0})
     focusTitle(this.el)
   },
 
   destroyed(this: ModalDialogHook) {
-    if (this.opener) document.getElementById(this.opener)?.focus()
+    stack.splice(stack.indexOf(this.el), 1)
+    if (this.signInClosed) window.removeEventListener(SIGN_IN_CLOSED_EVENT, this.signInClosed)
+    if (this.opener) document.getElementById(this.opener)?.focus({focusVisible: !pointerPress})
   },
 }
 

@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
           post(build_conn(), "/auth/privy/session", %{}),
           delete(build_conn(), "/auth/privy/session"),
           get(build_conn(), "/openapi.json"),
-          get(build_conn(), "/capabilities"),
+          get(build_conn(), "/capabilities.json"),
           get(build_conn(), "/.well-known/api-catalog"),
           get(build_conn(), "/.well-known/agent-skills/index.json"),
           get(build_conn(), "/metadata/1/1")
@@ -138,11 +138,11 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert secure_headers(open) != %{}
   end
 
-  test "while closed, the early-access page, the contact and legal pages, the operational files and the static files stay open" do
+  test "while closed, the early-access page, the legal pages, the operational files and the static files stay open" do
     close_surfaces()
 
     for path <-
-          ~w(/early /contact /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
+          ~w(/early /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
             ~w(/sitemap.xml /favicon.ico /favicon-32.png /mark.png /images/brand/mark-flat-dark.svg /metadata/collection.json) do
       assert get(build_conn(), path).status == 200, "#{path} closed"
     end
@@ -158,9 +158,6 @@ defmodule KeyfleetWeb.LaunchGateTest do
       assert response(conn, 200) =~ "# Keyfleet"
     end
 
-    contact = build_conn() |> put_req_header("accept", "text/markdown") |> get("/contact")
-    assert response(contact, 200) =~ "# Contact Keyfleet"
-
     assert get(build_conn(), "/healthz").resp_body == "ok"
   end
 
@@ -168,7 +165,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     close_surfaces()
 
     assert locations(get(build_conn(), "/sitemap.xml")) ==
-             Enum.map(~w(/early /contact /privacy /terms), &KeyfleetWeb.PublicDocuments.url/1)
+             Enum.map(~w(/early /privacy /terms), &KeyfleetWeb.PublicDocuments.url/1)
 
     open_surfaces()
 
@@ -189,7 +186,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
       |> Enum.join(" ")
 
     assert home.status == 200
-    assert title == "Your personal agent joins a Fleet with a Key."
+    assert title == "A persistent team for your AI agent."
 
     for early <- [
           get(build_conn(), "/early"),

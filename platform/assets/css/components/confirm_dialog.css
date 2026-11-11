@@ -1,0 +1,40 @@
+/* The question a page asks before a press that can't be undone, in a small
+   window over the page (`KeyfleetWeb.Components.ConfirmDialog`). */
+.confirm-dialog {
+  --rg-dialog-size: 26rem;
+  color: var(--color-fg);
+  font-size: 1rem;
+}
+
+.confirm-dialog .rg-dialog__body {
+  display: grid;
+  gap: 1rem;
+}
+
+.confirm-dialog h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+/* The question takes focus when the window opens so it is read out first; it
+   is not something to press, so it shows no focus ring. */
+#app-shell .confirm-dialog h2:focus {
+  outline: none;
+}
+
+.confirm-dialog p {
+  margin: 0;
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.confirm-dialog__actions form {
+  margin: 0;
+}

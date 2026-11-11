@@ -102,6 +102,11 @@
   max-width: 100%;
 }
 
+/* The place a vote's line is read out from takes no room until it holds one. */
+.polls-said:not(:has(*)) {
+  margin-block-end: -1rem;
+}
+
 .polls-panel h2 {
   display: inline-flex;
   flex-wrap: wrap;
@@ -229,5 +234,24 @@
   display: block;
   color: var(--color-fg-muted);
   white-space: pre-line;
+}
+
+@media (max-width: 47.99rem) {
+  /* Start poll and Vote span the form, in the row that keeps them in reach. */
+  .polls-form > .sticky-actions {
+    display: grid;
+  }
+
+  /* Each choice, and the Key that started the poll, are a full finger's
+     height. */
+  .polls-choices label,
+  .polls-status a {
+    min-height: 2.75rem;
+  }
+
+  .polls-status a {
+    display: inline-flex;
+    align-items: center;
+  }
 }
 }

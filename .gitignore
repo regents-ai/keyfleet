@@ -9,3 +9,4 @@ local-only-*
 # The key-art service's packages and built page.
 /key-art/node_modules/
 /key-art/dist/
+/key-art/dist-shuffle/

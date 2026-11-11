@@ -5,7 +5,8 @@ records what happened in them, in the order the chain made it:
 
 - **The fleet contract** (`Keyfleet`): who holds every key (`OwnershipEpoch`),
   each key's reveal (`KeyRevealed`: the Chainlink VRF request and the seed its
-  traits are drawn from), an asset sent to the fleet by mistake and forwarded
+  traits are drawn from), each key whose wait for its draw was ended, so it
+  never gets traits (`RevealExpired`), an asset sent to the fleet by mistake and forwarded
   to its treasury (`ForwardedToTreasury`) and the protocol share sent to
   REGENT staking (`ProtocolShareSent`).
 - **The vote contract** (`KeyfleetVotes`): every proposal with the calls it
@@ -50,7 +51,7 @@ active is worked out the same way: it is the wallet's latest shard record, it
 has not run out, and its key has not changed hands since it was issued.
 
 Apart from that history, and so a slow node never holds it up, the app reads
-every minute, at the head, what the treasury holds and what the reward ledger
+every five minutes, at the head, what the treasury holds and what the reward ledger
 backs for each asset the daily split shares (`splitAssets()`: ETH, REGENT,
 USDC, then OUSD once admitted and the launch token once bound) and no other:
 a token merely sent to the treasury is never read or shown. The same reading
@@ -74,24 +75,40 @@ hand, as below.
 
 The reading is Oban work:
 
-- `Keyfleet.Chain.Watch` runs every minute from the Oban cron. Where a node
-  is configured, it makes sure each deployed fleet has a reading job and
+- `Keyfleet.Chain.Watch` runs every five minutes from the Oban cron. Where a
+  node is configured, it makes sure each deployed fleet has a reading job and
   queues a reading of its balances.
 - `Keyfleet.Chain.ReadFleet` is one job per fleet, on whichever machine took
   it (queue `chain`). Each run proves the node serves the fleet's chain, makes
-  one pass over the fleet's history and waits four seconds before the next. A
-  pass that fails is retried after a wait that doubles up to a minute; after
-  20 failures the job is given up, and the watch starts a fresh one within a
-  minute.
-- `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet.
+  one pass over the fleet's history and waits five minutes before the next. A
+  pass that fails is retried a minute later; after 20 failures the job is
+  given up, and the watch starts a fresh one within five minutes.
+- `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet. It is
+  also queued at once when someone presses the Treasury's read-again icon
+  (each person once every 30 seconds).
+  Only one reading of a fleet waits to start at a time.
+- When a step sent from the site goes through, `Keyfleet.ChainRefresh` asks
+  the watch to read that chain again (`Keyfleet.Chain.Watch.refresh/1`): each
+  fleet on it reads its history ten seconds later instead of at its next
+  turn, and its balances at once. Many presses close together cost one
+  history read. Everything else, such as a Key bought or sold elsewhere,
+  shows within five minutes.
+
+The node is paid for each call, and almost nothing changes between two reads
+of a fleet, so the reader runs on a slow clock and the site's own presses
+bring it forward. The same shape runs in every Regent site; ash-template
+holds the original.
 
 Seeing that these ran, running them again and stopping them is in
 `docs/recurring-jobs.md`.
 
-Each pass reads the head, reads again the last 30 blocks it already recorded
-(about a minute of Base), then records what happened after them up to the
-head, in stretches of at most 10,000 blocks. A stretch is one request for all
-the contracts above.
+Each pass reads the head, reads again the last 300 blocks it already recorded
+(about a minute of Base at five blocks a second, from Denim on 5 November 2026), then records what happened after them, one
+stretch of at most 10,000 blocks a pass. A stretch is one request for all
+the contracts above. A pass that ends still behind the head it read is followed
+by the next a second later, so a long gap is caught up in minutes; once caught
+up, the next pass is five minutes on. A node that does not answer is a
+minute's wait, not a failure.
 
 ## Turning it on
 
@@ -103,7 +120,7 @@ the contracts above.
    ```
 
    With no `KEYFLEET_RPC_URL` nothing is read, and while fleets are deployed
-   the watch saves an error saying so every minute. A node on any chain other
+   the watch saves an error saying so every five minutes. A node on any chain other
    than the one a fleet was deployed on is refused, logged and saved with the
    site's errors, and nothing is read.
    The site also reads what a page's wallet buttons sent through this node
@@ -119,7 +136,7 @@ the contracts above.
    fly ssh console -C "/app/bin/seed-deployment /tmp/base.classic.deployed.json"
    ```
 
-   It binds that fleet alone, opens its five fixed rooms and five open rooms,
+   It binds that fleet alone, opens its six fixed rooms and five open rooms,
    and prints the fleet with its contract and first block. This is what puts
    the fleet's keys on sale, and it opens a fleet the site showed as coming
    soon. Every other fleet is left as it is. Running it again with the same
@@ -144,17 +161,18 @@ the contracts above.
    `001` and every trait of the table, with its card published at the address
    its `image` names.
 
-3. Nothing to restart: the watch starts reading a newly bound fleet within a
-   minute.
+3. Nothing to restart: the watch starts reading a newly bound fleet within
+   five minutes.
 
-While a fleet's head was last read more than two minutes ago, or its record
-is 300 blocks (about ten minutes) or more behind that head, or while it is
+While a fleet's head was last read more than seven minutes ago (one
+five-minute turn and two retries a minute apart), or its record
+is 3,000 blocks (about ten minutes) or more behind that head, or while it is
 stopped, nobody can post in its rooms or change its workspace; pages still
 load and say the record is catching up.
 
 ## What a stop means
 
-A second reading of the last 30 blocks found an ownership change, reveal,
+A second reading of the last 300 blocks found an ownership change, reveal,
 proposal, ballot, cancellation, execution, presence, edit restriction, shard
 record, agent-voting setting or money event that reads differently from the
 record, or a recorded one gone from a block whose hash is no longer the
@@ -184,7 +202,9 @@ is no stop. A `KeyRevealed` for a revealed key with a different seed or request
 stops the fleet at the earlier of the recorded reveal's block and the block it
 was read from, and nothing is recorded. Chainlink VRF draws the seed from the
 request's block, so a change in history deep enough to drop that block can
-bring a different seed; that is a real reorg, corrected as below.
+bring a different seed; that is a real reorg, corrected as below. A key's
+`RevealExpired` read again from another block is the ended wait already
+recorded, in the same way.
 
 ## When a stretch is not read
 
@@ -226,6 +246,7 @@ SELECT DISTINCT block_number, block_hash
 FROM (
   SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_attachments
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveals
+  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveal_expiries
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_presences
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
   UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
@@ -313,6 +334,11 @@ ALTER TABLE keyfleet_app.key_reveals DISABLE TRIGGER immutable_key_reveals;
 DELETE FROM keyfleet_app.key_reveals
 WHERE fleet_id = :'fleet' AND block_number >= :from_block;
 ALTER TABLE keyfleet_app.key_reveals ENABLE TRIGGER immutable_key_reveals;
+
+ALTER TABLE keyfleet_app.key_reveal_expiries DISABLE TRIGGER immutable_key_reveal_expiries;
+DELETE FROM keyfleet_app.key_reveal_expiries
+WHERE fleet_id = :'fleet' AND block_number >= :from_block;
+ALTER TABLE keyfleet_app.key_reveal_expiries ENABLE TRIGGER immutable_key_reveal_expiries;
 
 ALTER TABLE keyfleet_app.key_presences DISABLE TRIGGER immutable_key_presences;
 DELETE FROM keyfleet_app.key_presences

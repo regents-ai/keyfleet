@@ -6,16 +6,15 @@ defmodule Keyfleet.Repo do
   # that read tables owned elsewhere name their schema themselves.
   @schema "keyfleet_app"
 
-  # Keep this at 14 even though the server runs 17: at 17 AshPostgres writes
-  # upserts as MERGE statements, which drop the schema prefix and fail with
-  # "relation ... does not exist".
-  def min_pg_version, do: %Version{major: 14, minor: 0, patch: 0}
+  # The shared database runs PostgreSQL 17.
+  def min_pg_version, do: %Version{major: 17, minor: 0, patch: 0}
   def installed_extensions, do: ["ash-functions"]
   def default_prefix, do: @schema
 
-  # Ash qualifies reads with `default_prefix/0`; writes and plain Ecto queries take
-  # the prefix from here instead. An explicit prefix, such as a resource's own
-  # schema, always wins over this default.
+  # Ash qualifies reads with `default_prefix/0`; writes, upserts, `Ash.update_many`
+  # and plain Ecto queries take the prefix from here instead (upserts and
+  # `update_many` through Regent's ash_postgres copy, ash-project/ash_postgres#910).
+  # An explicit prefix, such as a resource's own schema, always wins over this default.
   def default_options(_operation), do: [prefix: @schema]
 
   # PostgreSQL's own catalog (`pg_class`, `pg_namespace`, ...) is never in this

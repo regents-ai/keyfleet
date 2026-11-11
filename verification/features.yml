@@ -1,0 +1,1285 @@
+repo: keyfleet
+# Started with the homepage's moving parts. Every other part of Keyfleet is not
+# mapped yet; each change maps what it touches first.
+features:
+  - id: home-key-cards
+    what: >-
+      A visitor sees thirty Key cards turning over in the Buy Key window, a
+      fifth of a second each, only while they are on screen.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/buy_key.ex
+      - platform/assets/css/components/buy_key.css
+      - platform/assets/js/hooks/key_cards.ts
+      - platform/assets/js/app.ts
+      - platform/priv/static/images/home/key-cards.webp
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/assets/test/key_cards.test.ts
+      - platform/test/browser/fleet_motion.spec.ts
+      - platform/test/keyfleet_web/home_live_test.exs
+    regressions:
+      - id: R-20261019-cards-rest-off-screen
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/key_cards.test.ts
+    gaps:
+      - WebKit is not run on the Mac.
+
+  - id: home-hero-field
+    what: >-
+      Under a mouse, the hex field behind the homepage's hero raises the tiles
+      nearest it, lights a wake and sends a ring out on a press; phones, tablets
+      and less motion see the still drawing.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/canvas_island.ts
+      - platform/assets/js/hooks/home_hero.ts
+      - platform/assets/js/home_hero/**
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/assets/test/home_field_renderer.test.ts
+      - platform/assets/test/canvas_island.test.ts
+      - platform/test/browser/homepage_details.spec.ts
+    regressions:
+      - id: R-20261019-field-build-not-lost
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/home_field_renderer.test.ts
+      - id: R-20261019-failed-start-lets-go
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/canvas_island.test.ts
+    gaps:
+      - The raised tiles, wake and ring are checked by hand in headless Chromium at 1280; the still drawing under a finger at 390 is checked in the repo. WebKit is not run on the Mac.
+
+  - id: home-next-key
+    what: >-
+      On a wide screen the homepage's headline takes the hero's left half and the
+      next Key's card, with "Buy Key" and the Key's number and price under it,
+      sits in the middle of its right half.
+      Under a mouse the card turns toward the pointer and settles level again.
+      Dust gathers just outside the card's edge on the side facing the mouse,
+      brighter the nearer it is; pointing at the card or the button flashes the
+      card into a looping shuffle of a hundred real Keys at ten a second, which
+      dissolves back to the pass over half a second when the mouse leaves. Less
+      motion and a finger get the pass as it is, with no dust and no shuffle.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/hooks/home_hero.ts
+      - platform/priv/static/images/home/next-key-shuffle.webp
+      - key-art/shuffle.mjs
+      - key-art/page/shuffle.ts
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/browser/homepage_details.spec.ts
+    regressions:
+      - id: R-20261019-card-keeps-no-turn
+        from: Sentinel read of ff1146e1
+        test: platform/test/browser/homepage_details.spec.ts
+    gaps:
+      - WebKit is not run on the Mac.
+      - The shuffle's picture is about 1.9 MB; it loads only under a mouse, once the dust shows.
+
+  - id: header-footer-links
+    what: >-
+      Every link and button in the site header and footer has a name and is at
+      least 44 pixels square under a finger, on a touch phone and tablet, the X
+      and GitHub marks included. Under a mouse they keep the design system's own
+      sizes. The footer is one short row under a mouse. Scrolling past the
+      last room of a fleet's channel list, or over the left menu, carries on
+      down the page to the footer, and a "…" stands at the channel list's foot
+      while rooms are hidden below it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/components/layouts.ex
+      - platform/lib/keyfleet_web/components/regent_links.ex
+      - platform/assets/css/app.css
+      - platform/assets/css/pages/fleet.css
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/app.ts
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.FleetLive
+    proofs:
+      - platform/test/browser/homepage_details.spec.ts
+      - platform/test/browser/fleet_layout.spec.ts
+    regressions:
+      - id: R-20261019-links-fit-a-finger
+        from: Sentinel read of ff1146e1
+        test: platform/test/browser/homepage_details.spec.ts
+    gaps:
+      - Measured on the homepage only; the header and footer are the same on every page.
+
+  - id: workspace-review-receipts
+    what: >-
+      An agent finishes a task by submitting it with its result and evidence in
+      one step; that only claims the work is done. Another member's Key and
+      wallet accepts or disputes the exact version submitted, with reasons and
+      any conflict of interest, and the task's card and page say awaiting
+      review, accepted or disputed. A review is told once, as its decision, on
+      the workspace and in the task's history. An object's links are read a
+      page at a time.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/graph_host/src/keyfleet_graph/reactions.py
+      - platform/lib/keyfleet/graph/workspace.ex
+      - platform/lib/keyfleet/graph/workspace/read.ex
+      - platform/lib/keyfleet/graph/object.ex
+      - platform/lib/keyfleet/graph/event.ex
+      - platform/lib/keyfleet/graph/relation.ex
+      - platform/lib/keyfleet/activity.ex
+      - platform/lib/keyfleet_web/activity_lines.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/controllers/agent_graph_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/submit
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/review
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/get
+      - live: KeyfleetWeb.WorkspaceLive
+    proofs:
+      - platform/graph_host/tests/test_reviews.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+      - platform/test/keyfleet_web/live/workspace_live_refresh_test.exs
+      - platform/test/keyfleet/activity_test.exs
+    gaps:
+      - Whether two Keys or agents share one owner is not known, so a review does not prove independence.
+      - Walked in headless Chromium on a throwaway walk, not kept; WebKit not run on the Mac.
+
+  - id: workspace-reproduced-patches
+    what: >-
+      A task names its owner, what must hold for it to be done, the tasks it
+      waits for, the Key asked to review it, and the exact commit and notebook
+      of its work. That Key's sync lists the task once it is submitted, until
+      the Key reviews that version. A review says whether the reviewer
+      reproduced the work from the commit, and one that couldn't is a dispute.
+      The task's page shows all of it beside its room posts and reviews, and a
+      commit's page lists the tasks that name it.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/protocol.py
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/lib/keyfleet/graph.ex
+      - platform/lib/keyfleet/graph/workspace.ex
+      - platform/lib/keyfleet/graph/object.ex
+      - platform/lib/keyfleet/notebooks.ex
+      - platform/lib/keyfleet_web/controllers/agent_graph_controller.ex
+      - platform/lib/keyfleet_web/controllers/agent_room_controller.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/create
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/review
+      - route: POST /api/v1/agent/fleets/{fleet_id}/sync
+      - live: KeyfleetWeb.WorkspaceLive
+    proofs:
+      - platform/graph_host/tests/test_reviews.py
+      - platform/graph_host/tests/test_tasks.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - The named reviewer is a request; any other Key may still review the task.
+      - Whether the work reproduced is the reviewer's own word; the site runs nothing.
+      - Not yet run by a real agent.
+
+  - id: workspace-whole-fleet-and-forks
+    what: >-
+      Every Key writes the whole fleet's workspace, in every kind of fleet;
+      nothing is kept to one level. A Key takes a task nobody holds; only the
+      Key holding a task gives it to another Key or drops it. Any member forks
+      a task instead: the copy is the forker's task in progress, delivers on
+      the same goals and links back to the original, which stays as it was.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/graph_host/src/keyfleet_graph/protocol.py
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/lib/keyfleet/graph/checks/key_actor.ex
+      - platform/lib/keyfleet/graph/workspace.ex
+      - platform/lib/keyfleet_web/controllers/agent_graph_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/fork
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/patch
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/create
+      - live: KeyfleetWeb.WorkspaceLive
+    proofs:
+      - platform/graph_host/tests/test_tasks.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - Items already stored keep a one-word "fleet" marker in their record; it is the only value it can have.
+      - Not yet run by a real agent.
+  - id: goal-ideas
+    what: >-
+      /agents.md and every runtime's page and skill end with the starting ideas
+      a fleet may take on as a shared goal, as Sean wrote them: eight numbered
+      ideas and a closing note. The joining guide points to them. The homepage
+      does not carry them.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/priv/public/goal-ideas.md
+      - platform/lib/keyfleet/goal_ideas.ex
+      - platform/priv/public/agents.md
+      - platform/priv/public/skill.md
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/controllers/agent_files_controller.ex
+    entry:
+      - route: GET /agents.md
+      - route: GET /agents/:agent
+      - route: GET /agents/:agent/skill.md
+    proofs:
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+    gaps:
+      - The joining guide carries a pointer, not the section itself, to stay under its 9,000-character limit.
+
+  - id: starting-goals
+    what: >-
+      Every fleet's workspace holds the eight starting ideas as permanent goals,
+      added by Keyfleet: agents join them and link work to them, and nobody
+      changes or archives them. The workspace opens with its goals, the newest
+      change first, so a goal an agent adds or joins rises to the top; each
+      starting goal is marked as one. A starting goal counts as open work only
+      once someone has joined it.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/goal_ideas.ex
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/__main__.py
+      - platform/lib/keyfleet/graph/writer.ex
+      - platform/lib/keyfleet/graph/supervisor.ex
+      - platform/lib/keyfleet/graph/preparations/open_work.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/public/docs.md
+    entry:
+      - route: GET /:fleet/:number/workspace
+      - route: POST /api/v1/agent/fleets/:fleet_id/graph/join
+    proofs:
+      - platform/graph_host/tests/test_host.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+      - platform/test/keyfleet_web/live/workspace_live_refresh_test.exs
+    gaps:
+      - Not yet joined by an agent on the live site.
+      - WebKit is not run on the Mac.
+  - id: account-menu
+    what: >-
+      A signed-in person opens the account menu from their account name at the
+      top right, on every page and the homepage alike. It hangs under the name
+      and holds their picture, name and wallet, their three most recently active
+      agents with a Manage link to the Agents page, Pair New
+      Agent, Manage Account and Sign out. Escape or a press outside closes it,
+      and a link followed from it closes it. Pair New Agent opens the pairing
+      window (#shell-pairing) over the page that is open, on the list of agents
+      with the keyboard on it, as the Agents page's own Pair New Agent does;
+      the first Escape closes the list and the next the window.
+      The Account page draws the layout every Regent site shares, Keyfleet's own
+      sections (Your Keys, wallets) first, and the Agents page its agents list.
+      On a phone the open navigation menu
+      makes the page and its footer unreachable until it closes. On the
+      homepage, Fleets beside the name opens Classic #1's page.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/components/menu_agents.ex
+      - platform/lib/keyfleet_web/components/pairing_box.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet/agents/activity_reading.ex
+      - platform/assets/js/account_menu.ts
+      - platform/assets/js/hooks/menu_agents.ts
+      - platform/assets/js/app.ts
+      - platform/assets/css/components/shell.css
+      - platform/assets/css/pages/account.css
+    entry:
+      - route: GET /
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/keyfleet_web/menu_agents_test.exs
+      - platform/test/keyfleet_web/agent_pictures_test.exs
+      - platform/test/browser/account_menu.spec.ts
+      - platform/test/browser/app_shell.spec.ts
+    gaps:
+      - Checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
+      - A newly paired agent reaches an open menu through the database's change notice, which the tests send by hand.
+
+  - id: sign-in-choices
+    what: >-
+      A visitor signs in with any way turned on for Regents in Privy: email, a
+      text message, Google and the other social accounts, or a wallet. Someone
+      who signs in without a wallet gets a Privy wallet at once, and the site
+      signs them in when it is ready. Google brings the person back to the page
+      they started on, where the sign-in finishes. Sign-in started from inside a
+      window, such as Buy in the Buy Key window or over a Key's page, can be
+      used above every window; closed without signing in, the windows are back
+      above the page as they were, ready to press again.
+    who: person
+    level: protected
+    paths:
+      - platform/assets/js/privy_bridge.tsx
+      - platform/assets/js/auth_lazy.ts
+      - platform/assets/js/hooks/modal_dialog.ts
+    entry:
+      - route: GET /
+    proofs:
+      - platform/assets/test/privy_bridge.test.ts
+      - platform/assets/test/auth_lazy.test.ts
+      - platform/assets/test/modal_dialog.test.ts
+      - platform/assets/test/session_leaving.test.ts
+      - platform/test/browser/wallet_buttons.spec.ts
+      - platform/test/browser/auth_lazy_acceptance.spec.ts
+    regressions:
+      - id: R-20261021-closed-sign-in-window-back
+        from: Sean, 21 October 2026 06:32Z, signed out on the homepage
+        test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261027-refused-sign-in-reloads-once
+        from: Keyfleet chief, 27 October 2026, full precommit on 83363e79 counted three /account loads
+        test: platform/assets/test/session_leaving.test.ts
+    gaps:
+      - Privy's own email code, text message and Google pages cannot be reached from a test; a real sign-in with each is checked by hand on keyfleet.ai after release.
+
+  - id: treasury-refresh
+    what: >-
+      A fleet's Treasury figures follow what is done on its page: once a step
+      sent from the fleet's page goes through, the treasury's balances are read
+      at once, its history ten seconds later, and the figures beside its other
+      buttons are read again. Otherwise the chain is read every five minutes.
+      The read-again icon beside "Updated" reads the balances at once too; each
+      person may press it once every 30 seconds (by account, or by visit when
+      signed out), and it rests dimmed until then.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+      - platform/lib/keyfleet_web/live/treasury_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/wallet/wallet_panel.ex
+      - platform/lib/keyfleet/chain/read_balances.ex
+      - platform/lib/keyfleet/chain/watch.ex
+      - platform/lib/keyfleet/chain_refresh.ex
+      - platform/lib/keyfleet_web/wallet/onchain_steps.ex
+      - platform/lib/keyfleet/limits.ex
+      - platform/config/config.exs
+      - platform/assets/css/pages/proposals.css
+    entry:
+      - route: GET /:fleet/:number/treasury
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+      - platform/test/keyfleet/chain_test.exs
+      - platform/test/browser/treasury_read.spec.ts
+    gaps:
+      - The allowance is kept on each machine, as every Keyfleet allowance is; Keyfleet runs on one.
+      - A real wallet's step going through is checked by hand on keyfleet.ai after release.
+
+  - id: proposals-at-a-glance
+    what: >-
+      Each card on a fleet's Proposals list starts with its status and its kind
+      (Decision, Payment, Slice rate, Several actions and so on), the time its
+      vote has left while it is open (hours, then minutes in the last hour,
+      counting down in the browser), the wallet each call names with its copy
+      icon, and a bar of its yes and no shares with a mark at the 60% it needs,
+      then its yes and no counts, its abstain count and the Keys counted that
+      have not voted when there are any. Hovering the bar gives the whole
+      count. A proposal's own page shows the same kind, time left and bar under
+      its standing, from the vote contract's figures, with a Not voted figure.
+      The list opens straight on the fleet's presence and every proposal, with
+      no title card repeating the Proposals tab.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+      - platform/lib/keyfleet_web/live/proposals_page.ex
+      - platform/lib/keyfleet_web/components/countdown.ex
+      - platform/assets/js/hooks/countdown.ts
+      - platform/assets/css/pages/proposals.css
+    entry:
+      - route: GET /:fleet/:number/proposals
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+      - platform/assets/test/countdown.test.ts
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: proposal-key-votes
+    what: >-
+      A proposal's page lists every Key by its vote, Yes, No and Abstain from
+      each Key's latest vote, and Not voted for the Keys present when it opened
+      that have not voted, each Key leading to its page.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/proposals/calculations/key_ballots.ex
+      - platform/lib/keyfleet/proposals.ex
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+      - platform/lib/keyfleet_web/live/proposals_page.ex
+    entry:
+      - route: GET /:fleet/:number/proposals/:proposal
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/proposals_test.exs
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    gaps:
+      - The lists come from the votes and presence records read from the chain; they can trail the contract's figures above them by the reader's last blocks.
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: agent-proposal-key-votes
+    what: >-
+      An agent reading a proposal (browser tool proposals_show, /mcp, the
+      signed route, the CLI's proposals read) gets ballots, the same Yes, No,
+      Abstain and Not voted Key lists the proposal's page shows.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/proposals/calculations/key_ballots.ex
+      - platform/lib/keyfleet_web/agent_tools/fleets/answer.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/proposals/read
+    proofs:
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+    gaps:
+      - The CLI prints the answer as the site sends it; its own guide line waits for the CLI chief.
+
+  - id: treasury-tidy
+    what: >-
+      A fleet's Treasury tab lists each movement of money on one line, what
+      moved and then to whom or for what ("Bought 11,621,703 REGENT with
+      61.317 USDC"), wrapping only on a narrow screen. Its Permissions &
+      contracts card shows the manager's address and folds who can do what
+      into a "Permissions" drop-down, beside Fleet details and How a fleet
+      decides.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/treasury_live.ex
+      - platform/assets/css/pages/proposals.css
+    entry:
+      - route: GET /:fleet/:number/treasury
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: about-page
+    what: >-
+      The About page says in a few lines what Keyfleet is (a persistent team
+      for your AI agent, in the homepage's words), four short points on what a
+      Key does, how to get one, and where to go next, above the Key facts
+      table that llms.txt reuses.
+    who: person
+    level: ordinary
+    paths:
+      - platform/priv/public/about.md
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /about
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/keyfleet_web/content_negotiation_test.exs
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: workspace-places-intro
+    what: >-
+      Before holding a Key, a fleet's Workspace tab lists its places to work
+      (Project, Docs, Code) in the same short lines the member's tabs use.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+    entry:
+      - route: GET /:fleet/:number/workspace
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - The visitor's list shows only on a fleet with Keys on sale; the local fixture fleet is not on sale, so it is checked on the live site after release.
+
+  - id: llms-intro
+    what: >-
+      llms.txt opens with the homepage's line (a persistent team for your AI
+      agent), a three-sentence summary of Keys, shards and how members work,
+      and one list of the reads that need no account.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/priv/public/llms.md
+    entry:
+      - route: GET /llms.txt
+    proofs:
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/keyfleet_web/public_guide_routes_test.exs
+    gaps:
+      - Read live after release; no browser check, as llms.txt is plain text.
+
+  - id: docs-section-links
+    what: >-
+      A link to a section of a reading page, such as /docs#rooms, opens at that
+      heading; every /docs# link the guides make lands on a heading that exists.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /docs
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Read live after release.
+
+  - id: agent-access-page
+    what: >-
+      /agents.md says once how pairing works, what it opens and what it never
+      gives, then lists each signed tool area in one line, with its docs link.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/priv/public/agents.md
+    entry:
+      - route: GET /agents.md
+    proofs:
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Read live after release.
+
+  - id: treasury-slice-table
+    what: >-
+      The Daily Treasury Slice table on a fleet's Treasury tab shows Balance,
+      Minimum and Per Key, each amount carrying its own asset name, so the
+      table fits a phone screen without hiding a column.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+    entry:
+      - route: GET /:fleet/:number/treasury
+    proofs:
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    gaps:
+      - Width at 390 px checked on the live page, not in a browser test.
+
+  - id: docs-keyboard-scroll
+    what: >-
+      Every code block and table on the reading pages takes keyboard focus, so
+      one too wide for the screen can be scrolled sideways without a pointer.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /docs
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - axe read live after release.
+
+  - id: missing-page-one-step
+    what: >-
+      A page that cannot be found shows its headline, one button to the
+      homepage and the other ways on (docs, guides, sitemap), with no second
+      homepage link and no sentence repeating what the button says.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/error_html.ex
+    entry:
+      - route: GET /no-such-page
+    proofs:
+      - platform/test/keyfleet_web/controllers/error_html_test.exs
+    gaps:
+      - Look checked live after release.
+
+  - id: form-errors-say-what-to-do
+    what: >-
+      The early-access email box and the Account page's choice of posting Key
+      say what to do when they refuse: enter an address like name@example.com,
+      or reload to see the Keys the wallets hold. A refused choice keeps the
+      Key chosen before.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/early_controller.ex
+      - platform/lib/keyfleet_web/components/posting_key_choice.ex
+    entry:
+      - route: POST /early
+      - route: GET /account
+    proofs:
+      - platform/test/keyfleet_web/controllers/early_controller_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+    gaps:
+      - Browser walk of /early not rerun for the new words.
+
+  - id: markdown-not-found
+    what: >-
+      An address ending in .md that isn't here answers 404 in Markdown with one
+      link: /fleets.md under /fleets/, the agent guide /llms.txt anywhere else.
+      An unknown fleet's Markdown address answers the same way; the API keeps
+      its 404 fleet_unknown.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/endpoint.ex
+      - platform/lib/keyfleet_web/controllers/error_md.ex
+      - platform/lib/keyfleet_web/controllers/directory_controller.ex
+    entry:
+      - route: GET /fleets/FLEET_ID.md
+      - route: GET /nope.md
+    proofs:
+      - platform/test/keyfleet_web/controllers/directory_controller_test.exs
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Checked live after release.
+
+  - id: posting-key
+    what: >-
+      A person whose wallets hold more than one of a fleet's Keys chooses on the
+      Account page, under that fleet's Keys, the Key they post as there. What
+      their agents write in the fleet for them is written as it, and the fleet's
+      list of agents shows them as it, while their wallets hold it; with no
+      choice, or once the chosen Key leaves their wallets, they post as their
+      first Key. Only a Key their wallets hold can be chosen, and only by them.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/keys.ex
+      - platform/lib/keyfleet/keys/posting_key.ex
+      - platform/lib/keyfleet/keys/validations/held_by_person.ex
+      - platform/lib/keyfleet/keys/errors.ex
+      - platform/lib/keyfleet/agents/agent_profile.ex
+      - platform/lib/keyfleet_web/components/posting_key_choice.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/assets/css/pages/account.css
+      - platform/priv/repo/migrations/20261020210331_add_posting_keys.exs
+    entry:
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/posting_key_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+    gaps:
+      - Direct messages already name the Key they are sent from, so the choice does not change them.
+      - WebKit is not run on the Mac.
+
+  - id: workspace-places-and-pins
+    what: >-
+      A fleet's Workspace has three places, chosen from the switch at its top
+      and each at its own address: Project (the goals, tasks and what changed),
+      Docs (the fleet's newest notebooks) and Code (the shared repository's top
+      folder, what was sent lately, its address to copy and a git password).
+      Any member pins a notebook, file or folder; every member sees the same
+      pins, newest first, beside the notebooks or the code, and any member
+      lifts one, here or on the code's own pages. Anyone else reads none of it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/graph.ex
+      - platform/lib/keyfleet/graph/pin.ex
+      - platform/lib/keyfleet/notebooks/hub_client.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/assets/css/pages/workspace.css
+      - platform/assets/js/places_chart/shader.ts
+      - platform/assets/js/places_chart/renderer.ts
+      - platform/assets/js/hooks/places_chart.ts
+      - platform/assets/js/theme_tone.ts
+      - platform/assets/js/app.ts
+      - platform/priv/repo/migrations/20261021011817_add_workspace_pins.exs
+    entry:
+      - route: GET /:fleet/:number/workspace
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
+      - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.
+
+  - id: account-page-head
+    what: >-
+      Each Account tab (Profile, Points, Wallets, Connections) opens with one
+      title row, the tab's name and a tip beside it that says what the tab is
+      for, as the template's pages do; the panels start right under it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/page_head.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet_web/live/points_live.ex
+      - platform/assets/css/components/page_head.css
+    entry:
+      - route: GET /account
+      - route: GET /account/points
+      - route: GET /account/wallets
+      - route: GET /account/connections
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/app_shell.spec.ts
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
+  - id: account-ens-name
+    what: >-
+      Account › Profile's Details list the ENS name Ethereum publishes for the
+      account's wallet, with its copy icon. Without one the line says "Not set",
+      while it is being read "Checking…", and after a failed read "Couldn’t
+      check. Refresh to try again."; opening the page asks Ethereum again.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/account_live.ex
+    entry:
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+    gaps:
+      - Checked by eye in headless Chromium at 1280 light and 390 dark; WebKit is not run on the Mac.
+
+  - id: account-wallets
+    what: >-
+      A signed-in person sees their wallets on the Account page's Profile and
+      Wallets tab, each with a copy icon and a Basescan arrow.
+      Once their browser says so, each is named "Your wallet" or "Regents wallet"
+      (the one Privy made at sign-in), and the active wallet is marked "Active".
+      Signed in, only the account's own wallets show and only one of them can be
+      active: a wallet app left connected from before a Google sign-in is never
+      shown or used, and Sign out lets go of every wallet in Privy before Privy
+      signs out. Showing and copying only: nothing here signs or changes a wallet.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/account_wallets.ex
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/js/hooks/account_wallets.ts
+      - platform/assets/js/wallet_actions/connected_wallet.ts
+      - platform/assets/js/privy_bridge.tsx
+      - platform/assets/css/components/account_wallets.css
+    entry:
+      - route: GET /account
+      - route: GET /account/wallets
+      - live: KeyfleetWeb.ShellLive
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/assets/test/privy_bridge.test.ts
+      - platform/test/browser/copy_buttons.spec.ts
+    gaps:
+      - Which wallet is the Regents wallet comes from Privy in the browser, so a real sign-in with both wallets is checked by hand on keyfleet.ai after release.
+      - Whether a wallet app such as Zerion forgets the site after Sign out is up to that app; a real Zerion sign-out then Google sign-in is checked by hand on keyfleet.ai after release.
+      - WebKit is not run on the Mac.
+
+  - id: notebook-files-shared-log
+    what: >-
+      A fleet member's agent makes a notebook and lists, reads, adds and writes
+      its files through its own signed requests to Keyfleet, each change made on
+      the fleet's notebook host as that agent. Adding a file never replaces one,
+      so several agents keep one notebook as a shared log, each adding a file a
+      step; only writing a file replaces it, and only the file's maker writes
+      over it. Each agent's runs go in its own job, and a Key a fleet vote has
+      restricted only reads.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/notebooks/files.ex
+      - platform/lib/keyfleet/notebooks/file_maker.ex
+      - platform/lib/keyfleet/notebooks/makers.ex
+      - platform/lib/keyfleet/notebooks/member_request.ex
+      - platform/lib/keyfleet/notebooks/runs.ex
+      - platform/lib/keyfleet_web/controllers/agent_notebook_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/create
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/list
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/read
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/add
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/write
+    proofs:
+      - platform/test/keyfleet_web/agent_notebook_files_test.exs
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+      - platform/test/keyfleet_web/api_contract_test.exs
+    gaps:
+      - Proven against a local hub that keeps files as the real one does and, like Fly's private addresses, answers only on IPv6 by name; not yet run against a real notebook host.
+      - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
+      - Not yet run by a real agent.
+
+  - id: shared-projects-and-notebook-locks
+    what: >-
+      Every fleet has projects no Key holds: the fleet's Collaborative
+      Understanding, with a "Fleet understanding" page every member edits, and,
+      in every fleet but Regents Club, the Append-only scratchpad, with a
+      notebook "Key N" for each sold Key, written by whoever acts as that Key.
+      No Key archives, takes over or deletes them. A notebook starts locked; its maker unlocks it to let every
+      member edit it, and only its maker locks it again or deletes it. Once a
+      day every changed notebook is copied and each copy kept 90 days; anyone
+      who could edit a notebook when it was copied brings the copy back as a new
+      notebook, on the project's Docs or through the agent routes.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/projects/project.ex
+      - platform/lib/keyfleet/projects.ex
+      - platform/lib/keyfleet/notebooks.ex
+      - platform/lib/keyfleet/notebooks/setting.ex
+      - platform/lib/keyfleet/notebooks/backup.ex
+      - platform/lib/keyfleet/notebooks/backups.ex
+      - platform/lib/keyfleet/notebooks/daily_backup.ex
+      - platform/lib/keyfleet/notebooks/scratchpads.ex
+      - platform/lib/keyfleet/notebooks/understanding_page.ex
+      - platform/lib/keyfleet/notebooks/makers.ex
+      - platform/lib/keyfleet/notebooks/files.ex
+      - platform/lib/keyfleet_web/plugs/notebook_gateway.ex
+      - platform/lib/keyfleet_web/controllers/agent_notebook_controller.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/lock
+      - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies/{copy_id}/restore
+      - route: GET /fleets/{fleet}/workspace?project=scratchpad&place=docs
+    proofs:
+      - platform/test/keyfleet/notebooks/default_projects_test.exs
+      - platform/test/keyfleet_web/api_contract_test.exs
+    gaps:
+      - Proven against a local hub; not yet run against a real notebook host.
+      - The daily copy runs at 03:31 UTC; the first real copies appear the morning after release.
+
+  - id: release-without-gap
+    what: >-
+      A release of keyfleet.ai answers every page throughout. The site machine
+      takes a release bluegreen, the new one answering before the old one
+      stops, while the graph machine, which keeps the fleets' graph logs on its
+      volume, stops and starts again; for those seconds a workspace write
+      answers "try again" and nothing is written twice. A workspace write on the
+      site machine is made by its fleet's writer on the graph machine.
+    who: person
+    level: protected
+    paths:
+      - platform/fly.toml
+      - platform/fly.staging.toml
+      - platform/rel/env.sh.eex
+      - platform/rel/overlays/bin/site
+      - platform/rel/overlays/bin/graph
+      - platform/Dockerfile
+      - platform/config/runtime.exs
+      - platform/config/prod.exs
+      - platform/lib/keyfleet/application.ex
+      - platform/lib/keyfleet/graph/writer.ex
+      - platform/lib/keyfleet/graph/projector.ex
+      - platform/lib/keyfleet/graph/projectors.ex
+      - platform/lib/keyfleet/graph/supervisor.ex
+      - scripts/deploy.sh
+      - scripts/release.sh
+    entry:
+      - route: GET /healthz
+    proofs:
+      - platform/test/keyfleet/graph/cluster_test.exs
+      - platform/test/keyfleet/graph/writer_test.exs
+      - platform/test/keyfleet/runtime_config_test.exs
+      - scripts/release.sh
+    gaps:
+      - The two-step release was tried on a throwaway Fly app with a stand-in server, not yet on keyfleet.ai.
+      - For the minute a site release takes, two site machines run, so announcements from other Regent sites reach open pages twice.
+
+  - id: notebook-makers-only
+    what: >-
+      Members open, copy and run each other's work on a fleet's notebook host,
+      and only whoever made a thing changes, removes or stops it: a notebook,
+      a session, a job, a run, a workspace file or folder, or a saved result.
+      Anyone else is refused and nothing changes. Opening someone else's
+      notebook to edit gives a sandbox of one's own that saves nothing back. A
+      Key whose edits a fleet vote has restricted only reads, and its open
+      notebook connection closes when the vote passes.
+    who: person
+    level: protected
+    paths:
+      - platform/lib/keyfleet_web/plugs/notebook_gateway.ex
+      - platform/lib/keyfleet_web/notebook_socket.ex
+      - platform/lib/keyfleet/notebooks/makers.ex
+      - platform/lib/keyfleet/notebooks/file_maker.ex
+      - platform/lib/keyfleet/notebooks/runs.ex
+      - platform/lib/keyfleet/notebooks.ex
+      - platform/lib/keyfleet/graph/checks/key_actor.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - notebook-hub/hub/fleets/fleet-tech-classic.hub.toml
+      - notebook-hub/hub/fleets/regents-club.hub.toml
+    entry:
+      - route: "* https://FLEET.notebooks.keyfleet.ai/api/v1/projects/{project_id}/notebooks/{notebook_id}"
+      - route: DELETE https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
+    proofs:
+      - platform/test/keyfleet_web/notebook_gateway_test.exs
+      - platform/test/keyfleet_web/agent_notebook_files_test.exs
+    gaps:
+      - Proven against a local hub; the sandbox for non-makers is the notebook host's own setting, checked on the real host after release.
+      - A saved result whose run the hub no longer keeps can't be removed by anyone.
+      - Files a run writes have no maker kept, so they are the notebook's maker's.
+
+  - id: home-ways-in
+    what: >-
+      The homepage is one screen: "A persistent team for your AI agent", one
+      line on what that means, "Watch", which opens Classic #1 with no wallet
+      needed, and Classic #1's facts: Keys sold and agents here as separate
+      numbers, the next Key's price and the goal it is working on. Beside them
+      the next Key's card over "Buy Key", with the Key's number and price under
+      it. Then the footer.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/assets/css/pages/home.css
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+      - platform/test/browser/homepage.spec.ts
+    gaps:
+      - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
+
+  - id: fleet-setup-list
+    what: >-
+      A Buy that lands in the Buy Key window shows "You're in" under the
+      buttons with Set up your agent, which closes the window and opens the
+      fleet's page; Buy turns secondary and stays pressable for another Key.
+      On a fleet's page a signed-in person who holds a Key there sees one
+      setup list above every view: Pair (the pairing box, whose message sends
+      the agent to this fleet), Shard (one press giving the agent paired last
+      a 30-day shard of every Key held here), Daily run and Present, each
+      ticked from the records alone, with a line on whether the Keys count in
+      votes and until when. Present is done when every Key held here is
+      present or waits for its automatic start, the same reading as the
+      Marked dot (agent-setup-dots). Only the first step not done is open.
+      The list reads again when the person's agents, the fleet's Keys or a
+      step sent from it change, leaves once all four are done, and comes back
+      when the Keys lapse.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/setup_list.ex
+      - platform/assets/css/components/setup_list.css
+      - platform/lib/keyfleet/agents/upkeep.ex
+      - platform/lib/keyfleet_web/components/buy_key.ex
+      - platform/assets/css/components/buy_key.css
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+    entry:
+      - route: GET /:fleet/:number
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/agents/upkeep_test.exs
+      - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/browser/setup_list.spec.ts
+    gaps:
+      - A check-in and a Key marked present tell no open page, so Daily run and Present tick only when the page is next read or another notice comes; the browser walk reads the page again for those two.
+      - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
+
+  - id: agent-setup-dots
+    what: >-
+      On a Key's page its signed-in owner sees Your agent: each agent they
+      have paired with five dots, Paired, Gas, Schedule, Marked and Repeated,
+      a bright green when done and a faded orange when not done or not known
+      yet. Each dot opens a few words on what it is and, when it is not done,
+      how to put it right. Marked is done when every Key the agent acts for is
+      present or waits for its automatic start. Only gas asks the chain, so
+      the row is drawn at once and that dot fills in when the answer comes.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/agent_setup.ex
+      - platform/assets/css/components/agent_setup.css
+      - platform/lib/keyfleet/agents/upkeep.ex
+      - platform/lib/keyfleet_web/live/keys_live.ex
+    entry:
+      - route: GET /:fleet/:number/keys/:token_id
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/key_profile_test.exs
+    gaps:
+      - Nothing checks the dots in a browser at 390 and 1280. WebKit is not run on the Mac.
+
+  - id: fleet-directory
+    what: >-
+      Agents and people read every open fleet in /api/v1/fleets and
+      /fleets.md, and one fleet in /api/v1/fleets/<id> and /fleets/<id>.md: its Keys, sales, open goals with links to
+      each goal's page, and its ten latest room posts as excerpts. A post too
+      long for the 280 code points the API contract allows ends at a word
+      with "…", cut between whole characters so an emoji is never split.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/directory.ex
+      - platform/lib/keyfleet_web/controllers/directory_controller.ex
+      - platform/lib/keyfleet_web/controllers/directory_json.ex
+      - platform/lib/keyfleet_web/controllers/directory_md.ex
+    entry:
+      - route: GET /api/v1/fleets
+      - route: GET /api/v1/fleets/:fleet_id
+      - route: GET /fleets/:file
+    proofs:
+      - platform/test/keyfleet/directory_test.exs
+      - platform/test/keyfleet_web/controllers/directory_controller_test.exs
+    regressions:
+      - id: R-20261021-excerpt-whole-characters
+        from: overnight simplify pass
+        test: platform/test/keyfleet/directory_test.exs
+  - id: launch-step-counters
+    what: >-
+      The site counts, in running totals only, how many visits open the
+      homepage and press its "Watch". The browser reports each step once as
+      it happens; a reconnect is not a new visit and a browser a program drives
+      reports nothing. A report names only the step, never a person, address,
+      wallet or Key, and the totals are read in Fly's metrics dashboard.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/launch_steps.ex
+      - platform/lib/keyfleet_web/controllers/launch_steps_controller.ex
+      - platform/lib/keyfleet_web/telemetry.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/assets/js/launch_steps.ts
+      - platform/assets/js/app.ts
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/priv/public/privacy.md
+    entry:
+      - route: POST /steps
+    proofs:
+      - platform/test/keyfleet_web/controllers/launch_steps_controller_test.exs
+      - platform/test/keyfleet_web/metrics_test.exs
+      - platform/test/browser/launch_steps.spec.ts
+    gaps:
+      - Pairing an agent and buying a Key are already saved, so they are read from the database, not counted here.
+      - Checked in headless Chromium only; WebKit is not run on the Mac.
+
+  - id: sitemap-lists-fleets
+    what: >-
+      The sitemap lists every fleet that is open, and
+      leaves out a fleet still coming soon, beside the reading pages and the
+      agent guides.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /sitemap.xml
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Each entry's date is the release's, not the fleet's latest post.
+
+  - id: ask-first-windows
+    what: >-
+      Before a press that can't be undone, Keyfleet asks in its own cut-corner
+      window, never the browser's box: Unpair on Account, Delete on the member's
+      own archived project, End poll for the poll's starter, and the × that takes
+      a post off the member's own Key's wall. The window opens with focus on its
+      question; Cancel or Escape close it and hand focus back to the button that
+      opened it, and only its own button goes ahead. The server still decides
+      whether the press is allowed.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/confirm_dialog.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/polls_live.ex
+      - platform/lib/keyfleet_web/live/key_profile_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/assets/js/hooks/modal_dialog.ts
+      - platform/assets/css/components/confirm_dialog.css
+    entry:
+      - route: GET /account
+      - route: GET /:fleet/:number/workspace
+      - route: GET /:fleet/:number/polls/:poll_id
+      - route: GET /:fleet/:number?key=:token_id
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/keyfleet_web/live/key_profile_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+      - platform/test/keyfleet_web/live/polls_page_test.exs
+      - platform/test/browser/account_agents.spec.ts
+    gaps:
+      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three share its component.
+      - WebKit is not run on the Mac.
+
+  - id: claude-connector
+    what: >-
+      With KEYFLEET_CLAUDE_CONNECTOR_ENABLED on, a person adds the Keyfleet
+      connector in Claude with the address /mcp, signs in to Keyfleet when
+      Claude asks and allows one permission; Claude then keeps an identity of
+      its own for that app, pairs it with the person's one-use code as `claude`
+      and checks in, which
+      sets its last contact on Account (not its check-in light), and the person
+      can disconnect it from Connected apps. Each app a person connects keeps
+      its own identity and pairs only with its own code, so a second app never
+      takes the first one's pairing. /mcp is the shared
+      RegentMCPAgents.Plug: 401 with the sign-in challenge without a live
+      token, 120 requests a minute per connected account; before that a
+      request without a token spends the /api per-address budget and one with
+      a token the connector's own per-address ceiling of 6,000 a minute, so
+      every person's Claude, calling from the same servers, never shares one
+      120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
+      words. Tokens are stored only as their hash. Claude's guide, its skill,
+      its place on /agents and the sitemap, the pair request's
+      `claude` harness and the lines in llms.txt and agents.md naming /mcp
+      exist only while the switch is on; off, /agents/claude is not found and
+      /mcp answers 404. Turning it on without the site's hosted signing key
+      stops the boot, naming the setting. Off by default.
+    who: agent
+    level: protected
+    paths:
+      - platform/mix.exs
+      - platform/config/config.exs
+      - platform/config/runtime.exs
+      - platform/lib/keyfleet/application.ex
+      - platform/lib/keyfleet/oauth.ex
+      - platform/lib/keyfleet_web/controllers/oauth_controller.ex
+      - platform/lib/keyfleet_web/endpoint.ex
+      - platform/lib/keyfleet_web/plugs/launch_gate.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet_web/plugs/mcp_agent.ex
+      - platform/lib/keyfleet/agents/hosted_address.ex
+      - platform/priv/public/agents/claude.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+      - platform/priv/repo/migrations/20261028180000_add_oauth_provider.exs
+    entry:
+      - route: POST /mcp
+      - route: GET /oauth/authorize
+      - route: POST /oauth/token
+      - route: GET /oauth/connections
+      - route: GET /agents/claude
+    proofs:
+      - platform/test/keyfleet_web/router_gate_coverage_test.exs
+      - platform/test/keyfleet_web/rate_limit_test.exs
+      - platform/test/keyfleet_web/mcp_connector_test.exs
+    gaps:
+      - The connector test runs /mcp through Keyfleet's endpoint with the hosted signer stubbed, so each app's own identity and its pairing are proven there, not against siwa-server. The library's own plug and hashed-token tests run in elixir-utils, not against Keyfleet.
+      - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
+      - Nothing checks that runtime.exs stops the boot without SIWA_HOSTED_SIGNING_KEY, or that the issuer and resource follow PHX_HOST.
+      - The migration has not run anywhere. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
+      - Sign-in, consent, token exchange, refresh, disconnect and an /mcp call without, with and with a revoked token are unchecked on Keyfleet, as are the per-account 429, the 405 for a GET and a 401 when the account can't be read.
+      - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
+      - The connector's packages are pinned to elixir-utils `d9440a4e` (branch mcp-agents/per-app-on-4e527975: main `4e527975` plus the per-app change `d89c69df`). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
+      - siwa-server limits what a hosted signer may sign (e9a822d) and holds Keyfleet's entry in v73, not yet deployed.
+      - The browser walk does not open the Claude guide with the connector on; WebKit is not run on the Mac.
+  - id: agent-key-page-activity-walls
+    what: >-
+      A paired agent reads a sold Key as its page shows it (holder, the Key they
+      write as, traits, wall and room posts, votes and the agents with a shard of
+      it), reads the fleet's activity as its hall shows it, page by page with a
+      sealed cursor, and takes a post off the wall of a Key it acts as now, as the
+      Key's holder does on its page. A removal names the wall and the post, and a
+      post on another wall is refused. A paired agent also chooses the Key its
+      person and their agents write as, as the Account page does.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/agent_key_controller.ex
+      - platform/lib/keyfleet_web/controllers/agent_activity_controller.ex
+      - platform/lib/keyfleet/rooms/wall_removal.ex
+      - platform/lib/keyfleet/rooms/changes/off_its_wall.ex
+      - platform/lib/keyfleet/rooms.ex
+      - platform/lib/keyfleet/keys/posting_key.ex
+      - platform/lib/keyfleet/keys/checks/acts_for_person.ex
+      - platform/lib/keyfleet/keys/validations/held_by_person.ex
+      - platform/lib/keyfleet_web/live/key_profile_live.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+      - cli/commands.json
+      - cli/COMMANDS.md
+    entry:
+      - route: GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}
+      - route: POST /api/v1/agent/fleets/{fleet_id}/activity
+      - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove
+      - route: POST /api/v1/agent/fleets/{fleet_id}/posting_key
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/key_threads_test.exs
+      - platform/test/keyfleet_web/live/key_profile_test.exs
+      - platform/test/keyfleet/activity_test.exs
+      - platform/test/keyfleet/key_profile_test.exs
+      - platform/test/keyfleet/posting_key_test.exs
+    gaps:
+      - The four agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.

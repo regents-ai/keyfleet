@@ -12,7 +12,7 @@ from keyfleet_graph.reactions import MAX_ATTENTION, MAX_WORK, DependsOnLinks
 GATEWAY = "keyfleet:gateway"
 MEMBER = f"member:8453:{CONTRACT}:17@3/agent:{WALLET}"
 SYS = {
-    "scope": "fleet",
+    "project": "general",
     "created_by": {
         "key": {"chain_id": 8453, "contract": CONTRACT, "token_id": 17},
         "ownership_epoch": 3,
@@ -37,11 +37,16 @@ class Fleet:
         return reply
 
     def create(self, type_, **data):
-        return self.send("create", {"type": type_, "scope": "fleet", "data": {"title": type_, **data}})["result"]["id"]
+        return self.send("create", {"project": "general", "type": type_, "data": {"title": type_, **data}})["result"]["id"]
 
     def patch(self, object_id, **fields):
         obj = self.host.graph.get_object(object_id)
         return self.send("patch", {"id": object_id, "expected_version": obj.version, "set": fields})
+
+    def submit(self, object_id, result_ref="https://example.com/result", evidence=()):
+        obj = self.host.graph.get_object(object_id)
+        body = {"id": object_id, "expected_version": obj.version, "result_ref": result_ref, "evidence": list(evidence)}
+        return self.send("submit", body)
 
     def archive(self, object_id):
         obj = self.host.graph.get_object(object_id)
@@ -71,7 +76,7 @@ def change(reply):
 
 @pytest.fixture
 def fleet(db):
-    return Fleet(Host("fleet_a", str(db)))
+    return Fleet(Host("fleet_a", str(db), []))
 
 
 EVIDENCE = {"source_uri": "https://example.com/source"}
@@ -80,23 +85,23 @@ EVIDENCE = {"source_uri": "https://example.com/source"}
 # ---------- task_unblocked ----------
 
 
-def test_a_task_marked_done_unblocks_each_task_waiting_only_on_it(fleet):
+def test_a_task_submitted_asks_for_its_review_and_unblocks_each_task_waiting_only_on_it(fleet):
     blocker = fleet.create("task")
     first, second = fleet.create("task"), fleet.create("task", progress="blocked")
     fleet.link(first, blocker)
     fleet.link(second, blocker)
 
-    done = fleet.patch(blocker, progress="done")
+    done = fleet.submit(blocker)
 
     cause, log = change(done)["id"], done["run_id"]
     assert [event["payload"] for event in attention(done)] == [
         {
-            "kind": "task_unblocked",
+            "kind": kind,
             "object_id": task,
             "cause": {"event_id": cause},
-            "dedupe_key": f"{log}:task_unblocked:{task}:{cause}",
+            "dedupe_key": f"{log}:{kind}:{task}:{cause}",
         }
-        for task in (first, second)
+        for kind, task in (("needs_review", blocker), ("task_unblocked", first), ("task_unblocked", second))
     ]
     assert {event["actor"] for event in attention(done)} == {GATEWAY}
 
@@ -105,12 +110,12 @@ def test_attention_comes_after_the_change_it_answers_and_the_ledger_names_it(fle
     blocker, waiting = fleet.create("task"), fleet.create("task")
     fleet.link(waiting, blocker)
 
-    done = fleet.patch(blocker, progress="done")
+    done = fleet.submit(blocker)
 
     types = [event["type"] for event in done["events"]]
-    assert types[:3] == ["patch.applied", "keyfleet.attention", "keyfleet.command"]
+    assert types[:4] == ["patch.applied", "keyfleet.attention", "keyfleet.attention", "keyfleet.command"]
     [ledger] = [event for event in done["events"] if event["type"] == "keyfleet.command"]
-    assert ledger["payload"]["events"] == [event["id"] for event in done["events"][:2]]
+    assert ledger["payload"]["events"] == [event["id"] for event in done["events"][:3]]
 
 
 def test_a_task_still_waiting_on_another_target_is_not_unblocked_until_that_one_finishes(fleet):
@@ -118,8 +123,8 @@ def test_a_task_still_waiting_on_another_target_is_not_unblocked_until_that_one_
     fleet.link(waiting, one)
     fleet.link(waiting, two)
 
-    assert asked(fleet.patch(one, progress="done")) == []
-    assert asked(fleet.patch(two, progress="done")) == [("task_unblocked", waiting)]
+    assert asked(fleet.submit(one)) == [("needs_review", one)]
+    assert asked(fleet.submit(two)) == [("needs_review", two), ("task_unblocked", waiting)]
 
 
 @pytest.mark.parametrize("other", ["service", "goal"])
@@ -130,11 +135,12 @@ def test_a_target_with_no_finished_state_keeps_its_dependents_waiting(fleet, oth
     fleet.link(waiting, blocker)
     fleet.link(waiting, standing)
 
-    assert asked(fleet.patch(blocker, progress="done")) == []
+    assert asked(fleet.submit(blocker)) == [("needs_review", blocker)]
 
 
 def test_archiving_an_unfinished_target_unblocks_and_archiving_a_done_one_does_not(fleet):
-    open_target, done_target = fleet.create("goal", outcome="o"), fleet.create("task", progress="done")
+    open_target, done_target = fleet.create("goal", outcome="o"), fleet.create("task")
+    fleet.submit(done_target)
     waiting, also = fleet.create("task"), fleet.create("task")
     fleet.link(waiting, open_target)
     fleet.link(also, done_target)
@@ -148,12 +154,13 @@ def test_archiving_a_task_already_done_asks_nothing_more(fleet):
     blocker, waiting = fleet.create("task"), fleet.create("task")
     fleet.link(waiting, blocker)
 
-    assert asked(fleet.patch(blocker, progress="done")) == [("task_unblocked", waiting)]
+    assert asked(fleet.submit(blocker)) == [("needs_review", blocker), ("task_unblocked", waiting)]
     assert asked(fleet.archive(blocker)) == []
 
 
 def test_unlinking_an_unfinished_target_unblocks_its_source_and_other_unlinks_do_not(fleet):
-    open_target, done_target = fleet.create("task"), fleet.create("task", progress="done")
+    open_target, done_target = fleet.create("task"), fleet.create("task")
+    fleet.submit(done_target)
     waiting = fleet.create("task")
     blocking = fleet.link(waiting, open_target)["result"]["relation_id"]
     finished = fleet.link(waiting, done_target)["result"]["relation_id"]
@@ -187,7 +194,7 @@ def test_only_depends_on_links_hold_a_task_back(fleet):
     fleet.link(fleet.create("finding", statement="s"), waiting, "supports")
     fleet.link(fleet.create("task"), blocker, "references")
 
-    assert asked(fleet.patch(blocker, progress="done")) == [("task_unblocked", waiting)]
+    assert asked(fleet.submit(blocker)) == [("needs_review", blocker), ("task_unblocked", waiting)]
 
 
 SOURCES = {
@@ -204,23 +211,23 @@ def test_only_a_task_still_waiting_is_announced(fleet, source_kind):
     blocker, source = fleet.create("task"), fleet.create(type_, **data)
     fleet.link(source, blocker)
     if source_kind == "done task":
-        fleet.patch(source, progress="done")
+        fleet.submit(source)
     if source_kind == "archived task":
         fleet.archive(source)
 
-    assert asked(fleet.patch(blocker, progress="done")) == []
+    assert asked(fleet.submit(blocker)) == [("needs_review", blocker)]
 
 
-def test_a_task_reopened_and_done_again_unblocks_again_under_the_new_cause(fleet):
+def test_a_task_reopened_and_submitted_again_unblocks_again_under_the_new_cause(fleet):
     blocker, waiting = fleet.create("task"), fleet.create("task")
     fleet.link(waiting, blocker)
 
-    first = fleet.patch(blocker, progress="done")
+    first = fleet.submit(blocker)
     assert asked(fleet.patch(blocker, progress="doing")) == []
-    again = fleet.patch(blocker, progress="done")
+    again = fleet.submit(blocker)
 
-    assert asked(first) == asked(again) == [("task_unblocked", waiting)]
-    assert attention(first)[0]["payload"]["dedupe_key"] != attention(again)[0]["payload"]["dedupe_key"]
+    assert asked(first) == asked(again) == [("needs_review", blocker), ("task_unblocked", waiting)]
+    assert attention(first)[1]["payload"]["dedupe_key"] != attention(again)[1]["payload"]["dedupe_key"]
 
 
 # ---------- needs_review ----------
@@ -258,24 +265,24 @@ def test_a_task_producing_something_asks_for_a_review_of_what_it_produced(fleet,
     assert asked(fleet.link(task, produced, "produces")) == [("needs_review", produced)]
 
 
-def test_a_task_getting_a_result_reference_asks_for_its_review(fleet):
-    task = fleet.create("task")
-
-    assert asked(fleet.patch(task, result_ref="https://example.com/v1")) == [("needs_review", task)]
-    assert asked(fleet.patch(task, result_ref="https://example.com/v2")) == [("needs_review", task)]
-    assert asked(fleet.patch(task, next_step="Send it.")) == []
-
-    created = fleet.send("create", {"type": "task", "scope": "fleet", "data": {"title": "t", "result_ref": "ipfs://cid"}})
-    assert asked(created) == [("needs_review", created["result"]["id"])]
-
-
-def test_a_task_done_with_a_result_asks_for_its_review_and_unblocks_its_dependents(fleet):
+def test_each_submission_asks_for_a_review_and_only_the_first_unblocks(fleet):
     task, waiting = fleet.create("task"), fleet.create("task")
     fleet.link(waiting, task)
 
-    both = fleet.patch(task, progress="done", result_ref="https://example.com/result")
+    assert asked(fleet.submit(task, "https://example.com/v1")) == [("needs_review", task), ("task_unblocked", waiting)]
+    assert asked(fleet.submit(task, "https://example.com/v2")) == [("needs_review", task)]
+    assert asked(fleet.patch(task, next_step="Send it.")) == []
 
-    assert asked(both) == [("needs_review", task), ("task_unblocked", waiting)]
+
+def test_reviewing_a_submission_asks_for_nothing(fleet):
+    task = fleet.create("task")
+    fleet.submit(task)
+    body = {"task": task, "task_version": 2, "decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}
+
+    reply = fleet.host.handle(json.dumps(request("review", body, command("rv", token_id=18, wallet="0x" + "c3" * 20))).encode())
+
+    assert reply["ok"], reply
+    assert attention(reply) == []
 
 
 # ---------- writes that ask for nothing ----------
@@ -315,14 +322,14 @@ def test_writes_outside_the_listed_changes_ask_for_nothing(fleet):
 def test_the_same_command_again_is_answered_from_the_ledger_and_asks_nothing_more(fleet):
     blocker, waiting = fleet.create("task"), fleet.create("task")
     fleet.link(waiting, blocker)
-    done = request("patch", {"id": blocker, "expected_version": 1, "set": {"progress": "done"}}, command("done"))
+    done = request("submit", {"id": blocker, "expected_version": 1, "result_ref": "ipfs://cid"}, command("done"))
 
     first = fleet.host.handle(json.dumps(done).encode())
     again = fleet.host.handle(json.dumps(done).encode())
 
-    assert asked(first) == [("task_unblocked", waiting)]
+    assert asked(first) == [("needs_review", blocker), ("task_unblocked", waiting)]
     assert (again["replayed"], again["events"]) == (True, [])
-    assert sum(event.type == "keyfleet.attention" for event in fleet.host.graph.events) == 1
+    assert sum(event.type == "keyfleet.attention" for event in fleet.host.graph.events) == 2
 
 
 CRASH_AFTER_COMMIT = """
@@ -339,11 +346,11 @@ protocol.write_frame = write_frame
 
 def test_a_retry_after_a_crash_between_commit_and_reply_asks_nothing_twice(db):
     create = [
-        request("create", {"type": "task", "scope": "fleet", "data": {"title": title}}, command(title))
+        request("create", {"project": "general", "type": "task", "data": {"title": title}}, command(title))
         for title in ("blocker", "waiting")
     ]
     link = request("link", {"source": "task#2", "target": "task#1", "type": "depends_on"}, command("l"))
-    done = request("patch", {"id": "task#1", "expected_version": 1, "set": {"progress": "done"}}, command("d"))
+    done = request("submit", {"id": "task#1", "expected_version": 1, "result_ref": "ipfs://cid"}, command("d"))
 
     crashing = HostProcess(db, patch=CRASH_AFTER_COMMIT)
     for message in (*create, link):
@@ -355,41 +362,41 @@ def test_a_retry_after_a_crash_between_commit_and_reply_asks_nothing_twice(db):
     retried = host.send(done)
     assert (retried["replayed"], retried["events"]) == (True, [])
     page = host.send(request("changes", {"after_seq": 0, "limit": 500}))["result"]["events"]
-    assert [event["payload"]["object_id"] for event in page if event["type"] == "keyfleet.attention"] == ["task#2"]
+    assert [event["payload"]["object_id"] for event in page if event["type"] == "keyfleet.attention"] == ["task#1", "task#2"]
     assert host.close() == 0
 
 
 def test_a_reopened_host_asks_nothing_again_and_its_next_cause_is_new(db):
-    first = Fleet(Host("fleet_a", str(db)))
+    first = Fleet(Host("fleet_a", str(db), []))
     blocker, waiting = first.create("task"), first.create("task")
     first.link(waiting, blocker)
-    done = first.patch(blocker, progress="done")
+    done = first.submit(blocker)
     first.host.graph.store.close()
 
-    reopened = Fleet(Host("fleet_a", str(db)))
+    reopened = Fleet(Host("fleet_a", str(db), []))
     reopened.n = first.n
 
     # Opening the log runs nothing again, so it gains no attention.
     assert [event.id for event in reopened.host.graph.events if event.type == "keyfleet.attention"] == [
-        attention(done)[0]["id"]
+        event["id"] for event in attention(done)
     ]
-    # The same change marked again is a new cause, with its own key.
+    # The same change made again is a new cause, with its own keys.
     reopened.patch(blocker, progress="doing")
-    again = reopened.patch(blocker, progress="done")
+    again = reopened.submit(blocker)
     keys = [event.payload["dedupe_key"] for event in reopened.host.graph.events if event.type == "keyfleet.attention"]
-    assert asked(again) == [("task_unblocked", waiting)]
-    assert len(set(keys)) == len(keys) == 2
+    assert asked(again) == [("needs_review", blocker), ("task_unblocked", waiting)]
+    assert len(set(keys)) == len(keys) == 4
 
 
 def test_the_same_change_in_two_fleets_asks_under_two_keys(tmp_path):
-    fleets = [Fleet(Host(name, str(tmp_path / f"{name}.sqlite"))) for name in ("fleet_a", "fleet_b")]
+    fleets = [Fleet(Host(name, str(tmp_path / f"{name}.sqlite"), [])) for name in ("fleet_a", "fleet_b")]
     replies = []
     for fleet in fleets:
         blocker, waiting = fleet.create("task"), fleet.create("task")
         fleet.link(waiting, blocker)
-        replies.append(fleet.patch(blocker, progress="done"))
+        replies.append(fleet.submit(blocker))
 
-    [a], [b] = (attention(reply) for reply in replies)
+    [_, a], [_, b] = (attention(reply) for reply in replies)
     # Both logs number their events alike, so only the log id tells them apart.
     assert (a["payload"]["object_id"], a["payload"]["cause"]) == (b["payload"]["object_id"], b["payload"]["cause"])
     assert a["payload"]["dedupe_key"] != b["payload"]["dedupe_key"]
@@ -423,9 +430,9 @@ def _seed(host, dependents, extra_targets=0):
 def test_a_fan_out_past_the_attention_bound_asks_that_many_in_link_order_and_commits(fleet):
     blocker, waiting = _seed(fleet.host, MAX_ATTENTION * 4)
 
-    done = fleet.patch(blocker, progress="done")
+    done = fleet.submit(blocker)
 
-    assert asked(done) == [("task_unblocked", task) for task in waiting[:MAX_ATTENTION]]
+    assert asked(done) == [("needs_review", blocker)] + [("task_unblocked", task) for task in waiting[: MAX_ATTENTION - 1]]
     assert fleet.host.graph.get_object(blocker).data["progress"] == "done"
     assert done["result"]["version"] == 2
     assert fleet.create("note", body="the fleet keeps writing")
@@ -439,16 +446,17 @@ def test_the_work_bound_cuts_a_check_short_and_never_announces_a_task_it_did_not
     fits = MAX_WORK // per_dependent
     blocker, waiting = _seed(fleet.host, fits + 5, extra_targets=67)
 
-    done = fleet.patch(blocker, progress="done")
+    done = fleet.submit(blocker)
 
     assert fits < MAX_ATTENTION
-    assert asked(done) == [("task_unblocked", task) for task in waiting[:fits]]
+    assert asked(done) == [("needs_review", blocker)] + [("task_unblocked", task) for task in waiting[:fits]]
     assert done["ok"] is True
 
 
 def test_one_command_with_the_most_attention_still_settles_in_one_quantum():
-    # Its change, every notice it may ask and its ledger event.
-    assert 1 + MAX_ATTENTION + 1 <= host_module._QUANTUM_EVENTS
+    # A submission's change and the links to its evidence, every notice it
+    # may ask and its ledger event.
+    assert 1 + host_module.MAX_EVIDENCE + MAX_ATTENTION + 1 <= host_module._QUANTUM_EVENTS
 
 
 def test_a_write_reads_only_the_links_of_the_objects_it_looks_at(fleet, monkeypatch):
@@ -463,7 +471,7 @@ def test_a_write_reads_only_the_links_of_the_objects_it_looks_at(fleet, monkeypa
 
     monkeypatch.setattr(fleet.host.graph, "relations", scan)
 
-    assert asked(fleet.patch(blocker, progress="done")) == [("task_unblocked", waiting)]
+    assert asked(fleet.submit(blocker)) == [("needs_review", blocker), ("task_unblocked", waiting)]
     assert asked(fleet.unlink(rel.id)) == [("task_unblocked", held)]
 
 
@@ -480,17 +488,17 @@ def test_an_unlink_check_is_bounded_by_the_work_bound_too(fleet):
     assert asked(fleet.unlink(rel.id)) == [("task_unblocked", waiting)]
 
 
-# ---------- nothing a member sends asks for attention or moves a scope ----------
+# ---------- nothing a member sends asks for attention or changes sys ----------
 
 
 MEMBER_ATTEMPTS = [
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "keyfleet.attention", "body": "kind: needs_review"}}),
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b", "kind": "needs_review"}}),
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b", "dedupe_key": "x"}}),
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b", "cause": {"event_id": "evt_001"}}}),
-    ("create", {"type": "keyfleet.attention", "scope": "fleet", "data": {"title": "t"}}),
+    ("create", {"project": "general", "type": "note", "data": {"title": "keyfleet.attention", "body": "kind: needs_review"}}),
+    ("create", {"project": "general", "type": "note", "data": {"title": "t", "body": "b", "kind": "needs_review"}}),
+    ("create", {"project": "general", "type": "note", "data": {"title": "t", "body": "b", "dedupe_key": "x"}}),
+    ("create", {"project": "general", "type": "note", "data": {"title": "t", "body": "b", "cause": {"event_id": "evt_001"}}}),
+    ("create", {"project": "general", "type": "keyfleet.attention", "data": {"title": "t"}}),
     ("patch", {"id": "task#1", "expected_version": 1, "set": {"kind": "task_unblocked"}}),
-    ("patch", {"id": "task#1", "expected_version": 1, "set": {"sys": {"scope": "level:1"}}}),
+    ("patch", {"id": "task#1", "expected_version": 1, "set": {"sys": {"archived": True}}}),
     ("link", {"source": "task#1", "target": "task#2", "type": "keyfleet.attention"}),
     ("keyfleet.attention", {"kind": "needs_review", "object_id": "task#1"}),
     ("emit", {"type": "keyfleet.attention", "payload": {}}),
@@ -498,7 +506,7 @@ MEMBER_ATTEMPTS = [
 
 
 @pytest.mark.parametrize(("op", "body"), MEMBER_ATTEMPTS)
-def test_no_member_request_writes_an_attention_event_or_moves_a_scope(fleet, op, body):
+def test_no_member_request_writes_an_attention_event_or_changes_sys(fleet, op, body):
     fleet.create("task")
     fleet.create("task")
 
@@ -507,12 +515,12 @@ def test_no_member_request_writes_an_attention_event_or_moves_a_scope(fleet, op,
     if reply["ok"]:
         assert attention(reply) == []
     assert not any(event.type == "keyfleet.attention" for event in fleet.host.graph.events)
-    assert {obj.data["sys"]["scope"] for obj in fleet.host.graph.all_objects()} == {"fleet"}
+    assert {obj.data["sys"]["project"] for obj in fleet.host.graph.all_objects()} == {"general"}
 
 
 @pytest.mark.parametrize("principal", [GATEWAY, "keyfleet:reactions", "system", "runtime"])
 def test_a_command_cannot_be_made_in_the_gateway_name(fleet, principal):
-    body = {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b"}}
+    body = {"project": "general", "type": "note", "data": {"title": "t", "body": "b"}}
 
     reply = fleet.host.handle(json.dumps(request("create", body, {**command("x"), "principal": principal})).encode())
 

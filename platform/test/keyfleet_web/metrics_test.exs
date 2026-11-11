@@ -44,4 +44,12 @@ defmodule KeyfleetWeb.MetricsTest do
     assert body =~
              ~s(health_chain_request_failures_total{chain_id="8453",class="timeout",method="eth_getTransactionReceipt",scope="wallet"})
   end
+
+  test "exposes the steps into Keyfleet under their names only", %{url: url} do
+    :telemetry.execute([:keyfleet, :launch, :step], %{count: 1}, %{step: "watch"})
+
+    body = Req.get!(url <> "/metrics", retry: false).body
+
+    assert body =~ ~s(keyfleet_launch_steps_total{step="watch"})
+  end
 end

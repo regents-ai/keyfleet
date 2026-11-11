@@ -20,7 +20,7 @@
   font-size: 1rem;
 }
 
-/* Asking "Delete for both Keys?" keeps the space the button had. */
+/* Asking "Delete for you only?" keeps the space the button had. */
 .dms-delete {
   display: grid;
   gap: 0.5rem;
@@ -81,6 +81,13 @@
   border: 0;
 }
 
+/* The site a named link goes to, under its name. */
+.dms-link-host {
+  display: block;
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+}
+
 .dms-parts pre {
   margin: 0;
   padding: 0.5rem;
@@ -114,6 +121,20 @@
   .dms-settings > a {
     display: inline-flex;
     align-items: center;
+  }
+
+  /* A file or link sent in a message is a full finger's height. */
+  .dms-parts a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  /* Block spans its panel like the choice above it, and so does Sign in
+     when the messages are closed. */
+  .dms-settings > .rg-button,
+  #dms-closed > .rg-button {
+    justify-self: stretch;
   }
 
   /* A Key's one action spans its heading. */

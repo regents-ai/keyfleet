@@ -49,6 +49,9 @@ defmodule Keyfleet.Fleets.Fleet do
   @doc "The fields a deployment records, every one of them required."
   def deployment_fields, do: @deployment
 
+  @doc "Whether `number` can be a fleet's Key number: from 1 to 9,999,999,999."
+  def key_number?(number), do: is_integer(number) and number > 0 and number < @token_id_stride
+
   @doc "The token id on the chain of the fleet's Key `key_number`."
   def onchain_token_id(%{chain_fleet_id: fleet}, key_number)
       when is_integer(fleet) and key_number > 0 and key_number < @token_id_stride,

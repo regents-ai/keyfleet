@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+KEYFLEET_RELEASE_COMMAND=migrate exec "$(dirname "$0")/keyfleet" eval 'Keyfleet.Release.migrate_shared()'

@@ -8,7 +8,11 @@ defmodule Keyfleet.Graph.WriterTest do
   @fleets Keyfleet.Fleets.catalog_ids()
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
-  @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}
+  @note %{
+    project: "general",
+    type: "note",
+    data: %{title: "Plan", body: "Ship the first service."}
+  }
 
   # A host that stops is saved with the site's errors, from the writer's own
   # process.
@@ -127,7 +131,7 @@ defmodule Keyfleet.Graph.WriterTest do
     start_graph(ctx, [fleet, other], python: hooked_python(ctx.tmp_dir))
     await_ready(fleet)
     await_ready(other)
-    before = {writer(fleet), writer(other), Process.whereis(Keyfleet.Graph.Registry)}
+    before = {writer(fleet), writer(other)}
 
     for _ <- 1..10 do
       assert {:error, %{"code" => "bad_request"}} =
@@ -137,7 +141,7 @@ defmodule Keyfleet.Graph.WriterTest do
                Writer.command(fleet, "create", %{type: <<0xFF>>}, authorized("c1"))
     end
 
-    assert {writer(fleet), writer(other), Process.whereis(Keyfleet.Graph.Registry)} == before
+    assert {writer(fleet), writer(other)} == before
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
 
     assert {:ok, _hello} = Writer.request(other, "hello", %{})
@@ -145,7 +149,7 @@ defmodule Keyfleet.Graph.WriterTest do
     assert length(launches(ctx.tmp_dir)) == 2
   end
 
-  test "a fleet whose host keeps crashing leaves the other fleets, the registry and the supervisors running",
+  test "a fleet whose host keeps crashing leaves the other fleets and the supervisors running",
        ctx do
     [crashing, healthy] = Enum.take(@fleets, 2)
     python = hooked_python(ctx.tmp_dir, crash_fleet: crashing)
@@ -154,14 +158,13 @@ defmodule Keyfleet.Graph.WriterTest do
       capture_host_failures(fn ->
         graph = start_graph(ctx, [crashing, healthy], python: python)
         await_ready(healthy)
-        before = {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)}
+        before = {writer(crashing), writer(healthy)}
 
         await(fn -> Enum.count(launches(ctx.tmp_dir), &(&1["fleet"] == crashing)) >= 8 end)
 
         assert Process.alive?(graph)
 
-        assert {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)} ==
-                 before
+        assert {writer(crashing), writer(healthy)} == before
 
         assert Writer.request(crashing, "hello", %{}) == {:error, :unavailable}
 
@@ -175,18 +178,21 @@ defmodule Keyfleet.Graph.WriterTest do
        ctx do
     [fleet] = Enum.take(@fleets, 1)
 
+    # The next request meets an idle exit only once the writer has seen the
+    # exit; a request written to a host that has just died fails on the closed
+    # pipe instead, which is a different case. So the test waits until the
+    # writer has let the host go, and the restart waits a second, well past
+    # the one request the test sends in between.
     log =
       capture_host_failures(fn ->
-        start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
+        start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir), restart_min: 1_000)
         await_ready(fleet)
         [%{"pid" => os_pid}] = launches(ctx.tmp_dir)
 
         shell_kill(Integer.to_string(os_pid))
+        await(fn -> :sys.get_state(writer(fleet)).host == nil end)
 
-        assert Writer.request(fleet, "hello", %{}) in [
-                 {:error, :indeterminate},
-                 {:error, :unavailable}
-               ]
+        assert Writer.request(fleet, "hello", %{}) == {:error, :unavailable}
 
         await_ready(fleet)
       end)
@@ -204,8 +210,12 @@ defmodule Keyfleet.Graph.WriterTest do
           start_graph(ctx, [fleet], python: python)
 
           assert_unavailable_for_a_while(fleet)
-          File.write!(python, "#!/bin/sh\nexec '#{python()}' \"$@\"\n")
-          File.chmod!(python, 0o755)
+          # Made runnable before it takes the name, so a restart never finds
+          # the interpreter present but not yet runnable.
+          staged = python <> ".staged"
+          File.write!(staged, "#!/bin/sh\nexec '#{python()}' \"$@\"\n")
+          File.chmod!(staged, 0o755)
+          File.rename!(staged, python)
           await_ready(fleet)
         end)
 
@@ -240,8 +250,10 @@ defmodule Keyfleet.Graph.WriterTest do
         capture_host_failures(fn ->
           start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
 
+          # The writer has tried again while the lock is held, however slowly
+          # this machine runs it.
+          await(fn -> length(launches(ctx.tmp_dir)) >= 2 end)
           assert_unavailable_for_a_while(fleet)
-          assert length(launches(ctx.tmp_dir)) >= 2
           Port.close(holder)
           await_ready(fleet)
         end)
@@ -296,10 +308,7 @@ defmodule Keyfleet.Graph.WriterTest do
 
     pending =
       Task.async(fn ->
-        Writer.command(fleet, "create", @note, fn within ->
-          send(test, {:asked, self(), within})
-          {:error, :key_changed_hands}
-        end)
+        Writer.command(fleet, "create", @note, {__MODULE__, :ask_then_refuse, [test]})
       end)
 
     await(fn -> Process.info(writer, :message_queue_len) == {:message_queue_len, 1} end)
@@ -323,11 +332,7 @@ defmodule Keyfleet.Graph.WriterTest do
     await_ready(fleet)
     writer = writer(fleet)
 
-    check = fn _within ->
-      :ok = fn -> :ok end |> Task.async() |> Task.await()
-      {:ok, command("linked-1")}
-    end
-
+    check = {__MODULE__, :admit_after_task, ["linked-1"]}
     assert {:ok, %{"replayed" => false}} = Writer.command(fleet, "create", @note, check)
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
     assert writer(fleet) == writer
@@ -340,7 +345,7 @@ defmodule Keyfleet.Graph.WriterTest do
     await_ready(fleet)
     writer = writer(fleet)
 
-    pool_down = fn _within -> exit({:noproc, {DBConnection.Holder, :checkout, []}}) end
+    pool_down = {__MODULE__, :pool_down, []}
 
     log =
       ExUnit.CaptureLog.capture_log(fn ->
@@ -366,7 +371,7 @@ defmodule Keyfleet.Graph.WriterTest do
     await_ready(fleet)
     writer = writer(fleet)
 
-    faulty = fn _within -> raise ArgumentError, "no such level" end
+    faulty = {__MODULE__, :faulty, []}
 
     log =
       ExUnit.CaptureLog.capture_log(fn ->
@@ -386,7 +391,7 @@ defmodule Keyfleet.Graph.WriterTest do
        ctx do
     [stormy, calm] = Enum.take(@fleets, 2)
     # Task 1 has 200 tasks waiting on it, each also waiting on the same 100
-    # done tasks: every time it is marked done, the reactions read until the
+    # done tasks: every time it is submitted, the reactions read until the
     # work bound stops them.
     seed_waiting!(ctx.data_dir, stormy, 200, 100)
     start_graph(ctx, [stormy, calm])
@@ -400,9 +405,13 @@ defmodule Keyfleet.Graph.WriterTest do
       Task.async(fn ->
         Stream.iterate(1, &(&1 + 1))
         |> Enum.reduce_while([], fn n, asked ->
-          progress = if rem(n, 2) == 1, do: "done", else: "doing"
-          patch = %{id: "task#1", expected_version: n, set: %{progress: progress}}
-          {:ok, reply} = Writer.command(stormy, "patch", patch, authorized("storm-#{n}"))
+          {op, body} =
+            if rem(n, 2) == 1,
+              do: {"submit", %{result_ref: "https://example.com/storm/#{n}"}},
+              else: {"patch", %{set: %{progress: "doing"}}}
+
+          body = Map.merge(body, %{id: "task#1", expected_version: n})
+          {:ok, reply} = Writer.command(stormy, op, body, authorized("storm-#{n}"))
           asked = [Enum.count(reply["events"], &(&1["type"] == "keyfleet.attention")) | asked]
           if n == 2, do: send(test, :storming)
 
@@ -420,9 +429,10 @@ defmodule Keyfleet.Graph.WriterTest do
     asked = Task.await(storm, 30_000)
 
     # The storm ran from before the first calm write until after the last, and
-    # every round that marked task 1 done asked for all its bounds allow.
+    # every round that submitted task 1 asked for its review and for all the
+    # unblocked tasks its bounds allow.
     assert length(asked) > 2
-    assert asked |> Enum.take_every(2) |> Enum.uniq() == [19]
+    assert asked |> Enum.take_every(2) |> Enum.uniq() == [1 + 19]
 
     # The calm fleet's writes answer as they did before the storm, well inside
     # the writer's reply budget.
@@ -468,10 +478,13 @@ defmodule Keyfleet.Graph.WriterTest do
     })
   end
 
+  # The fleets start with no starting goals, so each log holds only what a
+  # test writes.
   defp graph_opts(ctx, fleets, opts) do
     Keyword.merge(
       [
         fleets: fleets,
+        starting_goals: [],
         data_dir: ctx.data_dir,
         reply_timeout: 5_000,
         hello_timeout: 30_000,
@@ -563,7 +576,29 @@ defmodule Keyfleet.Graph.WriterTest do
     port
   end
 
-  defp authorized(id), do: fn _within -> {:ok, command(id)} end
+  defp authorized(id), do: {__MODULE__, :admit, [id]}
+
+  # Ownership checks the writer calls, as it calls `KeyActor.command/5`.
+  @doc false
+  def admit(id, _within), do: {:ok, command(id)}
+
+  @doc false
+  def ask_then_refuse(test, within) do
+    send(test, {:asked, self(), within})
+    {:error, :key_changed_hands}
+  end
+
+  @doc false
+  def admit_after_task(id, _within) do
+    :ok = fn -> :ok end |> Task.async() |> Task.await()
+    {:ok, command(id)}
+  end
+
+  @doc false
+  def pool_down(_within), do: exit({:noproc, {DBConnection.Holder, :checkout, []}})
+
+  @doc false
+  def faulty(_within), do: raise(ArgumentError, "no such level")
 
   # Microseconds for one plain write to be answered.
   defp timed_note(fleet, id) do
@@ -591,8 +626,8 @@ defmodule Keyfleet.Graph.WriterTest do
     actor = "member:8453:#{@contract}:17@3/agent:#{@wallet}"
     key = {"chain_id": 1, "contract": "#{@contract}", "token_id": 17}
     created_by = {"key": key, "ownership_epoch": 3, "kind": "agent", "wallet": "#{@wallet}"}
-    sys_record = {"scope": "fleet", "created_by": created_by, "archived": False}
-    host = Host(fleet, db)
+    sys_record = {"project": "general", "created_by": created_by, "archived": False}
+    host = Host(fleet, db, [])
     add = host.graph.add_object
     with host._transaction():
         blocker = add("task", {"title": "Blocker", "sys": sys_record}, actor=actor).id
@@ -629,23 +664,20 @@ defmodule Keyfleet.Graph.WriterTest do
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
       },
-      writable_scopes: ["fleet"]
+      projects: %{"general" => "active"}
     }
   end
 
   defp writer(fleet) do
-    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, fleet)
+    [pid] = :pg.get_members(Keyfleet.Graph.Processes, {Writer, fleet})
     pid
   end
 
-  # The registry itself is briefly gone while the graph supervisor restarts.
   defp current_writer(fleet) do
-    case Registry.lookup(Keyfleet.Graph.Registry, fleet) do
-      [{pid, _timeout}] -> pid
+    case :pg.get_members(Keyfleet.Graph.Processes, {Writer, fleet}) do
+      [pid] -> pid
       [] -> nil
     end
-  rescue
-    ArgumentError -> nil
   end
 
   defp await_ready(fleet),

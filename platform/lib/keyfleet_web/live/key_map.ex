@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.KeyMap do
   until its close-up is made.
   """
 
-  import Keyfleet.Fleets.Rules, only: [grouped: 1]
+  import Keyfleet.Fleets.Rules, only: [grouped: 1, keys: 1]
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.Fleets.Presets
@@ -108,20 +108,7 @@ defmodule KeyfleetWeb.KeyMap do
           else: found([], "No Key #{grouped(token_id)} yet.")
 
       {:wallet, wallet} ->
-        case KeyfleetWeb.PageRead.run("map search", fn ->
-               Keys.keys_held_in_fleet!(fleet_id, [wallet])
-             end) do
-          {:ok, keys} ->
-            token_ids = Enum.map(keys, & &1.token_id)
-
-            found(
-              token_ids,
-              "#{RegentFormat.short_address(wallet)} holds #{keys_held(token_ids)} here."
-            )
-
-          {:error, _failure} ->
-            found([], "That search couldn’t be run. Try again in a moment.")
-        end
+        held_by(fleet_id, wallet)
 
       :unreadable ->
         found([], "Enter a Key number or a 0x address.")
@@ -129,6 +116,23 @@ defmodule KeyfleetWeb.KeyMap do
   end
 
   def find(_fleet_id, _progress, _query), do: found([], "Enter a Key number or a 0x address.")
+
+  defp held_by(fleet_id, wallet) do
+    case KeyfleetWeb.PageRead.run("map search", fn ->
+           Keys.keys_held_in_fleet!(fleet_id, [wallet])
+         end) do
+      {:ok, keys} ->
+        token_ids = Enum.map(keys, & &1.token_id)
+
+        found(
+          token_ids,
+          "#{RegentFormat.short_address(wallet)} holds #{keys_held(token_ids)} here."
+        )
+
+      {:error, _failure} ->
+        found([], "That search couldn’t be run. Try again in a moment.")
+    end
+  end
 
   defp sought(""), do: :nothing
 
@@ -143,8 +147,7 @@ defmodule KeyfleetWeb.KeyMap do
   defp found(token_ids, words), do: %{keys: bitset(token_ids), words: words}
 
   defp keys_held([]), do: "no Keys"
-  defp keys_held([_one]), do: "1 Key"
-  defp keys_held(token_ids), do: "#{grouped(length(token_ids))} Keys"
+  defp keys_held(token_ids), do: keys(length(token_ids))
 
   @doc """
   The levels the map can go to, which are the levels it draws: each level

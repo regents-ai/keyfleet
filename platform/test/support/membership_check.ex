@@ -42,11 +42,18 @@ defmodule Keyfleet.MembershipCheck do
     LocalDatabaseFixture,
     Notebooks,
     PairingHelpers,
+    Projects,
     Rooms,
     WorkspaceFixtures
   }
 
-  alias KeyfleetWeb.{CodePassword, NotebookSocket, Refusal, SessionAuthorityHelpers}
+  alias KeyfleetWeb.{
+    CodePassword,
+    NotebookSocket,
+    Refusal,
+    SessionAuthorityHelpers,
+    SignedAgentHelpers
+  }
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
@@ -96,7 +103,6 @@ defmodule Keyfleet.MembershipCheck do
     lineage = signed_in!(holder)
     cookie = notebook_cookie(c, holder, lineage)
     own_password = person_password(holder, lineage)
-    password = code_password(c, holder, @fleet)
     socket = open_socket(c, holder, @fleet)
 
     before = [
@@ -107,8 +113,7 @@ defmodule Keyfleet.MembershipCheck do
         notebooks(c, holder, @fleet)
       ),
       line("transfer: holder's agent opens a notebook connection", opened(socket)),
-      admission("transfer: holder's agent gets a code password", password),
-      admission("transfer: git lets the holder's agent in", git(c, @fleet, password(password))),
+      admission("transfer: git lets the holder's agent in", agent_git(c, holder, @fleet)),
       admission(
         "transfer: holder opens the notebooks with their sign-in",
         notebook_page(c, cookie)
@@ -137,9 +142,9 @@ defmodule Keyfleet.MembershipCheck do
         403,
         "notebooks_not_holder"
       ),
-      refusal(
-        "transfer: buyer's agent refused a code password",
-        code_password(c, buyer, @fleet),
+      git_refusal(
+        "transfer: git refuses the buyer's agent",
+        agent_git(c, buyer, @fleet),
         403,
         "code_not_holder"
       )
@@ -172,15 +177,9 @@ defmodule Keyfleet.MembershipCheck do
         403,
         "notebooks_not_holder"
       ),
-      refusal(
-        "transfer: old holder's agent refused a code password",
-        code_password(c, holder, @fleet),
-        403,
-        "code_not_holder"
-      ),
       git_refusal(
-        "transfer: git refuses the password the old holder's agent got before",
-        git(c, @fleet, password(password)),
+        "transfer: git refuses the old holder's agent",
+        agent_git(c, holder, @fleet),
         403,
         "code_not_holder"
       ),
@@ -210,27 +209,17 @@ defmodule Keyfleet.MembershipCheck do
       line(
         "transfer: new holder's agent opens a notebook connection",
         opened(open_socket(c, buyer, @fleet))
-      )
+      ),
+      admission("transfer: git lets the new holder's agent in", agent_git(c, buyer, @fleet))
     ]
 
-    new_password = code_password(c, buyer, @fleet)
-
-    code = [
-      admission("transfer: new holder's agent gets a code password", new_password),
-      admission(
-        "transfer: git lets the new holder's agent in",
-        git(c, @fleet, password(new_password))
-      )
-    ]
-
-    before ++ [roster] ++ moved ++ code
+    before ++ [roster] ++ moved
   end
 
   defp revocation(c) do
     read_chain!()
     paired = pair!()
     BrowserChain.sell!(@fleet, paired.wallet)
-    password = code_password(c, paired, @fleet)
     socket = open_socket(c, paired, @fleet)
 
     admitted = [
@@ -241,8 +230,7 @@ defmodule Keyfleet.MembershipCheck do
         notebooks(c, paired, @fleet)
       ),
       line("revocation: paired agent opens a notebook connection", opened(socket)),
-      admission("revocation: paired agent gets a code password", password),
-      admission("revocation: git lets the paired agent in", git(c, @fleet, password(password)))
+      admission("revocation: git lets the paired agent in", agent_git(c, paired, @fleet))
     ]
 
     unpair!(paired)
@@ -255,35 +243,26 @@ defmodule Keyfleet.MembershipCheck do
       )
 
     refused =
-      for {place, answer} <- [
-            {"in rooms", room(c, paired, @fleet)},
-            {"the workspace", workspace(c, paired, @fleet)},
-            {"the notebooks", notebooks(c, paired, @fleet)},
-            {"a code password", code_password(c, paired, @fleet)}
+      for {place, answer, refused} <- [
+            {"in rooms", room(c, paired, @fleet), &refused_exactly/3},
+            {"the workspace", workspace(c, paired, @fleet), &refused_exactly/3},
+            {"the notebooks", notebooks(c, paired, @fleet), &refused_exactly/3},
+            {"the fleet's code", agent_git(c, paired, @fleet), &refused_to_git/3}
           ] do
         line(
           "revocation: unpaired agent refused #{place} (403 agent_not_paired, Refusal's words)",
-          refused_exactly(answer, 403, "agent_not_paired")
+          refused.(answer, 403, "agent_not_paired")
         )
       end
 
-    git =
-      git_refusal(
-        "revocation: git refuses the password the agent got before",
-        git(c, @fleet, password(password)),
-        401,
-        "code_sign_in"
-      )
-
     site = line("revocation: agent_not_paired sends the person to this site", own_site())
-    admitted ++ [closed | refused] ++ [git, site]
+    admitted ++ [closed | refused] ++ [site]
   end
 
   defp other_fleet(c) do
     read_chain!()
     outsider = pair!()
     BrowserChain.sell!(@other_fleet, outsider.wallet)
-    own_password = code_password(c, outsider, @other_fleet)
 
     [
       refusal(
@@ -308,17 +287,11 @@ defmodule Keyfleet.MembershipCheck do
         403,
         "notebooks_not_holder"
       ),
-      refusal(
-        "other fleet: agent refused a code password",
-        code_password(c, outsider, @fleet),
+      git_refusal(
+        "other fleet: git refuses the agent on this fleet's code",
+        agent_git(c, outsider, @fleet),
         403,
         "code_not_holder"
-      ),
-      git_refusal(
-        "other fleet: git refuses its own fleet's password on this fleet's code",
-        git(c, @fleet, password(own_password)),
-        401,
-        "code_sign_in"
       ),
       admission(
         "other fleet: agent reads a members-only room of its own fleet",
@@ -332,10 +305,9 @@ defmodule Keyfleet.MembershipCheck do
         "other fleet: agent is let into its own fleet's notebooks",
         notebooks(c, outsider, @other_fleet)
       ),
-      admission("other fleet: agent gets its own fleet's code password", own_password),
       admission(
         "other fleet: git lets the agent into its own fleet's code",
-        git(c, @other_fleet, password(own_password))
+        agent_git(c, outsider, @other_fleet)
       )
     ]
   end
@@ -392,7 +364,7 @@ defmodule Keyfleet.MembershipCheck do
     end
   end
 
-  # Pairing guidance names this site's Account page, never regents.sh.
+  # Pairing guidance names this site's Agents page, never regents.sh.
   defp own_site do
     %{error: %{message: message, hint: hint}} = Refusal.body("agent_not_paired")
 
@@ -537,8 +509,10 @@ defmodule Keyfleet.MembershipCheck do
 
     for fleet_id <- [@fleet, @other_fleet] do
       WorkspaceFixtures.open_log(fleet_id)
-      Notebooks.record_hub!(fleet_id, "proj-" <> fleet_id, actor: %Actors.System{})
-      Code.record_repository!(fleet_id, @store_owner, actor: %Actors.System{})
+
+      general = Projects.project!(fleet_id, Projects.general(), actor: %Actors.System{})
+      Projects.record_space!(general, "proj-" <> fleet_id, actor: %Actors.System{})
+      Code.record_repository!(general.repository, @store_owner, actor: %Actors.System{})
     end
   end
 
@@ -567,7 +541,7 @@ defmodule Keyfleet.MembershipCheck do
   ## People and their agents
 
   # A person with a fresh wallet, and their agent, paired the way the person's
-  # Account page pairs one, with a profile so it may open the notebooks.
+  # Agents page pairs one, with a profile so it may open the notebooks.
   defp pair! do
     wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
     {:ok, signer} = Siwa.LocalSigner.new()
@@ -614,22 +588,26 @@ defmodule Keyfleet.MembershipCheck do
   defp workspace(c, agent, fleet_id),
     do: signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet_id}/graph/changes", "{}")
 
-  defp code_password(c, agent, fleet_id),
-    do: signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet_id}/code/password", "{}")
+  # Git as an agent runs it through the signing helper: every request to the
+  # code host signed with the agent's own key, an empty body included.
+  defp agent_git(c, agent, fleet_id) do
+    path = "/#{fleet_id}.git/info/refs?service=git-upload-pack"
+    host = Code.config()[:host]
+    headers = signed_headers(c, agent, host, "GET", path, "")
+    send_request(c, "GET", host, path, headers, nil)
+  end
 
   # On the notebook host a GET signs the empty body too.
   defp notebooks(c, agent, fleet_id) do
-    headers = signed_headers(c, agent, "GET", "/", "")
-    send_request(c, "GET", Notebooks.host(fleet_id), "/", headers, nil)
+    host = Notebooks.host(fleet_id)
+    headers = signed_headers(c, agent, host, "GET", "/", "")
+    send_request(c, "GET", host, "/", headers, nil)
   end
 
   defp signed(c, agent, method, path, body) do
-    headers = signed_headers(c, agent, method, path, body)
+    headers = signed_headers(c, agent, "localhost", method, path, body)
     send_request(c, method, "localhost", path, headers, body)
   end
-
-  defp password(%{status: 200, body: %{"password" => password}}), do: password
-  defp password(_refused), do: nil
 
   defp git(_c, _fleet_id, nil), do: %{status: nil, body: "no password to give git"}
 
@@ -649,21 +627,34 @@ defmodule Keyfleet.MembershipCheck do
     do: SessionAuthorityHelpers.signed_in_session(person.human_account_id)["session_lineage"]
 
   # A notebook sign-in for the person, made the way the fleet's workspace
-  # makes one: a link that works once, spent on the notebook host for its
-  # cookie.
+  # makes one: a code that works once, sent to the notebook host from this
+  # site's page for its cookie.
   defp notebook_cookie(c, %{person: person}, lineage) do
-    with {:ok, link} <- Notebooks.open(person, lineage, @fleet),
-         %URI{path: path, query: query} = URI.parse(link),
+    with {:ok, entry} <- Notebooks.open(person, lineage, @fleet),
+         headers = [
+           {"origin", KeyfleetWeb.Endpoint.url()},
+           {"content-type", "application/x-www-form-urlencoded"}
+         ],
+         form = URI.encode_query(code: entry.code, to: entry.to),
          %{status: 303, headers: %{"set-cookie" => set}} <-
-           send_request(c, "GET", Notebooks.host(@fleet), path <> "?" <> query, [], nil) do
-      Enum.find_value(set, fn cookie ->
-        case String.split(hd(String.split(cookie, ";")), "=", parts: 2) do
-          [@cookie, value] -> value
-          _other -> nil
-        end
-      end)
+           send_request(
+             c,
+             "POST",
+             Notebooks.host(@fleet),
+             URI.parse(entry.action).path,
+             headers,
+             form
+           ) do
+      Enum.find_value(set, &notebook_cookie_value/1)
     else
       _refused -> nil
+    end
+  end
+
+  defp notebook_cookie_value(set_cookie) do
+    case String.split(hd(String.split(set_cookie, ";")), "=", parts: 2) do
+      [@cookie, value] -> value
+      _other -> nil
     end
   end
 
@@ -682,9 +673,10 @@ defmodule Keyfleet.MembershipCheck do
     send_request(c, "GET", Notebooks.host(@fleet), "/", headers, nil)
   end
 
-  # Signed as the docs say an agent signs ("Signing in as an agent"), under a
-  # fresh receipt from the stand-in sign-in server's secret.
-  defp signed_headers(c, agent, method, path, body) do
+  # Signed as the docs say an agent signs ("Sign-in"), under a
+  # fresh receipt from the stand-in sign-in server's secret, for the host the
+  # request is sent to.
+  defp signed_headers(c, agent, host, method, path, body) do
     {:ok, %{token: receipt}} =
       Siwa.Receipt.create(
         %{
@@ -705,6 +697,7 @@ defmodule Keyfleet.MembershipCheck do
         %{
           method: method,
           path: path,
+          authority: Siwa.Contract.authority("https://" <> host),
           body: body,
           headers: %{"content-type" => "application/json"}
         },
@@ -740,7 +733,8 @@ defmodule Keyfleet.MembershipCheck do
   # every request to the notebook host is.
   defp open_socket(c, agent, fleet_id) do
     path = "/api/v1/events"
-    headers = signed_headers(c, agent, "GET", path, "")
+    host = Notebooks.host(fleet_id)
+    headers = signed_headers(c, agent, host, "GET", path, "")
 
     with {:ok, conn} <-
            Mint.HTTP.connect(:https, "localhost", c.port,
@@ -749,7 +743,7 @@ defmodule Keyfleet.MembershipCheck do
            ),
          {:ok, conn, ref} <-
            Mint.WebSocket.upgrade(:wss, conn, path, [
-             {"host", Notebooks.host(fleet_id)} | Enum.to_list(headers)
+             {"host", host} | Enum.to_list(headers)
            ]),
          {:ok, conn, 101, response_headers, _body} <- upgraded(conn, ref, []),
          {:ok, conn, websocket} <- Mint.WebSocket.new(conn, ref, 101, response_headers) do
@@ -774,19 +768,19 @@ defmodule Keyfleet.MembershipCheck do
          {:ok, conn, more} <- Mint.WebSocket.stream(conn, message) do
       parts = parts ++ more
 
-      if Enum.any?(parts, &match?({:done, ^ref}, &1)) do
-        {:status, ^ref, status} = List.keyfind(parts, :status, 0)
-        {:headers, ^ref, headers} = List.keyfind(parts, :headers, 0)
-
-        {:ok, conn, status, headers,
-         IO.iodata_to_binary(for {:data, ^ref, data} <- parts, do: data)}
-      else
-        upgraded(conn, ref, parts)
-      end
+      if Enum.any?(parts, &match?({:done, ^ref}, &1)),
+        do: upgrade_answer(conn, ref, parts),
+        else: upgraded(conn, ref, parts)
     else
       :timeout -> {:error, "no answer to the upgrade in #{div(@answer_within_ms, 1000)} s"}
       {:error, _conn, error, _parts} -> {:error, Exception.message(error)}
     end
+  end
+
+  defp upgrade_answer(conn, ref, parts) do
+    {:status, ^ref, status} = List.keyfind(parts, :status, 0)
+    {:headers, ^ref, headers} = List.keyfind(parts, :headers, 0)
+    {:ok, conn, status, headers, IO.iodata_to_binary(for {:data, ^ref, data} <- parts, do: data)}
   end
 
   # What the site does with the open connection by `deadline`: closes it, as
@@ -854,10 +848,11 @@ defmodule Keyfleet.MembershipCheck do
     {:ok, raw, conn} = read_body(conn)
     payload = Jason.decode!(raw)
 
-    case Siwa.verify_authenticated_request(payload,
+    case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           authorities: [payload["authority"]]
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
         json(conn, 200, %{

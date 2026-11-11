@@ -1,3 +1,5 @@
+import {readdirSync, readFileSync} from "node:fs"
+
 import {afterEach, describe, expect, it, vi} from "vitest"
 
 import {
@@ -7,6 +9,8 @@ import {
   createSessionMutationCoordinator,
   consumeSignOutHandoff,
   installAccountAuthLazyLoader,
+  privyHoldsSession,
+  privyRemembersVisitor,
   proveAnonymousSession,
   reloadDocumentOnce,
   reportSignInFailure,
@@ -71,15 +75,24 @@ function memoryStorage(initial?: string) {
   }
 }
 
+// A browser Privy holds a connected wallet for.
+function rememberedByPrivy() {
+  const storage = memoryStorage()
+  storage.setItem("privy:connections", '[{"address":"0x1111111111111111111111111111111111111111"}]')
+  vi.stubGlobal("window", {location: {origin: "https://regents.sh"}, localStorage: storage})
+}
+
 function accountDocument({
   signedIn = false,
   bridgeSource = "/assets/js/privy_bridge.js",
   appId = "public-app-id",
-}: {signedIn?: boolean; bridgeSource?: string | null; appId?: string | null} = {}) {
+  search = "",
+}: {signedIn?: boolean; bridgeSource?: string | null; appId?: string | null; search?: string} = {}) {
   let status = new AccountElement()
   let signInControls = [new AccountElement("sign-in")]
   const listeners = new Map<string, (event: Event) => void>()
   const documentRoot = {
+    location: {search},
     querySelector(selector: string) {
       if (selector === "meta[name='privy-app-id']") {
         return appId === null ? null : {content: appId}
@@ -132,6 +145,54 @@ function accountDocument({
 }
 
 describe("lazy browser authentication", () => {
+  // Google and the other redirect sign-ins leave the page and come back with
+  // Privy's code in the address. Privy finishes that sign-in only once it runs.
+  it("a page Privy returns to from Google starts the bridge at once", async () => {
+    const page = accountDocument({search: "?privy_oauth_code=code&privy_oauth_state=state"})
+    const request = vi.fn(async () => undefined)
+    const startPrivyBridge = vi.fn(async () => ({request}))
+    const stop = installAccountAuthLazyLoader(page.documentRoot, async () => ({startPrivyBridge}))
+
+    await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sync"))
+    expect(startPrivyBridge).toHaveBeenCalledOnce()
+    stop()
+  })
+
+  // A member whose sign-in here lapsed while Privy kept its own is signed
+  // back in on whatever page they open, not only on a page with a wallet.
+  it("a signed-out page Privy holds a sign-in for starts the bridge at once", async () => {
+    const storage = memoryStorage()
+    storage.setItem("privy:refresh_token", '"r"')
+    vi.stubGlobal("window", {location: {origin: "https://regents.sh"}, localStorage: storage})
+    const request = vi.fn(async () => undefined)
+    const startPrivyBridge = vi.fn(async () => ({request}))
+    const stop = installAccountAuthLazyLoader(accountDocument().documentRoot, async () => ({startPrivyBridge}))
+
+    await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sync"))
+    expect(startPrivyBridge).toHaveBeenCalledOnce()
+    stop()
+  })
+
+  it("a signed-out page Privy only remembers a wallet for waits for a press", async () => {
+    rememberedByPrivy()
+    const importer = vi.fn<() => Promise<PrivyBridgeModule>>()
+    const stop = installAccountAuthLazyLoader(accountDocument().documentRoot, importer)
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(importer).not.toHaveBeenCalled()
+    stop()
+  })
+
+  it("an ordinary signed-out page waits for a press before starting the bridge", async () => {
+    const page = accountDocument({search: "?ref=home"})
+    const importer = vi.fn(async () => ({startPrivyBridge: vi.fn(async () => ({request: async () => undefined}))}))
+    const stop = installAccountAuthLazyLoader(page.documentRoot, importer)
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(importer).not.toHaveBeenCalled()
+    stop()
+  })
+
   it("an explicit retry replaces failed startup without reloading or stacking a bridge", async () => {
     vi.stubGlobal("Element", AccountElement)
     const page = accountDocument()
@@ -411,6 +472,36 @@ describe("lazy browser authentication", () => {
     ])
   })
 
+  it("asks the bridge to sync once a page load, even after the first sync finished", async () => {
+    const handleRequest = vi.fn(async (_request: AccountRequest) => undefined)
+    const loader = createLazyAuthLoader(
+      vi.fn(async () => ({
+        startPrivyBridge: vi.fn(async () => ({request: handleRequest})),
+      })),
+    )
+
+    await loader.request("sync")
+    await loader.request("sync")
+
+    expect(handleRequest.mock.calls.map(([request]) => request)).toEqual(["sync"])
+  })
+
+  it("asks the bridge to sync again after a sync failed", async () => {
+    const handleRequest = vi
+      .fn(async (_request: AccountRequest) => undefined)
+      .mockRejectedValueOnce(new Error("wallet sync failed"))
+    const loader = createLazyAuthLoader(
+      vi.fn(async () => ({
+        startPrivyBridge: vi.fn(async () => ({request: handleRequest})),
+      })),
+    )
+
+    await expect(loader.request("sync")).rejects.toThrow("wallet sync failed")
+    await loader.request("sync")
+
+    expect(handleRequest.mock.calls.map(([request]) => request)).toEqual(["sync", "sync"])
+  })
+
   it("keeps a successful in-flight sync independent from a queued sign-out rejection", async () => {
     let resolveSync: (() => void) | undefined
     const signOutError = new Error("local session deletion failed")
@@ -672,6 +763,7 @@ describe("lazy browser authentication", () => {
   })
 
   it("synchronizes Privy's wallets when a wallet page mounts, without starting sign in", async () => {
+    rememberedByPrivy()
     const page = accountDocument()
     const handleRequest = vi.fn(async () => undefined)
     const startPrivyBridge = vi.fn(async () => ({request: handleRequest}))
@@ -687,7 +779,21 @@ describe("lazy browser authentication", () => {
     expect(page.status.hidden).toBe(true)
   })
 
+  it("leaves Privy unloaded when a visitor it has never seen opens a wallet page", async () => {
+    vi.stubGlobal("window", {location: {origin: "https://regents.sh"}, localStorage: memoryStorage()})
+    const page = accountDocument()
+    const importer = vi.fn(async () => ({startPrivyBridge: vi.fn(async () => ({request: async () => undefined}))}))
+
+    installAccountAuthLazyLoader(page.documentRoot, importer)
+    page.dispatch("ash:wallet-sync")
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(importer).not.toHaveBeenCalled()
+    expect(page.status.hidden).toBe(true)
+  })
+
   it("keeps a wallet page quiet when its mount synchronization cannot start", async () => {
+    rememberedByPrivy()
     const page = accountDocument()
     const failed = vi.fn()
     page.documentRoot.addEventListener("ash:wallet-connect-failed", failed)
@@ -703,6 +809,24 @@ describe("lazy browser authentication", () => {
     expect(failed).not.toHaveBeenCalled()
     expect(page.status.textContent).toBe("")
     expect(page.status.hidden).toBe(true)
+  })
+
+  it("says the sign-in window has gone whenever a sign-in ends without a reload, and only then", () => {
+    for (const failure of ["closed", "provider", "session", "startup"] as const) {
+      const page = accountDocument()
+      const gone = vi.fn()
+      page.documentRoot.addEventListener("ash:sign-in-closed", gone)
+
+      showAccountAuthFailure("sign-in", page.documentRoot, failure)
+
+      expect(gone).toHaveBeenCalledOnce()
+    }
+
+    const page = accountDocument({signedIn: true})
+    const gone = vi.fn()
+    page.documentRoot.addEventListener("ash:sign-in-closed", gone)
+    showAccountAuthFailure("sign-out", page.documentRoot)
+    expect(gone).not.toHaveBeenCalled()
   })
 
   it("announces a wallet connection failure to the active route", async () => {
@@ -821,7 +945,7 @@ describe("lazy browser authentication", () => {
     const clearSession = vi.fn(async () => void order.push("local"))
     const reload = vi.fn(() => void order.push("reload"))
 
-    const wallet = (name: string): [string, {provider: EthereumProvider; disconnect: () => void}] => {
+    const wallet = (name: string): [string, {provider: EthereumProvider; disconnect: () => void; regents: boolean}] => {
       const provider: EthereumProvider = {
         request: vi.fn(async () => {
           order.push(`revoke:${name}`)
@@ -833,7 +957,7 @@ describe("lazy browser authentication", () => {
 
       return [
         `0x${name === "first" ? "1" : "2"}`.padEnd(42, name === "first" ? "1" : "2"),
-        {provider, disconnect: vi.fn(() => void order.push(`disconnect:${name}`))},
+        {provider, disconnect: vi.fn(() => void order.push(`disconnect:${name}`)), regents: false},
       ]
     }
 
@@ -1496,5 +1620,43 @@ describe("lazy browser authentication", () => {
     await signOut
     expect(request).not.toHaveBeenCalled()
     expect(finishSignOutOnly).toHaveBeenCalledOnce()
+  })
+})
+
+// A wallet page loads Privy as it opens only for a visitor Privy could already
+// name a wallet for; everyone else loads it with their first Sign in or press.
+describe("whether Privy remembers this visitor", () => {
+  const storage = (items: Record<string, string>) => ({getItem: (key: string) => items[key] ?? null})
+
+  it("does not for a browser it has never been loaded in, or one it holds no wallet for", () => {
+    expect(privyRemembersVisitor(storage({}))).toBe(false)
+    expect(privyRemembersVisitor(storage({"privy:caid": '"a1b2"', "privy:connections": "[]"}))).toBe(false)
+    expect(privyRemembersVisitor(storage({"privy:connections": "not-json"}))).toBe(false)
+    expect(privyRemembersVisitor(null)).toBe(false)
+  })
+
+  it("does when it holds a session or a wallet connected through it", () => {
+    expect(privyRemembersVisitor(storage({"privy:token": '"t"'}))).toBe(true)
+    expect(privyRemembersVisitor(storage({"privy:refresh_token": '"r"'}))).toBe(true)
+    expect(privyRemembersVisitor(storage({"privy:connections": '[{"address":"0x1111111111111111111111111111111111111111"}]'}))).toBe(true)
+  })
+
+  it("holds a sign-in only when it keeps a session, not a connected wallet alone", () => {
+    expect(privyHoldsSession(storage({"privy:token": '"t"'}))).toBe(true)
+    expect(privyHoldsSession(storage({"privy:refresh_token": '"r"'}))).toBe(true)
+    expect(privyHoldsSession(storage({"privy:connections": '[{"address":"0x1111111111111111111111111111111111111111"}]'}))).toBe(false)
+    expect(privyHoldsSession(storage({}))).toBe(false)
+    expect(privyHoldsSession(null)).toBe(false)
+  })
+
+  // An upgrade that moves these keys would quietly stop a returning visitor's
+  // wallet from showing before they press anything.
+  it("reads the keys the installed Privy writes", () => {
+    const dist = new URL("../../node_modules/@privy-io/react-auth/dist/esm/", import.meta.url)
+    const source = readdirSync(dist).filter(name => name.endsWith(".mjs"))
+      .map(name => readFileSync(new URL(name, dist), "utf8")).join("\n")
+    for (const key of ["privy:token", "privy:refresh_token", "privy:connections"]) {
+      expect(source).toContain(`"${key}"`)
+    }
   })
 })

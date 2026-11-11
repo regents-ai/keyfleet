@@ -14,8 +14,8 @@ defmodule Keyfleet.Chain.Scanner do
 
   Each pass reads the head and the buyer the manager names there, and a pass
   that cannot read the buyer reads nothing and fails. It then reads again the
-  last 30 blocks it already
-  recorded (about a minute of Base), then records what
+  last 300 blocks it already
+  recorded (about a minute of Base at five blocks a second), then records what
   happened after them up to the head. Each stretch of blocks is one request
   for all seven contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
@@ -60,9 +60,12 @@ defmodule Keyfleet.Chain.Scanner do
   `Keyfleet.Proposals.topic/1`. One that recorded keys revealed, sold,
   changing hands, issuing or ending shards, turning their agent voting on or
   off, or having their edits restricted or allowed names them all in one
-  notice on `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
-  even if the pass then failed or stopped the fleet, and each is only a hint
-  to read again.
+  notice on `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Keys
+  marked present in the blocks it read for the first time are named in one
+  notice of their own there, `{:keys_present, fleet_id, token_ids}`, however
+  many marks they came in, so a page reads again only what shows presence.
+  Each is said even if the pass then failed or stopped the fleet, and each is
+  only a hint to read again.
   """
 
   require Logger
@@ -70,7 +73,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.Logs
-  alias Keyfleet.Chain.ReadingStopped
+  alias Keyfleet.Chain.ReadingStoppedError
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
@@ -78,7 +81,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias RegentChain.Abi
   alias RegentChain.Call
 
-  @rescan_blocks 30
+  @rescan_blocks 300
   @regent_buyer Call.encode("REGENT_BUYER()", [])
   @max_range 10_000
   @system %System{}
@@ -195,7 +198,8 @@ defmodule Keyfleet.Chain.Scanner do
   # Reads `from..to` in chain order. A stretch the node will not answer whole
   # is asked for again in halves, and each answered piece goes to `handle`
   # before the next is asked for, so a pass holds one answer at most. The
-  # first piece that fails ends the reading.
+  # first piece that fails ends the reading, and so does a node asking for
+  # fewer requests (HTTP 429): halves would only ask it more.
   defp each_piece(_contracts, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
 
   defp each_piece({fleet, buyer} = contracts, from, to, client, acc, handle) do
@@ -203,6 +207,9 @@ defmodule Keyfleet.Chain.Scanner do
       {:ok, logs} ->
         with {:ok, records} <- Logs.decode(logs, fleet, buyer, from, to),
              do: handle.(from, to, records, acc)
+
+      {:error, :chain_busy} ->
+        {:error, {:block_unanswered, from, :chain_busy}}
 
       {:error, _reason} when from < to ->
         middle = div(from + to, 2)
@@ -283,6 +290,7 @@ defmodule Keyfleet.Chain.Scanner do
 
   defp make_record({:ownership, epoch}), do: Keys.record_epoch(epoch, @record_opts)
   defp make_record({:reveal, reveal}), do: Keys.record_reveal(reveal, @record_opts)
+  defp make_record({:reveal_expiry, expiry}), do: Keys.record_reveal_expiry(expiry, @record_opts)
 
   defp make_record({:proposal, proposal}), do: Proposals.record_proposal(proposal, @record_opts)
   defp make_record({:ballot, vote}), do: Proposals.record_vote(vote, @record_opts)
@@ -329,34 +337,46 @@ defmodule Keyfleet.Chain.Scanner do
   end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
-  # Every key revealed, sold, changing hands, issuing or ending a shard,
-  # turning its agent voting on or off, or having its edits restricted or
-  # allowed in the pass is named once.
+  # Every key revealed or whose draw's wait was ended, sold, changing hands,
+  # issuing or ending a shard, turning its agent voting on or off, or having
+  # its edits restricted or allowed in the pass is named once, and so is every
+  # key marked present in the blocks the pass moved the cursor past.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
 
+    present =
+      since(now.next_block, before.next_block, fn ->
+        for(
+          %{kind: :present, token_id: token_id} <-
+            Keys.presences_in_blocks!(fleet_id, before.next_block, now.next_block - 1,
+              actor: @system
+            ),
+          uniq: true,
+          do: token_id
+        )
+      end)
+
     revealed =
-      if now.reveal_seq > before.reveal_seq,
-        do: Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system),
-        else: []
+      since(now.reveal_seq, before.reveal_seq, fn ->
+        Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system) ++
+          Keys.reveal_expiries_recorded_since!(fleet_id, before.reveal_seq, actor: @system)
+      end)
 
     owned =
-      if now.ownership_seq > before.ownership_seq,
-        do: Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system),
-        else: []
+      since(now.ownership_seq, before.ownership_seq, fn ->
+        Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system)
+      end)
 
     sharded =
-      if now.shard_seq > before.shard_seq,
-        do:
-          Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system) ++
-            Keys.agent_voting_recorded_since!(fleet_id, before.shard_seq, actor: @system),
-        else: []
+      since(now.shard_seq, before.shard_seq, fn ->
+        Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system) ++
+          Keys.agent_voting_recorded_since!(fleet_id, before.shard_seq, actor: @system)
+      end)
 
     restricted =
-      if now.proposal_seq > before.proposal_seq,
-        do:
-          Keys.edits_restrictions_recorded_since!(fleet_id, before.proposal_seq, actor: @system),
-        else: []
+      since(now.proposal_seq, before.proposal_seq, fn ->
+        Keys.edits_restrictions_recorded_since!(fleet_id, before.proposal_seq, actor: @system)
+      end)
 
     if now.proposal_seq > before.proposal_seq do
       Phoenix.PubSub.broadcast(
@@ -371,8 +391,9 @@ defmodule Keyfleet.Chain.Scanner do
         :ok
 
       records ->
-        # Whoever was let into the fleet's code is checked afresh.
+        # Whoever was let into the fleet's code or notebooks is checked afresh.
         Keyfleet.Code.end_access(fleet_id)
+        Keyfleet.Notebooks.end_access(fleet_id)
 
         Phoenix.PubSub.broadcast(
           Keyfleet.PubSub,
@@ -380,7 +401,20 @@ defmodule Keyfleet.Chain.Scanner do
           {:keys_changed, fleet_id, Enum.map(records, & &1.token_id)}
         )
     end
+
+    if present != [] do
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        Keys.topic(fleet_id),
+        {:keys_present, fleet_id, present}
+      )
+    end
   end
+
+  # The rows a pass recorded under one of the cursor's numbers, read only when
+  # the pass moved that number on.
+  defp since(now, before, read) when now > before, do: read.()
+  defp since(_now, _before, _read), do: []
 
   # Someone else moved the cursor or stopped the fleet during the pass: an
   # operator's correction, or another pass. The pass leaves the cursor as it
@@ -405,7 +439,7 @@ defmodule Keyfleet.Chain.Scanner do
         "Correct the record as docs/chain-reader.md describes, then run bin/clear-fleet-stop #{fleet.id}."
 
     Logger.error(message)
-    ReadingStopped.report(message)
+    ReadingStoppedError.report(message)
     {:stopped, stopped_at}
   end
 end

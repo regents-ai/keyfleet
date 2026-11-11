@@ -41,16 +41,31 @@ defmodule Keyfleet.CheckInStatusTest do
              {:no_schedule, "No scheduled check-ins"}
   end
 
-  defp status(fields) do
-    check_in = %CheckIn{
+  test "the light is green on time, amber when late or unconfirmed, red when missing" do
+    assert CheckInStatus.light(nil, @now) == :off
+    assert light(session_at: ago(30)) == :on
+
+    on_time = [minutes: 30, scheduled_at: ago((30 + 45) * 60), confirmed_at: ago(3600)]
+    assert light(on_time) == :on
+    assert light(Keyword.put(on_time, :scheduled_at, ago((30 + 45) * 60 + 1))) == :late
+    assert light(Keyword.put(on_time, :scheduled_at, ago((2 * 30 + 45) * 60 + 1))) == :off
+
+    assert light(minutes: 30, scheduled_at: ago(60)) == :late
+    assert light([]) == :late
+  end
+
+  defp light(fields), do: fields |> check_in() |> CheckInStatus.light(@now)
+
+  defp status(fields), do: fields |> check_in() |> CheckInStatus.derive(@now) |> elem(0)
+
+  defp check_in(fields) do
+    %CheckIn{
       last_check_in_at: @now,
       last_session_at: fields[:session_at],
       last_scheduled_at: fields[:scheduled_at],
       schedule_minutes: fields[:minutes],
       schedule_confirmed_at: fields[:confirmed_at]
     }
-
-    check_in |> CheckInStatus.derive(@now) |> elem(0)
   end
 
   defp ago(seconds), do: DateTime.add(@now, -seconds, :second)

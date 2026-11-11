@@ -11,7 +11,9 @@ from conftest import CONTRACT, WALLET, HostProcess, command, request
 
 from keyfleet_graph import protocol
 from keyfleet_graph.__main__ import EXIT_FAILED, EXIT_LOCKED
-from keyfleet_graph.host import CHANGES_PAGE_BYTES, Host
+from keyfleet_graph.host import CHANGES_PAGE_BYTES, Host, Refusal, StartingGoal
+from keyfleet_graph.pack import RECORD_MODELS
+from pydantic import ValidationError
 
 PINNED_VERSION = "1.10.0"
 PINNED_COMMIT = "8aedb1866cf5dce056af97529152ffd6f468a1ed"
@@ -32,11 +34,11 @@ def _ok(host, op, body, command_id):
 @pytest.fixture
 def seeded(db):
     """A host holding a goal at version 2, a task, a finding and an archived note."""
-    host = Host("fleet_a", str(db))
-    _ok(host, "create", {"type": "goal", "scope": "fleet", "data": GOAL}, "s1")
-    _ok(host, "create", {"type": "task", "scope": "fleet", "data": {"title": "Draft"}}, "s2")
-    _ok(host, "create", {"type": "finding", "scope": "fleet", "data": {"title": "F", "statement": "S"}}, "s3")
-    _ok(host, "create", {"type": "note", "scope": "fleet", "data": {"title": "N", "body": "B"}}, "s4")
+    host = Host("fleet_a", str(db), [])
+    _ok(host, "create", {"project": "general", "type": "goal", "data": GOAL}, "s1")
+    _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Draft"}}, "s2")
+    _ok(host, "create", {"project": "general", "type": "finding", "data": {"title": "F", "statement": "S"}}, "s3")
+    _ok(host, "create", {"project": "general", "type": "note", "data": {"title": "N", "body": "B"}}, "s4")
     _ok(host, "archive", {"id": "note#4", "expected_version": 1}, "s5")
     _ok(host, "patch", {"id": "goal#1", "expected_version": 1, "set": {"status": "achieved"}}, "s6")
     return host
@@ -56,10 +58,7 @@ def _logged(host, event_type):
     return [event for event in page["events"] if event["type"] == event_type]
 
 
-FORBIDDEN_FIELDS = ["sys", "scope", "paid", "approved", "admin", "treasury_balance"]
-
-# A scope is the fleet or one of the twenty levels, written exactly so.
-MALFORMED_SCOPES = ["level:0", "level:21", "level:01", "level:1 ", "Level:1", "level:", "level:-1", "fleet:1", "*", ""]
+FORBIDDEN_FIELDS = ["sys", "project", "paid", "approved", "admin", "treasury_balance"]
 
 # Embeddings, overrides and isolates, which can reorder how text displays.
 BIDI_CONTROLS = [chr(code) for code in [*range(0x202A, 0x202F), *range(0x2066, 0x206A)]]
@@ -67,9 +66,9 @@ BIDI_CONTROLS = [chr(code) for code in [*range(0x202A, 0x202F), *range(0x2066, 0
 REFUSALS = [
     ("conflict", request("patch", {"id": "goal#1", "expected_version": 1, "set": {"title": "x"}}, command("c"))),
     ("conflict", request("archive", {"id": "goal#1", "expected_version": 1}, command("c"))),
-    ("invalid", request("create", {"type": "goal", "scope": "fleet", "data": {"title": "t"}}, command("c"))),
-    ("invalid", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": "x" * 201}}, command("c"))),
-    ("invalid", request("create", {"type": "receipt", "scope": "fleet", "data": {"title": "t"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "goal", "data": {"title": "t"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "goal", "data": {**GOAL, "title": "x" * 201}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "receipt", "data": {"title": "t"}}, command("c"))),
     ("invalid", request("patch", {"id": "note#4", "expected_version": 2, "set": {"body": "b"}}, command("c"))),
     ("invalid", request("patch", {"id": "task#2", "expected_version": 1, "set": {"progress": "later"}}, command("c"))),
     ("invalid", request("link", {"source": "finding#3", "target": "goal#1", "type": "owns"}, command("c"))),
@@ -79,22 +78,22 @@ REFUSALS = [
     ("invalid", request("patch", {"id": "task#2", "expected_version": 1}, command("c"))),
     ("invalid", request("patch", {"id": "task#2", "expected_version": 1, "set": {"title": "Draft"}}, command("c"))),
     ("invalid", request("patch", {"id": "task#2", "expected_version": 1, "unset": ["next_step"]}, command("c"))),
-    ("invalid", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": "a\x00b"}}, command("c"))),
-    ("invalid", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": "two\nlines"}}, command("c"))),
-    ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "bell\x07"}}, command("c"))),
-    ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "cr\rlf"}}, command("c"))),
-    ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "c1\x85c1"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "goal", "data": {**GOAL, "title": "a\x00b"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "goal", "data": {**GOAL, "title": "two\nlines"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "note", "data": {"title": "t", "body": "bell\x07"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "note", "data": {"title": "t", "body": "cr\rlf"}}, command("c"))),
+    ("invalid", request("create", {"project": "general", "type": "note", "data": {"title": "t", "body": "c1\x85c1"}}, command("c"))),
     ("invalid", request("link", {"source": "finding#3", "target": "goal#1", "type": "supports", "note": "a\tb"}, command("c"))),
     *[
-        ("invalid", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": f"pay{bidi}moc.exe"}}, command("c")))
+        ("invalid", request("create", {"project": "general", "type": "goal", "data": {**GOAL, "title": f"pay{bidi}moc.exe"}}, command("c")))
         for bidi in BIDI_CONTROLS
     ],
     *[
-        ("invalid", request("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": f"line\n{bidi}two"}}, command("c")))
+        ("invalid", request("create", {"project": "general", "type": "note", "data": {"title": "t", "body": f"line\n{bidi}two"}}, command("c")))
         for bidi in BIDI_CONTROLS
     ],
     *[
-        ("forbidden_field", request("create", {"type": "goal", "scope": "fleet", "data": {**GOAL, field: True}}, command("c")))
+        ("forbidden_field", request("create", {"project": "general", "type": "goal", "data": {**GOAL, field: True}}, command("c")))
         for field in FORBIDDEN_FIELDS
     ],
     *[
@@ -103,40 +102,48 @@ REFUSALS = [
     ],
     ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "unset": ["sys"]}, command("c"))),
     ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "set": {"assignee_key": 99}}, command("c"))),
-    ("forbidden_scope", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=()))),
-    ("forbidden_scope", request("patch", {"id": "goal#1", "expected_version": 2, "set": {"title": "x"}}, command("c", scopes=()))),
-    ("forbidden_scope", request("link", {"source": "finding#3", "target": "goal#1", "type": "supports"}, command("c", scopes=()))),
+    ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "set": {"progress": "done"}}, command("c"))),
+    ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "set": {"result_ref": "ipfs://cid"}}, command("c"))),
+    ("forbidden_field", request("create", {"project": "general", "type": "task", "data": {"title": "t", "progress": "done"}}, command("c"))),
+    ("forbidden_field", request("create", {"project": "general", "type": "task", "data": {"title": "t", "result_ref": "ipfs://cid"}}, command("c"))),
+    ("invalid", request("submit", {"id": "task#2", "expected_version": 1}, command("c"))),
+    ("invalid", request("submit", {"id": "goal#1", "expected_version": 2, "result_ref": "ipfs://cid"}, command("c"))),
+    ("invalid", request("submit", {"id": "task#2", "expected_version": 1, "evidence": ["goal#1"]}, command("c"))),
+    ("invalid", request("submit", {"id": "task#2", "expected_version": 1, "evidence": ["note#4"]}, command("c"))),
+    ("invalid", request("submit", {"id": "task#2", "expected_version": 1, "result_ref": "ftp://host/file"}, command("c"))),
+    ("conflict", request("submit", {"id": "task#2", "expected_version": 2, "result_ref": "ipfs://cid"}, command("c"))),
+    ("not_found", request("submit", {"id": "task#404", "expected_version": 1, "result_ref": "ipfs://cid"}, command("c"))),
+    ("not_found", request("submit", {"id": "task#2", "expected_version": 1, "evidence": ["evidence#404"]}, command("c"))),
+    ("bad_request", request("submit", {"id": "task#2", "result_ref": "ipfs://cid"}, command("c"))),
+    ("bad_request", request("submit", {"id": "task#2", "expected_version": 1, "evidence": ["finding#3"] * 21}, command("c"))),
+    ("invalid", request("review", {"task": "task#2", "task_version": 1, "decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}, command("c"))),
+    ("invalid", request("review", {"task": "goal#1", "task_version": 2, "decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}, command("c"))),
+    ("bad_request", request("review", {"task": "task#2", "task_version": 1, "decision": "accept", "conflicts_of_interest": "none"}, command("c"))),
     ("not_found", request("patch", {"id": "goal#404", "expected_version": 1, "set": {}}, command("c"))),
     ("not_found", request("link", {"source": "finding#3", "target": "goal#404", "type": "supports"}, command("c"))),
     ("not_found", request("unlink", {"relation_id": "rel_404"}, command("c"))),
-    ("duplicate_mismatch", request("create", {"type": "task", "scope": "fleet", "data": {"title": "Other"}}, command("s2"))),
+    ("not_found", request("join", {"id": "goal#404"}, command("c"))),
+    ("invalid", request("join", {"id": "task#2"}, command("c"))),
+    ("invalid", request("join", {"id": "note#4"}, command("c"))),
+    ("invalid", request("leave", {"id": "task#2"}, command("c"))),
+    ("bad_request", request("join", {"id": "goal#1", "expected_version": 2}, command("c"))),
+    ("duplicate_mismatch", request("create", {"project": "general", "type": "task", "data": {"title": "Other"}}, command("s2"))),
     ("duplicate_mismatch", request("archive", {"id": "task#2", "expected_version": 1}, command("s2"))),
     ("bad_request", {"v": 2, "req": "r", "op": "hello", "body": {}}),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL})),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL})),
     ("bad_request", request("hello", {}, command("c"))),
     ("bad_request", request("changes", {"after_seq": 0, "limit": 501})),
     ("bad_request", request("patch", {"id": "goal#1", "set": {}}, command("c"))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, {**command("c"), "principal": "system"})),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", wallet="0x" + WALLET[2:].upper()))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", contract="0x" + CONTRACT[2:].upper()))),
-    ("forbidden_scope", request("create", {"type": "goal", "scope": "level:1", "data": GOAL}, command("c"))),
-    ("forbidden_scope", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=("level:1",)))),
-    *[
-        ("bad_request", request("create", {"type": "goal", "scope": scope, "data": GOAL}, command("c")))
-        for scope in MALFORMED_SCOPES
-    ],
-    *[
-        ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=("fleet", scope))))
-        for scope in MALFORMED_SCOPES
-    ],
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", scopes=["fleet"] * 22))),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, {**command("c"), "principal": "system"})),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c", wallet="0x" + WALLET[2:].upper()))),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c", contract="0x" + CONTRACT[2:].upper()))),
     ("bad_request", request("changes", {"after_seq": 2**63, "limit": 10})),
     ("bad_request", request("changes", {"after_seq": 2**70, "limit": 10})),
     ("bad_request", request("patch", {"id": "goal#1", "expected_version": 2**63, "set": {}}, command("c"))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c", token_id=2**64))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c\x00"))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, _with_auth(command("c"), checked_at="yesterday"))),
-    ("bad_request", request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, _with_auth(command("c"), credential_ref="receipt"))),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c", token_id=2**64))),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c\x00"))),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, _with_auth(command("c"), checked_at="yesterday"))),
+    ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, _with_auth(command("c"), credential_ref="receipt"))),
 ]
 
 
@@ -154,7 +161,6 @@ def test_each_refusal_names_its_code_and_writes_nothing(seeded, code, message):
 RUNTIME_OPS = [
     "emit",
     "load_pack",
-    "fork",
     "promote",
     "compact",
     "truncate_after",
@@ -253,12 +259,61 @@ def test_a_link_is_idempotent_on_its_triple_and_an_unlink_removes_it(seeded):
         (created["relation_id"], "supports", "finding#3", "goal#1", {"note": "the first customer said yes"})
     ]
 
-    unscoped = _call(seeded, request("unlink", {"relation_id": created["relation_id"]}, command("u0", scopes=())))
-    assert unscoped["error"]["code"] == "forbidden_scope"
     assert _ok(seeded, "unlink", {"relation_id": created["relation_id"]}, "u1") == {"relation_id": created["relation_id"]}
     assert seeded.graph.relations() == []
     relinked = _ok(seeded, "link", link, "l3")
     assert (relinked["existing"], relinked["relation_id"] != created["relation_id"]) == (False, True)
+
+
+def test_each_key_and_wallet_joins_a_goal_once_and_leaves_it(seeded):
+    other = "0x" + "c3" * 20
+
+    def joined():
+        return [(entry["key"]["token_id"], entry["wallet"]) for entry in seeded.graph.get_object("goal#1").data["sys"]["joined"]]
+
+    assert _ok(seeded, "join", {"id": "goal#1"}, "j1") == {"id": "goal#1", "version": 3}
+    assert _ok(seeded, "join", {"id": "goal#1"}, "j2") == {"id": "goal#1", "version": 3}
+    assert _call(seeded, request("join", {"id": "goal#1"}, command("j3", wallet=other)))["ok"]
+    assert _call(seeded, request("join", {"id": "goal#1"}, command("j4", token_id=18)))["ok"]
+    assert joined() == [(17, WALLET), (17, other), (18, WALLET)]
+
+    assert _ok(seeded, "leave", {"id": "goal#1"}, "l1") == {"id": "goal#1", "version": 6}
+    assert _ok(seeded, "leave", {"id": "goal#1"}, "l2") == {"id": "goal#1", "version": 6}
+    assert joined() == [(17, other), (18, WALLET)]
+    assert seeded.graph.get_object("goal#1").data["status"] == "achieved"
+
+
+def test_a_keys_joins_from_an_earlier_owner_lapse_when_its_owner_joins(seeded):
+    other = "0x" + "c3" * 20
+    assert _ok(seeded, "join", {"id": "goal#1"}, "j1")["version"] == 3
+    assert _call(seeded, request("join", {"id": "goal#1"}, command("j2", token_id=18)))["ok"]
+
+    sold = command("j3", wallet=other)
+    bought = {**_with_auth(sold, ownership_epoch=4), "principal": sold["principal"].replace("@3/", "@4/")}
+    assert _call(seeded, request("join", {"id": "goal#1"}, bought))["ok"]
+    sys = seeded.graph.get_object("goal#1").data["sys"]
+    assert [(entry["key"]["token_id"], entry["ownership_epoch"], entry["wallet"]) for entry in sys["joined"]] == [
+        (18, 3, WALLET),
+        (17, 4, other),
+    ]
+
+
+def test_a_patch_that_changes_nothing_is_refused_on_a_goal_from_an_older_pack(seeded):
+    goal = seeded.graph.get_object("goal#1")
+    older = {field: value for field, value in goal.data["sys"].items() if field != "joined"}
+    seeded.graph.patch_object("goal#1", {"sys": older}, actor="system")
+
+    same = _call(seeded, request("patch", {"id": "goal#1", "expected_version": 3, "set": {"status": "achieved"}}, command("p1")))
+    assert same["error"]["code"] == "invalid"
+
+
+def test_a_goal_records_at_most_its_limit_of_members(seeded):
+    for token_id in range(1, 101):
+        assert _call(seeded, request("join", {"id": "goal#1"}, command(f"j{token_id}", token_id=token_id)))["ok"]
+
+    full = _call(seeded, request("join", {"id": "goal#1"}, command("j101", token_id=101)))
+    assert full["error"]["code"] == "invalid"
+    assert _ok(seeded, "join", {"id": "goal#1"}, "again") == {"id": "goal#1", "version": 102}
 
 
 def _all_changes(host, limit):
@@ -282,9 +337,9 @@ def test_changes_pages_through_every_event_exactly_once(seeded):
 
 
 def test_a_changes_page_stops_at_its_byte_budget_and_the_cursor_continues(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     for n in range(60):
-        _ok(host, "create", {"type": "note", "scope": "fleet", "data": {"title": f"N{n}", "body": "x" * 20_000}}, f"n{n}")
+        _ok(host, "create", {"project": "general", "type": "note", "data": {"title": f"N{n}", "body": "x" * 20_000}}, f"n{n}")
 
     first = _call(host, request("changes", {"after_seq": 0, "limit": 500}))["result"]
     events, last, _pages = _all_changes(host, 500)
@@ -296,14 +351,14 @@ def test_a_changes_page_stops_at_its_byte_budget_and_the_cursor_continues(db):
 
 def test_multi_line_text_keeps_its_newlines_and_tabs(seeded):
     body = "first line\n\tindented"
-    note = _ok(seeded, "create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": body}}, "m1")
+    note = _ok(seeded, "create", {"project": "general", "type": "note", "data": {"title": "t", "body": body}}, "m1")
 
     assert seeded.graph.get_object(note["id"]).data["body"] == body
 
 
 @pytest.mark.parametrize("blank", ["", "   "])
 def test_a_goal_never_holds_an_empty_open_question(seeded, blank):
-    create = {"type": "goal", "scope": "fleet", "data": {**GOAL, "open_questions": ["Who pays?", blank]}}
+    create = {"project": "general", "type": "goal", "data": {**GOAL, "open_questions": ["Who pays?", blank]}}
     patch = {"id": "goal#1", "expected_version": 2, "set": {"open_questions": [blank]}}
 
     assert _call(seeded, request("create", create, command("q1")))["error"]["code"] == "invalid"
@@ -315,8 +370,8 @@ def test_a_goal_never_holds_an_empty_open_question(seeded, blank):
 
 def test_a_reopened_host_serves_the_same_graph_and_ledger(db):
     first = HostProcess(db)
-    assert first.send(request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1")))["ok"]
-    assert first.send(request("create", {"type": "task", "scope": "fleet", "data": {"title": "T"}}, command("c2")))["ok"]
+    assert first.send(request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c1")))["ok"]
+    assert first.send(request("create", {"project": "general", "type": "task", "data": {"title": "T"}}, command("c2")))["ok"]
     link = request("link", {"source": "task#2", "target": "goal#1", "type": "implements"}, command("c3"))
     assert first.send(link)["ok"]
     patch = request("patch", {"id": "task#2", "expected_version": 1, "set": {"progress": "doing"}}, command("c4"))
@@ -344,7 +399,7 @@ def test_a_reopened_host_serves_the_same_graph_and_ledger(db):
 def test_the_log_id_is_minted_with_the_file_and_kept_across_restarts(db, tmp_path):
     first = HostProcess(db)
     log_id = first.send(request("hello", {}))["result"]["run_id"]
-    created = first.send(request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1")))
+    created = first.send(request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c1")))
     changes = first.send(request("changes", {"after_seq": 0, "limit": 500}))["result"]
     assert first.close() == 0
 
@@ -374,7 +429,7 @@ protocol.write_frame = write_frame
 
 
 def test_a_retry_after_a_crash_between_commit_and_reply_returns_the_original_result(db):
-    create = request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1"))
+    create = request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c1"))
     patch = request("patch", {"id": "goal#1", "expected_version": 1, "set": {"status": "dropped"}}, command("c2"))
     other = request("patch", {"id": "goal#1", "expected_version": 1, "set": {"status": "achieved"}}, command("c2"))
 
@@ -427,7 +482,7 @@ Host._settle = settle
 
 
 def test_a_kill_inside_the_commit_leaves_nothing_and_the_retry_applies_once(db):
-    create = request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1"))
+    create = request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c1"))
 
     dying = HostProcess(db, patch=KILL_BEFORE_COMMIT)
     assert dying.send(create) is None
@@ -442,8 +497,8 @@ def test_a_kill_inside_the_commit_leaves_nothing_and_the_retry_applies_once(db):
 
 
 def test_an_append_failure_ends_the_host_and_a_reload_holds_only_durable_state(db):
-    kept = request("create", {"type": "goal", "scope": "fleet", "data": GOAL}, command("c1"))
-    doomed = request("create", {"type": "task", "scope": "fleet", "data": {"title": "doomed"}}, command("c2"))
+    kept = request("create", {"project": "general", "type": "goal", "data": GOAL}, command("c1"))
+    doomed = request("create", {"project": "general", "type": "task", "data": {"title": "doomed"}}, command("c2"))
 
     failing = HostProcess(db, patch=APPEND_FAILURE)
     assert failing.send(kept)["result"] == {"id": "goal#1", "version": 1}
@@ -477,7 +532,7 @@ def test_the_private_seams_of_the_pinned_activegraph_hold(db):
     assert activegraph.__version__ == PINNED_VERSION
     assert direct_url["vcs_info"]["commit_id"] == PINNED_COMMIT
 
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     store = host.graph.store
     assert type(store) is SQLiteEventStore
     assert store._conn.isolation_level is None
@@ -494,22 +549,127 @@ def test_the_private_seams_of_the_pinned_activegraph_hold(db):
 
 
 def test_right_to_left_text_is_kept_as_written(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     title = "خدمة العملاء \U0001F680"
 
-    created = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": title}}, "rtl")
+    created = _ok(host, "create", {"project": "general", "type": "goal", "data": {**GOAL, "title": title}}, "rtl")
 
     assert host.graph.get_object(created["id"]).data["title"] == title
 
 
 def test_emoji_joined_with_a_zero_width_joiner_are_kept_as_written(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     family = "Crew \U0001F469‍\U0001F469‍\U0001F467"
     mechanic = "\U0001F9D1‍\U0001F527 on shift"
 
-    goal = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": family}}, "zwj1")
-    note = _ok(host, "create", {"type": "note", "scope": "fleet", "data": {"title": mechanic, "body": f"{family}\n{mechanic}"}}, "zwj2")
+    goal = _ok(host, "create", {"project": "general", "type": "goal", "data": {**GOAL, "title": family}}, "zwj1")
+    note = _ok(host, "create", {"project": "general", "type": "note", "data": {"title": mechanic, "body": f"{family}\n{mechanic}"}}, "zwj2")
 
     assert host.graph.get_object(goal["id"]).data["title"] == family
     stored = host.graph.get_object(note["id"]).data
     assert (stored["title"], stored["body"]) == (mechanic, f"{family}\n{mechanic}")
+
+
+STARTING = [
+    {"title": "Plan a service.", "outcome": "Research a customer problem."},
+    {"title": "Compete on Yukon.", "outcome": "Choose a challenge.\n\nYukon: https://yukon.org/"},
+]
+
+
+def _starting(host):
+    """The workspace's starting goals by number, as `(id, title, outcome, archived)`."""
+    return {
+        obj.data["sys"]["starting"]: (obj.id, obj.data["title"], obj.data["outcome"], obj.data["sys"]["archived"])
+        for obj in host.graph.query("goal")
+        if obj.data["sys"]["starting"] is not None
+    }
+
+
+def _goal_writes(host):
+    return [event.id for event in host.graph.events if event.actor == "keyfleet:starting_goals"]
+
+
+def _created_ids(host):
+    return [event.payload["object"]["id"] for event in host.graph.events if event.type == "object.created"]
+
+
+def test_a_new_workspace_starts_with_its_starting_goals_the_first_newest(db):
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+
+    assert _starting(host) == {
+        1: ("goal#2", "Plan a service.", "Research a customer problem.", False),
+        2: ("goal#1", "Compete on Yukon.", "Choose a challenge.\n\nYukon: https://yukon.org/", False),
+    }
+    assert _created_ids(host) == ["goal#1", "goal#2"]
+    goal = host.graph.get_object("goal#2").data
+    assert goal["status"] == "open"
+    assert goal["sys"] == {"project": "general", "created_by": None, "starting": 1, "archived": False, "joined": []}
+    assert {event.actor for event in host.graph.events if event.type == "object.created"} == {"keyfleet:starting_goals"}
+
+
+def test_starting_goals_are_kept_as_listed_across_restarts(db):
+    first = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    written = _goal_writes(first)
+    first.graph.store.close()
+    same = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    assert _goal_writes(same) == written
+    same.graph.store.close()
+
+    reworded = [{**STARTING[0], "outcome": "Research one customer's problem."}]
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in reworded])
+    assert _starting(host) == {
+        1: ("goal#2", "Plan a service.", "Research one customer's problem.", False),
+        2: ("goal#1", "Compete on Yukon.", "Choose a challenge.\n\nYukon: https://yukon.org/", True),
+    }
+    host.graph.store.close()
+
+    back = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    assert _starting(back)[2] == ("goal#1", "Compete on Yukon.", "Choose a challenge.\n\nYukon: https://yukon.org/", False)
+    assert _created_ids(back) == ["goal#1", "goal#2"]
+
+
+def test_a_starting_goal_is_joined_and_linked_but_never_changed_or_archived(db):
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    task = _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Enter"}}, "t")
+
+    _ok(host, "join", {"id": "goal#1"}, "j")
+    _ok(host, "link", {"source": task["id"], "target": "goal#1", "type": "implements"}, "l")
+    for op, body in [
+        ("patch", {"id": "goal#1", "expected_version": 2, "set": {"status": "achieved"}}),
+        ("archive", {"id": "goal#1", "expected_version": 2}),
+    ]:
+        reply = _call(host, request(op, body, command(op)))
+        assert reply["error"]["code"] == "invalid", reply
+        assert reply["error"]["details"]["errors"][0]["path"] == "id"
+
+    goal = host.graph.get_object("goal#1").data
+    assert (goal["status"], goal["sys"]["archived"], len(goal["sys"]["joined"])) == ("open", False, 1)
+
+
+def test_a_restart_keeps_who_joined_a_starting_goal_whose_words_change(db):
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    _ok(host, "join", {"id": "goal#2"}, "j")
+    host.graph.store.close()
+
+    reworded = [{**STARTING[0], "title": "Plan a paid service."}, STARTING[1]]
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in reworded])
+    goal = host.graph.get_object("goal#2").data
+    assert goal["title"] == "Plan a paid service."
+    assert len(goal["sys"]["joined"]) == 1
+
+
+@pytest.mark.parametrize(
+    "sys",
+    [
+        {"project": "general", "created_by": None, "archived": False},
+        {"project": "general", "created_by": None, "starting": 0, "archived": False},
+    ],
+)
+def test_a_goal_is_either_created_by_a_member_or_a_starting_goal(sys):
+    with pytest.raises(ValidationError):
+        RECORD_MODELS["goal"].model_validate({**GOAL, "sys": sys})
+
+
+def test_starting_goals_whose_words_do_not_fit_a_goal_stop_the_host(db):
+    with pytest.raises(Refusal):
+        Host("fleet_a", str(db), [StartingGoal(title="two\nlines", outcome="o")])

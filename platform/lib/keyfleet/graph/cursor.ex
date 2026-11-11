@@ -26,6 +26,14 @@ defmodule Keyfleet.Graph.Cursor do
   actions do
     defaults [:read]
 
+    # The fleet's cursor, held until the transaction ends: each page the
+    # projector copies and each project's deletion take their turn on it.
+    read :hold do
+      public? false
+      get_by [:fleet_id]
+      prepare build(lock: :for_update)
+    end
+
     create :start do
       public? false
       accept [:fleet_id, :run_id]

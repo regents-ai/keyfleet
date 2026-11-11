@@ -29,6 +29,17 @@ defmodule Keyfleet.Rooms.Errors.CreatedRoomLimitError do
   def message(%{limit: limit}), do: "this fleet already has #{limit} created rooms"
 end
 
+defmodule Keyfleet.Rooms.Errors.OwnRoomLimitError do
+  @moduledoc """
+  Raised when an agent, with the other agents of its person, has already
+  created as many of a fleet's rooms as one person's agents may.
+  """
+  use Splode.Error, fields: [:limit], class: :invalid
+
+  def message(%{limit: limit}),
+    do: "this agent and its person's agents already created #{limit} of this fleet's rooms"
+end
+
 defmodule Keyfleet.Rooms.Errors.RenameTooSoonError do
   @moduledoc "Raised when an open room is renamed again within a minute of its last naming."
   use Splode.Error, fields: [:retry_after], class: :invalid
@@ -38,11 +49,21 @@ defmodule Keyfleet.Rooms.Errors.RenameTooSoonError do
 end
 
 defmodule Keyfleet.Rooms.Errors.PostLimitError do
-  @moduledoc "Raised when people have already posted as a key as often as an hour allows."
+  @moduledoc """
+  Raised when people, or agents, have already posted as a key as often as an
+  hour allows.
+  """
   use Splode.Error, fields: [:limit, :retry_after], class: :invalid
 
   def message(%{limit: limit, retry_after: retry_after}),
     do: "this key has posted #{limit} times in the last hour; try again in #{retry_after} seconds"
+end
+
+defmodule Keyfleet.Rooms.Errors.MuteLimitError do
+  @moduledoc "Raised when a muter already has as many mutes as one muter may."
+  use Splode.Error, fields: [:limit], class: :invalid
+
+  def message(%{limit: limit}), do: "#{limit} keys are muted already"
 end
 
 defmodule Keyfleet.Rooms.Errors.NoKeyToWriteAsError do

@@ -4,7 +4,9 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
   `op` names the operation and `body` the arguments that make up its body; an
   argument left out is left out of the body. A write carries the command the
-  writer stamps, at its turn, from the actor's standing on the key it acts as.
+  writer stamps, at its turn, from the actor's standing on the key it acts as
+  and the state of each of the fleet's projects then (`command/5`): the
+  graph takes new work only into an active project.
   When that standing cannot be read at the write's turn, because the database
   failed or ran out of time, the write is answered as unavailable: nothing was
   sent to the graph.
@@ -16,14 +18,15 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   `head_seq`, a read made now includes the write.
 
   A new write by an agent is recorded as its latest contribution to the
-  fleet. The write already stands in the graph, so a record that fails is
-  logged and the write is answered as it was.
+  fleet: taking a task, handing one in, a review, or another workspace write. The write
+  already stands in the graph, so a record that fails is logged and the write
+  is answered as it was.
   """
   use Ash.Resource.Actions.Implementation
 
   require Logger
 
-  alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.System
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
@@ -33,6 +36,7 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   alias Keyfleet.Graph.Projector
   alias Keyfleet.Graph.Writer
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Projects
 
   @impl true
   def run(input, opts, context) do
@@ -42,20 +46,35 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
     body = Map.take(arguments, Keyword.fetch!(opts, :body))
 
-    authorize = fn within ->
-      KeyActor.command(context.actor, fleet_id, arguments.as_key, arguments.command_id, within)
-    end
+    authorize =
+      {__MODULE__, :command, [context.actor, fleet_id, arguments.as_key, arguments.command_id]}
 
-    fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id, context.actor)
+    fleet_id
+    |> Writer.command(op, body, authorize)
+    |> write_reply(fleet_id, context.actor, kind(op, arguments))
+  end
+
+  @doc """
+  The command a write carries, read at the write's turn: the actor's standing
+  on the Key it acts as (`Keyfleet.Graph.Checks.KeyActor.command/5`) and
+  `projects`, each of the fleet's projects that is not deleted by name, with
+  its state, `active` or `archived`.
+  """
+  def command(actor, fleet_id, as_key, command_id, within) do
+    with {:ok, command} <- KeyActor.command(actor, fleet_id, as_key, command_id, within),
+         {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}) do
+      {:ok, Map.put(command, :projects, Map.new(projects, &{&1.name, &1.state}))}
+    end
   end
 
   defp write_reply(
          {:ok, %{"run_id" => run_id, "head_seq" => head_seq} = reply},
          fleet_id,
-         actor
+         actor,
+         kind
        ) do
     watermark = Projector.await(fleet_id, run_id, head_seq)
-    unless reply["replayed"], do: note_contribution(actor, fleet_id)
+    unless reply["replayed"], do: Keyfleet.Agents.record_contribution(actor, fleet_id, kind)
 
     {:ok,
      %{
@@ -66,25 +85,18 @@ defmodule Keyfleet.Graph.Workspace.Relay do
      }}
   end
 
-  defp write_reply({:error, :indeterminate}, fleet_id, _actor),
+  defp write_reply({:error, :indeterminate}, fleet_id, _actor, _kind),
     do: {:error, IndeterminateError.exception(fleet_id: fleet_id)}
 
-  defp write_reply(error, fleet_id, _actor), do: refused(error, fleet_id)
+  defp write_reply(error, fleet_id, _actor, _kind), do: refused(error, fleet_id)
 
-  defp note_contribution(%Agent{} = actor, fleet_id) do
-    case Keyfleet.Agents.note_contribution(actor, fleet_id, :workspace) do
-      {:ok, _check_in} ->
-        :ok
-
-      {:error, error} ->
-        Logger.warning(
-          "workspace write for #{fleet_id} not recorded as a contribution: " <>
-            Exception.message(error)
-        )
-    end
-  end
-
-  defp note_contribution(_actor, _fleet_id), do: :ok
+  # Taking a task (its `assignee_key` set to the Key acting, or a fork),
+  # handing one in and reviewing one are told apart from other writes.
+  defp kind("patch", %{as_key: key, set: %{"assignee_key" => key}}), do: :task
+  defp kind("fork", _arguments), do: :task
+  defp kind("submit", _arguments), do: :submit
+  defp kind("review", _arguments), do: :review
+  defp kind(_op, _arguments), do: :workspace
 
   defp refused({:error, %{"code" => code, "message" => reason, "details" => details}}, _fleet_id),
     do: {:error, RefusedError.exception(code: code, reason: reason, details: details)}

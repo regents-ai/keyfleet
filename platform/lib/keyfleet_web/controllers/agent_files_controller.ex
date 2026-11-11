@@ -7,13 +7,17 @@ defmodule KeyfleetWeb.AgentFilesController do
   lists the skill with its description and a zip of its folder with that zip's
   sha256 digest; the zip holds `SKILL.md`, which is also served on its own.
   Each runtime's skill, at `/agents/SLUG/skill.md`, is the guide with that
-  runtime's notes from `KeyfleetWeb.AgentGuides` added.
+  runtime's notes from `KeyfleetWeb.AgentGuides` added. The parts an agent
+  needs only for some work (the fleet's code, notebooks, polls and proposals)
+  are short pages of their own at `/skill/NAME.md`, which the guide links.
   Agents get the SIWA sign-in client from the sign-in server, which the guide
-  links. `/commands.json` is the list of `regents keyfleet` commands, read
+  links; `/agent/git-remote-siwa` is the git helper that signs each of git's
+  requests to a fleet's code with that client (`KeyfleetWeb.Plugs.CodeGateway`).
+  `/commands.json` is the list of `regents keyfleet` commands, read
   from `cli/commands.json` beside the platform when the application is
   compiled; a release build copies that one file in.
 
-  The guide is read when the application is compiled. Its `{{origin}}` and
+  The guide and its parts are read when the application is compiled. Its `{{origin}}` and
   `{{siwa_origin}}` become this site's address and the sign-in server it
   trusts, so the zip is built from the filled-in guide, with a fixed date and
   mode, and the same guide always gives the same digest. Each answer carries
@@ -29,6 +33,17 @@ defmodule KeyfleetWeb.AgentFilesController do
 
   @guide File.read!(@guide_path)
 
+  @part_paths Map.new(
+                ~w(code.md notebooks.md decide.md),
+                &{&1, Application.app_dir(:keyfleet, "priv/public/skill/#{&1}")}
+              )
+  for {_name, path} <- @part_paths, do: @external_resource(path)
+  @parts Map.new(@part_paths, fn {name, path} -> {name, File.read!(path)} end)
+
+  @git_helper_path Application.app_dir(:keyfleet, "priv/public/git-remote-siwa")
+  @external_resource @git_helper_path
+  @git_helper File.read!(@git_helper_path)
+
   @commands_path Path.expand("../../../../cli/commands.json", __DIR__)
   @external_resource @commands_path
   @commands File.read!(@commands_path)
@@ -41,26 +56,36 @@ defmodule KeyfleetWeb.AgentFilesController do
   @epoch {{1980, 1, 1}, {0, 0, 0}}
 
   @doc "The joining guide as it is served, with this site's addresses in it."
-  def guide do
-    @guide
+  def guide, do: fill(@guide)
+
+  defp fill(markdown) do
+    markdown
     |> String.replace("{{siwa_origin}}", Application.fetch_env!(:keyfleet, :siwa_broker_url))
     |> String.replace("{{origin}}", PublicDocuments.url(""))
   end
 
-  def skill(conn, _params) do
-    guide = guide()
-    conn |> cached(guide) |> put_resp_content_type("text/markdown") |> send_resp(200, guide)
+  def skill(conn, _params), do: markdown(conn, guide())
+
+  @doc "One part of the guide, such as `/skill/code.md`."
+  def part(conn, %{"part" => name}) do
+    case @parts do
+      %{^name => part} -> markdown(conn, fill(part))
+      %{} -> raise KeyfleetWeb.NotFoundError
+    end
   end
 
   @doc """
   One runtime's skill: the joining guide with that runtime's Set up section
-  from its page at `/agents/SLUG` added at the end.
+  from its page at `/agents/SLUG` added at the end, then the starting ideas
+  for a fleet's shared goal.
   """
   def agent_skill(conn, %{"agent" => slug}) do
     case KeyfleetWeb.AgentGuides.setup(slug) do
       {name, setup} ->
-        skill = guide() <> "\n## On #{name}\n\n" <> setup <> "\n"
-        conn |> cached(skill) |> put_resp_content_type("text/markdown") |> send_resp(200, skill)
+        skill =
+          guide() <> "\n## On #{name}\n\n" <> setup <> "\n\n" <> Keyfleet.GoalIdeas.markdown()
+
+        markdown(conn, skill)
 
       nil ->
         raise KeyfleetWeb.NotFoundError
@@ -86,6 +111,13 @@ defmodule KeyfleetWeb.AgentFilesController do
       )
 
     conn |> cached(index) |> put_resp_content_type("application/json") |> send_resp(200, index)
+  end
+
+  def git_helper(conn, _params) do
+    conn
+    |> cached(@git_helper)
+    |> put_resp_content_type("text/x-python")
+    |> send_resp(200, @git_helper)
   end
 
   def commands(conn, _params) do
@@ -126,6 +158,10 @@ defmodule KeyfleetWeb.AgentFilesController do
       :zip.create(~c"#{@skill["name"]}.zip", [{~c"SKILL.md", body, stat}], [:memory])
 
     zip
+  end
+
+  defp markdown(conn, body) do
+    conn |> cached(body) |> put_resp_content_type("text/markdown") |> send_resp(200, body)
   end
 
   defp cached(conn, body) do

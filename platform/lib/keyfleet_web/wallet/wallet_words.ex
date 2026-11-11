@@ -33,8 +33,10 @@ defmodule KeyfleetWeb.WalletWords do
 
   # The same words whether or not Approve is showing: the numbered buttons
   # carry the order, so the line never changes length under a press.
-  defp says(:buy, %{token_id: token_id, price: price}),
-    do: "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}."
+  defp says(:buy, %{token_id: token_id, price: price, max_price: max_price}),
+    do:
+      "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}. " <>
+        "If it sells first, you get the next Key for up to #{FleetLive.usdc(max_price)}."
 
   defp says(:ballot, %{keys: [_key | _more] = keys}), do: "With #{key_words(keys)}."
 
@@ -60,17 +62,11 @@ defmodule KeyfleetWeb.WalletWords do
   defp action({:pay, asset, to, share, amount}),
     do: "Pays #{share_words(asset, share, amount)} to #{RegentFormat.short_address(to)}."
 
-  defp action({:advance, _id, asset, operator, share, amount}),
-    do:
-      "Advances #{share_words(asset, share, amount)} to #{RegentFormat.short_address(operator)}."
-
   defp action({:rate, bps}),
     do: "Sets the Daily Treasury Slice to Keys to #{ProposalsPage.units(bps, 2)}%."
 
   defp action({:edits, target, true}), do: "Restricts Key #{Rules.grouped(target)}’s edits."
   defp action({:edits, target, false}), do: "Allows Key #{Rules.grouped(target)}’s edits."
-  defp action({:signature, :approve, _issued_at}), do: "Signs the fleet’s Lit wallet request."
-  defp action({:signature, :revoke, _issued_at}), do: "Withdraws the fleet’s signature."
   defp action({:launch, %{symbol: symbol}}), do: "Launches #{symbol} through Autolaunch."
 
   defp share_words(asset, share, amount),
@@ -106,7 +102,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:days_unreadable), do: "From 1 to 365 days."
   defp problem(:share_unreadable), do: "From 0.0001% to 99%."
   defp problem(:rate_unreadable), do: "From 0.1% to 2%."
-  defp problem(:issued_at_unreadable), do: "The request time is a whole number, like 1790000000."
+  defp problem(:restricted_unreadable), do: "Choose Restrict or Allow."
   defp problem(:kind_unknown), do: "Choose what to propose."
   defp problem({:missing, name}), do: "#{field_name(name)} is empty."
 
@@ -121,6 +117,10 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:recipient_unreadable), do: "That wallet isn’t a full address. #{@address_words}"
   defp problem(:asset_unreadable), do: "Choose a token."
   defp problem(:advance_unknown), do: "No advance has this number."
+
+  defp problem(:decimals_unknown),
+    do: "This token hasn’t said its decimals, so no amount can be read."
+
   defp problem(:not_recorded), do: "This proposal isn’t on this page yet."
   defp problem(:no_launch), do: "No launch yet."
   defp problem(:unread), do: "Can’t reach the network right now. Trying again."
@@ -146,6 +146,11 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:not_pass_holder), do: "Only its Pass’s holder can claim"
   def blocked(:pass_burned), do: "Its Pass was burned"
   def blocked(:reveal_requested), do: "Draw on its way"
+  def blocked(:reveal_expired), do: "Wait ended: it never gets traits"
+  def blocked(:no_draw_waiting), do: "No draw waiting"
+  def blocked({:expire_from, from}), do: "From #{at(from)}"
+  def blocked(:dealt_by_number), do: "Its number gives its traits"
+  def blocked(:deck_not_set), do: "Its fleet’s deck isn’t set yet"
   def blocked(:voting_closed), do: "Voting closed"
   def blocked(:only_no), do: "Only No while it waits"
   def blocked(:open), do: "Voting still open"
@@ -164,8 +169,11 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:sales_not_open), do: "Sales aren’t open yet"
   def blocked(:sold_out), do: "Sold out"
   def blocked(:too_new), do: "Too new: Keys wait 2 days"
+  def blocked(:clear_first), do: "Clear lapsed Keys first"
   def blocked(:nothing_owed), do: "Nothing owed"
   def blocked(:nothing_queued), do: "Nothing waiting to turn into REGENT"
+  def blocked({:too_big, nil}), do: "Can’t buy REGENT right now"
+  def blocked({:too_big, largest}), do: "Too big now: try #{FleetLive.usdc(largest)}"
   def blocked(:launch_settled), do: "Already settled"
   def blocked(:sale_running), do: "Sale still running"
   def blocked(:bound), do: "Already added"
@@ -176,10 +184,11 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "approve"}), do: "Approve"
   def title(%{name: "buy"}), do: "Buy Key"
   def title(%{name: "reveal"}), do: "Ask again for the draw"
+  def title(%{name: "expire_reveal"}), do: "End the wait for the draw"
   def title(%{name: "claim-" <> _asset}), do: "Claim"
   def title(%{name: "club-claim"}), do: "Claim Key"
   def title(%{name: "present"}), do: "Mark present"
-  def title(%{name: "sweep"}), do: "Continue"
+  def title(%{name: "sweep"}), do: "Clear lapsed Keys"
   def title(%{name: "issue"}), do: "Issue a shard"
   def title(%{name: "end-" <> _wallet}), do: "End a shard"
   def title(%{name: "renew-" <> _wallet}), do: "Renew a shard"
@@ -211,8 +220,9 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp confirmed("approve"), do: "Approved. Now press the next button."
   defp confirmed("buy"), do: "Done. The Key is yours."
-  defp confirmed("claim-" <> _asset), do: "Done. Paid to the Key’s holder."
+  defp confirmed("claim-" <> _asset), do: "Done. Paid to each Key’s holder."
   defp confirmed("club-claim"), do: "Done. The Key and what it earned are yours."
+  defp confirmed("expire_reveal"), do: "Done. This Key never gets traits."
   defp confirmed("present"), do: "Done. Present for 48 hours."
   defp confirmed("propose"), do: "Done. It’s open to votes."
   defp confirmed("run_split"), do: "Done. Shared with every Key."
@@ -223,12 +233,11 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("approve"), do: "Not approved. Nothing moved."
   defp reverted("buy"), do: "Not bought. No USDC was taken."
   defp reverted("reveal"), do: "Nothing asked. The draw may be on its way."
+  defp reverted("expire_reveal"), do: "Not ended. The draw may have come."
   defp reverted("claim-" <> _asset), do: "Nothing claimed."
   defp reverted("club-claim"), do: "Not claimed. Nothing moved."
   defp reverted("present"), do: "Not marked. A Key may have changed hands."
-
-  defp reverted("propose"),
-    do: "Not proposed. Press Continue under Present first, or check the Key."
+  defp reverted("propose"), do: "Not proposed. Check the Key."
 
   defp reverted(choice) when choice in ["yes", "no", "abstain"],
     do: "Not counted. Voting may have closed."
@@ -244,12 +253,15 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted(_step), do: "Didn’t go through. Nothing moved."
 
   @doc """
-  An amount of a token: the fleet's USDC exactly, another the fleet's
-  deployment names in its own units with its symbol, any other token with
-  its address too, or in its smallest units when it hasn't said its
-  decimals.
+  An amount of a token: the fleet's USDC exactly, its REGENT cut to two
+  decimal places, another the fleet's deployment names in its own units with
+  its symbol, any other token with its address too, or in its smallest units
+  when it hasn't said its decimals.
   """
   def token_amount(%{amount: amount, usdc?: true}), do: FleetLive.usdc(amount)
+
+  def token_amount(%{amount: amount, known?: true, symbol: "REGENT", decimals: decimals}),
+    do: "#{ProposalsPage.regent(amount, decimals)} REGENT"
 
   def token_amount(%{amount: amount, known?: true, symbol: symbol, decimals: decimals}),
     do: "#{ProposalsPage.units(amount, decimals)} #{symbol}"

@@ -13,6 +13,8 @@ defmodule KeyfleetWeb.ActivityLines do
       alone, in the site's own words: "a task", "some evidence";
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
+    * `{:address, wallet}`: a wallet that acted with no Key or agent to name
+      it, or one that Keys moved to;
     * `{:quote, text}`: words a member wrote;
     * `{:proposal, number}`: a proposal.
 
@@ -49,13 +51,35 @@ defmodule KeyfleetWeb.ActivityLines do
     "evidence" => "some evidence",
     "service" => "a service",
     "note" => "a note",
-    "dead_end" => "a dead end"
+    "dead_end" => "a dead end",
+    "review" => "a review"
   }
   @unknown_type "an item"
+
+  @plural %{
+    "goal" => "goals",
+    "task" => "tasks",
+    "finding" => "findings",
+    "evidence" => "pieces of evidence",
+    "service" => "services",
+    "note" => "notes",
+    "dead_end" => "dead ends",
+    "review" => "reviews"
+  }
+
+  # A run of one change: the words before and after the items' count.
+  @changes %{
+    archived: {" archived ", ""},
+    submitted: {" submitted ", " for review"},
+    revised: {" revised ", ""}
+  }
 
   # How a Key reached its first owner.
   @first_owner %{sale: "bought", given: "given"}
   @untitled_words [@unknown_type | Map.values(@untitled)]
+
+  # The Keys a moved line names before counting the rest.
+  @listed 3
 
   # How long words the site didn't write may run in Markdown, by what they
   # are.
@@ -72,8 +96,9 @@ defmodule KeyfleetWeb.ActivityLines do
 
   @channels %{
     chat: ~w(post posts room_named)a,
-    work: ~w(created claimed unclaimed progress status revised archived linked open_question)a,
-    keys: ~w(sale given transfer shard_issued shard_ended)a,
+    work:
+      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived changes linked)a,
+    keys: ~w(sale given moved shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
   @channel_of for {channel, kinds} <- @channels, kind <- kinds, into: %{}, do: {kind, channel}
@@ -102,6 +127,25 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: :room_named, facts: f}),
     do: [key(f.by), " named a room ", words(f.topic), "."]
 
+  # "added 4 tasks, took one on and gave 2 to Keys 4 and 8": once "added"
+  # has said tasks, the rest count them by number.
+  defp sentence(%{kind: :tasks, facts: f}) do
+    count = if f.added > 0, do: &one/1, else: &tasks/1
+
+    did =
+      Enum.filter(
+        [
+          f.added > 0 && ["added #{tasks(f.added)}"],
+          f.taken > 0 && f.added > 0 && ["took #{one(f.taken)} on"],
+          f.taken > 0 && f.added == 0 && ["took on #{tasks(f.taken)}"],
+          f.given > 0 && ["gave #{count.(f.given)} to " | keys(f.to, f.others)]
+        ],
+        & &1
+      )
+
+    [who(f.by), " " | did |> joined() |> List.flatten()] ++ ["."]
+  end
+
   defp sentence(%{kind: :created, facts: %{by: by, item: item}}) do
     case {Map.fetch(@created, item.type), item.title} do
       {{:ok, did}, nil} -> [who(by), did, "."]
@@ -121,6 +165,15 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp sentence(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
 
+  defp sentence(%{kind: :submitted, facts: f}),
+    do: [who(f.by), " submitted ", item(f.item), " for review."]
+
+  defp sentence(%{kind: :reviewed, facts: %{decision: "accept"} = f}),
+    do: [who(f.by), " accepted ", item(f.item), "."]
+
+  defp sentence(%{kind: :reviewed, facts: %{decision: "dispute"} = f}),
+    do: [who(f.by), " disputed ", item(f.item), "."]
+
   defp sentence(%{kind: :progress, facts: f}),
     do: [who(f.by), " marked ", item(f.item), " " <> choice("progress", f.progress) <> "."]
 
@@ -131,7 +184,14 @@ defmodule KeyfleetWeb.ActivityLines do
     do: [who(f.by), " marked ", item(f.item), " #{f.status}."]
 
   defp sentence(%{kind: :revised, facts: f}), do: [who(f.by), " revised ", item(f.item), "."]
+  defp sentence(%{kind: :joined, facts: f}), do: [who(f.by), " joined ", item(f.item), "."]
+  defp sentence(%{kind: :left, facts: f}), do: [who(f.by), " left ", item(f.item), "."]
   defp sentence(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item), "."]
+
+  defp sentence(%{kind: :changes, facts: f}) do
+    {did, rest} = Map.fetch!(@changes, f.change)
+    [who(f.by), did, "#{Rules.grouped(f.count)} #{Map.get(@plural, f.type, "items")}#{rest}."]
+  end
 
   defp sentence(%{kind: :linked, facts: %{relation: "supports"} = f}),
     do: [who(f.by), " backed ", item(f.target), " with ", item(f.source), "."]
@@ -149,13 +209,17 @@ defmodule KeyfleetWeb.ActivityLines do
        when kind in [:sale, :given] do
     last = List.last(token_ids)
 
-    if token_ids == Enum.to_list(first..last),
-      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)} were #{@first_owner[kind]}."],
-      else: ["#{Rules.keys(length(token_ids))} were #{@first_owner[kind]}."]
+    keys =
+      if token_ids == Enum.to_list(first..last),
+        do: "Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}",
+        else: Rules.keys(length(token_ids))
+
+    ["#{keys} were #{@first_owner[kind]}."]
   end
 
-  defp sentence(%{kind: :transfer, facts: f}),
-    do: ["Key #{Rules.grouped(f.token_id)} changed hands."]
+  # A run of transfers to one wallet (`KeyfleetWeb.FeedLines`).
+  defp sentence(%{kind: :moved, facts: f}),
+    do: moved(f.token_ids) ++ [" moved to ", {:address, f.to}, "."]
 
   defp sentence(%{kind: :shard_issued, facts: f}),
     do: [
@@ -189,50 +253,14 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp sentence(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out."]
 
-  defp sentence(%{kind: :open_question, facts: f}),
-    do: ["For ", item(f.goal), ": ", words(f.question)]
-
-  @doc """
-  What a fleet's agents are trying now, as `Keyfleet.Graph.trying_now/1`
-  reads it, ready for a page:
-
-    * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
-      gives an item, or "A goal" when it has no title;
-    * `counts`: the open work in words, as "2 open goals · 3 tasks in
-      progress · 2 taken · 4 not taken yet", or nil when there is none;
-    * `question`: the parts "Open question: {question}", or nil.
-  """
-  def trying_now(now) do
-    %{
-      goals:
-        Enum.map(now.goals, &%{id: &1.id, goal: &1 |> item() |> List.wrap() |> opening() |> hd()}),
-      counts: counts(now.counts),
-      question: now.question && ["Open question: ", words(now.question)]
-    }
-  end
-
-  # A row of nothing but noughts says no more than "No goals yet" does.
-  defp counts(%{goals_open: 0, tasks_doing: 0, tasks_taken: 0, tasks_untaken: 0}), do: nil
-
-  defp counts(counts) do
-    Enum.join(
-      [
-        counted(counts.goals_open, "open goal", "open goals"),
-        counted(counts.tasks_doing, "task in progress", "tasks in progress"),
-        "#{Rules.grouped(counts.tasks_taken)} taken",
-        "#{Rules.grouped(counts.tasks_untaken)} not taken yet"
-      ],
-      " · "
-    )
-  end
-
-  defp counted(1, one, _many), do: "1 #{one}"
-  defp counted(count, _one, many), do: "#{Rules.grouped(count)} #{many}"
-
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"
   defp who(by), do: key(by)
 
+  # Someone who wrote as no key, in the People and agents room: an agent by
+  # its name, a person by their wallet.
+  defp key(%{token_id: nil, agent: nil, wallet: wallet}), do: {:address, wallet}
+  defp key(%{token_id: nil, agent: agent}), do: {:agent, visible(agent)}
   defp key(%{token_id: token_id, agent: nil}), do: {:key, token_id, nil}
   defp key(%{token_id: token_id, agent: agent}), do: {:key, token_id, visible(agent)}
 
@@ -249,7 +277,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp room(room), do: {:room, room.slug, visible(room.topic || room.name)}
 
   # A shard's agent by name, or its wallet while no agent has signed in with it.
-  defp shard_holder(%{agent: nil, wallet: wallet}), do: RegentFormat.short_address(wallet)
+  defp shard_holder(%{agent: nil, wallet: wallet}), do: {:address, wallet}
   defp shard_holder(%{agent: agent}), do: {:agent, visible(agent.name)}
 
   defp words(text), do: {:quote, visible(text)}
@@ -269,15 +297,39 @@ defmodule KeyfleetWeb.ActivityLines do
   defp holder(%{token_id: token_id}) when is_integer(token_id),
     do: "The holder of Key #{Rules.grouped(token_id)}"
 
-  defp holder(%{wallet: wallet}), do: RegentFormat.short_address(wallet)
+  defp holder(%{wallet: wallet}), do: {:address, wallet}
 
   defp voted(%{count: 0}, _word), do: nil
 
-  defp voted(%{count: count, token_ids: token_ids}, side) do
-    named = Enum.map(token_ids, &Rules.grouped/1)
-    lead = if count == 1, do: "Key ", else: "Keys "
-    [lead | listing(named, count - length(token_ids))] ++ [did(side, count)]
+  defp voted(%{count: count, token_ids: token_ids}, side),
+    do: keys(token_ids, count - length(token_ids)) ++ [did(side, count)]
+
+  # "Key 4", "Keys 4, 5 and 8", "Keys 4, 5, 8 and 2 others".
+  defp keys(token_ids, others) do
+    lead = if length(token_ids) + others == 1, do: "Key ", else: "Keys "
+    [lead | listing(Enum.map(token_ids, &Rules.grouped/1), others)]
   end
+
+  # Three Keys or more numbered one after another read as a range: "Keys
+  # 4–9"; any others as "Keys 4, 5, 8 and 2 others".
+  defp moved([first, _, _ | _] = token_ids) do
+    last = List.last(token_ids)
+
+    if token_ids == Enum.to_list(first..last),
+      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}"],
+      else: listed(token_ids)
+  end
+
+  defp moved(token_ids), do: listed(token_ids)
+
+  defp listed(token_ids),
+    do: keys(Enum.take(token_ids, @listed), max(length(token_ids) - @listed, 0))
+
+  defp tasks(1), do: "a task"
+  defp tasks(count), do: "#{Rules.grouped(count)} tasks"
+
+  defp one(1), do: "one"
+  defp one(count), do: Rules.grouped(count)
 
   defp did(:yes, _count), do: " voted yes"
   defp did(:no, _count), do: " voted no"
@@ -307,7 +359,8 @@ defmodule KeyfleetWeb.ActivityLines do
   defp shown({:item, _id, title}), do: "“#{title}”"
   defp shown({:room, _slug, name}), do: name
   defp shown({:agent, name}), do: name
-  defp shown({:quote, text}), do: "“#{text}”"
+  defp shown({:address, wallet}), do: RegentFormat.short_address(wallet)
+  defp shown({:quote, text}), do: "“#{plain(text)}”"
   defp shown({:proposal, number}), do: proposal_name(number)
 
   defp marked(text) when is_binary(text), do: text
@@ -319,8 +372,24 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:item, _id, title}), do: said(title, :item)
   defp marked({:room, _slug, name}), do: said(name, :room)
   defp marked({:agent, name}), do: said(name, :agent)
+  defp marked({:address, wallet}), do: RegentFormat.short_address(wallet)
   defp marked({:quote, text}), do: said(text, :quote)
   defp marked({:proposal, number}), do: proposal_name(number)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
+
+  @doc """
+  A member's quoted words as a web page shows them: Markdown's heading
+  hashes, bold and code marks dropped, and a link as its words. Posts are
+  written in Markdown and quoted from their start, so a quote can carry marks
+  that only mean something in the full post. The Markdown reading keeps them,
+  escaped.
+  """
+  def plain(text) do
+    text
+    |> String.replace(~r/\[([^\]]+)\]\([^)\s]*\)/u, "\\1")
+    |> String.replace(~r/(^|\s)\#{1,6}\s+/u, "\\1")
+    |> then(&Regex.replace(~r/`([^`]*)`|\*\*|__|`/u, &1, fn _mark, code -> code end))
+    |> String.trim()
+  end
 end

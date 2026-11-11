@@ -3,8 +3,10 @@ defmodule Keyfleet.PublicIdentity do
   The public name and picture of a signed-in account.
 
   The name is its display name, else its wallet's ENS name, else its shortened
-  wallet address. The picture is its ENS name's picture, else one generated
-  from its wallet address.
+  wallet address. Its squares are a picture generated from its wallet address;
+  its picture is its ENS name's, when it has one, and `avatar_src/1` is that
+  picture, else the squares. Every wallet is public, and so is the ENS name
+  that points to it.
   """
 
   @wallet ~r/\A0x[0-9a-fA-F]{40}\z/
@@ -15,10 +17,53 @@ defmodule Keyfleet.PublicIdentity do
   def name(account),
     do: present(Map.get(account, :display_name)) || present(Map.get(account, :ens_name))
 
-  def avatar_src(account),
-    do:
-      present(Map.get(account, :ens_avatar_url)) ||
-        account |> Map.get(:wallet_address) |> normalize_wallet() |> avatar()
+  @doc """
+  The name a list other people read prints for an account: its display name
+  when it has one, else `nil` when it shows by its wallet, its ENS name or short
+  address, which a page draws with `Regent.Primitives.address`. An account with
+  neither a display name nor a wallet prints its `label/1`.
+  """
+  def listed_name(account) do
+    case present(Map.get(account, :display_name)) do
+      nil -> if !wallet(account), do: label(account)
+      chosen -> chosen
+    end
+  end
+
+  @doc "The account's wallet address, when it has one."
+  def wallet(account) do
+    case Map.get(account, :wallet_address) do
+      wallet when is_binary(wallet) ->
+        wallet = String.trim(wallet)
+        if Regex.match?(@wallet, wallet), do: wallet
+
+      _ ->
+        nil
+    end
+  end
+
+  def picture(account), do: present(Map.get(account, :ens_avatar_url))
+
+  def ens_name(account), do: present(Map.get(account, :ens_name))
+
+  def squares(account), do: account |> wallet() |> identicon()
+
+  @doc """
+  How a Key's holder is named beside their address, as `{chosen, ens}`: the
+  name they typed, shown beside the address so it never passes for an ENS
+  name, else their ENS name standing in for the address it points to. Both
+  are nil for an address no account links.
+  """
+  def holder(nil), do: {nil, nil}
+
+  def holder(account) do
+    case present(account.display_name) do
+      nil -> {nil, present(account.ens_name)}
+      chosen -> {chosen, nil}
+    end
+  end
+
+  def avatar_src(account), do: picture(account) || squares(account)
 
   def short_wallet(wallet) when is_binary(wallet) do
     if Regex.match?(@wallet, wallet), do: RegentFormat.short_address(wallet), else: "Account"
@@ -35,18 +80,13 @@ defmodule Keyfleet.PublicIdentity do
 
   defp present(_value), do: nil
 
-  defp normalize_wallet(wallet) when is_binary(wallet) do
-    wallet = String.trim(wallet)
-    if Regex.match?(@wallet, wallet), do: String.downcase(wallet)
-  end
-
-  defp normalize_wallet(_wallet), do: nil
-
   # A 5×5 identicon mirrored around its middle column, coloured from the hash.
-  defp avatar(nil), do: nil
+  defp identicon(nil), do: nil
 
-  defp avatar(wallet) do
-    <<red, green, blue, red2, green2, blue2, cells::binary>> = :crypto.hash(:sha256, wallet)
+  defp identicon(wallet) do
+    <<red, green, blue, red2, green2, blue2, cells::binary>> =
+      :crypto.hash(:sha256, String.downcase(wallet))
+
     primary = color(red, green, blue)
     secondary = color(red2, green2, blue2)
 

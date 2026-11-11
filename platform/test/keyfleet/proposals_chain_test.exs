@@ -35,6 +35,7 @@ defmodule Keyfleet.ProposalsChainTest do
   # contracts in contracts/test/KeyfleetVotesTopics.t.sol where it pins them.
   @ownership "0x7728f9822f7ef5ea19c1e399d729115b9cfbf4a30a69074c998576148f47b9c1"
   @revealed "0x2641319733d9075c8fb8c0e9c0738513e76e459cba32ba76efd9a29096dc8a24"
+  @reveal_expired "0xe7a4b3ed034eada5a71195b6461d48bb201a05ce179836c366f403517eaa78b8"
   @forwarded "0x8926b565a570cae7e82c2dcc861e6aeea283665a938a403f59ee2a13bcc83d81"
   @protocol_share "0x406fe989f03a57e5eb52c9fc293be7940d07567bd9425fb5fe3d0eafd20be3f3"
   @created "0x959c9f8f330ac28b7f4719d751c7fa2d25e7be768c2642037e274c468a0ac796"
@@ -131,6 +132,7 @@ defmodule Keyfleet.ProposalsChainTest do
                Enum.sort([
                  @ownership,
                  @revealed,
+                 @reveal_expired,
                  @forwarded,
                  @protocol_share,
                  @created,
@@ -455,9 +457,9 @@ defmodule Keyfleet.ProposalsChainTest do
       assert for({_addresses, _topics, from, to} <- StubClient.log_requests(), do: {from, to}) ==
                [
                  {@deployed, @deployed + 9_999},
-                 {@deployed + 9_970, @deployed + 9_999},
+                 {@deployed + 9_700, @deployed + 9_999},
                  {@deployed + 10_000, @deployed + 19_999},
-                 {@deployed + 19_970, @deployed + 19_999},
+                 {@deployed + 19_700, @deployed + 19_999},
                  {@deployed + 20_000, @deployed + 25_000}
                ]
     end
@@ -486,6 +488,40 @@ defmodule Keyfleet.ProposalsChainTest do
       StubClient.put_chain(head(@deployed + 16), [mint, moved | decision(1, @deployed + 13)])
       assert Scanner.step(fleet, StubClient) == :ok
       refute_received {:proposals_changed, _fleet}
+    end
+
+    # A Present press can mark every Key a wallet holds in one transaction, and
+    # a daily run or the presence timer marks more. However many marks a pass
+    # records, the fleet's pages hear one notice naming each Key once, and only
+    # Keys marked in the blocks the pass read for the first time: the second
+    # reading of those blocks names none of them again.
+    test "a pass that records Keys marked present names them all in one notice", %{
+      fleet: fleet
+    } do
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
+
+      marks = [
+        present(1, @deployed + 1, 0),
+        present(2, @deployed + 1, 1),
+        present(3, @deployed + 1, 2),
+        present(1, @deployed + 3, 0)
+      ]
+
+      StubClient.put_chain(head(@deployed + 10), marks)
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_present, @fleet, token_ids}
+      assert Enum.sort(token_ids) == [1, 2, 3]
+      refute_received {:keys_present, _fleet, _token_ids}
+      refute_received {:keys_changed, _fleet, _token_ids}
+
+      StubClient.put_chain(head(@deployed + 12), marks)
+      assert Scanner.step(fleet, StubClient) == :ok
+      refute_received {:keys_present, _fleet, _token_ids}
+
+      StubClient.put_chain(head(@deployed + 14), marks ++ [present(2, @deployed + 13, 0)])
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_present, @fleet, [2]}
+      refute_received {:keys_present, _fleet, _token_ids}
     end
 
     # A piece recorded before the pass stopped the fleet stays recorded, so the

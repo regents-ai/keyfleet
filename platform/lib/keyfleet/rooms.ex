@@ -6,16 +6,19 @@ defmodule Keyfleet.Rooms do
   """
   use Ash.Domain
 
+  import Ecto.Query, only: [from: 2, subquery: 1]
+
   require Ash.Query
 
   alias Keyfleet.Access
+  alias Keyfleet.Actors.{Agent, Human}
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
 
-  # As many rooms as a fleet holds: five fixed rooms, five open rooms and a
+  # As many rooms as a fleet holds: six fixed rooms, five open rooms and a
   # hundred created ones.
-  @max_sync_rooms 110
+  @max_sync_rooms 111
   # Keys' walls one catch-up follows.
   @max_sync_walls 100
   @sync_page 50
@@ -23,6 +26,9 @@ defmodule Keyfleet.Rooms do
   @quotes_page 20
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
+  # How far back a Key's own posts count when telling it where others have
+  # posted after it.
+  @posted_after_days 7
 
   resources do
     resource Keyfleet.Rooms.Room do
@@ -71,7 +77,7 @@ defmodule Keyfleet.Rooms do
     end
 
     resource Keyfleet.Rooms.WallRemoval do
-      define :remove_from_wall, action: :remove, args: [:message_id]
+      define :remove_from_wall, action: :remove, args: [:fleet_id, :token_id, :message_id]
     end
 
     resource Keyfleet.Rooms.ReadMark do
@@ -98,6 +104,19 @@ defmodule Keyfleet.Rooms do
       define :my_quote_requests, action: :mine, args: [:fleet_id]
     end
   end
+
+  @doc """
+  The wallets whose posts share one sender's send keys: a person's own
+  wallets, or an agent's wallet and its person's. A send key belongs to the
+  sender, not to one of its wallets, so a person's retry finds their first
+  post whichever of their wallets holds the Key they write as now.
+  """
+  def sender_wallets(%Human{wallet_addresses: wallets}), do: wallets
+
+  def sender_wallets(%Agent{wallet_address: wallet, pairing: %Human{wallet_addresses: person}}),
+    do: [wallet | person]
+
+  def sender_wallets(%Agent{wallet_address: wallet}), do: [wallet]
 
   @doc """
   Takes away `actor`'s mute of a key, if it has one: `{:ok, mute | nil}`.
@@ -129,11 +148,86 @@ defmodule Keyfleet.Rooms do
     do: Enum.reject(messages, &(&1.kind == :post and MapSet.member?(muted, &1.as_key)))
 
   @doc """
+  The fleet's rooms where others have posted since `token_id` last did, of
+  the ones it posted in over the last week, as `[%{slug, after_seq, posts}]`
+  by slug: `after_seq` is the place of the Key's latest post there, to read
+  on from, and `posts` how many posts written as another Key, or as none,
+  came after it. Muted Keys' posts are counted, as a room's places are.
+  """
+  def posted_after_key(fleet_id, token_id) do
+    since = DateTime.add(DateTime.utc_now(), -@posted_after_days * 86_400)
+
+    latest =
+      from(m in "messages",
+        where:
+          m.fleet_id == ^fleet_id and m.as_key == ^token_id and m.kind == "post" and
+            not m.in_key_thread and m.inserted_at >= type(^since, :utc_datetime_usec),
+        group_by: m.room_id,
+        select: %{room_id: m.room_id, seq: max(m.seq)}
+      )
+
+    from(mine in subquery(latest),
+      join: m in "messages",
+      on: m.room_id == mine.room_id and m.seq > mine.seq,
+      join: r in "rooms",
+      on: r.id == mine.room_id,
+      where: m.kind == "post" and (is_nil(m.as_key) or m.as_key != ^token_id),
+      group_by: [r.slug, mine.seq],
+      order_by: r.slug,
+      select: %{slug: r.slug, after_seq: mine.seq, posts: count(m.id)}
+    )
+    # Asked only for a member's own Key, and a member reads every room: only
+    # slugs and counts are read, over all of the Key's rooms in one query.
+    |> Keyfleet.Repo.all()
+  end
+
+  @doc """
+  How many posts written as another Key, or as none, came between `message`
+  and the Key's post before it in the same room or thread, as `%{after_seq,
+  posts}`, `after_seq` being that earlier post's place; nil when the Key
+  hadn't posted there before, or `message` was written as no Key.
+  """
+  def posted_after_previous(%{as_key: nil}), do: nil
+
+  def posted_after_previous(%{room_id: room_id, as_key: key, seq: seq}) do
+    in_room =
+      from(m in "messages",
+        where: m.room_id == type(^room_id, Ecto.UUID) and m.kind == "post" and m.seq < ^seq
+      )
+
+    previous =
+      from(m in in_room,
+        where: m.as_key == ^key,
+        order_by: [desc: m.seq],
+        limit: 1,
+        select: m.seq
+      )
+
+    # Asked only after `message` was posted, by its sender, who reads the room:
+    # only a place and a count are read.
+    case Keyfleet.Repo.one(previous) do
+      nil ->
+        nil
+
+      after_seq ->
+        others =
+          from(m in in_room,
+            where: m.seq > ^after_seq and (is_nil(m.as_key) or m.as_key != ^key),
+            select: count(m.id)
+          )
+
+        # A count in the same room, as above.
+        %{after_seq: after_seq, posts: Keyfleet.Repo.one(others)}
+    end
+  end
+
+  @doc """
   Where a reader of `class` (`Keyfleet.Access.class/2`) hears what changed in
   the fleet's rooms, posts and keys' threads: "room_head", "key_activity" and
   "rooms_changed". Whoever reads every room hears of every room. Anyone else
-  hears of General and the keys' threads alone, and of no room made or named.
-  A listener is on one of the two, never both.
+  hears of the Public room and the keys' threads alone, and of no room made
+  or named. A listener is on one of the two, never both. The Public room's
+  new posts are also published whole, on `Keyfleet.Rooms.Message.topic/2`.
   """
   def topic(fleet_id, class) do
     if Access.enough?(class, :read, :rooms),
@@ -156,16 +250,17 @@ defmodule Keyfleet.Rooms do
   caller has read that room. Every room the caller may read answers with the
   posts after that point, the cursor those posts reach, and the room's own
   head, so a caller that is behind knows to come back for the rest. Anyone who
-  is not a member of the fleet reads General alone: any other room they name,
-  whether or not the fleet has it, answers with its slug alone and
+  is not a member of the fleet reads the Public room alone: any other room
+  they name, whether or not the fleet has it, answers with its slug alone and
   `refused: true`, and the rest of the answer stands. A caller that names
   rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
   `places` says how far the caller has read the rest, as
-  `%{graph: seq, proposals: seq, keys: walls, dms: cursors | nil, quotes: seq | nil}`.
+  `%{graph: seq, project: name | nil, proposals: seq, keys: walls, dms: cursors | nil, quotes: seq | nil}`.
 
   `graph` is the place in the workspace's log. The workspace answers with at
-  most 100 of its changes after that point, as `Keyfleet.Graph.list_changes/3`
+  most 100 of its changes after that point, the whole fleet's or, when
+  `project` names one, that project's, as `Keyfleet.Graph.list_changes/3`
   does, with `next_cursor` to send next time and `run_id`: a different `run_id`
   from the one the caller last saw means the log started over, and the caller
   reads it again from 0.
@@ -231,7 +326,7 @@ defmodule Keyfleet.Rooms do
          {:ok, graph} <-
            Keyfleet.Graph.list_changes(
              fleet_id,
-             %{after_seq: places.graph, limit: @graph_sync_page},
+             %{after_seq: places.graph, project: places.project, limit: @graph_sync_page},
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),
@@ -265,7 +360,7 @@ defmodule Keyfleet.Rooms do
   defp dm_topics(_fleet_id, nil, _actor), do: []
   defp dm_topics(fleet_id, _cursors, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
 
-  defp quote_topics(fleet_id, after_seq, %Keyfleet.Actors.Agent{human_account_id: account})
+  defp quote_topics(fleet_id, after_seq, %Agent{human_account_id: account})
        when not is_nil(after_seq) and not is_nil(account),
        do: [Keyfleet.Rooms.QuoteRequest.topic(fleet_id, account)]
 
@@ -415,6 +510,7 @@ defmodule Keyfleet.Rooms do
       {:graph_notable, ^fleet_id} -> flush_news(fleet_id)
       {:proposals_changed, ^fleet_id} -> flush_news(fleet_id)
       {:keys_changed, ^fleet_id, _token_ids} -> flush_news(fleet_id)
+      {:keys_present, ^fleet_id, _token_ids} -> flush_news(fleet_id)
       %Phoenix.Socket.Broadcast{} -> flush_news(fleet_id)
     after
       0 -> :ok
@@ -447,8 +543,8 @@ defmodule Keyfleet.Rooms do
   end
 
   # A member is shown every room, so one it names and is not shown is a room
-  # the fleet does not have. Anyone else is shown General alone, and is not
-  # told which other rooms there are: those are refused, further on.
+  # the fleet does not have. Anyone else is shown the Public room alone, and
+  # is not told which other rooms there are: those are refused, further on.
   defp known_rooms(_fleet_id, [], _class), do: :ok
 
   defp known_rooms(fleet_id, [%{slug: slug} | _], class) do
@@ -601,16 +697,41 @@ defmodule Keyfleet.Rooms do
 
   @doc "How many rooms agents have created in the fleet, counted by the server for its limit."
   def count_created_rooms!(fleet_id) do
-    # The server's own count for its limit: it counts every created room, not
-    # only the ones the asker may read.
-    Room
-    |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
-    |> Ash.Query.filter(kind == :created)
-    |> Ash.count!(authorize?: false)
+    # The limit counts every created room, not only the ones the asker may read.
+    fleet_id |> created_rooms() |> Ash.count!(authorize?: false)
   end
 
   @doc """
-  Ensures the five fixed rooms and the five open rooms of each fleet in
+  How many of the fleet's created rooms an agent's `wallet` created, or any
+  agent of its `person` (their Privy user, nil for none), counted by the
+  server for its limit.
+  """
+  def count_rooms_created_by!(fleet_id, wallet, nil) do
+    fleet_id
+    |> created_rooms()
+    |> Ash.Query.filter(acting_agent_wallet == ^wallet)
+    # The limit counts every room they created, not only the ones they may read.
+    |> Ash.count!(authorize?: false)
+  end
+
+  def count_rooms_created_by!(fleet_id, wallet, person) do
+    fleet_id
+    |> created_rooms()
+    |> Ash.Query.filter(acting_agent_wallet == ^wallet or beneficiary_privy_user_id == ^person)
+    # The limit counts every room they created, not only the ones they may read.
+    |> Ash.count!(authorize?: false)
+  end
+
+  # The server's own counts for its limits: every created room, not only the
+  # ones the asker may read.
+  defp created_rooms(fleet_id) do
+    Room
+    |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
+    |> Ash.Query.filter(kind == :created)
+  end
+
+  @doc """
+  Ensures the six fixed rooms and the five open rooms of each fleet in
   `fleet_ids` from trusted setup code. The fleets must already be seeded.
 
   Reruns preserve room identities, restore canonical names and leave every open

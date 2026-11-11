@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.DmsLive do
           </.link>
 
           <form id="dms-auto-delete" class="dms-auto-delete" phx-change="dm_auto_delete">
-            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Delete after">
+            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Auto-delete">
               <select
                 id={field.id}
                 name="days"
@@ -167,7 +167,7 @@ defmodule KeyfleetWeb.DmsLive do
             >
               Delete conversation
             </Regent.Primitives.button>
-            <p :if={@confirm_delete} class="rooms-detail">Delete for both Keys?</p>
+            <p :if={@confirm_delete} class="rooms-detail">Delete for you only?</p>
             <div :if={@confirm_delete} class="dms-delete-choices">
               <Regent.Primitives.button id="dms-delete" type="button" phx-click="dm_delete">
                 Delete
@@ -205,12 +205,20 @@ defmodule KeyfleetWeb.DmsLive do
                   Key {Rules.grouped(message.from_token_id)}
                 </.link>
                 <small class="rooms-writer">
-                  <.sent_from via={arrival(message)} /> {writer(message)}
+                  <.sent_from via={arrival(message)} />
+                  <span :if={message.via_agent}>{message.via_agent.name}</span>
+                  <Regent.Primitives.address
+                    :if={!message.via_agent}
+                    id={"#{dom_id}-writer"}
+                    address={message.author_wallet}
+                  />
                 </small>
               </p>
               <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
               <.parts parts={message.parts} />
-              <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
+              <p class="rooms-detail">
+                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+              </p>
             </li>
           </ol>
 
@@ -267,11 +275,17 @@ defmodule KeyfleetWeb.DmsLive do
     <section id="dms-closed" class="rooms-panel">
       <.load_failed :if={@dms == :unreadable} />
       <h2 :if={@dms != :unreadable}>{closed_reason(@dms)}</h2>
+      <a
+        :if={@dms != :unreadable and is_nil(@dms.fleet_name)}
+        href="/"
+        class="rg-button rg-button--secondary"
+      >
+        See the fleets
+      </a>
       <Regent.Primitives.button
         :if={sign_in?(@dms)}
         id="dms-sign-in"
         type="button"
-        variant="secondary"
         data-account-target="sign-in"
       >
         Sign in
@@ -298,7 +312,11 @@ defmodule KeyfleetWeb.DmsLive do
         </.link>
         <span class="dms-preview">{preview(conversation, @dms.token_id)}</span>
         <small class="rooms-detail">
-          {RoomsLive.stamp(conversation.last_at)}
+          <KeyfleetWeb.Time.local
+            id={"dms-conversation-#{conversation.id}-at"}
+            at={conversation.last_at}
+            as={:stamp}
+          />
         </small>
       </li>
     </ul>
@@ -307,7 +325,8 @@ defmodule KeyfleetWeb.DmsLive do
 
   attr :parts, :list, required: true
 
-  # A message's extra parts: words, a link (a file is always a link), or data.
+  # A message's extra parts: words, a link (a file is always a link), or data. A
+  # link's name is the writer's own, so the site it goes to is shown under it.
   defp parts(assigns) do
     ~H"""
     <ul :if={@parts != []} class="dms-parts">
@@ -321,6 +340,9 @@ defmodule KeyfleetWeb.DmsLive do
         >
           {part["name"] || part["url"]}
         </a>
+        <small :if={part["kind"] == "link" and part["name"]} class="dms-link-host">
+          {URI.parse(part["url"]).host}
+        </small>
         <pre :if={part["kind"] == "data"}><code>{Jason.encode!(part["data"], pretty: true)}</code></pre>
       </li>
     </ul>
@@ -360,10 +382,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
   defp preview(%{last_body: body}, _token_id), do: body
-
-  # Who wrote as the Key: the agent that wrote it, or the holder's wallet.
-  defp writer(%{via_agent: %{name: name}}), do: name
-  defp writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
 
   # How a message reached Keyfleet: an agent's signed request, or the website.
   defp arrival(%{via_agent_id: nil}), do: :web
@@ -533,12 +551,22 @@ defmodule KeyfleetWeb.DmsLive do
   end
 
   @doc "What the conversation page does with a message, its settings, a block and a delete."
-  def handle_event("validate_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket),
-    do:
-      {:noreply,
-       update(socket, :dm_form, &(&1 |> as_signed_in(socket) |> AshPhoenix.Form.validate(params)))}
+  def handle_event(
+        "validate_dm",
+        %{"dm" => %{"body" => body} = params},
+        %{assigns: %{dm_form: %{}}} = socket
+      )
+      when is_binary(body) do
+    {:noreply,
+     update(socket, :dm_form, &(&1 |> as_signed_in(socket) |> AshPhoenix.Form.validate(params)))}
+  end
 
-  def handle_event("send_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket) do
+  def handle_event(
+        "send_dm",
+        %{"dm" => %{"body" => body} = params},
+        %{assigns: %{dm_form: %{}}} = socket
+      )
+      when is_binary(body) do
     case socket.assigns.dm_form
          |> as_signed_in(socket)
          |> AshPhoenix.Form.submit(params: params) do
@@ -561,11 +589,14 @@ defmodule KeyfleetWeb.DmsLive do
         "dm_auto_delete",
         %{"days" => days},
         %{assigns: %{dms: %{conversation: %{}}}} = socket
-      ) do
+      )
+      when is_binary(days) do
     %{dms: dms} = socket.assigns
     days = if days == "", do: nil, else: days
 
-    case Dms.set_auto_delete(dms.conversation, days, actor: ShellLive.human_actor(socket)) do
+    case Dms.set_auto_delete(dms.conversation, dms.token_id, days,
+           actor: ShellLive.human_actor(socket)
+         ) do
       {:ok, conversation} ->
         {:noreply, assign(socket, dms: %{dms | conversation: conversation}, dm_notice: nil)}
 
@@ -592,8 +623,10 @@ defmodule KeyfleetWeb.DmsLive do
     do: {:noreply, assign(socket, :dm_confirm_delete, false)}
 
   def handle_event("dm_delete", _params, %{assigns: %{dms: %{conversation: %{}} = dms}} = socket) do
-    case Dms.delete_conversation(dms.conversation, actor: ShellLive.human_actor(socket)) do
-      :ok ->
+    case Dms.delete_conversation(dms.conversation, dms.token_id,
+           actor: ShellLive.human_actor(socket)
+         ) do
+      {:ok, _cleared} ->
         {:noreply, push_patch(socket, to: inbox_path(dms))}
 
       {:error, error} ->
@@ -734,10 +767,11 @@ defmodule KeyfleetWeb.DmsLive do
 
   # The open conversation is read up to the last message the page has shown.
   # It is written when the conversation opens and when the person leaves it,
-  # not as messages arrive.
+  # not as messages arrive. When it can't be saved the conversation still
+  # opens, and the person still leaves.
   defp mark_read(%{assigns: %{dms: %{conversation: %{id: id}, last_seq: seq}}} = socket, actor)
        when seq > 0 do
-    Dms.mark_conversation_read!(id, seq, actor: actor)
+    PageRead.run("messages", fn -> Dms.mark_conversation_read!(id, seq, actor: actor) end)
     socket
   end
 
@@ -753,6 +787,9 @@ defmodule KeyfleetWeb.DmsLive do
 
           Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
             "Key #{Rules.grouped(dms.other_token_id)} isn’t sold yet."
+
+          most = RoomsLive.too_long(errors) ->
+            "A message can be up to #{Rules.grouped(most)} characters."
 
           Enum.any?(errors, &match?(%{field: :body}, &1)) ->
             "Write a message first."

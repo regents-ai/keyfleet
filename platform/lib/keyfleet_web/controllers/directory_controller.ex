@@ -8,14 +8,15 @@ defmodule KeyfleetWeb.DirectoryController do
   anything the directory gives can't be read, it answers 503 and says so.
 
   A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
-  fleet's page or its General room; any other request there is sent to the
-  fleet's Markdown. An unknown fleet is the site's not-found page for a browser
-  and 404 `fleet_unknown`, as the API answers it, for anything else.
+  fleet's page or its Public room, open in the fleet's hall; any other request there is sent to the
+  fleet's Markdown. An unknown fleet is the site's not-found page, in HTML for a
+  browser and in Markdown, pointing to `/fleets.md`, for anything else.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, PageRead, Refusal}
+  alias KeyfleetWeb.{AgentReply, DirectoryMD, ErrorHTML, ErrorMD, PageRead}
+  alias KeyfleetWeb.AgentTools.Public.Answer
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
@@ -36,38 +37,26 @@ defmodule KeyfleetWeb.DirectoryController do
   end
 
   def rooms(conn, %{"fleet_id" => fleet_id}),
-    do: open_fleet(conn, fleet_id, "/rooms/general")
+    do: open_fleet(conn, fleet_id, "?room=general")
 
   defp fleet_md(conn, fleet_id) do
     case read(fn -> Directory.fleet(fleet_id) end) do
       {:ok, fleet} -> markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
-      :unknown -> Refusal.json(conn, 404, "fleet_unknown")
+      :unknown -> not_found(conn, "md")
       {:error, _failure} -> unavailable_md(conn)
     end
   end
 
-  def index_json(conn, _params) do
-    case read(&Directory.list/0) do
-      {:ok, fleets} ->
-        conn |> cached() |> json(DirectoryJSON.index(%{fleets: fleets, generated_at: now()}))
+  # The JSON answers are the Claude connector's `fleets_list` and
+  # `fleets_show` (`KeyfleetWeb.AgentTools.Public.Answer`); only an answer
+  # read whole is kept.
+  def index_json(conn, params), do: json_answer(conn, Answer.answer(:fleets, params, nil, nil))
+  def show_json(conn, params), do: json_answer(conn, Answer.answer(:fleet, params, nil, nil))
 
-      {:error, _failure} ->
-        unavailable_json(conn)
-    end
-  end
+  defp json_answer(conn, {200, _body, _retry_after} = answer),
+    do: conn |> cached() |> AgentReply.answer(answer)
 
-  def show_json(conn, %{"fleet_id" => fleet_id}) do
-    case read(fn -> Directory.fleet(fleet_id) end) do
-      {:ok, fleet} ->
-        conn |> cached() |> json(DirectoryJSON.show(%{fleet: fleet, generated_at: now()}))
-
-      :unknown ->
-        Refusal.json(conn, 404, "fleet_unknown")
-
-      {:error, _failure} ->
-        unavailable_json(conn)
-    end
-  end
+  defp json_answer(conn, answer), do: AgentReply.answer(conn, answer)
 
   # A request that prefers HTML to Markdown; one asking for anything, as most
   # programs do, prefers Markdown here.
@@ -84,16 +73,16 @@ defmodule KeyfleetWeb.DirectoryController do
     case {fleet_id in Fleets.catalog_ids(), browser?(conn)} do
       {true, true} -> redirect(conn, to: Fleets.path(fleet_id) <> under)
       {true, false} -> redirect(conn, to: ~p"/fleets/#{fleet_id <> ".md"}")
-      {false, true} -> not_found_html(conn)
-      {false, false} -> Refusal.json(conn, 404, "fleet_unknown")
+      {false, true} -> not_found(conn, "html")
+      {false, false} -> not_found(conn, "md")
     end
   end
 
-  defp not_found_html(conn) do
+  defp not_found(conn, format) do
     conn
     |> put_status(404)
-    |> put_format("html")
-    |> put_view(html: ErrorHTML)
+    |> put_format(format)
+    |> put_view(html: ErrorHTML, md: ErrorMD)
     |> render(:"404")
   end
 
@@ -107,8 +96,6 @@ defmodule KeyfleetWeb.DirectoryController do
     |> put_resp_content_type("text/markdown")
     |> send_resp(503, @unavailable <> "\n")
   end
-
-  defp unavailable_json(conn), do: Refusal.json(conn, 503, "directory_unavailable")
 
   defp markdown(conn, body) do
     conn

@@ -23,12 +23,12 @@ defmodule Keyfleet.Authority do
     },
     %{
       what: "Pair or unpair an agent",
-      who: "The person: pair on their account page here, unpair on regents.sh",
+      who: "The person: pair with Pair New Agent and unpair, both on their Agents page",
       authority: :owner_only,
       conditions: []
     },
     %{
-      what: "Read and update the agent's profile and status; read Credits and Points",
+      what: "Read and update the agent's profile and status; read Points",
       who: "The paired agent",
       authority: :paired_agent,
       conditions: []
@@ -86,17 +86,16 @@ defmodule Keyfleet.Authority do
       what: "Buy a Key",
       who: "A person; agents never buy or move Keys",
       authority: :wallet,
-      conditions: [],
-      closed: "No fleet sells Keys yet"
+      conditions: []
     }
   ]
 
   @doc "Every row, in the order the tables show them."
   def rows, do: @rows
 
-  @doc "Wallet permissions relevant to the treasury page."
+  @doc "Wallet permissions relevant to the treasury page: every one but buying a Key."
   def treasury_rows,
-    do: Enum.filter(@rows, &(&1.authority == :wallet and not Map.has_key?(&1, :closed)))
+    do: Enum.filter(@rows, &(&1.authority == :wallet and &1.what != "Buy a Key"))
 
   @doc "What a row needs, in words for the fleet's page."
   def needs(%{authority: authority, conditions: conditions}),
@@ -111,8 +110,7 @@ defmodule Keyfleet.Authority do
 
   @doc """
   The rows as a Markdown table for agents, with whether each is open now:
-  while the launch gate is closed, only public rows are, and a row closed for
-  its own reason stays closed either way.
+  while the launch gate is closed, only public rows are.
   """
   def markdown_table(open?) do
     """
@@ -129,7 +127,6 @@ defmodule Keyfleet.Authority do
     "| #{row.what} | #{row.who} | `#{authority}` | #{listed} | #{now(row, open?)} |"
   end
 
-  defp now(%{closed: reason}, _open?), do: "Closed: #{reason}"
   defp now(%{authority: :public}, _open?), do: "Open"
   defp now(_row, true), do: "Open"
   defp now(_row, false), do: "Closed: opens at launch"

@@ -3,7 +3,8 @@ import type {Page} from "@playwright/test"
 // From the first paint the page records every inline transform or opacity any
 // element takes, every number split into pieces to roll and whether the
 // headline moved, so a test can ask what moved and whether it ended clean.
-// The shell's page-change motion, the page arriving, is recorded apart.
+// The shell's page-change motion, the page arriving, is recorded apart, and so
+// is each place a tab row's mark takes: it rests on a transform of its own.
 // Each time a number or the headline splits, it records whether every piece
 // sits in a box clipped by its class (`.split-clip`) rather than by a style of
 // its own, which a policy refusing style attributes would refuse.
@@ -12,7 +13,8 @@ function recordMotion() {
   const rolled = new Set<string>()
   const pageMoves = new Set<string>()
   const clipped = new Map<string, boolean>()
-  Object.assign(window, {__moves: moves, __rolled: rolled, __pageMoves: pageMoves, __clipped: clipped})
+  const inkSpots = new Set<string>()
+  Object.assign(window, {__moves: moves, __rolled: rolled, __pageMoves: pageMoves, __clipped: clipped, __inkSpots: inkSpots})
   const clippedByClass = (el: Element) =>
     el.matches(".split-clip") && (el as HTMLElement).style.overflow === "" && getComputedStyle(el).overflow === "clip"
   const piece = "[data-word], [data-char], :has(> [data-word], > [data-char])"
@@ -43,6 +45,10 @@ function recordMotion() {
           pageMoves.add(el.id)
           continue
         }
+        if (el.matches("[data-ink]")) {
+          inkSpots.add(style)
+          continue
+        }
         if (el.closest("main h1")) rolled.add("headline")
         moves.set(el, [...(moves.get(el) ?? []), style])
       }
@@ -62,6 +68,7 @@ type Recorded = {
   __rolled: Set<string>
   __pageMoves: Set<string>
   __clipped: Map<string, boolean>
+  __inkSpots: Set<string>
 }
 
 export const watchMotion = (page: Page) => page.addInitScript(recordMotion)
@@ -82,6 +89,9 @@ export const rolled = (page: Page, id: string) => page.evaluate(id => (window as
 export const clippedByClass = (page: Page, id: string) =>
   page.evaluate(id => (window as unknown as Recorded).__clipped.get(id), id)
 
+// How many places a tab row's mark has taken: one for a jump, many for a glide.
+export const inkSpots = (page: Page) => page.evaluate(() => (window as unknown as Recorded).__inkSpots.size)
+
 // Whether a page change moved the page arriving.
 export const pageChangeMoved = (page: Page) => page.evaluate(() => (window as unknown as Recorded).__pageMoves.size > 0)
 
@@ -91,6 +101,7 @@ export const forget = (page: Page) =>
     ;(window as unknown as Recorded).__rolled.clear()
     ;(window as unknown as Recorded).__pageMoves.clear()
     ;(window as unknown as Recorded).__clipped.clear()
+    ;(window as unknown as Recorded).__inkSpots.clear()
   })
 
 // What still carries an inline transform or opacity after moving; empty once

@@ -1,6 +1,13 @@
 app = "keyfleet-staging"
 primary_region = "iad"
 
+# Fly stops a machine with SIGINT unless told otherwise, and the VM answers
+# SIGINT by halting at once, cutting open connections and running jobs. SIGTERM
+# shuts it down in order: open connections drain and running jobs finish, well
+# inside the timeout.
+kill_signal = "SIGTERM"
+kill_timeout = "60s"
+
 [deploy]
   release_command = "/app/bin/migrate"
 
@@ -8,23 +15,36 @@ primary_region = "iad"
   PORT = "4000"
   KEYFLEET_DEPLOYMENT_ROLE = "staging"
   KEYFLEET_SIWA_URL = "https://siwa.regents.sh"
+  DNS_CLUSTER_QUERY = "keyfleet-staging.internal"
 
-[metrics]
+# Two kinds of machine, in one Erlang cluster (rel/env.sh.eex). The graph
+# machine keeps each fleet's work graph as a file on its volume and runs the
+# fleets' graph writers; it serves no pages. The site machine has no volume and
+# serves keyfleet.ai, so scripts/deploy.sh can release it bluegreen: the new
+# one answers its health check before the old one stops. Each group runs on
+# exactly one machine: a second graph machine would get its own, empty volume.
+[processes]
+  site = "/app/bin/site"
+  graph = "/app/bin/graph"
+
+[[metrics]]
   port = 9091
   path = "/metrics"
+  processes = ["site"]
 
-# Each fleet's work graph is a file on this volume, so the app runs on exactly
-# one machine: a second machine would get its own, empty volume.
 [mounts]
   source = "keyfleet_graph"
   destination = "/data"
+  processes = ["graph"]
 
 [http_service]
   internal_port = 4000
   force_https = true
+  processes = ["site"]
 
 # BEAM release + migrations OOM at Fly's 256MB default.
 [[vm]]
+  processes = ["site", "graph"]
   memory_mb = 1024
 
 # The check reaches the machine directly over plain HTTP. `Host: localhost` is

@@ -111,7 +111,7 @@ colour. The stream mixes two kinds of line:
 
 - **chat**: room posts, with the Key number, the agent's name and a "✓ person" mark;
 - **action cards**, one line each, opening to detail: task taken / done, finding recorded,
-  dead end logged, commits pushed (Twigpine), notebook run or document edited (MarimoHub),
+  dead end logged, commits pushed (Code), notebook run or document edited (MarimoHub),
   proposal opened, vote cast, proposal passed, split paid, Key claimed, agent came online.
 
 Channels down the left, like Slack: General, Business, Voting, Coding, the open rooms, then
@@ -141,7 +141,7 @@ loop in H3 and H4 and gives A4 its report.
 
 | Tile | Today on live | Shows | Link out |
 | --- | --- | --- | --- |
-| Code (Twigpine) | Running, private, code.keyfleet.ai | last pushes, who, message | clone address; Get a git password for holders |
+| Code (keyfleet-code) | Running, private, code.keyfleet.ai | last pushes, who, message | clone address; Get a git password for holders |
 | Workspace (ActiveGraph) | Running inside the site | open goals, tasks by state | the Board |
 | Notebooks (MarimoHub) | Built, not on Fly | last runs, open notebook | `<fleet>.notebooks.keyfleet.ai` |
 | Docs | Kept in the notebook hub (Sean, 13 Oct 2026); ddocs paused | recent docs | the doc in the hub |
@@ -189,7 +189,7 @@ Each slice ships on its own, with orchestrator check, Sentinel stamp and Sean's 
    CLI (with the regents-cli chief). This closes A3.
 4. **Directives + shard requests + "My agents" on the account page**. This closes H3, H4 and A4.
    Pairing moves onto Keyfleet's own /account when the template carry lands.
-5. **Code tile live** (Twigpine is already running).
+5. **Code tile live** (the code store is already running).
 6. **Notebooks** for the Club fleet, after Sean's go on infrastructure (below).
 7. **Docs**, kept in the fleet's notebook hub once slice 6 is live (Sean, 13 Oct 2026: agents use
    our Tigris MarimoHub for docs; all ddocs work and marketing is paused).

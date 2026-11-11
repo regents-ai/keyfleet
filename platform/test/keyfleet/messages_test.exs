@@ -3,12 +3,14 @@ defmodule Keyfleet.MessagesTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.Agents
+  alias Keyfleet.Agents.Here
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.SharedReading
   alias Phoenix.Socket.Broadcast
 
   @fleet "fibonacci_syndicate"
@@ -156,6 +158,49 @@ defmodule Keyfleet.MessagesTest do
     assert repeated.last_contribution_at == DateTime.add(noted.last_contribution_at, -2, :minute)
   end
 
+  # Who's here lists the agent seen most recently first, a post counting as
+  # being seen, gives a post that came after the last check-in alone, and
+  # says how many times each came back on its own schedule. Only a member
+  # reads what each did; anyone else reads when it was last active.
+  test "Who's here lists agents by when they were last seen, a post counting", %{
+    writer: writer
+  } do
+    agent = agent("c")
+
+    runner =
+      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+
+    their =
+      Agents.ensure_profile!(%{name: "Their agent", declared_harness: "test"}, actor: writer)
+
+    ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
+
+    post!(agent, "general", "Hull survey started")
+    post!(writer, "general", "Morning")
+
+    now = DateTime.utc_now()
+    seen!(runner, check_in: DateTime.add(now, -4, :hour), posted: DateTime.add(now, -2, :hour))
+    seen!(their, check_in: DateTime.add(now, -3, :hour), posted: DateTime.add(now, -5, :hour))
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET scheduled_check_ins = 12 WHERE agent_profile_id = $1",
+      [Ecto.UUID.dump!(runner.id)]
+    )
+
+    Here.read(@fleet)
+    {:ok, %{reading: %{agents: agents}}} = SharedReading.fetch(Here.fleet_key(@fleet))
+
+    assert Enum.map(agents, &{&1.name, Here.seen_by(&1.seen, true).line}) == [
+             {"Orbit runner", "Posted 2 hours ago · came back 12 times"},
+             {"Their agent", "Seen 3 hours ago · posted 5 hours ago"}
+           ]
+
+    assert Enum.map(agents, &{&1.name, Here.seen_by(&1.seen, false).line}) == [
+             {"Orbit runner", "Active 2 hours ago · came back 12 times"},
+             {"Their agent", "Active 3 hours ago"}
+           ]
+  end
+
   test "a post can only answer a post in the same room", %{writer: writer} do
     elsewhere = post!(writer, "coding", "Hull survey started")
     here = post!(writer, "general", "Morning")
@@ -205,7 +250,7 @@ defmodule Keyfleet.MessagesTest do
       Rooms.sync(
         @fleet,
         [%{slug: "general", after_seq: 0}],
-        %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+        %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
         writer,
         false
       )
@@ -220,7 +265,7 @@ defmodule Keyfleet.MessagesTest do
       Rooms.sync(
         @fleet,
         [%{slug: "general", after_seq: 3}, %{slug: "coding", after_seq: 1}],
-        %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+        %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
         writer,
         false
       )
@@ -234,7 +279,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                [%{slug: "hull-survey", after_seq: 0}],
-               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+               %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -245,7 +290,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                too_many,
-               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+               %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -256,7 +301,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                beyond,
-               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+               %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -267,7 +312,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                twice,
-               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+               %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -277,7 +322,7 @@ defmodule Keyfleet.MessagesTest do
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 %{graph: after_seq, proposals: 0, keys: [], dms: nil, quotes: nil},
+                 %{graph: after_seq, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                  writer,
                  false
                )
@@ -286,7 +331,7 @@ defmodule Keyfleet.MessagesTest do
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 %{graph: 0, proposals: after_seq, keys: [], dms: nil, quotes: nil},
+                 %{graph: 0, project: nil, proposals: after_seq, keys: [], dms: nil, quotes: nil},
                  writer,
                  false
                )
@@ -305,7 +350,7 @@ defmodule Keyfleet.MessagesTest do
       Rooms.sync(
         @fleet,
         cursors,
-        %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+        %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
         writer,
         false
       )
@@ -313,7 +358,7 @@ defmodule Keyfleet.MessagesTest do
     assert [%{cursor: 50, head_seq: 51}, %{cursor: 1, head_seq: 1}] = synced.rooms
     assert synced.graph.has_more == false
 
-    # The one read across rooms shows anyone without a key General alone.
+    # The one read across rooms shows anyone without a key the Public room alone.
     stranger = human("e")
     assert {:ok, [_ | _]} = Rooms.catch_up(@fleet, ["general"], [0], 50, actor: stranger)
 
@@ -559,6 +604,13 @@ defmodule Keyfleet.MessagesTest do
     @fleet
     |> Rooms.list_rooms!(authorize?: false)
     |> Map.new(&{{&1.fleet_id, &1.slug}, &1.head_seq})
+  end
+
+  defp seen!(profile, check_in: check_in, posted: posted) do
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_check_in_at = $2, last_contribution_at = $3 WHERE agent_profile_id = $1",
+      [Ecto.UUID.dump!(profile.id), check_in, posted]
+    )
   end
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)

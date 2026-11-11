@@ -1,9 +1,9 @@
 defmodule Mix.Tasks.Keyfleet.SetupLocalAuth do
   @moduledoc """
-  Prepares the guarded local database: the shared tables this site reads and
-  every migration. Only the repo is started, so it runs before the site does;
-  `mix test` runs it first, since the site's job queue starts only on a
-  migrated database.
+  Prepares the guarded local database as staging's first deployment is: the
+  shared tables this site reads, every shared change, then every migration.
+  Only the repo is started, so it runs before the site does; `mix test` runs
+  it first, since the site's job queue starts only on a migrated database.
   """
   use Mix.Task
 

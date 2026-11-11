@@ -3,10 +3,11 @@ export type EthereumProvider = {
 }
 
 /**
- * One wallet Privy currently holds: the provider this page sends through, and
- * Privy's own way of letting go of it.
+ * One wallet Privy currently holds: the provider this page sends through,
+ * Privy's own way of letting go of it, and whether Privy made it at sign-in
+ * (the Regents wallet) rather than it coming from the person's own wallet app.
  */
-export type ConnectedEthereumWallet = {provider: EthereumProvider; disconnect: () => void}
+export type ConnectedEthereumWallet = {provider: EthereumProvider; disconnect: () => void; regents: boolean}
 
 export type SelectedWallet = {address: string; provider: EthereumProvider}
 
@@ -64,6 +65,15 @@ export function replaceConnectedEthereumWallets(
   wallets: ReadonlyArray<readonly [string, ConnectedEthereumWallet]>,
 ): void {
   connectedWallets = new Map(wallets.map(([address, wallet]) => [address.toLowerCase(), wallet]))
+}
+
+/**
+ * The connected wallets Privy made at sign-in (the Regents wallet), or `null`
+ * while the page holds no connected wallet and so cannot yet tell.
+ */
+export function regentsWallets(): string[] | null {
+  if (walletDisconnected() || connectedWallets.size === 0) return null
+  return [...connectedWallets].flatMap(([address, wallet]) => (wallet.regents ? [address] : []))
 }
 
 export function connectedEthereumWallet(expectedSigner?: string): SelectedWallet | null {

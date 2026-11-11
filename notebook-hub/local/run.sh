@@ -10,7 +10,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=../marimohub/pin.env
 source "$here/marimohub/pin.env"
 tag="${MARIMOHUB_COMMIT:0:7}"
-hub_image="keyfleet/notebook-hub:$tag"
+hub_tag="$tag-$(cat "$here"/marimohub/*.patch | shasum -a 256 | cut -c1-7)"
+hub_image="keyfleet/notebook-hub:$hub_tag"
 runner_image="keyfleet/notebook-runner:$tag"
 net6=kf-nb-local-6pn
 front=kf-nb-local-front
@@ -51,6 +52,11 @@ docker create --name kf-nb-local-hub \
   -e MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED=true \
   -e MARIMOHUB_PERSIST_WORKSPACE=workspace \
   -e MARIMOHUB_RUN_MAINTENANCE=true \
+  -e MARIMOHUB_SANDBOX_AUTH=on \
+  -e MARIMOHUB_EDITOR_SANDBOX_SHARING=exclusive \
+  -e MARIMOHUB_JOBS=on \
+  -e MARIMOHUB_JOBS_MAX_PER_NOTEBOOK=100 \
+  -e MARIMOHUB_INTEGRATIONS=off \
   -e "MARIMOHUB_COMPUTE_IMAGE=$runner_image" \
   -e MARIMOHUB_COMPUTE_FLY_API_URL=http://_api.internal:4280 \
   -e "FLY_API_TOKEN=$fly_token" \

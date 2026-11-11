@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.EarlyController do
   alias KeyfleetWeb.{ClientAddress, PublicDocuments}
 
   @joined "You're on the list. We'll email you when Keyfleet opens."
-  @unreadable "That doesn't look like an email address."
+  @unreadable "Enter an email address, like name@example.com."
   @too_many "Too many tries from here. Wait a few minutes and try again."
   @not_saved "We couldn't save that just now. Try again in a moment."
 
@@ -161,7 +161,7 @@ defmodule KeyfleetWeb.EarlyHTML do
 
       <section id="key-roller" class="roller" aria-labelledby="roller-title" data-key-roller>
         <p class="early__overline">Try a Key</p>
-        <h2 id="roller-title" class="roller__title">Roll an example Key</h2>
+        <h2 id="roller-title" class="roller__title">Example Key</h2>
         <div class="roller__stage" data-roller-stage data-state="painting">
           <canvas
             class="roller__canvas"
@@ -183,7 +183,6 @@ defmodule KeyfleetWeb.EarlyHTML do
 
       <footer class="early__footer">
         <a href="https://x.com/regents_sh" rel="me">Follow on X</a>
-        <a href={~p"/contact"}>Contact</a>
         <a href={~p"/privacy"}>Privacy</a>
         <a href={~p"/terms"}>Terms</a>
       </footer>

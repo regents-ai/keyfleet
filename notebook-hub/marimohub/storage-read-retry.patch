@@ -1,0 +1,131 @@
+diff --git a/packages/storage-s3/src/index.ts b/packages/storage-s3/src/index.ts
+index 1937a8fe..7644995c 100644
+--- a/packages/storage-s3/src/index.ts
++++ b/packages/storage-s3/src/index.ts
+@@ -80,6 +80,14 @@ function isConditionalRequestConflict(err: unknown): boolean {
+ 	return (err as { name?: string })?.name === 'ConditionalRequestConflict';
+ }
+ 
++// Reads the SDK may retry after a 408. Writes are left out: a conditional write
++// that landed before the 408 would come back from its retry as a false conflict.
++const RETRIED_CANCELLED_READS = new Set([
++	'GetObjectCommand',
++	'HeadObjectCommand',
++	'ListObjectsV2Command',
++]);
++
+ function* chunk<T>(items: T[], size: number): Generator<T[]> {
+ 	for (let i = 0; i < items.length; i += size) {
+ 		yield items.slice(i, i + size);
+@@ -107,6 +115,22 @@ export class S3Storage implements Bucket {
+ 				throwOnRequestTimeout: true,
+ 			},
+ 		});
++		// Some stores (Tigris) cancel reads with 408 RequestCanceled, which the SDK
++		// does not count as transient. Low priority runs inside the SDK's retry step,
++		// so marking the error retryable here lets its retry strategy try again.
++		this.client.middlewareStack.add(
++			(next, context) => async (args) => {
++				try {
++					return await next(args);
++				} catch (error) {
++					if (RETRIED_CANCELLED_READS.has(context.commandName ?? '') && httpStatus(error) === 408) {
++						Object.assign(error as object, { $retryable: {} });
++					}
++					throw error;
++				}
++			},
++			{ step: 'finalizeRequest', priority: 'low', name: 'retryCancelledReads' },
++		);
+ 	}
+ 
+ 	private request<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+diff --git a/packages/storage-s3/src/retries.test.ts b/packages/storage-s3/src/retries.test.ts
+new file mode 100644
+index 00000000..38b0086a
+--- /dev/null
++++ b/packages/storage-s3/src/retries.test.ts
+@@ -0,0 +1,83 @@
++import { createServer } from 'node:http';
++import type { IncomingMessage, ServerResponse } from 'node:http';
++import { once } from 'node:events';
++import { afterEach, describe, expect, it } from 'vitest';
++import { S3Storage } from './index';
++
++const config = {
++	bucket: 'test-bucket',
++	region: 'us-east-1',
++	forcePathStyle: true,
++	credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
++	requestTimeoutMs: 5_000,
++};
++
++const cancelled =
++	'<?xml version="1.0" encoding="UTF-8"?><Error><Code>RequestCanceled</Code><Message>Request canceled</Message></Error>';
++const emptyList =
++	'<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><Name>test-bucket</Name><KeyCount>0</KeyCount><IsTruncated>false</IsTruncated></ListBucketResult>';
++
++const servers: ReturnType<typeof createServer>[] = [];
++
++afterEach(async () => {
++	for (const server of servers.splice(0)) {
++		server.closeAllConnections();
++		await new Promise<void>((resolve) => server.close(() => resolve()));
++	}
++});
++
++/** A store that cancels the first `cancels` requests with 408, then answers `ok`. */
++async function cancellingStore(
++	cancels: number,
++	ok: (request: IncomingMessage, response: ServerResponse) => void,
++) {
++	const requests: string[] = [];
++	const server = createServer((request, response) => {
++		request.resume();
++		requests.push(request.method ?? '');
++		if (requests.length <= cancels) {
++			response.writeHead(408, { 'Content-Type': 'application/xml' });
++			response.end(cancelled);
++		} else ok(request, response);
++	});
++	servers.push(server);
++	server.listen(0, '127.0.0.1');
++	await once(server, 'listening');
++	const address = server.address();
++	if (!address || typeof address === 'string') throw new Error('Missing server address');
++	return {
++		requests,
++		bucket: new S3Storage({ ...config, endpoint: `http://127.0.0.1:${address.port}` }),
++	};
++}
++
++describe('S3 cancelled requests', () => {
++	it('retries a list the store cancelled with 408', async () => {
++		const { bucket, requests } = await cancellingStore(1, (_request, response) => {
++			response.writeHead(200, { 'Content-Type': 'application/xml' });
++			response.end(emptyList);
++		});
++		await expect(bucket.list({ prefix: 'p/' })).resolves.toMatchObject({ objects: [] });
++		expect(requests).toEqual(['GET', 'GET']);
++	});
++
++	it('retries a read the store cancelled with 408', async () => {
++		const { bucket, requests } = await cancellingStore(1, (_request, response) => {
++			response.writeHead(200, { 'Content-Length': '2', ETag: '"e"' });
++			response.end('hi');
++		});
++		await expect((await bucket.get('key'))?.text()).resolves.toBe('hi');
++		expect(requests).toEqual(['GET', 'GET']);
++	});
++
++	it('does not retry a write the store cancelled with 408', async () => {
++		const { bucket, requests } = await cancellingStore(1, (_request, response) => {
++			response.writeHead(200, { ETag: '"e"' });
++			response.end();
++		});
++		await expect(bucket.put('key', 'v', { onlyIfNotExists: true })).rejects.toMatchObject({
++			$metadata: { httpStatusCode: 408 },
++		});
++		expect(requests).toEqual(['PUT']);
++	});
++});

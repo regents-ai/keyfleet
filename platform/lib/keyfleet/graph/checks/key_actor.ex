@@ -14,10 +14,9 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   hands moves the right to write with it, ends its shards, and an unknown
   owner grants nothing.
 
-  Every key writes the fleet scope. A key of a Fibonacci fleet also writes its
-  own level, and a later level once every key of that level is sold, as far as
-  the fleet's key history has been read; never an earlier level. Classic and
-  Accelerant keys write the fleet scope only.
+  Every key adds to the whole fleet's workspace, whatever kind of fleet it is;
+  which objects a key may change is the fleet's writer's to answer
+  (`Keyfleet.Graph.Workspace`).
   The policy asks first; the fleet's writer asks again when the write's turn
   comes, and only that answer lets the write through.
 
@@ -30,7 +29,6 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
-  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph.Errors.CheckExpiredError
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
@@ -44,13 +42,28 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
         "its owner, today, while the fleet's ownership is fresh and the key's edits are " <>
         "not restricted"
 
+  # The Claude connector lists an agent's writes, and only an agent's, before
+  # any write names a fleet or a key (`AshAi`); calling one runs the whole check.
   @impl true
+  def match?(
+        actor,
+        %{subject: %Ash.ActionInput{context: %{private: %{ash_ai_pre_check?: true}}}},
+        _opts
+      ),
+      do: is_struct(actor, Agent)
+
   def match?(actor, %{subject: %Ash.ActionInput{arguments: arguments}}, _opts) do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 
     # A key whose edits are restricted passes here, so that the writer's own
     # check refuses the write and says why.
-    case command(actor, arguments.fleet_id, arguments.as_key, arguments.command_id, within) do
+    case command(
+           actor,
+           arguments.fleet_id,
+           arguments.as_key,
+           Map.get(arguments, :command_id),
+           within
+         ) do
       {:ok, _command} -> true
       {:error, %EditsRestrictedError{}} -> true
       {:error, _error} -> false
@@ -61,15 +74,14 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
   @doc """
   The command a write carries: its id, the member principal it is recorded
-  under, the audit stamp of the standing that admits it and the scopes it may
-  write, read now within `within` milliseconds.
+  under and the audit stamp of the standing that admits it, read now within
+  `within` milliseconds.
   """
   def command(actor, fleet_id, token_id, command_id, within) do
     deadline = System.monotonic_time(:microsecond) + within * 1_000
 
-    with {:ok, auth} <- authority(actor, fleet_id, token_id, deadline),
-         {:ok, scopes} <- writable_scopes(fleet_id, token_id, deadline) do
-      {:ok, %{id: command_id, principal: principal(auth), auth: auth, writable_scopes: scopes}}
+    with {:ok, auth} <- authority(actor, fleet_id, token_id, deadline) do
+      {:ok, %{id: command_id, principal: principal(auth), auth: auth}}
     end
   end
 
@@ -94,6 +106,28 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     else
       nil -> {:ok, false}
       {:error, %NotKeyHolderError{}} -> {:ok, false}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  As `member/3`, and also whether a vote of the fleet has restricted the
+  edits of the key the actor is in the fleet as: `{:ok, %{token_id:,
+  restricted?:}}` when it is in the fleet, `{:ok, nil}` when it is not, and
+  `{:error, error}` when either can't be read right now. Read within
+  `within` milliseconds, as `member/3` is.
+  """
+  def membership(actor, fleet_id, within) do
+    deadline = System.monotonic_time(:microsecond) + within * 1_000
+
+    with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
+         {:ok, _reading} <- fresh_reading(fleet_id, deadline),
+         {:ok, _standing} <- standing(actor, fleet_id, token_id, deadline),
+         {:ok, restricted?} <- restricted(fleet_id, token_id, deadline) do
+      {:ok, %{token_id: token_id, restricted?: restricted?}}
+    else
+      nil -> {:ok, nil}
+      {:error, %NotKeyHolderError{}} -> {:ok, nil}
       {:error, error} -> {:error, error}
     end
   end
@@ -222,31 +256,21 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     }
 
   defp unrestricted(fleet_id, token_id, deadline) do
-    with {:ok, opts} <- within(deadline, fleet_id) do
-      case Keys.edits_restricted?(fleet_id, token_id, opts) do
-        {:ok, false} ->
-          :ok
+    case restricted(fleet_id, token_id, deadline) do
+      {:ok, false} ->
+        :ok
 
-        {:ok, true} ->
-          {:error, EditsRestrictedError.exception(fleet_id: fleet_id, token_id: token_id)}
+      {:ok, true} ->
+        {:error, EditsRestrictedError.exception(fleet_id: fleet_id, token_id: token_id)}
 
-        error ->
-          error
-      end
+      error ->
+        error
     end
   end
 
-  # Read once the standing is known, so the key has an owner on record.
-  defp writable_scopes(fleet_id, token_id, deadline) do
-    if Presets.levelled?(fleet_id) do
-      with {:ok, opts} <- within(deadline, fleet_id),
-           {:ok, minted} <- Keyfleet.Chain.minted(fleet_id, opts) do
-        levels = Presets.writable_levels(token_id, minted)
-        {:ok, ["fleet" | Enum.map(levels, &"level:#{&1}")]}
-      end
-    else
-      {:ok, ["fleet"]}
-    end
+  defp restricted(fleet_id, token_id, deadline) do
+    with {:ok, opts} <- within(deadline, fleet_id),
+         do: Keys.edits_restricted?(fleet_id, token_id, opts)
   end
 
   # What is left of the check's budget, as the database's time limit for the

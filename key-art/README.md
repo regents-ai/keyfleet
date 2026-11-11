@@ -8,8 +8,9 @@ Draws a revealed key's card as a 767×959 PNG for the site's picture job
   and draws the card off screen, so the picture is the same card the Key Lab and
   the early-access page's roller show.
 - `server.mjs` keeps one headless Chromium (CPU rendering, no graphics chip) and
-  answers:
-  - `GET /healthz`: 200 once the browser is up.
+  answers as soon as it starts, while the browser is still starting, so the draw
+  that wakes a stopped machine is answered once the browser is up:
+  - `GET /healthz`: 200 once the browser is up, 503 while it starts.
   - `POST /draw` with JSON `{"seed", "top_line", "table"}`: 200 and the PNG;
     400 and `{"error": <reason>}` for a body that is not JSON with those three
     strings; 422 and `{"error": <reason>}` for a seed that is not 32 bytes of
@@ -33,6 +34,26 @@ PORT=4890 npm start
 
 The site's development settings point at `http://127.0.0.1:4890`. `npm run
 typecheck` checks the page against the site's TypeScript settings.
+
+## The homepage's shuffle
+
+`shuffle.mjs` draws the hundred Keys the homepage's next Key card shuffles
+through when a mouse points at it, and writes them as one looping animated
+WebP, ten cards a second:
+
+```sh
+cd key-art
+node shuffle.mjs ../platform/priv/static/images/home/next-key-shuffle.webp
+```
+
+The cards are real Keys from the trait table, of no fleet's deck, from fixed
+seeds unlike the thirty turning cards lower on the homepage. Each is drawn
+whole with the site's card code on the graphics chip at 1200×1500, its key
+reaching past its card, cut out of the studio and kept at 480×600. It needs
+`npm ci` here and in `platform/`, and libwebp's `cwebp` and `webpmux`. A WebP
+is the one animated picture with transparency every current browser shows in
+a plain image; at this size it is about 1.9 MB, so the page loads it only under
+a mouse, once its dust shows.
 
 ## Going live
 

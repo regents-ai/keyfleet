@@ -6,7 +6,8 @@ defmodule Keyfleet.Rooms.Validations.IssuedKey do
   sold moments ago is refused as unknown until its sale has been read.
 
   The key is the `token_id` argument, or the one `argument:` names, which may
-  hold a list of keys; the first one not issued is refused.
+  hold a list of keys; the first one not issued is refused. A changeset may
+  name the fleet and the key as the record's own fields instead.
   """
   use Ash.Resource.Validation
 
@@ -16,9 +17,12 @@ defmodule Keyfleet.Rooms.Validations.IssuedKey do
   def supports(_opts), do: [Ash.Changeset, Ash.Query]
 
   @impl true
-  def validate(%input_type{} = input, opts, _context) do
-    fleet_id = input_type.get_argument(input, :fleet_id)
-    token_ids = input_type.get_argument(input, Keyword.get(opts, :argument, :token_id))
+  def validate(input, opts, _context) do
+    fleet_id = Ash.Subject.get_argument_or_attribute(input, :fleet_id)
+
+    token_ids =
+      Ash.Subject.get_argument_or_attribute(input, Keyword.get(opts, :argument, :token_id))
+
     {:ok, minted} = Keyfleet.Chain.minted(fleet_id)
 
     case Enum.find(List.wrap(token_ids), &(&1 > minted)) do

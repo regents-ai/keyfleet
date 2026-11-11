@@ -1,7 +1,8 @@
 defmodule Keyfleet.Agents.Changes.ScheduledCheckIn do
   @moduledoc """
-  Records a scheduled check-in and keeps the count that confirms the schedule,
-  all in the one statement that inserts or updates the row.
+  Records a scheduled check-in, counts it as a return when it comes on
+  time, and keeps the count that confirms the schedule, all in the one
+  statement that inserts or updates the row.
 
   With `I` the declared interval and `gap` the time since the counted
   scheduled check-in:
@@ -13,6 +14,10 @@ defmodule Keyfleet.Agents.Changes.ScheduledCheckIn do
     * a gap of at most twice the interval plus the grace counts and leaves the
       confirmation as it was;
     * a longer gap means the check-ins had stopped, so confirming starts again.
+
+  A return is the first scheduled check-in or one at least half its interval
+  after the counted one, whatever interval it names, so checking in more often
+  than the schedule, or naming a new interval each time, never adds returns.
   """
   use Ash.Resource.Change
 
@@ -31,6 +36,30 @@ defmodule Keyfleet.Agents.Changes.ScheduledCheckIn do
     |> Ash.Changeset.atomic_set(:counted_scheduled_at, now())
     |> Ash.Changeset.atomic_update(:last_check_in_at, now())
     |> Ash.Changeset.atomic_update(:last_scheduled_at, now())
+    |> Ash.Changeset.atomic_set(:scheduled_check_ins, 1)
+    |> Ash.Changeset.atomic_update(
+      :scheduled_check_ins,
+      Ash.Expr.expr(
+        type(
+          fragment(
+            """
+            CASE
+              WHEN ? IS NULL
+                OR (statement_timestamp() AT TIME ZONE 'utc') - ? >= make_interval(mins => ?::integer) / 2
+                THEN ? + 1
+              ELSE ?
+            END
+            """,
+            counted_scheduled_at,
+            counted_scheduled_at,
+            ^minutes,
+            scheduled_check_ins,
+            scheduled_check_ins
+          ),
+          :integer
+        )
+      )
+    )
     |> Ash.Changeset.atomic_update(
       :counted_scheduled_at,
       Ash.Expr.expr(

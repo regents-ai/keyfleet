@@ -72,6 +72,41 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     end
   end
 
+  # A key whose wait for its draw was ended never gets traits, so it says so
+  # for good and may be kept for an hour.
+  test "a key whose draw's wait was ended says it is never revealed", %{conn: conn} do
+    Keys.record_reveal_expiry!(
+      %{
+        fleet_id: "fibonacci_cascade",
+        token_id: 3,
+        block_number: 12,
+        block_hash: "0x" <> String.duplicate("c", 64),
+        transaction_hash: transaction("fibonacci_cascade", 3, "expired"),
+        log_index: 0
+      },
+      actor: %System{}
+    )
+
+    response = get(conn, key_path("fibonacci_cascade", 3))
+
+    assert get_resp_header(response, "cache-control") == ["public, max-age=3600"]
+
+    assert json_response(response, 200) == %{
+             "name" => "CASCADE—001—003",
+             "description" =>
+               "Key 3 of Cascade #1. It never gets traits: the wait for its draw was ended.",
+             "image" => @interim_pass,
+             "attributes" => [
+               %{"trait_type" => "Set Type", "value" => "Cascade"},
+               %{"trait_type" => "Set ID", "value" => "001"},
+               %{"trait_type" => "Level", "value" => 2},
+               %{"trait_type" => "Status", "value" => "Never Revealed"}
+             ]
+           }
+
+    assert ContractSchema.response_errors(json_response(response, 200), "GET", @path, 200) == []
+  end
+
   # The traits are the fixture table's golden draw for this seed, the same
   # draw contracts/test/KeyfleetTraitDraw.t.sol pins. A reveal queues its
   # card's drawing; until the card is in the bucket the key keeps the pass.
@@ -216,6 +251,43 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     for response <- [cascade, accelerant] do
       assert ContractSchema.response_errors(json_response(response, 200), "GET", @path, 200) == []
     end
+  end
+
+  # A close-up that can't be made is tried for days, then given up for good,
+  # so it never holds the key-art queue again.
+  test "a small picture whose job fails its last try is not looked for again" do
+    picture =
+      Keyfleet.Keys.KeyPicture
+      |> Ash.Changeset.for_create(
+        :record,
+        %{
+          fleet_id: "fibonacci_cascade",
+          token_id: 3,
+          seed: Traits.keccak256("golden-1"),
+          cid: "b" <> String.duplicate("c", 58)
+        },
+        actor: %System{}
+      )
+      |> Ash.create!()
+
+    Req.Test.stub(KeyArt, &Plug.Conn.send_resp(&1, 502, ""))
+    waiting = fn -> Ash.read!(Keyfleet.Keys.KeyPicture, action: :without_close_up) end
+    args = %{"primary_key" => %{"id" => picture.id}}
+
+    # An earlier try fails the job, which Oban runs again later.
+    assert_raise Ash.Error.Unknown, fn ->
+      perform_job(Keyfleet.Keys.KeyPicture.Workers.CloseUp, args, attempt: 19, max_attempts: 20)
+    end
+
+    assert [%{id: id, close_up_failed_at: nil}] = waiting.()
+    assert id == picture.id
+
+    perform_job(Keyfleet.Keys.KeyPicture.Workers.CloseUp, args, attempt: 20, max_attempts: 20)
+
+    assert waiting.() == []
+
+    assert %{close_up_failed_at: %DateTime{}, close_up_cid: nil} =
+             Ash.get!(Keyfleet.Keys.KeyPicture, picture.id)
   end
 
   # A key's traits need its fleet's table; a key still waiting for its card

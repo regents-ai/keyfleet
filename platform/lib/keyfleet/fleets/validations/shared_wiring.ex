@@ -13,8 +13,6 @@ defmodule Keyfleet.Fleets.Validations.SharedWiring do
   """
   use Ash.Resource.Validation
 
-  require Ash.Query
-
   @fields [
     :chain_id,
     :keys_address,

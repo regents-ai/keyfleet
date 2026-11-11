@@ -1,7 +1,8 @@
 defmodule Keyfleet.Keys.Profile do
   @moduledoc """
   Everything one key's profile shows, as a plain map: the key itself, the
-  wallet holding it, its thread and what it has said in the fleet's rooms.
+  wallet holding it and the Key it writes as, its thread and what it has said
+  in the fleet's rooms.
 
   Every figure is read with a fixed number of indexed reads, so opening a key
   costs the same however large the fleet is and however many keys its holder
@@ -11,12 +12,11 @@ defmodule Keyfleet.Keys.Profile do
   number, level and price.
   """
 
-  require Ash.Query
-
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.Agents
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.Keys.KeyAttachment
@@ -78,7 +78,7 @@ defmodule Keyfleet.Keys.Profile do
   What changes when the key, or a key its holder holds, has written or been
   written to, or a post has come off its wall: how many posts its wall shows
   (`messages`) and the place of the last one written to it (`wall_head`), its
-  posts in General, and its holder's.
+  posts in the rooms anyone reads, and its holder's.
   Read as nobody, so the fleet's other rooms, which only its keys read, never
   show here.
   """
@@ -142,6 +142,7 @@ defmodule Keyfleet.Keys.Profile do
     holder = current.owner_wallet
     activity = activity(fleet_id, token_id, holder)
     thread = latest_thread(fleet_id, token_id, activity.wall_head)
+    traits = traits(fleet, token_id)
 
     held =
       Keys.keys_held_in_fleet!(fleet_id, [holder], query: [limit: @listed])
@@ -154,9 +155,12 @@ defmodule Keyfleet.Keys.Profile do
       image: Metadata.image(fleet, token_id),
       level: level(fleet_id, token_id),
       issue_price: Presets.issue_price(fleet_id, token_id),
-      traits: traits(fleet, token_id),
+      traits: traits,
+      draw_ended?: is_nil(traits) and Keys.get_reveal_expiry!(fleet_id, token_id) != nil,
       held_since: current.observed_at,
       holder: holder,
+      posts_as: posts_as(fleet, token_id),
+      opensea: opensea(fleet, token_id),
       yours?: holder in wallets(viewer),
       held_for_pass?: Presets.given?(fleet_id) and holder == fleet.club_claims_address,
       changed_hands:
@@ -168,7 +172,7 @@ defmodule Keyfleet.Keys.Profile do
       holder_keys: held,
       holder_key_count:
         count(KeyAttachment, :held_in_fleet, %{fleet_id: fleet_id, owner_wallets: [holder]}),
-      holder_keys_everywhere: count(KeyAttachment, :held_by_wallet, %{owner_wallet: holder}),
+      holder_keys_everywhere: count(KeyAttachment, :held_everywhere, %{owner_wallets: [holder]}),
       composer: composer(viewer, fleet_id)
     }
     |> Map.merge(activity)
@@ -179,11 +183,24 @@ defmodule Keyfleet.Keys.Profile do
   def last_seq([], shown), do: shown
   def last_seq(posts, _shown), do: List.last(posts).seq
 
+  # The Key its holder writes as in the fleet, as everything they write shows
+  # it (`Keyfleet.Keys.faces/2`), with its small card.
+  defp posts_as(fleet, token_id) do
+    %{^token_id => %{face: face}} = Keys.faces(fleet.id, [token_id])
+    %{token_id: face, image: Metadata.small_cards(fleet, [face])[face]}
+  end
+
+  # The Key's own page on OpenSea, by its token id on Base.
+  defp opensea(fleet, token_id),
+    do:
+      "https://opensea.io/item/base/#{fleet.keys_address}/#{Fleet.onchain_token_id(fleet, token_id)}"
+
   defp level(fleet_id, token_id),
     do: if(Presets.levelled?(fleet_id), do: Presets.fibonacci_level_of(token_id))
 
   # Each trait the key's card has, in its fleet's order, with the share of
-  # keys that draw it; `nil` while the key is still revealing.
+  # keys that draw it; `nil` while the key is still revealing, or for good
+  # once the wait for its draw was ended (`draw_ended?`).
   defp traits(fleet, token_id) do
     case Keys.card_seed(fleet, token_id) do
       nil ->

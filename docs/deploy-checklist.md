@@ -1,8 +1,10 @@
 # Putting the Keyfleet site on Fly
 
 The steps, in order, for the first launch of the website at keyfleet.ai. The
-site has been live since: the app `keyfleet` on one machine in `iad`, with the
-volume `keyfleet_graph` at `/data`, released from `main` by step 6. This list
+site has been live since: the app `keyfleet` in `iad`, released from `main` by
+step 6. It has two machines (`platform/fly.toml`): the site machine serves
+every page, and the graph machine runs the fleets' graph writers beside their
+logs on the volume `keyfleet_graph` at `/data`. This list
 stays as the way to set it up again. Key sales stay off throughout: they need
 the founder's word, and not before the contracts are complete and deployed on
 Base (see "Before any key is sold").
@@ -18,7 +20,7 @@ graph host. The build fetches the shared libraries from GitHub at the commits
 `platform/` itself.
 
 1. The sealed supplies live in `/Users/sean/Documents/regent/archive/release-supply`:
-   `regent-graph-host-arm64-20260926` and `regent-graph-host-amd64-20260926`.
+   `regent-graph-host-arm64-20261104` and `regent-graph-host-amd64-20261104`.
    Reseal with `scripts/seal-graph-host-supply.sh <arch>` only when
    `graph_host/uv.lock` or `graph_host/.python-version` changes.
 2. Commit everything first: uncommitted changes are left out, and the script
@@ -35,7 +37,8 @@ graph host. The build fetches the shared libraries from GitHub at the commits
 
 1. `fly apps create keyfleet` (only when setting the site up again; the app exists).
 2. `fly volumes create keyfleet_graph --region iad --size 1 --config fly.toml`.
-   Each fleet's shared work graph is a file on this volume at `/data`.
+   Each fleet's shared work graph is a file on this volume at `/data`, which
+   only the graph machine mounts.
 
 ## 3. Set the secrets
 
@@ -45,6 +48,7 @@ the values from their owners.
 | Name | What it is |
 | --- | --- |
 | `PHX_HOST` | `keyfleet.ai` |
+| `KEYFLEET_PRESENCE_TIMER_KEY` | The timer wallet's private key, stored on Fly and nowhere else (`docs/recurring-jobs.md`). |
 | `SECRET_KEY_BASE` | A fresh random secret of at least 64 bytes (`mix phx.gen.secret`). |
 | `KEYFLEET_APP_SURFACES` | `on` opens the whole site, and `/early` then sends visitors to the homepage. `off` shows only the early-access page (`/early`, where visitors leave an email address), the Privacy Policy and Terms of Use, `/healthz`, `/robots.txt`, `/sitemap.xml` and `/.well-known/security.txt`: every other page sends visitors to `/early`, and the API, sign-in and agent files answer 503. The site will not start without it, or with any other value. |
 | `DATABASE_POOLED_URL` | The shared production database, as the running site signs in to it: the login `keyfleet-runtime`, which has the `writer` role. Its host must be `direct.dzx6qo6xqzvojpv5.flympg.net`, with no port other than 5432 and nothing after `?`. |
@@ -59,6 +63,7 @@ the values from their owners.
 | `LIGHTHOUSE_API_KEY` | Regent's Lighthouse account key; revealed keys' cards are kept on IPFS there. |
 | `PICTURES_PUBLIC_URL` | The address the bucket's objects are read from, `https://<bucket>.fly.storage.tigris.dev`. Pages may load pictures from it. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | Optional error reporting. |
+| `RELEASE_COOKIE` | A fresh random secret the site and graph machines share to join one cluster (`platform/rel/env.sh.eex`). Set it without showing it: `fly secrets set --stage RELEASE_COOKIE="$(openssl rand -hex 32)" > /dev/null`. Neither machine starts without it. |
 
 Sean creates both database logins at launch; neither exists before then.
 `keyfleet-runtime` reads and changes records but cannot create, change or drop
@@ -273,23 +278,78 @@ refuses anything but staging.
    ```sh
    fly deploy <folder> --config <folder>/platform/fly.toml \
      --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
-     --remote-only --ha=false --image-label <short commit>
+     --remote-only --ha=false --image-label <short commit> --process-groups graph
+   fly deploy --config <folder>/platform/fly.toml \
+     --image registry.fly.io/keyfleet:<short commit> --ha=false \
+     --process-groups site --strategy bluegreen
    ```
-   with Fly's remote builder. A plain `fly deploy` from `platform/` cannot work. `--ha=false` keeps one machine: a
-   second machine would get its own empty volume and the fleets' graphs would
-   split without any error. The migration step runs before the site starts:
+   The first builds the image with Fly's remote builder and releases the graph
+   machine: it stops and starts again, and for those seconds a workspace write
+   answers "try again". The second starts a new site machine on the same image,
+   waits for its health check, and only then stops the old one, so pages are
+   answered throughout. A plain `fly deploy` from `platform/` cannot work.
+   `--ha=false` keeps one graph machine: a second would get its own empty
+   volume and the fleets' graphs would split without any error. The migration
+   step runs in both, before either machine starts:
    it brings the database up to date and then puts the five fleets on the
    site, opening the Regents Club's rooms. The Regents Club is open, and
    Classic #1, Syndicate #1, Cascade #1 and Accelerant #1 are coming soon,
    shown by name with no price, no keys, no rooms and no way to join. It
    records no contracts, and every later deploy runs it again without changing
    anything that is already there. Every release since the first has been
-   built by Fly's remote builder with these flags.
+   built by Fly's remote builder.
 2. The site starts, and every fleet's graph shows as unavailable because the
-   new volume belongs to root: `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`.
+   new volume belongs to root:
+   `fly ssh console --config fly.toml --process-group graph -C "chown 1001:1001 /data"`.
    The graphs come back within 30 seconds with no restart.
 3. Check `https://keyfleet.ai/healthz` answers, and that `fly status` shows one
-   machine that stays running.
+   site machine and one graph machine, both staying running.
+
+## Two machines
+
+Until 21 October 2026 the app ran on one machine, `d891115dbe7098` (process
+group `app`), which served the pages and held the volume. Releasing it
+stopped every page for 7 to 9 seconds. The site and graph machines replace
+it. The move was rehearsed on a throwaway app the same day, with a page load
+every half second: none failed. It is done once, by the first release of the
+commit that splits them, and in this order, because `scripts/deploy.sh` on
+that commit, run while the one machine is still in the `app` group, would
+start a second graph machine on a new, empty volume.
+
+1. Stage the cluster's secret, without showing it:
+   `fly secrets set --app keyfleet --stage RELEASE_COOKIE="$(openssl rand -hex 32)" > /dev/null`.
+2. Push the commit to `main`, assemble its context folder for amd64
+   (`platform/scripts/build-release-context.sh <folder> amd64`), and start the
+   site machine first, from the monorepo root:
+   ```sh
+   fly deploy <folder> --config <folder>/platform/fly.toml \
+     --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
+     --remote-only --ha=false --image-label <short commit> \
+     --process-groups site --strategy bluegreen
+   ```
+   Fly creates the one site machine and leaves `d891115dbe7098` as it is, so
+   both serve pages. Workspace writes made on the new machine answer "try
+   again" until step 4.
+3. Put the old machine in the graph group:
+   `fly machine update d891115dbe7098 --app keyfleet --metadata fly_process_group=graph`.
+   It starts again in a few seconds, still on its volume, while the site
+   machine serves the pages.
+4. Release the graph machine on the same image:
+   `fly deploy --config platform/fly.toml --image registry.fly.io/keyfleet:<short commit> --ha=false --process-groups graph`.
+   It now runs only the fleets' writers, joins the site machine's cluster, and
+   takes no pages.
+5. Check `fly status --app keyfleet` shows one site and one graph machine,
+   `https://keyfleet.ai/healthz` answers, and a workspace write succeeds.
+   From now on every release is `scripts/deploy.sh production`.
+
+To go back to one machine: put the graph machine back in the `app` group
+(`fly machine update d891115dbe7098 --app keyfleet --metadata fly_process_group=app`),
+then deploy the last release before the split with its own `fly.toml`,
+without `--process-groups`, as the restore drill's rollback does. Fly
+updates the machine to serve pages again and removes the site machine, which
+its `fly.toml` does not name. Pages stop for a few seconds while the machine
+starts again, as every release did before the split. The volume never moves,
+so nothing is copied and no write is lost.
 
 ## Key sales stay off
 

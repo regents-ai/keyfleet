@@ -37,6 +37,8 @@ defmodule KeyfleetWeb do
     quote do
       use Phoenix.LiveView, layout: {KeyfleetWeb.Layouts, :app}
 
+      on_mount KeyfleetWeb.VisitLog
+
       unquote(html_helpers())
     end
   end

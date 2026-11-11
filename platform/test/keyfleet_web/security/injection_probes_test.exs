@@ -13,15 +13,17 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
   alias KeyfleetWeb.ContentSecurityPolicy, as: CSP
 
   @xss_payloads [
-    ~s(<script>alert(document.cookie)</script>),
-    ~s(<img src=x onerror="alert(1)">),
-    ~s(<a href="javascript:alert(1)">tap</a>),
-    ~s(<svg/onload=alert(1)>),
-    ~s(<iframe src="https://evil.example"></iframe>),
-    ~s([click](javascript:alert(1))),
-    ~s(<a href="data:text/html,<script>alert(1)</script>">x</a>)
+    ~S|<script>alert(document.cookie)</script>|,
+    ~S|<img src=x onerror="alert(1)">|,
+    ~S|<a href="javascript:alert(1)">tap</a>|,
+    ~S|<svg/onload=alert(1)>|,
+    ~S|<iframe src="https://evil.example"></iframe>|,
+    ~S|[click](javascript:alert(1))|,
+    ~S|<a href="data:text/html,<script>alert(1)</script>">x</a>|
   ]
 
+  # A payload left as text comes back escaped (`&lt;img … onerror=…&gt;`), which
+  # is safe, so the handler and scheme checks look inside a real tag.
   describe "stored XSS — a room post's words are rendered as safe HTML (RT-XSS-ROOMS)" do
     # Toggle to break: in rooms_live.ex `@markdown`, set `sanitize: []` or add
     # `render: [unsafe_: true]`; the payload then reaches the page unescaped.
@@ -32,14 +34,22 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
         refute html =~ ~r/<script/i, "script tag survived: #{inspect(payload)}"
         refute html =~ ~r/<iframe/i, "iframe survived: #{inspect(payload)}"
         refute html =~ ~r/<svg/i, "svg survived: #{inspect(payload)}"
-        refute html =~ ~r/on\w+\s*=/i, "event handler survived: #{inspect(payload)}"
-        refute html =~ ~r/javascript:/i, "javascript: scheme survived: #{inspect(payload)}"
-        refute html =~ ~r/\sdata:text\/html/i, "data:text/html survived: #{inspect(payload)}"
+
+        refute html =~ ~r/<[a-z][^>]*[\s\/]on\w+\s*=/i,
+               "event handler survived: #{inspect(payload)}"
+
+        refute html =~ ~r/<[a-z][^>]*\s(href|src)\s*=\s*"?\s*javascript:/i,
+               "javascript: scheme survived: #{inspect(payload)}"
+
+        refute html =~ ~r/<[a-z][^>]*\s(href|src)\s*=\s*"?\s*data:text\/html/i,
+               "data:text/html survived: #{inspect(payload)}"
       end
     end
 
     test "a plain link keeps noopener and an allowed scheme" do
-      html = "[docs](https://example.com)" |> KeyfleetWeb.RoomsLive.body_html() |> safe_to_string()
+      html =
+        "[docs](https://example.com)" |> KeyfleetWeb.RoomsLive.body_html() |> safe_to_string()
+
       assert html =~ ~s(href="https://example.com")
       assert html =~ "noopener"
     end
@@ -52,8 +62,8 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
       for payload <- @xss_payloads do
         html = payload |> KeyfleetWeb.PublicDocuments.html() |> safe_to_string()
         refute html =~ ~r/<script/i, inspect(payload)
-        refute html =~ ~r/on\w+\s*=/i, inspect(payload)
-        refute html =~ ~r/javascript:/i, inspect(payload)
+        refute html =~ ~r/<[a-z][^>]*[\s\/]on\w+\s*=/i, inspect(payload)
+        refute html =~ ~r/<[a-z][^>]*\s(href|src)\s*=\s*"?\s*javascript:/i, inspect(payload)
       end
     end
   end
@@ -86,8 +96,12 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
     # Toggle to break: in Keyfleet.Notebooks, make `destination?/1` return true
     # for arbitrary strings; `notebook_open_controller` would then redirect off
     # site.
-    test "only the start page or a saved-output path is an allowed destination" do
+    test "only the start page, one notebook or a saved-output path is an allowed destination" do
       assert Keyfleet.Notebooks.destination?("/")
+
+      assert Keyfleet.Notebooks.destination?(
+               "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef"
+             )
 
       for hostile <- [
             "https://evil.example",
@@ -95,7 +109,11 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
             "http://169.254.169.254/latest/meta-data/",
             "javascript:alert(1)",
             "/../../etc/passwd",
-            "\\\\evil.example"
+            "\\\\evil.example",
+            "//projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef",
+            "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef/../../x",
+            "/projects/../notebooks/nb-0123456789abcdef",
+            "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef?next=//evil.example"
           ] do
         refute Keyfleet.Notebooks.destination?(hostile), inspect(hostile)
       end

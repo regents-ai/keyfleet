@@ -24,6 +24,15 @@
   height: 2.5rem;
 }
 
+.kf-placeholder--area {
+  position: absolute;
+  inset: 0;
+}
+
+.kf-placeholder--area .kf-placeholder__bar {
+  height: 100%;
+}
+
 @keyframes kf-placeholder-pulse {
   50% { opacity: 0.45; }
 }
@@ -36,4 +45,14 @@
 .kf-empty {
   padding: var(--space-3) 0;
   justify-items: start;
+}
+
+/* Straight under a heading, it starts as close as any other panel's first
+   line, and the last thing in its section ends as close to the edge. */
+:is(h2, h3) + .kf-empty {
+  padding-block-start: 0;
+}
+
+.kf-empty:last-child {
+  padding-block-end: 0;
 }

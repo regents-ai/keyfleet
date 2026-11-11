@@ -4,7 +4,7 @@
 # /etc/marimohub/fly-compute.mjs. Build context: notebook-hub/.
 
 # --- build stage: marimohub at the pin, plus compute-fly as a workspace package ---
-FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS build
+FROM node:24.22.1-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 ENV CI=true
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -19,13 +19,64 @@ RUN git init --quiet \
  && git checkout --quiet --detach FETCH_HEAD
 COPY marimohub/pnpm-lock.patch /tmp/pnpm-lock.patch
 RUN git apply /tmp/pnpm-lock.patch
+# A catalog write that lands but is retried by the storage client keeps its snapshot
+# (the catalog is read before deleting); without it the hub could delete the snapshot
+# its own catalog names.
+COPY marimohub/catalog-commit.patch /tmp/catalog-commit.patch
+RUN git apply /tmp/catalog-commit.patch
+# A failed storage call's log line carries the store's HTTP status, request ids and
+# tries, so a refused write can be traced with the store.
+COPY marimohub/storage-errors.patch /tmp/storage-errors.patch
+RUN git apply /tmp/storage-errors.patch
+# Deleted-notebook cleanup works on 16 notebooks at a time, so a project with
+# thousands of notebooks finishes inside the maintenance deadline.
+COPY marimohub/sweep-concurrency.patch /tmp/sweep-concurrency.patch
+RUN git apply /tmp/sweep-concurrency.patch
+# A read the store cancels with 408 (Tigris RequestCanceled) is retried like any
+# other brief store failure. Writes are not retried after a 408, though the storage
+# client still retries them after server errors and timeouts.
+COPY marimohub/storage-read-retry.patch /tmp/storage-read-retry.patch
+RUN git apply /tmp/storage-read-retry.patch
+# The app pool sweep works on 16 pools at a time and passes over a deleted
+# notebook's empty pool, so a purged project's thousands of pools finish inside
+# both loop deadlines.
+COPY marimohub/app-pool-sweep.patch /tmp/app-pool-sweep.patch
+RUN git apply /tmp/app-pool-sweep.patch
+# A store call that fails names its call and object key in its log line, and the
+# storage client's own retries wait 1, 2, 4 and 8 seconds between five tries.
+COPY marimohub/storage-calls.patch /tmp/storage-calls.patch
+RUN git apply /tmp/storage-calls.patch
+# A lease write that landed but was retried by the storage client and refused still
+# wins (the lease is read back for this attempt's own holder and expiry), and a loop
+# refused its lease logs who holds it and until when, so a lockout is never silent.
+COPY marimohub/maintenance-lock-landed.patch /tmp/maintenance-lock-landed.patch
+RUN git apply /tmp/maintenance-lock-landed.patch
+# Each notebook's upload and thumbnail cleanup runs hourly under its own lease
+# instead of in every five-minute maintenance cycle, and reads thumbnail.json only
+# when an image is over a day old.
+COPY marimohub/notebook-prune-hourly.patch /tmp/notebook-prune-hourly.patch
+RUN git apply /tmp/notebook-prune-hourly.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
+# marimohub's catalog tests, with the three catalog-commit.patch adds and the
+# maintenance-lock-landed.patch lease tests.
+RUN cd packages/core && pnpm exec vp test run src/services/catalog/
+# The notebook and thumbnail tests, with the sweep-concurrency.patch add and the
+# notebook-prune-hourly.patch adds, and the storage client's tests, with the
+# storage-read-retry.patch adds.
+RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts src/services/content/ThumbnailService.test.ts
+RUN cd packages/storage-s3 && pnpm exec vp test run
+# The server's loop and startup tests, with the lease and hourly prune adds, and the
+# Cloudflare example's tests for its lease calls.
+RUN cd apps/server && pnpm exec vp test run src/backgroundLoops.test.ts src/cron.test.ts src/cron.tracing.test.ts src/bootstrap.test.ts
+RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
+# The app pool tests, with the app-pool-sweep.patch add.
+RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---
-FROM node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS runtime
+FROM node:24.22.1-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

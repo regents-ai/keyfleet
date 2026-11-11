@@ -29,14 +29,16 @@ defmodule Keyfleet.Graph.Relation do
   end
 
   actions do
-    # The links from or to one object, oldest first.
+    # The links from or to one object made after `after_seq`, oldest first.
     read :touching do
       argument :fleet_id, :string, allow_nil?: false
       argument :object_id, :string, allow_nil?: false, constraints: @text
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 201]
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and
+                 fragment("? > ?", created_seq, ^arg(:after_seq)) and
                  (source == ^arg(:object_id) or target == ^arg(:object_id))
              )
 
@@ -74,11 +76,44 @@ defmodule Keyfleet.Graph.Relation do
       prepare build(sort: [created_seq: :asc], limit: 100)
     end
 
+    # The links whose both ends are among `ids`, oldest first: the edges of
+    # the workspace's graph between the items it draws. Callers bound it
+    # with a limit.
+    read :among do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :ids, {:array, :string},
+        allow_nil?: false,
+        constraints: [items: @text, max_length: 200]
+
+      filter expr(fleet_id == ^arg(:fleet_id) and source in ^arg(:ids) and target in ^arg(:ids))
+      prepare build(sort: [created_seq: :asc])
+    end
+
     read :with_ids do
       public? false
       argument :fleet_id, :string, allow_nil?: false
       argument :ids, {:array, :string}, allow_nil?: false, constraints: [items: @text]
       filter expr(fleet_id == ^arg(:fleet_id) and id in ^arg(:ids))
+    end
+
+    # Every link from or to an object of one project, for its deletion. Run
+    # before the project's objects go.
+    read :of_project do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   "EXISTS (SELECT 1 FROM keyfleet_app.graph_objects AS o WHERE o.fleet_id = ? AND o.project = ? AND o.id IN (?, ?))",
+                   ^arg(:fleet_id),
+                   ^arg(:project),
+                   source,
+                   target
+                 )
+             )
     end
 
     create :project do
@@ -94,11 +129,11 @@ defmodule Keyfleet.Graph.Relation do
   end
 
   policies do
-    policy action([:touching, :linked, :producing]) do
+    policy action([:touching, :linked, :producing, :among]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:with_ids, :project, :remove]) do
+    policy action([:with_ids, :project, :remove, :of_project]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

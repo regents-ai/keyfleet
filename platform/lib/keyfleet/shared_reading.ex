@@ -1,11 +1,13 @@
 defmodule Keyfleet.SharedReading do
   @moduledoc """
-  A figure every visitor sees alike, read once and shared by every open page.
+  A figure every reader it admits sees alike, read once and shared by every open
+  page.
 
   It is for a reading no saved row carries (a chain's newest block) or one built
-  from many rows (a list of the latest trades). A public row saved through Ash
-  reaches pages through its own `pub_sub` publication instead, and anything that
-  differs by viewer is reread under that viewer's scope: neither belongs here.
+  from many rows (a list of the latest trades, the Points board). A public row
+  saved through Ash reaches pages through its own `pub_sub` publication instead,
+  and anything that differs by viewer is reread under that viewer's scope: neither
+  belongs here.
   The rule and its reasons are in the `ash-frontend` skill,
   `references/public-figures.md`.
 
@@ -35,9 +37,11 @@ defmodule Keyfleet.SharedReading do
 
   A key is `{kind, id}`. `kind` is one of `@kinds` and `id` is an integer or a
   short string the site already holds in its own rows or settings, never text
-  from a request. Each kind states why every visitor may see it, the most keys
-  it may hold and the largest reading it accepts, so adding one is a reviewed
-  change. A reading is small plain data: numbers, strings, atoms, dates,
+  from a request. Each kind states who may see it and why, the most keys it may
+  hold and the largest reading it accepts, so adding one is a reviewed change.
+  Nothing hands out a reading by its kind: each page or answer fetches the keys it
+  shows, and shows a kind only to the readers its `audience` names. A reading is
+  small plain data: numbers, strings, atoms, dates,
   `Decimal`s, and maps, lists or tuples of them. An Ash record or any other
   struct is refused, as is a reading over its kind's size.
 
@@ -54,7 +58,10 @@ defmodule Keyfleet.SharedReading do
   each kind, how many keys it holds, how many of them have never been read, how
   many are late and how long ago its oldest reading was taken
   (`[:keyfleet, :shared_reading, :kind]`), and the table's size in memory
-  (`[:keyfleet, :shared_reading, :table]`). Every `degraded/1` is counted
+  (`[:keyfleet, :shared_reading, :table]`). Every reading offered to `put/2`
+  reports its `bytes` and its kind's `limit` (`[:keyfleet, :shared_reading, :size]`),
+  so a reading growing towards its limit shows before it is refused. Every
+  `degraded/1` is counted
   (`[:keyfleet, :shared_reading, :degraded]`), as is every refused reading
   (`[:keyfleet, :shared_reading, :refused]`) and every wake-up sent to pages
   (`[:keyfleet, :shared_reading, :woken]`), by kind.
@@ -64,33 +71,125 @@ defmodule Keyfleet.SharedReading do
 
   @table __MODULE__
 
-  # open: why a signed-out visitor may see it. keys: the most this kind holds.
+  # audience: who may see it, and why. keys: the most this kind holds.
   # bytes: the largest reading, measured as `:erlang.external_size/1`.
   # within: the seconds inside which a working producer reads every key again.
   @kinds %{
     fleet_agents: %{
-      open:
-        "the agents here and what their check-ins say are open to a signed-out read " <>
+      audience:
+        "every visitor: the agents here and what their check-ins say are open to a signed-out read " <>
           "(Keyfleet.Agents.AgentProfile :here_in_fleet, Keyfleet.Agents.CheckIn read policy) " <>
           "and in the open fleet directory; if either policy tightens, this kind changes with it. " <>
           "Its two holder counts are numbers only: how many addresses hold a Key, which the " <>
-          "chain shows anyone, and how many of them acted in the last hour, naming nobody",
+          "chain shows anyone, and how many of them acted in the last hour, naming nobody. " <>
+          "Its faces name the holder of each of the agents' Keys, the Key they write as and " <>
+          "how many Keys they hold (Keyfleet.Keys.faces/2): the chain shows who holds each Key, " <>
+          "every address an account links is public as the Member List shows, and the Key a " <>
+          "person writes as shows beside everything they write",
       # One for each fleet in Keyfleet.Fleets' catalog: a sixth fleet raises
-      # it, or its Who's here is refused and shown as not counted.
+      # it, or its Here now is refused and shown as not counted.
       keys: 5,
-      # 26,881 bytes measured at its fullest; the rest leaves room for a longer
+      # 26,881 bytes measured at its fullest before faces, which add about
+      # 120 bytes for each of up to 50 Keys; the rest leaves room for a longer
       # picture address in production.
-      bytes: 32_768,
+      bytes: 40_960,
       within: 120
     },
     key_agents: %{
-      open:
-        "a Key's active shards and their agents are open to a signed-out read " <>
+      audience:
+        "every visitor: a Key's active shards and their agents are open to a signed-out read " <>
           "(Keyfleet.Keys.ShardEvent and Keyfleet.Agents.CheckIn read policies); " <>
           "if either policy tightens, this kind changes with it",
       keys: 10_000,
       bytes: 20_480,
       within: 120
+    },
+    fleet_now: %{
+      audience:
+        "every visitor: a fleet's activity, what it is working on and how far it has sold, as a signed-out " <>
+          "visitor reads them, are open to a signed-out read: Keyfleet.Activity.page/3 and " <>
+          "headline/2 with no actor (the Public room and the Keys' threads, under the " <>
+          "Keyfleet.Rooms.Message read policy, and no workspace changes), " <>
+          "Keyfleet.Graph.shown/1 (the :titles read of projects and :open_goals), the fleet's " <>
+          "record, and the Keys sold " <>
+          "(Keyfleet.Chain.minted/2), which the chain shows anyone, and the holders of the Keys " <>
+          "in its activity with the Key each writes as (Keyfleet.Keys.faces/2), as open as the " <>
+          "Member List and what they write; if any of these tightens, this kind changes with it",
+      # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
+      keys: 5,
+      # Not yet measured at its fullest: a page of 30 activity items, the
+      # projects and their open goals, and a few numbers. A reading over it is refused and
+      # counted, and pages keep the one before.
+      bytes: 65_536,
+      within: 120
+    },
+    fleet_proposals: %{
+      audience:
+        "every visitor: the first page of a fleet's proposals, their tallies and words, is open to a signed-out " <>
+          "read (Keyfleet.Proposals.Proposal, Vote, Cancellation, Execution and Words read " <>
+          "policies), with the fleet's record, its chain cursor (Keyfleet.Chain.Cursor) and the " <>
+          "tokens its treasury pays in (Keyfleet.Treasury.AssetDetails and Reading read " <>
+          "policies); if any of these tightens, this kind changes with it",
+      # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
+      keys: 5,
+      # Not yet measured: twenty proposals, each with up to 4,000 bytes of words.
+      bytes: 131_072,
+      within: 120
+    },
+    fleet_treasury: %{
+      audience:
+        "every visitor: a fleet's Treasury page is open to a signed-out read: its latest reading, money " <>
+          "history and advances (Keyfleet.Treasury.Reading, Event and AssetDetails read " <>
+          "policies), the votes carried out (Keyfleet.Proposals.Proposal and Execution), the " <>
+          "fleet's record, its chain cursor and the Keys sold (Keyfleet.Keys.KeyAttachment), " <>
+          "which the chain shows anyone; if any of these tightens, this kind changes with it",
+      keys: 5,
+      # Not yet measured: the latest history, the open advances and five votes carried out.
+      bytes: 65_536,
+      within: 120
+    },
+    share_card: %{
+      audience:
+        "every visitor: the figures on a fleet's share picture are open to a signed-out read: its Keys sold " <>
+          "(Keyfleet.Chain.minted/2) and the Key to change hands last " <>
+          "(Keyfleet.Keys.KeyAttachment), which the chain shows anyone, its treasury's latest " <>
+          "reading (Keyfleet.Treasury.Reading read policy), and that Key's name and card " <>
+          "picture (Keyfleet.Keys.KeyReveal and KeyPicture read policies), which its Key's " <>
+          "page shows anyone; if any of these tightens, this kind changes with it",
+      # One for each fleet with a picture of its own (KeyfleetWeb.ShareCard.fleets/0).
+      keys: 2,
+      # A few short lines: the Keys, up to three treasury amounts, a Key's name
+      # and an IPFS address.
+      bytes: 1_024,
+      within: 120
+    },
+    proposal: %{
+      audience:
+        "every visitor: a proposal's first page is open to a signed-out read: the proposal, its calls, its " <>
+          "first fifty votes and its words (Keyfleet.Proposals.Proposal, Vote, Cancellation, " <>
+          "Execution and Words read policies), what its calls come to at the treasury's latest " <>
+          "balance (Keyfleet.Treasury.Reading and AssetDetails) and where it stands on the vote " <>
+          "contract, which the chain shows anyone; if any of these tightens, this kind changes " <>
+          "with it",
+      # Twenty for each catalog fleet, with room for a pass to put new proposals
+      # before it deletes the ones they pushed off the list.
+      keys: 200,
+      # Up to 4,000 bytes of words, fifty votes and the calls; a larger one is
+      # refused, counted, and read for each visit instead.
+      bytes: 131_072,
+      within: 120
+    },
+    # Ten rows of about 3.6 KB at most (a name, a 2.3 KB square pattern and a
+    # picture address) and 8 bytes for each account with points: 10,000 such
+    # accounts take about 116 KB.
+    points_board: %{
+      audience:
+        "signed-in people and paired agents, the readers the Points page and the agent's " <>
+          "Points answer admit; each gets the rows without account ids and their own place, " <>
+          "never the list of totals (Keyfleet.Points.Board)",
+      keys: 1,
+      bytes: 131_072,
+      within: 150
     }
   }
 
@@ -111,6 +210,10 @@ defmodule Keyfleet.SharedReading do
     # No table for the instant its owner restarts: the same as no reading.
     ArgumentError -> :error
   end
+
+  @doc "The largest reading `kind` accepts, as `:erlang.external_size/1` measures it."
+  @spec bytes(atom()) :: pos_integer()
+  def bytes(kind) when is_map_key(@kinds, kind), do: @kinds[kind].bytes
 
   @doc "Hear `{:shared_reading, key}` whenever the reading for `key` changes."
   @spec subscribe(key()) :: :ok
@@ -296,9 +399,20 @@ defmodule Keyfleet.SharedReading do
     refused
   end
 
+  # Every offered reading's size is reported against its kind's limit, so one
+  # that grows shows nearing the limit well before it is refused.
   defp fits(kind, reading) do
+    bytes = :erlang.external_size(reading)
+    limit = bytes(kind)
+
+    :telemetry.execute(
+      [:keyfleet, :shared_reading, :size],
+      %{bytes: bytes, limit: limit},
+      %{kind: kind}
+    )
+
     cond do
-      :erlang.external_size(reading) > @kinds[kind].bytes -> {:error, :too_large}
+      bytes > limit -> {:error, :too_large}
       not plain?(reading) -> {:error, :not_plain}
       true -> :ok
     end

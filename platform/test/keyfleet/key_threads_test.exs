@@ -78,7 +78,7 @@ defmodule Keyfleet.KeyThreadsTest do
              Rooms.sync(
                @fleet,
                [%{slug: "key-5", after_seq: 0}],
-               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+               %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                first,
                false
              )
@@ -94,9 +94,9 @@ defmodule Keyfleet.KeyThreadsTest do
        %{first: first, fifth: fifth} do
     opening = to_key!(first, 5, "Welcome aboard")
     taken = to_key!(first, 5, "Taken off")
-    Rooms.remove_from_wall!(taken.id, actor: fifth)
+    Rooms.remove_from_wall!(@fleet, 5, taken.id, actor: fifth)
     walls = [%{token_id: 5, after_seq: 0}, %{token_id: 7, after_seq: 0}]
-    places = %{graph: 0, proposals: 0, keys: walls, dms: nil, quotes: nil}
+    places = %{graph: 0, project: nil, proposals: 0, keys: walls, dms: nil, quotes: nil}
 
     assert {:ok, %{keys: [five, seven]}} = Rooms.sync(@fleet, [], places, first, false)
     assert {five.token_id, five.head_seq, five.cursor} == {5, 2, 2}
@@ -218,7 +218,7 @@ defmodule Keyfleet.KeyThreadsTest do
              {"general", "Morning"}
            ]
 
-    # Anyone else reads only what the key said in General.
+    # Anyone else reads only what the key said in the Public room.
     assert Enum.map(Rooms.posts_as_key!(@fleet, 1), &{&1.room.slug, &1.body}) == [
              {"general", "Anyone on the hull survey?"},
              {"general", "Morning"}
@@ -235,7 +235,7 @@ defmodule Keyfleet.KeyThreadsTest do
 
   test "a post tells the keys it concerns once, and a repeat tells nobody",
        %{first: first, fifth: fifth, first_agent: first_agent} do
-    # Keys' threads and General are told to anyone.
+    # Keys' threads and the Public room are told to anyone.
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.topic(@fleet, :public))
 
     {:ok, opening} = send_to_key(first, 5, "Welcome aboard", "k-1")
@@ -295,17 +295,6 @@ defmodule Keyfleet.KeyThreadsTest do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query(statement, [Ecto.UUID.dump!(posted.id)], mode: :savepoint)
     end
-
-    assert {:error,
-            %Postgrex.Error{postgres: %{code: :check_violation, constraint: "messages_as_key"}}} =
-             Repo.query(
-               "INSERT INTO keyfleet_app.messages " <>
-                 "(seq, kind, in_key_thread, author_kind, author_wallet, as_key, body, body_digest, idempotency_key, fleet_id, room_id) " <>
-                 "SELECT seq + 1, kind, in_key_thread, author_kind, author_wallet, NULL, body, body_digest, 'k-none', fleet_id, room_id " <>
-                 "FROM keyfleet_app.messages WHERE id = $1",
-               [Ecto.UUID.dump!(posted.id)],
-               mode: :savepoint
-             )
 
     assert Enum.map(Rooms.read_key_thread!(@fleet, 5), &{&1.id, &1.as_key}) == [{posted.id, 1}]
   end

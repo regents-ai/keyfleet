@@ -19,22 +19,30 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc "Serves `plug` on a free local port under the calling test and returns its address."
-  def serve!(id, plug) do
+  def serve!(id, plug), do: "http://127.0.0.1:#{listen!(id, plug, {127, 0, 0, 1})}"
+
+  @doc """
+  Serves `plug` on IPv6 only and returns an address by name, as Fly's private
+  addresses are: a client that looks the name up over IPv4 never reaches it.
+  """
+  def serve_ipv6!(id, plug), do: "http://localhost:#{listen!(id, plug, {0, 0, 0, 0, 0, 0, 0, 1})}"
+
+  defp listen!(id, plug, ip) do
     pid =
       ExUnit.Callbacks.start_supervised!(
-        Supervisor.child_spec({Bandit, plug: plug, ip: {127, 0, 0, 1}, port: 0}, id: id)
+        Supervisor.child_spec({Bandit, plug: plug, ip: ip, port: 0}, id: id)
       )
 
     {:ok, {_, port}} = ThousandIsland.listener_info(pid)
-    "http://127.0.0.1:#{port}"
+    port
   end
 
   @doc """
-  `method path` with `body`, signed by `signer` under a fresh receipt for
-  `audience` on `chain`, carrying a cookie and a bearer token the site must
-  not forward.
+  `method path` with `body`, sent to `authority` (`Siwa.Contract.authority/1`)
+  and signed by `signer` under a fresh receipt for `audience` on `chain`,
+  carrying a cookie and a bearer token the site must not forward.
   """
-  def sign(signer, secret, method, path, body, audience \\ "keyfleet", chain \\ 8453) do
+  def sign(signer, secret, authority, method, path, body, audience \\ "keyfleet", chain \\ 8453) do
     {:ok, %{token: receipt}} =
       Siwa.Receipt.create(
         %{
@@ -55,6 +63,7 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
         %{
           method: method,
           path: path,
+          authority: authority,
           body: body,
           headers: %{
             "content-type" => "application/json",
@@ -84,6 +93,23 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc """
+  The request in `payload`, the JSON the site sends the sign-in server, as
+  siwa-server hands it to the library: its method, path, the host it reached,
+  headers and the digest of its body. A stand-in serves Keyfleet at whatever
+  host a test sends to, so it lists that host as the site's own
+  (`authorities: [payload["authority"]]`).
+  """
+  def siwa_request(payload) do
+    %{
+      method: payload["method"],
+      path: payload["path"],
+      authority: payload["authority"],
+      headers: payload["headers"],
+      body_digest: payload["body_digest"]
+    }
+  end
+
+  @doc """
   The sign-in server's answer when asked to verify `payload`, a request signed
   under a receipt made with `secret`: `{200, verdict}` naming the wallet that
   signed it, or `{401, refusal}` when the signature does not hold. The browser
@@ -91,44 +117,50 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   (`Keyfleet.BrowserAgents`).
   """
   def verdict(payload, secret) do
-    case Siwa.verify_authenticated_request(payload,
+    case Siwa.verify_authenticated_request(siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           authorities: [payload["authority"]]
          ) do
-      {:ok, %{claims: claims, covered_components: covered}} ->
-        {200,
-         %{
-           code: "http_envelope_valid",
-           data: %{
-             verified: true,
-             walletAddress: claims["sub"],
-             chainId: claims["chain_id"],
-             verificationMethod: "eoa_recovery",
-             keyId: claims["key_id"],
-             receiptExpiresAt:
-               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-             requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
-             requiredCoveredComponents:
-               Siwa.required_authenticated_request_components(
-                 payload["headers"],
-                 payload["body_digest"]
-               ),
-             coveredComponents: covered,
-             agentRegistration: nil,
-             agentBook: nil,
-             principal: %{
-               kind: "wallet",
-               wallet_address: claims["sub"],
-               chain_id: claims["chain_id"],
-               audience: claims["aud"]
-             }
-           }
-         }}
-
-      {:error, _} ->
-        {401, %{error: refusal()}}
+      {:ok, verified} -> granted(verified, payload)
+      {:error, _} -> {401, %{error: refusal()}}
     end
+  end
+
+  @doc """
+  The sign-in server's `{200, verdict}` for `payload` once it has verified it.
+  A request verifies once: the sign-in server refuses the same signature again.
+  """
+  def granted(%{claims: claims, covered_components: covered}, payload) do
+    {200,
+     %{
+       code: "http_envelope_valid",
+       data: %{
+         verified: true,
+         walletAddress: claims["sub"],
+         chainId: claims["chain_id"],
+         verificationMethod: "eoa_recovery",
+         keyId: claims["key_id"],
+         receiptExpiresAt:
+           DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
+         requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
+         requiredCoveredComponents:
+           Siwa.required_authenticated_request_components(
+             payload["headers"],
+             payload["body_digest"]
+           ),
+         coveredComponents: covered,
+         agentRegistration: nil,
+         agentBook: nil,
+         principal: %{
+           kind: "wallet",
+           wallet_address: claims["sub"],
+           chain_id: claims["chain_id"],
+           audience: claims["aud"]
+         }
+       }
+     }}
   end
 
   # The sign-in server's refusal of a request whose signature does not hold.

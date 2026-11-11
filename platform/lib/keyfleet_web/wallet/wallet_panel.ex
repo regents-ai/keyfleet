@@ -8,11 +8,12 @@ defmodule KeyfleetWeb.WalletPanel do
   The steps are built on the server by `Keyfleet.WalletSteps` for the one
   wallet that may send them: Privy's active wallet, when the signed-in account
   links it. The page receives them before anyone presses. With another wallet
-  active, the figures are built for the account's own wallet, a note names
-  both, and a press sends nothing and says why. Signed out, nothing is built;
-  the Key on sale, the daily split's preview, presence and the launch still
-  show their figures, read from the chain the same way, and all but Buy
-  without their buttons.
+  active, or none, the figures are built for the account's own wallet without
+  its network fee, which no press pays, and a press sends nothing and names
+  the wallet to open; another wallet active is named in a note too. Signed
+  out, nothing is built; the Key on sale, the daily split's preview, presence
+  and the launch still show their figures, read from the chain the same way,
+  and all but Buy without their buttons.
 
   Nothing here disables, hides or holds back a button while anything is
   pending: every press reaches the wallet, and the contract decides. The one
@@ -39,11 +40,16 @@ defmodule KeyfleetWeb.WalletPanel do
       agent (`assets/js/page_tools.ts`), if any; and `class`;
     * the slots `heading`, `fields`, `notes`, `buttons` and `details` (the
       last under what was sent), each given the panel's state (`inputs`,
-      `built`, `review`, `presses`, `signer`) to read.
+      `built`, `review`, `presses`, `signer`, `signed_out`) to read.
 
   Buttons name their step with `data-onchain-step` and sit outside the form;
   fields that feed the steps carry `data-onchain-input` with the name they
-  are built from.
+  are built from. Signed out, a button also carries
+  `data-account-target="sign-in"`, so its press opens sign-in instead.
+
+  When a step sent from it goes through, the chain is read again
+  (`KeyfleetWeb.OnchainSteps.checked/3`) and the page that renders it receives
+  `{:onchain_landed, fleet_id}`.
   """
   use KeyfleetWeb, :live_component
 
@@ -93,11 +99,17 @@ defmodule KeyfleetWeb.WalletPanel do
   attr :step, :string, required: true
   attr :id, :string, required: true
   attr :variant, :string, default: "primary"
+
+  attr :done, :boolean,
+    default: false,
+    doc: "marks a step that has landed, as Approve once it has"
+
   slot :inner_block, required: true
 
   @doc """
   One wallet button: it names its step, and when the chain's own state makes
   that step certain to fail it stays in view, disabled, with why beside it.
+  Signed out, its press opens sign-in.
   """
   def step_button(assigns) do
     assigns = assign(assigns, reason: blocked(assigns.panel, assigns.step))
@@ -108,6 +120,8 @@ defmodule KeyfleetWeb.WalletPanel do
         id={@id}
         variant={@variant}
         data-onchain-step={@step}
+        data-account-target={@panel.signed_out && "sign-in"}
+        data-done={@done}
         disabled={@reason != nil}
         aria-describedby={@reason && "#{@id}-why"}
       >
@@ -123,6 +137,17 @@ defmodule KeyfleetWeb.WalletPanel do
   @doc "Whether `step` has been sent and has not been turned down."
   def sent?(%{presses: presses}, step),
     do: Enum.any?(presses.sent, &(&1.name == step and &1.outcome in [:pending, :confirmed]))
+
+  @doc """
+  Whether an approval sent from this group has landed and the figures read
+  since hold no step back for want of one: Approve is then shown done.
+  """
+  def approved?(%{presses: presses} = panel) do
+    landed? = Enum.any?(presses.sent, &(&1.name == "approve" and &1.outcome == :confirmed))
+    held = panel |> figures() |> Map.get(:blocked, %{}) |> Map.values()
+
+    landed? and not Enum.any?(held, &(&1 in [:approve_first, :approve_usdc_first]))
+  end
 
   @impl true
   def mount(socket) do
@@ -185,14 +210,17 @@ defmodule KeyfleetWeb.WalletPanel do
   # A press made before its step reached the page, or before the steps caught
   # up with the form: the form is taken as the page's own, and the reply
   # carries the steps built from it, read now even where the chain is read,
-  # so the press never waits on steps still being read elsewhere.
+  # so the press never waits on steps still being read elsewhere. A step those
+  # steps find certain to fail is not handed over: the button was pressed while
+  # the page still showed figures built for another wallet or form, and it now
+  # shows why it can't be pressed.
   def handle_event("prepare_and_send", %{"form" => form, "step" => step}, socket)
       when is_map(form) and is_binary(step) do
     socket = socket |> take_inputs(form) |> sync_now()
 
-    case socket.assigns.review do
-      %{} = review -> {:reply, %{review: review, send: step}, socket}
-      nil -> {:reply, %{}, socket}
+    case {socket.assigns.review, blocked(socket.assigns, step)} do
+      {%{} = review, nil} -> {:reply, %{review: review, send: step}, socket}
+      _none_or_blocked -> {:reply, %{}, socket}
     end
   end
 
@@ -219,6 +247,16 @@ defmodule KeyfleetWeb.WalletPanel do
     Proposals.save_words(fleet_id, text, actor)
     {:noreply, socket}
   end
+
+  # Buy REGENT clears its amount once the wallet has the press, so the form
+  # starts over for the next one.
+  def handle_event(
+        "step_pressed",
+        %{"step" => "convert"},
+        %{assigns: %{flow: :convert}} = socket
+      ),
+      do:
+        {:noreply, socket |> assign(inputs: %{socket.assigns.inputs | "amount" => ""}) |> sync()}
 
   def handle_event("step_pressed", _params, socket), do: {:noreply, socket}
 
@@ -249,17 +287,24 @@ defmodule KeyfleetWeb.WalletPanel do
 
   @impl true
   # A step that has landed changes what the next one needs (an approval, a
-  # vote, what is waiting), so the steps are built again.
+  # vote, what is waiting), so the steps are built again. One that went
+  # through may have moved the fleet's money: `OnchainSteps.checked/3` has
+  # asked for the chain to be read again, and the page is told
+  # (`{:onchain_landed, fleet_id}`), so its other figures are read again too.
   def handle_async({:onchain_step, hash}, result, socket) do
     socket = OnchainSteps.checked(socket, hash, result)
 
-    landed? =
-      Enum.any?(
-        socket.assigns.presses.sent,
-        &(&1.hash == hash and &1.outcome in [:confirmed, :reverted])
-      )
+    case Enum.find(socket.assigns.presses.sent, &(&1.hash == hash)) do
+      %{outcome: :confirmed} ->
+        send(self(), {:onchain_landed, socket.assigns.fleet.fleet_id})
+        {:noreply, sync(socket)}
 
-    {:noreply, if(landed?, do: sync(socket), else: socket)}
+      %{outcome: :reverted} ->
+        {:noreply, sync(socket)}
+
+      _still_reading ->
+        {:noreply, socket}
+    end
   end
 
   # Figures land only while the wallet they were read for is still the one
@@ -385,6 +430,7 @@ defmodule KeyfleetWeb.WalletPanel do
       signer: wallet,
       component_id: assigns.id,
       params: %{
+        sending: wallet == assigns.signer,
         inputs: assigns.inputs,
         proposal: assigns.proposal,
         token_id: assigns.token_id,
@@ -448,12 +494,20 @@ defmodule KeyfleetWeb.WalletPanel do
     end
   end
 
+  # A purchase's figures are on its buttons, so its line says only why its
+  # steps couldn't be built.
+  defp line(%{flow: :buy, built: %{problem: nil}}), do: nil
+  defp line(assigns), do: WalletWords.line(assigns.flow, assigns.built, assigns.inputs)
+
   @impl true
   def render(assigns) do
     assigns =
       assign(assigns,
-        panel: Map.take(assigns, [:inputs, :built, :review, :presses, :signer]),
-        line: WalletWords.line(assigns.flow, assigns.built, assigns.inputs),
+        panel:
+          assigns
+          |> Map.take([:inputs, :built, :review, :presses, :signer])
+          |> Map.put(:signed_out, assigns.actor == nil),
+        line: line(assigns),
         chain: chain_name(%{assigns: assigns}),
         read_only: assigns.actor == nil and assigns.flow in @read_only_for_visitors
       )
@@ -464,6 +518,7 @@ defmodule KeyfleetWeb.WalletPanel do
       class={["wallet-panel", @class]}
       phx-hook="OnchainSteps"
       data-webmcp-tool={@tool}
+      data-webmcp-fleet={@tool && @fleet.fleet_id}
     >
       {render_slot(@heading, @panel)}
 
@@ -487,7 +542,8 @@ defmodule KeyfleetWeb.WalletPanel do
       </p>
       <p :if={@names_sender} id={"#{@id}-from"} class="wallet-panel-note" hidden={!@signer}>
         <%= if @signer do %>
-          Sending from <code>{RegentFormat.short_address(@signer)}</code> on {@chain}.
+          Sending from <Regent.Primitives.address id={"#{@id}-signer"} address={@signer} />
+          on {@chain}.
         <% end %>
       </p>
       <p id={"#{@id}-mismatch"} class="wallet-panel-note" hidden={!@mismatch}>
@@ -523,7 +579,7 @@ defmodule KeyfleetWeb.WalletPanel do
         >
           <strong>{WalletWords.title(entry)}</strong>
           <span>{shown.words}</span>
-          <code title={entry.hash}>{RegentFormat.short_hash(entry.hash)}</code>
+          <Regent.Primitives.address id={"#{@id}-sent-#{entry.hash}"} address={entry.hash} kind="tx" />
           <Regent.Primitives.button
             :if={shown.state == :stalled}
             variant="quiet"

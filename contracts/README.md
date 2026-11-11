@@ -1,8 +1,8 @@
 # Contracts
 
-A Foundry workspace pinned to Solidity 0.8.26 with OpenZeppelin 5.7.0 and
-forge-std 1.9.7 vendored as git submodules under `contracts/lib`. Everything
-lives on Base (chain 8453).
+A Foundry workspace, tested with forge 1.8.6, pinned to Solidity 0.8.26 with
+OpenZeppelin 5.7.0 and forge-std 1.9.7 vendored as git submodules under
+`contracts/lib`. Everything lives on Base (chain 8453).
 
 Every key of every fleet is a token of one ERC-721 collection, `KeyfleetKeys`,
 named "Keyfleet" with the symbol KEYFLEET. Each fleet is four contracts the
@@ -1649,7 +1649,7 @@ without six decimals, a zero keeper and a zero trait table hash.
   past that; `record` writes
   `deployments/base-fork-lab.json` through `RecordKeyfleets`, in the shape of
   the release's deployed record; `fulfil` answers every draw still waiting
-  (Classic #1's keys 1 to 1,000 hold their cards by number and draw nothing).
+  (Classic #1's keys 1 to 1,024 hold their cards by number and draw nothing).
   The shell script also gives each buyer named 100 ETH and exactly 1,000 USDC.
   Every step refuses any chain but 31337 (`WrongChain`).
 
@@ -1849,8 +1849,8 @@ claims contract and a fleet's four contracts with `cast disassemble` and walks i
 following every jump target the code pushes, and fails if any of them can reach
 `DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT`. Bytes nothing jumps to, such as
 the Classic price table stored at the end of the manager's code, are data and
-are not judged. Foundry must be installed; the compiler may be downloaded on
-first use.
+are not judged. Foundry must be installed (forge 1.8.6); the compiler may be
+downloaded on first use.
 
 Tests need no RPC, apart from the five suites in `test/fork/`, which skip
 themselves unless `BASE_RPC_URL` is set:

@@ -4,7 +4,9 @@ defmodule KeyfleetWeb.Plugs.FleetComingSoon do
   `fleet_coming_soon`. Such a fleet has no rooms, workspace or proposals and
   no keys to run until it opens, so nothing the request asks for is read or
   written, a sync's check-in included. Requests that name no fleet, and those
-  about open or unknown fleets, pass on unchanged.
+  about open or unknown fleets, pass on unchanged. The Claude connector's
+  tools refuse it alike (`KeyfleetWeb.AgentTools.SignedRequest`,
+  `KeyfleetWeb.ToolErrors`).
   """
   @behaviour Plug
 

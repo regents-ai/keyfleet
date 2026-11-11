@@ -3,41 +3,62 @@ defmodule KeyfleetWeb.WorkspacePage do
   What a fleet's workspace pages show, read from the workspace's read tables
   alone, never from the fleet's writer.
 
-  `board/3` is the fleet's items a page at a time, the most recently changed
-  first, beside its latest changes and the changes sent to its code
-  (`Keyfleet.Code`); `item/4` is one item with its fields, its
-  links a page at a time and its history a page at a time. Each answers
+  `board/3` is one of the workspace's four places (`places/0`), in one of
+  the fleet's projects (`Keyfleet.Projects`) or across all of them. Its
+  Project is the items a page at a time, the most recently changed first,
+  beside the goals and the latest changes; its Docs the newest notebooks;
+  its Code the project's repository, its top folder and the changes sent to
+  it (`Keyfleet.Code`), or every project's repository in turn. Docs and Code
+  each list what the fleet's members pinned there (`Keyfleet.Graph.Pin`).
+  Public is what the fleet's Keys made public
+  (`Keyfleet.Projects.Publication`), newest first, and anyone reads it.
+  `item/4` is one item with its fields, its links a page at a time and its
+  history a page at a time, and a goal with the work around it in place of
+  its links. Goals are listed one line each,
+  the board's and every list of goals. Each answers
   `seen`, the log and the place in it the read tables had reached when the
   page was read. Every change is told as one plain line: a list of parts, each a piece of text, a key
   (`{:key, token_id, agent}`, with the name of the agent that wrote as it, or
   nil) or an item (`{:item, id, title}`, with a `nil` title when the item is
   not in the workspace). Who added an item is a key told the same way, so two
-  agents writing as one person's key are told apart.
+  agents writing as one person's key are told apart; a starting goal, one of
+  the ideas every workspace begins with (`Keyfleet.GoalIdeas`), was added by
+  Keyfleet.
 
-  `commit/4` is one commit in the fleet's code, at the address a workspace
-  cites it by (`commit_url/2`): who sent it, and the evidence that cites it
+  `commit/4` is one commit in one of the fleet's repositories, at the
+  address a workspace cites it by (`commit_url/3`): who sent it, and the evidence that cites it
   with the tasks that produced that evidence.
 
   Only the fleet's members read its workspace
   (`Keyfleet.Graph.Checks.KeyReader`) and its code: for anyone else every page
-  answers `members_only?: true`. The board then shows the fleet's outline,
-  each goal and task by title, standing and the public summary its members
-  wrote, beside the fixed public summaries from `Keyfleet.WorkspacePulse`;
-  nothing else members write.
+  answers `members_only?: true`, with what the fleet shows anyone of its
+  workspace: each project by title with the titles of its open goals
+  (`KeyfleetWeb.FleetPage.read_recent_work/1`), and nothing else members
+  write, except the Public place, which reads the same for everyone.
 
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
   """
 
-  alias Keyfleet.{Agents, Code, Fleets, Notebooks}
+  require Logger
+
+  alias Keyfleet.Actors.{Human, System}
+  alias Keyfleet.{Agents, Code, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Graph
+  alias Keyfleet.Graph.RerunCheck
+  alias Keyfleet.Notebooks.HubClient
+  alias Keyfleet.Projects.Publish
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Message
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
+  alias KeyfleetWeb.FleetPage
+  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.WorkspaceGraph
 
-  @types ~w(goal task finding evidence service note dead_end)
+  @types ~w(goal task finding evidence service note dead_end review)
 
   @type_names %{
     "goal" => {"goal", "Goals"},
@@ -46,7 +67,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     "evidence" => {"evidence", "Evidence"},
     "service" => {"service", "Services"},
     "note" => {"note", "Notes"},
-    "dead_end" => {"dead end", "Dead ends"}
+    "dead_end" => {"dead end", "Dead ends"},
+    "review" => {"review", "Reviews"}
   }
 
   # Each type's fields in the order they are shown, with their names; any
@@ -55,17 +77,20 @@ defmodule KeyfleetWeb.WorkspacePage do
     "goal" => [
       {"outcome", "Outcome"},
       {"status", "Status"},
-      {"public_summary", "Public summary"},
       {"success_criteria", "Success criteria"},
       {"open_questions", "Open questions"}
     ],
     "task" => [
       {"progress", "Progress"},
       {"assignee_key", "Taken by"},
+      {"reviewer_key", "Reviewer"},
       {"deliverable", "Deliverable"},
+      {"acceptance_criteria", "Done when"},
       {"next_step", "Next step"},
-      {"result_ref", "Result"},
-      {"public_summary", "Public summary"}
+      {"notebook_ref", "Notebook"},
+      {"commit_ref", "Commit"},
+      {"rerun", "Rerun"},
+      {"result_ref", "Result"}
     ],
     "finding" => [
       {"statement", "Statement"},
@@ -75,7 +100,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     "evidence" => [
       {"source_uri", "Source"},
       {"excerpt", "Excerpt"},
-      {"how_obtained", "How it was found"},
+      {"how_obtained", "Method"},
       {"digest", "Document code"}
     ],
     "service" => [
@@ -84,12 +109,18 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"deliverable", "Deliverable"},
       {"price_proposal", "Proposed price"},
       {"payment_asset", "Paid in"},
-      {"implementation_refs", "Work so far"}
+      {"implementation_refs", "Work"}
     ],
     "note" => [{"body", "Note"}],
     "dead_end" => [
-      {"what_was_tried", "What was tried"},
-      {"why_it_failed", "Why it didn’t work"}
+      {"what_was_tried", "Approach tried"},
+      {"why_it_failed", "Reason"}
+    ],
+    "review" => [
+      {"decision", "Decision"},
+      {"reproduction", "Reproduced"},
+      {"rationale", "Reasons"},
+      {"conflicts_of_interest", "Conflicts"}
     ]
   }
 
@@ -98,8 +129,16 @@ defmodule KeyfleetWeb.WorkspacePage do
       "todo" => "To do",
       "doing" => "In progress",
       "blocked" => "Blocked",
-      "done" => "Done"
+      "done" => "Submitted"
     },
+    "review" => %{
+      "awaiting_review" => "Awaiting review",
+      "accepted" => "Accepted",
+      "reproduced" => "Reproduced",
+      "disputed" => "Disputed"
+    },
+    "decision" => %{"accept" => "Accepted", "dispute" => "Disputed"},
+    "reproduction" => %{"passed" => "Yes", "failed" => "No"},
     "status" => %{"open" => "Open", "achieved" => "Achieved", "dropped" => "Dropped"},
     "confidence" => %{"low" => "Low", "medium" => "Medium", "high" => "High"},
     "payment_asset" => %{
@@ -116,20 +155,51 @@ defmodule KeyfleetWeb.WorkspacePage do
     "depends_on" => "depends on",
     "implements" => "delivers on",
     "produces" => "produces",
-    "references" => "mentions"
+    "references" => "mentions",
+    "reviews" => "reviews",
+    "forks" => "copies"
   }
 
-  # How many goals and tasks a fleet's outline shows anyone.
-  @outlined %{"goal" => 12, "task" => 24}
+  # How many goals the board lists above the fleet's other work.
+  @board_goals 12
+
+  # The workspace's places, as the address names each: the Project when it
+  # names none.
+  @places %{nil => :project, "docs" => :docs, "code" => :code, "public" => :public}
+
+  # How many things made public the Public place lists, newest first.
+  @public_shown 12
+
+  # How many notebooks the Docs place lists, newest first: one project's, or
+  # each project's in the whole fleet's view.
+  @docs_shown 24
+  @section_shown 6
+
+  # How many goals the Graph view steps through.
+  @step_goals 120
+  # How many lines each small panel under the Graph view's stage shows.
+  @instrument_rows 6
+  # How many items of the work around a goal, the most recently changed, its
+  # page reads for what they cite.
+  @goal_items 100
+  # How many of the notebooks its work cites a goal's page asks the hub for.
+  @cited_notebooks 20
+  # The fields by which a goal's tasks and evidence cite their results,
+  # notebooks and commits.
+  @cites ["source_uri", "result_ref", "notebook_ref", "commit_ref"]
 
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
   @room_slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
-  # One saved page of a notebook version, after the notebooks' `/results/`:
-  # notebook id, version id, and when the page was saved in milliseconds since 1970.
-  @saved_result ~r/\Anb-[a-z0-9]{16}\/ver_[0-9A-Z]{26}\/[1-9][0-9]{0,15}\z/
-  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
-  @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
+  # One saved page of a notebook version or background run, after the
+  # notebooks' `/results/`: notebook id, version or run id, and when the page
+  # was saved in milliseconds since 1970.
+  # A page of history, and the most pages back a reader goes: past that, git
+  # itself reads further.
+  @history_page 30
+  @history_pages 300
+
+  @saved_result ~r/\Anb-[a-z0-9]{16}\/(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\/[1-9][0-9]{0,15}\z/
 
   @doc "The types of item a workspace holds."
   def types, do: @types
@@ -145,78 +215,585 @@ defmodule KeyfleetWeb.WorkspacePage do
         query
       )
 
-  @doc "The path of the fleet's workspace, showing `filter` from `position`."
+  @doc """
+  The path of the fleet's workspace, showing `filter` from `position`: on the
+  board, or in the graph (`view: :graph`), where `owner` names the Key whose
+  items it draws.
+  """
   def board_path(fleet_id, filter, position \\ []) do
-    query =
-      Enum.reject(
-        [type: filter.type, archived: if(filter.archived?, do: "shown")] ++ position,
-        &is_nil(elem(&1, 1))
+    with_query(
+      "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+      given(
+        [
+          view: if(filter.view == :graph, do: "graph"),
+          project: filter.project,
+          type: filter.type,
+          owner: filter.owner,
+          goal: filter.goal,
+          archived: if(filter.archived?, do: "shown")
+        ] ++ position
       )
-
-    with_query("#{Keyfleet.Fleets.path(fleet_id)}/workspace", query)
+    )
   end
 
-  @doc "The address a workspace cites one commit of the fleet's code by."
-  def commit_url(fleet_id, hash), do: Endpoint.url() <> Code.commit_path(fleet_id, hash)
+  @doc "The workspace's places, in the order a page offers them."
+  def places, do: [:project, :docs, :code, :public]
+
+  @doc "The path of one of the workspace's places, in one project or, for nil, all of them."
+  def place_path(fleet_id, place, project \\ nil) do
+    with_query(
+      "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+      given(place: if(place != :project, do: place), project: project)
+    )
+  end
+
+  @doc "The address a workspace cites one commit of a project's repository by."
+  def commit_url(fleet_id, repository, hash),
+    do: Endpoint.url() <> Code.commit_path(fleet_id, repository, hash)
+
+  defp given(query), do: Enum.reject(query, &is_nil(elem(&1, 1)))
 
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
 
-  @doc "The fleet's items, a page of them, and its latest changes."
+  @doc """
+  The place of the workspace the address names (`place`), the Project, Docs,
+  Code or Public, in the project it names (`project`) or across all of them;
+  beside it the fleet's projects, for the picker, and the Key the member
+  acts as (`you`) with the projects it holds. Any other place, or a project
+  the fleet doesn't have, is a page that doesn't exist, and a visitor learns
+  neither. Anyone reads the Public place; a visitor reads every other place
+  as the members-only page.
+  """
   def board(fleet_id, params, actor) do
-    filter = filter!(params)
+    place = Map.get(@places, params["place"]) || raise NotFoundError
     opts = [actor: actor]
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, page} <- cards_page(fleet, filter, params, opts),
-         {:ready, cursor} <- ready(fleet, opts) do
-      activity = Graph.latest_activity!(fleet_id, opts)
-      titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
+         {:ok, projects} <- members_read(fleet, Projects.by_state(fleet_id, opts)) do
+      shown = shown_project!(projects, params["project"])
 
-      agents =
-        agent_names(
-          Enum.map(page.results, &creator_wallet(&1.sys)) ++ Enum.map(activity, &actor_wallet/1)
-        )
-
-      notes =
-        fleet_id
-        |> Graph.workspace_cards!(%{type: "note"}, Keyword.put(opts, :page, limit: 24))
-        |> Map.fetch!(:results)
-        |> Map.new(&{&1.changed_seq, &1.card["gist"]})
-
-      %{
+      fleet
+      |> place(place, shown, projects, params, opts)
+      |> Map.merge(%{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
-        ready?: true,
-        seen: seen(cursor),
-        filter: filter,
-        cards: Enum.map(page.results, &card(&1, fleet_id, agents)),
-        first_page?: not paged?(params),
-        first_page: board_path(fleet_id, filter),
-        pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
-        activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq])),
-        code: %{
-          clone_url: Code.clone_url(fleet_id),
-          pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push(&1, fleet_id))
-        }
-      }
+        place: place,
+        project: shown && shown.name,
+        active?: is_nil(shown) or shown.state == :active,
+        projects:
+          Enum.map(
+            projects,
+            &Map.take(&1, [:name, :title, :description, :key, :state, :shown_to_everyone])
+          ),
+        you: you(projects, actor, fleet_id)
+      })
     else
-      {:missing, name} ->
-        %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil, filter: filter}
-
-      {:members_only, name} ->
-        members_only(fleet_id, name)
+      {:missing, _name} -> raise NotFoundError
+      {:members_only, name} when place == :public -> public_board(fleet_id, name, params)
+      {:members_only, name} -> members_only(fleet_id, name)
     end
   end
 
-  @doc "One item, a page of its links and a page of its history."
+  # The Public place as a visitor reads it, with the projects as their pages
+  # show them.
+  defp public_board(fleet_id, name, params) do
+    projects = Projects.project_titles!(fleet_id)
+    shown = shown_project!(projects, params["project"])
+
+    fleet_id
+    |> public(shown, projects, nil, params)
+    |> Map.merge(%{
+      fleet_id: fleet_id,
+      fleet_name: name,
+      place: :public,
+      project: shown && shown.name,
+      active?: is_nil(shown) or shown.state == :active,
+      projects:
+        Enum.map(
+          projects,
+          &Map.take(&1, [:name, :title, :description, :key, :state, :shown_to_everyone])
+        ),
+      you: nil,
+      rooms: []
+    })
+  end
+
+  defp shown_project!(_projects, nil), do: nil
+
+  defp shown_project!(projects, name),
+    do: Enum.find(projects, &(&1.name == name)) || raise(NotFoundError)
+
+  # The Key the member acts as (`Keyfleet.Keys.identity/2`), its active
+  # project and its archived ones; nil for a member who holds no Key.
+  defp you(projects, actor, fleet_id) do
+    with %{token_id: key} <- Keys.identity(actor, fleet_id) do
+      held = Enum.filter(projects, &(&1.key == key))
+
+      %{
+        key: key,
+        active: Enum.find_value(held, &(&1.state == :active && &1.name)),
+        archived: for(%{state: :archived, name: name} <- held, do: name)
+      }
+    end
+  end
+
+  # The small panels under the Graph view's stage, the project's or the whole
+  # fleet's: the newest lines of the workstream, and the newest notebooks and
+  # code the fleet's members pinned, a few of each. None of it calls the
+  # notebook hub or the code store.
+  defp instruments(fleet_id, filter, projects, opts) do
+    activity =
+      fleet_id
+      |> Graph.latest_activity!(%{project: filter.project}, opts)
+      |> Enum.take(@instrument_rows)
+
+    titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
+    agents = agent_names(Enum.map(activity, &actor_wallet/1))
+    hub? = Notebooks.hub?(fleet_id)
+    spaces = Map.new(projects, &{&1.name, hub? && &1.hub_project_id})
+    repositories = Map.new(projects, &{&1.name, &1.repository})
+    labels = if filter.project, do: %{}, else: Map.new(projects, &{&1.name, &1.title})
+
+    %{
+      workstream: Enum.map(activity, &line(&1, titles, agents)),
+      docs:
+        for pin <- shown_pins(Graph.pins!(fleet_id, :docs, filter.project, opts), spaces) do
+          space = spaces[pin.project]
+          link = if is_binary(space), do: notebook_link(fleet_id, space, pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end,
+      code:
+        for pin <- shown_pins(Graph.pins!(fleet_id, :code, filter.project, opts), repositories) do
+          link = Code.files_path(fleet_id, repositories[pin.project], pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end
+    }
+  end
+
+  # The newest pins of the projects listed, a few of them.
+  defp shown_pins(pins, projects),
+    do: pins |> Enum.filter(&Map.has_key?(projects, &1.project)) |> Enum.take(@instrument_rows)
+
+  # The goals the Graph view steps through, one goal's map at a time: the
+  # project's, or the whole fleet's, the #{@step_goals} most recently changed,
+  # in the order they were added. A step shows the goal's whole map, so it
+  # leaves the kind and owner filters behind.
+  defp step_goals(fleet_id, filter, opts) do
+    fleet_id
+    |> Graph.graph_objects!(
+      %{project: filter.project, type: "goal", archived: filter.archived?},
+      [query: [limit: @step_goals]] ++ opts
+    )
+    |> Enum.sort_by(fn %{id: "goal#" <> number} -> String.to_integer(number) end)
+    |> Enum.map(
+      &%{
+        id: &1.id,
+        title: &1.title,
+        path: board_path(fleet_id, %{filter | goal: &1.id, type: nil, owner: nil})
+      }
+    )
+  end
+
+  # Each project's title by its name, to label what the whole fleet's view
+  # lists; none in one project's.
+  defp labels(nil, projects), do: Map.new(projects, &{&1.name, &1.title})
+  defp labels(_shown, _projects), do: %{}
+
+  # The project's items, or the whole fleet's, drawn as a graph with the
+  # links between them (`KeyfleetWeb.WorkspaceGraph`), under how many goals
+  # and tasks stand where (`Keyfleet.Graph.tally/3`).
+  defp place(fleet, :project, shown, projects, params, opts)
+       when is_map_key(params, "view") do
+    filter = filter!(params, shown)
+
+    case ready(fleet, opts) do
+      {:ready, cursor} ->
+        graph =
+          Graph.workspace_graph!(
+            fleet.id,
+            %{
+              project: filter.project,
+              type: filter.type,
+              owner_key: filter.owner,
+              goal: filter.goal,
+              archived: filter.archived?
+            },
+            opts
+          )
+
+        %{
+          ready?: true,
+          seen: seen(cursor),
+          filter: filter,
+          counts: Graph.tally!(fleet.id, filter.project, opts),
+          graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects)),
+          goals: step_goals(fleet.id, filter, opts),
+          instruments: instruments(fleet.id, filter, projects, opts)
+        }
+
+      {:missing, _name} ->
+        %{ready?: false, seen: nil, filter: filter}
+    end
+  end
+
+  # The project's items, or the whole fleet's, a page of them, beside its
+  # goals, its latest changes and how many goals and tasks stand where
+  # (`Keyfleet.Graph.tally/3`).
+  defp place(fleet, :project, shown, projects, params, opts) do
+    filter = filter!(params, shown)
+    within = %{project: filter.project}
+    labels = labels(shown, projects)
+
+    case ready(fleet, opts) do
+      {:ready, cursor} ->
+        page = page!(cards_page(fleet, filter, params, opts))
+        activity = Graph.latest_activity!(fleet.id, within, opts)
+        titles = titles(fleet.id, Enum.flat_map(activity, &mentions/1), opts)
+
+        goals =
+          fleet.id
+          |> Graph.workspace_cards!(
+            Map.put(within, :type, "goal"),
+            Keyword.put(opts, :page, limit: @board_goals)
+          )
+          |> Map.fetch!(:results)
+
+        agents =
+          agent_names(
+            Enum.map(page.results, &creator_wallet(&1.sys)) ++
+              Enum.map(activity, &actor_wallet/1)
+          )
+
+        notes =
+          fleet.id
+          |> Graph.workspace_cards!(
+            Map.put(within, :type, "note"),
+            Keyword.put(opts, :page, limit: 24)
+          )
+          |> Map.fetch!(:results)
+          |> Map.new(&{&1.changed_seq, &1.card["gist"]})
+
+        %{
+          ready?: true,
+          seen: seen(cursor),
+          filter: filter,
+          counts: Graph.tally!(fleet.id, filter.project, opts),
+          cards: Enum.map(page.results, &entry(&1, filter, fleet.id, agents, labels)),
+          goals: Enum.map(goals, &goal_row(&1, labels)),
+          all_goals: board_path(fleet.id, %{filter | type: "goal", archived?: false}),
+          first_page?: not paged?(params),
+          first_page: board_path(fleet.id, filter),
+          pages: page_links(page, params, &board_path(fleet.id, filter, &1)),
+          activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
+        }
+
+      {:missing, _name} ->
+        %{ready?: false, seen: nil, filter: filter}
+    end
+  end
+
+  # One project's newest notebooks, each locked or open to every member's
+  # edits, with whether the member is the one who locks it, and the daily
+  # copies of them the member may bring back; or each project's few newest in
+  # turn; and what the fleet's members pinned there. None of it comes from
+  # the workspace's log, so it keeps no place in it (`seen`), and its notices
+  # don't read it again.
+  defp place(fleet, :docs, shown, projects, _params, opts) do
+    hub? = Notebooks.hub?(fleet.id)
+    spaces = Map.new(projects, &{&1.name, hub? && &1.hub_project_id})
+    labels = labels(shown, projects)
+    shown_hub? = hub? and shown != nil
+
+    %{
+      hub?: hub?,
+      notebooks:
+        shown &&
+          fleet.id
+          |> notebooks(spaces[shown.name], limit: @docs_shown)
+          |> with_locks(fleet.id, shown_hub?, opts[:actor]),
+      copies: if(shown_hub?, do: copies(fleet.id, opts[:actor], shown.name), else: []),
+      sections: if(is_nil(shown), do: sections(fleet.id, projects, spaces), else: []),
+      pins:
+        for pin <- Graph.pins!(fleet.id, :docs, shown && shown.name, opts),
+            Map.has_key?(spaces, pin.project) do
+          space = spaces[pin.project]
+          link = if is_binary(space), do: notebook_link(fleet.id, space, pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end
+    }
+  end
+
+  # One project's repository: how to copy it, its top folder, the changes
+  # sent to it lately, and what the fleet's members pinned in it.
+  defp place(fleet, :code, %{} = project, _projects, _params, opts) do
+    repository = project.repository
+
+    %{
+      repository: repository,
+      clone_url: Code.clone_url(repository),
+      history_link: Code.history_path(fleet.id, repository),
+      pushes: pushes(Code.recent_pushes!(fleet.id, project.name, opts), fleet.id, repository),
+      files: folder_entries(fleet.id, repository, ""),
+      repositories: [],
+      pins:
+        for pin <- Graph.pins!(fleet.id, :code, project.name, opts) do
+          link = Code.files_path(fleet.id, repository, pin.target)
+          pin_row(pin, link, %{}, opts[:actor])
+        end
+    }
+  end
+
+  # Every project's repository in turn, each with how to copy it, and every
+  # pin in the fleet's code.
+  defp place(fleet, :code, nil, projects, _params, opts) do
+    repositories = Map.new(projects, &{&1.name, &1.repository})
+    labels = labels(nil, projects)
+
+    %{
+      repositories:
+        for project <- projects do
+          %{
+            project: project.name,
+            title: project.title,
+            key: project.key,
+            state: project.state,
+            clone_url: Code.clone_url(project.repository),
+            link: place_path(fleet.id, :code, project.name)
+          }
+        end,
+      pins:
+        for pin <- Graph.pins!(fleet.id, :code, nil, opts),
+            Map.has_key?(repositories, pin.project) do
+          link = Code.files_path(fleet.id, repositories[pin.project], pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end
+    }
+  end
+
+  # What the fleet's Keys made public, in the project on show or every
+  # project, and the rooms the member's Key makes its posts public from.
+  defp place(fleet, :public, shown, projects, params, opts) do
+    you = you(projects, opts[:actor], fleet.id)
+
+    fleet.id
+    |> public(shown, projects, you && you.key, params)
+    |> Map.put(
+      :rooms,
+      if(you,
+        do: for(room <- Rooms.list_rooms!(fleet.id, opts), do: room_choice(room)),
+        else: []
+      )
+    )
+  end
+
+  defp pin_row(pin, link, labels, actor) do
+    %{
+      id: pin.id,
+      project: pin.project,
+      label: labels[pin.project],
+      target: pin.target,
+      title: pin.title,
+      folder?: pin.folder?,
+      link: link,
+      whose: whose(pin, actor)
+    }
+  end
+
+  # Newest first, each with what a visitor reads of it: for posts, the posts
+  # its Key wrote in that range of the room, word for word, each with its
+  # writer; for an item, the item as it stands, while it isn't archived; for
+  # a saved notebook page, its address, which opens for anyone; for a commit,
+  # the project's files at it, read-only. Only the Key that made it public
+  # (`key`) takes it back. A page at a time,
+  # `@public_shown` long: `more` reads on from the last one, and `first` goes
+  # back to the newest.
+  defp public(fleet_id, shown, projects, key, params) do
+    labels = labels(shown, projects)
+    project = shown && shown.name
+    from = Map.take(params, ["after"])
+
+    %Ash.Page.Keyset{results: publications, more?: more?} =
+      fleet_id
+      |> Projects.publications(project, page: [limit: @public_shown] ++ public_position(from))
+      |> page!()
+
+    rooms =
+      fleet_id
+      |> Rooms.list_rooms!(authorize?: false)
+      |> Map.new(&{&1.slug, RoomsLive.room_label(&1)})
+
+    objects = public_objects(fleet_id, for(%{kind: :item, item: id} <- publications, do: id))
+    agents = agent_names(for {_id, object} <- objects, do: creator_wallet(object.sys))
+
+    %{
+      public:
+        Enum.flat_map(publications, fn publication ->
+          case public_record(publication, rooms, objects, agents) do
+            nil ->
+              []
+
+            record ->
+              [
+                Map.merge(record, %{
+                  id: publication.id,
+                  kind: publication.kind,
+                  project: publication.project,
+                  label: labels[publication.project],
+                  key: publication.key,
+                  at: publication.inserted_at,
+                  mine?: publication.key == key
+                })
+              ]
+          end
+        end),
+      public_more:
+        if(more?,
+          do: public_path(fleet_id, project, after: List.last(publications).__metadata__.keyset)
+        ),
+      public_first: if(from != %{}, do: public_path(fleet_id, project, []))
+    }
+  end
+
+  defp public_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]
+  defp public_position(_newest), do: []
+
+  defp public_path(fleet_id, project, position),
+    do:
+      with_query(
+        "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+        given([place: "public", project: project] ++ position)
+      )
+
+  defp public_record(%{kind: :posts} = publication, rooms, _objects, _agents) do
+    posts =
+      for post <-
+            Publish.posts(
+              publication.fleet_id,
+              publication.room,
+              publication.from_seq,
+              publication.to_seq,
+              publication.key,
+              publication.author_wallet
+            ),
+          do: Message.public(post, post.reply_to_seq)
+
+    %{
+      agent: Enum.find_value(posts, &(&1.author.kind == :agent && &1.author.name)),
+      room: publication.room,
+      room_label: Map.get(rooms, publication.room, publication.room),
+      from: publication.from_seq,
+      to: publication.to_seq,
+      posts: posts
+    }
+  end
+
+  # An item archived since it was made public stops showing.
+  defp public_record(%{kind: :item, item: id}, _rooms, objects, agents) do
+    case objects[id] do
+      %{sys: %{"archived" => true}} -> nil
+      nil -> nil
+      object -> %{item: public_item(object, agents)}
+    end
+  end
+
+  defp public_record(%{kind: :page} = publication, _rooms, _objects, _agents),
+    do: %{page_url: Notebooks.url(publication.fleet_id, publication.page)}
+
+  defp public_record(%{kind: :commit} = publication, _rooms, _objects, _agents) do
+    case Code.repository(publication.fleet_id, publication.project) do
+      {:ok, repository} when is_binary(repository) ->
+        %{
+          commit: publication.commit_hash,
+          files_url:
+            Code.files_path(publication.fleet_id, repository, "", publication.commit_hash)
+        }
+
+      _gone ->
+        nil
+    end
+  end
+
+  defp public_objects(_fleet_id, []), do: %{}
+
+  defp public_objects(fleet_id, ids),
+    do: fleet_id |> Graph.read_objects!(ids, actor: %System{}) |> Map.new(&{&1.id, &1})
+
+  # What a visitor reads of an item: its words and choices, each address as
+  # written, never a link into the members' pages.
+  defp public_item(object, agents) do
+    %{
+      type: object.type,
+      title: object.data["title"],
+      by: created_by(object.sys, agents),
+      changed_at: time(object.changed_at),
+      fields:
+        Enum.flat_map(Map.get(@fields, object.type, []), fn {field, label} ->
+          case public_value(field, object.data[field]) do
+            nil -> []
+            shown -> [{label, shown}]
+          end
+        end)
+    }
+  end
+
+  defp public_value(_field, nil), do: nil
+  defp public_value(_field, []), do: nil
+
+  defp public_value(field, token_id) when field in ["assignee_key", "reviewer_key"],
+    do: key_or(token_id, nil)
+
+  defp public_value(field, value) when is_map_key(@choices, field), do: choice(field, value)
+  defp public_value(_field, value), do: value(value)
+
+  defp room_choice(room), do: %{slug: room.slug, label: RoomsLive.room_label(room)}
+
+  # Whose a pin is to the member reading: only its pinner lifts it.
+  defp whose(pin, actor),
+    do: if(pin.human_account_id == actor.human_account_id, do: :mine, else: :theirs)
+
+  # Each project's newest few notebooks, the projects read at once; one the
+  # hub doesn't answer in time is `:unreadable`.
+  defp sections(fleet_id, projects, spaces) do
+    projects
+    |> Task.async_stream(&notebooks(fleet_id, spaces[&1.name], limit: @section_shown),
+      max_concurrency: 4,
+      timeout: Notebooks.config()[:page_timeout_ms],
+      on_timeout: :kill_task
+    )
+    |> Enum.zip_with(projects, fn
+      {:ok, notebooks}, project ->
+        section(fleet_id, project, notebooks)
+
+      {:exit, :timeout}, project ->
+        Logger.warning("The notebooks of #{fleet_id} could not be read: timeout")
+        section(fleet_id, project, :unreadable)
+    end)
+  end
+
+  defp section(fleet_id, project, notebooks) do
+    %{
+      project: project.name,
+      title: project.title,
+      key: project.key,
+      state: project.state,
+      notebooks: notebooks,
+      link: place_path(fleet_id, :docs, project.name)
+    }
+  end
+
+  @doc """
+  One item, a page of its links and a page of its history. A goal comes with
+  the work around it (`goal`) in place of its links.
+  """
   def item(fleet_id, object_id, params, actor) do
     opts = [actor: actor]
     links_at = position!(params, "links")
     history_through = history_position!(params)
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, object} <- members_read(fleet, Graph.read_object(fleet_id, object_id, opts)),
+         {:ok, object} <-
+           members_read(fleet, Graph.read_object(fleet_id, object_id, [load: [:review]] ++ opts)),
          {:ready, cursor} <- ready(fleet, opts) do
       base = %{fleet_id: fleet_id, fleet_name: fleet.name, ready?: true, seen: seen(cursor)}
 
@@ -225,10 +802,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           Map.put(base, :object, nil)
 
         object ->
-          links =
-            page!(
-              Graph.object_links(fleet_id, object_id, page: links_at ++ [limit: 50], actor: actor)
-            )
+          {links, goal} = around(object, fleet_id, links_at, opts)
 
           {history, earlier} =
             fleet_id
@@ -236,21 +810,26 @@ defmodule KeyfleetWeb.WorkspacePage do
             |> page!()
             |> Enum.split(50)
 
-          others = Enum.map(links.results, &other_end(&1, object_id))
-          titles = titles(fleet_id, others ++ Enum.flat_map(history, &mentions/1), opts)
-          agents = agent_names([creator_wallet(object.sys) | Enum.map(history, &actor_wallet/1)])
+          titles =
+            titles(
+              fleet_id,
+              other_ends(links, object_id) ++ Enum.flat_map(history, &mentions/1),
+              opts
+            )
+
+          agents =
+            agent_names(
+              [creator_wallet(object.sys) | joined_wallets(object.sys)] ++
+                Enum.map(history, &actor_wallet/1)
+            )
+
           path = &item_path(fleet_id, object_id, item_query(params, &1, &2))
 
           Map.merge(base, %{
             object: detail(object, fleet_id, agents, opts),
-            links: %{
-              rows: Enum.map(links.results, &link_row(&1, object, titles)),
-              more:
-                if(links.more?,
-                  do: path.("links", List.last(links.results).__metadata__.keyset)
-                ),
-              first: if(links_at != [], do: path.("links", nil))
-            },
+            public: item_public(fleet_id, object, actor),
+            goal: goal,
+            links: links && link_rows(links, object, titles, path, links_at != []),
             history: %{
               lines: Enum.map(history, &line(&1, titles, agents)),
               more: if(earlier != [], do: path.("history", List.last(history).seq - 1)),
@@ -264,79 +843,482 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  defp members_only(fleet_id, name) do
-    pulse =
-      case Keyfleet.WorkspacePulse.read(fleet_id) do
-        {:ok, pulse} -> pulse
-        :unknown -> %{activity: [], notebooks_configured: false}
-        {:error, error} -> raise error
-      end
+  # Whether everyone reads the item on the Public place, and what the
+  # member's Key does about it: the Key that added it makes it public, and
+  # the Key that made it public takes it back.
+  defp item_public(fleet_id, object, actor) do
+    publication = Projects.item_publication!(fleet_id, object.id, actor: actor)
+    key = with %{token_id: key} <- Keys.identity(actor, fleet_id), do: key
+    added_by = get_in(object.sys, ["created_by", "key", "token_id"])
 
+    %{
+      id: publication && publication.id,
+      link: place_path(fleet_id, :public, object.project),
+      take_back?: publication != nil and publication.key == key,
+      make?:
+        is_nil(publication) and is_integer(key) and added_by == key and
+          not archived?(object.sys)
+    }
+  end
+
+  # A goal's page lists the work around it in place of its links.
+  defp around(%{type: "goal"} = goal, fleet_id, _links_at, opts),
+    do: {nil, goal_work(fleet_id, goal, opts)}
+
+  defp around(object, fleet_id, links_at, opts) do
+    {page!(Graph.object_links(fleet_id, object.id, [page: links_at ++ [limit: 50]] ++ opts)), nil}
+  end
+
+  defp other_ends(nil, _object_id), do: []
+  defp other_ends(links, object_id), do: Enum.map(links.results, &other_end(&1, object_id))
+
+  defp link_rows(links, object, titles, path, later?) do
+    %{
+      rows: Enum.map(links.results, &link_row(&1, object, titles)),
+      more: if(links.more?, do: path.("links", List.last(links.results).__metadata__.keyset)),
+      first: if(later?, do: path.("links", nil))
+    }
+  end
+
+  defp members_only(fleet_id, name) do
     %{
       fleet_id: fleet_id,
       fleet_name: name,
       members_only?: true,
       seen: nil,
-      pulse: pulse,
-      outline: Map.new(@outlined, fn {type, limit} -> {type, outline(fleet_id, type, limit)} end)
+      projects: FleetPage.read_recent_work(fleet_id)
     }
   end
 
-  defp outline(fleet_id, type, limit) do
-    for object <- Graph.outline!(fleet_id, type, query: [limit: limit]) do
-      %{
-        id: object.id,
-        title: object.title,
-        standing: standing(type, object.standing),
-        summary: object.public_summary
-      }
+  # Every goal starts open, so only one that has moved on says so.
+  defp goal_standing(status) when status in [nil, "open"], do: nil
+  defp goal_standing(status), do: choice("status", status)
+
+  @doc """
+  One page of a project's repository history, newest first, named by the
+  repository: from the commit `from` (a full hash, so the pages hold still
+  while changes arrive) or the default branch now, `page` by `page`. Each
+  commit with its first line, its git author, when it was written, the Key
+  and agent that sent it, and the tasks and evidence that cite it. `commits`
+  is `:unreadable` when the code store doesn't answer. An address naming a
+  repository none of the fleet's projects has, a `from` that isn't a full
+  hash or a commit there, or a page past the history's end is a page that
+  doesn't exist.
+  """
+  def history(fleet_id, repository, from, page, actor) do
+    from = commit!(from)
+    page = history_page!(page)
+    project = project_of!(fleet_id, repository)
+    opts = [actor: actor]
+
+    # Reading who sent no commit at all still asks whether the reader is
+    # one of the fleet's members.
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, _members} <- members_read(fleet, Code.senders(fleet_id, project.name, [], opts)) do
+      fleet_id
+      |> history_page(repository, project, from, page, opts)
+      |> Map.merge(%{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        repository: repository,
+        project: project.name,
+        page: page,
+        files_link: Code.files_path(fleet_id, repository, "")
+      })
+    else
+      {:missing, _name} ->
+        raise NotFoundError
+
+      {:members_only, name} ->
+        %{fleet_id: fleet_id, fleet_name: name, members_only?: true}
     end
   end
 
-  defp standing("goal", status), do: choice("status", status)
-  defp standing("task", progress), do: choice("progress", progress)
+  defp history_page(fleet_id, repository, project, from, page, opts) do
+    case Code.history(repository, from, (page - 1) * @history_page, @history_page) do
+      {:ok, %{commits: []}} when page > 1 ->
+        raise NotFoundError
+
+      {:ok, %{commits: commits, head: head, more?: more?}} ->
+        hashes = Enum.map(commits, & &1["hash"])
+        senders = Code.senders!(fleet_id, project.name, hashes, opts)
+        agents = agent_names(senders |> Map.values() |> Enum.map(& &1.acting_agent_wallet))
+
+        citing =
+          citing_any(fleet_id, Enum.map(hashes, &commit_url(fleet_id, repository, &1)), opts)
+
+        %{
+          commits:
+            Enum.map(commits, &history_row(&1, fleet_id, repository, senders, agents, citing)),
+          head: head,
+          more?: more?,
+          newer: if(page > 1, do: Code.history_path(fleet_id, repository, head, page - 1)),
+          older:
+            if(more? and page < @history_pages,
+              do: Code.history_path(fleet_id, repository, head, page + 1)
+            ),
+          latest: if(from, do: Code.history_path(fleet_id, repository))
+        }
+
+      :not_found ->
+        raise NotFoundError
+
+      {:error, error} ->
+        %{
+          commits: unreadable_code(repository, error),
+          head: nil,
+          more?: false,
+          newer: nil,
+          older: nil,
+          latest: nil
+        }
+    end
+  end
+
+  defp history_row(commit, fleet_id, repository, senders, agents, citing) do
+    hash = commit["hash"]
+
+    %{
+      hash: hash,
+      subject: commit["message"],
+      author: commit["author"],
+      at: time(commit["date"]),
+      link: Code.commit_path(fleet_id, repository, hash),
+      sent: sender(senders[hash], agents),
+      citing: Map.get(citing, commit_url(fleet_id, repository, hash), [])
+    }
+  end
+
+  # Who sent a commit: the Key, the agent beside it when one sent it, the
+  # branch it came on and when.
+  defp sender(nil, _agents), do: nil
+
+  defp sender(push, agents) do
+    %{
+      token_id: push.token_id,
+      agent: agents[push.acting_agent_wallet],
+      ref: push.ref,
+      what: moved(push.ref),
+      at: push.pushed_at
+    }
+  end
+
+  # The tasks and evidence that cite each address, by address, each as a
+  # link to it.
+  defp citing_any(_fleet_id, [], _opts), do: %{}
+
+  defp citing_any(fleet_id, urls, opts) do
+    fleet_id
+    |> Graph.work_citing_any!(urls, opts)
+    |> Enum.reject(&archived?(&1.sys))
+    |> Enum.group_by(
+      &if(&1.type == "task", do: &1.data["commit_ref"], else: &1.data["source_uri"]),
+      &%{id: &1.id, type: &1.type, title: &1.title}
+    )
+  end
+
+  defp history_page!(page) when page in 1..@history_pages, do: page
+  defp history_page!(_page), do: raise(NotFoundError)
 
   @doc """
-  One commit of the fleet's code, named by its repository and full hash:
-  the pushes that left a branch or tag at it, and the evidence that cites it
-  with the tasks that produced that evidence. An address naming another
-  repository, or less than a full hash, is a page that doesn't exist.
+  The page a History address names: 1 when it names none. A page that isn't
+  a whole number is a page that doesn't exist.
+  """
+  def history_page_number!(nil), do: 1
+
+  def history_page_number!(page) do
+    case Integer.parse(page) do
+      {page, ""} -> page
+      _not_a_page -> raise NotFoundError
+    end
+  end
+
+  @doc """
+  One commit of one of the fleet's repositories, named by the repository and
+  its full hash: its message, its git author and when it was written, the
+  Key and agent that sent it, the commits before it, and each file it
+  changed with the lines that changed; beside it the tasks that name it as
+  their commit, with the notebook and result each names, and the evidence
+  that cites it with the tasks that produced that evidence. `change` is
+  `:not_found` while the code holds no commit by that hash, and
+  `:unreadable` when the code store doesn't answer. An address naming a
+  repository none of the fleet's projects has, or less than a full hash, is
+  a page that doesn't exist.
   """
   def commit(fleet_id, repository, hash, actor) do
-    if repository != fleet_id or not Code.full_hash?(hash), do: raise(NotFoundError)
+    if not Code.full_hash?(hash), do: raise(NotFoundError)
+    project = project_of!(fleet_id, repository)
     opts = [actor: actor]
-    url = commit_url(fleet_id, hash)
+    url = commit_url(fleet_id, repository, hash)
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pushes} <- members_read(fleet, Code.pushes_of_commit(fleet_id, hash, opts)),
-         {:ok, evidence} <- members_read(fleet, Graph.evidence_citing(fleet_id, url, opts)) do
-      producers = producers(fleet_id, evidence, opts)
+         {:ok, senders} <-
+           members_read(fleet, Code.senders(fleet_id, project.name, [hash], opts)),
+         {:ok, citing} <- members_read(fleet, Graph.work_citing(fleet_id, url, opts)) do
+      producers = producers(fleet_id, Enum.filter(citing, &(&1.type == "evidence")), opts)
       titles = titles(fleet_id, producers |> Map.values() |> List.flatten(), opts)
-      agents = agent_names(Enum.map(evidence, &creator_wallet(&1.sys)))
+
+      agents =
+        agent_names([
+          senders[hash] && senders[hash].acting_agent_wallet
+          | Enum.map(citing, &creator_wallet(&1.sys))
+        ])
 
       %{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
         hash: hash,
+        project: project.name,
+        public: commit_public(fleet_id, project, repository, hash, actor),
         url: url,
-        clone_url: Code.clone_url(fleet_id),
-        pushes: Enum.map(pushes, &push(&1, fleet_id)),
-        evidence:
-          for object <- evidence do
+        repository: repository,
+        clone_url: Code.clone_url(repository),
+        sent: sender(senders[hash], agents),
+        change: commit_change(fleet_id, repository, hash),
+        history_link: Code.history_path(fleet_id, repository),
+        files_link: Code.files_path(fleet_id, repository, "", hash),
+        citing:
+          for object <- citing do
             %{
               id: object.id,
+              type: object.type,
               title: object.title,
               excerpt: object.card["gist"],
               archived?: archived?(object.sys),
               by: created_by(object.sys, agents),
+              notebook_ref: task_ref(object, "notebook_ref"),
+              result_ref: task_ref(object, "result_ref"),
+              notebook: source(task_ref(object, "notebook_ref"), fleet_id),
+              result: source(task_ref(object, "result_ref"), fleet_id),
               tasks: Enum.map(Map.get(producers, object.id, []), &item_part(&1, titles))
             }
           end
       }
     else
-      {:missing, _name} -> raise NotFoundError
-      {:members_only, name} -> %{fleet_id: fleet_id, fleet_name: name, members_only?: true}
+      {:missing, _name} ->
+        raise NotFoundError
+
+      {:members_only, name} ->
+        %{fleet_id: fleet_id, fleet_name: name, hash: hash, members_only?: true}
     end
+  end
+
+  # Whether everyone reads the project's code at this commit, and what the
+  # member's Key does about it: the Key holding the active project makes it
+  # public, and the Key that made it public takes it back.
+  defp commit_public(fleet_id, project, repository, hash, actor) do
+    publication = Projects.commit_publication!(fleet_id, project.name, hash, actor: actor)
+    key = with %{token_id: key} <- Keys.identity(actor, fleet_id), do: key
+
+    %{
+      id: publication && publication.id,
+      link: Code.files_path(fleet_id, repository, "", hash),
+      take_back?: publication != nil and publication.key == key,
+      make?:
+        is_nil(publication) and is_integer(key) and project.key == key and
+          project.state == :active
+    }
+  end
+
+  # The notebook or result a task names, for a task.
+  defp task_ref(%{type: "task", data: data}, field), do: data[field]
+  defp task_ref(_object, _field), do: nil
+
+  # The commit as the code holds it: its message split into the first line
+  # and the rest, its author and time, its parents, and each file it changed
+  # with its lines.
+  defp commit_change(fleet_id, repository, hash) do
+    case Code.commit(repository, hash) do
+      {:ok, commit} ->
+        {subject, body} = message(commit["message"])
+        files = commit["files"] |> Enum.with_index() |> Enum.map(&changed_file/1)
+
+        %{
+          subject: subject,
+          body: body,
+          author: commit["author"],
+          at: time(commit["date"]),
+          parents:
+            for parent <- commit["parents"] do
+              %{hash: parent, link: Code.commit_path(fleet_id, repository, parent)}
+            end,
+          files: files,
+          files_cut?: commit["files_truncated"] == true,
+          additions: files |> Enum.map(&(&1.additions || 0)) |> Enum.sum(),
+          deletions: files |> Enum.map(&(&1.deletions || 0)) |> Enum.sum()
+        }
+
+      :not_found ->
+        :not_found
+
+      {:error, error} ->
+        unreadable_code(repository, error)
+    end
+  end
+
+  defp message(message) do
+    case String.split(message, "\n", parts: 2) do
+      [subject] -> {subject, nil}
+      [subject, body] -> {subject, if(String.trim(body) != "", do: String.trim(body))}
+    end
+  end
+
+  defp changed_file({file, index}) do
+    %{
+      id: index,
+      path: file["path"],
+      old_path: file["old_path"],
+      status: file["status"],
+      additions: file["additions"],
+      deletions: file["deletions"],
+      binary?: file["binary"] == true,
+      patch: file["patch"],
+      cut?: file["patch_truncated"] == true
+    }
+  end
+
+  @doc """
+  One folder or file of a project's repository as it stands on the default
+  branch now, or at the commit `at` asks for, named by the repository and the
+  `path` asked for (none for the top folder): a folder's names, folders
+  first, or a file's text, beside the latest changes sent to the repository.
+  A visitor reads a commit the Key holding the project made public, read-only,
+  and nothing else of the code. A file that isn't text, or is past
+  `file_max_bytes`, is named but not shown; `listing` is `:unreadable`
+  when the code store doesn't answer. An address naming a repository none
+  of the fleet's projects has, a path that can't name a place in the code,
+  or a file that isn't there is a page that doesn't exist.
+  """
+  def files(fleet_id, repository, params, actor) do
+    path = code_path!(params["path"])
+    at = commit!(params["at"])
+    project = project_of!(fleet_id, repository)
+    opts = [actor: actor]
+
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, project.name, opts)) do
+      %{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        repository: repository,
+        path: path,
+        at: at,
+        project: project.name,
+        active?: project.state == :active and is_nil(at),
+        pinned:
+          if(at,
+            do: %{},
+            else:
+              fleet_id
+              |> Graph.pins!(:code, project.name, opts)
+              |> Map.new(&{&1.target, whose(&1, actor)})
+          ),
+        crumbs: crumbs(fleet_id, repository, path, at),
+        clone_url: Code.clone_url(repository),
+        pushes: if(at, do: [], else: pushes(pushes, fleet_id, repository)),
+        listing: listing(fleet_id, repository, path, at),
+        history_link: Code.history_path(fleet_id, repository),
+        commit_link: at && Code.commit_path(fleet_id, repository, at)
+      }
+    else
+      {:missing, _name} ->
+        raise NotFoundError
+
+      {:members_only, name} ->
+        if at && Projects.commit_publication!(fleet_id, project.name, at, actor: %System{}),
+          do: public_files(fleet_id, name, repository, project, path, at),
+          else: %{fleet_id: fleet_id, fleet_name: name, path: path, members_only?: true}
+    end
+  end
+
+  defp code_path!(nil), do: ""
+  defp code_path!(path), do: if(Code.code_path?(path), do: path, else: raise(NotFoundError))
+
+  defp commit!(nil), do: nil
+  defp commit!(hash), do: if(Code.full_hash?(hash), do: hash, else: raise(NotFoundError))
+
+  # A commit the Key holding the project made public, as a visitor reads it:
+  # its files and folders alone.
+  defp public_files(fleet_id, name, repository, project, path, at) do
+    %{
+      fleet_id: fleet_id,
+      fleet_name: name,
+      repository: repository,
+      path: path,
+      at: at,
+      project: project.name,
+      active?: false,
+      pinned: %{},
+      crumbs: crumbs(fleet_id, repository, path, at),
+      clone_url: nil,
+      pushes: [],
+      listing: listing(fleet_id, repository, path, at),
+      history_link: nil,
+      commit_link: nil
+    }
+  end
+
+  # The project whose repository an address names, if it is one of the
+  # fleet's.
+  defp project_of!(fleet_id, repository) do
+    case Projects.project_of_repository!(repository, actor: %System{}) do
+      %{fleet_id: ^fleet_id} = project -> project
+      _none_or_another_fleets -> raise NotFoundError
+    end
+  end
+
+  defp repository!(fleet_id, project) do
+    {:ok, repository} = Code.repository(fleet_id, project)
+    repository
+  end
+
+  # Each folder above the place shown, from the top, as a link.
+  defp crumbs(_fleet_id, _repository, "", _at), do: []
+
+  defp crumbs(fleet_id, repository, path, at) do
+    names = String.split(path, "/")
+
+    for depth <- 0..(length(names) - 2)//1 do
+      above = names |> Enum.take(depth + 1) |> Enum.join("/")
+      %{name: Enum.at(names, depth), link: Code.files_path(fleet_id, repository, above, at)}
+    end
+  end
+
+  # A folder holds something: git keeps no empty folder. So a place that
+  # holds nothing is a file, or nothing at all.
+  defp listing(fleet_id, repository, path, at) do
+    case Code.folder(repository, path, at) do
+      {:ok, []} when path != "" ->
+        file(repository, path, at)
+
+      {:ok, entries} ->
+        {:folder, Enum.map(entries, &entry_row(&1, fleet_id, repository, path, at))}
+
+      {:error, error} ->
+        unreadable_code(repository, error)
+    end
+  end
+
+  # Each entry of a folder with its path from the top of the repository.
+  defp entry_row(entry, fleet_id, repository, folder, at) do
+    path = if folder == "", do: entry.name, else: folder <> "/" <> entry.name
+    Map.merge(entry, %{path: path, link: Code.files_path(fleet_id, repository, path, at)})
+  end
+
+  defp file(repository, path, at) do
+    case Code.file(repository, path, at) do
+      {:ok, :too_large} -> {:file, :too_large}
+      {:ok, bytes} -> {:file, if(text?(bytes), do: bytes, else: :not_text)}
+      :not_found -> raise NotFoundError
+      {:error, error} -> unreadable_code(repository, error)
+    end
+  end
+
+  defp text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
+
+  defp unreadable_code(repository, error) do
+    Logger.warning("The repository #{repository} could not be read: #{reason(error)}")
+    :unreadable
   end
 
   # The tasks that produced each piece of evidence, by the evidence's id.
@@ -381,33 +1363,56 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp seen(cursor), do: {cursor.run_id, cursor.applied_seq}
 
-  defp filter!(params) do
-    type =
-      case params["type"] do
-        nil -> nil
-        type when type in @types -> type
-        _unknown -> raise NotFoundError
-      end
+  defp filter!(params, shown) do
+    view = view!(params)
 
-    archived? =
-      case params["archived"] do
-        nil -> false
-        "shown" -> true
-        _unknown -> raise NotFoundError
-      end
+    %{
+      view: view,
+      project: shown && shown.name,
+      type: type!(params["type"]),
+      owner: owner!(view, params["owner"]),
+      goal: goal!(view, params["goal"]),
+      archived?: archived!(params["archived"])
+    }
+  end
 
-    %{type: type, archived?: archived?}
+  # The graph is one picture, so it has no pages, and only it is drawn for
+  # one Key.
+  defp view!(%{"view" => "graph"} = params),
+    do: if(paged?(params), do: raise(NotFoundError), else: :graph)
+
+  defp view!(%{"view" => _unknown}), do: raise(NotFoundError)
+  defp view!(_board), do: :board
+
+  defp type!(nil), do: nil
+  defp type!(type) when type in @types, do: type
+  defp type!(_unknown), do: raise(NotFoundError)
+
+  defp owner!(_view, nil), do: nil
+  defp owner!(:graph, owner) when is_binary(owner), do: token_id!(owner)
+  defp owner!(_view, _unknown), do: raise(NotFoundError)
+
+  # Only the graph is drawn around one goal.
+  defp goal!(_view, nil), do: nil
+  defp goal!(:graph, "goal#" <> _number = id), do: id
+  defp goal!(_view, _unknown), do: raise(NotFoundError)
+
+  defp archived!(nil), do: false
+  defp archived!("shown"), do: true
+  defp archived!(_unknown), do: raise(NotFoundError)
+
+  defp token_id!(digits) do
+    if String.match?(digits, ~r/\A[1-9][0-9]{0,17}\z/),
+      do: String.to_integer(digits),
+      else: raise(NotFoundError)
   end
 
   defp cards_page(fleet, filter, params, opts) do
-    read =
-      Graph.workspace_cards(
-        fleet.id,
-        %{type: filter.type, include_archived?: filter.archived?},
-        Keyword.put(opts, :page, card_position(params) ++ [limit: 24])
-      )
-
-    members_read(fleet, read)
+    Graph.workspace_cards(
+      fleet.id,
+      %{project: filter.project, type: filter.type, include_archived?: filter.archived?},
+      Keyword.put(opts, :page, card_position(params) ++ [limit: 24])
+    )
   end
 
   defp card_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]
@@ -471,16 +1476,292 @@ defmodule KeyfleetWeb.WorkspacePage do
     |> Map.new(&{&1.id, &1})
   end
 
-  defp card(object, fleet_id, agents) do
+  # Goals are listed one line each; every other item is a card. In the whole
+  # fleet's view each is labelled with its project's title.
+  defp entry(object, %{type: "goal"}, _fleet_id, _agents, labels), do: goal_row(object, labels)
+
+  defp entry(object, _filter, fleet_id, agents, labels),
+    do: card(object, fleet_id, agents, labels)
+
+  defp goal_row(object, labels) do
+    %{
+      id: object.id,
+      title: object.title,
+      project: labels[object.project],
+      starting?: starting?(object.sys),
+      archived?: archived?(object.sys),
+      status: goal_standing(object.card["status"]),
+      joined: length(joined(object.sys)),
+      changed_on: time(object.changed_at)
+    }
+  end
+
+  # What a goal's page shows of the work around it: its map, as the Graph
+  # view draws it around the goal (`KeyfleetWeb.WorkspaceGraph.tree/2`), and
+  # of what the work around it cites (`Keyfleet.Graph.Object`,
+  # `:around_goal`), the saved notebook results, the notebooks and the
+  # commits of the fleet's code; beside them the goal's own place in the
+  # code, the folder `goals/goal-N`, and the notebooks tagged `goal-N` in its
+  # project's space. `code` and `notebooks` are `:unreadable` when the code
+  # store or the notebook hub doesn't answer, and `notebooks` is nil for a
+  # fleet without notebooks. `graph` is the same map in its project's Graph
+  # view.
+  defp goal_work(fleet_id, goal, opts) do
+    objects = fleet_id |> Graph.goal_work!(goal.id, opts) |> Enum.take(@goal_items)
+    name = String.replace(goal.id, "#", "-")
+    folder = "goals/" <> name
+    repository = repository!(fleet_id, goal.project)
+
+    cited =
+      for object <- objects,
+          field <- @cites,
+          uri <- [object.card[field]],
+          is_binary(uri),
+          do: {object, uri, source(uri, fleet_id)}
+
+    {notebooks, unshown} =
+      goal_notebooks(
+        fleet_id,
+        space!(fleet_id, goal.project),
+        name,
+        for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: notebook_in(uri))
+      )
+
+    # An archived goal's map holds the archived items around it, as the goal
+    # itself is one.
+    archived? = archived?(goal.sys)
+
+    map =
+      fleet_id
+      |> Graph.workspace_graph!(%{goal: goal.id, archived: archived?}, opts)
+      |> WorkspaceGraph.draw(fleet_id, %{})
+
+    %{
+      map: WorkspaceGraph.tree(map, goal.id),
+      more?: map.more_nodes?,
+      graph:
+        board_path(fleet_id, %{
+          view: :graph,
+          project: goal.project,
+          type: nil,
+          owner: nil,
+          goal: goal.id,
+          archived?: archived?
+        }),
+      results:
+        for {object, uri, {:notebook_result, uri}} <- cited do
+          %{
+            id: object.id,
+            type: object.type,
+            title: object.title,
+            uri: uri,
+            changed_on: time(object.changed_at)
+          }
+        end
+        |> Enum.uniq_by(& &1.uri),
+      commits:
+        for {object, _uri, {:commit, hash, path}} <- cited do
+          %{
+            id: object.id,
+            type: object.type,
+            title: object.title,
+            hash: hash,
+            path: path,
+            changed_on: time(object.changed_at)
+          }
+        end
+        |> Enum.uniq_by(& &1.hash),
+      name: name,
+      folder: %{path: folder, link: Code.files_path(fleet_id, repository, folder)},
+      code: folder_entries(fleet_id, repository, folder),
+      notebooks: notebooks,
+      notebooks_unshown: unshown
+    }
+  end
+
+  # The notebooks tagged with the goal's name, then the ones its work cites
+  # that aren't tagged, with how many of those aren't shown.
+  defp goal_notebooks(fleet_id, space, name, cited) do
+    case notebooks(fleet_id, space, tag: name, limit: 50) do
+      tagged when is_list(tagged) ->
+        {found, unshown} = cited_notebooks(fleet_id, cited -- Enum.map(tagged, &{space, &1.id}))
+        {tagged ++ found, unshown}
+
+      none_or_unreadable ->
+        {none_or_unreadable, 0}
+    end
+  end
+
+  # The space and id of a cited notebook, from its address.
+  defp notebook_in(uri) do
+    ["", "projects", space, "notebooks", id] = String.split(URI.parse(uri).path, "/")
+    {space, id}
+  end
+
+  # The most recently cited, each asked for by its id at once, however old,
+  # all within one page wait. One in a space that isn't one of the fleet's
+  # projects', or since deleted, is left out; one the hub doesn't answer in
+  # time, and those past the first @cited_notebooks, are counted as not shown.
+  defp cited_notebooks(_fleet_id, []), do: {[], 0}
+
+  defp cited_notebooks(fleet_id, cited) do
+    {:ok, spaces} = Notebooks.spaces(fleet_id)
+    ours = MapSet.new(spaces, fn {_project, space} -> space end)
+    {asked, rest} = cited |> Enum.filter(&(elem(&1, 0) in ours)) |> Enum.split(@cited_notebooks)
+
+    answers =
+      Task.async_stream(
+        asked,
+        fn {space, id} -> {space, HubClient.notebook(fleet_id, space, id)} end,
+        max_concurrency: @cited_notebooks,
+        timeout: Notebooks.config()[:page_timeout_ms],
+        on_timeout: :kill_task
+      )
+
+    {found, unanswered} =
+      Enum.reduce(answers, {[], 0}, fn
+        {:ok, {_space, {:ok, %{"status" => "deleted"}}}}, acc ->
+          acc
+
+        {:ok, {_space, {:ok, nil}}}, acc ->
+          acc
+
+        {:ok, {space, {:ok, notebook}}}, {found, unanswered} ->
+          {[notebook_row(fleet_id, space, notebook) | found], unanswered}
+
+        {:ok, {_space, {:error, error}}}, {found, unanswered} ->
+          Logger.warning("A notebook of #{fleet_id} could not be read: #{reason(error)}")
+          {found, unanswered + 1}
+
+        {:exit, :timeout}, {found, unanswered} ->
+          Logger.warning("A notebook of #{fleet_id} could not be read: timeout")
+          {found, unanswered + 1}
+      end)
+
+    {Enum.reverse(found), unanswered + length(rest)}
+  end
+
+  defp folder_entries(fleet_id, repository, folder) do
+    case Code.folder(repository, folder) do
+      {:ok, entries} -> Enum.map(entries, &entry_row(&1, fleet_id, repository, folder, nil))
+      {:error, error} -> unreadable_code(repository, error)
+    end
+  end
+
+  # A space's notebooks as `query` narrows them (`HubClient.notebooks/3`),
+  # newest first, each with its folder, when it was added and the link that
+  # opens it: nil for a fleet without notebooks (`space!/2` false), none
+  # before the project's space is made, and `:unreadable` when the hub
+  # doesn't answer.
+  defp notebooks(_fleet_id, false, _query), do: nil
+  defp notebooks(_fleet_id, nil, _query), do: []
+
+  defp notebooks(fleet_id, space, query) do
+    case HubClient.notebooks(fleet_id, space, query) do
+      {:ok, notebooks} ->
+        Enum.map(notebooks, &notebook_row(fleet_id, space, &1))
+
+      {:error, error} ->
+        Logger.warning("The notebooks of #{fleet_id} could not be read: #{reason(error)}")
+        :unreadable
+    end
+  end
+
+  defp notebook_row(fleet_id, space, notebook) do
+    {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
+
+    %{
+      id: notebook["id"],
+      title: notebook["title"],
+      author: notebook["author"],
+      description: notebook["description"],
+      folder: Enum.find_value(notebook["tags"], &folder/1),
+      added: added,
+      open: notebook_link(fleet_id, space, notebook["id"])
+    }
+  end
+
+  defp folder("folder/" <> folder), do: folder
+  defp folder(_tag), do: nil
+
+  # Each notebook locked or open to every member's edits
+  # (`Keyfleet.Notebooks.locks/1`), and whether the member is its creator:
+  # its author, or the Key whose scratchpad it is.
+  defp with_locks(rows, fleet_id, true, actor) when is_list(rows) do
+    locks = Notebooks.locks(fleet_id)
+    {subject, key} = viewer(fleet_id, actor)
+
+    for row <- rows do
+      lock = Map.get(locks, row.id, %{locked: true, key: nil})
+
+      Map.merge(row, %{
+        locked: lock.locked,
+        creator?: if(lock.key, do: lock.key == key, else: row.author == subject)
+      })
+    end
+  end
+
+  defp with_locks(rows, _fleet_id, _hub?, _actor), do: rows
+
+  defp viewer(fleet_id, %Human{} = actor) do
+    {Notebooks.subject(actor), Keys.identity(actor, fleet_id)[:token_id]}
+  end
+
+  defp viewer(_fleet_id, _actor), do: {nil, nil}
+
+  # The project's daily copies the member may bring back, each notebook's
+  # newest first; none for anyone who holds no Key, or when they can't be
+  # read now.
+  defp copies(fleet_id, %Human{} = actor, project) do
+    case Notebooks.copies(fleet_id, actor, Notebooks.subject(actor), project) do
+      {:ok, notebooks} ->
+        for notebook <- notebooks,
+            copies = Enum.filter(notebook.copies, & &1.restorable),
+            copies != [],
+            do: %{notebook | copies: copies}
+
+      {:error, _reason} ->
+        []
+    end
+  end
+
+  defp copies(_fleet_id, _actor, _project), do: []
+
+  # A project's space in the fleet's notebook hub: false for a fleet without
+  # notebooks, nil before it is made.
+  defp space!(fleet_id, project) do
+    with true <- Notebooks.hub?(fleet_id),
+         {:ok, space} <- Notebooks.space(fleet_id, project) do
+      space
+    else
+      false -> false
+      {:error, error} -> raise error
+    end
+  end
+
+  defp notebook_link(fleet_id, space, notebook_id),
+    do: notebook_open(fleet_id, Notebooks.notebook_path(space, notebook_id))
+
+  defp notebook_open(fleet_id, to),
+    do: "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
+
+  # Only the kind of failure is logged: a database error carries its query.
+  defp reason(%module{}), do: inspect(module)
+  defp reason(reason), do: inspect(reason)
+
+  defp card(object, fleet_id, agents, labels) do
     %{
       id: object.id,
       type: object.type,
       title: object.title,
+      project: labels[object.project],
       archived?: archived?(object.sys),
-      level: level(object.sys),
+      starting?: starting?(object.sys),
       by: created_by(object.sys, agents),
-      changed_at: at(object.changed_at),
-      facts: facts(object.type, object.card, fleet_id),
+      changed_at: time(object.changed_at),
+      facts:
+        facts(object.type, Map.put(object.card, "review", object.review), fleet_id) ++
+          joined_fact(object.sys),
       gist: object.card["gist"]
     }
   end
@@ -491,6 +1772,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp facts("task", card, _fleet_id) do
     present([
       {"Progress", choice("progress", card["progress"])},
+      {"Review", card["review"] && choice("review", card["review"])},
       {"Taken by", key_or(card["assignee_key"], "No one yet")}
     ])
   end
@@ -533,48 +1815,132 @@ defmodule KeyfleetWeb.WorkspacePage do
       type: object.type,
       title: object.data["title"],
       archived?: archived?(object.sys),
-      level: level(object.sys),
+      starting?: starting?(object.sys),
       by: created_by(object.sys, agents),
       version: object.version,
-      changed_at: at(object.changed_at),
+      changed_at: time(object.changed_at),
       fields:
-        Enum.flat_map(known ++ others, fn {field, label} ->
-          case field_value(field, object.data[field], fleet_id) do
-            nil -> []
-            shown -> [{label, shown}]
-          end
-        end),
+        receipt(object, fleet_id) ++
+          Enum.flat_map(known ++ others, fn {field, label} ->
+            case field_value(field, object.data[field], fleet_id) do
+              nil -> []
+              shown -> [{label, shown}]
+            end
+          end) ++ rerun_check(object) ++ joined_field(object.sys, agents),
       discussion: discussion(object.data["discussion"], fleet_id, opts)
     }
   end
 
+  # Where a submitted task's review stands, and what a review judged: the
+  # task's version and who submitted it.
+  defp receipt(%{type: "task", review: review}, _fleet_id) when is_binary(review),
+    do: [{"Review", choice("review", review)}]
+
+  defp receipt(%{type: "review", sys: %{"review" => review}}, fleet_id) do
+    present([
+      {"Version reviewed", Integer.to_string(review["task_version"])},
+      {"Commit reviewed", source(review["commit_ref"], fleet_id)},
+      {"Submitted by", {:key, review["submitted_by"]["key"]["token_id"], nil}}
+    ])
+  end
+
+  defp receipt(_object, _fleet_id), do: []
+
+  # Once a task names its commit or its rerun, whether it carries everything
+  # a rerun needs, or each thing it still needs.
+  defp rerun_check(%{type: "task", data: data}) do
+    if data["commit_ref"] || data["rerun"],
+      do: [{"Rerun check", rerun_needs(RerunCheck.missing(data))}],
+      else: []
+  end
+
+  defp rerun_check(_object), do: []
+
+  defp rerun_needs([]), do: "Complete"
+  defp rerun_needs(missing), do: {:list, Enum.map(missing, &("Needs " <> &1.need))}
+
   defp field_value(_field, nil, _fleet_id), do: nil
   defp field_value(_field, [], _fleet_id), do: nil
-  defp field_value("assignee_key", token_id, _fleet_id), do: key_or(token_id, nil)
 
-  defp field_value(field, uri, fleet_id) when field in ["source_uri", "result_ref"],
-    do: source(uri, fleet_id)
+  defp field_value(field, token_id, _fleet_id) when field in ["assignee_key", "reviewer_key"],
+    do: key_or(token_id, nil)
+
+  defp field_value(field, uri, fleet_id)
+       when field in ["source_uri", "result_ref", "commit_ref", "notebook_ref"],
+       do: source(uri, fleet_id)
 
   defp field_value(field, value, _fleet_id) when is_map_key(@choices, field),
     do: choice(field, value)
 
+  # How to run a task's work again, a line each: the command, then its
+  # lockfile, inputs and outputs, each with its role and digest.
+  defp field_value("rerun", %{"command" => command} = rerun, _fleet_id) do
+    files =
+      [
+        {"Lockfile", List.wrap(rerun["lockfile"])},
+        {"Input", rerun["inputs"]},
+        {"Output", rerun["outputs"]}
+      ]
+      |> Enum.flat_map(fn {label, files} -> Enum.map(files, &rerun_file(label, &1)) end)
+
+    {:list, [command | files]}
+  end
+
   defp field_value(_field, value, _fleet_id), do: value(value)
 
-  # A commit of the fleet's own code is shown as that commit, opened on this
-  # site; a saved result of one of the fleet's notebooks as that result; any
-  # other address as `value/1` shows it.
+  defp rerun_file(label, file) do
+    details = Enum.reject([file["role"], file["digest"]], &is_nil/1)
+    Enum.join(["#{label}: #{file["path"]}" | details], " · ")
+  end
+
+  # A commit of one of the fleet's own repositories is shown as that commit,
+  # opened on this site; a saved result of one of the fleet's notebooks as that result; one
+  # of its notebooks as that notebook, opened through this site; any other
+  # address as `value/1` shows it.
   defp source(nil, _fleet_id), do: nil
 
   defp source(uri, fleet_id) do
-    hash = String.replace_prefix(uri, commit_url(fleet_id, ""), "")
-    saved = String.replace_prefix(uri, Notebooks.url(fleet_id, "/results/"), "")
-
-    cond do
-      hash != uri and Code.full_hash?(hash) -> {:commit, hash, Code.commit_path(fleet_id, hash)}
-      saved != uri and Regex.match?(@saved_result, saved) -> {:notebook_result, uri}
-      true -> value(uri)
+    case fleet_commit(uri, fleet_id) do
+      {repository, hash} -> {:commit, hash, Code.commit_path(fleet_id, repository, hash)}
+      nil -> notebook_source(uri, fleet_id)
     end
   end
+
+  defp notebook_source(uri, fleet_id) do
+    saved = String.replace_prefix(uri, Notebooks.url(fleet_id, "/results/"), "")
+    path = String.replace_prefix(uri, Notebooks.url(fleet_id, ""), "")
+
+    cond do
+      saved != uri and Regex.match?(@saved_result, saved) ->
+        {:notebook_result, uri}
+
+      path != uri and Notebooks.notebook?(path) ->
+        {:notebook, notebook_open(fleet_id, path)}
+
+      true ->
+        value(uri)
+    end
+  end
+
+  @doc """
+  The repository and full hash a workspace's address of a commit names, as
+  `{repository, hash}`, when it is a commit of one of the fleet's own
+  repositories on this site (`commit_url/3`); nil for any other address.
+  """
+  def fleet_commit(uri, fleet_id) when is_binary(uri) do
+    code = String.replace_prefix(uri, Endpoint.url() <> Fleets.path(fleet_id) <> "/code/", "")
+
+    with true <- code != uri,
+         [repository, "commits", hash] <- String.split(code, "/"),
+         {:ok, ^fleet_id} <- Code.repository_fleet(repository),
+         true <- Code.full_hash?(hash) do
+      {repository, hash}
+    else
+      _other -> nil
+    end
+  end
+
+  def fleet_commit(_uri, _fleet_id), do: nil
 
   # Text as written; an address with a scheme allowed for links is a link.
   defp value(value) when is_binary(value) do
@@ -605,7 +1971,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         seq: seq,
         path:
           if(name && Regex.match?(@room_slug, room),
-            do: "#{Keyfleet.Fleets.path(fleet_id)}/rooms/#{room}"
+            do: KeyLinks.room_path(fleet_id, room)
           )
       }
     end
@@ -629,16 +1995,42 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
-  defp relation_words(type), do: Map.fetch!(@relations, type)
+  @doc "What one item is to another by their link, read from its source to its target."
+  def relation_words(type), do: Map.fetch!(@relations, type)
 
   # The ids a change's line names.
   defp mentions(%{brief: brief}),
-    do: Enum.filter([brief["object"], brief["source"], brief["target"]], &is_binary/1)
+    do:
+      Enum.filter(
+        [brief["object"], brief["source"], brief["target"], brief["task"]],
+        &is_binary/1
+      )
 
   defp line(event, titles, agents) do
     parts = event |> parts(titles) |> Enum.map(&named(&1, agents))
-    %{seq: event.seq, at: at(event.timestamp), parts: parts}
+    %{seq: event.seq, at: time(event.timestamp), parts: parts}
   end
+
+  # A review is told as its decision on the task, from its creation on the
+  # board and from its link to the task in the task's history.
+  defp parts(
+         %{type: "object.created", brief: %{"object_type" => "review", "task" => task} = brief} =
+           event,
+         titles
+       )
+       when is_binary(task),
+       do: reviewed(event, brief, task, titles)
+
+  defp parts(
+         %{
+           type: "relation.created",
+           brief: %{"relation_type" => "reviews", "target" => task} = brief
+         } =
+           event,
+         titles
+       )
+       when is_binary(task),
+       do: reviewed(event, brief, task, titles)
 
   defp parts(%{type: "object.created", brief: %{"object" => id} = brief} = event, titles)
        when is_binary(id) do
@@ -653,6 +2045,22 @@ defmodule KeyfleetWeb.WorkspacePage do
        when is_binary(id),
        do: [who(event.actor), " archived ", item_part(id, titles), "."]
 
+  defp parts(%{type: "patch.applied", brief: %{"object" => id, "joins" => joins}} = event, titles)
+       when is_binary(id) and joins != 0,
+       do: [
+         who(event.actor),
+         if(joins > 0, do: " joined ", else: " left "),
+         item_part(id, titles),
+         "."
+       ]
+
+  defp parts(
+         %{type: "patch.applied", brief: %{"object" => id, "submitted" => true}} = event,
+         titles
+       )
+       when is_binary(id),
+       do: [who(event.actor), " submitted ", item_part(id, titles), " for review."]
+
   defp parts(%{type: "patch.applied", brief: %{"object" => id} = brief} = event, titles)
        when is_binary(id) do
     item = item_part(id, titles)
@@ -663,6 +2071,15 @@ defmodule KeyfleetWeb.WorkspacePage do
       changes -> [who(event.actor), " updated ", item, ": " | changes] ++ ["."]
     end
   end
+
+  # A fork's link is told as the copy being made.
+  defp parts(
+         %{type: "relation.created", brief: %{"relation_type" => "forks", "target" => task}} =
+           event,
+         titles
+       )
+       when is_binary(task),
+       do: [who(event.actor), " forked ", item_part(task, titles), "."]
 
   defp parts(
          %{type: type, brief: %{"source" => source, "target" => target} = brief} = event,
@@ -695,6 +2112,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     do: ["Something in the workspace needs attention."]
 
   defp parts(_event, _titles), do: ["The workspace changed."]
+
+  defp reviewed(event, brief, task, titles) do
+    did = if brief["decision"] == "accept", do: " accepted ", else: " disputed "
+    [who(event.actor), did, item_part(task, titles), "."]
+  end
 
   # What a change changed, in the order the fields are shown, with the new
   # value of the few short fields.
@@ -740,8 +2162,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   # when an agent wrote as it (`named/2` puts its name in); anything else was
   # the workspace's own doing.
   defp who(actor) do
-    case Regex.run(@member, actor, capture: :all_but_first) do
-      [token_id, kind, wallet] -> {:by, String.to_integer(token_id), agent_wallet(kind, wallet)}
+    case Graph.Event.member(actor) do
+      {token_id, kind, wallet} -> {:by, token_id, agent_wallet(kind, wallet)}
       nil -> "Keyfleet"
     end
   end
@@ -749,11 +2171,47 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp named({:by, token_id, wallet}, agents), do: {:key, token_id, agents[wallet]}
   defp named(part, _agents), do: part
 
-  # The key an item was added as, with the name of the agent that added it.
-  defp created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}} = sys, agents),
+  @doc """
+  The key an item was added as, with the name of the agent that added it
+  (`agent_names/1` of `creator_wallet/1`); Keyfleet added the starting goals.
+  """
+  def created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}} = sys, agents),
     do: {:key, token_id, agents[creator_wallet(sys)]}
 
-  defp creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
+  def created_by(%{"created_by" => nil}, _agents), do: "Keyfleet"
+
+  @doc "The wallet of the agent that added an item, or nil when no agent did."
+  def creator_wallet(%{"created_by" => nil}), do: nil
+  def creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
+
+  # Who joined a goal, in the order they joined, each told as the key it
+  # joined as with the name of its agent.
+  defp joined(sys), do: Map.get(sys, "joined", [])
+
+  defp joined_wallets(sys), do: Enum.map(joined(sys), &agent_wallet(&1["kind"], &1["wallet"]))
+
+  defp joined_field(sys, agents) do
+    case joined(sys) do
+      [] ->
+        []
+
+      members ->
+        keys =
+          for member <- members,
+              do:
+                {:key, member["key"]["token_id"],
+                 agents[agent_wallet(member["kind"], member["wallet"])]}
+
+        [{"Joined", {:list, keys}}]
+    end
+  end
+
+  defp joined_fact(sys) do
+    case length(joined(sys)) do
+      0 -> []
+      count -> [{"Joined", Integer.to_string(count)}]
+    end
+  end
 
   defp actor_wallet(event) do
     case who(event.actor) do
@@ -765,38 +2223,36 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp agent_wallet("agent", wallet), do: wallet
   defp agent_wallet(_kind, _wallet), do: nil
 
-  # The names agents gave themselves, by wallet, looked up together for the
-  # page. A person, or an agent that has no profile here, has no name.
-  # Agents choose their own names, so none can hide or reverse the Key beside it.
-  defp agent_names(wallets) do
-    case wallets |> Enum.reject(&is_nil/1) |> Enum.uniq() do
-      [] ->
-        %{}
-
-      wallets ->
-        wallets
-        |> Agents.agents_by_wallets!()
-        |> Map.new(&{&1.wallet_address, DirectoryMD.visible(&1.name)})
-    end
+  @doc """
+  The names agents gave themselves, by wallet, looked up together for a
+  page. A person, or an agent that has no profile here, has no name.
+  Agents choose their own names, so none can hide or reverse the Key beside it.
+  """
+  def agent_names(wallets) do
+    wallets
+    |> Agents.names_by_wallet()
+    |> Map.new(fn {wallet, name} -> {wallet, DirectoryMD.visible(name)} end)
   end
 
   defp archived?(sys), do: sys["archived"] == true
 
-  defp level(%{"scope" => scope}) do
-    case Regex.run(@level, scope, capture: :all_but_first) do
-      [level] -> String.to_integer(level)
-      nil -> nil
-    end
+  defp starting?(sys), do: is_integer(sys["starting"])
+
+  # A push an agent sent names the agent beside its Key.
+  defp pushes(pushes, fleet_id, repository) do
+    agents = agent_names(Enum.map(pushes, & &1.acting_agent_wallet))
+    Enum.map(pushes, &push(&1, fleet_id, repository, agents))
   end
 
   # The log stamps every event in UTC.
-  defp push(push, fleet_id) do
+  defp push(push, fleet_id, repository, agents) do
     %{
       id: push.id,
       token_id: push.token_id,
+      agent: agents[push.acting_agent_wallet],
       what: moved(push.ref),
-      commit: {:commit, push.head, Code.commit_path(fleet_id, push.head)},
-      at: Calendar.strftime(push.pushed_at, "%-d %B %Y at %H:%M UTC")
+      commit: {:commit, push.head, Code.commit_path(fleet_id, repository, push.head)},
+      at: push.pushed_at
     }
   end
 
@@ -804,9 +2260,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp moved("refs/tags/" <> tag), do: "the tag " <> tag
   defp moved(ref), do: ref
 
-  defp at(timestamp) do
+  defp time(timestamp) do
     {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
-    Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
+    datetime
   end
 
   defp humanize(field), do: field |> String.replace("_", " ") |> String.capitalize()

@@ -205,7 +205,7 @@ defmodule Keyfleet.Chain.VotesLog do
 
   defp calls(<<length::256, rest::binary>>)
        when length > 0 and length <= div(byte_size(rest), 32 * 4) do
-    <<offsets::binary-size(32 * length), _calls::binary>> = rest
+    <<offsets::binary-size(32 * ^length), _calls::binary>> = rest
     starts = for <<offset::256 <- offsets>>, do: offset
     ends = Enum.drop(starts, 1) ++ [byte_size(rest)]
 

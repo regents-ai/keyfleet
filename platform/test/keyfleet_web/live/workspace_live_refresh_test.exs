@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
   @fleet "fleet_tech_classic"
   @board "/classic/1/workspace"
+  @result "https://example.com/result"
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
 
@@ -46,30 +47,29 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
     await_ready()
 
-    start_supervised!(
-      {Keyfleet.Graph.Projectors,
-       fleets: [@fleet], projection_wait: 30_000, catch_up_interval: 60_000}
-    )
+    start_supervised!({Keyfleet.Graph.Projectors, fleets: [@fleet], catch_up_interval: 60_000})
 
     %{conn: holder_conn()}
   end
 
   test "what agents write appears on an open page by itself", %{conn: conn} do
-    {:ok, view, html} = live(conn, @board)
-    assert html =~ "Nothing has been added to this workspace yet."
+    {:ok, view, _html} = live(conn, @board)
+    starting = cards(view)
+    assert length(starting) == length(Keyfleet.GoalIdeas.starting_goals())
+    assert length(activity(view)) == length(starting)
 
     {goal, _head} = create!("goal", %{title: "Revenue", outcome: "One paying customer."}, "c-1")
-    assert shows?(fn -> cards(view) == [goal] end)
+    assert shows?(fn -> cards(view) == [goal | starting] end)
 
     {task, _head} = create!("task", %{title: "Draft", progress: "todo"}, "c-2")
     write!("link", %{source: task, target: goal, type: "implements"}, "c-3")
     write!("patch", %{id: task, expected_version: 1, set: %{progress: "doing"}}, "c-4")
     write!("archive", %{id: goal, expected_version: 1}, "c-5")
 
-    assert shows?(fn -> length(activity(view)) == 5 end)
-    assert cards(view) == [task]
+    assert shows?(fn -> length(activity(view)) == 5 + length(starting) end)
+    assert cards(view) == [task | starting]
 
-    assert activity(view) == [
+    assert Enum.take(activity(view), 5) == [
              "Key 17 archived “Revenue”.",
              "Key 17 updated “Draft”: progress is now in progress.",
              "Key 17 linked “Draft” to “Revenue”, which it delivers on.",
@@ -79,8 +79,8 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
     {:ok, item, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, task))
     assert has_element?(item, "#workspace-links", "This task delivers on")
-    write!("patch", %{id: task, expected_version: 2, set: %{progress: "done"}}, "c-6")
-    assert shows?(fn -> has_element?(item, "#workspace-fields", "Done") end)
+    write!("submit", %{id: task, expected_version: 2, result_ref: @result}, "c-6")
+    assert shows?(fn -> has_element?(item, "#workspace-fields", "Awaiting review") end)
   end
 
   test "a task whose last dependency is done is announced as ready to start", %{conn: conn} do
@@ -91,10 +91,14 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
     {:ok, view, _html} = live(conn, @board)
     refute Enum.any?(activity(view), &(&1 =~ "ready to start"))
 
-    write!("patch", %{id: first, expected_version: 1, set: %{progress: "done"}}, "c-4")
+    write!("submit", %{id: first, expected_version: 1, result_ref: @result}, "c-4")
 
     assert shows?(fn -> hd(activity(view)) == "“Write the brief” is ready to start." end)
-    assert Enum.at(activity(view), 1) == "Key 17 updated “Collect filings”: progress is now done."
+
+    assert Enum.slice(activity(view), 1, 2) == [
+             "“Collect filings” needs review.",
+             "Key 17 submitted “Collect filings” for review."
+           ]
   end
 
   # An open page reads what changed a moment after it hears of it.
@@ -116,7 +120,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   # so to every open page before the wait ends.
   defp create!(type, data, id) do
     {:ok, %{"result" => %{"id" => object_id}, "head_seq" => head}} =
-      command("create", %{type: type, scope: "fleet", data: data}, id)
+      command("create", %{project: "general", type: type, data: data}, id)
 
     {object_id, await(head)}
   end
@@ -133,7 +137,10 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   end
 
   defp command(op, body, id),
-    do: Writer.command(@fleet, op, body, fn _within -> {:ok, stamped(id)} end)
+    do: Writer.command(@fleet, op, body, {__MODULE__, :admit, [id]})
+
+  @doc false
+  def admit(id, _within), do: {:ok, stamped(id)}
 
   defp stamped(id) do
     %{
@@ -148,7 +155,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
       },
-      writable_scopes: ["fleet"]
+      projects: %{"general" => "active"}
     }
   end
 

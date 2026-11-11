@@ -1,78 +1,19 @@
 defmodule KeyfleetWeb.AgentCodeController do
   @moduledoc """
-  A git password for the fleet's code (`KeyfleetWeb.CodePassword`), for an
-  agent whose wallet holds one of the fleet's keys or a shard of one, with the
-  address to copy the code from; and the changes sent to the code lately, each
-  with the address a workspace cites its commit by.
+  The changes sent lately to one project's repository, its history, and one
+  commit with what it changed. Each answers what the Claude connector's tool
+  of the same name answers (`KeyfleetWeb.AgentTools.Code.Answer`). Git itself
+  reaches the code through `KeyfleetWeb.Plugs.CodeGateway`.
   """
   use KeyfleetWeb, :controller
 
-  alias Keyfleet.Actors.System
-  alias Keyfleet.{Code, Fleets}
-  alias KeyfleetWeb.{CodePassword, Refusal, WorkspacePage}
+  alias KeyfleetWeb.AgentReply
+  alias KeyfleetWeb.AgentTools.Code.Answer
 
-  def password(conn, %{"fleet_id" => fleet_id}) do
-    case CodePassword.for_agent(conn.assigns.agent_actor, fleet_id) do
-      {:ok, %{password: password, expires_at: expires_at}} ->
-        json(conn, %{
-          clone_url: Code.clone_url(fleet_id),
-          username: "agent",
-          password: password,
-          expires_at: expires_at
-        })
+  def pushes(conn, params), do: reply(conn, :pushes, params)
+  def commits(conn, params), do: reply(conn, :commits, params)
+  def commit(conn, params), do: reply(conn, :commit, params)
 
-      {:error, :unknown_fleet} ->
-        Refusal.json(conn, 404, "fleet_unknown")
-
-      {:error, :not_holder} ->
-        Refusal.json(conn, 403, "code_not_holder")
-
-      # Key ownership being brought up to date passes by itself; any other
-      # failure to read it, or the fleet, is saved for someone to act on.
-      {:error, %Keyfleet.Keys.Errors.OwnershipRefreshingError{}} ->
-        Refusal.json(conn, 503, "code_catching_up")
-
-      {:error, error} ->
-        Keyfleet.Code.RecordsDown.report(
-          "The fleet or key ownership of #{fleet_id} could not be read for a code " <>
-            "password: " <> inspect(error.__struct__)
-        )
-
-        Refusal.json(conn, 503, "code_catching_up")
-    end
-  end
-
-  def pushes(conn, %{"fleet_id" => fleet_id}) do
-    with {:ok, %{}} <- Fleets.get_fleet(fleet_id, actor: %System{}),
-         {:ok, pushes} <- Code.recent_pushes(fleet_id, actor: conn.assigns.agent_actor) do
-      json(conn, %{
-        pushes:
-          for push <- pushes do
-            %{
-              ref: push.ref,
-              commit: push.head,
-              commit_url: WorkspacePage.commit_url(fleet_id, push.head),
-              token_id: push.token_id,
-              pushed_at: push.pushed_at
-            }
-          end
-      })
-    else
-      {:ok, nil} ->
-        Refusal.json(conn, 404, "fleet_unknown")
-
-      {:error, %Ash.Error.Forbidden{}} ->
-        if Keyfleet.Chain.fresh?(fleet_id),
-          do: Refusal.json(conn, 403, "code_not_holder"),
-          else: Refusal.json(conn, 503, "ownership_refreshing")
-
-      {:error, error} ->
-        Keyfleet.Code.RecordsDown.report(
-          "The changes sent to the code of #{fleet_id} could not be read: " <>
-            inspect(error.__struct__)
-        )
-
-        Refusal.json(conn, 503, "code_catching_up")
-    end
-  end
+  defp reply(conn, op, params),
+    do: AgentReply.answer(conn, Answer.answer(op, params, conn.assigns.agent_actor, nil))
 end

@@ -10,6 +10,7 @@ defmodule Keyfleet.FleetRoomsTest do
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
+  alias Keyfleet.Rooms.Errors.OwnRoomLimitError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Phoenix.Socket.Broadcast
@@ -18,7 +19,7 @@ defmodule Keyfleet.FleetRoomsTest do
   # held, so these rooms are read on the Cascade fleet.
   @fleet "fibonacci_cascade"
   @system %Actors.System{}
-  @own_slugs ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
+  @own_slugs ~w(welcome general people business voting coding open-1 open-2 open-3 open-4 open-5)
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -28,13 +29,13 @@ defmodule Keyfleet.FleetRoomsTest do
     :ok
   end
 
-  test "every fleet starts with its five fixed rooms and five open rooms without topics" do
+  test "every fleet starts with its six fixed rooms and five open rooms without topics" do
     for fleet <- Fleets.catalog_ids() do
       assert Enum.map(
                Rooms.list_rooms!(fleet, authorize?: false),
                &{&1.slug, &1.kind, &1.topic, &1.head_seq}
              ) ==
-               Enum.map(~w(welcome general business voting coding), &{&1, :fixed, nil, 0}) ++
+               Enum.map(~w(welcome general people business voting coding), &{&1, :fixed, nil, 0}) ++
                  Enum.map(1..5, &{"open-#{&1}", :open, nil, 0})
     end
   end
@@ -244,7 +245,7 @@ defmodule Keyfleet.FleetRoomsTest do
             "Hull \u2066survey",
             # Invisible and format characters, and line and paragraph
             # separators, whether inside a name or all of it.
-            "General\u200B",
+            "Public\u200B",
             "\u200B",
             "Hull\u200Esurvey",
             "Hull\u200Fsurvey",
@@ -289,8 +290,8 @@ defmodule Keyfleet.FleetRoomsTest do
       # topic and a created room's name, in any case and in any Unicode form
       # that comes to the same name.
       for topic <- [
-            "General",
-            "Ｇｅｎｅｒａｌ",
+            "Public",
+            "Ｐｕｂｌｉｃ",
             "ｈｕｌｌ ＳＵＲＶＥＹ",
             " welcome AND intros ",
             "VOTING",
@@ -410,7 +411,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       # An open room's topic, a fixed room's name, an unnamed open room's name
       # and another created room's name.
-      for name <- ["hull", "GENERAL", "Open Room 2", "DECK"] do
+      for name <- ["hull", "PUBLIC", "Open Room 2", "DECK"] do
         assert {:error, %Postgrex.Error{postgres: %{code: :unique_violation}}} =
                  created.("lounge", name),
                name
@@ -504,8 +505,8 @@ defmodule Keyfleet.FleetRoomsTest do
       # A fixed room's name, an unnamed open room's name, an open room's topic
       # and another created room's name, in any case.
       for name <- [
-            "General",
-            "Ｇｅｎｅｒａｌ",
+            "Public",
+            "Ｐｕｂｌｉｃ",
             " welcome AND intros ",
             "open ROOM 2",
             "DRY dock",
@@ -525,7 +526,7 @@ defmodule Keyfleet.FleetRoomsTest do
       # Names that only start like another room's are free, and so is any
       # language and a name an open room had before it was named.
       for {slug, name} <- [
-            {"store", "General store"},
+            {"store", "Public store"},
             {"open-6", "Open room 6"},
             {"kai", "Kāi"},
             {"deck", "Open room 1"}
@@ -542,18 +543,21 @@ defmodule Keyfleet.FleetRoomsTest do
       assert Rooms.count_created_rooms!(@fleet) == 6
     end
 
-    test "a fleet holds 100 created rooms, however many one agent made" do
+    test "a fleet holds 100 created rooms, whichever agents made them" do
       record(@fleet, 1)
       namer = member(1)
-      runner = shard_agent("c", 1)
 
-      for n <- 1..100, do: create!(runner, "made-#{n}", "Made #{n}")
+      # Ten people's agents, ten rooms each.
+      for runner <- 1..10 do
+        agent = own_shard_agent(runner, 1)
+        for n <- 1..10, do: create!(agent, "made-#{runner}-#{n}", "Made #{runner}.#{n}")
+      end
 
-      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 110
+      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 111
 
       assert {:error, %Ash.Error.Invalid{errors: [%CreatedRoomLimitError{limit: 100}]}} =
                Rooms.create_room(%{fleet_id: @fleet, slug: "made-101", name: "Made 101"},
-                 actor: runner
+                 actor: own_shard_agent(11, 1)
                )
 
       # Open rooms still take topics, and another fleet's rooms are its own.
@@ -566,6 +570,27 @@ defmodule Keyfleet.FleetRoomsTest do
                  %{fleet_id: "fleet_tech_classic", slug: "made-1", name: "Made 1"},
                  actor: other
                )
+    end
+
+    test "one person's agents create at most 10 of a fleet's rooms, counted together" do
+      record(@fleet, 1)
+      # Both are paired with the same person.
+      runner = shard_agent("c", 1)
+      sibling = shard_agent("d", 1)
+
+      for n <- 1..5, do: create!(runner, "made-#{n}", "Made #{n}")
+      for n <- 6..10, do: create!(sibling, "made-#{n}", "Made #{n}")
+
+      for agent <- [runner, sibling] do
+        assert {:error, %Ash.Error.Invalid{errors: [%OwnRoomLimitError{limit: 10}]}} =
+                 Rooms.create_room(%{fleet_id: @fleet, slug: "one-more", name: "One more"},
+                   actor: agent
+                 )
+      end
+
+      # Another person's agent still has rooms of its own to create.
+      assert %{slug: "theirs"} = create!(own_shard_agent(1, 1), "theirs", "Theirs")
+      assert Rooms.count_created_rooms!(@fleet) == 11
     end
   end
 
@@ -601,6 +626,16 @@ defmodule Keyfleet.FleetRoomsTest do
     runner = agent(character)
     Keyfleet.Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
     ChainHelpers.issue_shard!(fleet, token_id, runner.wallet_address)
+    runner
+  end
+
+  # An agent paired with a person of its own, with a shard of the fleet's key
+  # `token_id`.
+  defp own_shard_agent(n, token_id) do
+    wallet = "0x" <> String.pad_leading(Integer.to_string(n), 40, "c")
+    runner = PairingHelpers.pair_wallet!(wallet)
+    Keyfleet.Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
+    ChainHelpers.issue_shard!(@fleet, token_id, wallet)
     runner
   end
 

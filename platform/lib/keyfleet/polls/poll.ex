@@ -4,9 +4,9 @@ defmodule Keyfleet.Polls.Poll do
   Key that started it and when it closes.
 
   A poll stays open for the 1 to 60 minutes its starter chose, or until the
-  starter ends it. It is never removed. Anyone reads a fleet's polls; only the
-  fleet's Key holders read a poll's notes. Each choice's count of votes is
-  read once the poll has closed (`Keyfleet.Polls.Calculations.Totals`).
+  starter ends it. It is never removed. Only the fleet's members read its
+  polls (`Keyfleet.Access`, `:polls`). Each choice's count of votes is read
+  once the poll has closed (`Keyfleet.Polls.Calculations.Totals`).
 
   Starting and ending one is announced on `Keyfleet.Polls.fleet_topic/1` as
   "polls_changed", and ending one on `Keyfleet.Polls.topic/1` as
@@ -121,22 +121,20 @@ defmodule Keyfleet.Polls.Poll do
       authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
     end
 
-    policy action([:read, :listed, :in_fleet, :last_started]) do
+    # Only for filters that follow a vote to its poll, and for locking one.
+    policy action(:read) do
       authorize_if always()
+    end
+
+    # The fleet's members, and the site finding a poll before it asks whose
+    # it is (`KeyfleetWeb.AgentPollController`).
+    policy action([:listed, :in_fleet, :last_started]) do
+      authorize_if {Keyfleet.Access.Check, read: :polls, scope: :fleet_id}
+      authorize_if actor_attribute_equals(:role, :system)
     end
 
     policy action(:end) do
       authorize_if {Keyfleet.Polls.Checks.Standing, role: :starter}
-    end
-  end
-
-  field_policies do
-    field_policy :notes do
-      authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
-    end
-
-    field_policy :* do
-      authorize_if always()
     end
   end
 
@@ -161,7 +159,7 @@ defmodule Keyfleet.Polls.Poll do
         items: [min_length: 1, max_length: 100, match: @plain_text]
       ]
 
-    # What the starter adds for the fleet's Key holders alone.
+    # What the starter adds to the question.
     attribute :notes, :string, public?: true, constraints: [max_length: 2_000]
 
     attribute :started_by_key, :integer,

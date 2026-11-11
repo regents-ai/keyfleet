@@ -74,6 +74,9 @@ config :keyfleet, Keyfleet.Decks,
 
 config :keyfleet, :database_startup_enabled, true
 
+# A wallet holding nothing, so the presence timer has nothing to mark.
+config :keyfleet, Keyfleet.Keys.PresenceTimer, key: "0x" <> String.duplicate("11", 32)
+
 # Jobs run only when a test runs them (`Oban.Testing`).
 config :keyfleet, Oban, testing: :manual
 
@@ -81,6 +84,12 @@ config :keyfleet, Oban, testing: :manual
 config :keyfleet, :agent_wait_ms, 200
 config :keyfleet, :agent_waits_per_address, 1
 config :keyfleet, :agent_waits_total, 1
+
+# A fleet page reads its feed again soon after a notice.
+config :keyfleet, :fleet_feed_wait_ms, 200
+
+# And the first read of every fleet as the site starts gives up sooner.
+config :keyfleet, :first_read_ms, 2_000
 
 # Notebook hosts answer under .localhost here. The tests name each fleet's hub
 # themselves. This signing key is for the test suite only and signs nothing
@@ -90,10 +99,11 @@ config :keyfleet, :notebooks,
   signing_keys:
     ~s({"keys":[{"crv":"P-256","d":"stH406oqfhU2FNxw1WOLcP4Pm9m-ruc2z-vxPp_iKI0","kty":"EC","x":"ja1FaT0GKapQdzAf5-K0t2eotYxDjdC1hi8NlZP1Obk","y":"KuMSboRZZzZgwQGhV_iu_F95lcVknJMXNQad0dTOjXQ"}]})
 
-# The fleets' code answers at code.localhost here. The tests name the code
-# store themselves; making a repository is answered by `Req.Test`.
+# The fleets' code answers at code.localhost here. What this site asks the
+# code store is answered by `Req.Test`; the git tests name a store themselves.
 config :keyfleet, :code,
   host: "code.localhost",
+  node: "http://code-store.test",
   req_options: [plug: {Req.Test, Keyfleet.Code.NodeClient}]
 
 # Every test case here reaches one node holding one anonymous bootstrap budget
@@ -103,8 +113,10 @@ config :keyfleet, :code,
 config :keyfleet, :session_bootstrap_rate_limit, limit: 100_000, window_seconds: 300
 
 # The same holds for the API budget: every case and the agent contract's own
-# server share the loopback address. The rate-limit tests put 120/60 back.
+# server share the loopback address, and the same for the Claude connector's
+# ceiling. The rate-limit tests put the release budgets back.
 config :keyfleet, :api_rate_limit, limit: 100_000, window_seconds: 60
+config :keyfleet, :connector_rate_limit, limit: 100_000, window_seconds: 60
 
 # And for the early-access form. Its own test puts the release 5/600 back.
 config :keyfleet, :early_signup_rate_limit, limit: 100_000, window_seconds: 600
@@ -132,6 +144,11 @@ config :keyfleet, Keyfleet.Repo,
   # 70ms, so a tenth of a second leaves almost no room and two seconds leaves
   # plenty.
   queue_target: 1_000
+
+# A write waits for its change to be readable before it answers. Tests that
+# write share the machine with the whole suite, so they wait far longer than
+# production's two seconds before reading.
+config :keyfleet, :graph, projection_wait: 30_000
 
 config :ash, :disable_async?, true
 config :ash, :missed_notifications, :ignore

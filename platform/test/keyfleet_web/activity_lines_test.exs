@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - an item read without its title is named by its type, never linked
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
+  # - a wallet with no Key or agent to name it, or one Keys moved to, is a
+  #   part of its own, so a page can show it as every address is shown
 
   @post %{
     id: "post:1",
@@ -23,12 +25,12 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     }
   }
 
-  test "members' words stay as written on a page and are escaped in Markdown" do
+  test "a quote on a page drops its link marks, and Markdown escapes members' words" do
     assert ActivityLines.text(@post) ==
-             "Ada *bold* (Key 7) in Hull [survey](x): “Ship *v2* [now](https://example.com)”"
+             "Ada *bold* (Key 7) in Hull [survey](x): “Ship *v2* now”"
 
     assert ActivityLines.markdown(@post) ==
-             ~S"“Ada \*bold\*” (Key 7) in “Hull \[survey\]\(x\)”: “Ship \*v2\* \[now\]\(https://example.com\)”"
+             ~S"“Ada \*bold\*” (Key 7) in “Hull \[survey\](x)”: “Ship \*v2\* \[now\](https://example.com)”"
   end
 
   test "characters that can't be seen or reverse the text are shown nowhere" do
@@ -55,6 +57,42 @@ defmodule KeyfleetWeb.ActivityLinesTest do
              for({:item, _, _} = item <- ActivityLines.parts(goal), do: item)
 
     assert title != ""
+  end
+
+  test "a wallet with no Key to name it is a part of its own, shown short" do
+    wallet = "0x1234567890abcdef1234567890abcdef12345678"
+
+    proposed = %{
+      id: "proposed:1",
+      at: ~U[2026-09-25 12:00:00Z],
+      kind: :proposed,
+      facts: %{number: 1, proposer: %{token_id: nil, wallet: wallet}}
+    }
+
+    assert [{:address, ^wallet} | _] = ActivityLines.parts(proposed)
+    assert ActivityLines.text(proposed) == "0x1234..5678 put Proposal 1 to a vote."
+    assert ActivityLines.markdown(proposed) == "0x1234..5678 put Proposal 1 to a vote."
+  end
+
+  test "Keys moved to one wallet are one sentence, the wallet a part of its own" do
+    wallet = "0x1234567890abcdef1234567890abcdef12345678"
+
+    moved =
+      &%{
+        id: "transfer:1",
+        at: ~U[2026-09-25 12:00:00Z],
+        kind: :moved,
+        facts: %{token_ids: &1, to: wallet}
+      }
+
+    assert {:address, wallet} in ActivityLines.parts(moved.([4]))
+    assert ActivityLines.channel(moved.([4])) == :keys
+    assert ActivityLines.text(moved.([4])) == "Key 4 moved to 0x1234..5678."
+    assert ActivityLines.text(moved.([3, 4, 7])) == "Keys 3, 4 and 7 moved to 0x1234..5678."
+    assert ActivityLines.text(moved.([4, 5, 6, 7])) == "Keys 4–7 moved to 0x1234..5678."
+
+    assert ActivityLines.text(moved.([3, 4, 8, 12, 1_200])) ==
+             "Keys 3, 4, 8 and 2 others moved to 0x1234..5678."
   end
 
   test "a dead end added to the workspace is told as one recorded" do
@@ -129,5 +167,49 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
     assert ActivityLines.text(votes) ==
              "Key 5 voted no and Keys 3 and 4 abstained on Proposal 12."
+  end
+
+  test "a run of Keys bought and handed-out tasks are one sentence" do
+    at = ~U[2026-09-25 12:00:00Z]
+    by = %{token_id: 17, agent: nil}
+    item = &%{id: "x:1", at: at, kind: &1, facts: &2}
+
+    assert ActivityLines.text(item.(:sale, %{token_ids: [56, 57, 58]})) ==
+             "Keys 56–58 were bought."
+
+    assert ActivityLines.text(item.(:sale, %{token_ids: [56, 58]})) == "2 Keys were bought."
+
+    tasks = &item.(:tasks, Map.merge(%{by: by, taken: 0, to: [4, 8], others: 0}, &1))
+
+    assert ActivityLines.text(tasks.(%{added: 3, given: 0, to: []})) == "Key 17 added 3 tasks."
+
+    assert ActivityLines.text(tasks.(%{added: 0, given: 2})) ==
+             "Key 17 gave 2 tasks to Keys 4 and 8."
+
+    assert ActivityLines.text(tasks.(%{added: 4, given: 1, to: [4]})) ==
+             "Key 17 added 4 tasks and gave one to Key 4."
+
+    assert ActivityLines.text(tasks.(%{added: 5, given: 5, to: [1, 2, 3], others: 2})) ==
+             "Key 17 added 5 tasks and gave 5 to Keys 1, 2, 3 and 2 others."
+
+    assert ActivityLines.text(tasks.(%{added: 1, taken: 1, given: 0})) ==
+             "Key 17 added a task and took one on."
+
+    assert ActivityLines.text(tasks.(%{added: 4, taken: 1, given: 2})) ==
+             "Key 17 added 4 tasks, took one on and gave 2 to Keys 4 and 8."
+
+    assert ActivityLines.text(tasks.(%{added: 0, taken: 2, given: 0})) ==
+             "Key 17 took on 2 tasks."
+  end
+
+  test "a run of one change counts its items" do
+    facts = %{by: %{token_id: 3, agent: "Scout"}, count: 4, type: "task"}
+    item = &%{id: "changes:1", at: ~U[2026-09-25 12:00:00Z], kind: :changes, facts: &1}
+
+    assert ActivityLines.text(item.(Map.put(facts, :change, :archived))) ==
+             "Scout (Key 3) archived 4 tasks."
+
+    assert ActivityLines.text(item.(Map.merge(facts, %{change: :submitted, type: "evidence"}))) ==
+             "Scout (Key 3) submitted 4 pieces of evidence for review."
   end
 end

@@ -35,9 +35,9 @@ defmodule Keyfleet.Fleets.Rules do
     "10% of each Key sale stays USDC and goes to REGENT staking, once, and nothing from the " <>
       "treasury after.",
     "Once a day, anyone can release the Daily Treasury Slice to Keys. It shares from 0.1% to 2% of " <>
-      "each token it covers equally among all the Keys, at the rate the Keys vote for, " <>
-      "starting at 0.5%. A token is shared only while the treasury holds at least 100 of " <>
-      "it, or 0.05 ETH.",
+      "each token it covers equally among the Keys sold at least 2 days ago, at the rate the " <>
+      "Keys vote for, starting at 0.5%. A token is shared only while the treasury holds at " <>
+      "least 100 of it, or 0.05 ETH.",
     "A new Key waits 2 days before it can propose or vote. It is present on its own from " <>
       "day 2 to day 4; after that its holder marks it present, which lasts 48 hours. A Key " <>
       "away for longer keeps its part of every slice and can come back at any time.",
@@ -68,17 +68,12 @@ defmodule Keyfleet.Fleets.Rules do
   def membership_terms, do: @membership_terms
 
   @doc "A number of keys in words, such as `1 Key` or `1,771 Keys`."
-  def keys(1), do: "1 Key"
-  def keys(count), do: "#{grouped(count)} Keys"
+  def keys(count), do: counted(count, "Key", "Keys")
+
+  @doc "`count` things in words, such as `1 vote` or `1,024 votes`."
+  def counted(1, one, _many), do: "1 #{one}"
+  def counted(count, _one, many), do: "#{grouped(count)} #{many}"
 
   @doc "A whole number with its thousands separated by commas."
-  def grouped(number) do
-    number
-    |> Integer.to_string()
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
-  end
+  def grouped(number), do: number |> Integer.to_string() |> RegentFormat.add_delimiters()
 end

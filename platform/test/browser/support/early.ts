@@ -4,5 +4,5 @@
  */
 export function rollerOnly(requested: string[]): boolean {
   const scripts = requested.map(url => new URL(url).pathname).filter(path => path.endsWith(".js"))
-  return scripts.includes("/assets/js/key_roller.js") && scripts.every(path => /^\/assets\/js\/(key_roller|chunk-[A-Z0-9]+)\.js$/.test(path))
+  return scripts.includes("/assets/js/key_roller.js") && scripts.every(path => /^\/assets\/js\/(key_roller|chunks\/chunk-[A-Z0-9]+)\.js$/.test(path))
 }

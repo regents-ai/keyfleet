@@ -58,6 +58,12 @@ type IslandInteraction<Renderer extends IslandRenderer> = {
   nudge(): void
   /** Registers work to run each time a renderer lands, before its first frame. */
   onReady(compose: () => void): void
+  /**
+   * Registers work to run once a picture that keeps moving is handed too few
+   * frames (`true`), and when it is given another chance, as the tab is shown
+   * again (`false`).
+   */
+  onStrain(hold: (strained: boolean) => void): void
 }
 
 type IslandKind<Renderer extends IslandRenderer> = {
@@ -80,6 +86,18 @@ export const MAX_DRAWING_BUFFER_PIXELS = 1_500_000
 
 /** Frames the easing may spend settling after the pointer stops moving. */
 export const EASING_FRAME_LIMIT = 24
+
+/**
+ * A picture that keeps moving by itself asks for a frame every time the screen
+ * refreshes. A device saving power hands out fewer (Safari's Low Power Mode and
+ * Chrome's Energy Saver hold a page to 30 a second), and so does one that can't
+ * keep up. When three in four of a stretch of frames come slower than 40 a
+ * second, the picture is asked to hold still. A busy moment on a healthy device
+ * slows only some of them.
+ */
+export const STRAIN_WINDOW_FRAMES = 90
+const SLOW_FRAME_MS = 1000 / 40
+const STRAINED_SHARE = 0.75
 
 /**
  * Devices the island will ask for again after one it was drawing on is lost.
@@ -149,6 +167,11 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
   let easingFrames = 0
   let recoveries = 0
   let compose: (() => void) | undefined
+  let strain: ((strained: boolean) => void) | undefined
+  let strained = false
+  let lastFrameAt: number | undefined
+  let pacedFrames = 0
+  let slowFrames = 0
 
   // Every reason the island may work is tracked apart from every other one, because
   // they come back independently: an island scrolling into view while the tab is hidden
@@ -173,6 +196,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
   const stopFrame = () => {
     if (renderFrame !== undefined) cancelFrame(renderFrame)
     renderFrame = undefined
+    lastFrameAt = undefined
   }
 
   const stopStart = () => {
@@ -244,9 +268,15 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
     renderer = undefined
   }
 
-  /** A retreat the island does not come back from: the GPU is not going to draw this. */
+  /**
+   * A retreat the island does not come back from: the GPU is not going to draw
+   * this, so whatever steers the picture lets go now. The tab and motion
+   * listeners stay until destroy(), and find nothing to do.
+   */
   const retire = () => {
     retired = true
+    release?.()
+    release = undefined
     retreat()
   }
 
@@ -287,9 +317,46 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
     )
   }
 
-  function tick(): void {
+  /**
+   * How fast the browser hands a moving picture its frames, judged a stretch at
+   * a time. Only a frame that follows one which asked for it is timed. A
+   * stretch that comes too slow asks the picture to hold still, once.
+   */
+  const pace = (time: number) => {
+    const since = lastFrameAt === undefined ? undefined : time - lastFrameAt
+    lastFrameAt = time
+    if (strained || since === undefined) return
+    pacedFrames += 1
+    if (since > SLOW_FRAME_MS) slowFrames += 1
+    if (pacedFrames < STRAIN_WINDOW_FRAMES) return
+    strained = slowFrames >= pacedFrames * STRAINED_SHARE
+    pacedFrames = 0
+    slowFrames = 0
+    if (strained) strain?.(true)
+  }
+
+  /**
+   * A tab shown again may be on a device that has its frames back, plugged in
+   * or out of its power saving, so a picture that was asked to hold still is
+   * timed afresh.
+   */
+  const relieve = () => {
+    strained = false
+    pacedFrames = 0
+    slowFrames = 0
+    strain?.(false)
+  }
+
+  function tick(time: number): void {
     renderFrame = undefined
+    draw(time)
+    // A frame that asks for no other ends the run, and the next run is timed afresh.
+    if (renderFrame === undefined) lastFrameAt = undefined
+  }
+
+  function draw(time: number): void {
     if (!renderer) return
+    if (kind.continuous) pace(time)
     if (pendingSize) {
       renderer.resize(pendingSize[0], pendingSize[1])
       pendingSize = undefined
@@ -319,6 +386,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
     })
     const onVisibilityChange = () => {
       visible = !document.hidden
+      if (visible && strained) relieve()
       sync()
     }
 
@@ -334,6 +402,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
         invalidate()
       },
       onReady: work => void (compose = work),
+      onStrain: hold => void (strain = hold),
     })
 
     return () => {
@@ -342,6 +411,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
       document.removeEventListener("visibilitychange", onVisibilityChange)
       releaseInteraction?.()
       compose = undefined
+      strain = undefined
     }
   }
 
@@ -375,6 +445,10 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
       mounted = true
       retired = false
       recoveries = 0
+      strained = false
+      lastFrameAt = undefined
+      pacedFrames = 0
+      slowFrames = 0
       awake = true
       // The fresh observer, not the last lifetime, says where the island stands now.
       onscreen = false

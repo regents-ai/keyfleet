@@ -4,16 +4,18 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "695a824a7fe956a0337592b454479389cd95f8b6"
+  @elixir_utils_ref "d89c69df697f81d2a56a43124eada843d1682303"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "9e93f1497f5a014bccd3be0e5c5729f2b866cc54"
+  @design_system_ref "d3845c6d9fe34b7131937bafa051e6e04c9b09dd"
 
   def project do
     [
       app: :keyfleet,
       version: "0.1.0",
-      elixir: "~> 1.15",
+      elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
+      # The browser walk's files under test/browser are run by Playwright, not ExUnit.
+      test_ignore_filters: [&String.starts_with?(&1, "test/browser/")],
       start_permanent: false,
       aliases: aliases(),
       deps: deps(),
@@ -49,19 +51,33 @@ defmodule Keyfleet.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.8.9"},
+      # Production's site and graph machines join one cluster (fly.toml).
+      {:dns_cluster, "~> 0.3.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.6", override: true},
-      {:ash, "~> 3.36"},
-      {:ash_phoenix, "~> 2.3.25"},
-      {:ash_postgres, "== 2.13.0"},
+      {:ash, "~> 3.37"},
+      {:ash_phoenix, "~> 2.3.26"},
+      # The Claude connector's MCP address (/mcp), as ash-template serves its own.
+      {:ash_ai, "~> 1.5"},
+      # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
+      # use the repo's prefix, which picks each site's schema on the shared
+      # database. It stands in for the copy the shared Regent libraries pin,
+      # until a release carries #910.
+      {:ash_postgres,
+       git: "https://github.com/ash-project/ash_postgres.git",
+       ref: "55db7d449aad351d200c5f300fca2a83e0a8734c",
+       override: true},
       {:oban, "~> 2.24"},
+      # Each paired agent's activity, kept a few minutes for the account menu.
+      {:nebulex, "~> 3.0"},
+      {:nebulex_local, "~> 3.0"},
       # The notebook gateway's connection to a fleet hub's live notebook sockets.
       {:mint_web_socket, "~> 1.0"},
-      # The code gateway streams git's request to the fleets' code store.
+      # The code gateway's connection to the fleets' code store.
       {:mint, "~> 1.11"},
-      {:ash_oban, "~> 0.10.0"},
-      {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
-      {:mdex, "== 0.14.2"},
+      {:ash_oban, "~> 0.10.3"},
+      {:igniter, "== 0.8.5", only: [:dev, :test], runtime: false},
+      {:mdex, "== 0.14.6"},
       {:regent_privy,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
       {:regent_identity,
@@ -69,25 +85,39 @@ defmodule Keyfleet.MixProject do
       {:regent_agents,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ash_components/agents", override: true},
       {:regent_ui, git: @design_system, ref: @design_system_ref, sparse: "regent_ui"},
-      {:regent_agent_access, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access"},
+      # regent_mcp_agents names regent_agent_access by path; this pin replaces it.
+      {:regent_agent_access,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access", override: true},
       {:siwa,
        git: @elixir_utils,
        ref: @elixir_utils_ref,
        sparse: "siwa/siwa-elixir/apps/siwa",
        override: true},
-      {:regent_format, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "format"},
+      # regent_identity and regent_agents name regent_format by path; this pin replaces it.
+      {:regent_format,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "format", override: true},
       {:regent_chain,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
-      {:regent_credits, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "credits"},
+      # Keeps crash saving on when one save fails (RegentHttp.ErrorSaving).
+      {:regent_http, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "http"},
       {:regent_points, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "points"},
       {:ens_elixir, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ens"},
+      # The Claude connector: its sign-in, and the MCP address and identity tools
+      # it calls. regent_mcp_agents names regent_oauth by path; this pin replaces it.
+      {:regent_oauth,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "oauth", override: true},
+      {:regent_mcp_agents, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "mcp_agents"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
+      # Property tests. Ash already needs it in every environment, so it is not
+      # limited to :test here.
+      {:stream_data, "~> 1.4"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
+      {:logger_json, "~> 7.0"},
       {:telemetry_metrics, "~> 1.0"},
+      {:peep, "~> 5.0"},
       {:telemetry_poller, "~> 1.3"},
-      {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:error_tracker, "~> 0.9"},
       {:jason, "~> 1.2"},
       {:yaml_elixir, "~> 2.12"},
@@ -97,7 +127,7 @@ defmodule Keyfleet.MixProject do
       {:ex_image_info, "~> 1.0"},
       # Cuts each Key card's small close-up out of its picture (libvips).
       {:vix, "~> 0.42.0"},
-      {:bandit, "~> 1.13"},
+      {:bandit, "~> 1.14 and >= 1.14.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:credo_ash,
@@ -106,8 +136,8 @@ defmodule Keyfleet.MixProject do
        sparse: "credo_ash",
        only: [:dev, :test],
        runtime: false},
-      {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
-      {:usage_rules, "~> 1.2.8", only: [:dev, :test], runtime: false}
+      {:sobelow, "~> 0.18", only: [:dev, :test], runtime: false},
+      {:usage_rules, "~> 1.3", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -158,7 +188,7 @@ defmodule Keyfleet.MixProject do
       ],
       # The database is prepared before the site starts: its job queue starts
       # only on a migrated database.
-      test: ["keyfleet.setup_local_auth", "test"],
+      test: ["ecto.create --quiet", "keyfleet.setup_local_auth", "test"],
       "test.external": ["test --only external"],
       precommit: [
         "compile --warnings-as-errors",
@@ -176,19 +206,21 @@ defmodule Keyfleet.MixProject do
         # The early-access list adds one: its domain.
         # Shards add two: the ShardEvent and EditsRestriction records, each with its domain.
         # Mutes add two: their domain and the OwnMute check.
-        # Notebooks add two: the Hub and Handoff records, each with its domain.
+        # Notebooks add one: the Handoff record, with its domain.
         # Code adds two: the Repository and Push records, each with its domain.
         # Keys' pictures and the Base contracts' event records each add to it.
         # Proposal words add one: the AgentActor check on their write action.
         # Polls add four: the Poll and Vote records, each with its domain and the Standing check.
-        # Rooms' Keys-only reads add two: the PublicRoom and InGeneral checks.
+        # The rooms anyone reads add three: the RoomsAnyoneReads and
+        # InRoomsAnyoneReads checks, and the PeopleRoomWriter check on posting.
         # Direct messages add six: their domain's edge to the Conversation, Message
         # and Block records, and each record's KeyHolder check.
         # Workspace reads add four: the KeyReader check on the workspace and its
         # three read tables.
         # Names add two: the EnsIdentity and SharedProfile records, each with its domain.
         # The table of who reads and writes what a fleet shares adds four: its
-        # Check on code pushes, messages and rooms, and rooms' InGeneral check.
+        # Check on code pushes, messages and rooms, and rooms' InRoomsAnyoneReads check.
+        # Members-only polls add one: the Poll record's Check.
         # Quote requests add one: their domain.
         # Wall removals add two: their domain and the KeyHolder check.
         # The router adds two more: the saved-errors page is a plug it sets up as
@@ -196,13 +228,49 @@ defmodule Keyfleet.MixProject do
         # Read marks add two: the rooms' and direct messages' ReadMark records, each
         # with its domain. Saved notebook outputs add one: the SavedOutput record.
         # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
-        # three records bring it to 82.
-        "xref graph --label compile-connected --fail-above 82",
+        # three records bring it to 82. The Key a person posts as adds one: the
+        # PostingKey record, with its domain. Workspace pins add two: the Pin
+        # record in the Graph domain, and its policy's access check. Main counted
+        # 87 on 23 Oct, one above the 86 recorded here; the PeopleRoomWriter
+        # check brings it to 88. Projects add three: the Project record, with its
+        # domain, and its KeyActor and KeyReader checks. Notebook locks and daily
+        # copies add two: the Setting and Backup records in the Notebooks domain.
+        # Public records add two: the Publication record, with its domain, and
+        # its Publish action. An agent choosing its person's posting Key adds
+        # one: the ActsForPerson check. Agent checkpoints and notebook run sources
+        # add two: the Checkpoint record in the Agents domain and the RunSource
+        # record in the Notebooks domain. The Claude connector adds ten: the
+        # router hands AshAi the input check (`KeyfleetWeb.ToolErrors.check_input/3`)
+        # as it compiles; the Connection record in the Agents domain, with its
+        # Caller check; the WriteAllowance check on workspace writes; and the
+        # AgentTools domain's records, Workspace with its Read, and Rooms and
+        # Dms, each with the Run their tools share. Polls and projects add four:
+        # the Polls and Projects records, each with that Run. Fleets adds two: the
+        # Fleets record, with that Run. Keys adds two: the Keys record, with
+        # that Run. Account and Public add four: the two records, each with that
+        # Run. Publications, Code and Notebooks add six: the three records, each
+        # with that Run. Agents pinning as their person add one: the Pin record's
+        # ActsForPerson check. The connector's pin and unpin add one: Workspace
+        # with that Run beside its Read. Ended draw waits add one: the
+        # KeyRevealExpiry record, with its domain.
+        "xref graph --label compile-connected --fail-above 129",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",
         "usage_rules.sync --check",
-        "keyfleet.route_handoff --check"
+        "keyfleet.route_handoff --check",
+        # The typecheck reads the shared libraries' copied scripts and tokens.
+        "regent_ui.assets",
+        "regent_identity.assets",
+        "regent_agent_access.assets",
+        "cmd npm run typecheck",
+        "cmd npm test",
+        # The browser suite (test/browser) on its own server, once the ExUnit suite
+        # on the same database has finished.
+        "cmd npm run test:browser",
+        # The main flows at an iPhone's and a Pixel's screen, and the
+        # accessibility check of every main page (playwright.devices.config.ts).
+        "cmd npm run test:devices"
       ]
     ]
   end

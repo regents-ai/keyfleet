@@ -42,7 +42,7 @@
 
 .motion-lab__kicker {
   color: var(--color-fg-muted);
-  font: 0.72rem/1 var(--font-family-mono);
+  font: 0.72rem/1 var(--font-family-ui);
   letter-spacing: var(--tracking-microlabel);
   text-transform: uppercase;
 }
@@ -83,7 +83,7 @@
   height: 1.8rem;
   background: var(--ash-accent-warm);
   color: var(--color-fg-on-accent);
-  font: 1rem/1 var(--font-family-mono);
+  font: 1rem/1 var(--font-family-ui);
 }
 
 .motion-lab__section-head p {
@@ -106,7 +106,7 @@
   margin-inline-start: 0.45em;
   padding: 0.1em 0.35em;
   border: 1px solid currentColor;
-  font: 0.625rem/1 var(--font-family-mono);
+  font: 0.625rem/1 var(--font-family-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -126,7 +126,7 @@
   border-inline-end: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-fg-muted);
-  font: 0.8rem/1 var(--font-family-mono);
+  font: 0.8rem/1 var(--font-family-ui);
   cursor: pointer;
 }
 
@@ -158,7 +158,7 @@
 
 .motion-lab__pickers dt {
   color: var(--color-fg-muted);
-  font: 0.72rem/1 var(--font-family-mono);
+  font: 0.72rem/1 var(--font-family-ui);
   letter-spacing: var(--tracking-microlabel);
   text-transform: uppercase;
 }
@@ -187,11 +187,12 @@
   font-size: 1.25rem;
 }
 
-/* Sparks, rings and stitches float over everything and never catch a press. */
+/* Sparks, rings and stitches float at the tip layer, under only the skip link,
+   and never catch a press. */
 .motion-lab__fx {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--rg-layer-tip);
   overflow: hidden;
   pointer-events: none;
 }
@@ -221,7 +222,7 @@
 .motion-lab__fx-stitch {
   margin: -0.6em 0 0 -0.3em;
   color: var(--fx-color);
-  font: 700 1.3rem/1 var(--font-family-mono);
+  font: 1.3rem/1 var(--font-family-ui);
 }
 
 /* Panels */
@@ -233,12 +234,12 @@
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  z-index: 30;
+  z-index: var(--rg-layer-tip);
   display: grid;
   min-width: 13rem;
   border: 1px solid var(--ash-line-strong);
   background: var(--color-surface);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--rg-layer-tip-shadow);
   transform-origin: 1.5rem 0;
 }
 
@@ -263,17 +264,20 @@
   outline: none;
 }
 
+/* The lab shows each panel on its own, over a site's header and under only its
+   skip link: the shade, the drawer, the sheet and the note all take the tip
+   layer, and the one later in the page sits on top. */
 .motion-lab__shade {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--rg-layer-tip);
   background: color-mix(in oklch, var(--color-bg) 72%, transparent);
 }
 
 .motion-lab__drawer,
 .motion-lab__sheet {
   position: fixed;
-  z-index: 70;
+  z-index: var(--rg-layer-tip);
   display: grid;
   align-content: start;
   gap: var(--space-2);
@@ -338,20 +342,16 @@
   position: fixed;
   bottom: var(--space-3);
   left: var(--space-3);
-  z-index: 65;
+  z-index: var(--rg-layer-tip);
   display: grid;
   gap: var(--space-1);
   width: min(15rem, calc(100vw - 2 * var(--space-3)));
   padding: var(--space-2);
   border: 1px solid var(--ash-line-strong);
   background: color-mix(in oklab, var(--ash-accent-warm) 22%, var(--color-surface));
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--rg-layer-tip-shadow);
   rotate: -2deg;
   transform-origin: 0 100%;
-}
-
-.motion-lab__note p {
-  font-weight: var(--font-weight-semibold);
 }
 
 .motion-lab__note .motion-lab__close {
@@ -424,7 +424,7 @@
   padding: 0.45rem 0.8rem;
   border: 1px solid var(--ash-line-strong);
   background: var(--color-bg);
-  font: 0.8rem/1.2 var(--font-family-mono);
+  font: 0.8rem/1.2 var(--font-family-ui);
   white-space: nowrap;
 }
 
@@ -500,7 +500,7 @@
   border: 0;
   background: none;
   color: var(--color-fg-muted);
-  font: var(--font-weight-semibold) 0.95rem/1 var(--font-family-ui);
+  font: 0.95rem/1 var(--font-family-ui);
   cursor: pointer;
 }
 
@@ -572,7 +572,7 @@
   padding: 0.6rem;
   border: 1px solid var(--ash-line-strong);
   background: var(--color-bg);
-  font: 0.75rem/1.2 var(--font-family-mono);
+  font: 0.75rem/1.2 var(--font-family-ui);
   overflow-wrap: anywhere;
 }
 

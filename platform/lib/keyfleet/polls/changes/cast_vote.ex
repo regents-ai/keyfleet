@@ -42,7 +42,7 @@ defmodule Keyfleet.Polls.Changes.CastVote do
     end
   end
 
-  # Anyone may read a poll; the vote itself was authorized.
+  # The vote itself was authorized, by the standing that reads the poll.
   defp poll(fleet_id, poll_id) do
     Poll
     |> Ash.Query.filter(id == ^poll_id and fleet_id == ^fleet_id)

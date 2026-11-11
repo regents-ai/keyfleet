@@ -99,15 +99,15 @@ test("a refused copy shakes over the press's squish and still ends at rest", asy
   await page.addInitScript(() => {
     navigator.clipboard.writeText = () => Promise.reject(new DOMException("Refused", "NotAllowedError"))
   })
-  await watchMotion(page)
-  await page.goto("/")
-  await expect(page.locator(".phx-connected").first()).toBeAttached()
+  await openFleet(page)
+  await page.locator("#shell-regents-crown > summary").hover()
+  await expect(page.locator("#shell-regents-crown-copy")).toBeVisible()
   await forget(page)
 
-  await pressRapidly(page, "#home-instruction-copy")
+  await pressRapidly(page, "#shell-regents-crown-copy")
   await settle(page)
 
-  expect(await moved(page, "#home-instruction-copy")).toBe(true)
+  expect(await moved(page, "#shell-regents-crown-copy")).toBe(true)
   expect(await leftovers(page)).toEqual([])
 })
 

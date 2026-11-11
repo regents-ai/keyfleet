@@ -1,8 +1,7 @@
 defmodule KeyfleetWeb.Plugs.Theme do
   @moduledoc """
   Reads the colour theme the visitor last chose so the first server render
-  already carries it. Until they choose, the theme is nil and the page carries
-  none: the shared colours then follow the device, dark unless it asks for light.
+  already carries it. Until they choose, the page is light.
 
   The value reaches an HTML attribute, and a cookie is the visitor's to write,
   so only the two themes the interface offers are ever accepted.
@@ -24,5 +23,5 @@ defmodule KeyfleetWeb.Plugs.Theme do
   end
 
   defp theme(value) when value in ["light", "dark"], do: value
-  defp theme(_value), do: nil
+  defp theme(_value), do: "light"
 end

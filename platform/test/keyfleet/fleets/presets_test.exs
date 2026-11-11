@@ -41,21 +41,6 @@ defmodule Keyfleet.Fleets.PresetsTest do
     assert progress.next_price == Presets.fibonacci_level_price(21)
   end
 
-  # Levels end at keys 2, 5, 10, 18 and on.
-  test "a Fibonacci key writes its own level, and a later level only once every key of it is sold" do
-    assert Enum.map([2, 4, 5, 9, 10], &Presets.writable_levels(1, &1)) ==
-             [[1], [1], [1, 2], [1, 2], [1, 2, 3]]
-
-    assert Enum.map([3, 5, 10, 18], &Presets.writable_levels(3, &1)) ==
-             [[2], [2], [2, 3], [2, 3, 4]]
-
-    # A key whose own level is not yet complete still writes it, and never an earlier one.
-    assert Presets.writable_levels(6, 6) == [3]
-    assert Presets.writable_levels(10, 46_365) == Enum.to_list(3..20)
-    assert Presets.writable_levels(46_365, 46_365) == [20]
-    assert Presets.writable_levels(46_366, 46_366) == [21]
-  end
-
   test "only the two Fibonacci fleets have levels" do
     assert Enum.filter(Keyfleet.Fleets.catalog_ids(), &Presets.levelled?/1) ==
              ["fibonacci_syndicate", "fibonacci_cascade"]
@@ -91,6 +76,15 @@ defmodule Keyfleet.Fleets.PresetsTest do
              Presets.progress("fleet_tech_classic", 1_023)
 
     assert %{next_price: nil, next_token_id: nil} = Presets.progress("fleet_tech_classic", 1_024)
+  end
+
+  # Costly failure: an agent asking about a Key number no fleet will ever have
+  # gets a crash where "no such Key" belongs.
+  test "a number past a fleet's last Key has no price" do
+    assert Presets.issue_price("fleet_tech_classic", 1_025) == nil
+    assert Presets.issue_price("fleet_tech_accelerant", 2_001) == nil
+    assert Presets.issue_price("regents_club", 1_999) == nil
+    assert is_integer(Presets.issue_price("fibonacci_syndicate", 50_000))
   end
 
   # A key's price is what the fleet asked for it once the key before it sold.

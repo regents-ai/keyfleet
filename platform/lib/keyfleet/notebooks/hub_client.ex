@@ -4,8 +4,10 @@ defmodule Keyfleet.Notebooks.HubClient do
   (`kf_provisioner_<fleet id>`, the one super admin each hub names). Every
   call is made once: the job that makes it retries the whole job.
 
-  Each answer is `{:ok, data}` or `{:error, reason}`. Adding someone already
-  there, and removing or reactivating someone who isn't, answer `{:ok, nil}`.
+  Each answer is `{:ok, data}` or `{:error, {:hub, address, reason}}`, naming
+  the hub's address and the request's error, `{:status, status}` or
+  `:unexpected_page`. Adding someone already there, and removing or
+  reactivating someone who isn't, answer `{:ok, nil}`.
   """
 
   alias Keyfleet.Notebooks
@@ -14,14 +16,122 @@ defmodule Keyfleet.Notebooks.HubClient do
   @doc "The hub user this site manages the fleet's hub as."
   def provisioner(fleet_id), do: "kf_provisioner_#{fleet_id}"
 
-  @doc "Every project in the hub."
+  @doc "Every project in the hub, each with its `owner` and `tags`."
   def projects(fleet_id), do: fleet_id |> request(:get, "/api/v1/projects") |> page()
 
-  @doc "Makes a project the provisioner owns."
-  def create_project(fleet_id, name) do
+  @doc """
+  The project's newest notebooks, by when each was added, as the hub lists
+  them (`id`, `title`, `description`, `created_at`, ...), waiting
+  `page_timeout_ms` at most, for a page that shows them. `query` is what the
+  hub narrows them by: how many (`limit`), and a `tag` for only those tagged
+  with it.
+  """
+  def notebooks(fleet_id, project_id, query) do
     fleet_id
-    |> request(:post, "/api/v1/projects", json: %{name: name, description: ""})
+    |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks",
+      params: query,
+      receive_timeout: Notebooks.config()[:page_timeout_ms]
+    )
+    |> page()
+  end
+
+  @doc """
+  One notebook's `meta` (`id`, `title`, `description`, `status`,
+  `created_at`, ...), waiting `page_timeout_ms` at most, or nil when the hub
+  has none by that id.
+  """
+  def notebook(fleet_id, project_id, notebook_id) do
+    fleet_id
+    |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}",
+      receive_timeout: Notebooks.config()[:page_timeout_ms]
+    )
+    |> answer([200], [404])
+    |> case do
+      {:ok, %{"meta" => meta}} -> {:ok, meta}
+      other -> other
+    end
+  end
+
+  @doc """
+  Every notebook in the project, a page of `limit` at a time, as the hub lists
+  them (`id`, `title`, `author`, `updated_at`, `tags`, ...), each page read
+  in turn until the last.
+  """
+  def all_notebooks(fleet_id, project_id, limit \\ 500),
+    do: all_notebooks(fleet_id, project_id, limit, nil, [])
+
+  defp all_notebooks(fleet_id, project_id, limit, cursor, found) do
+    params = [limit: limit] ++ if(cursor, do: [cursor: cursor], else: [])
+
+    sent =
+      request(fleet_id, :get, "/api/v1/projects/#{segment(project_id)}/notebooks", params: params)
+
+    case answer(sent, [200]) do
+      {:ok, %{"items" => items, "next_cursor" => next}} when is_binary(next) ->
+        all_notebooks(fleet_id, project_id, limit, next, found ++ items)
+
+      {:ok, %{"items" => items}} ->
+        {:ok, found ++ items}
+
+      {:ok, _other} ->
+        {:error, {:hub, elem(sent, 0), :unexpected_page}}
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Makes a notebook in the project as the provisioner, titled `title` and
+  tagged with `tags`, with `code`, answering its `meta`. Once the hub has
+  answered, the same `idempotency_key` answers that notebook again; the hub
+  records the key only after making the notebook, so one sent while the first
+  is still being made can make a second.
+  """
+  def create_notebook(
+        fleet_id,
+        project_id,
+        %{title: _, code: _, tags: _} = notebook,
+        idempotency_key
+      ) do
+    fleet_id
+    |> request(:post, "/api/v1/projects/#{segment(project_id)}/notebooks",
+      json: Map.put(notebook, :description, ""),
+      headers: [{"idempotency-key", idempotency_key}]
+    )
     |> answer([201])
+  end
+
+  @doc "The notebook's code, or nil when the hub has no notebook by that id."
+  def content(fleet_id, project_id, notebook_id) do
+    fleet_id
+    |> request(
+      :get,
+      "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}/content"
+    )
+    |> answer([200], [404])
+    |> case do
+      {:ok, %{"code" => code}} -> {:ok, code}
+      other -> other
+    end
+  end
+
+  @doc "Makes a project the provisioner owns, named `name` and tagged with `tags`."
+  def create_project(fleet_id, name, tags) do
+    fleet_id
+    |> request(:post, "/api/v1/projects", json: %{name: name, description: "", tags: tags})
+    |> answer([201])
+  end
+
+  @doc """
+  Deletes the project with its notebooks, as the provisioner, a manager of
+  every hub project. A project already gone counts as deleted. The hub keeps
+  a deleted project out of every read at once and clears it away later.
+  """
+  def delete_project(fleet_id, project_id) do
+    fleet_id
+    |> request(:delete, "/api/v1/projects/#{segment(project_id)}")
+    |> answer([200], [404])
   end
 
   @doc "The project's members, each named by `user_id` or, when it was added by its address, `email`."
@@ -77,38 +187,44 @@ defmodule Keyfleet.Notebooks.HubClient do
   defp request(fleet_id, method, path, options \\ []) do
     {:ok, address} = Notebooks.hub_address(fleet_id)
 
-    Req.request(
-      [
-        method: method,
-        base_url: address,
-        url: path,
-        headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
-        retry: false,
-        redirect: false,
-        receive_timeout: Notebooks.config()[:hub_timeout_ms]
-      ] ++ options
-    )
+    {timeout, options} =
+      Keyword.pop(options, :receive_timeout, Notebooks.config()[:hub_timeout_ms])
+
+    {address,
+     Req.request(
+       [
+         method: method,
+         base_url: address,
+         url: path,
+         headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
+         retry: false,
+         redirect: false,
+         # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+         connect_options: [timeout: timeout, transport_opts: [inet6: true]],
+         receive_timeout: timeout
+       ] ++ options
+     )}
   end
 
-  defp page(response) do
-    case answer(response, [200]) do
+  defp page({address, _response} = sent) do
+    case answer(sent, [200]) do
       {:ok, %{"items" => items}} -> {:ok, items}
-      {:ok, _other} -> {:error, :unexpected_page}
+      {:ok, _other} -> {:error, {:hub, address, :unexpected_page}}
       error -> error
     end
   end
 
-  defp answer(response, ok, settled \\ []) do
+  defp answer({address, response}, ok, settled \\ []) do
     case response do
       {:ok, %Req.Response{status: status, body: body}} ->
         cond do
           status in ok -> {:ok, data(body)}
           status in settled -> {:ok, nil}
-          true -> {:error, {:hub_status, status}}
+          true -> {:error, {:hub, address, {:status, status}}}
         end
 
       {:error, error} ->
-        {:error, error}
+        {:error, {:hub, address, error}}
     end
   end
 

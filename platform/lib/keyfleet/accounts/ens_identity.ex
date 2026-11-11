@@ -108,7 +108,8 @@ defmodule Keyfleet.Accounts.EnsIdentity do
     end
   end
 
-  # A finished lookup reaches the open pages of the account it belongs to.
+  # Asking, a finished lookup and one that gave up each reach the open pages of
+  # the account they belong to, which read the account again.
   pub_sub do
     module Phoenix.PubSub
     name Keyfleet.PubSub
@@ -116,7 +117,9 @@ defmodule Keyfleet.Accounts.EnsIdentity do
     broadcast_type :broadcast
     transform & &1.data
 
+    publish :request_lookup, [:human_account_id]
     publish :look_up, [:human_account_id]
+    publish :lookup_failed, [:human_account_id]
   end
 
   @doc "The topic a finished lookup for `human_account_id` is published on."

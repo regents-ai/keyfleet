@@ -176,6 +176,27 @@ test("anonymous load does not request the deferred Privy bridge", async ({page})
   expect(bridgeRequests).toEqual([])
 })
 
+// A member whose sign-in here lapsed while Privy kept its own is signed back
+// in on any page they open, here a fleet's chat, which has no wallet panel.
+test("a signed-out page Privy holds a sign-in for loads sign-in at once", async ({page}) => {
+  await page.addInitScript(() => localStorage.setItem("privy:refresh_token", '"r"'))
+  await page.route(bridgePattern, route =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `export async function startPrivyBridge() {
+        return {async request(request) { window.__bridgeCalls = [...(window.__bridgeCalls || []), request] }}
+      }`,
+    }),
+  )
+
+  await page.goto(`${fleetPath}?room=general`)
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & {__bridgeCalls?: string[]}).__bridgeCalls ?? []))
+    .toEqual(["sync"])
+})
+
 // The sign-in offered on the Account page is the Privy sign-in, the same one the
 // header runs: Privy signs the visitor in and connects the wallet's accounts with it.
 test("anonymous Account page sign-in loads Privy and opens its sign-in", async ({page}) => {
@@ -438,7 +459,8 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
     ),
   ).toBe(false)
   await expect(page.locator("[data-phx-session]").first()).toBeVisible()
-  await expect(page.locator("#account-control").getByRole("button", {name: "Sign out"})).toBeVisible()
+  await expect(page.locator("#account-control [data-account-target='profile']")).toBeVisible()
+  await expect(page.locator("#account-menu [data-account-target='sign-out']")).toBeAttached()
   // Exercise the same live session on the Account page.
   await page.locator("#shell-sidebar a[href='/account']").click()
   await expect(page.locator("#account-page")).toBeVisible()
@@ -650,10 +672,13 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
 
   await page.goto("/account")
   await expect(page.locator("#account-control [data-account-target='profile']")).toBeVisible()
-  await page.locator("#account-control").getByRole("button", {name: "Sign out"}).click()
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+  await page.locator("#account-chip").click()
+  await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
   await expect.poll(() => sessionDeletes).toBe(1)
 
-  await expect.poll(() => documentRequests.length).toBe(2)
+  // The server's disconnect closes the socket with 1000: LiveView reloads 5-10 s later.
+  await expect.poll(() => documentRequests.length, {timeout: 15_000}).toBe(2)
   await expect(
     page.locator("#account-control [data-account-target='sign-in']"),
   ).toBeAttached()
@@ -783,7 +808,8 @@ test("Privy's logout finished on the page pressed leaves the next page without P
   await page.goto("/account")
   await expect.poll(() => bridgeLoads).toBe(1)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await page.locator("#account-control").getByRole("button", {name: "Sign out"}).click()
+  await page.locator("#account-chip").click()
+  await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
 
   await expect.poll(() => sessionDeletes).toBe(1)
   await expect.poll(() => documentRequests.length).toBe(2)
@@ -838,7 +864,7 @@ for (const failure of [
     await expect(page.locator("#account-auth-status")).toBeHidden()
     await expect(page.locator("#account-auth-status")).toHaveText("")
     await expect(
-      page.locator("#account-control [data-account-target='sign-out']"),
+      page.locator("#account-menu [data-account-target='sign-out']"),
     ).toBeAttached()
     const finalSession = await page.request.get("/auth/session")
     expect((await finalSession.json()).authenticated).toBe(true)

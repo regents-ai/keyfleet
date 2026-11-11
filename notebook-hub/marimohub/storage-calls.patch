@@ -1,0 +1,86 @@
+diff --git a/packages/core/src/operationalLog.ts b/packages/core/src/operationalLog.ts
+--- a/packages/core/src/operationalLog.ts
++++ b/packages/core/src/operationalLog.ts
+@@ -1,13 +1,17 @@
+ /**
+  * What an object store said about a failed call (AWS SDK `$metadata`): its HTTP
+- * status, its request ids and how many tries were made. Ids and numbers only, so
+- * safe to log; a store support ticket needs the ids.
++ * status, its request ids and how many tries were made, with the call and the
++ * object key it named (`$call`, set by the S3 adapter). Ids, numbers and object
++ * paths only, so safe to log; a store support ticket needs the ids.
+  */
+ export function storageMetadata(err: unknown): Record<string, string | number> | undefined {
+-	const meta = (err as { $metadata?: Record<string, unknown> } | null)?.$metadata;
++	const failed = err as { $metadata?: Record<string, unknown>; $call?: Record<string, unknown> } | null;
++	const meta = failed?.$metadata;
+ 	if (!meta || typeof meta !== 'object') return undefined;
+ 	const out: Record<string, string | number> = {};
+ 	for (const [key, field] of [
++		['command', failed.$call?.command],
++		['key', failed.$call?.key],
+ 		['http_status', meta.httpStatusCode],
+ 		['request_id', meta.requestId],
+ 		['extended_request_id', meta.extendedRequestId],
+diff --git a/packages/storage-s3/package.json b/packages/storage-s3/package.json
+--- a/packages/storage-s3/package.json
++++ b/packages/storage-s3/package.json
+@@ -19,7 +19,8 @@
+ 	},
+ 	"dependencies": {
+ 		"@aws-sdk/client-s3": "catalog:",
+-		"@marimo-hub/core": "workspace:*"
++		"@marimo-hub/core": "workspace:*",
++		"@smithy/core": "catalog:"
+ 	},
+ 	"devDependencies": {
+ 		"@marimo-hub/tsconfig": "workspace:*",
+diff --git a/packages/storage-s3/src/index.ts b/packages/storage-s3/src/index.ts
+--- a/packages/storage-s3/src/index.ts
++++ b/packages/storage-s3/src/index.ts
+@@ -23,6 +23,7 @@
+ 	S3Client,
+ } from '@aws-sdk/client-s3';
+ import type { PutObjectCommandInput } from '@aws-sdk/client-s3';
++import { ConfiguredRetryStrategy } from '@smithy/core/retry';
+ import { assertTimerDelay, withDeadline } from '@marimo-hub/core/async';
+ import { PreconditionFailedError } from '@marimo-hub/core/errors';
+ import { assertValidBucketListLimit } from '@marimo-hub/core/ports/bucket';
+@@ -114,7 +115,26 @@
+ 				requestTimeout: this.requestTimeoutMs,
+ 				throwOnRequestTimeout: true,
+ 			},
++			// Tigris cancels reads in bursts; five tries one, two, four and eight
++			// seconds apart outlast a short one and still end well inside the deadline.
++			retryStrategy: new ConfiguredRetryStrategy(5, (attempt) => 1_000 * 2 ** (attempt - 1)),
+ 		});
++		// A failed call's log line names the call and its object (storageMetadata).
++		// Initialize runs outside the retries, so this sees only the final failure.
++		this.client.middlewareStack.add(
++			(next, context) => async (args) => {
++				try {
++					return await next(args);
++				} catch (error) {
++					const input = args.input as { Key?: string; Prefix?: string };
++					Object.assign(error as object, {
++						$call: { command: context.commandName, key: input.Key ?? input.Prefix },
++					});
++					throw error;
++				}
++			},
++			{ step: 'initialize', name: 'nameFailedCall' },
++		);
+ 		// Some stores (Tigris) cancel reads with 408 RequestCanceled, which the SDK
+ 		// does not count as transient. Low priority runs inside the SDK's retry step,
+ 		// so marking the error retryable here lets its retry strategy try again.
+diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -54,6 +54,7 @@
+   '@opentelemetry/sdk-trace-base': ^2.9.0
+   '@opentelemetry/sdk-trace-node': ^2.9.0
+   '@oxlint/plugins': 1.67.0
++  '@smithy/core': ^3.28.0
+   '@smithy/node-http-handler': ^4.9.1
+   '@smithy/signature-v4': ^5.6.0
+   '@smithy/types': ^4.15.0

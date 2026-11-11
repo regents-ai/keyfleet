@@ -30,12 +30,10 @@ defmodule Keyfleet.PairingHelpers do
   end
 
   @doc """
-  Pairs the agent that signs as `wallet` with a person of its own, the way a
-  signed request finds it.
+  Pairs the agent that signs as `wallet` with a person of its own, or the
+  person whose wallet is `person`, the way a signed request finds it.
   """
-  def pair_wallet!(wallet) do
-    person = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
-
+  def pair_wallet!(wallet, person \\ new_wallet()) do
     pair!(
       %Agent{
         wallet_address: wallet,
@@ -75,4 +73,6 @@ defmodule Keyfleet.PairingHelpers do
 
     agent
   end
+
+  defp new_wallet, do: "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
 end

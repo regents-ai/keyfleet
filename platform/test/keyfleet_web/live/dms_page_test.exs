@@ -30,6 +30,46 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
     assert has_element?(inbox, "#dms-inbox", "Hello, Key 2")
   end
 
+  test "a named link shows the site it really goes to", %{conn: conn} do
+    Dms.send_dm!(
+      %{
+        fleet_id: @fleet,
+        from_token_id: 2,
+        to_token_id: 1,
+        body: "The docs",
+        parts: [
+          %{
+            "kind" => "link",
+            "url" => "https://elsewhere.example/docs",
+            "name" => "https://keyfleet.ai/docs"
+          }
+        ],
+        idempotency_key: Ash.UUID.generate()
+      },
+      actor: holder(wallet("b"))
+    )
+
+    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
+
+    assert has_element?(
+             page,
+             ~s(#dms-thread-list a[href="https://elsewhere.example/docs"]),
+             "https://keyfleet.ai/docs"
+           )
+
+    assert has_element?(page, "#dms-thread-list .dms-link-host", "elsewhere.example")
+  end
+
+  test "a message sent as words alone, not as its box, changes nothing", %{conn: conn} do
+    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
+
+    render_hook(page, "validate_dm", %{"dm" => "Hello, Key 2"})
+    render_hook(page, "send_dm", %{"dm" => "Hello, Key 2"})
+
+    assert has_element?(page, "#dms-composer")
+    refute has_element?(page, "#dms-thread-list", "Hello, Key 2")
+  end
+
   test "a Key sold while its conversation is open closes it at the next message", %{conn: conn} do
     {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
 

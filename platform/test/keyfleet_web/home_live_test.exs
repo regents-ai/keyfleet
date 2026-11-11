@@ -3,30 +3,40 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
-  alias KeyfleetWeb.Components.SendAgent
+  alias KeyfleetWeb.FleetNow
   alias Phoenix.Socket.Broadcast
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
-  # - while Classic is coming soon, "Buy Next Key" and the card's tag name Key 1
-  #   and its price, but the button says it can't be pressed, with "Sales open
-  #   soon" beside it, links nowhere, and the header offers no Get a Key
-  # - once Classic is on sale, "Buy Next Key" opens its page with Get a Key
-  #   pressed, and it and the card's tag name the Key on offer and its price
-  #   after the Keys sold
+  # - every way to buy is called "Buy Key", the Key's number and price beside
+  #   it and never in its label
+  # - while Classic is coming soon, the card's tag names Key 1 and its price,
+  #   but "Buy Key" says it can't be pressed, with "Sales open soon" under it,
+  #   links nowhere, and the header offers no "Buy Key"
+  # - once Classic is on sale, the hero's "Buy Key" and the header's open the
+  #   "Buy Key" window, which holds the fleet's own Approve and Buy, and the
+  #   line under the button and the card's tag name the Key on offer and its
+  #   price after the Keys sold
   # - once every Classic Key is sold, the button can't be pressed and says so
-  # - the Club shows its newest open goal and featured item once connected,
-  #   and the first render reads neither; a coming-soon Club reads nothing
-  # - a Club read that fails is said to have failed and never shown as zero
-  # - a burst of notices is answered by one refresh of each fleet it names
-  # - the command box shows the homepage instruction whole and copies exactly
-  #   what it shows
-  # - the Markdown homepage carries the tagline as Sean wrote it, says Classic
-  #   opens soon until it does, then links its page
-  # - launch-gate: internal links stay on the fleets' maps, the account page,
-  #   the public documents, or anchors that exist
+  # - a Classic read that fails is said to have failed and never shown as zero
+  # - a burst of notices is answered by one read of each fleet it names, for
+  #   every open homepage at once, and a post taken off a wall reads its fleet
+  #   again
+  # - the page is the hero alone: the headline and what a fleet gives an
+  #   agent; the Markdown homepage carries them with the tagline as Sean wrote
+  #   it and Classic Keyfleet, says Classic opens soon until it does, then
+  #   links its page
+  # - "Watch" opens Classic #1's own page; Classic #1's figures each keep their
+  #   own name: Keys sold out of all, the agents here, the next Key's price
+  #   and the goal it is working on, which links its workspace
+  # - launch-gate: internal links stay on the fleets' maps and workspaces, the
+  #   account page, the public documents, or anchors that exist
+  # - signed in, the header's name opens the account menu, with Sign out,
+  #   Manage Account, the account's agents and Pair New Agent opening the
+  #   pairing window, and an agent paired while the page is open shows in it;
+  #   Fleets beside the name opens Classic; signed out there is neither
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -40,12 +50,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
       ChainHelpers.seed_cursor!(@classic)
     end
 
-    unless context[:club_undeployed] do
-      ChainHelpers.deploy!(@club)
-      ChainHelpers.seed_cursor!(@club)
-    end
-
     Enum.each(Fleets.catalog_ids(), &Workspace.open_log/1)
+    read_fleets()
     :ok
   end
 
@@ -56,197 +62,282 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#app-shell")
   end
 
-  @tag :classic_undeployed
-  test "while Classic is coming soon, Buy Next Key can't be pressed and says why",
+  test "signed in, the homepage has the account menu and Fleets; signed out, neither",
        %{conn: conn} do
-    {:ok, view, html} = live(conn, "/")
+    {:ok, view, _html} = live(conn, "/")
+    refute has_element?(view, "#account-menu")
+    refute has_element?(view, "[popovertarget=account-menu]")
+    refute has_element?(view, "#shell-fleets")
+
+    wallet = "0x" <> String.duplicate("b", 40)
+
+    account =
+      Keyfleet.Accounts.register_verified("did:privy:home-panel", wallet, [wallet],
+        actor: %Actors.System{}
+      )
+      |> then(fn {:ok, account} -> account end)
+
+    {:ok, view, _html} = conn |> init_test_session(%{human_account_id: account.id}) |> live("/")
+
+    assert has_element?(view, "#shell-header #account-chip[popovertarget=account-menu]")
+    assert has_element?(view, "#account-control a#shell-fleets[href='/classic/1']", "Fleets")
+    refute has_element?(view, "#account-control [data-account-target=sign-out]")
+    assert has_element?(view, "#account-menu[popover] [data-account-target=sign-out]", "Sign out")
+    assert has_element?(view, ~s(#account-menu a[href="/account"]), "Manage Account")
 
     assert has_element?(
              view,
-             ~s(button#home-buy-next-key[aria-disabled="true"][aria-describedby="home-buy-why"]),
-             "Buy Next Key"
+             ~s(#account-menu button[data-pair-open][aria-controls="shell-pairing"]),
+             "Pair New Agent"
            )
 
-    assert text(view, "#home-buy-price") == "Key 1 · 10 USDC"
+    assert has_element?(view, "dialog#shell-pairing form#shell-pairing-box")
+
+    assert has_element?(view, ~s(#shell-agents a[href="/account/agents"]), "Manage")
+    refute has_element?(view, "#shell-agents li")
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(
+        actor: %RegentAgents.Person{privy_user_id: "did:privy:home-panel"}
+      )
+
+    RegentAgents.pair_agent!(code, "Astra", :hermes,
+      actor: %RegentAgents.Agent{wallet: "0x" <> String.duplicate("c", 40)}
+    )
+
+    # Announced after the pairing's commit (`RegentAgents.channel/0`), which the
+    # test's transaction never makes. The page passes it on to the panel, which
+    # draws after the render that follows.
+    send(view.pid, :agents_changed)
+    render(view)
+    assert has_element?(view, "#shell-agents li", "Astra")
+  end
+
+  @tag :classic_undeployed
+  test "while Classic is coming soon, Buy Key can't be pressed and says why",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+
+    assert has_element?(
+             view,
+             ~s(button#home-buy-key[aria-disabled="true"][aria-describedby="home-buy-why"]),
+             "Buy Key"
+           )
+
+    assert text(view, "#home-buy-key") == "Buy Key"
+    refute has_element?(view, "#home-buy-price")
     assert text(view, "#home-buy-tag") == "Key 1 · 10 USDC"
     assert text(view, "#home-buy-why") == "Sales open soon"
-    refute html =~ "?buy"
+    assert text(view, "#home-classic-price") == "10 USDC"
+
+    assert text(view, "#home-price-tip") =~
+             "Keys increase steadily in cost until 100 USDC for the last Key."
+
     refute has_element?(view, "#shell-get-key")
   end
 
-  test "once Classic is on sale, Buy Next Key opens its page at the Key on offer",
+  test "once Classic is on sale, Buy Key has the Key on offer under it and opens the Buy Key window",
        %{conn: conn} do
     for token_id <- 1..3, do: issue!(@classic, token_id)
+    read_fleets()
 
     {:ok, view, _html} = live(conn, "/")
 
     price = Keyfleet.Fleets.Presets.progress(@classic, 3).next_price
 
-    assert has_element?(view, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Buy Next Key")
+    assert text(view, ~s(button#home-buy-key[aria-describedby="home-buy-price"])) == "Buy Key"
     assert text(view, "#home-buy-price") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-tag") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
-    assert text(view, "#home-buy-why") == ""
-    assert text(view, "#home-classic-sold") == "3"
+    refute has_element?(view, "#home-buy-why")
+    assert text(view, "#home-classic-price") == KeyfleetWeb.FleetLive.usdc(price)
+    assert text(view, "#home-classic-sold") == "3 of 1,024"
+
+    view |> element("button#home-buy-key") |> render_click()
+
+    assert has_element?(
+             view,
+             ~s(dialog#buy-key button#buy-key-button[data-onchain-step="buy"])
+           )
+
+    assert has_element?(
+             view,
+             ~s(dialog#buy-key button#buy-key-approve[data-onchain-step="approve"])
+           )
+
+    refute has_element?(view, "#buy-key-go")
   end
 
-  test "once every Classic Key is sold, Buy Next Key can't be pressed and says so",
+  test "once Classic is on sale, the header's Buy Key opens the Buy Key window", %{
+    conn: conn
+  } do
+    issue!(@classic, 1)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+    assert text(view, "button#shell-get-key") == "Buy Key"
+    view |> element("button#shell-get-key") |> render_click()
+
+    assert has_element?(view, "dialog#buy-key")
+  end
+
+  test "once Classic is on sale, Buy Key opens its window: the Key cards turning, how many are sold, the Key on offer, the price, Buy and Close",
+       %{conn: conn} do
+    issue!(@classic, 1)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("button#home-buy-key") |> render_click()
+
+    assert text(view, "#buy-key-title") == "Buy Key"
+    assert has_element?(view, "dialog#buy-key #buy-key-cards.key-cards")
+
+    assert ["Sold", "Key", "Price" <> _tip] =
+             view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("dialog#buy-key dl dt")
+             |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+    assert text(view, "#buy-key-sold") == "1 of 1,024"
+    assert text(view, "#buy-key-number") == "2"
+    assert text(view, "#buy-key-price") == "10.02 USDC"
+
+    assert text(view, "#buy-key-price-tip") =~
+             "Your wallet asks twice: Approve lets the sale take this much USDC, then Buy pays it"
+
+    assert has_element?(view, "dialog#buy-key #buy-key-button")
+    assert has_element?(view, "dialog#buy-key #buy-key-close", "Close")
+  end
+
+  test "once every Classic Key is sold, Buy Key can't be pressed and says so",
        %{conn: conn} do
     issue!(@classic, 1024)
+    read_fleets()
 
     {:ok, view, _html} = live(conn, "/")
 
-    assert has_element?(view, ~s(button#home-buy-next-key[aria-disabled="true"]))
+    assert has_element?(view, ~s(button#home-buy-key[aria-disabled="true"]))
     assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
+    assert text(view, "#home-classic-price") == "Sold out"
   end
 
-  test "the Club shows its newest open goal and what it features, once connected",
-       %{conn: conn} do
-    goal("Sell the first audit", %{"open_questions" => ["Who pays for it?"]})
-    Workspace.edit(@club, goal("Ship the site"), %{"status" => "dropped"})
-
-    static = conn |> get("/") |> html_response(200)
-    assert attribute(static, "[data-fleet-trying]", "class") == []
-
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-
-    assert text(view, "#home-club [data-fleet-trying]") == "Trying: Sell the first audit"
-
-    assert has_element?(
-             view,
-             ~s(#home-club [data-fleet-featured][data-kind="open_question"]),
-             "Who pays for it?"
-           )
-
-    assert has_element?(
-             view,
-             ~s(#home-club [data-fleet-latest][data-kind="status"]),
-             "Ship the site"
-           )
-
-    assert has_element?(view, ~s(#home-club-public[href="/app/fleets/regents_club"]))
-  end
-
-  @tag :club_undeployed
-  test "a coming-soon Club says so and reads nothing", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-
-    assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
-    refute has_element?(view, "#home-club [data-fleet-who]")
-  end
-
-  test "a Club read that fails is said to have failed, never zero, and the page stays up",
-       %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-    refute has_element?(view, "[data-fleet-failed]")
-
-    # Renamed inside the test's own transaction, so the next reads fail the way
-    # a database that refuses them does; the rename ends with the test.
-    Keyfleet.Repo.query!(
-      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
-    )
-
-    log =
-      capture_log(fn ->
-        send(view.pid, {:refresh, @club})
-        render(view)
-        render_async(view, 3_000)
-      end)
-
-    assert text(view, "#home-club [data-fleet-failed]") == "Couldn’t load this fleet just now."
-    assert log =~ "failed"
-    assert Process.alive?(view.pid)
-  end
-
-  test "a first Club read that fails shows the failure, never zero", %{conn: conn} do
-    Keyfleet.Repo.query!(
-      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
-    )
-
-    capture_log(fn ->
-      {:ok, view, _html} = live(conn, "/")
-      render_async(view, 3_000)
-
-      assert has_element?(view, "#home-club [data-fleet-failed]")
-      assert text(view, "#home-club [data-fleet-who]") == ""
-    end)
-  end
-
-  test "fleets that can't be read leave the homepage drawn, saying so for each",
+  test "a Classic that can't be read leaves the homepage drawn, saying so",
        %{conn: conn} do
     Keyfleet.Repo.query!(
       "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.fleets RENAME TO fleets_away"
     )
 
     capture_log(fn ->
+      first_read(@classic)
       {:ok, view, _html} = live(conn, "/")
 
       assert has_element?(view, "#public-home")
-      assert has_element?(view, "#home-club [data-fleet-failed]")
-      refute has_element?(view, "#home-club [data-fleet-soon]")
+      assert text(view, "#home-classic-price") == "—"
       assert text(view, "#home-classic-sold") == "—"
       assert text(view, "#home-buy-why") == "Couldn’t read sales just now"
     end)
   end
 
-  test "the command box shows the homepage instruction and copies what it shows",
+  test "a burst of notices is answered by one read of each fleet, for every open homepage",
        %{conn: conn} do
-    {:ok, view, html} = live(conn, "/")
+    producer = start_supervised!(FleetNow)
+    {:ok, _view, _html} = live(conn, "/")
+    {:ok, _view, _html} = live(conn, "/")
 
-    assert attribute(html, "#home-instruction-copy", "data-copy-text") ==
-             [SendAgent.home_instruction()]
+    # Watch the fleets the producer reads; the two open pages read nothing.
+    :erlang.trace_pattern({FleetNow, :read, 1}, true, [:global])
+    :erlang.trace(producer, true, [:call])
+    on_exit(fn -> :erlang.trace_pattern({FleetNow, :read, 1}, false, [:global]) end)
 
-    assert text(view, "#home-instruction") == SendAgent.home_instruction()
+    send(producer, {:graph_notable, @club})
+    send(producer, {:graph_notable, @club})
+    send(producer, {:proposals_changed, @club})
+    send(producer, {:keys_changed, @classic, [1]})
+
+    assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
+    assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@classic]}}
+    refute_receive {:trace, ^producer, :call, {FleetNow, :read, _}}, 1_500
   end
 
-  test "a burst of notices is answered by one refresh of each fleet", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
+  # R-20261019-wall-removal-reads-again: a post taken off a Club wall stopped
+  # every open homepage, which knew no such notice. The fleets' reading hears
+  # it and reads the fleet again.
+  test "a post taken off a wall reads its fleet again" do
+    producer = start_supervised!(FleetNow)
 
-    # Watch the pauses the page sets before reading a fleet again.
-    :erlang.trace_pattern({:erlang, :send_after, 3}, true, [:global])
-    :erlang.trace(view.pid, true, [:call])
-    on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
+    :erlang.trace_pattern({FleetNow, :read, 1}, true, [:global])
+    :erlang.trace(producer, true, [:call])
+    on_exit(fn -> :erlang.trace_pattern({FleetNow, :read, 1}, false, [:global]) end)
 
-    send(view.pid, {:graph_notable, @club})
-    send(view.pid, {:graph_notable, @club})
-    send(view.pid, {:proposals_changed, @club})
-    send(view.pid, {:keys_changed, @classic, [1]})
-
-    send(view.pid, %Broadcast{
-      event: "key_activity",
-      payload: %{fleet_id: @classic, token_ids: [1]}
+    send(producer, %Broadcast{
+      topic: Keyfleet.Rooms.topic(@club, :public),
+      event: "wall_removed",
+      payload: %{fleet_id: @club, token_id: 17, message_id: Ecto.UUID.generate()}
     })
 
-    render(view)
-
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
-    refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
-
-    # Once the fleet has read again, its next notice sets a pause of its own.
-    send(view.pid, {:refresh, @club})
-    send(view.pid, {:graph_notable, @club})
-    render(view)
-
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
-    refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
+    assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
   end
 
-  test "the page and the Markdown homepage carry the tagline as written", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    assert text(view, "#home-title") == "Your personal agent joins a Fleet with a Key."
+  test "the page is the hero, and it and the Markdown homepage lead with the headline, the Markdown with Sean's tagline",
+       %{conn: conn} do
+    {:ok, view, html} = live(conn, "/")
+    assert attribute(html, "main section[id]", "id") == ["home-hero"]
+    assert text(view, "#home-title") == "A persistent team for your AI agent."
+
+    assert text(view, "#home-lead") ==
+             "Agents in a fleet share goals, code and results, and review each other's work."
 
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    assert markdown =~ "\nYour personal agent joins a Fleet with a Key.\n"
+    assert String.starts_with?(markdown, "# Keyfleet\n\nA persistent team for your AI agent.\n")
+
+    assert markdown =~
+             " review each other's work. Your personal agent joins a Fleet with a Key.\n"
+
+    assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
+             ["Classic Keyfleet"],
+             ["More"]
+           ]
+
     [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
-    [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
+    [_, path] = Regex.run(~r{\[Live activity\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
+  end
+
+  test "Watch opens Classic #1's page, over Classic #1's figures", %{conn: conn} do
+    for token_id <- 1..2, do: issue!(@classic, token_id)
+    Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
+    read_fleets()
+    Keyfleet.Agents.Here.read(@classic)
+
+    {:ok, view, html} = live(conn, "/")
+
+    assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
+    assert text(view, "#home-watch") == "Watch"
+    # A press is counted by the step it names (assets/js/launch_steps.ts).
+    assert attribute(html, "a#home-watch", "data-step") == ["watch"]
+
+    assert text(view, "#home-hero-fleet") == "Classic #1 now"
+
+    assert ["Keys sold", "Agents here", "Next Key" <> _tip] =
+             html
+             |> LazyHTML.from_document()
+             |> LazyHTML.query("#home-classic-facts dt")
+             |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+    assert text(view, "#home-classic-sold") == "2 of 1,024"
+    assert text(view, "#home-classic-agents") == "0"
+    assert text(view, "#home-classic-goal") == "Working on Chart the bay"
+    assert attribute(html, "#home-classic-goal a", "href") == ["/classic/1/workspace"]
+  end
+
+  test "agents not yet counted show a dash, never none", %{conn: conn} do
+    SharedReading.delete(Keyfleet.Agents.Here.fleet_key(@classic))
+    {:ok, view, _html} = live(conn, "/")
+    assert text(view, "#home-classic-agents") == "—"
+    refute has_element?(view, "#home-classic-goal")
   end
 
   @tag :classic_undeployed
@@ -257,17 +348,19 @@ defmodule KeyfleetWeb.HomeLiveTest do
     [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
     [section | _] = String.split(section, "\n## ", parts: 2)
     assert section =~ "Sales open soon."
-    refute section =~ "What it’s doing right now"
+    refute section =~ "Live activity"
   end
 
-  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
+  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do
     {:ok, _view, html} = live(conn, "/")
 
     anchors = attribute(html, "[id]", "id")
-    fleet_paths = Enum.map(Fleets.catalog_ids(), &"#{Keyfleet.Fleets.path(&1)}")
+
+    fleet_paths =
+      Enum.flat_map(Fleets.catalog_ids(), &[Fleets.path(&1), "#{Fleets.path(&1)}/workspace"])
 
     for href <- attribute(html, "a", "href"),
         href != "/",
@@ -296,8 +389,14 @@ defmodule KeyfleetWeb.HomeLiveTest do
     )
   end
 
-  defp goal(title, data \\ %{}),
-    do: Workspace.create(@club, "goal", Map.merge(%{"title" => title, "outcome" => "O"}, data))
+  # What the homepage's producer does as the site starts and on each pass.
+  defp read_fleets, do: FleetNow.read(@classic)
+
+  # A fleet the site has never read, as just after it starts, then read once.
+  defp first_read(fleet_id) do
+    SharedReading.delete(FleetNow.key(fleet_id))
+    FleetNow.read(fleet_id)
+  end
 
   defp text(view, selector) do
     view

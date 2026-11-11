@@ -1,20 +1,34 @@
+/* Layer order: the native-control defaults first, so every product rule wins over them. */
+@layer regents-base, regents-product;
+
 @import "../vendor/regent_ui/design_system_tokens.css";
 @import "../vendor/regent_ui/primitives.css";
 @import "./tokens/root.css";
 @import "./components/shell.css";
+@import "./components/buttons.css";
+@import "./components/sticky_actions.css";
 @import "./components/key_map.css";
 @import "./components/key_profile.css";
+@import "./components/key_card.css";
 @import "./components/who_is_here.css";
+@import "./components/vote_tally.css";
+@import "./components/check_in_status.css";
 @import "./components/activity.css";
 @import "./components/agent_picture.css";
-@import "./components/send_agent.css";
+@import "./components/buy_key.css";
 @import "./components/wallet_panel.css";
-@import "./components/credits.css";
+@import "./components/account_wallets.css";
 @import "./components/presence_card.css";
-@import "./components/fleet_risks.css";
+@import "./components/agent_setup.css";
+@import "./components/setup_list.css";
 @import "./components/motion.css";
 @import "./components/placeholder.css";
+@import "./components/page_progress.css";
 @import "./components/load_failed.css";
+@import "./components/toast.css";
+@import "./components/footnote.css";
+@import "./components/page_head.css";
+@import "./components/confirm_dialog.css";
 @import "./pages/home.css";
 @import "./pages/legal.css";
 @import "./pages/early.css";
@@ -25,6 +39,9 @@
 @import "./pages/rooms.css";
 @import "./pages/dms.css";
 @import "./pages/workspace.css";
+@import "./pages/workspace_graph.css";
+@import "./pages/code.css";
+@import "./pages/project.css";
 @import "./pages/proposals.css";
 @import "./pages/polls.css";
 @import "./pages/animations.css";
@@ -87,27 +104,48 @@ h6 {
   font-synthesis: none;
 }
 
-/* Native fallback controls; actual application actions use Regent.Primitives. */
-button:not(.rg-button),
-input {
-  border: 1px solid currentColor;
-  border-radius: 0;
-  background: var(--color-surface-elevated, Canvas);
-  color: var(--color-fg, CanvasText);
+/* Native fallback controls; actual application actions use Regent.Primitives.
+   In the lowest layer, so any component's own button or field rule wins. */
+@layer regents-base {
+  button:not(.rg-button),
+  input {
+    border: 1px solid currentColor;
+    border-radius: 0;
+    background: var(--color-surface-elevated, Canvas);
+    color: var(--color-fg, CanvasText);
+  }
+
+  button:not(.rg-button) {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+  }
 }
 
-button:not(.rg-button) {
-  min-height: 2.75rem;
-  padding: 0.5rem 0.75rem;
-  cursor: pointer;
-}
-
+/* The same ring as inside the app, so focus looks alike on every page. */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--color-focus-ring, Highlight);
+  outline: 2px solid var(--ash-accent);
   outline-offset: 2px;
+}
+
+/* A cut-corner button's ring follows its cut corners instead of boxing it. */
+.rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible,
+#app-shell .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible {
+  outline: none;
+  filter: drop-shadow(2px 0 0 var(--ash-accent)) drop-shadow(-2px 0 0 var(--ash-accent))
+    drop-shadow(0 2px 0 var(--ash-accent)) drop-shadow(0 -2px 0 var(--ash-accent));
+}
+
+/* With the device's own colours forced, the button is a plain box, so its ring is too. */
+@media (forced-colors: active) {
+  .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible,
+  #app-shell .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible {
+    outline: 2px solid Highlight;
+    filter: none;
+  }
 }
 
 /* The label a wallet button squishes when pressed, while the button keeps its size. */
@@ -139,66 +177,55 @@ input:focus-visible,
   }
 }
 
-/* The footer of the home page and every public page (`Layouts.product_links/1`). */
+/* The footer of the home page and every public page (`Layouts.product_links/1`):
+   one short row, tight above and below. */
 .regent-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--rg-panel-padding);
+  gap: 0 var(--space-3);
+  padding: var(--space-1) var(--rg-panel-padding);
   border-top: 1px solid var(--hairline);
   font-size: 0.8125rem;
 }
 .regent-footer p { margin: 0; }
 .regent-footer__social { display: flex; align-items: center; gap: var(--space-2); }
-.regent-footer__social > a, .regent-footer__social > a svg { display: inline-flex; width: 1.5rem; height: 1.5rem; }
+.regent-footer__social > a { display: inline-grid; place-items: center; }
+.regent-footer__social > a svg { display: block; width: 1.5rem; height: 1.5rem; }
 .regent-footer__links { display: flex; flex-wrap: wrap; column-gap: var(--space-3); }
-.regent-footer__links a { display: inline-flex; align-items: center; min-height: 2.75rem; color: inherit; }
+.regent-footer__links a { display: inline-flex; align-items: center; min-height: 2rem; color: inherit; }
 .regent-footer__links .regent-footer__guide {
-  display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0; border: 0;
+  display: inline-flex; align-items: center; min-height: 2rem; padding: 0; border: 0;
   background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer;
 }
-/* The two legal documents stay together, apart from the rest by a hairline where
-   they share its line and on a line of their own on a phone. */
+/* Under a finger each brand link and each short link is a full finger's size. */
+@media (pointer: coarse) {
+  .regent-footer__social > a { min-width: 2.75rem; min-height: 2.75rem; }
+  .regent-footer__links :is(a, .regent-footer__guide) { justify-content: center; min-width: 2.75rem; min-height: 2.75rem; }
+}
+/* Under a mouse the theme switch is no taller than the links beside it. */
+@media not (pointer: coarse) {
+  .regent-footer .rg-theme-toggle.rg-button { width: 2rem; height: 2rem; min-width: 2rem; min-height: 2rem; }
+}
+/* On a phone the brand marks and the copyright share the first line, and the
+   links run on below them. */
+@media (max-width: 47.99rem) {
+  .regent-footer__links { order: 1; }
+}
+/* The two legal documents stay together, apart from the rest by a hairline. */
 .regent-footer__legal { display: flex; column-gap: var(--space-3); }
 @media (min-width: 48rem) {
   .regent-footer__legal { padding-inline-start: var(--space-3); border-inline-start: 1px solid var(--hairline); }
 }
-@media (max-width: 47.99rem) { .regent-footer__legal { flex-basis: 100%; } }
 .regent-footer__guide-body p { margin: 0; color: var(--rg-p-muted); }
 .regent-footer__guide-body a { min-height: 2.75rem; }
 .regent-footer__guide-body:popover-open { display: grid; }
 
 /* A public page fills the screen with its footer, so the footer sits at the foot of
-   the screen however short the page is. The page grows to meet it, frame and all. */
+   the screen however short the page is, across its whole width. The page grows to
+   meet it, frame and all. */
 body:has(> .regent-footer) { display: flex; flex-direction: column; height: auto; min-height: 100dvh; }
 body:has(> .regent-footer) > :first-child { flex: 1 0 auto; }
 body:has(> .regent-footer) > [data-phx-main] { display: grid; grid-template-rows: 1fr; }
-body > .regent-footer {
-  margin-inline: auto;
-  width: min(calc(100% - 2 * var(--rg-page-gutter)), var(--rg-frame-max));
-  border-inline: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
-}
 .rg-panel.rg-support-panel { --color-fg: var(--support-panel-ink); --color-fg-muted: color-mix(in srgb, var(--support-panel-ink) 72%, var(--support-panel-surface)); --color-surface: var(--support-panel-surface); --color-border: color-mix(in srgb, var(--support-panel-ink) 22%, var(--support-panel-surface)); }
-@media (max-width: 74.99rem) { body > .regent-footer { --rg-page-gutter: var(--space-3); } }
-@media (max-width: 47.99rem) { body > .regent-footer { --rg-page-gutter: var(--space-2); } }
-
-/* The browser owns opening, Escape and outside-click dismissal. */
-.regents-apps {
-  width: min(24rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
-  overflow: auto; margin: auto; padding: var(--space-3);
-  background: var(--color-surface); color: var(--color-fg);
-  border: 1px solid var(--hairline-strong);
-}
-.regents-apps h2 { font-size: 1.25rem; }
-.regents-apps ul {
-  list-style: none; padding: 0;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-.regents-apps a {
-  display: flex; align-items: center; justify-content: center; min-height: 3rem;
-  padding: var(--space-2); border: 1px solid var(--hairline-strong);
-}

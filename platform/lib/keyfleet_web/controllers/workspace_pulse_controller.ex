@@ -1,14 +1,17 @@
 defmodule KeyfleetWeb.WorkspacePulseController do
-  @moduledoc "Public activity summaries; never inherits browser or agent membership."
+  @moduledoc """
+  Public activity summaries; never inherits browser or agent membership. It
+  answers what the Claude connector's `workspace_pulse` answers
+  (`KeyfleetWeb.AgentTools.Public.Answer`).
+  """
   use KeyfleetWeb, :controller
 
-  def show(conn, %{"fleet_id" => fleet_id}) do
-    conn = put_resp_header(conn, "cache-control", "no-store")
+  alias KeyfleetWeb.AgentReply
+  alias KeyfleetWeb.AgentTools.Public.Answer
 
-    case Keyfleet.WorkspacePulse.read(fleet_id) do
-      {:ok, pulse} -> json(conn, pulse)
-      :unknown -> KeyfleetWeb.Refusal.json(conn, 404, "fleet_unknown")
-      {:error, _error} -> KeyfleetWeb.Refusal.json(conn, 503, "graph_unavailable")
-    end
+  def show(conn, params) do
+    conn
+    |> put_resp_header("cache-control", "no-store")
+    |> AgentReply.answer(Answer.answer(:pulse, params, nil, nil))
   end
 end

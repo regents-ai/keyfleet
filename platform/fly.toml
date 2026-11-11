@@ -1,6 +1,13 @@
 app = "keyfleet"
 primary_region = "iad"
 
+# Fly stops a machine with SIGINT unless told otherwise, and the VM answers
+# SIGINT by halting at once, cutting open connections and running jobs. SIGTERM
+# shuts it down in order: open connections drain and running jobs finish, well
+# inside the timeout.
+kill_signal = "SIGTERM"
+kill_timeout = "60s"
+
 [deploy]
   release_command = "/app/bin/migrate"
 
@@ -8,36 +15,57 @@ primary_region = "iad"
   PORT = "4000"
   KEYFLEET_DEPLOYMENT_ROLE = "production"
   KEYFLEET_SIWA_URL = "https://siwa.regents.sh"
+  DNS_CLUSTER_QUERY = "keyfleet.internal"
 
-[metrics]
+# Two kinds of machine, in one Erlang cluster (rel/env.sh.eex). The graph
+# machine keeps each fleet's work graph as a file on its volume and runs the
+# fleets' graph writers; it serves no pages. The site machine has no volume and
+# serves keyfleet.ai, so scripts/deploy.sh can release it bluegreen: the new
+# one answers its health check before the old one stops. Each group runs on
+# exactly one machine: a second graph machine would get its own, empty volume.
+[processes]
+  site = "/app/bin/site"
+  graph = "/app/bin/graph"
+
+[[metrics]]
   port = 9091
   path = "/metrics"
+  processes = ["site"]
 
-# Each fleet's work graph is a file on this volume, so the app runs on exactly
-# one machine: a second machine would get its own, empty volume.
 [mounts]
   source = "keyfleet_graph"
   destination = "/data"
+  processes = ["graph"]
 
 [http_service]
   internal_port = 4000
   force_https = true
+  processes = ["site"]
 
 # Session creation can wait three minutes for a cold notebook runner.
 [http_service.http_options]
   idle_timeout = 240
 
-# Keep one web instance until cross-instance long-poll resumption is fixed.
-# Machine count is managed by `fly scale count 1`; deploy with `--ha=false`.
-# Two dedicated processors and 4 GB, on the same one machine and volume. When
-# Sentinel's readings show it filling up, the answer is a bigger machine,
-# chosen by hand (Sean, 14 October 2026). Measured on 14 October 2026 on the
-# live code, before the open-pages change: each open page, its connection
-# included, adds about 0.9 MB to the machine.
+# Keep one site machine until cross-instance long-poll resumption is fixed;
+# only a release runs a second one, for the minute it takes. Deploy with
+# `--ha=false`. Two dedicated processors and 4 GB. When Sentinel's readings
+# show it filling up, the answer is a bigger machine, chosen by hand (Sean, 14
+# October 2026). Measured on 14 October 2026 on the live code, before the
+# open-pages change: each open page, its connection included, adds about 0.9 MB
+# to the machine.
 [[vm]]
+  processes = ["site"]
   cpu_kind = "performance"
   cpus = 2
   memory_mb = 4096
+
+# The graph machine runs one Python host per fleet and serves no pages, so it
+# starts smaller (Sean, 21 October 2026) and is sized from Sentinel's readings.
+[[vm]]
+  processes = ["graph"]
+  cpu_kind = "shared"
+  cpus = 2
+  memory_mb = 2048
 
 # The check reaches the machine directly over plain HTTP. `Host: localhost` is
 # the host force_ssl leaves alone (config/prod.exs), so the check reads the

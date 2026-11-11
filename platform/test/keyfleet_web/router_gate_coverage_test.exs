@@ -15,7 +15,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     :ok
   end
 
-  test "only the early-access page, the contact and legal pages and the operational files and NFT metadata stay open" do
+  test "only the early-access page, the legal pages and the operational files and NFT metadata stay open" do
     answers =
       for route <- routes(), conn = request(route), do: {route.verb, route.path, answer(conn)}
 
@@ -30,7 +30,6 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/.well-known/hub-jwks.json"},
              {:get, "/metadata/collection.json"},
              {:get, "/metadata/keys/:token_id"},
-             {:get, "/contact"},
              {:get, "/privacy"},
              {:get, "/terms"},
              {:get, "/early"},
@@ -40,20 +39,31 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     # Every page a browser opens is sent to the early-access page, and every
     # other address answers 503.
     assert for({:get, path, :to_early} <- answers, do: path) ==
-             ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /app) ++
-               ~w(/help /docs /agents /agents/:agent /fleets/:file /fleets/:fleet_id/rooms / /fleets/:fleet_id/notebooks/open /account) ++
-               ~w(/account/points /account/wallets /account/connections /about /opportunities) ++
+             ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /app /agent /start) ++
+               ~w(/help /skill/:part /agent/git-remote-siwa /share/:file /docs /agents /agents/:agent /changelog /fleets/:file /fleets/:fleet_id/rooms) ++
+               ~w(/oauth/authorize /oauth/connections / /fleets/:fleet_id/notebooks/open /account) ++
+               ~w(/account/agents /account/points /account/wallets /account/connections /about /pair /opportunities) ++
                for(
                  fleet <-
                    ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),
                  page <-
-                   ["", "/rooms/:slug", "/workspace", "/workspace/:object_id"] ++
-                     ["/code/:repository/commits/:commit", "/proposals"] ++
+                   ["", "/workspace", "/workspace/:object_id"] ++
+                     ["/code/:repository/commits/:commit", "/code/:repository/commits"] ++
+                     ["/code/:repository/files"] ++
+                     ["/projects/:project", "/proposals"] ++
                      ["/proposals/:number", "/treasury", "/polls", "/polls/:poll_id"] ++
                      ["/keys/:token_id"] ++
                      ["/keys/:token_id/dms", "/keys/:token_id/dms/:other_token_id"],
                  do: fleet <> page
                )
+  end
+
+  # The walk above asks for `/skill/gate-coverage`, which names no file; an
+  # agent asks for a part by its file name, as it asks for the guide.
+  test "the joining guide's parts answer as the guide does while the site is closed" do
+    for path <- ~w(/skill.md /skill/code.md /skill/notebooks.md /skill/decide.md) do
+      assert build_conn() |> get(path) |> answer() == :closed, path
+    end
   end
 
   test "every product LiveView mounts through the gate" do

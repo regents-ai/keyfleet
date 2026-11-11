@@ -62,10 +62,12 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         {:ok, raw, conn} = read_body(conn)
         payload = Jason.decode!(raw)
 
-        case Siwa.verify_authenticated_request(payload,
+        case Siwa.verify_authenticated_request(
+               KeyfleetWeb.SignedAgentHelpers.siwa_request(payload),
                secret: secret,
                audience: "keyfleet",
-               wallet_audiences: ["keyfleet"]
+               wallet_audiences: ["keyfleet"],
+               authorities: [payload["authority"]]
              ) do
           {:ok, %{claims: claims, covered_components: covered}} ->
             answer(conn, 200, %{
@@ -107,7 +109,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "an agent with no key is listed and reads General alone, and posts nowhere", c do
+  test "an agent with no key is listed and reads the rooms anyone reads, and posts in People and agents alone",
+       c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     listed = send_signed(c, "GET", @rooms_path)
@@ -116,7 +119,17 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert listed.body["rooms"] == [
              %{
                "slug" => "general",
-               "name" => "General",
+               "name" => "Public",
+               "kind" => "fixed",
+               "public" => true,
+               "topic" => nil,
+               "topic_set_by" => nil,
+               "topic_set_at" => nil,
+               "head_seq" => 0
+             },
+             %{
+               "slug" => "people",
+               "name" => "People and agents",
                "kind" => "fixed",
                "public" => true,
                "topic" => nil,
@@ -134,6 +147,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     refused = send_signed(c, "POST", @send_general, send_body("Standing by", "k-1"))
     assert refused.status == 403
     assert refused.body == refused("not_a_member")
+
+    # In People and agents it posts as itself, with no Key.
+    sent = send_signed(c, "POST", room_path("people", "send"), send_body("Standing by", "k-2"))
+    assert sent.status == 201
+    assert %{"author_kind" => "agent", "as_key" => nil} = sent.body["message"]
+    assert sent.body["message"]["author_wallet"] == c.signer.address
+    assert Keyfleet.ContractSchema.errors(sent.body, "RoomMessageEnvelope") == []
 
     # A room of the fleet and a room it does not have are refused alike.
     for slug <- ["open-1", "hull-survey"] do
@@ -162,7 +182,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {"POST", "#{fleet}/proposals/read", ~s({"number":1,"votes_after_seq":0})},
           {"POST", "#{fleet}/graph/changes", "{}"},
           {"POST", "#{fleet}/graph/create",
-           ~s({"as_key":1,"command_id":"c-1","type":"note","scope":"fleet","data":{}})},
+           ~s({"as_key":1,"command_id":"c-1","project":"general","type":"note","data":{}})},
           {"GET", "#{fleet}/mutes", nil},
           {"POST", "#{fleet}/keys/{token_id}/mute", "{}"},
           {"POST", "#{fleet}/keys/{token_id}/unmute", "{}"},
@@ -386,14 +406,14 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
-    for {method, path} <- [
-          {"GET", @rooms_path <> "?all=1"},
-          {"POST", @read_general <> "?after_seq=1"},
-          {"DELETE", @send_general},
-          {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send"},
-          {"POST", @read_general <> "/"}
+    for {method, path, status} <- [
+          {"GET", @rooms_path <> "?all=1", 401},
+          {"POST", @read_general <> "?after_seq=1", 401},
+          {"DELETE", @send_general, 405},
+          {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send", 404},
+          {"POST", @read_general <> "/", 404}
         ] do
-      assert send_signed(c, method, path, "{}").status == 401
+      assert send_signed(c, method, path, "{}").status == status
     end
 
     # A signed body that doesn't fit is told the fields its operation takes.
@@ -542,6 +562,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         %{
           method: method,
           path: path,
+          authority: Siwa.Contract.authority(c.app),
           body: body,
           headers: %{"content-type" => "application/json"}
         },

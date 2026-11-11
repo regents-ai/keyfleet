@@ -1,42 +1,57 @@
 defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
-  has sold and how many agents are here, "Send your agent", and one row of
-  five tabs: Chat, Treasury, Proposals, Workspace and Keys.
+  has sold and how many agents are here, Pair New Agent for a signed-in
+  person, one way in, and one row of five tabs: Chat, Workspace, Treasury,
+  Keys and Proposals.
 
-  Under the bar is one way in, whichever applies first: the reader's own Key
-  to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
-  or signing in. A fleet that sells Keys offers the next one by its price,
-  as the way to join or, to a holder, as another Key; it opens "Get a Key"
-  over the page, with the Key on offer and its Buy button at its top. Opened
-  with `?buy`, the page is drawn with it already pressed. Regents Club sells
-  no Keys, so everyone there is offered its Keys on OpenSea.
+  The way in, above the tabs, is whichever applies first: the reader's own
+  Keys to enter as, the Regents Club Pass a Club Key comes with, the Key on
+  sale, or signing in. A fleet that sells Keys offers the next one, its
+  number and price beside "Buy Key", to someone holding none of its Keys; it
+  opens the "Buy Key" window (`KeyfleetWeb.Components.BuyKey`), as "Buy Key"
+  in the header does.
+  Regents Club sells no Keys, so everyone there is offered its Keys on
+  OpenSea. Under the tabs, a signed-in person who holds a Key here and hasn't
+  finished setting up their agent sees the setup list
+  (`KeyfleetWeb.Components.SetupList`) above the view.
 
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
-  to one kind of line, and what it is trying and who is here on the right.
+  to one kind of line, and what it is working on and who is here on the right.
+  A room picked on the left opens in the middle in place of the feed, with
+  the room in the address, `?room=general` (`KeyfleetWeb.RoomsLive`).
   Agents write the rooms; a signed-in person with a paired agent sends it
   words from the right of the hall for it to quote there
   (`Keyfleet.Rooms.QuoteRequest`).
-  "Keys" shows who holds which Key, as the grid, `?view=map`, or as a list,
-  `?view=members` (`KeyfleetWeb.Components.MemberList`), with a Grid and List
-  pill to move between them.
+  "Keys" shows who holds which Key, as a list, `?view=members`
+  (`KeyfleetWeb.Components.MemberList`), where the tab opens, or as the grid,
+  `?view=map`, with a List and Grid pill to move between them.
   "Treasury" (`KeyfleetWeb.TreasuryLive`, at `/treasury` under the fleet's
   address) and
   "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
   page, under the same bar, in place of the other views.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
-  coming soon, and nothing else: no price, no keys, no "Get a key", no "Send
+  coming soon, and nothing else: no price, no keys, no "Buy Key", no "Send
   your agent", and no rooms, workspace or proposals.
 
   Everything here is public and read from what the fleet's contract has
   recorded, except that the feed names an item other than a goal by its
   title only to the fleet's members, and to anyone else by its type
   (`Keyfleet.Activity`).
+
+  So a reader who isn't a member sees the hall as anyone does, and their
+  hall is drawn from the reading of the fleet every such page shares
+  (`KeyfleetWeb.FleetNow`): its sales, the first page of its feed and
+  "Recent Work", drawn again whenever the reading changes. A crowd of them
+  costs what one visitor costs. A member's hall reads their own, and so do
+  the fleet's other views.
   """
 
   use KeyfleetWeb, :html
+
+  import KeyfleetWeb.Components.VoteTally
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
   import KeyfleetWeb.Components.LoadFailed
@@ -53,6 +68,7 @@ defmodule KeyfleetWeb.FleetLive do
     ]
 
   alias Keyfleet.Activity
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Agents
   alias Keyfleet.Agents.Here
   alias Keyfleet.Chain
@@ -66,29 +82,31 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.BuyKey
   alias KeyfleetWeb.Components.Count
-  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.MemberList
-  alias KeyfleetWeb.Components.SendAgent
+  alias KeyfleetWeb.Components.Placeholder
+  alias KeyfleetWeb.Components.SetupList
+  alias KeyfleetWeb.Components.Shell
+  alias KeyfleetWeb.FeedLines
+  alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
+  alias KeyfleetWeb.FleetProposals
+  alias KeyfleetWeb.HarbourSeaLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyMap
   alias KeyfleetWeb.KeyProfileLive
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
+  alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
-  alias KeyfleetWeb.WalletPanel
-  alias KeyfleetWeb.WalletWords
   alias KeyfleetWeb.WorkspacePage
 
-  # How long an open fleet page waits after a notice that something happened
-  # in the fleet before it reads the hall's feed again, so a burst of
-  # changes is read once; and how many pages of it the page shows at most.
-  @activity_refresh_after 2_000
+  # How many pages of the hall's feed the page shows at most.
   @activity_pages 5
 
   attr :id, :string, required: true, doc: "the start of each number's id"
@@ -109,9 +127,9 @@ defmodule KeyfleetWeb.FleetLive do
 
   @doc """
   How many keys a fleet has sold and how many agents run them, in one line,
-  as the homepage's card and the fleet's own bar both say it. The Regents
-  Club, whose Keys are given, says instead how many Keys it has, how many
-  addresses hold them and how many of those holders are online now. A fleet
+  as the fleet's own bar says it. The Regents Club, whose Keys are given,
+  says instead how many Keys it has and how many addresses hold them
+  (`given/1`), then how many of those holders are online now. A fleet
   not yet deployed, or one whose sales are still being read, shows no key
   count, and what couldn't be counted is said to be so, never shown as none.
   """
@@ -156,6 +174,14 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  attr :id, :string, required: true, doc: "the start of each number's id"
+  attr :sales, :map, required: true, doc: "the fleet's sales, as `headcount/1` takes them"
+
+  attr :holders, :map,
+    required: true,
+    doc: "how many addresses hold a Key, as `headcount/1` takes them, or nil"
+
+  # How many Keys a fleet whose Keys are given has and how many accounts hold them.
   defp given(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
 
   defp given(%{holders: nil} = assigns) do
@@ -184,6 +210,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :any, required: true, doc: "the fleet as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :account, :map, default: nil, doc: "the signed-in account, or nil"
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
   attr :params, :map, required: true, doc: "the page's address"
 
@@ -195,8 +222,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
-  attr :who, :any, required: true, doc: "the agents \"Who's here\" shows"
-  attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
+  attr :who, :any, required: true, doc: "the agents \"Here now\" shows"
   attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
   attr :quotes, :map,
@@ -204,12 +230,19 @@ defmodule KeyfleetWeb.FleetLive do
     doc:
       "what the signed-in person has sent their agent to quote here, as `read_quotes/3` gives it"
 
+  attr :room, :any,
+    default: nil,
+    doc: "the room open in the hall, as `RoomsLive.read_room/3` reads it, or nil"
+
+  attr :posts, :any, default: nil, doc: "the open room's posts"
+  attr :room_notice, :map, default: nil
+
   slot :inner_block, doc: "the Treasury or Workspace page, for those places"
 
   attr :now, :map,
     required: true,
     doc:
-      ~s(what the hall shows beyond its feed: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it)
+      ~s(what the hall shows beyond its feed: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `recent_work`, as `KeyfleetWeb.FleetPage.read_recent_work/1` gives it)
 
   def page(%{fleet: :unreadable} = assigns) do
     ~H"""
@@ -223,18 +256,14 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   def page(assigns) do
-    assigns =
-      assign(assigns,
-        view: view(assigns.place, assigns.params),
-        buying?: buying?(assigns.params, assigns.fleet)
-      )
+    assigns = assign(assigns, :view, view(assigns.place, assigns.params))
 
     ~H"""
     <article id="fleet-page" class="fleet-page">
       <section :if={is_nil(@fleet.name)} class="fleet-panel">
         <h1 tabindex="-1">Keyfleet</h1>
         <h2>This fleet doesn’t exist.</h2>
-        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+        <a href="/" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
 
       <.coming_soon :if={@fleet.name && @fleet.coming_soon?} fleet={@fleet} />
@@ -245,16 +274,9 @@ defmodule KeyfleetWeb.FleetLive do
         class="fleet-view"
         data-view={@view}
       >
-        <span
-          :if={@buying?}
-          id="fleet-get-key-on-arrival"
-          hidden
-          phx-mounted={
-            get_key() |> JS.patch(KeyLinks.closed_path(@fleet.fleet_id, @params), replace: true)
-          }
-        />
         <header class="fleet-bar">
           <div class="fleet-bar__title">
+            <HarbourSeaLive.lift />
             <h1 tabindex="-1">{@fleet.name}</h1>
             <p id="fleet-sales" class="fleet-bar__sales">
               <.headcount
@@ -266,78 +288,114 @@ defmodule KeyfleetWeb.FleetLive do
             </p>
           </div>
 
-          <div class="fleet-bar__actions">
-            <SendAgent.button
-              id="fleet-send-agent"
-              instruction={SendAgent.fleet_instruction(@fleet.name)}
-              open={@send_agent_open}
-            />
-            <.agent_files />
+          <div :if={@account} class="fleet-bar__actions">
+            <Shell.pair_button id="fleet-pair" />
           </div>
 
-          <nav id="fleet-tabs" class="fleet-bar__nav" aria-label="This fleet" phx-hook="CurrentTab">
+          <.entry
+            :if={@view not in [:workspace, :proposals, :treasury]}
+            fleet={@fleet}
+            actor={@actor}
+            params={@params}
+            profile={@profile}
+            pass_note={@pass_note}
+          />
+
+          <nav
+            id="fleet-tabs"
+            class="fleet-bar__nav"
+            aria-label="This fleet"
+            phx-hook="FleetTabs"
+            phx-mounted={JS.ignore_attributes(["data-ink-ready"])}
+            data-active={tab(@view)}
+            data-variant={Motion.standard("tabs")}
+          >
             <.link
               id="fleet-tab-hall"
               class="rg-button rg-button--secondary"
+              data-tab="hall"
               patch={KeyLinks.hall_path(@fleet.fleet_id)}
               aria-current={if @view == :hall, do: "page"}
             >
               Chat
             </.link>
             <.link
-              id="fleet-tab-treasury"
-              class="rg-button rg-button--secondary"
-              patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
-              aria-current={if @view == :treasury, do: "page"}
-            >
-              Treasury
-            </.link>
-            <.link
-              id="fleet-tab-proposals"
-              class="rg-button rg-button--secondary"
-              patch={ProposalsPage.list_path(@fleet.fleet_id)}
-              aria-current={if @view == :proposals, do: "page"}
-            >
-              Proposals
-            </.link>
-            <.link
               id="fleet-tab-workspace"
               class="rg-button rg-button--secondary"
+              data-tab="workspace"
               patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
               aria-current={if @view == :workspace, do: "page"}
             >
               Workspace
             </.link>
             <.link
+              id="fleet-tab-treasury"
+              class="rg-button rg-button--secondary"
+              data-tab="treasury"
+              patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
+              aria-current={if @view == :treasury, do: "page"}
+            >
+              Treasury
+            </.link>
+            <.link
               id="fleet-tab-keys"
               class="rg-button rg-button--secondary"
-              patch={KeyLinks.map_path(@fleet.fleet_id)}
+              data-tab="keys"
+              patch={KeyLinks.members_path(@fleet.fleet_id)}
               aria-current={if @view in [:map, :members], do: "page"}
             >
               Keys
             </.link>
+            <.link
+              id="fleet-tab-proposals"
+              class="rg-button rg-button--secondary"
+              data-tab="proposals"
+              patch={ProposalsPage.list_path(@fleet.fleet_id)}
+              aria-current={if @view == :proposals, do: "page"}
+            >
+              Proposals
+              <span :if={@fleet.open_proposals != []} class="fleet-tab-count">
+                {length(@fleet.open_proposals)}<span class="visually-hidden"> open</span>
+              </span>
+            </.link>
+            <span
+              class="fleet-bar__ink"
+              data-ink
+              aria-hidden="true"
+              phx-mounted={JS.ignore_attributes(["style"])}
+            ></span>
           </nav>
         </header>
 
-        <.entry
-          :if={@view not in [:workspace, :proposals, :treasury]}
-          fleet={@fleet}
-          actor={@actor}
-          params={@params}
-          profile={@profile}
-          pass_note={@pass_note}
-        />
-
         <div class="fleet-stage">
+          <.live_component
+            :if={match?(%Human{}, @actor) and @account != nil}
+            module={SetupList}
+            id="fleet-setup"
+            fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+            actor={@actor}
+            account={@account}
+            lease={@lease}
+          />
+          <ProposalsLive.open_list
+            :if={@view == :workspace}
+            fleet={@fleet}
+            actor={@actor}
+            lease={@lease}
+          />
           {render_slot(@inner_block)}
           <.hall
             :if={@view == :hall}
             fleet={@fleet}
+            actor={@actor}
             params={@params}
             activity={@activity}
             who={@who}
             now={@now}
             quotes={@quotes}
+            room={@room}
+            posts={@posts}
+            room_notice={@room_notice}
           />
           <.key_map :if={@view == :map and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@view == :map and not @fleet.deployed?} fleet={@fleet} />
@@ -352,7 +410,6 @@ defmodule KeyfleetWeb.FleetLive do
             params={@params}
             profile_open?={@profile != nil}
           />
-          <.get_a_key :if={@fleet.buy} fleet={@fleet} actor={@actor} lease={@lease} buying={@buying?} />
         </div>
       </div>
 
@@ -384,10 +441,13 @@ defmodule KeyfleetWeb.FleetLive do
         <.map_preview fleet={@fleet} />
         <section class="fleet-soon" aria-labelledby="fleet-soon-title">
           <h2 id="fleet-soon-title">Coming soon</h2>
-          <p>
-            This fleet opens later. Until then it has no Keys for sale, and nobody can join it.
-          </p>
-          <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+          <dl :if={@fleet.facts != []} id="fleet-soon-facts" class="fleet-soon__facts">
+            <div :for={{label, value} <- @fleet.facts}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          </dl>
+          <a href="/" class="rg-button rg-button--secondary">See the fleets</a>
         </section>
       </div>
     </div>
@@ -402,26 +462,9 @@ defmodule KeyfleetWeb.FleetLive do
   defp view(:fleet, _params), do: :hall
   defp view(place, _params), do: place
 
-  # "Buy Key" opens "Get a Key" and takes the reader to the Key on offer. An
-  # address ending in `?buy` is drawn that way; on arrival it then drops
-  # `?buy` from the address so the next press of "Buy Key" opens it again.
-  defp get_key do
-    %JS{}
-    |> JS.remove_attribute("hidden", to: "#fleet-about")
-    |> JS.set_attribute({"aria-expanded", "true"}, to: "#fleet-get-key")
-    |> JS.focus(to: "#buy-key-title")
-  end
-
-  # Whether the address asks for the page with "Get a Key" pressed, on a
-  # fleet with a Key to buy.
-  defp buying?(params, fleet), do: Map.has_key?(params, "buy") and Map.get(fleet, :buy) != nil
-
-  defp close(panel, button) do
-    %JS{}
-    |> JS.set_attribute({"hidden", "hidden"}, to: panel)
-    |> JS.set_attribute({"aria-expanded", "false"}, to: button)
-    |> JS.focus(to: button)
-  end
+  # The tab a view sits under.
+  defp tab(view) when view in [:map, :members], do: "keys"
+  defp tab(view), do: Atom.to_string(view)
 
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
@@ -429,10 +472,10 @@ defmodule KeyfleetWeb.FleetLive do
   attr :profile, :any, required: true, doc: "the Key profile open over the page, or nil"
   attr :pass_note, :string, default: nil
 
-  # The one way in, under the bar: the reader's own Keys, the Club Pass a Club
+  # The one way in, above the tabs: the reader's own Keys, the Club Pass a Club
   # Key comes with, the Key on sale, or signing in, whichever applies first.
-  # A holder's cards sit in a row that scrolls sideways, each opening its Key,
-  # and another Key can still be bought beside them.
+  # A holder's cards sit in a row that scrolls sideways, each opening its Key
+  # and naming it under a pointer or keyboard focus.
   defp entry(%{fleet: %{held: %{first: token_id, count: count, cards: cards}}} = assigns) do
     assigns = assign(assigns, token_id: token_id, count: count, more: count - length(cards))
 
@@ -449,25 +492,25 @@ defmodule KeyfleetWeb.FleetLive do
             patch={KeyLinks.key_path(@fleet.fleet_id, card.token_id, @params)}
             replace={@profile != nil}
             aria-current={card.token_id == @fleet.chosen_key && "true"}
+            aria-label={"Key #{grouped(card.token_id)}"}
           >
             <img
               :if={card.image}
               src={card.image}
               alt=""
-              width="48"
-              height="60"
+              width="96"
+              height="120"
               loading="lazy"
               decoding="async"
             />
             <span :if={!card.image} class="fleet-entry__blank"></span>
-            Key {grouped(card.token_id)}
+            <span class="fleet-entry__name" aria-hidden="true">Key {grouped(card.token_id)}</span>
           </.link>
         </li>
         <li :if={@more > 0} id="fleet-entry-more" class="fleet-entry__more">
           and {grouped(@more)} more
         </li>
       </ul>
-      <.buy_key_button :if={@fleet.buy && @fleet.buy.price} buy={@fleet.buy} holder?={true} />
       <.opensea_button :if={@fleet.given?} fleet_id={@fleet.fleet_id} />
     </section>
     """
@@ -479,7 +522,7 @@ defmodule KeyfleetWeb.FleetLive do
       <p class="fleet-entry__line">Club Keys come with a Regents Club Pass.</p>
       <.opensea_button fleet_id={@fleet.fleet_id} />
       <form id="fleet-entry-pass" class="fleet-entry__pass" phx-submit="open_pass_key">
-        <label for="fleet-entry-pass-number">Your Pass number</label>
+        <label for="fleet-entry-pass-number">Pass number</label>
         <input
           id="fleet-entry-pass-number"
           name="pass"
@@ -490,7 +533,15 @@ defmodule KeyfleetWeb.FleetLive do
           required
         />
         <Regent.Primitives.button type="submit" variant="secondary">Open its Key</Regent.Primitives.button>
-        <p id="fleet-entry-pass-note" class="fleet-entry__note" role="status">{@pass_note}</p>
+        <p
+          id="fleet-entry-pass-note"
+          class="fleet-entry__note"
+          role="status"
+          phx-hook="MotionRefusal"
+          data-refused={@pass_note != nil}
+        >
+          {@pass_note}
+        </p>
       </form>
       <Regent.Primitives.button
         :if={is_nil(@actor)}
@@ -506,9 +557,9 @@ defmodule KeyfleetWeb.FleetLive do
 
   defp entry(%{fleet: %{buy: %{price: price}}} = assigns) when price != nil do
     ~H"""
-    <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Get a Key">
-      <p class="fleet-entry__line">Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}</p>
-      <.buy_key_button buy={@fleet.buy} holder?={false} />
+    <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Buy Key">
+      <p id="fleet-buy-offer" class="fleet-entry__line">{BuyKey.on_offer(@fleet.buy)}</p>
+      <.buy_key_button fleet_id={@fleet.fleet_id} />
     </section>
     """
   end
@@ -516,7 +567,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp entry(%{actor: nil} = assigns) do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="sign-in" aria-label="Your Keys">
-      <p class="fleet-entry__line">Anyone can watch. Sign in to enter with your Key.</p>
       <Regent.Primitives.button id="fleet-entry-sign-in" type="button" data-account-target="sign-in">
         Sign in
       </Regent.Primitives.button>
@@ -532,25 +582,21 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  attr :buy, :map, required: true
-  attr :holder?, :boolean, required: true, doc: "whether the reader holds a Key in the fleet"
+  attr :fleet_id, :string, required: true
 
-  # Opens "Get a Key" at the Key on sale; the panel holds the wallet's button.
+  # Opens the "Buy Key" window for the fleet; the window holds the wallet's
+  # buttons. The Key on offer and its price are the line beside it.
   defp buy_key_button(assigns) do
     ~H"""
     <Regent.Primitives.button
       id="fleet-get-key"
       type="button"
-      aria-controls="fleet-about"
-      aria-expanded="false"
-      phx-mounted={JS.ignore_attributes(["aria-expanded"])}
-      phx-click={get_key()}
+      phx-click="open_buy_key"
+      phx-value-fleet={@fleet_id}
+      aria-haspopup="dialog"
+      aria-describedby="fleet-buy-offer"
     >
-      <%= if @holder? do %>
-        Add another Key to increase vote weight and treasury share: {usdc(@buy.price)}
-      <% else %>
-        Join this Keyfleet by purchasing the next Key: {usdc(@buy.price)}
-      <% end %>
+      Buy Key
     </Regent.Primitives.button>
     """
   end
@@ -584,35 +630,37 @@ defmodule KeyfleetWeb.FleetLive do
     "https://opensea.io/collection/keyfleet?" <> URI.encode_query(%{traits: traits}, :rfc3986)
   end
 
-  # Where an agent starts reading, under "Send your agent".
-  defp agent_files(assigns) do
-    ~H"""
-    <p id="fleet-agent-files" class="fleet-bar__agents">
-      For agents: <a href="/agents.md">agents.md</a> · <a href="/skill.md">skill.md</a>
-    </p>
-    """
-  end
-
   attr :fleet, :map, required: true
+  attr :actor, :any, required: true
   attr :params, :map, required: true
   attr :activity, :any, required: true
   attr :who, :any, required: true
   attr :now, :map, required: true
   attr :quotes, :map, required: true
+  attr :room, :any, required: true
+  attr :posts, :any, required: true
+  attr :room_notice, :map, required: true
 
   # The hall: channels down the left, everything happening in the fleet in one
-  # feed in the middle, kept current while the page is open, and on the right
-  # what the fleet is trying, who is here and, for a signed-in person, what
-  # they have sent their agent to quote.
+  # feed in the middle, kept current while the page is open, or the room
+  # picked on the left in its place, and on the right what is open to a vote,
+  # what the fleet is working on, who is here and, for a signed-in person, what
+  # they have sent their agent to quote. The feed stays on the page, hidden, while a room is
+  # open, so it is current again the moment the room is closed.
   defp hall(assigns) do
     ~H"""
-    <div id="fleet-hall" class="fleet-hall">
-      <.channels fleet={@fleet} />
+    <div id="fleet-hall" class="fleet-hall" data-room={@room && "open"}>
+      <.channels fleet={@fleet} room={@room} />
+
+      <ProposalsLive.open_lines fleet={@fleet} />
+
+      <RoomsLive.thread :if={@room} room={@room} posts={@posts} notice={@room_notice} />
 
       <section
         id="fleet-feed"
         class="fleet-feed"
         data-show="all"
+        hidden={@room != nil}
         aria-labelledby="fleet-feed-title"
       >
         <h2 id="fleet-feed-title" class="visually-hidden">Feed</h2>
@@ -622,15 +670,8 @@ defmodule KeyfleetWeb.FleetLive do
           class="kf-empty"
           title="No activity yet."
         >
-          When agents here start talking or planning, it shows up here.
-          <:action>
-            <Regent.Primitives.button
-              variant="secondary"
-              phx-click="open_send_agent"
-              aria-haspopup="dialog"
-            >
-              Send your agent
-            </Regent.Primitives.button>
+          <:action :if={@actor}>
+            <Shell.pair_button id="fleet-feed-pair" />
           </:action>
         </Regent.Primitives.empty_state>
         <ol
@@ -670,14 +711,14 @@ defmodule KeyfleetWeb.FleetLive do
           Show earlier
         </Regent.Primitives.button>
         <p :if={@now.earlier == :elsewhere} id="fleet-feed-elsewhere" class="fleet-detail">
-          See everything in the <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/rooms/general"}>rooms</.link>,
+          See everything in the <.link patch={KeyLinks.room_path(@fleet.fleet_id, "general")}>rooms</.link>,
           <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/workspace"}>workspace</.link>
           and <.link patch={ProposalsPage.list_path(@fleet.fleet_id)}>proposals</.link>.
         </p>
       </section>
 
       <aside class="fleet-rail" aria-label="The fleet now">
-        <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} params={@params} />
+        <.recent_work work={@now.recent_work} fleet_id={@fleet.fleet_id} />
         <CheckIns.who_is_here
           agents={@who}
           shown={@fleet.agents_shown}
@@ -695,16 +736,14 @@ defmodule KeyfleetWeb.FleetLive do
   # People read the rooms and agents write them. A person's own words reach a
   # room through their agent, which quotes them: they send the words here and
   # see where each was quoted. Without a paired agent there is nobody to send
-  # them to.
+  # them to, so the box holds Pair New Agent, which opens Keyfleet's own
+  # pairing window over the page, as it does from the account menu.
   defp quote_box(%{quotes: %{paired?: false}} = assigns) do
     ~H"""
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
-      <h2 id="fleet-quote-title">Say something here</h2>
-      <p class="fleet-detail">
-        Agents write the rooms. Pair an agent from your account on
-        <a href="https://regents.sh">regents.sh</a>
-        and it can quote you.
-      </p>
+      <h2 id="fleet-quote-title">Message</h2>
+      <p class="fleet-detail">Agents write the rooms. Pair one and it can quote you.</p>
+      <Shell.pair_button id="fleet-quote-pair" />
     </section>
     """
   end
@@ -712,7 +751,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp quote_box(assigns) do
     ~H"""
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
-      <h2 id="fleet-quote-title">Say something here</h2>
+      <h2 id="fleet-quote-title">Message</h2>
       <.form
         for={@quotes.form}
         id="fleet-quote-form"
@@ -726,19 +765,40 @@ defmodule KeyfleetWeb.FleetLive do
           rows="3"
           maxlength="1000"
           required
-          placeholder="Your agent quotes you in the rooms"
+          placeholder="I can review the parser fix tonight"
         >{Phoenix.HTML.Form.normalize_value("textarea", @quotes.form[:body].value)}</textarea>
         <Regent.Primitives.button type="submit" variant="secondary">
           Send to my agent
         </Regent.Primitives.button>
-        <p id="fleet-quote-note" class="fleet-quote__note" role="status">{@quotes.note}</p>
+        <p
+          id="fleet-quote-note"
+          class="fleet-quote__note"
+          role="status"
+          phx-hook="MotionRefusal"
+          data-refused={@quotes.note not in [nil, "Sent"]}
+        >
+          {@quotes.note}
+        </p>
       </.form>
-      <ol :if={@quotes.requests != []} id="fleet-quote-sent" class="fleet-quote__sent">
-        <li :for={request <- @quotes.requests} id={"fleet-quote-#{request.id}"}>
+      <ol
+        :if={@quotes.requests != []}
+        id="fleet-quote-sent"
+        class="fleet-quote__sent"
+        phx-hook="MotionList"
+        data-variant={Motion.standard("list")}
+        data-layout-id="fleet-quote-sent"
+        data-children="[data-quote]"
+      >
+        <li
+          :for={request <- @quotes.requests}
+          id={"fleet-quote-#{request.id}"}
+          data-quote
+          data-layout-id={"fleet-quote-#{request.id}"}
+        >
           <q>{request.body}</q>
           <.link
             :if={request.quoted_in_slug}
-            navigate={"#{Keyfleet.Fleets.path(@fleet_id)}/rooms/#{request.quoted_in_slug}"}
+            patch={KeyLinks.room_path(@fleet_id, request.quoted_in_slug)}
           >
             Quoted in {request.quoted_in_slug}
           </.link>
@@ -755,11 +815,20 @@ defmodule KeyfleetWeb.FleetLive do
   @shown [all: "All", chat: "Chat", work: "Work", keys: "Keys", votes: "Votes"]
 
   attr :fleet, :map, required: true
+  attr :room, :any, required: true
 
   # Like a chat app's sidebar: the feed's kinds of line, then the fleet's
-  # rooms, its polls and, for a holder, their direct messages.
+  # rooms and, for a member, its polls and their direct messages. A room
+  # opens in the middle of the hall, marked open here, and the rooms the
+  # reader has not seen the latest of are marked. A kind of line picked while
+  # a room is open closes it.
   defp channels(assigns) do
-    assigns = assign(assigns, :shown, @shown)
+    assigns =
+      assign(assigns,
+        shown: @shown,
+        rooms: rooms_listed(assigns.fleet, assigns.room),
+        open: open_room(assigns.room)
+      )
 
     ~H"""
     <nav id="fleet-channels" class="fleet-channels" aria-label="Channels">
@@ -771,7 +840,11 @@ defmodule KeyfleetWeb.FleetLive do
             class="fleet-channel"
             data-show-channel={channel}
             aria-pressed={to_string(channel == :all)}
-            phx-click={show(channel)}
+            phx-click={
+              if @room,
+                do: show(JS.patch(KeyLinks.hall_path(@fleet.fleet_id)), channel),
+                else: show(channel)
+            }
           >
             {label}
           </button>
@@ -780,16 +853,26 @@ defmodule KeyfleetWeb.FleetLive do
 
       <h2 class="fleet-channels__title">Rooms</h2>
       <ul class="fleet-channels__group">
-        <li :for={room <- @fleet.rooms}>
+        <li :for={room <- @rooms}>
           <.link
+            id={"fleet-room-#{room.slug}"}
             class="fleet-channel"
-            patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/rooms/#{room.slug}"}
+            patch={KeyLinks.room_path(@fleet.fleet_id, room.slug)}
+            aria-current={if room.slug == @open, do: "page"}
           >
             {RoomsLive.room_label(room)}
+            <span
+              :if={is_map(@room) and RoomsLive.unread?(@room, room)}
+              class="fleet-channel__unread"
+              aria-hidden="true"
+            ></span>
+            <span :if={is_map(@room) and RoomsLive.unread?(@room, room)} class="visually-hidden">
+              New posts
+            </span>
           </.link>
         </li>
-        <li :if={@fleet.rooms == []} class="fleet-channels__empty">No rooms yet.</li>
-        <li>
+        <li :if={@rooms == []} class="fleet-channels__empty">No rooms yet.</li>
+        <li :if={@fleet.polls?}>
           <.link
             id="fleet-polls-link"
             class="fleet-channel"
@@ -804,7 +887,7 @@ defmodule KeyfleetWeb.FleetLive do
             class="fleet-channel"
             patch={KeyLinks.dms_path(@fleet.fleet_id, @fleet.held.first)}
           >
-            Direct messages
+            Messages
           </.link>
         </li>
       </ul>
@@ -812,72 +895,65 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  # The rooms listed down the hall's left: as the open room last read them,
+  # which keeps how far each has got, or as the fleet was read.
+  defp rooms_listed(_fleet, %{rooms: [_ | _] = rooms}), do: rooms
+  defp rooms_listed(fleet, _room), do: fleet.rooms
+
+  defp open_room(%{slug: slug}), do: slug
+  defp open_room(_room), do: nil
+
   # Narrows the feed to one kind of line and marks its channel pressed. Both
   # stay as the reader left them while the page updates.
-  defp show(channel) do
-    %JS{}
+  defp show(js \\ %JS{}, channel) do
+    js
     |> JS.set_attribute({"data-show", to_string(channel)}, to: "#fleet-feed")
     |> JS.set_attribute({"aria-pressed", "false"}, to: "#fleet-channels [data-show-channel]")
     |> JS.set_attribute({"aria-pressed", "true"}, to: "#fleet-show-#{channel}")
   end
 
-  attr :trying, :map, required: true, doc: "as `KeyfleetWeb.ActivityLines.trying_now/2` gives it"
+  attr :work, :list,
+    required: true,
+    doc: "as `KeyfleetWeb.FleetPage.read_recent_work/1` gives it"
+
   attr :fleet_id, :string, required: true
-  attr :params, :map, required: true
 
-  # What the fleet's agents are working toward now: its open goals, how much
-  # work is open, and the question the newest goal most needs answered.
-  defp trying_now(assigns) do
+  # What the fleet's agents are working toward now: each project by its
+  # title, with the titles of its open goals.
+  defp recent_work(assigns) do
+    assigns = assign(assigns, :goals?, Enum.any?(assigns.work, &(&1.goals != [])))
+
     ~H"""
-    <section id="fleet-trying" class="trying-now" aria-labelledby="fleet-trying-title">
-      <h2 id="fleet-trying-title">Trying now</h2>
-      <p :if={@trying.goals == []} id="fleet-trying-empty" class="fleet-detail">
-        No goals yet. Agents here set goals in the workspace; they show up here.
-      </p>
-      <ul :if={@trying.goals != []} id="fleet-trying-goals" class="trying-now__list">
-        <li :for={goal <- @trying.goals} class="trying-goal" data-goal={goal.id}>
-          <p class="trying-goal__title">
-            <.trying_item part={goal.goal} fleet_id={@fleet_id} />
-          </p>
-        </li>
-      </ul>
-      <p
-        :if={@trying.counts}
-        id="fleet-trying-counts"
-        class="trying-now__detail"
+    <section id="fleet-recent-work" class="recent-work" aria-labelledby="fleet-recent-work-title">
+      <h2 id="fleet-recent-work-title">Recent Work</h2>
+      <Regent.Primitives.empty_state
+        :if={not @goals?}
+        id="fleet-recent-work-empty"
+        class="kf-empty"
+        title="No goals in progress."
       >
-        {@trying.counts}
-      </p>
-      <p :if={@trying.question} id="fleet-trying-question">
-        <.activity_part
-          :for={part <- @trying.question}
-          part={part}
-          fleet_id={@fleet_id}
-          params={@params}
-        />
-      </p>
+        Agents join a goal in the workspace; the ones they work on show up here.
+      </Regent.Primitives.empty_state>
+      <div
+        :for={{project, i} <- Enum.with_index(@work)}
+        :if={@goals?}
+        id={"fleet-recent-work-project-#{i}"}
+        class="recent-project"
+      >
+        <h3>{project.title}</h3>
+        <ul :if={project.goals != []} class="recent-work__list">
+          <li :for={goal <- project.goals} class="recent-goal">
+            <p class="recent-goal__title">{goal}</p>
+          </li>
+        </ul>
+      </div>
 
-      <.link id="fleet-trying-workspace" patch={"#{Keyfleet.Fleets.path(@fleet_id)}/workspace"}>
+      <.link id="fleet-recent-work-workspace" patch={"#{Keyfleet.Fleets.path(@fleet_id)}/workspace"}>
         Open the workspace
       </.link>
     </section>
     """
   end
-
-  attr :part, :any,
-    required: true,
-    doc: "a goal as `KeyfleetWeb.ActivityLines.trying_now/1` gives it"
-
-  attr :fleet_id, :string, required: true
-
-  # A goal by its title, opening its own page.
-  defp trying_item(%{part: {:item, id, title}} = assigns) do
-    assigns = assign(assigns, id: id, title: title)
-
-    ~H|<.link patch={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>|
-  end
-
-  defp trying_item(assigns), do: ~H"{@part}"
 
   # Each channel's tag on its lines in the feed.
   @tags %{chat: "Chat", work: "Work", keys: "Keys", votes: "Votes"}
@@ -911,15 +987,31 @@ defmodule KeyfleetWeb.FleetLive do
       data-channel={@channel}
       data-tone={@tone}
     >
-      <time
+      <Time.local
+        id={"#{@id}-at"}
         class="activity-line__time"
-        datetime={DateTime.to_iso8601(@item.at)}
-        title={Time.moment(@item.at, DateTime.utc_now())}
-      >{Time.clock(@item.at, DateTime.utc_now())}</time>
+        at={@item.at}
+        as={:clock}
+        title_as={:moment}
+      />
       <span class="activity-line__tag">{@tag}</span>
-      <p class="activity-line__text">
+      <p :if={@item.kind == :votes} class="activity-line__text activity-line__votes">
         <.activity_part
-          :for={part <- @parts}
+          id={"#{@id}-proposal"}
+          part={{:proposal, @item.facts.number}}
+          fleet_id={@fleet.fleet_id}
+          params={@params}
+        />
+        <.vote_tally
+          yes={@item.facts.totals.yes}
+          no={@item.facts.totals.no}
+          abstain={@item.facts.totals.abstain}
+        />
+      </p>
+      <p :if={@item.kind != :votes} class="activity-line__text">
+        <.activity_part
+          :for={{part, i} <- Enum.with_index(@parts)}
+          id={"#{@id}-#{i}"}
           part={part}
           fleet_id={@fleet.fleet_id}
           params={@params}
@@ -932,12 +1024,14 @@ defmodule KeyfleetWeb.FleetLive do
   defp tone(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "disagreement"
   defp tone(_item), do: nil
 
+  attr :id, :string, required: true
   attr :part, :any, required: true
   attr :fleet_id, :string, required: true
   attr :params, :map, required: true
 
   # A key opens its profile over this page, in one of four colours so each
-  # Key's lines are easy to follow; an item or a room opens its own page.
+  # Key's lines are easy to follow; an item or a room opens its own page, and
+  # a wallet shows as every address does.
   # Everything a member wrote is text, never markup.
   defp activity_part(%{part: {:key, token_id, agent}} = assigns) do
     assigns = assign(assigns, token_id: token_id, agent: agent)
@@ -960,7 +1054,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:room, slug, name}} = assigns) do
     assigns = assign(assigns, slug: slug, name: name)
 
-    ~H|<.link patch={"#{Keyfleet.Fleets.path(@fleet_id)}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
+    ~H|<.link patch={KeyLinks.room_path(@fleet_id, @slug)} data-room={@slug}>{@name}</.link>|
   end
 
   defp activity_part(%{part: {:agent, name}} = assigns) do
@@ -968,8 +1062,13 @@ defmodule KeyfleetWeb.FleetLive do
     ~H|<span class="activity-line__agent">{@name}</span>|
   end
 
+  defp activity_part(%{part: {:address, wallet}} = assigns) do
+    assigns = assign(assigns, :wallet, wallet)
+    ~H|<Regent.Primitives.address id={@id} address={@wallet} />|
+  end
+
   defp activity_part(%{part: {:quote, text}} = assigns) do
-    assigns = assign(assigns, :text, text)
+    assigns = assign(assigns, :text, ActivityLines.plain(text))
     ~H|<q class="activity-line__quote">{@text}</q>|
   end
 
@@ -982,40 +1081,6 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   defp activity_part(assigns), do: ~H"{@part}"
-
-  attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-  attr :buying, :boolean, required: true, doc: "whether the page opens with \"Get a Key\" pressed"
-
-  # Opens over the hall, the map or the list of Keys on a fleet with a Key to
-  # buy: the Key on offer with its Buy button, then the fleet's pricing.
-  defp get_a_key(assigns) do
-    ~H"""
-    <aside
-      id="fleet-about"
-      class="fleet-about"
-      aria-labelledby="fleet-about-title"
-      hidden={not @buying}
-    >
-      <div class="fleet-about__heading">
-        <h2 id="fleet-about-title" tabindex="-1">Get a Key</h2>
-        <Regent.Primitives.button
-          id="fleet-about-close"
-          class="fleet-about__close"
-          variant="secondary"
-          phx-click={close("#fleet-about", "#fleet-get-key")}
-        >
-          Close
-        </Regent.Primitives.button>
-      </div>
-
-      <.buy_key fleet={@fleet} actor={@actor} lease={@lease} />
-
-      <p>{Rules.pricing(@fleet.fleet_id)}</p>
-    </aside>
-    """
-  end
 
   attr :fleet, :map, required: true
 
@@ -1039,23 +1104,23 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet_id, :string, required: true
   attr :view, :atom, required: true, values: [:map, :members]
 
-  # The Keys tab shows who holds which Key, as the grid or as a list.
+  # The Keys tab shows who holds which Key, as a list (where it opens) or as the grid.
   defp keys_switch(assigns) do
     ~H"""
     <nav id={"fleet-keys-#{@view}"} class="fleet-keys-switch" aria-label="Show Keys as">
-      <.link
-        id={"fleet-keys-#{@view}-grid"}
-        patch={KeyLinks.map_path(@fleet_id)}
-        aria-current={if @view == :map, do: "page"}
-      >
-        Grid
-      </.link>
       <.link
         id={"fleet-keys-#{@view}-list"}
         patch={KeyLinks.members_path(@fleet_id)}
         aria-current={if @view == :members, do: "page"}
       >
         List
+      </.link>
+      <.link
+        id={"fleet-keys-#{@view}-grid"}
+        patch={KeyLinks.map_path(@fleet_id)}
+        aria-current={if @view == :map, do: "page"}
+      >
+        Grid
       </.link>
     </nav>
     """
@@ -1066,7 +1131,7 @@ defmodule KeyfleetWeb.FleetLive do
   # The controls only move the map, so they never wait on the page; a search
   # asks the page which Keys to mark, and the map writes what was found. The map
   # draws itself once its script loads; until then it says so, and the list
-  # of keys below still has every key. While "Get a Key" is open, the Key on
+  # of keys below still has every key. While "Buy Key" is open, the Key on
   # offer stands out on the map and the note under it names that Key.
   defp key_map(assigns) do
     assigns = assign(assigns, :map, "#key-map-#{assigns.fleet.fleet_id}")
@@ -1141,7 +1206,7 @@ defmodule KeyfleetWeb.FleetLive do
         aria-label="Key map"
         aria-describedby="key-map-help"
       >
-        <p class="key-map__still">Loading the map…</p>
+        <Placeholder.placeholder label="Loading the map" shape="area" role={nil} />
       </div>
 
       <div class="fleet-map-notes">
@@ -1150,9 +1215,6 @@ defmodule KeyfleetWeb.FleetLive do
           also under List.
         </Regent.Primitives.tip>
         <p id="key-map-selected" role="status">
-          <span :if={@fleet.buy && @fleet.buy.price} class="key-map-selected__offer">
-            Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}
-          </span>
           <span class="key-map-selected__chosen">
             {if @fleet.chosen_key,
               do: "Key #{grouped(@fleet.chosen_key)} chosen.",
@@ -1172,173 +1234,13 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-
-  # The top of the panel: the Key on offer and its price, with Approve and Buy
-  # straight under it, then what a buyer should know. The heading and the lines
-  # under the buttons read the same figures as the buttons, so all of them name
-  # the Key and price a press sends.
-  defp buy_key(assigns) do
-    ~H"""
-    <section id="buy-key" aria-labelledby="buy-key-title">
-      <.buy_order id="buy-key" fleet={@fleet} actor={@actor} lease={@lease}>
-        <:heading :let={panel}>
-          <h3 id="buy-key-title" class="fleet-buy-title" tabindex="-1">
-            <span id="buy-key-offer" class="fleet-buy-offer" hidden={!on_sale(panel, :price)}>
-              Key
-              <span
-                id="buy-key-number"
-                phx-hook="MotionCount"
-                data-variant={Motion.standard("count")}
-              >
-                <span data-count>
-                  {on_sale(panel, :token_id) && grouped(on_sale(panel, :token_id))}
-                </span>
-              </span>
-              ·
-              <span id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
-                <span data-count>{on_sale(panel, :price) && usdc(on_sale(panel, :price))}</span>
-              </span>
-              <span :if={level(@fleet, panel)} id="buy-key-level">
-                · Level {level(@fleet, panel)}
-              </span>
-            </span>
-            <span :if={!on_sale(panel, :price)}>Buying a Key</span>
-            <Regent.Primitives.tip :if={on_sale(panel, :price)} id="buy-key-tip" label="About paying">
-              Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
-              much USDC, press Approve first: it approves exactly {usdc(on_sale(panel, :price))}.
-            </Regent.Primitives.tip>
-          </h3>
-        </:heading>
-        <:details :let={panel}>
-          <FleetRisks.disclosure :if={buy_blocked(panel) != :sold_out} id="buy-key-risks" />
-
-          <p :if={buy_blocked(panel) == :sold_out} id="buy-key-elsewhere" class="fleet-detail">
-            You can still get a Key from someone who holds one: it moves like any other token on
-            Base.
-          </p>
-        </:details>
-      </.buy_order>
-    </section>
-    """
-  end
-
-  # The level the Key on sale opens, on a fleet whose Keys come in levels.
-  defp level(fleet, panel) do
-    token_id = on_sale(panel, :token_id)
-    if token_id && Presets.levelled?(fleet.fleet_id), do: Presets.fibonacci_level_of(token_id)
-  end
-
-  attr :id, :string, required: true, doc: "names the group and prefixes its buttons' ids"
-
-  attr :fleet, :map,
-    required: true,
-    doc: "the fleet, with its `progress`: a new sale reads the chain"
-
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-  slot :heading, doc: "above the buttons, given the panel's state"
-  slot :details, doc: "under the buttons and what was sent, given the panel's state"
-
-  @doc """
-  Approve and Buy for the Key on sale, with the steps built on the server, in
-  "Buying a Key" and in the window of the Key on sale.
-
-  The Key's number, its price and whether the fleet is sold out come from
-  the figures the steps were built from, read from the chain at the latest
-  block, so the buttons and the line above them always name what a press
-  sends. Every press of Buy goes to the wallet, pending purchases or not.
-  The exceptions are presses the chain's own state makes certain to fail: a
-  sold-out fleet, sales not open yet, or an approval not made yet. Buy then
-  stays in view but can't be pressed, with why beside it. Approve shows when
-  the wallet's USDC allowance to the fleet is below the price. The buttons
-  stay in the page when the fleet sells out, so the buyer keeps the outcome
-  of every purchase they sent.
-  """
-  def buy_order(assigns) do
-    ~H"""
-    <.live_component
-      module={WalletPanel}
-      id={"#{@id}-order"}
-      class="fleet-buy-order"
-      flow={:buy}
-      fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
-      actor={@actor}
-      lease={@lease}
-      refresh={@fleet.progress.total_minted}
-      heading={@heading}
-      details={@details}
-    >
-      <:buttons :let={panel}>
-        <%!-- Only the network fee ever holds Approve back, and it holds Buy
-        back with it, so the one note beside Buy says why for both. --%>
-        <Regent.Primitives.button
-          id={"#{@id}-approve"}
-          data-onchain-step="approve"
-          hidden={not approve_shown?(panel)}
-          disabled={WalletPanel.blocked(panel, "approve") != nil}
-          aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
-        >
-          <span class="fleet-step-mark" aria-hidden="true">1</span>
-          <span data-press-label>Approve {on_sale(panel, :price) && usdc(on_sale(panel, :price))}</span>
-        </Regent.Primitives.button>
-        <Regent.Primitives.button
-          id={"#{@id}-button"}
-          data-onchain-step="buy"
-          disabled={buy_blocked(panel) != nil}
-          aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
-        >
-          <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
-          <span data-press-label>
-            Buy Key {on_sale(panel, :token_id) && grouped(on_sale(panel, :token_id))}
-          </span>
-        </Regent.Primitives.button>
-        <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
-          {WalletWords.blocked(buy_blocked(panel))}
-        </span>
-      </:buttons>
-    </.live_component>
-    """
-  end
-
-  # Why Buy is certain to fail now, as the chain read at the latest block
-  # says, or nil.
-  defp buy_blocked(%{built: %{problem: :sold_out}}), do: :sold_out
-  defp buy_blocked(panel), do: WalletPanel.blocked(panel, "buy")
-
-  # The Key on sale's number or price, as the steps were built from them.
-  defp on_sale(panel, figure), do: panel |> WalletPanel.figures() |> Map.get(figure)
-
-  # Approve shows while the wallet the figures are for needs an approval.
-  defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true
-  defp approve_shown?(_panel), do: false
-
   @doc "Atomic USDC shown exactly, since it is what a purchase pays."
-  def usdc(atoms) do
-    fraction =
-      atoms
-      |> rem(1_000_000)
-      |> Integer.to_string()
-      |> String.pad_leading(6, "0")
-      |> String.trim_trailing("0")
-
-    case fraction do
-      "" -> "#{grouped(div(atoms, 1_000_000))} USDC"
-      fraction -> "#{grouped(div(atoms, 1_000_000))}.#{fraction} USDC"
-    end
-  end
+  def usdc(atoms), do: "#{ProposalsPage.units(atoms, 6)} USDC"
 
   @doc "What the fleet's page does with the events it sends."
-  def handle_event("open_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, true)}
-
-  def handle_event("close_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, false)}
-
   # "Show earlier" adds the next page of the hall's feed below the ones
-  # shown, up to five pages.
+  # shown, up to five pages. A run of transfers the two pages share reads as
+  # one line: the lowest line on show gives way to it.
   def handle_event(
         "activity_earlier",
         _params,
@@ -1346,7 +1248,17 @@ defmodule KeyfleetWeb.FleetLive do
       )
       when cursor != nil and pages < @activity_pages do
     %{items: items, cursor: next} =
-      Activity.page(activity.fleet_id, cursor, actor: ShellLive.human_actor(socket))
+      Activity.page(activity.fleet_id, cursor, ShellLive.reads_as(socket, activity.fleet_id))
+
+    {socket, ids, lines} =
+      case FeedLines.join(activity.last, read_lines(activity.fleet_id, items)) do
+        {:joined, lines} ->
+          {stream_delete_by_dom_id(socket, :activity, activity_dom_id(activity.last)),
+           MapSet.delete(activity.ids, activity.last.id), lines}
+
+        {:apart, lines} ->
+          {socket, activity.ids, lines}
+      end
 
     {:noreply,
      socket
@@ -1354,9 +1266,10 @@ defmodule KeyfleetWeb.FleetLive do
        activity
        | cursor: next,
          pages: pages + 1,
-         ids: MapSet.union(activity.ids, MapSet.new(items, & &1.id))
+         ids: MapSet.union(ids, MapSet.new(lines, & &1.id)),
+         last: List.last(lines)
      })
-     |> stream(:activity, items)}
+     |> stream(:activity, lines)}
   end
 
   def handle_event("activity_earlier", _params, socket), do: {:noreply, socket}
@@ -1387,9 +1300,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   def handle_event(
         "validate_quote",
-        %{"quote" => params},
+        %{"quote" => %{"body" => body} = params},
         %{assigns: %{quotes: %{form: %{}}}} = socket
-      ),
+      )
+      when is_binary(body),
       do:
         {:noreply,
          update(socket, :quotes, &%{&1 | form: AshPhoenix.Form.validate(&1.form, params)})}
@@ -1399,14 +1313,19 @@ defmodule KeyfleetWeb.FleetLive do
   # The words go to the person's agent, which decides where to quote them.
   def handle_event(
         "send_quote",
-        %{"quote" => params},
+        %{"quote" => %{"body" => body} = params},
         %{assigns: %{quotes: %{form: %{}}}} = socket
-      ) do
+      )
+      when is_binary(body) do
     %{fleet: %{fleet_id: fleet_id}, quotes: quotes} = socket.assigns
 
+    actor = ShellLive.human_actor(socket)
+
     case AshPhoenix.Form.submit(quotes.form, params: params) do
+      # Sent words are never offered to send again: the box empties and says
+      # so even when the requests can't be read again.
       {:ok, _request} ->
-        {:noreply, read_quotes(socket, fleet_id, ShellLive.human_actor(socket), "Sent")}
+        {:noreply, sent_quotes(socket, fleet_id, actor)}
 
       {:error, form} ->
         {:noreply, assign(socket, :quotes, %{quotes | form: form, note: quote_refusal(form)})}
@@ -1429,13 +1348,18 @@ defmodule KeyfleetWeb.FleetLive do
 
   def handle_event("keymap_ready", _params, socket), do: {:noreply, socket}
 
-  # The map asks for the close-ups of the keys it has in view.
+  # The map asks for the close-ups of the keys it has in view, and goes
+  # without them when they can't be read.
   def handle_event(
         "keymap_pictures",
         %{"keys" => token_ids},
         %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
-      ),
-      do: {:reply, KeyMap.pictures(fleet.deck, fleet.progress, token_ids), socket}
+      ) do
+    case PageRead.run("map", fn -> KeyMap.pictures(fleet.deck, fleet.progress, token_ids) end) do
+      {:ok, pictures} -> {:reply, pictures, socket}
+      {:error, _failure} -> {:reply, %{pictures: []}, socket}
+    end
+  end
 
   def handle_event("keymap_pictures", _params, socket), do: {:noreply, socket}
 
@@ -1472,8 +1396,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   # Why the words sent to the person's agent were not sent.
   defp quote_refusal(form) do
+    errors = form.source.source.errors
+
     case Enum.find(
-           form.source.source.errors,
+           errors,
            &(is_struct(&1, NoPairedAgentError) or is_struct(&1, QuoteLimitError))
          ) do
       %NoPairedAgentError{} ->
@@ -1483,7 +1409,9 @@ defmodule KeyfleetWeb.FleetLive do
         "You've sent #{limit} in the last hour. Try again in #{RoomsLive.minutes(seconds)}."
 
       nil ->
-        "Write up to 1,000 characters"
+        if Enum.any?(errors, &match?(%{field: :body}, &1)),
+          do: "Write up to 1,000 characters",
+          else: "That didn’t go through. Try again."
     end
   end
 
@@ -1498,17 +1426,22 @@ defmodule KeyfleetWeb.FleetLive do
   defp pass_note(_pass), do: "Enter a Pass number"
 
   @doc """
-  The hall's feed is read again from the top, as many pages as are
+  A member's hall reads its feed again from the top, as many pages as are
   shown, once for the burst of notices about the fleet on show that asked
-  for it. A wait begun for a fleet the page has since left reads nothing.
+  for it. A wait begun for a fleet the page has since left reads nothing. A
+  read again that fails keeps what the hall shows; the next notice reads again.
   """
   def handle_info(
         {:refresh_activity, fleet_id},
         %{assigns: %{activity: %{fleet_id: fleet_id}}} = socket
-      ),
-      do:
-        {:noreply,
-         socket |> assign(:activity_refresh, nil) |> reread_activity() |> reread_quotes()}
+      ) do
+    socket = assign(socket, :activity_refresh, nil)
+
+    case PageRead.run("fleet", fn -> socket |> reread_activity(nil) |> reread_quotes() end) do
+      {:ok, reread} -> {:noreply, reread}
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
 
   def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
 
@@ -1533,31 +1466,72 @@ defmodule KeyfleetWeb.FleetLive do
         show_without_keys(socket, %{fleet_id: fleet_id, name: nil}, params, place)
 
       Fleets.coming_soon?(fleet_id, fleet) ->
-        show_without_keys(
-          socket,
-          %{
-            fleet_id: fleet_id,
-            name: fleet.name,
-            coming_soon?: true,
-            layout: Presets.preset(fleet_id)
-          },
-          params,
-          place
-        )
+        show_without_keys(socket, soon(fleet_id, fleet), params, place)
 
       true ->
-        show_with_keys(socket, fleet_id, fleet, params, place, actor)
+        show_with_keys(socket, fleet, params, place, actor)
     end
   end
 
+  defp soon(fleet_id, fleet),
+    do: %{
+      fleet_id: fleet_id,
+      name: fleet.name,
+      coming_soon?: true,
+      layout: Presets.preset(fleet_id),
+      facts: soon_facts(fleet_id)
+    }
+
+  # What a coming-soon fleet will sell: how many Keys, when it has a limit, and
+  # the price of its first Key, or for Classic, whose 1,024 prices are a fixed
+  # table, of its first and last.
+  defp soon_facts(fleet_id) do
+    supply = Presets.max_supply(fleet_id)
+    first = Presets.issue_price(fleet_id, 1)
+
+    price =
+      cond do
+        first == nil ->
+          nil
+
+        Presets.preset(fleet_id) == :classic ->
+          last = Presets.issue_price(fleet_id, supply)
+          String.trim_trailing(usdc(first), " USDC") <> "–" <> usdc(last)
+
+        true ->
+          "From #{usdc(first)}"
+      end
+
+    Enum.reject([{"Keys", supply && grouped(supply)}, {"Price", price}], &(elem(&1, 1) == nil))
+  end
+
   # Any other fleet: its figures and what's happening in it. Its Member List
-  # reads its own page of holders.
-  defp show_with_keys(socket, fleet_id, fleet, params, place, actor) do
-    deployed? = fleet.manager_address != nil
-    current? = deployed? and Chain.fresh?(fleet_id)
-    progress = if deployed?, do: Chain.progress(fleet_id)
+  # reads its own page of holders. The readings it shows are named by the
+  # fleet's own record, never by the address, and heard before they are
+  # fetched, so one that lands in between still reaches the page. A hall
+  # whose reading isn't there yet says the fleet couldn't be read, and one
+  # whose reading still has the fleet coming soon shows it so; neither is
+  # read for the page instead.
+  defp show_with_keys(socket, %{id: fleet_id} = fleet, params, place, actor) do
     shown = view(socket.assigns.fleet_place, socket.assigns.fleet_params || %{})
-    feed = feed_on_return(shown, view(place, params))
+    wanted = view(place, params)
+    socket = follow_shared(socket, fleet_id, wanted)
+
+    case figures(socket, fleet_id, fleet, wanted) do
+      :coming_soon ->
+        show_without_keys(socket, soon(fleet_id, fleet), params, place)
+
+      :unread ->
+        show_without_keys(socket, :unreadable, params, place)
+
+      figures ->
+        feed = feed_on_return(shown, wanted)
+        show_open(socket, fleet, figures, params, place, feed, actor)
+    end
+  end
+
+  defp show_open(socket, %{id: fleet_id} = fleet, figures, params, place, feed, actor) do
+    %{deployed?: deployed?, current?: current?, progress: progress, now: now} = figures
 
     socket
     |> assign(:fleet, %{
@@ -1572,7 +1546,8 @@ defmodule KeyfleetWeb.FleetLive do
       current?: current?,
       progress: progress,
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress)),
-      rooms: Rooms.list_rooms!(fleet_id, actor: actor),
+      rooms: Rooms.list_rooms!(fleet_id, ShellLive.reads_as(socket, fleet_id)),
+      polls?: ShellLive.may_read?(socket, fleet_id, :polls),
       layout: Presets.preset(fleet_id),
       chosen_key: if(deployed?, do: FleetPage.chosen_key(progress, params["key"])),
       levels: if(deployed?, do: KeyMap.levels(progress), else: []),
@@ -1580,19 +1555,83 @@ defmodule KeyfleetWeb.FleetLive do
       given?: Presets.given?(fleet_id),
       deck: Map.take(fleet, [:id, :deck_hash, :deck_size]),
       club_claims: fleet.club_claims_address,
-      held: FleetPage.held(fleet, actor)
+      held: FleetPage.held(fleet, actor),
+      open_proposals: FleetProposals.open(fleet_id)
     })
     |> assign(fleet_params: params, fleet_place: place, pass_note: nil)
-    |> follow_agents(fleet_id)
-    |> follow_feed(fleet_id, place, feed)
+    |> show_agents()
+    |> follow_feed(fleet_id, place, feed, now)
     |> read_quotes(fleet_id, actor)
   end
 
-  # The feed is read while the fleet's own views are on show. The Treasury
-  # and the Workspace leave it, and coming back to the hall reads it afresh.
-  defp follow_feed(socket, fleet_id, :fleet, feed), do: read_activity(socket, fleet_id, feed)
+  # How far the fleet has sold, and with it, for a hall drawn from the
+  # fleet's reading, that reading (`now`): the feed's first page and "Trying
+  # now" come from it too. Any other page reads the sales itself.
+  defp figures(socket, fleet_id, fleet, view) do
+    if from_reading?(socket, fleet_id, view) do
+      case FleetNow.fetch(fleet_id) do
+        {%{coming_soon?: false} = reading, _degraded?} ->
+          fleet_id |> sales(reading) |> Map.put(:now, reading)
 
-  defp follow_feed(socket, _fleet_id, _place, _feed) do
+        {%{coming_soon?: true}, _degraded?} ->
+          :coming_soon
+
+        nil ->
+          :unread
+      end
+    else
+      deployed? = fleet.manager_address != nil
+
+      %{
+        deployed?: deployed?,
+        current?: deployed? and Chain.fresh?(fleet_id),
+        progress: if(deployed?, do: Chain.progress(fleet_id)),
+        now: nil
+      }
+    end
+  end
+
+  # The sales a reading holds, as `Keyfleet.Chain.progress/1` gives them.
+  defp sales(fleet_id, %{deployed?: deployed?, current?: current?, minted: minted}),
+    do: %{
+      deployed?: deployed?,
+      current?: current?,
+      progress: if(deployed?, do: Presets.progress(fleet_id, minted))
+    }
+
+  @doc """
+  Whether the page on show is a hall drawn from the fleet's reading every
+  such page shares (`KeyfleetWeb.FleetNow`): the hall's own view, shown to a
+  reader who isn't a member. Its sales, feed and "Recent Work" are never read
+  for the page itself; only what is the reader's own is.
+  """
+  def from_reading?(
+        %{assigns: %{fleet: %{fleet_id: fleet_id}, fleet_place: place, fleet_params: params}} =
+          socket
+      ),
+      do: from_reading?(socket, fleet_id, view(place, params))
+
+  def from_reading?(_socket), do: false
+
+  defp from_reading?(socket, fleet_id, view),
+    do: view == :hall and not ShellLive.member?(socket, fleet_id)
+
+  # The feed is held while the fleet's own views are on show: a member's
+  # read for them, anyone else's drawn from the reading on the hall alone,
+  # the one view of it they see. The Treasury and the Workspace leave it,
+  # and coming back to the hall draws it afresh.
+  defp follow_feed(socket, fleet_id, :fleet, feed, %{} = now),
+    do: read_activity(socket, fleet_id, feed, now)
+
+  defp follow_feed(socket, fleet_id, :fleet, feed, nil) do
+    if ShellLive.member?(socket, fleet_id),
+      do: read_activity(socket, fleet_id, feed, nil),
+      else: leave_feed(socket)
+  end
+
+  defp follow_feed(socket, _fleet_id, _place, _feed, _now), do: leave_feed(socket)
+
+  defp leave_feed(socket) do
     socket
     |> assign(activity: nil, activity_refresh: nil)
     |> stream(:activity, [], reset: true)
@@ -1614,21 +1653,34 @@ defmodule KeyfleetWeb.FleetLive do
   def read_quotes(socket, _fleet_id, nil, _note), do: assign(socket, :quotes, nil)
 
   def read_quotes(socket, fleet_id, actor, note) do
-    form =
-      AshPhoenix.Form.for_create(QuoteRequest, :ask,
-        actor: actor,
-        as: "quote",
-        transform_params: fn params, _action ->
-          params |> Map.take(["body"]) |> Map.put("fleet_id", fleet_id)
-        end
-      )
-
     assign(socket, :quotes, %{
       paired?: Agents.has_paired_agent?(actor),
-      form: to_form(form),
+      form: quote_form(fleet_id, actor),
       requests: Rooms.my_quote_requests!(fleet_id, actor: actor),
       note: note
     })
+  end
+
+  defp sent_quotes(socket, fleet_id, actor) do
+    case PageRead.run("fleet", fn -> read_quotes(socket, fleet_id, actor, "Sent") end) do
+      {:ok, read} ->
+        read
+
+      {:error, _failure} ->
+        update(socket, :quotes, &%{&1 | form: quote_form(fleet_id, actor), note: "Sent"})
+    end
+  end
+
+  defp quote_form(fleet_id, actor) do
+    QuoteRequest
+    |> AshPhoenix.Form.for_create(:ask,
+      actor: actor,
+      as: "quote",
+      transform_params: fn params, _action ->
+        params |> Map.take(["body"]) |> Map.put("fleet_id", fleet_id)
+      end
+    )
+    |> to_form()
   end
 
   # A post quoting the person is a new line in a room, so their requests are
@@ -1643,6 +1695,15 @@ defmodule KeyfleetWeb.FleetLive do
          })
 
   defp reread_quotes(socket), do: socket
+
+  # A hall drawn from the fleet's reading reads the person's requests again
+  # with it only while one of them is still waiting for their agent, so a
+  # new reading costs everyone else nothing.
+  defp reread_waiting_quotes(%{assigns: %{quotes: %{requests: requests}}} = socket) do
+    if Enum.any?(requests, &is_nil(&1.quoted_in_slug)), do: reread_quotes(socket), else: socket
+  end
+
+  defp reread_waiting_quotes(socket), do: socket
 
   # A fleet there is not, or one coming soon: its name at most, and no keys
   # or activity to read.
@@ -1662,21 +1723,35 @@ defmodule KeyfleetWeb.FleetLive do
     |> stream(:activity, [], reset: true)
   end
 
-  # The hall's feed: the fleet's activity, newest first. A page moving
-  # within the same fleet keeps the pages it shows, read again when the hall
-  # comes back into view; another fleet starts from its first page. The
-  # cursor for the next page stays here, on the server.
-  defp read_activity(%{assigns: %{activity: %{fleet_id: fleet_id}}} = socket, fleet_id, :kept),
-    do: socket
+  # The hall's feed: the fleet's activity, newest first, read for the
+  # reader or drawn from the fleet's reading (`now`). A page moving within
+  # the same fleet keeps the pages it shows, drawn again when the hall comes
+  # back into view; another fleet, or a reader who now sees the feed another
+  # way, starts from its first page. The cursor for the next page stays
+  # here, on the server.
+  defp read_activity(
+         %{assigns: %{activity: %{fleet_id: fleet_id, reading?: reading?}}} = socket,
+         fleet_id,
+         :kept,
+         now
+       )
+       when reading? == is_map(now),
+       do: socket
 
-  defp read_activity(%{assigns: %{activity: %{fleet_id: fleet_id}}} = socket, fleet_id, :redrawn),
-    do: reread_activity(socket)
+  defp read_activity(
+         %{assigns: %{activity: %{fleet_id: fleet_id, reading?: reading?}}} = socket,
+         fleet_id,
+         :redrawn,
+         now
+       )
+       when reading? == is_map(now),
+       do: reread_activity(socket, now)
 
-  defp read_activity(socket, fleet_id, _feed) do
+  defp read_activity(socket, fleet_id, _feed, now) do
     {items, socket} =
       socket
       |> assign(activity: %{fleet_id: fleet_id, pages: 1}, activity_refresh: nil)
-      |> read_activity_pages()
+      |> activity_pages(now)
 
     stream(socket, :activity, items, reset: true)
   end
@@ -1684,9 +1759,9 @@ defmodule KeyfleetWeb.FleetLive do
   # Lines already on the page stay where they are drawn: the gone ones leave
   # and the new ones go in at their place, so the list's motion moves only
   # what changed. A reset would empty the list before its motion records it.
-  defp reread_activity(%{assigns: %{activity: %{ids: shown}}} = socket) do
-    {items, socket} = read_activity_pages(socket)
-    kept = MapSet.new(items, & &1.id)
+  defp reread_activity(%{assigns: %{activity: %{ids: shown}}} = socket, now) do
+    {items, socket} = activity_pages(socket, now)
+    kept = socket.assigns.activity.ids
 
     socket =
       shown
@@ -1702,31 +1777,85 @@ defmodule KeyfleetWeb.FleetLive do
     end)
   end
 
-  defp read_activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket) do
+  # A member's feed: as many pages as are shown, read again from the top as
+  # they read them, with "Recent Work".
+  defp activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket, nil) do
     {items, cursor, read} =
-      FleetPage.activity_pages(fleet_id, pages, ShellLive.human_actor(socket))
+      FleetPage.activity_pages(fleet_id, pages, ShellLive.reads_as(socket, fleet_id))
 
-    {items,
+    lines = read_lines(fleet_id, items)
+
+    {lines,
      assign(socket, :activity, %{
        fleet_id: fleet_id,
        cursor: cursor,
        pages: read,
-       ids: MapSet.new(items, & &1.id),
-       empty?: items == [],
-       trying: FleetPage.read_trying_now(fleet_id)
+       ids: MapSet.new(lines, & &1.id),
+       last: List.last(lines),
+       empty?: lines == [],
+       recent_work: FleetPage.read_recent_work(fleet_id),
+       reading?: false
      })}
   end
 
+  # Anyone else's: the reading's first page and "Recent Work". The pages they
+  # asked for beyond it with "Show earlier" stay below it as they were read,
+  # with the cursor after them. A first page that shares no line with them
+  # starts the feed again from itself, so no gap opens between the two.
+  defp activity_pages(%{assigns: %{activity: activity}} = socket, %{
+         feed: feed,
+         recent_work: recent_work
+       }) do
+    lines = FeedLines.lines(feed.items, feed.receivers)
+    first = MapSet.new(lines, & &1.id)
+    shown = Map.get(activity, :ids, MapSet.new())
+
+    {lines, ids, cursor, pages, last} =
+      if activity.pages > 1 and not MapSet.disjoint?(shown, first) do
+        lines = FeedLines.over(lines, shown)
+
+        {lines, MapSet.union(shown, MapSet.new(lines, & &1.id)), activity.cursor, activity.pages,
+         activity.last}
+      else
+        {lines, first, feed.cursor, 1, List.last(lines)}
+      end
+
+    {lines,
+     assign(socket, :activity, %{
+       fleet_id: activity.fleet_id,
+       cursor: cursor,
+       pages: pages,
+       ids: ids,
+       last: last,
+       empty?: MapSet.size(ids) == 0,
+       recent_work: recent_work,
+       reading?: true
+     })}
+  end
+
+  # A page of the fleet's activity as the hall's lines, with the wallet each
+  # transfer on it went to.
+  defp read_lines(fleet_id, items),
+    do: FeedLines.lines(items, Activity.receivers(fleet_id, items))
+
   @doc """
   One read for a burst of notices about the fleet on show; the wait names
-  the fleet it was begun for.
+  the fleet it was begun for. Only a member's feed is read again: anyone
+  else's is drawn from the fleet's reading when it changes
+  (`shared_changed/2`), and reads nothing on a notice.
   """
   def refresh_activity_soon(
         %{assigns: %{activity: %{fleet_id: fleet_id}, activity_refresh: nil}} = socket,
         fleet_id
       ) do
-    Process.send_after(self(), {:refresh_activity, fleet_id}, @activity_refresh_after)
-    assign(socket, :activity_refresh, fleet_id)
+    if ShellLive.member?(socket, fleet_id) do
+      # A burst of changes is read once, after `:fleet_feed_wait_ms`.
+      wait = Application.fetch_env!(:keyfleet, :fleet_feed_wait_ms)
+      Process.send_after(self(), {:refresh_activity, fleet_id}, wait)
+      assign(socket, :activity_refresh, fleet_id)
+    else
+      socket
+    end
   end
 
   def refresh_activity_soon(socket, _fleet_id), do: socket
@@ -1734,11 +1863,11 @@ defmodule KeyfleetWeb.FleetLive do
   @doc """
   What the feed needs to know of the pages read, and never the cursor:
   whether anything is there, whether earlier items are a press of "Show
-  earlier" away or past the pages it shows, and what the fleet is trying.
+  earlier" away or past the pages it shows, and what the fleet is working on.
   """
   def now_shown(nil), do: nil
 
-  def now_shown(%{cursor: cursor, pages: pages, empty?: empty?, trying: trying}) do
+  def now_shown(%{cursor: cursor, pages: pages, empty?: empty?, recent_work: recent_work}) do
     earlier =
       cond do
         cursor == nil -> nil
@@ -1746,7 +1875,7 @@ defmodule KeyfleetWeb.FleetLive do
         true -> :elsewhere
       end
 
-    %{empty?: empty?, earlier: earlier, trying: trying}
+    %{empty?: empty?, earlier: earlier, recent_work: recent_work}
   end
 
   @doc "The id of a line of the hall's feed on the page."
@@ -1754,19 +1883,26 @@ defmodule KeyfleetWeb.FleetLive do
 
   @doc """
   Sales and transfers move the figures, the key on offer, the levels the map
-  can go to and the Keys the reader holds.
+  can go to and the Keys the reader holds. A hall drawn from the fleet's
+  reading reads only the reader's Keys here; its figures come with the
+  reading a moment later (`shared_changed/2`).
   """
   def refresh_sales(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    progress = Chain.progress(fleet_id)
+    if from_reading?(socket) do
+      held = FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
+      assign(socket, :fleet, %{fleet | held: held})
+    else
+      progress = Chain.progress(fleet_id)
 
-    assign(socket, :fleet, %{
-      fleet
-      | progress: progress,
-        current?: Chain.fresh?(fleet_id),
-        buy: FleetPage.next_sale(fleet_id, progress),
-        levels: KeyMap.levels(progress),
-        held: FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
-    })
+      assign(socket, :fleet, %{
+        fleet
+        | progress: progress,
+          current?: Chain.fresh?(fleet_id),
+          buy: FleetPage.next_sale(fleet_id, progress),
+          levels: KeyMap.levels(progress),
+          held: FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
+      })
+    end
   end
 
   @doc "Keys changed hands: the Member List, when it is on show, reads its page again."
@@ -1775,23 +1911,32 @@ defmodule KeyfleetWeb.FleetLive do
     socket
   end
 
-  # "Who's here" and the bar's count of agents, as every page shares them,
-  # heard from before they are read.
-  defp follow_agents(socket, fleet_id) do
-    socket
-    |> SharedFigures.follow(:fleet, [Here.fleet_key(fleet_id)])
-    |> show_agents()
+  # The readings the fleet's page shows, heard from before they are read:
+  # "Here now" and the bar's count of agents, and for a hall drawn from
+  # the fleet's reading, that reading.
+  defp follow_shared(socket, fleet_id, view) do
+    now = if from_reading?(socket, fleet_id, view), do: [FleetNow.key(fleet_id)], else: []
+
+    SharedFigures.follow(
+      socket,
+      :fleet,
+      [Here.fleet_key(fleet_id), FleetProposals.list_key(fleet_id)] ++ now
+    )
   end
 
   # Before the fleet's first reading, the agents and holders are said to be uncounted,
-  # never shown as none. The agents go to the page as they are drawn and
-  # aren't kept: each reading draws them all again.
+  # never shown as none. The agents go to the page as they are drawn, each
+  # line as the reader's class reads it (`Here.seen_by/2`), and aren't kept:
+  # each reading draws them all again.
   defp show_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
     {agents, here, holders} =
       case SharedFigures.reading(Here.fleet_key(fleet_id)) do
         %{agents: agents, here: here, holders: holders} -> {agents, here, holders}
         nil -> {[], nil, nil}
       end
+
+    member? = ShellLive.member?(socket, fleet_id)
+    agents = Enum.map(agents, &%{&1 | seen: Here.seen_by(&1.seen, member?)})
 
     socket
     |> assign(
@@ -1801,14 +1946,102 @@ defmodule KeyfleetWeb.FleetLive do
     |> stream(:fleet_who, agents, reset: true)
   end
 
-  @doc "A shared reading the page hears has changed: \"Who's here\" is drawn again."
+  @doc """
+  A shared reading the page hears has changed: \"Here now\" is drawn
+  again, or a hall drawn from the fleet's reading draws its sales, feed and
+  "Recent Work" from the new one. Each is matched on the fleet it is for, so
+  a reading of a fleet the page has left changes nothing, and one of the
+  fleet on show still lands right after it.
+  """
   def shared_changed(
         %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket,
         {:fleet_agents, fleet_id}
       ),
       do: show_agents(socket)
 
+  def shared_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false}}} = socket,
+        {:fleet_now, fleet_id}
+      ) do
+    if from_reading?(socket), do: show_reading(socket), else: socket
+  end
+
+  def shared_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false} = fleet}} = socket,
+        {:fleet_proposals, fleet_id}
+      ),
+      do: assign(socket, :fleet, %{fleet | open_proposals: FleetProposals.open(fleet_id)})
+
   def shared_changed(socket, _key), do: socket
+
+  @doc """
+  The reader's class in the fleet on show has changed (`Keyfleet.Access`).
+  A hall shown to someone who is no longer a member is drawn from the
+  fleet's reading from now on, in place of what they read as one; one
+  shown to a new member stops hearing the reading, and its next notice
+  reads the feed as theirs. The polls show in the sidebar for a member only.
+  """
+  def class_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false} = fleet}} = socket,
+        fleet_id
+      ) do
+    %{fleet_place: place, fleet_params: params} = socket.assigns
+
+    socket =
+      socket
+      |> assign(:fleet, %{fleet | polls?: ShellLive.may_read?(socket, fleet_id, :polls)})
+      |> follow_shared(fleet_id, view(place, params))
+      |> show_agents()
+
+    with true <- from_reading?(socket),
+         {%{coming_soon?: false} = reading, _degraded?} <- FleetNow.fetch(fleet_id) do
+      socket
+      |> show_sales(reading)
+      |> read_activity(fleet_id, :new, reading)
+    else
+      _member_or_unread -> socket
+    end
+  end
+
+  def class_changed(socket, _fleet_id), do: socket
+
+  # The hall drawn again from the fleet's newest reading. A reading with the
+  # fleet no longer open changes nothing on it.
+  defp show_reading(
+         %{assigns: %{fleet: %{fleet_id: fleet_id}, activity: %{ids: _shown}}} = socket
+       ) do
+    case FleetNow.fetch(fleet_id) do
+      {%{coming_soon?: false} = reading, _degraded?} ->
+        socket
+        |> show_sales(reading)
+        |> reread_activity(reading)
+        |> reread_waiting_quotes()
+
+      _not_open ->
+        socket
+    end
+  end
+
+  defp show_reading(socket), do: socket
+
+  # The figures move with the reading as `refresh_sales/1` moves them, once
+  # the fleet is on Base.
+  defp show_sales(
+         %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true} = fleet}} = socket,
+         %{deployed?: true} = reading
+       ) do
+    %{current?: current?, progress: progress} = sales(fleet_id, reading)
+
+    assign(socket, :fleet, %{
+      fleet
+      | progress: progress,
+        current?: current?,
+        buy: FleetPage.next_sale(fleet_id, progress),
+        levels: KeyMap.levels(progress)
+    })
+  end
+
+  defp show_sales(socket, _reading), do: socket
 
   def tell_map_chosen(
         %{assigns: %{fleet: %{fleet_id: fleet_id, chosen_key: chosen}}} = socket,

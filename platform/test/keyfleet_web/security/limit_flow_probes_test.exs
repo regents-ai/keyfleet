@@ -6,9 +6,7 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
   a body carries an undocumented field, and when a body is over its cap.
 
   These lock in the server-side gates so a future change that moves a money
-  endpoint out from behind a gate is caught. The true parallel credit
-  double-spend proof is out of this repo (debit lives in RegentCredits) and is
-  tagged `:dynamic` for the Mac's non-sandboxed / fork run.
+  endpoint out from behind a gate is caught.
 
   See `priv/security/redteam_checks.yml` and
   `docs/security/redteam-2026-10-17.md`.
@@ -101,10 +99,16 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
     # keys), or raise a route's body cap.
     test "a body with an undocumented field is refused", ctx do
       resp =
-        send_signed(ctx, ctx.signer, "POST", "/api/v1/agent/fleets/#{fleet()}/rooms/general/topic", %{
-          "topic" => "ok",
-          "role" => "admin"
-        })
+        send_signed(
+          ctx,
+          ctx.signer,
+          "POST",
+          "/api/v1/agent/fleets/#{fleet()}/rooms/general/topic",
+          %{
+            "topic" => "ok",
+            "role" => "admin"
+          }
+        )
 
       assert resp.status == 422
       assert refusal_code(resp) == "invalid_request"
@@ -132,8 +136,7 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
     #
     # NOTE: under the test sandbox all callers share one connection and
     # serialize, so this proves the unique index/upsert decides one winner, not
-    # true parallel timing. The genuine parallel credit double-spend proof needs
-    # a non-sandboxed DB and the RegentCredits debit action — Mac / fork only.
+    # true parallel timing.
     @tag :dynamic
     test "two identical sends yield one message id", ctx do
       body = %{"body" => "same", "idempotency_key" => "dup-1"}
@@ -147,5 +150,66 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
 
       assert a.body["message"]["id"] == b.body["message"]["id"]
     end
+  end
+
+  describe "an agent's posts as a Key spend its wallet's allowance (RT-QUOTA-POSTS)" do
+    # Toggle to break: remove `change Keyfleet.Rooms.Changes.LimitPosts` from
+    # :send_message in rooms/message.ex; the second post is then written.
+    test "a post past the allowance is 429 post_limit_reached, and a repeat is handed back",
+         ctx do
+      allow!(:agent_posts, 1)
+      path = "/api/v1/agent/fleets/#{fleet()}/rooms/general/messages/send"
+      first = %{"body" => "First", "idempotency_key" => "k-1"}
+
+      assert %{status: 201} = send_signed(ctx, ctx.signer, "POST", path, first)
+
+      resp =
+        send_signed(ctx, ctx.signer, "POST", path, %{
+          "body" => "One more",
+          "idempotency_key" => "k-2"
+        })
+
+      assert_refused(resp, 429, "post_limit_reached")
+      assert [_seconds] = Req.Response.get_header(resp, "retry-after")
+      assert %{status: 200} = send_signed(ctx, ctx.signer, "POST", path, first)
+    end
+  end
+
+  describe "workspace writes spend each wallet's allowance (RT-QUOTA-WRITES)" do
+    # Toggle to break: drop the `Limits.admit(:graph_writes, ...)` step from
+    # `write/4` in agent_graph_controller.ex; the second write then reaches the
+    # workspace's own checks.
+    test "a write past the allowance is 429 workspace_limit_reached", ctx do
+      allow!(:graph_writes, 1)
+
+      write = fn ->
+        send_signed(
+          ctx,
+          ctx.signer,
+          "POST",
+          "/api/v1/agent/fleets/#{fleet()}/graph/create",
+          %{
+            "as_key" => 2,
+            "command_id" => Ecto.UUID.generate(),
+            "project" => "general",
+            "type" => "note",
+            "data" => %{"title" => "x"}
+          }
+        )
+      end
+
+      assert_refused(write.(), 403, "not_a_key_holder")
+      limited = assert_refused(write.(), 429, "workspace_limit_reached")
+      assert [_seconds] = Req.Response.get_header(limited, "retry-after")
+    end
+  end
+
+  # Gives `name` an allowance of `limit` for this test alone.
+  defp allow!(name, limit) do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    window = limits |> Keyword.fetch!(name) |> Keyword.fetch!(:window_seconds)
+    allowance = [limit: limit, window_seconds: window]
+    Application.put_env(:keyfleet, :limits, Keyword.put(limits, name, allowance))
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
   end
 end

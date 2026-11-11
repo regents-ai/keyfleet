@@ -33,11 +33,8 @@ defmodule KeyfleetWeb.AgentChainJSON do
   defp why(nil), do: nil
   defp why(reason), do: WalletWords.blocked(reason)
 
-  defp figures(:present, %{keys: keys, maintenance?: maintenance?}) do
-    %{
-      keys: Enum.map(keys, &%{token_id: &1.token_id, present_until: &1.until}),
-      maintenance_needed: maintenance?
-    }
+  defp figures(:present, %{keys: keys}) do
+    %{keys: Enum.map(keys, &%{token_id: &1.token_id, present_until: &1.until})}
   end
 
   defp figures(:propose, figures) do
@@ -83,20 +80,58 @@ defmodule KeyfleetWeb.AgentChainJSON do
          opens_at: opens_at
        }
 
-  defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}) do
+  defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}),
+    do: %{token_id: token_id, paid_to: holder, waiting: Enum.map(waiting, &waiting/1)}
+
+  defp figures(:issue_shard, figures), do: Map.take(figures, [:keys, :wallet, :days])
+
+  defp figures(:end_shard, %{token_id: token_id, wallets: wallets, renew_days: days}),
+    do: %{token_id: token_id, wallets: wallets, renew_days: days}
+
+  defp figures(:agent_voting, %{keys: keys, voting: voting}),
+    do: %{keys: keys, voting_on: voting}
+
+  defp figures(:buy, %{token_id: token_id, price: price, max_price: max_price, approve?: approve?}),
+       do: %{
+         token_id: token_id,
+         price: Integer.to_string(price),
+         max_price: Integer.to_string(max_price),
+         approve_first: approve?
+       }
+
+  defp figures(flow, %{token_id: token_id}) when flow in [:club_claim, :reveal],
+    do: %{token_id: token_id}
+
+  defp figures(:return_advance, figures) do
     %{
-      token_id: token_id,
-      paid_to: holder,
-      waiting:
-        Enum.map(
-          waiting,
-          &%{
-            asset: &1.asset,
-            symbol: &1.symbol,
-            decimals: &1.decimals,
-            amount: Integer.to_string(&1.amount)
-          }
-        )
+      advance_id: figures.advance_id,
+      operator: figures.operator,
+      asset: figures.asset.address,
+      symbol: figures.asset.symbol,
+      decimals: figures.asset.decimals,
+      outstanding: Integer.to_string(figures.outstanding),
+      amount: Integer.to_string(figures.amount)
+    }
+  end
+
+  defp figures(:launch_upkeep, figures) do
+    %{
+      launch_id: figures.launch_id,
+      token: figures.token,
+      lifecycle: figures.lifecycle,
+      added_to_split: figures.bound?
+    }
+  end
+
+  defp figures(:claim_all, %{keys: keys, waiting: waiting}),
+    do: %{token_ids: keys, waiting: Enum.map(waiting, &waiting/1)}
+
+  defp waiting(entry) do
+    %{
+      asset: entry.asset,
+      symbol: entry.symbol,
+      decimals: entry.decimals,
+      amount: Integer.to_string(entry.amount)
     }
   end
 end

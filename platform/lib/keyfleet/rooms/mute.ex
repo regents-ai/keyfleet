@@ -5,7 +5,8 @@ defmodule Keyfleet.Rooms.Mute do
 
   A mute is personal. It hides the posts only from whoever added it, changes
   nothing for anyone else, and is taken away by unmuting. Muting a key twice
-  keeps the one mute.
+  keeps the one mute. Only a key the fleet has issued is muted, and a muter
+  has at most 500 mutes (`Keyfleet.Rooms.Changes.LimitMutes`).
   """
   use Ash.Resource,
     domain: Keyfleet.Rooms,
@@ -41,7 +42,10 @@ defmodule Keyfleet.Rooms.Mute do
       upsert_condition expr(false)
       return_skipped_upsert? true
       validate Keyfleet.Graph.Validations.KnownFleet
+      # Checked once the muter is known, so anyone else is refused as no muter.
+      validate Keyfleet.Rooms.Validations.IssuedKey, before_action?: true
       change Keyfleet.Rooms.Changes.SetMuter
+      change Keyfleet.Rooms.Changes.LimitMutes
     end
 
     destroy :unmute do

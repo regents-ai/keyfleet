@@ -14,7 +14,7 @@ dev = ["pytest>=8"]
 [tool.uv]
 # ActiveGraph is built from source; its build backend is pinned so the build
 # is the same wherever it runs.
-build-constraint-dependencies = ["setuptools==84.0.0"]
+build-constraint-dependencies = ["setuptools==84.2.1"]
 
 # Reviewed upstream tree; see THIRD_PARTY_NOTICES.md at the platform root.
 [tool.uv.sources]

@@ -6,14 +6,18 @@ export default defineConfig({
   testDir: "./test/browser",
   // The component workshop and key map exist only when the local showcase is compiled in;
   // playwright.showcase.config.ts runs them against a server built that way.
-  // playwright.chain.config.ts runs the specs that drive the chain, on a database of their own.
+  // playwright.chain.config.ts runs the specs that drive the chain, on a database of their own,
+  // and playwright.devices.config.ts the first visit's flows and accessibility on that server.
   testIgnore: [
+    "main_flows.spec.ts",
+    "accessibility.spec.ts",
     "showcase.spec.ts",
     "key_map.spec.ts",
     "key_map_performance.spec.ts",
     "fleet_map.spec.ts",
     "key_profile.spec.ts",
     "fleet_motion.spec.ts",
+    "fleet_layout.spec.ts",
     "wallet_buttons.spec.ts",
     "key_shards.spec.ts",
     "room_mutes.spec.ts",
@@ -21,6 +25,15 @@ export default defineConfig({
     "content_security_policy.spec.ts",
     "shell_links.spec.ts",
     "early_page.spec.ts",
+    "agent_tools.spec.ts",
+    "account_agents.spec.ts",
+    "key_card.spec.ts",
+    "workspace_motion.spec.ts",
+    "group_flow.spec.ts",
+    "treasury_read.spec.ts",
+    "visits.spec.ts",
+    "sea_lift.spec.ts",
+    "setup_list.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
@@ -41,7 +54,7 @@ export default defineConfig({
   // KEYFLEET_BROWSER_TEST, which would open the port before the server is ready.
   webServer: {
     command: [
-      "mkdir -p tmp/cert",
+      "mkdir -p tmp/cert && rm -f tmp/walk-lines.jsonl",
       "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
       "MIX_ENV=test mix ecto.create --quiet",
       "MIX_ENV=test mix keyfleet.setup_local_auth",

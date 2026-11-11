@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Every notebook-hub check: compute-fly's types, lint, bundle and tests inside
 # the pinned marimohub workspace, the three images, and the runner helper's
-# tests inside the runner image. Needs Node 24 (marimohub's version) and Docker.
+# tests inside the runner image. Needs marimohub's exact Node version (its
+# `.node-version`) and Docker.
 # The full local end-to-end run is separate: local/run.sh.
 set -euo pipefail
 
