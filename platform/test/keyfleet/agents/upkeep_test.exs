@@ -58,7 +58,7 @@ defmodule Keyfleet.Agents.UpkeepTest do
     assert done(person) == %{pair: true, shard: true, run: true, present: false}
 
     # Every Key the person holds needs no mark, not only the one the agent
-    # acts for.
+    # holds a shard of.
     now = DateTime.utc_now(:second)
     presence!(@fleet, 1, now)
     assert done(person).present == false

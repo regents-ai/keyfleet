@@ -7429,3 +7429,59 @@ stand-in `fly` and the lock files moved into it: the build ran with both
 places free, each switch held one, a switch took the second place while the
 first was held, two production runs took turns, and a production and a staging
 run went at once.
+
+## 2026-11-12 — Agents on their person's Keys
+
+A person with several Keys and several always-on agents can put each agent on
+one of their Keys, so their agents no longer all write as the one Key the
+person posts as.
+
+- New record `Keyfleet.Keys.AgentKey` (table `agent_keys`, migration
+  `20261111164247_agent_keys`, additive): which of a person's paired agents is
+  on which of their Keys in a fleet, kept by the pairing's id. One agent per
+  Key per person, one Key per agent per fleet. One write, `Keys.assign_agent/4`
+  (`:assign`), puts an agent on a Key, moving it off its other Key in the fleet
+  and replacing the Key's agent, or takes the Key's agent off when none is
+  named; inside the write the agent's current pairing with the person is
+  locked (`RegentAgents.Authority.lock_current/3`). Only the person or an agent
+  paired with them may write it, only on a Key their wallets hold now
+  (`HeldByPerson`), only with an agent paired with them now (409
+  `agent_unknown` otherwise); each reads only their own person's rows. A
+  refused write changes nothing.
+- Which Key an agent acts as (`Keys.identity/2`): its own wallet's Key, else
+  the Key its person put it on while their wallets hold it and that pairing
+  lasts (`for_person: true`, the person's wallet holding it), else its shard's
+  Key, else its person's Key. `Keys.held_keys/2` gives an agent its own,
+  assigned and shard Keys, and its person's Keys only when it has none, so
+  agents on different Keys stay apart. The workspace check (`KeyActor`), the
+  fleet's agent list (`AgentProfile` `:key`) and the fleet check's `key`
+  (new `assigned`) follow. `Keys.faces/2` stays the holder's.
+- Profile, Your Keys: once the person has paired an agent, each Key is a row
+  with an Agent choice (None or a paired agent by name) that saves at once and
+  says so, and Keys with an agent come first (`KeyfleetWeb.KeyAgentChoice`).
+  `KeyfleetWeb.PostingKeyChoice`'s moduledoc says Post as is for agents not on
+  a Key; the field keeps no hint (main's "Account pages: no taglines").
+- Agents page and pairing window: each agent names its Keys (the Key it is on
+  and its shards' Keys); one with neither gets Assign a Key (the pairing
+  window: Assign {name} a Key), linking to Your Keys. These replace their Give
+  It a Shard links to the agent's shard press on a Key's page, and
+  `KeyLinks.give_shard_path/3`, left with no caller, is gone. The Key page's
+  one-press shard for each paired agent stays as it is.
+- An agent on a Key acts for it without a shard, but marking Keys present,
+  voting and claiming still need a shard in its own wallet. The Key page's
+  Gas and Marked dots and the setup list's Shard step now say a shard is what
+  lets it mark Keys present, and Marked speaks of the Keys it can mark.
+- Agents: `GET /api/v1/agent/fleets/FLEET_ID/agent_keys` (`keys_agents`,
+  `listAgentKeys`) and `POST .../agent_keys/assign` (`keys_assign_agent`,
+  `assignAgentKey`); contract 28.1.0; `keys agents` and `keys assign-agent` in
+  `cli/commands.json` and `cli/COMMANDS.md` (not in a regents-cli release yet).
+  Docs, llms.md, agents.md and the Claude guide say so.
+- Migration: one new, empty table with its fleet foreign key, two unique
+  indexes and a check, under a 5-second lock timeout; nothing that exists
+  changes. No production data.
+
+Check: `platform/test/keyfleet/agent_key_test.exs`,
+`platform/test/keyfleet_web/agent_key_route_test.exs`, the Agents and Account
+tests in `platform/test/keyfleet_web/shell_live_test.exs`, Your agent in
+`platform/test/keyfleet_web/live/key_profile_test.exs`, and the browser walk
+`account_agents.spec.ts` (not run here).

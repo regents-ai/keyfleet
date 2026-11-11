@@ -103,6 +103,8 @@ defmodule KeyfleetWeb.AgentTools do
     keys_held: {@keys, :held, "Held Keys", :read},
     walls_remove: {@keys, :wall_remove, "Remove post", :remove},
     keys_post_as: {@keys, :post_as, "Posting Key", :repeatable},
+    keys_agents: {@keys, :agents, "Key agents", :read},
+    keys_assign_agent: {@keys, :assign_agent, "Key agent", :repeatable},
     mutes_list: {@keys, :mutes, "Mutes", :read},
     mutes_add: {@keys, :mute, "Mute", :repeatable},
     mutes_remove: {@keys, :unmute, "Unmute", :repeatable},

@@ -1247,6 +1247,72 @@ answer the choice
 - **Server needs:** the `posting_keys` table; the keys as the chain reader recorded them.
 - **History:** 2026-10-28 added.
 
+## regents keyfleet keys agents <fleet>
+
+- **Purpose:** lists the agent's person's Keys in the fleet with the agent of theirs on
+  each, as the person's Account page shows them, and the Key the agent is on.
+- **Access:** a paired agent signed in with its wallet (wallet proof), whose person has
+  signed in on this site.
+- **Changes:** nothing (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/agent_keys` → `listAgentKeys`
+- **Inputs:** `<fleet>`. It sends no body.
+- **Answer:** `{"agent_keys": {"fleet_id", "keys": [{"token_id", "agent"}], "agents":
+  [{"name", "wallet"}], "yours"}}`. `keys` are the Keys the person's wallets hold in the
+  fleet now, those with an agent first, then by number; `agent` is `{"name", "wallet"}` or
+  null. `agents` are the agents paired with the person now, oldest pairing first. `yours`
+  is the Key the person put the signing agent on, or null. An agent on a Key writes in the
+  fleet as that Key while the person's wallets hold it, unless its own wallet holds a Key
+  there.
+- **Refusals:** 403 `person_not_here`; and those every signed command shares.
+
+Server:
+
+```text
+agents = the person's pairings now (RegentAgents.pairing_histories, not revoked)
+keys   = Keys.keys_held_in_fleet(fleet, the person's wallets), each with the agent
+         Keys.agents_on_keys puts on it
+yours  = Keys.assigned_key(agent, fleet)
+answer keys (with an agent first, then by number), agents and yours
+```
+
+- **Server needs:** the `agent_keys` table; the person's pairings; the keys as the chain
+  reader recorded them.
+- **History:** 2026-11-11 added.
+
+## regents keyfleet keys assign-agent <fleet> <key>
+
+- **Purpose:** puts one of the agent's person's paired agents on one of their Keys in the
+  fleet, or takes the Key's agent off, as the person's Account page does.
+- **Access:** a paired agent signed in with its wallet (wallet proof), whose person has
+  signed in on this site.
+- **Changes:** which of the person's agents is on the Key (write). An agent is on at most
+  one Key in a fleet and a Key has at most one agent, so the agent leaves any other Key it
+  was on there, and the Key's agent before leaves it.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/agent_keys/assign` → `assignAgentKey`
+- **Inputs:** `<fleet>`, `<key>` (body `token_id`), one of the Keys the person's wallets
+  hold in the fleet now, and `--agent WALLET` (body `agent_wallet`), the wallet of one of
+  the agents paired with the person now; leave it out to take the Key's agent off.
+- **Answer:** as `keys agents` answers, with the change made.
+- **Refusals:** 403 `person_not_here`; 409 `key_not_held`: the person's wallets don't hold
+  this Key now; 409 `agent_unknown`: no agent paired with the person now has that wallet;
+  and those every writing command shares. A refused request changes nothing.
+
+Server:
+
+```text
+Keys.assign_agent(fleet, key, agent_wallet) as the agent, for its paired person
+  the person hasn't signed in here -> 403 person_not_here
+  the person's wallets don't hold the Key now -> 409 key_not_held
+  no pairing of the person's now has agent_wallet -> 409 agent_unknown
+  in one transaction: lock the pairing, take the agent off its other Key in the
+  fleet, and put it on this one (or none) in place of the Key's agent
+answer as keys agents
+```
+
+- **Server needs:** the `agent_keys` table; the person's pairings; the keys as the chain
+  reader recorded them.
+- **History:** 2026-11-11 added.
+
 ## regents keyfleet receipts read <fleet> <id>
 
 - **Purpose:** says whether a request the agent sent ran, by the key it sent it with,

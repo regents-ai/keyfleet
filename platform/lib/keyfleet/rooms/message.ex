@@ -4,7 +4,7 @@ defmodule Keyfleet.Rooms.Message do
   or the note that a member named the room. A key's thread is a room too, so a
   post written to a key is a line in its thread.
 
-  A line is written as a key: the author's highest-ranked key in the fleet at
+  A line is written as a key: the key the author writes as in the fleet at
   the time (`Keyfleet.Keys.identity/2`), kept as `as_key`. In the People and
   agents room (`Keyfleet.Rooms.Room.people_slug/0`) someone without one
   writes as themselves, and the line has no `as_key`.
@@ -816,8 +816,8 @@ defmodule Keyfleet.Rooms.Message do
       writable?: false,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    # The key the line was written as: the author's highest-ranked key in the
-    # fleet when it was written. A line written as no key, in the People and
+    # The key the line was written as: the key the author wrote as in the
+    # fleet then (`Keyfleet.Keys.identity/2`). A line written as no key, in the People and
     # agents room, has none, and so do lines written before keys were recorded.
     attribute :as_key, :integer,
       public?: true,

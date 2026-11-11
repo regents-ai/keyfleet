@@ -7,8 +7,9 @@ defmodule KeyfleetWeb.AgentsPanel do
   and a larger view of one agent with where it has been active across the Regent
   sites, a line for each site and day (`Keyfleet.Agents.ActivityReading`), its
   name, which the person may change, and Unpair, which asks first in a window
-  of its own. Beside each agent are the Keys it holds a shard of, or Give It a
-  Shard from one of the person's own (`KeyfleetWeb.AgentKeys`).
+  of its own. Beside each agent are the Keys it is on and those it holds a
+  shard of, or, with none, Assign a Key, which leads to Your Keys on the
+  Account page (`KeyfleetWeb.AgentKeys`).
 
   Pairing immediately lets an agent do what `Keyfleet.Capabilities.may/0`
   lists, which the list's tip and the agent's view show the person. Pairing is
@@ -268,8 +269,8 @@ defmodule KeyfleetWeb.AgentsPanel do
     required: true,
     doc: "the agent's Keys, as `KeyfleetWeb.AgentKeys.read/2`, or `:unavailable`"
 
-  @doc "The Keys an agent holds a shard of, or where to give it one."
-  def agent_keys(%{keys: {:shards, _keys}} = assigns) do
+  @doc "The Keys an agent is on or holds a shard of, or where to put it on one."
+  def agent_keys(%{keys: {:keys, _keys}} = assigns) do
     ~H"""
     <.link
       :for={key <- elem(@keys, 1)}
@@ -281,10 +282,10 @@ defmodule KeyfleetWeb.AgentsPanel do
     """
   end
 
-  def agent_keys(%{keys: {:give, _path}} = assigns) do
+  def agent_keys(%{keys: :assign} = assigns) do
     ~H"""
-    <.link id={@id} navigate={elem(@keys, 1)} class="rg-button rg-button--quiet">
-      <span class="rg-button__label">Give it a shard</span>
+    <.link id={@id} navigate={KeyfleetWeb.AgentKeys.assign_path()} class="rg-button rg-button--quiet">
+      <span class="rg-button__label">Assign a Key</span>
     </.link>
     """
   end
@@ -366,7 +367,7 @@ defmodule KeyfleetWeb.AgentsPanel do
   defp lights(:unavailable, _now), do: %{}
 
   defp keys(account, agents) when is_list(agents) do
-    case KeyfleetWeb.AgentKeys.read(account, Enum.map(agents, & &1.wallet)) do
+    case KeyfleetWeb.AgentKeys.read(account, agents) do
       {:ok, keys} -> keys
       {:error, _failure} -> :unavailable
     end
@@ -375,7 +376,7 @@ defmodule KeyfleetWeb.AgentsPanel do
   defp keys(_account, :unavailable), do: %{}
 
   defp agent_keys_of(:unavailable, _agent), do: :unavailable
-  defp agent_keys_of(keys, agent), do: keys[agent.wallet]
+  defp agent_keys_of(keys, agent), do: keys[agent.id]
 
   defp read_agents(socket) do
     agents =

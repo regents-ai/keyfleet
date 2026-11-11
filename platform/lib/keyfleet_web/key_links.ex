@@ -19,13 +19,6 @@ defmodule KeyfleetWeb.KeyLinks do
   @doc "Key `token_id`'s own page, where its holder manages it."
   def page_path(fleet_id, token_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/keys/#{token_id}"
 
-  @doc """
-  Key `token_id`'s page at the shard press for the person's paired agent with
-  `wallet`, which the holder sees for each agent with no shard of the Key yet.
-  """
-  def give_shard_path(fleet_id, token_id, wallet),
-    do: "#{page_path(fleet_id, token_id)}#key-issue-#{wallet}"
-
   @doc "The messages written to and from key `token_id`."
   def dms_path(fleet_id, token_id), do: "#{page_path(fleet_id, token_id)}/dms"
 

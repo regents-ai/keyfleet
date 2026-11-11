@@ -381,6 +381,8 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/keys/held", AgentKeyController, :held
     get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
     post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
+    get "/fleets/:fleet_id/agent_keys", AgentKeyController, :agent_keys
+    post "/fleets/:fleet_id/agent_keys/assign", AgentKeyController, :assign_agent
     post "/fleets/:fleet_id/receipts", AgentReceiptController, :show
     get "/fleets/:fleet_id/doctor", AgentDoctorController, :show
     get "/fleets/:fleet_id/checkpoint", AgentCheckpointController, :show
