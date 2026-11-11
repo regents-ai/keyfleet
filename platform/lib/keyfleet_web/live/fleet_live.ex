@@ -88,6 +88,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.Components.SetupList
   alias KeyfleetWeb.Components.Shell
+  alias KeyfleetWeb.FeedLines
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.FleetProposals
@@ -1238,7 +1239,8 @@ defmodule KeyfleetWeb.FleetLive do
 
   @doc "What the fleet's page does with the events it sends."
   # "Show earlier" adds the next page of the hall's feed below the ones
-  # shown, up to five pages.
+  # shown, up to five pages. A run of transfers the two pages share reads as
+  # one line: the lowest line on show gives way to it.
   def handle_event(
         "activity_earlier",
         _params,
@@ -1248,15 +1250,26 @@ defmodule KeyfleetWeb.FleetLive do
     %{items: items, cursor: next} =
       Activity.page(activity.fleet_id, cursor, ShellLive.reads_as(socket, activity.fleet_id))
 
+    {socket, ids, lines} =
+      case FeedLines.join(activity.last, read_lines(activity.fleet_id, items)) do
+        {:joined, lines} ->
+          {stream_delete_by_dom_id(socket, :activity, activity_dom_id(activity.last)),
+           MapSet.delete(activity.ids, activity.last.id), lines}
+
+        {:apart, lines} ->
+          {socket, activity.ids, lines}
+      end
+
     {:noreply,
      socket
      |> assign(:activity, %{
        activity
        | cursor: next,
          pages: pages + 1,
-         ids: MapSet.union(activity.ids, MapSet.new(items, & &1.id))
+         ids: MapSet.union(ids, MapSet.new(lines, & &1.id)),
+         last: List.last(lines)
      })
-     |> stream(:activity, items)}
+     |> stream(:activity, lines)}
   end
 
   def handle_event("activity_earlier", _params, socket), do: {:noreply, socket}
@@ -1770,13 +1783,16 @@ defmodule KeyfleetWeb.FleetLive do
     {items, cursor, read} =
       FleetPage.activity_pages(fleet_id, pages, ShellLive.reads_as(socket, fleet_id))
 
-    {items,
+    lines = read_lines(fleet_id, items)
+
+    {lines,
      assign(socket, :activity, %{
        fleet_id: fleet_id,
        cursor: cursor,
        pages: read,
-       ids: MapSet.new(items, & &1.id),
-       empty?: items == [],
+       ids: MapSet.new(lines, & &1.id),
+       last: List.last(lines),
+       empty?: lines == [],
        recent_work: FleetPage.read_recent_work(fleet_id),
        reading?: false
      })}
@@ -1790,25 +1806,37 @@ defmodule KeyfleetWeb.FleetLive do
          feed: feed,
          recent_work: recent_work
        }) do
-    first = MapSet.new(feed.items, & &1.id)
+    lines = FeedLines.lines(feed.items, feed.receivers)
+    first = MapSet.new(lines, & &1.id)
     shown = Map.get(activity, :ids, MapSet.new())
 
-    {ids, cursor, pages} =
-      if activity.pages > 1 and not MapSet.disjoint?(shown, first),
-        do: {MapSet.union(shown, first), activity.cursor, activity.pages},
-        else: {first, feed.cursor, 1}
+    {lines, ids, cursor, pages, last} =
+      if activity.pages > 1 and not MapSet.disjoint?(shown, first) do
+        lines = FeedLines.over(lines, shown)
 
-    {feed.items,
+        {lines, MapSet.union(shown, MapSet.new(lines, & &1.id)), activity.cursor, activity.pages,
+         activity.last}
+      else
+        {lines, first, feed.cursor, 1, List.last(lines)}
+      end
+
+    {lines,
      assign(socket, :activity, %{
        fleet_id: activity.fleet_id,
        cursor: cursor,
        pages: pages,
        ids: ids,
+       last: last,
        empty?: MapSet.size(ids) == 0,
        recent_work: recent_work,
        reading?: true
      })}
   end
+
+  # A page of the fleet's activity as the hall's lines, with the wallet each
+  # transfer on it went to.
+  defp read_lines(fleet_id, items),
+    do: FeedLines.lines(items, Activity.receivers(fleet_id, items))
 
   @doc """
   One read for a burst of notices about the fleet on show; the wait names

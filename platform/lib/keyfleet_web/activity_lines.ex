@@ -13,7 +13,8 @@ defmodule KeyfleetWeb.ActivityLines do
       alone, in the site's own words: "a task", "some evidence";
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
-    * `{:address, wallet}`: a wallet that acted with no Key or agent to name it;
+    * `{:address, wallet}`: a wallet that acted with no Key or agent to name
+      it, or one that Keys moved to;
     * `{:quote, text}`: words a member wrote;
     * `{:proposal, number}`: a proposal.
 
@@ -77,6 +78,9 @@ defmodule KeyfleetWeb.ActivityLines do
   @first_owner %{sale: "bought", given: "given"}
   @untitled_words [@unknown_type | Map.values(@untitled)]
 
+  # The Keys a moved line names before counting the rest.
+  @listed 3
+
   # How long words the site didn't write may run in Markdown, by what they
   # are.
   @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160}
@@ -94,7 +98,7 @@ defmodule KeyfleetWeb.ActivityLines do
     chat: ~w(post posts room_named)a,
     work:
       ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived changes linked)a,
-    keys: ~w(sale given transfer shard_issued shard_ended)a,
+    keys: ~w(sale given moved shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
   @channel_of for {channel, kinds} <- @channels, kind <- kinds, into: %{}, do: {kind, channel}
@@ -213,8 +217,9 @@ defmodule KeyfleetWeb.ActivityLines do
     ["#{keys} were #{@first_owner[kind]}."]
   end
 
-  defp sentence(%{kind: :transfer, facts: f}),
-    do: ["Key #{Rules.grouped(f.token_id)} changed hands."]
+  # A run of transfers to one wallet (`KeyfleetWeb.FeedLines`).
+  defp sentence(%{kind: :moved, facts: f}),
+    do: moved(f.token_ids) ++ [" moved to ", {:address, f.to}, "."]
 
   defp sentence(%{kind: :shard_issued, facts: f}),
     do: [
@@ -303,6 +308,16 @@ defmodule KeyfleetWeb.ActivityLines do
   defp keys(token_ids, others) do
     lead = if length(token_ids) + others == 1, do: "Key ", else: "Keys "
     [lead | listing(Enum.map(token_ids, &Rules.grouped/1), others)]
+  end
+
+  # Three Keys or more numbered one after another read as a range: "Keys
+  # 4–9"; any others as "Keys 4, 5, 8 and 2 others".
+  defp moved([first | _] = token_ids) do
+    last = List.last(token_ids)
+
+    if length(token_ids) >= 3 and token_ids == Enum.to_list(first..last),
+      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}"],
+      else: keys(Enum.take(token_ids, @listed), max(length(token_ids) - @listed, 0))
   end
 
   defp tasks(1), do: "a task"
