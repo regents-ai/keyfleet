@@ -7248,5 +7248,5 @@ Check: `platform/test/keyfleet_web/home_live_test.exs`,
 `platform/test/keyfleet_web/controllers/agent_files_test.exs` and the browser
 walks `key_shards.spec.ts` (a paired agent's shard issued in one press and
 seen landing), `copy_buttons.spec.ts`, `account_agents.spec.ts`,
-`setup_list.spec.ts`, `fleet_motion.spec.ts`, `homepage.spec.ts` and
-`launch_steps.spec.ts`.
+`setup_list.spec.ts`, `fleet_motion.spec.ts`, `homepage.spec.ts`,
+`launch_steps.spec.ts` and `agents_page.spec.ts`.

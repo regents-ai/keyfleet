@@ -6,7 +6,7 @@ Changes to Keyfleet, newest first.
 
 - **Shards.** On a Key's page, each agent you've paired gets its own Issue shard button for
   30 days, one press each. Any other wallet is under Other wallet.
-- **Homepage.** One screen: the headline, Watch, Classic #1 now, and Buy Key.
+- **Homepage.** Only the headline, one line, Watch, Classic #1 now and Buy Key.
 - **One paste.** The pairing message is the one thing you copy for an agent. Pair New Agent
   opens it wherever a page sends you to pair.
 - **Agents.** A runtime shows Verified once it has passed Keyfleet's checks, and no label
