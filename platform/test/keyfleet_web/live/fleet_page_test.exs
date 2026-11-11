@@ -787,7 +787,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-button-why") == "Not enough ETH for the network fee"
 
       press_fails!(view, "wallet_unavailable")
-      assert text(view, "#buy-key-order-press-note") =~ "Switch it to 0xaaaa..aaaa"
+
+      assert text(view, "#buy-key-order-press-note") =~
+               "Check it's unlocked and open on 0xaaaa..aaaa"
     end
 
     # Costly failure: a press on the wallet panel is acted on for a sign-in
