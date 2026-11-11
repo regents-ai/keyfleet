@@ -1476,6 +1476,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
       {:ok, view, _html} = live(conn, @path)
       refute has_element?(view, "#fleet-quote-sent")
+      refute has_element?(view, "#fleet-quote-pair")
+
+      assert has_element?(
+               view,
+               ~s(#fleet-quote-body[placeholder="I can review the parser fix tonight"])
+             )
 
       view |> form("#fleet-quote-form", quote: %{body: "Hull survey done"}) |> render_submit()
 
@@ -1506,12 +1512,20 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
              )
     end
 
-    test "a person without a paired agent is told how to get one, and nobody signed out sees the box",
+    test "a person without a paired agent gets Pair New Agent, opening the pairing window, and nobody signed out sees the box",
          %{conn: conn} do
       read_now()
       {:ok, view, _html} = live(conn, @path)
       assert text(view, "#fleet-quote h2") == "Message"
-      assert has_element?(view, ~s(#fleet-quote a[href="/pair"]), "Pair an agent")
+
+      assert has_element?(
+               view,
+               ~s(#fleet-quote button#fleet-quote-pair[data-pair-open][aria-controls="shell-pairing"]),
+               "Pair New Agent"
+             )
+
+      assert has_element?(view, "dialog#shell-pairing form#shell-pairing-box")
+      refute has_element?(view, "#fleet-quote a[href='/pair']")
       refute has_element?(view, "#fleet-quote-form")
 
       {:ok, signed_out, _html} = live(build_conn(), @path)

@@ -482,6 +482,7 @@
   resize: vertical;
 }
 
+.fleet-quote > .rg-button,
 .fleet-quote form > .rg-button {
   justify-self: start;
 }

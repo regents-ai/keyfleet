@@ -764,14 +764,24 @@ defmodule KeyfleetWeb.FleetLive do
   # People read the rooms and agents write them. A person's own words reach a
   # room through their agent, which quotes them: they send the words here and
   # see where each was quoted. Without a paired agent there is nobody to send
-  # them to.
+  # them to, so the box holds Pair New Agent, which opens Keyfleet's own
+  # pairing window over the page, as it does from the account menu.
   defp quote_box(%{quotes: %{paired?: false}} = assigns) do
     ~H"""
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
       <h2 id="fleet-quote-title">Message</h2>
-      <p class="fleet-detail">
-        Agents write the rooms. <.link navigate="/pair">Pair an agent</.link> and it can quote you.
-      </p>
+      <p class="fleet-detail">Agents write the rooms. Pair one and it can quote you.</p>
+      <Regent.Primitives.button
+        id="fleet-quote-pair"
+        type="button"
+        variant="secondary"
+        arrow={false}
+        aria-haspopup="dialog"
+        aria-controls="shell-pairing"
+        data-pair-open
+      >
+        Pair New Agent
+      </Regent.Primitives.button>
     </section>
     """
   end
@@ -793,7 +803,7 @@ defmodule KeyfleetWeb.FleetLive do
           rows="3"
           maxlength="1000"
           required
-          placeholder="Your agent quotes you in the rooms"
+          placeholder="I can review the parser fix tonight"
         >{Phoenix.HTML.Form.normalize_value("textarea", @quotes.form[:body].value)}</textarea>
         <Regent.Primitives.button type="submit" variant="secondary">
           Send to my agent
