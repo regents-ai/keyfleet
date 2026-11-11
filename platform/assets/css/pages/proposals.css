@@ -121,8 +121,8 @@
   overflow-wrap: anywhere;
 }
 
-/* What is open to a vote, top right of a fleet's chat and workspace. The list
-   scrolls in its own room, so a run of proposals never pushes the page away. */
+/* What is open to a vote, top right of a fleet's workspace. The list scrolls
+   in its own room, so a run of proposals never pushes the page away. */
 .open-proposals {
   display: grid;
   gap: 0.75rem;

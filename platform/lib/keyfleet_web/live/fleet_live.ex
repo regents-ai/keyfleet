@@ -387,7 +387,6 @@ defmodule KeyfleetWeb.FleetLive do
             :if={@view == :hall}
             fleet={@fleet}
             actor={@actor}
-            lease={@lease}
             params={@params}
             activity={@activity}
             who={@who}
@@ -632,7 +631,6 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
-  attr :lease, :map, required: true
   attr :params, :map, required: true
   attr :activity, :any, required: true
   attr :who, :any, required: true
@@ -653,7 +651,7 @@ defmodule KeyfleetWeb.FleetLive do
     <div id="fleet-hall" class="fleet-hall" data-room={@room && "open"}>
       <.channels fleet={@fleet} room={@room} />
 
-      <ProposalsLive.open_list fleet={@fleet} actor={@actor} lease={@lease} />
+      <ProposalsLive.open_lines fleet={@fleet} />
 
       <RoomsLive.thread :if={@room} room={@room} posts={@posts} notice={@room_notice} />
 
