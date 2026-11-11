@@ -153,7 +153,7 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
   const earlier = sellKey(quiet, buyer)
   moveKey(quiet, earlier, heir)
   await openFleet(page, "/accelerant/1")
-  await expect(page.locator("#fleet-feed-list > li").first()).toContainText(`Key ${earlier} changed hands.`, {
+  await expect(page.locator("#fleet-feed-list > li").first()).toContainText(`Key ${earlier} moved to 0x3333..3333`, {
     timeout: 10_000,
   })
   await expect.poll(() => leftovers(page)).toEqual([])
