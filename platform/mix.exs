@@ -163,59 +163,77 @@ defmodule Keyfleet.MixProject do
       # only on a migrated database.
       test: ["keyfleet.setup_local_auth", "test"],
       "test.external": ["test --only external"],
-      precommit: [
-        "compile --warnings-as-errors",
-        "deps.unlock --check-unused",
-        "cmd mix hex.audit",
-        "format --check-formatted",
-        "credo --strict",
-        "cmd env SOBELOW_HOME=_build/sobelow mix sobelow --exit",
-        # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the
-        # floor: each resource adds its domain's edge and one per custom policy check
-        # module; Ash's built-in actor checks add none.
-        # Agents' check-in records add two: their domain and the OwnProfile check.
-        # Wallet steps add three: their domain, the Build action and the LinkedSigner check.
-        # The router adds one: its pipelines read the content security policies as they compile.
-        # The early-access list adds one: its domain.
-        # Shards add two: the ShardEvent and EditsRestriction records, each with its domain.
-        # Mutes add two: their domain and the OwnMute check.
-        # Notebooks add two: the Hub and Handoff records, each with its domain.
-        # Code adds two: the Repository and Push records, each with its domain.
-        # Keys' pictures and the Base contracts' event records each add to it.
-        # Proposal words add one: the AgentActor check on their write action.
-        # Polls add four: the Poll and Vote records, each with its domain and the Standing check.
-        # Rooms' Keys-only reads add two: the PublicRoom and InGeneral checks.
-        # Direct messages add six: their domain's edge to the Conversation, Message
-        # and Block records, and each record's KeyHolder check.
-        # Workspace reads add four: the KeyReader check on the workspace and its
-        # three read tables.
-        # Names add two: the EnsIdentity and SharedProfile records, each with its domain.
-        # The table of who reads and writes what a fleet shares adds four: its
-        # Check on code pushes, messages and rooms, and rooms' InGeneral check.
-        # Quote requests add one: their domain.
-        # Wall removals add two: their domain and the KeyHolder check.
-        # The router adds two more: the saved-errors page is a plug it sets up as
-        # it compiles, and a fleet's own addresses are drawn from the route catalog.
-        # Read marks add two: the rooms' and direct messages' ReadMark records, each
-        # with its domain. Saved notebook outputs add one: the SavedOutput record.
-        # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
-        # three records bring it to 82.
-        "xref graph --label compile-connected --fail-above 82",
-        "cmd --cd graph_host uv run --frozen --offline pytest -q",
-        "test --warnings-as-errors",
-        "ash.codegen --check",
-        "usage_rules.sync --check",
-        "keyfleet.route_handoff --check",
-        # The typecheck reads the shared libraries' copied scripts and tokens.
-        "regent_ui.assets",
-        "regent_identity.assets",
-        "regent_agent_access.assets",
-        "cmd npm run typecheck",
-        "cmd npm test",
-        # The browser suite (test/browser) on its own server, once the ExUnit suite
-        # on the same database has finished.
-        "cmd npm run test:browser"
-      ]
+      precommit: precommit_checks(),
+      "check.static": Enum.reject(precommit_checks(), &slow_check?/1)
+    ]
+  end
+
+  # The fast loop keeps the same static gates; only suites run by the change
+  # runner and the network advisory audit remain in the full loop.
+  defp slow_check?(check) do
+    check in [
+      "cmd mix hex.audit",
+      "test",
+      "test --warnings-as-errors",
+      "cmd npm test",
+      "cmd npm run test:browser",
+      "cmd --cd assets npm run test:browser"
+    ]
+  end
+
+  defp precommit_checks do
+    [
+      "compile --warnings-as-errors",
+      "deps.unlock --check-unused",
+      "cmd mix hex.audit",
+      "format --check-formatted",
+      "credo --strict",
+      "cmd env SOBELOW_HOME=_build/sobelow mix sobelow --exit",
+      # Ash 3.32.1's retained policy-check compile dependencies (ash #2886) set the
+      # floor: each resource adds its domain's edge and one per custom policy check
+      # module; Ash's built-in actor checks add none.
+      # Agents' check-in records add two: their domain and the OwnProfile check.
+      # Wallet steps add three: their domain, the Build action and the LinkedSigner check.
+      # The router adds one: its pipelines read the content security policies as they compile.
+      # The early-access list adds one: its domain.
+      # Shards add two: the ShardEvent and EditsRestriction records, each with its domain.
+      # Mutes add two: their domain and the OwnMute check.
+      # Notebooks add two: the Hub and Handoff records, each with its domain.
+      # Code adds two: the Repository and Push records, each with its domain.
+      # Keys' pictures and the Base contracts' event records each add to it.
+      # Proposal words add one: the AgentActor check on their write action.
+      # Polls add four: the Poll and Vote records, each with its domain and the Standing check.
+      # Rooms' Keys-only reads add two: the PublicRoom and InGeneral checks.
+      # Direct messages add six: their domain's edge to the Conversation, Message
+      # and Block records, and each record's KeyHolder check.
+      # Workspace reads add four: the KeyReader check on the workspace and its
+      # three read tables.
+      # Names add two: the EnsIdentity and SharedProfile records, each with its domain.
+      # The table of who reads and writes what a fleet shares adds four: its
+      # Check on code pushes, messages and rooms, and rooms' InGeneral check.
+      # Quote requests add one: their domain.
+      # Wall removals add two: their domain and the KeyHolder check.
+      # The router adds two more: the saved-errors page is a plug it sets up as
+      # it compiles, and a fleet's own addresses are drawn from the route catalog.
+      # Read marks add two: the rooms' and direct messages' ReadMark records, each
+      # with its domain. Saved notebook outputs add one: the SavedOutput record.
+      # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
+      # three records bring it to 82.
+      "xref graph --label compile-connected --fail-above 82",
+      "cmd --cd graph_host uv run --frozen --offline pytest -q",
+      "test --warnings-as-errors",
+      "ash.codegen --check",
+      "usage_rules.sync --check",
+      "keyfleet.route_handoff --check",
+      # The typecheck reads the shared libraries' copied scripts and tokens.
+      "regent_ui.assets",
+      "regent_identity.assets",
+      "regent_agent_access.assets",
+      "cmd npm run typecheck",
+      "cmd npm test",
+      # The browser suite (test/browser) on its own server, once the ExUnit suite
+      # on the same database has finished.
+      "cmd npm run test:browser"
     ]
   end
 end

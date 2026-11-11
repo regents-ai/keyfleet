@@ -96,6 +96,8 @@ defmodule KeyfleetWeb.BoundaryTest do
   end
 
   test "development keeps origin protection on an exact loopback allowlist" do
+    port = System.get_env("PORT", "4000")
+
     endpoint_config =
       "config/dev.exs"
       |> Config.Reader.read!(env: :dev)
@@ -103,8 +105,8 @@ defmodule KeyfleetWeb.BoundaryTest do
       |> Keyword.fetch!(KeyfleetWeb.Endpoint)
 
     assert Keyword.fetch!(endpoint_config, :check_origin) == [
-             "http://localhost:4000",
-             "http://127.0.0.1:4000"
+             "http://localhost:#{port}",
+             "http://127.0.0.1:#{port}"
            ]
   end
 

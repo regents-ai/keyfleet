@@ -2996,3 +2996,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   change to sign-in, the wallet or the side panel wait for the founder.
 - Why: Sean, 19 October 21:09Z: "why does every action need me to rubberstamp
   it?"; his 20 October 00:02Z "1. a" asked for the rule to be written down.
+
+## 2026-10-19 — Template development check and build improvements
+
+Adopt ash-template's change runner with all configured platform suites, independent
+ExUnit parts, bounded local runs and owned cleanup. Cache stable build dependencies
+before application files. Full integration/protected checks remain available. This
+records local implementation; verification and release state are in the rollout report.

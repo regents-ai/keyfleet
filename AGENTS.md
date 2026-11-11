@@ -15,10 +15,6 @@ signed-in Overview. The [README](README.md) describes the product.
 - There is no `identity/` folder. The shared profile domain comes from
   `regents/identity`, pinned by git in `platform/mix.exs` with `design-system`
   and `elixir-utils`.
-- `make check-change` is the check an ordinary change runs before it ships:
-  compile with warnings as errors, format, then the tests that cover what
-  changed since `origin/main` (`scripts/check-change.sh`). The platform
-  README's "Shipping a change" says how a change goes live.
 - `make check` runs every gate: the platform's `mix precommit` (which ends
   with the TypeScript typecheck, the unit tests and the browser suite), then the required-fixes check against ash-template
   (needs `gh auth login`), then the CLI's build, typecheck and tests, then the
@@ -35,7 +31,7 @@ signed-in Overview. The [README](README.md) describes the product.
   `platform/` and the graph host's sealed Python supply into an image and
   starts it against a throwaway database (`scripts/release.sh`). It never
   deploys; `scripts/deploy.sh production` does.
-- Follow the workspace's `regent-workflow`; whoever makes a change ships it.
+- Follow the workspace's `regent-workflow`; use one integrating owner and one current candidate.
   Scope verification to observable acceptance and preserve useful
   regression coverage.
 - When a step has a clear recommendation, do it; never ask the founder to
@@ -70,3 +66,6 @@ Preserve dated history and avoid cosmetic findings. Do not inflate severity or
 claim that no findings proves complete coverage. This is read-only review: never
 sign, pay, activate earnings, publish or deploy to test an instruction.
 <!-- END REGENT ROLLOUT REVIEW -->
+
+`make check-change` uses the shared ash-template change runner; `platform/README.md`
+explains its scope, isolation and full-check fallback. It grants no release authority.

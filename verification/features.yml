@@ -2,6 +2,34 @@ repo: keyfleet
 # Started with the homepage's moving parts. Every other part of Keyfleet is not
 # mapped yet; each change maps what it touches first.
 features:
+  - id: development-change-checks
+    what: >-
+      A developer checks ordinary platform changes with the template runner and
+      keeps the full integration gate for shared, build and dependency changes.
+      Runs use isolated local databases and clean up their owned processes.
+    who: operator
+    level: ordinary
+    paths:
+      - scripts/check-change.py
+      - scripts/check-change.sh
+      - platform/scripts/check_change_cleanup.exs
+      - platform/mix.exs
+      - Makefile
+    entry:
+      - command: make check-change
+    proofs:
+      - scripts/tests/test_check_change.py
+    regressions:
+      - id: R-20261019-owned-check-processes
+        from: independent review of the shared runner
+        test: scripts/tests/test_check_change.py
+      - id: R-20261019-isolated-failure-records
+        from: independent review of parallel ExUnit checks
+        test: scripts/tests/test_check_change.py
+    gaps:
+      - The default browser walk does not cover every separate browser configuration.
+      - WebKit is not run on the Mac.
+
   - id: home-fleet-seas
     what: >-
       A visitor sees Classic's and the Regents Club's seas on the homepage, a ship

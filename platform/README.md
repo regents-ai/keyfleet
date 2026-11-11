@@ -290,17 +290,47 @@ profiles the local site's public pages as two emulated phones (lab emulation
 in Chromium, not a device); the live site only when it is named as a second
 argument.
 
-## Checks
+## Checking a change
 
-Before an ordinary change ships, `make check-change` from the monorepo root
-compiles with warnings as errors, checks formatting and runs the tests that
-cover what changed since `origin/main` (`BASE=<ref>` picks another starting
-point): the ExUnit suite split four ways when anything under `lib`, `test`
-(outside the browser tests), `config` or `priv` or the Mix files changed,
-Vitest and Playwright on the tests that import what changed, and the graph
-host's tests and the contracts' gate when their folders changed. Its ExUnit run gives each quarter of the test
-files a database named after the checkout (`keyfleet_c<checksum>p1_test` to
-`p4`), created on first use, so two checkouts can run it at once.
+From the repository root, `make check-change` compares the working tree with the
+common ancestor of `BASE` (default `origin/main`) and includes new files. Use
+`python3 scripts/check-change.py --plan` to see its selection, or `--platform` to
+explicitly exercise the complete platform check path.
+
+For platform changes it keeps the static gates, splits **every** ExUnit test across
+two independent local test databases, runs the full JavaScript suite and the site's
+configured headless Chromium walk. Server pages and CSS run the whole walk; they
+cannot be selected safely through JavaScript imports. Unknown paths, dependency,
+shared-library, migration and build changes use the existing `make check` instead.
+Documentation-only output is not runtime or release evidence. `make check` remains
+the full integration/protected-change gate, including its network advisory check.
+Additional chain, device, showcase or security browser configurations still apply
+when the changed behavior needs them; the default walk does not include every configuration.
+
+Install the locked Mix and npm dependencies using this site's setup instructions
+first. The runner installs esbuild only if missing. `--jobs 1` runs tests serially;
+`--jobs 4` permits four parts when capacity allows. The default is two, with the
+site's established connection pool sizes. No `--stale`, retries or skipped failures.
+It admits two runner invocations at once, one per checkout, and refuses to start
+below 50 GiB free. Other heavy commands share the same two-run workspace budget.
+Failed shard logs and private failure records stay in `platform/_build/check-change/`;
+the ordinary `mix test --failed` is marked for a complete rerun after a failed or
+interrupted shard run. Passing shard scratch is removed. Browser worker counts stay
+with each site’s existing configuration. Only owned processes and throwaway test
+databases are cleaned up, including on
+failure or interruption. A cleanup failure fails the command.
+
+Shared adoption records the template revision, dependency pins, migration owner
+and order, compatible consumer state, and checks actually run. Keep one integrating
+owner and one current candidate per repository. Pushes and releases require the
+applicable authority from workspace AGENTS.md; a passing check grants none.
+
+The Dockerfile installs/copies stable npm dependencies before application files and
+compiles Mix dependencies using compile-time configuration only. Runtime config
+joins the app layer. Lockfile and compile-time config changes still invalidate the
+appropriate cache. A cold rebuild remains available for reproducibility checks.
+
+## Checks
 
 From the monorepo root, `make check-platform` runs this component's gate and
 `make check` runs every component's:
@@ -425,25 +455,11 @@ It prints the supply name to set as `ARM64_GRAPH_HOST_SUPPLY` or
 
 ### Shipping a change
 
-An ordinary change ships on the tests that cover it, with no other sign-off:
-
-1. Commit it on top of `origin/main`.
-2. Run `make check-change` from the monorepo root.
-3. Add its line to the monorepo's `CHANGELOG.md`, push to `main` (never
-   force), and run `scripts/deploy.sh production`. Fly waits for `/healthz`
-   on the new machine and reports a failed deploy when it does not answer.
-
-When another change reaches `main` first, rebase onto it, run
-`make check-change` again and deploy; the deploy script refuses a commit that
-does not contain the live one. To roll back, `fly releases -a keyfleet
---image` names the previous image, and
-`fly deploy --config platform/fly.toml --ha=false --image <that image>` from
-the monorepo root runs it again.
-
-Anything signed in Safe{Wallet}, a contract change, a write to production
-data, moving money, and a first change to sign-in, the wallet or the side
-panel waits for the founder's go, and runs `make check` in place of
-`make check-change`. Everything else ships without asking.
+Use the template change loop described above while iterating; run the full applicable
+checks on an integrated shared/build or protected change. Keep one integrating owner
+and one current candidate, record its checked revision and changelog, and preserve the
+deploy script's live-commit ancestry check. Pushes and deployment require the applicable
+founder authority from workspace AGENTS.md. A passing check grants none.
 
 ## Release
 
