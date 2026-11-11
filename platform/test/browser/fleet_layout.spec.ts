@@ -149,14 +149,15 @@ test("a channel list with every room in view shows no \"…\"", async ({page}) =
 })
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`"Purchase Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page, baseURL}) => {
+  test(`the fleet's "Buy Key" is filled Tangerine with Charcoal words in ${scheme}, the Key on offer beside it`, async ({page, baseURL}) => {
     // The theme the visitor chose, as the switch writes it.
     await page.context().addCookies([{name: "regent_theme", value: scheme, url: baseURL!}])
     await openFleet(page)
     await expect(page.locator("html")).toHaveAttribute("data-theme", scheme)
 
     const button = page.locator("#fleet-get-key")
-    await expect(button).toHaveText(/Join this Keyfleet by purchasing the next Key: [0-9.,]+ USDC/)
+    await expect(button).toHaveText("Buy Key")
+    await expect(page.locator("#fleet-buy-offer")).toHaveText(/^Key [0-9,]+ · [0-9.,]+ USDC$/)
     const paint = await button.evaluate(element => ({
       fill: getComputedStyle(element, "::before").backgroundColor,
       ink: getComputedStyle(element).color,
@@ -166,8 +167,8 @@ for (const scheme of ["light", "dark"] as const) {
 }
 
 // The way in sits in the fleet's bar, above its tabs, and opens the "Buy Key"
-// window, as the header's "Purchase Key" does (Sean, 20 October 2026).
-test("the way in sits above the tabs and opens the Buy Key window, as Purchase Key does", async ({page}) => {
+// window, as the header's "Buy Key" does (Sean, 20 October 2026).
+test("the way in sits above the tabs and opens the Buy Key window, as the header's Buy Key does", async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900})
   await openFleet(page)
 

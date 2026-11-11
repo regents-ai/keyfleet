@@ -24,7 +24,7 @@ const builderCode = "62635f7530393336306a6f0b0080218021802180218021802180218021"
 const approvedAmount = (data: string) => Number(BigInt(`0x${data.slice(0, -builderCode.length).slice(-64)}`))
 
 // Opens the fleet's page, signed in as `bearer` unless it is null, with the
-// "Buy Key" window the header's "Purchase Key" opens: earlier tests may have
+// "Buy Key" window the header's "Buy Key" opens: earlier tests may have
 // sold this account a Key, and a holder's way in has no Buy button. Returns
 // the page's uncaught errors.
 async function openBuying(page: Page, bearer: string | null = "valid") {
@@ -166,7 +166,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto("/")
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-  await page.locator("#home-buy-next-key").click()
+  await page.locator("#home-buy-key").click()
   const window = page.locator("dialog#buy-key")
   await expect(window).toBeVisible()
   await useStandInWallet(page, me)

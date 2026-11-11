@@ -375,7 +375,7 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  # "Purchase Key" in the header and a fleet page's "Join this Keyfleet" open
+  # "Buy Key" in the header and on a fleet page open
   # the "Buy Key" window for a fleet that sells its Keys, drawn from the
   # fleet's reading every page shares and drawn again as it changes.
   defp press("open_buy_key", %{"fleet" => fleet_id}, socket) do

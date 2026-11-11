@@ -1,7 +1,7 @@
 /**
- * The homepage's moving parts around "Buy Next Key": the hex field behind the
- * hero, with the tiles nearest a mouse standing up out of it, and the next
- * Key's card with its turn, its dust and its shuffle. Each only presents; the
+ * The homepage's moving parts around "Buy Key": the hex field behind the
+ * hero, with the tiles nearest a mouse standing up out of it, and the
+ * Key on offer's card with its turn, its dust and its shuffle. Each only presents; the
  * page is complete and readable before any of it loads, and none of it decides
  * whether the button can be pressed.
  */
@@ -650,7 +650,7 @@ export const NextKeyCard = {
     const onOver = (event: PointerEvent) => {
       if (event.pointerType !== "mouse") return
       const target = event.target as Element
-      point?.(!still(root) && target.closest("[data-key-card], #home-buy-next-key") !== null)
+      point?.(!still(root) && target.closest("[data-key-card], #home-buy-key") !== null)
     }
     const events = new AbortController()
     area.addEventListener("pointermove", onTurn, {signal: events.signal, passive: true})

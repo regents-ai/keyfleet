@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.Components.Shell do
   The app shell: the header, the sidebar and the page with the site's footer at
   its end.
 
-  Every page that has the header holds the "Buy Key" window its "Purchase Key"
+  Every page that has the header holds the "Buy Key" window its "Buy Key"
   opens (`KeyfleetWeb.Components.BuyKey`): the app's pages draw it in the
   `buy_key` slot, the homepage in its own Classic section.
 
@@ -22,12 +22,12 @@ defmodule KeyfleetWeb.Components.Shell do
   alias KeyfleetWeb.Components.RegentLinks
   alias KeyfleetWeb.RouteCatalog.RouteTarget
 
-  # Classic is the fleet that sells Keys: once it is open, "Purchase Key" in the
+  # Classic is the fleet that sells Keys: once it is open, "Buy Key" in the
   # header opens the "Buy Key" window for it. Until then the header has no
-  # "Purchase Key".
+  # "Buy Key".
   @get_key_fleet "fleet_tech_classic"
 
-  @doc "The fleet the header's \"Purchase Key\" opens, shown only while it is open."
+  @doc "The fleet the header's \"Buy Key\" opens, shown only while it is open."
   def get_key_fleet, do: @get_key_fleet
 
   attr(:route_spec, :map, required: true)
@@ -169,7 +169,7 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :get_key, :boolean,
     required: true,
-    doc: "whether the fleet \"Purchase Key\" opens is open, so the header shows it"
+    doc: "whether the fleet \"Buy Key\" opens is open, so the header shows it"
 
   attr :menu, :boolean,
     required: true,
@@ -186,7 +186,7 @@ defmodule KeyfleetWeb.Components.Shell do
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
   switch (not on the always-dark homepage), the Regents crown and links,
-  "Purchase Key" (once Classic is open), the account control and, signed in,
+  "Buy Key" (once Classic is open), the account control and, signed in,
   the account menu its name opens. It fits one line on a phone.
   """
   def header(assigns) do
@@ -259,7 +259,7 @@ defmodule KeyfleetWeb.Components.Shell do
   attr :id, :string, required: true
 
   @doc """
-  "Purchase Key" in the site header, for everyone, signed in or not, once Classic
+  "Buy Key" in the site header, for everyone, signed in or not, once Classic
   is open: it opens the "Buy Key" window for Classic.
   """
   def get_key(assigns) do
@@ -274,7 +274,7 @@ defmodule KeyfleetWeb.Components.Shell do
       phx-value-fleet={@fleet_id}
       aria-haspopup="dialog"
     >
-      <span class="rg-button__label">Purchase Key</span>
+      <span class="rg-button__label">Buy Key</span>
     </button>
     """
   end

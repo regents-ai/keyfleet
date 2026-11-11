@@ -478,7 +478,7 @@ span.account-chip {
   #shell-sidebar ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 47.99rem) {
-  /* One row on a phone: brand, Menu, theme, Purchase Key, account. The X and GitHub
+  /* One row on a phone: brand, Menu, theme, Buy Key, account. The X and GitHub
      links stay reachable in the footer, so the header never wraps over content. */
   #shell-header { flex-wrap: nowrap; }
   #shell-header .rl-header-links { display: none; }
@@ -511,7 +511,7 @@ span.account-chip {
   #shell-header button.account-chip { padding-inline: 0.5rem; }
 }
 @media (max-width: 22.49rem) {
-  /* A 320px phone has no room for the theme switch beside Purchase Key; the
+  /* A 320px phone has no room for the theme switch beside Buy Key; the
      device's own light or dark setting applies until the screen is wider. */
   #shell-header:has(.shell-get-key) .theme-control { display: none; }
 }

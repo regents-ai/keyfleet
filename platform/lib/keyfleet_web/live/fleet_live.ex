@@ -6,9 +6,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   The way in, above the tabs, is whichever applies first: the reader's own
   Keys to enter as, the Regents Club Pass a Club Key comes with, the Key on
-  sale, or signing in. A fleet that sells Keys offers the next one by its
-  price to someone holding none of its Keys; it opens the "Buy Key" window
-  (`KeyfleetWeb.Components.BuyKey`), as "Purchase Key" in the header does.
+  sale, or signing in. A fleet that sells Keys offers the next one, its
+  number and price beside "Buy Key", to someone holding none of its Keys; it
+  opens the "Buy Key" window (`KeyfleetWeb.Components.BuyKey`), as "Buy Key"
+  in the header does.
   Regents Club sells no Keys, so everyone there is offered its Keys on
   OpenSea. Under the tabs, a signed-in person who holds a Key here and hasn't
   finished setting up their agent sees the setup list
@@ -31,7 +32,7 @@ defmodule KeyfleetWeb.FleetLive do
   page, under the same bar, in place of the other views.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
-  coming soon, and nothing else: no price, no keys, no "Purchase Key", no "Send
+  coming soon, and nothing else: no price, no keys, no "Buy Key", no "Send
   your agent", and no rooms, workspace or proposals.
 
   Everything here is public and read from what the fleet's contract has
@@ -80,6 +81,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.BuyKey
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
@@ -560,8 +562,9 @@ defmodule KeyfleetWeb.FleetLive do
 
   defp entry(%{fleet: %{buy: %{price: price}}} = assigns) when price != nil do
     ~H"""
-    <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Purchase Key">
-      <.buy_key_button fleet_id={@fleet.fleet_id} buy={@fleet.buy} />
+    <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Buy Key">
+      <p id="fleet-buy-offer" class="fleet-entry__line">{BuyKey.on_offer(@fleet.buy)}</p>
+      <.buy_key_button fleet_id={@fleet.fleet_id} />
     </section>
     """
   end
@@ -586,10 +589,9 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   attr :fleet_id, :string, required: true
-  attr :buy, :map, required: true
 
   # Opens the "Buy Key" window for the fleet; the window holds the wallet's
-  # buttons.
+  # buttons. The Key on offer and its price are the line beside it.
   defp buy_key_button(assigns) do
     ~H"""
     <Regent.Primitives.button
@@ -598,8 +600,9 @@ defmodule KeyfleetWeb.FleetLive do
       phx-click="open_buy_key"
       phx-value-fleet={@fleet_id}
       aria-haspopup="dialog"
+      aria-describedby="fleet-buy-offer"
     >
-      Join this Keyfleet by purchasing the next Key: {usdc(@buy.price)}
+      Buy Key
     </Regent.Primitives.button>
     """
   end
@@ -1156,7 +1159,7 @@ defmodule KeyfleetWeb.FleetLive do
   # The controls only move the map, so they never wait on the page; a search
   # asks the page which Keys to mark, and the map writes what was found. The map
   # draws itself once its script loads; until then it says so, and the list
-  # of keys below still has every key. While "Purchase Key" is open, the Key on
+  # of keys below still has every key. While "Buy Key" is open, the Key on
   # offer stands out on the map and the note under it names that Key.
   defp key_map(assigns) do
     assigns = assign(assigns, :map, "#key-map-#{assigns.fleet.fleet_id}")

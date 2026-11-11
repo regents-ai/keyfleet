@@ -102,7 +102,8 @@ test.describe("a key's profile", () => {
     await page.locator("#key-profile-buy").click()
     const sale = page.locator("dialog#buy-key")
     await expect(sale.locator("#buy-key-title")).toBeFocused()
-    await expect(sale.locator("#buy-key-button")).toContainText(`Buy Key ${next}`)
+    await expect(sale.locator("#buy-key-button [data-press-label]")).toHaveText("Buy Key")
+    await expect(sale.locator("#buy-key-number")).toHaveText(next.toLocaleString("en-US"))
     await expect(profile(page)).toBeVisible()
 
     // Escape closes the window on top alone, and focus goes back to Buy Key.

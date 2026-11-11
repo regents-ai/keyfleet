@@ -104,7 +104,8 @@ features:
   - id: home-next-key
     what: >-
       On a wide screen the homepage's headline takes the hero's left half and the
-      next Key's card, with "Buy Next Key", sits in the middle of its right half.
+      next Key's card, with "Buy Key" and the Key's number and price under it,
+      sits in the middle of its right half.
       Under a mouse the card turns toward the pointer and settles level again.
       Dust gathers just outside the card's edge on the side facing the mouse,
       brighter the nearer it is; pointing at the card or the button flashes the

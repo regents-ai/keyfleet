@@ -37,16 +37,16 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   await expect(page.locator("#home-classic-price")).toHaveText(/^[0-9][0-9.]* USDC$/)
   await expectOnFirstScreen(page, facts, "Classic #1's Keys and price")
 
-  const buy = page.locator("#home-buy-next-key")
-  await expect(buy).toContainText("Buy Next Key")
+  const buy = page.locator("#home-buy-key")
+  await expect(buy).toHaveText("Buy Key")
   await expect(buy).toBeDisabled()
-  await expect(page.locator("#home-buy-price")).toHaveText("Key 1 · 10 USDC")
+  await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
   // The hero puts the Key's card above its button, so on a phone the button
   // sits below the first screen. That is a layout choice, so the run reports
   // how far below rather than failing on it.
   const below = await belowFirstScreen(page, buy)
-  test.info().annotations.push({type: "Buy Next Key below the first screen", description: `${below}px`})
+  test.info().annotations.push({type: "Buy Key below the first screen", description: `${below}px`})
   await expectComfortable(page, errors)
 
   // Classic #1's own "Buy Key" waits for the sale too, with the same reason.

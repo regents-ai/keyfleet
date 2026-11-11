@@ -115,10 +115,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     render_async(view)
     refute has_element?(view, "#key-profile-composer")
 
-    # Its Buy Key opens the fleet's Buy Key window above the profile.
+    # Its Buy Key opens the fleet's Buy Key window above the profile, the Key
+    # on sale in its facts.
     view |> element("#key-profile-buy") |> render_click()
     render_async(view, 3_000)
-    assert has_element?(view, "#buy-key #buy-key-button", "Buy Key 21")
+    assert text(view, "#buy-key #buy-key-button [data-press-label]") == "Buy Key"
+    assert text(view, "#buy-key #buy-key-number") == "21"
     assert has_element?(view, "#key-profile")
   end
 

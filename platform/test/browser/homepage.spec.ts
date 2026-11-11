@@ -1,11 +1,11 @@
 import {expect, test, type Page} from "@playwright/test"
 
-// The homepage leads with the headline, the ways in, Classic #1's figures and "Buy Next Key"
-// with the Key's card art and price, then Classic Keyfleet with "Buy Key", what a fleet can use
-// and the starting ideas for a fleet's shared goal.
+// The homepage leads with the headline, the ways in, Classic #1's figures and "Buy Key" under
+// the Key's card art and price, then Classic Keyfleet with "Buy Key", what a fleet can use and
+// the starting ideas for a fleet's shared goal.
 
-// No fleet in the test data is deployed, so Classic's sale is closed: "Buy Next Key" says it
-// can't be pressed, with the reason beside it.
+// No fleet in the test data is deployed, so Classic's sale is closed: "Buy Key" says it can't
+// be pressed, with the reason under it.
 
 const waitForHomepage = async (page: Page) => {
   await expect(page.locator("#public-home")).toBeVisible()
@@ -22,10 +22,9 @@ test("the homepage reads without scripts, top to bottom", async ({browser}) => {
 
   await expect(page.getByRole("heading", {name: "A persistent team for your AI agent.", level: 1}))
     .toBeVisible()
-  const buy = page.locator("#home-buy-next-key")
+  const buy = page.locator("#home-buy-key")
   await expect(buy).toBeDisabled()
-  await expect(buy).toContainText("Buy Next Key")
-  await expect(page.locator("#home-buy-price")).toHaveText("Key 1 · 10 USDC")
+  await expect(buy).toHaveText("Buy Key")
   await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
   await expect(page.locator("#home-integration-tiles > li")).toHaveCount(9)
@@ -83,15 +82,15 @@ test("the homepage shows the saved theme and offers the switch", async ({browser
   }
 })
 
-// On a phone the page fits the screen, and "Buy Next Key" comes before the instruction.
-test("on a phone nothing scrolls sideways and Buy Next Key comes first", async ({page}) => {
+// On a phone the page fits the screen, and the hero's "Buy Key" comes before the instruction.
+test("on a phone nothing scrolls sideways and Buy Key comes first", async ({page}) => {
   for (const width of [320, 375]) {
     await page.setViewportSize({width, height: 812})
     await page.goto("/")
     await waitForHomepage(page)
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    const buy = await page.locator("#home-buy-next-key").boundingBox()
+    const buy = await page.locator("#home-buy-key").boundingBox()
     const give = await page.locator("#home-instruction").boundingBox()
     expect(buy!.y).toBeLessThan(give!.y)
   }

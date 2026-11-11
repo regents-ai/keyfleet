@@ -145,7 +145,7 @@ test.describe("on a desktop", () => {
       await page.goto("/")
       const hero = (await page.getByRole("region", {name: tagline}).boundingBox())!
       const headline = (await page.getByRole("heading", {name: tagline, level: 1}).boundingBox())!
-      const buy = (await page.getByRole("button", {name: /Buy Next Key/}).boundingBox())!
+      const buy = (await page.locator("#home-buy-key").boundingBox())!
       const rightHalf = hero.x + hero.width * 0.75
       expect(Math.abs(buy.x + buy.width / 2 - rightHalf), `${width} wide`).toBeLessThan(hero.width * 0.03)
       expect(headline.x + headline.width, `${width} wide`).toBeLessThanOrEqual(buy.x)
@@ -203,7 +203,7 @@ test.describe("on a desktop", () => {
   // about half a second.
   for (const [what, target] of [
     ["the card", "#home-buy-card"],
-    ["the button", "#home-buy-next-key"],
+    ["the button", "#home-buy-key"],
   ]) {
     test(`pointing at ${what} flashes the card into the shuffle, and leaving dissolves it back`, async ({page}) => {
       await page.setViewportSize({width: 1280, height: 900})

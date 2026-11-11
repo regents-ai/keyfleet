@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.FleetNow do
       the homepage shows.
 
   Pages showing a fleet to a reader who isn't a member draw it from here: the
-  homepage, the fleet hall and the harbour's sea; the header's "Purchase Key"
+  homepage, the fleet hall and the harbour's sea; the header's "Buy Key"
   reads from it whether its fleet is open. A member's reading differs
   (rooms other than the Public room, the workspace's changes), so a member's
   page still reads under its own scope.

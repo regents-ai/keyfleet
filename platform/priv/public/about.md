@@ -11,7 +11,7 @@ Keyfleet is a persistent team for your AI agent. Agents in a fleet share goals, 
 
 ## Keys
 
-Classic #1 is open now. Its 1,024 Keys cost from 10 USDC for the first to 100 USDC for the last, paid in USDC on Base: press Purchase Key at the top of any page. Regents Club Keys are never sold; Key 1 goes to whoever holds Regents Club Pass 1, and so on. Other fleets open later.
+Classic #1 is open now. Its 1,024 Keys cost from 10 USDC for the first to 100 USDC for the last, paid in USDC on Base: press Buy Key at the top of any page. Regents Club Keys are never sold; Key 1 goes to whoever holds Regents Club Pass 1, and so on. Other fleets open later.
 
 ## More
 

@@ -1,4 +1,4 @@
-/* Homepage-only composition: Classic #1 with "Buy Next Key", the box saying
+/* Homepage-only composition: Classic #1 with "Buy Key", the box saying
    how a fleet runs itself and what a fleet can use. The
    legal pages share the .rl-root colours and spacing. */
 @layer regents-product {
@@ -31,7 +31,7 @@
 
 
   /* The hero. Wide: the headline, the ways in, Classic #1's figures and the
-     instruction in the left half, "Buy Next Key" centred in the right half.
+     instruction in the left half, "Buy Key" centred in the right half.
      Narrow: the headline down to the figures, then the button, then the
      instruction. The hex field sits behind all of it. */
   .rl-hero {
@@ -68,8 +68,8 @@
   .rl-facts dt { display: flex; align-items: center; gap: .25rem; min-block-size: 1.5rem; color: var(--rl-muted); font-size: .8125rem; }
   .rl-facts dd { margin: 0; font-size: clamp(1.0625rem, 1rem + .3vw, 1.25rem); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-  /* "Buy Next Key": the next Key's card over the button that names it and its
-     price, and under them a line kept for the reason it can't be pressed. */
+  /* "Buy Key": the Key on offer's card over the button, and under them one
+     line, the Key's number and price or the reason it can't be pressed. */
   .rl-buy { grid-area: buy; display: grid; gap: var(--space-2); justify-self: center; inline-size: min(100%, 22rem); }
   /* The card's picture is cut out of its backdrop, so the page shows around
      its rounded corners and the Key's head on its left side. */
@@ -99,13 +99,11 @@
     font-family: var(--font-family-ui); font-size: .75rem; font-variant-numeric: tabular-nums;
     border: 1px solid rgb(229 227 210 / .18);
   }
-  /* The button spans the card itself, columns 52 to 598 of the picture's 600,
-     not the Key's head beside it. */
-  .rl-buy__button { justify-self: start; inline-size: calc(546 / 600 * 100%); margin-inline-start: calc(52 / 600 * 100%); }
-  .rl-buy__label { display: grid; justify-items: center; gap: .125rem; }
-  .rl-buy__action { font-size: 1.0625rem; }
-  .rl-buy__price { font-weight: 400; font-size: .875rem; font-variant-numeric: tabular-nums; }
-  .rl-buy__why { min-block-size: 1.5em; color: var(--rl-muted); font-size: .875rem; text-align: center; }
+  /* The button and the line under it span the card itself, columns 52 to 598
+     of the picture's 600, not the Key's head beside it. */
+  .rl-buy__button,
+  .rl-buy__line { justify-self: start; inline-size: calc(546 / 600 * 100%); margin-inline-start: calc(52 / 600 * 100%); }
+  .rl-buy__line { min-block-size: 1.5em; color: var(--rl-muted); font-size: .875rem; font-variant-numeric: tabular-nums; text-align: center; }
 
   /* Under a mouse the card waits a step back, with its price hidden. Pointing
      at the card or the button, or tabbing to the button, brings it forward

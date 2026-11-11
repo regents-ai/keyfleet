@@ -468,10 +468,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   describe "buying the next key" do
-    # "Join this Keyfleet" opens the "Buy Key" window for this fleet, with
-    # how many of its Keys have sold and Buy naming the next one. Key 151
-    # opens level 9, whose price is the first to round up.
-    test "Join this Keyfleet opens the Buy Key window for the fleet's next Key" do
+    # The fleet page's "Buy Key" opens the "Buy Key" window for this fleet,
+    # with how many of its Keys have sold and the next one in the facts beside
+    # Buy, never in its label. Key 151 opens level 9, whose price is the first
+    # to round up.
+    test "Buy Key opens the Buy Key window for the fleet's next Key" do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       chain!(allowance: 45_150_000)
@@ -483,7 +484,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, ~s(dialog#buy-key #buy-key-title[tabindex="-1"]), "Buy Key")
       assert text(view, "#buy-key-sold") == "150"
-      assert text(view, "dialog#buy-key #buy-key-order #buy-key-button") == "Buy Key 151"
+      assert text(view, "#buy-key-number") == "151"
+      assert text(view, "dialog#buy-key #buy-key-order #buy-key-button") == "Buy Key"
       refute has_element?(view, "#buy-key-button-why")
       refute has_element?(view, "#buy-key-go")
 
@@ -525,15 +527,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert buy.to == @contract
       assert "0x" <> _calldata = buy.data
 
-      # The figures are on the buttons, not in a line above, with the choice
-      # to approve without limit right above Approve, not ticked.
+      # The figures are in the window's facts, not on the buttons or in a line
+      # above them, with the choice to approve without limit right above
+      # Approve, not ticked.
       assert has_element?(view, "#buy-key-order-line[hidden]")
       assert text(view, "#buy-key-approve [data-press-label]") == "Approve USDC"
       assert text(view, "#buy-key-unlimited-form") == "Unlimited"
       refute has_element?(view, "#buy-key-unlimited-form[hidden]")
       refute has_element?(view, "#buy-key-unlimited[checked]")
 
-      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key"
 
       assert text(view, "#buy-key-order-from") ==
                "Sending from 0xaaaa..aaaa #{@owner} on Base."
@@ -648,7 +651,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, "#buy-key-unlimited[disabled]")
       assert has_element?(view, "#buy-key-order-line[hidden]")
-      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key"
     end
 
     test "a purchase that doesn't go through says why it may not have", %{conn: conn} do
@@ -742,7 +745,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, "#buy-key-order-from[hidden]")
 
-      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key"
 
       view
       |> with_target("#buy-key-order")
@@ -802,7 +805,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
 
-      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key"
 
       refute has_element?(view, "#buy-key-button[disabled]")
       assert has_element?(view, "#buy-key-button[data-account-target=sign-in]")
@@ -865,7 +868,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, "/classic/1")
       open_buy_key(view, "fleet_tech_classic")
       render_async(view, 3_000)
-      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 1,024"
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key"
 
       active!(view, @owner)
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
@@ -900,31 +903,32 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key")
     end
 
-    # A buyer sees what the next Key costs before pressing anything, as the
-    # Buy button will name it: on the fleet's own button, with no line beside
-    # it, and on the homepage's "Buy Next Key".
-    test "the next Key and its price show before any press" do
+    # A buyer sees the next Key and what it costs before pressing anything, in
+    # the line beside "Buy Key" on the fleet's page and under it on the
+    # homepage, never in the button's label.
+    test "the next Key and its price show beside Buy Key before any press" do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       read_now("fleet_tech_classic")
 
       {:ok, view, _html} = live(build_conn(), "/classic/1")
 
-      assert text(view, "#fleet-entry #fleet-get-key") ==
-               "Join this Keyfleet by purchasing the next Key: 10 USDC"
+      assert text(view, "#fleet-entry #fleet-buy-offer") == "Key 1 · 10 USDC"
 
-      refute has_element?(view, "#fleet-entry .fleet-entry__line")
+      assert text(view, ~s(#fleet-entry #fleet-get-key[aria-describedby="fleet-buy-offer"])) ==
+               "Buy Key"
 
       {:ok, home, _html} = live(build_conn(), "/")
       render_async(home, 3_000)
 
-      assert has_element?(home, "button#home-buy-next-key", "Key 1 · 10 USDC")
+      assert text(home, "button#home-buy-key") == "Buy Key"
+      assert text(home, "#home-buy-price") == "Key 1 · 10 USDC"
     end
 
-    # The header's "Purchase Key", there for everyone on every app page,
-    # opens the "Buy Key" window for Classic where the reader is, whichever
-    # fleet's page that is.
-    test "the header's Purchase Key opens Classic's Buy Key window on any fleet's page", %{
+    # The header's "Buy Key", there for everyone on every app page, opens the
+    # "Buy Key" window for Classic where the reader is, whichever fleet's page
+    # that is.
+    test "the header's Buy Key opens Classic's Buy Key window on any fleet's page", %{
       conn: conn
     } do
       deploy!("fleet_tech_classic")
@@ -1276,7 +1280,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "a key bought appears once the chain reader records it", %{conn: conn} do
     fleet = deploy!("fleet_tech_accelerant", 5_000_000)
     {:ok, view, _html} = live(conn, "/accelerant/1?view=members")
-    assert has_element?(view, "#fleet-get-key", "Join this Keyfleet by purchasing the next Key")
+    assert has_element?(view, "#fleet-get-key", "Buy Key")
 
     StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
     assert Scanner.step(fleet, StubClient) == :ok
@@ -1821,10 +1825,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(build_conn(), @path)
 
       assert has_element?(view, ~s(#fleet-entry[data-entry="buy"]))
-
-      assert text(view, "#fleet-entry #fleet-get-key") ==
-               "Join this Keyfleet by purchasing the next Key: 42.99817 USDC"
-
+      assert text(view, "#fleet-entry #fleet-get-key") == "Buy Key"
+      assert text(view, "#fleet-entry #fleet-buy-offer") == "Key 151 · 42.99817 USDC"
       refute has_element?(view, "#fleet-entry-cards")
     end
 
@@ -2100,7 +2102,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   defp word(value), do: "0x" <> String.pad_leading(Integer.to_string(value, 16), 64, "0")
 
   # Privy's active wallet, as the wallet hook of the group `panel` reports it.
-  # Opens the "Buy Key" window as "Join this Keyfleet" does, for a reader
+  # Opens the "Buy Key" window as the fleet page's "Buy Key" does, for a reader
   # who holds Keys too, from the fleet's reading every page shares, read here
   # as its producer would.
   defp open_buy_key(view, fleet_id \\ @fleet) do

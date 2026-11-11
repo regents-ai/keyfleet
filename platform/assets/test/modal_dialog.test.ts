@@ -116,7 +116,7 @@ it("hands focus back to whatever opened it once it has gone, with its ring after
 })
 
 it("hands focus back with no ring when a pointer closed it", () => {
-  const opener = control("home-buy-next-key")
+  const opener = control("home-buy-key")
   const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"}, {active: opener})
 
   press("home-buy-key-close")
@@ -126,7 +126,7 @@ it("hands focus back with no ring when a pointer closed it", () => {
 })
 
 it("counts a click a key made, Enter on the close button, as the key's", () => {
-  const opener = control("home-buy-next-key")
+  const opener = control("home-buy-key")
   const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"}, {active: opener})
 
   presses.get("keydown")!()

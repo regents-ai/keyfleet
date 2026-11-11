@@ -1,12 +1,13 @@
 defmodule KeyfleetWeb.Components.BuyKey do
   @moduledoc """
-  The "Buy Key" window, the one place a Key is bought. "Purchase Key" in the
-  header opens it on every page, as do the homepage's "Buy Key" and "Buy Next
-  Key" and a fleet page's "Join this Keyfleet".
+  The "Buy Key" window, the one place a Key is bought. "Buy Key" in the header
+  opens it on every page, as do the homepage's two and a fleet page's. Every one
+  of them is called "Buy Key": the Key's number and price sit in the facts
+  beside it, never in its label.
 
-  It shows Key cards turning over, that a Key's traits are randomized, how
-  many Keys have sold, what the next one costs (with a tip saying the wallet
-  asks twice) and, once the fleet is on Base, its Approve and Buy. They stay
+  It shows Key cards turning over, how many Keys have sold, the Key on offer,
+  what it costs (with a tip saying the wallet asks twice) and, once the fleet
+  is on Base, its Approve and Buy. They stay
   when the fleet sells out, with why Buy can't be pressed beside it, so a
   buyer keeps the outcome of every purchase they sent. Before then its Buy is closed, with the reason
   right under it, so a phone that scrolls the window sees both together.
@@ -81,10 +82,12 @@ defmodule KeyfleetWeb.Components.BuyKey do
 
   @doc """
   Where a fleet's sale stands, as
-  `%{state: state, cost: cost, price: price, why: why}`: `:open` with the Key
-  on offer and its price, or `:soon` or `:sold_out` with the reason a Buy
-  can't be pressed. `cost` is what the next Key costs, "Sold out" once every
-  Key is sold, or a dash when sales couldn't be read.
+  `%{state: state, cost: cost, key: key, price: price, why: why}`: `:open`
+  with the Key on offer and its price, or `:soon` or `:sold_out` with the
+  reason a Buy can't be pressed. `cost` is what the next Key costs, "Sold out"
+  once every Key is sold, or a dash when sales couldn't be read; `key` is the
+  Key on offer's number and `price` names it with its cost (`on_offer/1`),
+  both nil once every Key is sold.
   """
   def offer(%{failed?: true, sales: nil} = sale),
     do: %{offer(%{sale | failed?: false}) | cost: "—", why: "Couldn’t read sales just now"}
@@ -95,26 +98,33 @@ defmodule KeyfleetWeb.Components.BuyKey do
     %{
       state: :soon,
       cost: FleetLive.usdc(price),
-      price: price(token_id, price),
+      key: grouped(token_id),
+      price: on_offer(%{token_id: token_id, price: price}),
       why: "Sales open soon"
     }
   end
 
   def offer(%{id: fleet_id, sales: %{buy: %{price: nil}}}) do
     max = grouped(Presets.max_supply(fleet_id))
-    %{state: :sold_out, cost: "Sold out", price: nil, why: "#{max}/#{max} Keys sold"}
+    %{state: :sold_out, cost: "Sold out", key: nil, price: nil, why: "#{max}/#{max} Keys sold"}
   end
 
   def offer(%{sales: %{buy: buy}}) do
     %{
       state: :open,
       cost: FleetLive.usdc(buy.price),
-      price: price(buy.token_id, buy.price),
+      key: grouped(buy.token_id),
+      price: on_offer(buy),
       why: nil
     }
   end
 
-  defp price(token_id, price), do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
+  @doc """
+  The Key on offer and its price, as the facts beside every "Buy Key" write
+  them: "Key 151 · 12.5 USDC".
+  """
+  def on_offer(%{token_id: token_id, price: price}),
+    do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
 
   attr :sale, :map, required: true, doc: "the fleet's sale, as `sale/1` reads it"
   attr :actor, :any, required: true
@@ -151,6 +161,10 @@ defmodule KeyfleetWeb.Components.BuyKey do
         <div>
           <dt>Sold</dt>
           <dd id="buy-key-sold">{@sold}</dd>
+        </div>
+        <div :if={@key}>
+          <dt>Key</dt>
+          <dd id="buy-key-number">{@key}</dd>
         </div>
         <div>
           <dt>
@@ -211,10 +225,10 @@ defmodule KeyfleetWeb.Components.BuyKey do
 
   # Approve and Buy for the Key on sale, with the steps built on the server.
   #
-  # The Key's number, its price and whether the fleet is sold out come from
-  # the figures the steps were built from, read from the chain at the latest
-  # block, so the buttons and the line above them always name what a press
-  # sends. Every press of Buy goes to the wallet, pending purchases or not.
+  # Whether the fleet is sold out comes from the figures the steps were built
+  # from, read from the chain at the latest block; the Key's number and price
+  # sit in the facts above, never in Buy's label. Every press of Buy goes to
+  # the wallet, pending purchases or not.
   # The exceptions are presses the chain's own state makes certain to fail: a
   # sold-out fleet, sales not open yet, or an approval not made yet. Buy then
   # stays in view but can't be pressed, with why beside it. Approve shows when
@@ -284,7 +298,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
           aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
         >
           <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
-          <span data-press-label>Buy Key {key_on_sale(panel)}</span>
+          <span data-press-label>Buy Key</span>
         </Regent.Primitives.button>
         <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
           {WalletWords.blocked(buy_blocked(panel))}
@@ -318,15 +332,6 @@ defmodule KeyfleetWeb.Components.BuyKey do
   # says, or nil.
   defp buy_blocked(%{built: %{problem: :sold_out}}), do: :sold_out
   defp buy_blocked(panel), do: WalletPanel.blocked(panel, "buy")
-
-  # The Key on sale's number or price, as the steps were built from them.
-  defp on_sale(panel, figure), do: panel |> WalletPanel.figures() |> Map.get(figure)
-
-  # The Key on sale's number as the page writes it, or nil before the steps are built.
-  defp key_on_sale(panel) do
-    token_id = on_sale(panel, :token_id)
-    token_id && grouped(token_id)
-  end
 
   # Approve shows while the wallet the figures are for needs an approval, and
   # stays once an approval sent from here has landed, marked done.

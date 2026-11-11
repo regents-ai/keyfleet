@@ -5,8 +5,8 @@ defmodule KeyfleetWeb.HomeLive do
   (the same page, where Buy Key and then the setup list bring an agent in),
   then Classic #1 as it is now: its Keys sold, the agents here, the price of
   the next Key and the goal it is working on; beside
-  it "Buy Next Key", which shows the Key's card art and price and opens the
-  "Buy Key" window, as the header's "Purchase Key" does; Classic Keyfleet, its
+  it the Key on offer's card art over "Buy Key", which opens the "Buy Key"
+  window, as the header's "Buy Key" does; Classic Keyfleet, its
   sea beside what a Key lets an agent join, Key cards turning over, its public
   page and "Buy Key"; what a fleet can use; the starting ideas a fleet may
   take on as a shared goal (`Keyfleet.GoalIdeas`), each link to another site
@@ -22,13 +22,14 @@ defmodule KeyfleetWeb.HomeLive do
 
   "Buy Key" opens the "Buy Key" window (`KeyfleetWeb.Components.BuyKey`),
   the one every page opens to buy a Key, so a Key is bought without leaving
-  the homepage. It follows the same sale as "Buy Next Key". The page holds
+  the homepage. Both follow the same sale. The page holds
   the sign-in the way the fleet's pages do, so its Approve and Buy act for
   whoever is signed in.
 
-  "Buy Next Key" names the Key on offer and its price, read from the fleet's
-  sales. While Classic is coming soon, or once it has sold every Key, the
-  button stays on the page, disabled, with the reason beside it. A fleet
+  The line under the hero's "Buy Key" names the Key on offer and its price,
+  read from the fleet's sales. While Classic is coming soon, or once it has
+  sold every Key, both buttons stay on the page, disabled, with the reason
+  beside them in that line's place. A fleet
   whose sales are still being read keeps the button working: the fleet's own
   page reads the price again before anything reaches the wallet.
 
@@ -401,7 +402,7 @@ defmodule KeyfleetWeb.HomeLive do
         </div>
       </div>
 
-      <.buy_next_key classic={@classic} />
+      <.buy_key classic={@classic} />
 
       <div class="rl-give">
         <p class="rl-give__label">Give this to your agent</p>
@@ -433,14 +434,15 @@ defmodule KeyfleetWeb.HomeLive do
 
   attr :classic, :map, required: true
 
-  # The Key on offer, its card art and its price. While Classic is coming
-  # soon it names the first Key, the one the sale will open with, and the
-  # button says it can't be pressed yet: a press shakes it and sends nothing.
-  # The card and its price tag are the same in every state. Under a mouse the
-  # card has dust outside its edge and, when pointed at, a shuffle of a
-  # hundred real Keys over the pass (NextKeyCard draws both); the shuffle's
-  # picture loads only once the dust shows.
-  defp buy_next_key(assigns) do
+  # The Key on offer's card art over "Buy Key", and under it one line: the
+  # Key's number and price while the sale is open, otherwise the reason the
+  # button can't be pressed. While Classic is coming soon the card's tag names
+  # the first Key, the one the sale will open with, and a press of the button
+  # shakes it and sends nothing. The card and its price tag are the same in
+  # every state. Under a mouse the card has dust outside its edge and, when
+  # pointed at, a shuffle of a hundred real Keys over the pass (NextKeyCard
+  # draws both); the shuffle's picture loads only once the dust shows.
+  defp buy_key(assigns) do
     assigns = assign(assigns, BuyKey.offer(assigns.classic))
 
     ~H"""
@@ -490,33 +492,27 @@ defmodule KeyfleetWeb.HomeLive do
 
       <button
         :if={@state == :open}
-        id="home-buy-next-key"
+        id="home-buy-key"
         type="button"
         class="rg-button rg-button--primary rl-buy__button"
         phx-click="open_buy_key"
         aria-haspopup="dialog"
+        aria-describedby="home-buy-price"
       >
-        <span class="rg-button__label" data-press-label>
-          <span class="rl-buy__label">
-            <span class="rl-buy__action">Buy Next Key</span>
-            <span id="home-buy-price" class="rl-buy__price">{@price}</span>
-          </span>
-        </span>
+        <span class="rg-button__label" data-press-label>Buy Key</span>
       </button>
       <Regent.Primitives.button
         :if={@state != :open}
-        id="home-buy-next-key"
+        id="home-buy-key"
         class="rl-buy__button"
         aria-disabled="true"
         aria-describedby="home-buy-why"
       >
-        <span class="rl-buy__label">
-          <span class="rl-buy__action">Buy Next Key</span>
-          <span id="home-buy-price" class="rl-buy__price">{@price}</span>
-        </span>
+        Buy Key
       </Regent.Primitives.button>
 
-      <p id="home-buy-why" class="rl-buy__why">{@why}</p>
+      <p :if={@state == :open} id="home-buy-price" class="rl-buy__line">{@price}</p>
+      <p :if={@state != :open} id="home-buy-why" class="rl-buy__line">{@why}</p>
     </div>
     """
   end
@@ -555,9 +551,9 @@ defmodule KeyfleetWeb.HomeLive do
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # Classic's city beside its name, the cards turning over with what a Key
-  # lets an agent join beside them, then its public page and "Buy Key". "Buy
-  # Key" follows the same sale as "Buy Next Key": closed, with the reason under
-  # it, until the sale opens.
+  # lets an agent join beside them, then its public page and "Buy Key". It
+  # follows the same sale as the hero's "Buy Key": closed, with the reason
+  # under it, until the sale opens.
   defp classic(assigns) do
     assigns = assign(assigns, :offer, BuyKey.offer(assigns.classic))
 
