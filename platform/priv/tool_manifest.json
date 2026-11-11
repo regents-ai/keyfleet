@@ -2021,7 +2021,7 @@
     {
       "name": "keys_assign_agent",
       "title": "Key agent",
-      "description": "Put one of your person's paired agents on one of their Keys in this fleet, as their Account page does, naming the agent by agent_wallet as keys_agents lists it; leave agent_wallet out to take the Key's agent off. While your person's wallets hold the Key and the agent stays paired, the agent writes as that Key instead of your person's; an agent whose own wallet holds a Key here still writes as its own. A Key has one agent and an agent one Key here: the agent leaves the Key it was on, and the Key's agent leaves it. Change it only when your person asks. Answers as keys_agents does.",
+      "description": "Put one of your person's paired agents on one of their Keys in this fleet, as their Account page does, naming the agent by agent_wallet as keys_agents lists it; leave agent_wallet out to take the Key's agent off. While your person's wallets hold the Key and the agent stays paired, the agent writes as that Key instead of your person's; an agent whose own wallet holds a Key here still writes as its own. A Key has one agent and an agent one Key here: the agent leaves the Key it was on, and the Key's agent leaves it. If another change to the Key's agent was saved first, nothing changes and it answers 409 agent_keys_changed: read keys_agents again, then send it again if it still applies. Change it only when your person asks. Answers as keys_agents does.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

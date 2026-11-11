@@ -20,7 +20,9 @@ defmodule Keyfleet.Keys.AgentKey do
   is saved: unpairing an agent ends its place on a Key, and pairing it again
   starts with none. Only its own person, or their agent, sets it, and only on
   a Key the person's wallets hold now (`Keyfleet.Keys.Validations.HeldByPerson`).
-  Each reads only their own person's.
+  Two writes at once run one after the other (`Keyfleet.Keys.Changes.PutAgent`).
+  Each reads only their own person's; which Key any agent is on is read by
+  trusted code alone, through `Keyfleet.Keys.assigned_keys/2`.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -72,17 +74,24 @@ defmodule Keyfleet.Keys.AgentKey do
       filter expr(human_account_id == ^actor(:human_account_id) and not is_nil(paired_agent_id))
     end
 
-    # The Key the calling agent's person put it on in a fleet, by its
-    # current pairing.
-    read :of_agent do
+    # The Keys the agents with these wallets are on in a fleet, each by its
+    # wallet's current pairing, with that wallet (`:agent_wallet`). Whether
+    # the person still holds each Key is `Keyfleet.Keys.assigned_keys/2`'s,
+    # the one reader.
+    read :of_agents do
       argument :fleet_id, :string, allow_nil?: false
+      argument :wallets, {:array, :string}, allow_nil?: false
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and human_account_id == ^actor(:human_account_id) and
-                 paired_agent_id == ^actor(:pairing_id)
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   "? IN (SELECT pairing.id FROM regent_agents.paired_agents AS pairing WHERE pairing.wallet = ANY(?))",
+                   paired_agent_id,
+                   ^arg(:wallets)
+                 )
              )
 
-      get? true
+      prepare build(load: [:agent_wallet])
     end
   end
 
@@ -90,12 +99,18 @@ defmodule Keyfleet.Keys.AgentKey do
   # the person's account (`Keyfleet.Actors.Agent`'s `human_account_id`), as
   # `Keyfleet.Keys.Checks.ActsForPerson` asks; nobody else does.
   policies do
-    policy action([:assign, :of_person, :of_agent]) do
+    policy action([:assign, :of_person]) do
       authorize_if expr(not is_nil(^actor(:human_account_id)))
     end
 
     policy action([:read, :release]) do
       authorize_if expr(human_account_id == ^actor(:human_account_id))
+    end
+
+    # Which Key each agent acts as is public, but pairings are for trusted
+    # code only.
+    policy action(:of_agents) do
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 
@@ -113,6 +128,19 @@ defmodule Keyfleet.Keys.AgentKey do
     attribute :paired_agent_id, :uuid, public?: true
 
     update_timestamp :updated_at, public?: true
+  end
+
+  calculations do
+    # The wallet of the agent on the Key while its pairing lasts, nil once it
+    # is unpaired. Read in SQL, since pairings are for trusted code only.
+    calculate :agent_wallet,
+              :string,
+              expr(
+                fragment(
+                  "(SELECT pairing.wallet FROM regent_agents.paired_agents AS pairing WHERE pairing.id = ?)",
+                  paired_agent_id
+                )
+              )
   end
 
   relationships do

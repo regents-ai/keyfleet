@@ -1416,7 +1416,7 @@
     },
     {
       "command": "keys assign-agent <fleet> <key>",
-      "description": "Put one of your person's paired agents on one of their Keys in the fleet, as their Account page does, or take the Key's agent off when --agent is left out. The agent leaves any other Key it was on in the fleet, and the Key's agent before leaves it.",
+      "description": "Put one of your person's paired agents on one of their Keys in the fleet, as their Account page does, or take the Key's agent off when --agent is left out. The agent leaves any other Key it was on in the fleet, and the Key's agent before leaves it. If another change to the Key's agent was saved first, nothing changes and it answers 409 agent_keys_changed: read keys agents again, then send it again if it still applies.",
       "operation_id": "assignAgentKey",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/agent_keys/assign",

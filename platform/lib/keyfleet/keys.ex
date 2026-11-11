@@ -143,7 +143,7 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :token_id, {:optional, :agent_wallet}]
 
       define :agent_keys_of_person, action: :of_person
-      define :assigned_agent_key, action: :of_agent, args: [:fleet_id], not_found_error?: false
+      define :agent_keys_of_agents, action: :of_agents, args: [:fleet_id, :wallets]
     end
 
     resource Keyfleet.Keys.EditsRestriction do
@@ -278,26 +278,82 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  The key `agent`'s person put it on in the fleet (`Keyfleet.Keys.AgentKey`),
-  as that key's current ownership record, while one of the person's wallets
-  holds it: `{:ok, key}`, `{:ok, nil}` when there is none, or
-  `{:error, error}`. Read by the agent's pairing as `agent` carries it, so
-  ask with one `Keyfleet.Actors.Agent.refresh/1` gave. `opts` are each
-  read's, the actor included.
-  """
-  def assigned_key(agent, fleet_id, opts)
+  The Key each agent with one of `wallets` (lowercase) is on in the fleet:
+  the Key its person put it on (`Keyfleet.Keys.AgentKey`), by the wallet's
+  current pairing, while one of that person's wallets holds it, as the Key's
+  current ownership record. `{:ok, %{wallet => key}}`, an agent on no Key
+  left out, or `{:error, error}`. However many agents, it is three reads, and
+  one more for each hundred people beyond the first.
 
-  def assigned_key(%Agent{pairing: %Human{wallet_addresses: wallets}}, fleet_id, opts) do
-    with {:ok, %{token_id: token_id}} <- assigned_agent_key(fleet_id, opts),
-         {:ok, %{owner_wallet: owner} = key} <- current_key(fleet_id, token_id, opts) do
-      {:ok, if(owner in wallets, do: key)}
+  This is the one rule for it: an agent acting (`assigned_key/2`) and the
+  agents a fleet lists (`Keyfleet.Agents.AgentProfile`'s `:key`) both read
+  it here.
+  """
+  def assigned_keys(_fleet_id, []), do: {:ok, %{}}
+
+  def assigned_keys(fleet_id, wallets) do
+    system = [actor: %Keyfleet.Actors.System{}]
+
+    case agent_keys_of_agents(fleet_id, wallets, system) do
+      {:ok, []} -> {:ok, %{}}
+      {:ok, placed} -> held_by_their_people(fleet_id, placed, system)
+      {:error, error} -> {:error, error}
     end
   end
 
-  def assigned_key(_agent, _fleet_id, _opts), do: {:ok, nil}
+  defp held_by_their_people(fleet_id, placed, system) do
+    token_ids = Enum.map(placed, & &1.token_id)
 
-  defp assigned_key!(agent, fleet_id) do
-    case assigned_key(agent, fleet_id, actor: agent) do
+    with {:ok, accounts} <- accounts_of(placed, system),
+         wallets_of = Map.new(accounts, &{&1.id, Human.for_account(&1).wallet_addresses}),
+         {:ok, held} <-
+           keys_held_in_fleet(
+             fleet_id,
+             wallets_of |> Map.values() |> Enum.concat(),
+             system ++
+               [query: Ash.Query.filter(Keyfleet.Keys.KeyAttachment, token_id in ^token_ids)]
+           ) do
+      held = Map.new(held, &{&1.token_id, &1})
+
+      on_keys =
+        for %{agent_wallet: wallet, token_id: token_id, human_account_id: account} <- placed,
+            %{owner_wallet: owner} = key <- List.wrap(held[token_id]),
+            owner in Map.get(wallets_of, account, []),
+            into: %{},
+            do: {wallet, key}
+
+      {:ok, on_keys}
+    end
+  end
+
+  # The accounts of the people who put those agents on their Keys, a hundred
+  # to a read.
+  defp accounts_of(placed, system) do
+    placed
+    |> Enum.map(& &1.human_account_id)
+    |> Enum.uniq()
+    |> Enum.chunk_every(100)
+    |> Enum.reduce_while({:ok, []}, fn ids, {:ok, read} ->
+      case Keyfleet.Accounts.accounts_by_ids(ids, system) do
+        {:ok, accounts} -> {:cont, {:ok, accounts ++ read}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  @doc """
+  The Key `agent`'s person put it on in the fleet, by `assigned_keys/2`:
+  `{:ok, key}`, `{:ok, nil}` when there is none, or `{:error, error}`.
+  """
+  def assigned_key(%Agent{pairing: %Human{}, wallet_address: wallet}, fleet_id) do
+    with {:ok, keys} <- assigned_keys(fleet_id, [wallet]), do: {:ok, keys[wallet]}
+  end
+
+  def assigned_key(_agent, _fleet_id), do: {:ok, nil}
+
+  @doc "`assigned_key/2`, raising when the read fails."
+  def assigned_key!(agent, fleet_id) do
+    case assigned_key(agent, fleet_id) do
       {:ok, key} -> key
       {:error, error} -> raise Ash.Error.to_error_class(error)
     end

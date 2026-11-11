@@ -222,6 +222,9 @@ defmodule KeyfleetWeb.Refusal do
     "agent_unknown" =>
       {"No agent paired with your person has this wallet now.",
        "Choose one of the agents GET /api/v1/agent/fleets/FLEET_ID/agent_keys lists, or leave agent_wallet out to take the Key's agent off."},
+    "agent_keys_changed" =>
+      {"Another change to this Key's agent was saved first, so nothing was changed.",
+       "Read GET /api/v1/agent/fleets/FLEET_ID/agent_keys again, then send the request again if it still applies."},
     "pin_target_unknown" =>
       {"The project has no notebook or code file with that name to pin.",
        "Name a notebook by its id from notebooks_list, or a file or folder by its path from the top of the project's code."},

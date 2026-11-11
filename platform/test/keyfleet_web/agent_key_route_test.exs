@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys}
+  alias KeyfleetWeb.AgentTools.Keys.Answer
   alias KeyfleetWeb.AgentTools.Refused
   alias KeyfleetWeb.SignedAgentHelpers
 
@@ -136,6 +137,32 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
 
     assert {:ok, %{agent_keys: %{yours: nil}}} =
              tool(:assign_agent, %{fleet_id: @fleet, token_id: 3}, agent)
+  end
+
+  # The tools take a body the signed route has not checked, so each shape it
+  # refuses answers its own reason too; none is a fault.
+  test "each refusal answers its own reason, an agent unpaired on the way included", c do
+    {:ok, agent} = Keyfleet.Agents.with_pairing(agent(c))
+    answer = &Answer.answer(:assign_agent, Map.put(&1, "fleet_id", @fleet), agent, nil)
+
+    for {params, status, code} <- [
+          {%{"token_id" => 9, "agent_wallet" => "0xab"}, 422, "invalid_request"},
+          {%{"token_id" => 0, "agent_wallet" => c.wallet}, 422, "invalid_request"},
+          {%{"token_id" => 4, "agent_wallet" => c.wallet}, 409, "key_not_held"},
+          {%{"token_id" => 9, "agent_wallet" => @other}, 409, "agent_unknown"}
+        ] do
+      assert {^status, %{error: %{code: ^code}}, nil} = answer.(params), inspect(params)
+    end
+
+    # Unpaired after its request was signed, it puts no agent on a Key.
+    person = %RegentAgents.Person{privy_user_id: agent.privy_user_id}
+    {:ok, agents} = RegentAgents.list_my_agents(actor: person)
+    :ok = RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == c.wallet)), actor: person)
+
+    assert {403, %{error: %{code: "agent_not_paired"}}, nil} =
+             answer.(%{"token_id" => 9, "agent_wallet" => @second})
+
+    assert Keys.agent_keys_of_person!(actor: agent) == []
   end
 
   test "a fleet that doesn't exist answers fleet_unknown", c do

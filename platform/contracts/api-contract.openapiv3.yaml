@@ -1062,7 +1062,9 @@ paths:
         "409":
           description: >-
             key_not_held: the person's wallets don't hold this Key now. agent_unknown: no agent
-            paired with the person now has agent_wallet. Nothing was changed.
+            paired with the person now has agent_wallet. agent_keys_changed: another change to
+            this Key's agent was saved first; read agent_keys again, then send the request again
+            if it still applies. Nothing was changed.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AgentKeyRefusedError"}
@@ -7698,7 +7700,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [key_not_held, agent_unknown]}
+            code: {type: string, enum: [key_not_held, agent_unknown, agent_keys_changed]}
             message: {type: string}
             hint: {type: string}
     ActivityRequest:
