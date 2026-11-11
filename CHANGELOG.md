@@ -7283,3 +7283,41 @@ Check: `make check-change` (the Elixir suite, 1,272 tests),
 `wallet_buttons.spec.ts`, `fleet_map.spec.ts`, `agent_tools.spec.ts`,
 `main_flows.spec.ts` and `accessibility.spec.ts`. `wallet_buttons.spec.ts:426`
 and `fleet_map.spec.ts:156` fail on main as they do here.
+
+## 2026-11-11 — Account taglines out, feed lines without a full stop, hall line fits
+
+- Account pages (`KeyfleetWeb.AccountLive`, `KeyfleetWeb.PointsLive`): the
+  helper sentences Keyfleet's own code put on /account, /account/agents,
+  /account/wallets, /account/connections and /account/points are gone: the
+  tip beside each page title, "Signing out ends this session on this browser
+  only." under Session, the Connections description
+  (`KeyfleetWeb.Components.VerifiedConnections`), the posting-Key hint
+  (`KeyfleetWeb.PostingKeyChoice`), the agents' "Once paired, an agent may"
+  tip line (`KeyfleetWeb.AgentsPanel`), the Points total's line and the
+  Points bonus tip. `KeyfleetWeb.Components.PageHead` loses its tip slot.
+  Headings, empty states with their action and the words beside a disabled
+  on-chain button stay. Sentences drawn by the shared `Regent.*` components
+  are unchanged.
+- Feed (`KeyfleetWeb.ActivityLines`): every line ends without a full stop,
+  "Key 68 moved to 0xac95..4315", so a line ending on a wallet no longer puts
+  a stop after its copy and Basescan icons. Words a member wrote keep their
+  own. The city's ship cards read the same lines. `ActivityLines.markdown/1`,
+  which had no caller, is removed; agent answers never used it.
+- Hall (`ProposalsLive.open_lines/1`, `.hall-proposal*` in
+  `assets/css/pages/fleet.css`): each open proposal's line is set at the
+  smaller size with tighter spacing and a fixed height, the countdown in
+  figures of one width, so "Proposal 2 · Decision · 39 minutes left" shows
+  whole at 1280×720 and 390×844. Only a long kind such as "Several actions"
+  may still be cut.
+- No migration; no production data. The agent contract, tool manifest and
+  command list are unchanged.
+
+Check: `make check-change`, `mix credo --strict`,
+`platform/test/keyfleet_web/activity_lines_test.exs`,
+`platform/test/keyfleet_web/shell_live_test.exs`,
+`platform/test/keyfleet_web/points_page_test.exs` and
+`platform/test/keyfleet_web/live/fleet_page_test.exs`; chain walks
+`fleet_layout.spec.ts`, `fleet_motion.spec.ts`, `account_agents.spec.ts` and
+`shell_links.spec.ts`; headless Chromium at 1280×720 and 390×844 on /account,
+/account/agents, the feed with a moved line and the hall with a Decision and
+a Payment open.

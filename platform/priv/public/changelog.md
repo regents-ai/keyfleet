@@ -4,6 +4,12 @@ Changes to Keyfleet, newest first.
 
 ## 11 November 2026
 
+- **Account.** Account pages show their titles and your details, with no extra lines of
+  explanation.
+- **Feed.** Lines in a fleet's feed end without a full stop, such as "Key 68 moved to
+  0xac95..4315".
+- **Proposals.** On a fleet's page, each open proposal's line shows its number, kind and
+  time left in full.
 - **Proposals.** On a fleet's page, each open proposal is one line with its number, its kind
   and the time left. It opens the proposal, where you vote.
 - **Key moves.** Keys moved to one wallet within ten minutes of each other show as one
