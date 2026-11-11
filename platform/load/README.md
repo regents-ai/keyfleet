@@ -21,7 +21,6 @@ Mac.
 | `lib/live.js` | The live connection, as the site's own browser code makes it. |
 | `summarize.mjs` | Turns any run's results into Markdown tables. Node only, no packages. |
 | `zap-baseline.sh`, `zap-rules.tsv` | The OWASP ZAP baseline scan of the local copy. |
-| `profile-live.sh` | A Lighthouse profile of a site's public pages, the local one unless another is named: 30 page loads, not load. |
 
 Results go to `results/<run>-<time>/` here, which git ignores.
 
@@ -41,9 +40,10 @@ started themselves.
 ## Before the first run
 
 1. **Docker Desktop's VM.** Settings, Resources: at least **4 CPUs and 8 GB**.
-   The server gets exactly production's machine (`fly.toml`: 2 dedicated CPUs,
-   4 GB, no swap) as `--cpus 2 --memory 4g --memory-swap 4g`, and PostgreSQL
-   and the VM itself need room beside it. The scripts refuse a smaller VM.
+   The server gets exactly production's site machine (`fly.toml`: 2 dedicated
+   CPUs, 4 GB, no swap) as `--cpus 2 --memory 4g --memory-swap 4g`, and the
+   graph machine, PostgreSQL and the VM itself need room beside it. The scripts
+   refuse a smaller VM.
 2. **The Mac beside the VM.** k6 runs on the Mac, outside the VM. It holds 2
    to 3 MB per open page, 4 to 6 GB at 2,000, and uses two or more cores at
    that count. With the VM's 8 GB, 2,000-page runs want a 16 GB Mac at least
@@ -53,7 +53,7 @@ started themselves.
 4. **The Club's deployment record.** The Regents Club's `base.deployed.json`,
    the record production was seeded with; it is not committed
    (contracts/README.md). Every run records it with `/app/bin/seed-deployment`
-   so the Club has its rooms, keys and polls as on production.
+   so the Club has its rooms and keys as on production.
 5. **Open files.** The scripts raise the shell's limit to 16,384. If that is
    refused, run `sudo launchctl limit maxfiles 65536 200000` and open a new
    terminal.
@@ -79,8 +79,7 @@ platform/load/local.sh zap      # about 10 minutes: the ZAP baseline scan
 
 Each run first starts PostgreSQL 17 on a Docker network of its own, creates
 and seeds the database with the release's own commands (`bootstrap-staging`,
-`migrate`, `seed-deployment` with the record, `seed-load-staging` for the
-poll), starts the server on `127.0.0.1:4100` (`LOAD_PORT`), checks its health
+`migrate` and `seed-deployment` with the record), starts the server on `127.0.0.1:4100` (`LOAD_PORT`), checks its health
 and that its database pool is 5 connections, then loads it. k6's output
 follows in the terminal. Every page is loaded once before the load starts, and
 the run stops at once, saying which, if one is missing or the Club is still
@@ -109,8 +108,7 @@ A virtual user is one open page. It picks a page, by weight:
 | Classic #1 | `/classic/1` | 10 |
 | Regents Club hall | `/app/fleets/regents_club` | 15 |
 | Regents Club key map | `/app/fleets/regents_club?view=map` | 10 |
-| General room | `/app/fleets/regents_club/rooms/general` | 10 |
-| A poll | the seeded poll | 5 |
+| Public room | `/app/fleets/regents_club?room=general` | 15 |
 
 Then, as the site's own browser code does (`assets/js/app.ts` with Phoenix
 LiveView 1.2):
@@ -159,8 +157,7 @@ platform/load/local.sh spike`, which lands the spike inside the crowd's hold.
 
 Other settings: `LOAD_PORT` (4100), `IMAGE` (`keyfleet:<commit>`),
 `DWELL_MIN_S` and `DWELL_MAX_S` (120 and 600; 30 and 60 in `smoke`, 20 and
-60 in `faults`), `ASSETS` (`first` or `every`), `REJOIN_DEADLINE_S` (120),
-`POLL_PATH`.
+60 in `faults`), `ASSETS` (`first` or `every`) and `REJOIN_DEADLINE_S` (120).
 
 ## Pass marks
 
@@ -191,19 +188,26 @@ made of.
 platform/load/local.sh deploy
 ```
 
-Production is one Fly machine with a volume, so a deploy cannot start the new
-machine beside the old one: Fly runs the release command on a machine of its
-own, stops the old machine (its default signal, SIGINT, and 5 seconds to
-finish), and starts the new image on the same volume. `local.sh deploy` does
-the same, in the same order, while k6 holds 2,000 pages open:
+Production is two Fly machines (`fly.toml`): the graph machine, which holds
+the volume, and the site machine, which serves the pages. A deploy runs the
+release command on a machine of its own, replaces the graph machine (Fly's
+default signal, SIGINT, and 5 seconds to finish, then the new image on the
+same volume), and then releases the site machine bluegreen: the new one
+answers its health check before Fly's proxy stops sending to the old one.
+`local.sh deploy` does the same, in the same order, while k6 holds 2,000 pages
+open, except that this computer has no stand-in for Fly's proxy, so the site
+server is stopped and started on the same port, the harshest case of a
+release:
 
 1. It opens the pages over `RAMP` and lets them settle for two minutes.
 2. It runs `/app/bin/migrate` in a container of its own, as Fly's release
    command, while the first server keeps serving.
-3. It stops the first server with `docker stop --signal SIGINT --time 5`.
-4. It starts a second server from the same image, with the same secret (so the
-   pages the first one drew join the second), the same `/data` volume and the
-   same port, and waits for its health.
+3. It stops the graph machine with `docker stop --signal SIGINT --time 5` and
+   starts a new one on the same `/data` volume.
+4. It stops the first server the same way.
+5. It starts a second server from the same image, with the same secret (so the
+   pages the first one drew join the second), on the same port, and waits for
+   its health.
 
 Meanwhile it asks the home page twice a second, which gives the gap in which
 a new visitor got no answer. Every open connection drops once, by design.
@@ -215,8 +219,8 @@ phase (the two minutes from the release command on) by the usual 0.1%, and
 inside it they are measured: every new visitor who arrives in the gap fails,
 and that count is the gap's cost. Live joins are judged throughout, so 2,000
 pages rejoining the new server at once must still join within a second at
-p95. The report's first table gives the release command's time, the stop,
-the new server's start to health and the longest time the home page did not
+p95. The report's first table gives the release command's time, the graph
+machine's replacement, the stop, the new server's start to health and the longest time the home page did not
 answer; the second has the drops (`lv_socket_drops`), the rejoins and their
 time (`lv_rejoin_duration`, p95 and max), the attempts made while no server
 answered (`lv_ws_connect_failed`), and the database wait of each server.
@@ -313,8 +317,8 @@ release on a machine of production's size, not as production:
   query holds one of the five connections longer there, so the pool's wait
   here understates production's: a run whose database wait is already above a
   few milliseconds at p95 is a warning for launch day.
-- **The data.** The Club's deployment and one poll, nothing more: no posts in
-  General, no members, no history, no chain reads (no `KEYFLEET_RPC_URL`, so
+- **The data.** The Club's deployment, nothing more: no posts in
+  the Public room, no members, no history, no chain reads (no `KEYFLEET_RPC_URL`, so
   the key map draws an empty fleet). Pages are lighter than production's.
 - **The deploy.** A container starts in seconds; a Fly machine also fetches
   the image and attaches the volume, and Fly's proxy, not a refused
@@ -337,6 +341,5 @@ single-machine replacement and a failing database. They cannot prove:
 - **Real phones**: the script is a browser's network traffic, not a browser.
   It draws nothing, runs no page script, fetches only what the HTML names and
   the modules those import, and sends nothing a reader's clicks would. LCP,
-  INP and CLS come from real visitors' browsers (`KeyfleetWeb.Vitals`), and
-  `profile-live.sh` gives a lab profile in Chromium.
+  INP and CLS come from real visitors' browsers (`KeyfleetWeb.Vitals`).
 - **Real 4G**: its latency, loss and handovers, and the reconnects they cause.

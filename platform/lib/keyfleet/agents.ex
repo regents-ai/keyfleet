@@ -1,9 +1,10 @@
 defmodule Keyfleet.Agents do
   @moduledoc """
   Wallet-owned agent profiles, independent of NFT authority, and when each
-  agent checks in with each fleet.
+  agent checks in with each fleet. The Claude connector's identity tools at
+  `/mcp` are this domain's (`Keyfleet.Agents.Connection`, `tools`).
   """
-  use Ash.Domain
+  use Ash.Domain, extensions: [AshAi]
 
   import Ash.Expr, only: [expr: 1]
   require Ash.Query
@@ -25,6 +26,7 @@ defmodule Keyfleet.Agents do
 
     resource Keyfleet.Agents.Pairing do
       define :get_pairing, action: :by_wallet, args: [:wallet], not_found_error?: false
+      define :pairings, action: :by_wallets, args: [:wallets]
     end
 
     resource Keyfleet.Agents.CheckIn do
@@ -35,9 +37,80 @@ defmodule Keyfleet.Agents do
 
       define :check_ins_in_fleet, action: :in_fleet, args: [:fleet_id, :agent_profile_ids]
     end
+
+    resource Keyfleet.Agents.Checkpoint do
+      define :checkpoint, action: :mine, args: [:fleet_id], not_found_error?: false
+      define :start_checkpoint, action: :start, args: [:fleet_id, :state]
+    end
+
+    resource Keyfleet.Agents.Connection
   end
 
-  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, DeleteAvatar}
+  # The connector's identity tools, for an app a person connected to their
+  # account here, with the titles, words and hints every Regent site gives them.
+  @identity Map.new(RegentMCPAgents.Tools.list(), &{&1.name, &1})
+
+  tools do
+    for name <- RegentMCPAgents.Tools.names() do
+      %{title: title, description: description, annotations: hints} = @identity[name]
+      name = String.to_atom(name)
+
+      tool name, Keyfleet.Agents.Connection, name do
+        title(title)
+        description description
+
+        annotations(
+          read_only_hint: hints.readOnlyHint,
+          idempotent_hint: hints.idempotentHint,
+          destructive_hint: hints.destructiveHint,
+          open_world_hint: hints.openWorldHint
+        )
+      end
+    end
+  end
+
+  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, CheckInStatus, Checkpoint, DeleteAvatar}
+
+  @doc """
+  Saves `state` as the agent's checkpoint in `fleet_id`, from the revision
+  it read, `expected_revision` (0 when it has none): `{:ok, checkpoint}` at
+  the next revision, or `{:stale, current}` with the checkpoint as it is now
+  (nil for none) when that wasn't the revision kept, and nothing is saved.
+  """
+  def save_checkpoint(actor, fleet_id, 0, state) do
+    case start_checkpoint(fleet_id, state, actor: actor) do
+      {:ok, checkpoint} -> {:ok, checkpoint}
+      {:error, _error} = refused -> stale_or(refused, actor, fleet_id)
+    end
+  end
+
+  def save_checkpoint(actor, fleet_id, expected_revision, state) do
+    Checkpoint
+    |> Ash.Query.for_read(:mine, %{fleet_id: fleet_id}, actor: actor)
+    |> Ash.Query.filter(revision == ^expected_revision)
+    |> Ash.bulk_update(:save, %{state: state},
+      actor: actor,
+      strategy: [:atomic],
+      return_records?: true,
+      return_errors?: true
+    )
+    |> case do
+      %Ash.BulkResult{status: :success, records: [checkpoint]} -> {:ok, checkpoint}
+      %Ash.BulkResult{status: :success, records: []} -> stale_or(nil, actor, fleet_id)
+      %Ash.BulkResult{errors: [error | _rest]} -> {:error, error}
+    end
+  end
+
+  # A first save that found one already kept, or a later one from another
+  # revision, answers the checkpoint as it is now; a first save refused with
+  # none kept answers that refusal.
+  defp stale_or(refused, actor, fleet_id) do
+    case checkpoint(fleet_id, actor: actor) do
+      {:ok, nil} when refused != nil -> refused
+      {:ok, current} -> {:stale, current}
+      {:error, error} -> {:error, error}
+    end
+  end
 
   @doc """
   The names agents gave themselves, as `%{wallet => name}`, for the agents
@@ -57,19 +130,66 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  Whether the signed-in person has an agent paired to their account, from
-  their account on regents.sh. A reading that fails counts as none.
+  Each agent's check-in light, as `%{wallet => %{light: "on" | "late" | "off" |
+  nil, light_label: words | nil}}`, for every wallet in `wallets`: the best
+  light of its check-ins with any fleet (on, then late, then off) and that
+  light's words (`CheckInStatus`). An agent that never came to Keyfleet has no
+  light, both nil.
   """
-  def has_paired_agent?(%Keyfleet.Actors.Human{human_account_id: id} = actor) do
+  def check_in_lights(wallets, now) do
+    seen =
+      wallets
+      |> Enum.chunk_every(100)
+      |> Enum.flat_map(&agents_by_wallets!(&1, load: [:check_ins]))
+      |> Map.new(&{&1.wallet_address, best_light(&1.check_ins, now)})
+
+    Map.new(wallets, &{&1, Map.get(seen, &1, %{light: nil, light_label: nil})})
+  end
+
+  @light_rank %{on: 0, late: 1, off: 2}
+
+  defp best_light(check_ins, now) do
+    {light, {_status, label}} =
+      check_ins
+      |> Enum.map(&{CheckInStatus.light(&1, now), CheckInStatus.derive(&1, now)})
+      |> Enum.min_by(
+        fn {light, _status} -> @light_rank[light] end,
+        fn -> {:off, CheckInStatus.derive(nil, now)} end
+      )
+
+    %{light: Atom.to_string(light), light_label: label}
+  end
+
+  @doc """
+  Whether the signed-in person has an agent paired to their Regent account,
+  from their Agents page here or on any Regent site. A reading that fails
+  counts as none.
+  """
+  def has_paired_agent?(%Keyfleet.Actors.Human{} = actor), do: my_agents(actor) != []
+
+  @doc """
+  The agents paired to the signed-in person's Regent account, from their Agents
+  page here or on any Regent site. A reading that fails counts as none.
+  """
+  def my_agents(%Keyfleet.Actors.Human{human_account_id: id} = actor) do
     with {:ok, account} <- Keyfleet.Accounts.get_human_account(id, actor: actor),
-         {:ok, [_ | _]} <-
+         {:ok, agents} <-
            RegentAgents.list_my_agents(
              actor: %RegentAgents.Person{privy_user_id: account.privy_user_id}
            ) do
-      true
+      agents
     else
-      _none -> false
+      _none -> []
     end
+  end
+
+  @doc "Each of `wallets`' check-ins with the fleet, as `%{wallet => check_in}`."
+  def check_ins_by_wallet(wallets, fleet_id) do
+    for profile <- agents_by_wallets!(wallets, load: [:check_ins]),
+        check_in <- profile.check_ins,
+        check_in.fleet_id == fleet_id,
+        into: %{},
+        do: {profile.wallet_address, check_in}
   end
 
   @doc """
@@ -136,12 +256,32 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  Records that the agent just contributed to the fleet: a `:post` or a
-  `:workspace` write. An agent without a profile has nothing to record.
+  Records that the agent just contributed to the fleet: a `:post`, a `:task`
+  it took, a `:submit` of one, a `:review`, another `:workspace` write, a `:notebook` edit or a
+  `:code` push. An agent without a profile has nothing to record.
   """
   def note_contribution(actor, fleet_id, kind) do
     with_profile(actor, &write(:note_contribution, &1, fleet_id, %{kind: kind}, actor))
   end
+
+  @doc """
+  Records a contribution that already stands elsewhere, in the graph, a
+  notebook or the code store (`note_contribution/3`). What a person does is
+  nobody's contribution, and a record that fails is logged, never raised.
+  """
+  def record_contribution(%Keyfleet.Actors.Agent{} = actor, fleet_id, kind) do
+    case note_contribution(actor, fleet_id, kind) do
+      {:ok, _check_in} ->
+        :ok
+
+      {:error, error} ->
+        Logger.warning(
+          "#{kind} contribution to #{fleet_id} not recorded: " <> Exception.message(error)
+        )
+    end
+  end
+
+  def record_contribution(_actor, _fleet_id, _kind), do: :ok
 
   @doc """
   Saves what the SIWA service said about the agent with this verified request
@@ -229,17 +369,6 @@ defmodule Keyfleet.Agents do
     )
     |> Ash.read!()
     |> Enum.map(& &1.key)
-  end
-
-  @doc """
-  How many agents are here in any of `fleet_ids`, as `count_agents_here/1`
-  counts them, each once however many of those fleets it is in, as `{:ok,
-  count}` or `{:error, failure}`.
-  """
-  def count_agents_in_fleets(fleet_ids) do
-    Keyfleet.Agents.AgentProfile
-    |> Ash.Query.for_read(:here_in_fleets, %{fleet_ids: fleet_ids})
-    |> Keyfleet.Count.of()
   end
 
   @doc """

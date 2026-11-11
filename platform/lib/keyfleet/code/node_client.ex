@@ -1,7 +1,7 @@
 defmodule Keyfleet.Code.NodeClient do
   @moduledoc """
   What this site asks of the code store outside git itself, under a pass that
-  opens only the one fleet's repository (`Keyfleet.Code.Pass`). Every call is
+  opens only the one repository (`Keyfleet.Code.Pass`). Every call is
   made once: the job that makes it retries the whole job, and a page reads
   afresh when it is opened again.
   """
@@ -10,13 +10,13 @@ defmodule Keyfleet.Code.NodeClient do
   alias Keyfleet.Code.Pass
 
   @doc """
-  Makes the fleet's private repository, or finds the one already made:
+  Makes a project's private repository, or finds the one already made:
   `{:ok, owner}`, the owner the store keeps it under, or `{:error, reason}`.
   """
-  def create_repository(fleet_id) do
+  def create_repository(repository) do
     request(
-      Pass.create(fleet_id),
-      [method: :post, url: "/api/v1/repos", json: %{name: fleet_id, is_public: false}],
+      Pass.create(repository),
+      [method: :post, url: "/api/v1/repos", json: %{name: repository, is_public: false}],
       Code.config()[:node_timeout_ms]
     )
     |> case do
@@ -33,15 +33,38 @@ defmodule Keyfleet.Code.NodeClient do
   end
 
   @doc """
-  What the folder `path` holds on the default branch now, `""` for the top:
-  `{:ok, entries}`, each with `kind` (`"blob"` for a file, `"tree"` for a
-  folder), `path` (its name) and, for a file, `size`; or `{:error, reason}`.
+  Deletes the repository from the store for good, with its history:
+  `:ok`, also when it is already gone, or `{:error, reason}`.
+  """
+  def delete_repository(repository, owner) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository)])
+
+    case request(
+           Pass.delete(repository),
+           [method: :delete, url: url],
+           Code.config()[:node_timeout_ms]
+         ) do
+      {:ok, %Req.Response{status: 204}} -> :ok
+      {:ok, %Req.Response{status: status}} -> {:error, {:code_store_status, status}}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  What the folder `path` holds on the default branch now, or at the commit
+  `at` (a full hash), `""` for the top:
+  `{:ok, entries}`, each with `type` (`"blob"` for a file, `"tree"` for a
+  folder), `name` and, for a file, `size`; or `{:error, reason}`.
   A folder that isn't there, or a file, holds nothing.
   """
-  def tree(fleet_id, owner, path) do
-    url = Path.join(["/api/v1/repos", segment(owner), segment(fleet_id), "tree", encode(path)])
+  def tree(repository, owner, path, at \\ nil) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "tree", encode(path)])
 
-    case request(Pass.read(fleet_id), [method: :get, url: url], Code.config()[:page_timeout_ms]) do
+    case request(
+           Pass.read(repository),
+           [method: :get, url: url, params: at(at)],
+           Code.config()[:page_timeout_ms]
+         ) do
       {:ok, %Req.Response{status: 200, body: %{"entries" => entries}}} when is_list(entries) ->
         {:ok, entries}
 
@@ -54,16 +77,23 @@ defmodule Keyfleet.Code.NodeClient do
   end
 
   @doc """
-  The file at `path` on the default branch now: `{:ok, bytes}`, `{:ok,
-  :too_large}` past `file_max_bytes`, `:not_found`, or `{:error, reason}`.
+  The file at `path` on the default branch now, or at the commit `at`:
+  `{:ok, bytes}`, `{:ok, :too_large}` past `file_max_bytes`, `:not_found`,
+  or `{:error, reason}`.
   """
-  def blob(fleet_id, owner, path) do
-    url = Path.join(["/api/v1/repos", segment(owner), segment(fleet_id), "blob", encode(path)])
+  def blob(repository, owner, path, at \\ nil) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "blob", encode(path)])
     cap = Code.config()[:file_max_bytes]
 
     case request(
-           Pass.read(fleet_id),
-           [method: :get, url: url, decode_body: false, into: &read_capped(&1, &2, cap)],
+           Pass.read(repository),
+           [
+             method: :get,
+             url: url,
+             params: at(at),
+             decode_body: false,
+             into: &read_capped(&1, &2, cap)
+           ],
            Code.config()[:page_timeout_ms]
          ) do
       {:ok, %Req.Response{status: 200, body: body}} -> {:ok, body}
@@ -72,6 +102,76 @@ defmodule Keyfleet.Code.NodeClient do
       {:error, error} -> {:error, error}
     end
   end
+
+  @doc """
+  One page of the history, newest first: from the commit `:start` (a full
+  hash; the default branch when nil), leaving out what any commit in `:not`
+  reaches, after `:skip` commits, at most `:limit`. `{:ok, %{commits:,
+  head:, more?:}}`, each commit with `hash`, `author`, `date` (RFC 3339) and
+  `message` (its first line), and `head` the commit it started
+  from, nil for a repository with no commits; `:not_found` for a `:start` or
+  `:not` the repository has no commit by; or `{:error, reason}`. A page waits
+  `page_timeout_ms`, a job (`timeout: :job`) `node_timeout_ms`.
+  """
+  def commits(repository, owner, options) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "commits"])
+
+    params =
+      [
+        ref: options[:start],
+        not: Enum.join(Keyword.get(options, :not, []), ","),
+        skip: Keyword.get(options, :skip, 0),
+        limit: Keyword.fetch!(options, :limit)
+      ]
+      |> Enum.reject(&(elem(&1, 1) in [nil, ""]))
+
+    case request(
+           Pass.read(repository),
+           [method: :get, url: url, params: params],
+           timeout(options)
+         ) do
+      {:ok, %Req.Response{status: 200, body: %{"commits" => commits, "more" => more} = body}}
+      when is_list(commits) ->
+        {:ok, %{commits: commits, head: body["head"], more?: more == true}}
+
+      {:ok, %Req.Response{status: 404}} ->
+        :not_found
+
+      {:ok, %Req.Response{status: status}} ->
+        {:error, {:code_store_status, status}}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
+  The commit `hash` (a full hash): `{:ok, commit}` with `hash`, `parents`,
+  `author`, `date` and `committed` (RFC 3339), `message`, `files` (each
+  `path`, `old_path`, `status`, `additions`, `deletions`, `binary`, `patch`
+  and `patch_truncated`) and `files_truncated`; `:not_found` when the
+  repository has no commit by it; or `{:error, reason}`.
+  """
+  def commit(repository, owner, hash) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "commits", hash])
+
+    case request(Pass.read(repository), [method: :get, url: url], Code.config()[:page_timeout_ms]) do
+      {:ok, %Req.Response{status: 200, body: %{"hash" => _hash} = commit}} -> {:ok, commit}
+      {:ok, %Req.Response{status: 404}} -> :not_found
+      {:ok, %Req.Response{status: status}} -> {:error, {:code_store_status, status}}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp timeout(options) do
+    if options[:timeout] == :job,
+      do: Code.config()[:node_timeout_ms],
+      else: Code.config()[:page_timeout_ms]
+  end
+
+  # The store reads the default branch unless `ref` names a commit.
+  defp at(nil), do: []
+  defp at(hash), do: [ref: hash]
 
   # A page waits `page_timeout_ms` at most for what it shows; a job waits
   # `node_timeout_ms`.

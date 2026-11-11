@@ -56,6 +56,9 @@ defmodule KeyfleetWeb.AgentAvatarTest do
 
     assert refusal(upload(c, ticket(c, declared), picture, "image/png"), 413) ==
              "request_too_large"
+
+    # An address Keyfleet didn't give is refused before any of the body is read.
+    assert refusal(upload(c, "forged", picture, "image/png"), 401) == "avatar_upload_expired"
   end
 
   # Each upload keeps a new picture and has the old one deleted, so an

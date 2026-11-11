@@ -1,16 +1,17 @@
 defmodule Keyfleet.Proposals.Actions do
   @moduledoc """
-  The calls a proposal can make, both ways: `encode/3` builds the exact
+  The calls a proposal can make, both ways: `encode/2` builds the exact
   calls of each kind of proposal the site offers, and `decode/2` reads a
   recorded call back as the action it takes, so a proposal's page can say in
   plain words what carrying it out does.
 
-  Every call but a launch is made to the fleet's own treasury or vote
-  contract: paying, advancing, the daily split's rate, approving or revoking
-  the treasury's own Lit wallet request, which it then answers as its
-  signature, and restricting a key's
-  edits, which names the Key by its id in the Key collection. A launch calls Autolaunch v2's factory and names the fleet's
-  treasury as the launch's treasury. A decision makes no call at all.
+  The site offers a decision, which makes no call at all, a payment, the
+  daily split's rate, restricting a Key's edits, which names the Key by its
+  id in the Key collection, and a launch, which calls Autolaunch v2's factory
+  and names the fleet's treasury as the launch's treasury. The vote contract
+  takes other calls too, made to the chain directly: `decode/2` also reads an
+  advance and an approval or revocation of the treasury's own Lit wallet
+  request, so voters see what such a proposal does.
   """
 
   alias Keyfleet.Fleets.Fleet
@@ -44,13 +45,10 @@ defmodule Keyfleet.Proposals.Actions do
   The calls of one kind of proposal, as `{target, wei, calldata}`:
 
     * `:decision`, no call;
-    * `{:pay, asset, to, share}` and `{:advance, id, operator, asset,
-      share, purpose}` from the treasury, `share` in parts per million of
-      the treasury's balance of `asset` when the proposal is carried out;
+    * `{:pay, asset, to, share}` from the treasury, `share` in parts per
+      million of the treasury's balance of `asset` when the proposal is
+      carried out;
     * `{:rate, bps}`, the daily split's rate;
-    * `{:signature, :approve | :revoke, issued_at}`, the treasury's own Lit
-      `CreateWallet` request at `issued_at`, in seconds, which the treasury
-      builds and signs under Lit's own domain;
     * `{:edits, token_id, restricted?}`, `token_id` the fleet's Key number;
     * `{:launch, %{name:, symbol:, description:, website:, image:}}`.
   """
@@ -59,16 +57,7 @@ defmodule Keyfleet.Proposals.Actions do
   def encode({:pay, asset, to, share}, fleet),
     do: [treasury(fleet, Call.encode(@pay, [asset, to, share]))]
 
-  def encode({:advance, id, operator, asset, share, purpose}, fleet),
-    do: [treasury(fleet, Call.encode(@advance, [id, operator, asset, share, purpose]))]
-
   def encode({:rate, bps}, fleet), do: [treasury(fleet, Call.encode(@rate, [bps]))]
-
-  def encode({:signature, :approve, issued_at}, fleet),
-    do: [treasury(fleet, Call.encode(@approve_lit, [issued_at]))]
-
-  def encode({:signature, :revoke, issued_at}, fleet),
-    do: [treasury(fleet, Call.encode(@revoke_lit, [issued_at]))]
 
   def encode({:edits, token_id, restricted?}, fleet),
     do: [
@@ -87,8 +76,11 @@ defmodule Keyfleet.Proposals.Actions do
   defp treasury(fleet, data), do: {fleet.treasury_address, 0, data}
 
   @doc """
-  What one recorded call does, as `encode/2` names it, plus `:voted_split`,
-  `{:admit_ousd, token}` and, for any other call, `{:other, target, data}`.
+  What one recorded call does, as `encode/2` names it, plus `{:advance, id,
+  operator, asset, share, purpose}`, `{:signature, :approve | :revoke,
+  issued_at}` for the treasury's own Lit `CreateWallet` request at
+  `issued_at`, in seconds, `:voted_split`, `{:admit_ousd, token}` and, for
+  any other call, `{:other, target, data}`.
   A call is read as an action only when it is made to the contract that
   action belongs to. The vote contract refuses a proposal whose calls send
   ETH, so no recorded call does.

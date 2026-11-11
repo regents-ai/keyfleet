@@ -1,5 +1,3 @@
-@import "@fontsource-variable/bricolage-grotesque/opsz.css";
-@import "@fontsource/ibm-plex-mono/600.css";
 
 /* The early-access page in the Regents palette, with headlines in the key
    cards' lettering. On a wide screen what Keyfleet is and the email form sit on
@@ -17,10 +15,6 @@
     --tier-3: var(--palette-powder-blue);
     --tier-4: var(--brand-accent);
     --tier-5: var(--brand-accent);
-    --early-display: "Bricolage Grotesque Variable", var(--font-family-sans);
-    /* Headings take the cards' lettering instead of the site's pixel face. */
-    --font-family-title: var(--early-display);
-    --early-label: "IBM Plex Mono", var(--font-family-mono);
     --early-stage: var(--palette-charcoal);
 
     display: grid;
@@ -49,9 +43,8 @@
   .early__pitch { min-width: 0; }
 
   .early__overline {
-    font-family: var(--early-label);
+    font-family: var(--font-family-ui);
     font-size: .6875rem;
-    font-weight: 600;
     letter-spacing: .18em;
     text-transform: uppercase;
     color: var(--brand-accent);
@@ -70,9 +63,8 @@
 
   .early__tagline {
     margin-block-start: var(--space-3);
-    font-family: var(--early-display);
+    font-family: var(--font-family-title);
     font-size: clamp(1.25rem, .9rem + 1.3vw, 1.875rem);
-    font-weight: 600;
     line-height: 1.1;
     letter-spacing: -.015em;
   }
@@ -110,9 +102,7 @@
      lines each marked with a Powder Blue rule. */
   .early__stack { margin-block-start: var(--space-5); max-width: 36rem; }
 
-  /* A small label rather than a headline, so it takes the label face. */
   .early__stack .rg-disclosure-title {
-    --font-family-title: var(--early-label);
     font-size: .6875rem;
     letter-spacing: .18em;
     text-transform: uppercase;
@@ -192,9 +182,8 @@
   .roller__loading {
     position: absolute;
     inset: auto 0 18px;
-    font-family: var(--early-label);
+    font-family: var(--font-family-ui);
     font-size: .6875rem;
-    font-weight: 600;
     letter-spacing: .14em;
     text-align: center;
     text-transform: uppercase;
@@ -227,7 +216,6 @@
     line-height: 1.5;
   }
 
-  .roller__status b { font-weight: 600; }
 
   /* ---------------- rarity chips ---------------- */
   .early [data-tier="0"] { --tier: var(--tier-0); }
@@ -249,9 +237,8 @@
     border-radius: var(--radius);
     background: var(--tier-fill, transparent);
     color: var(--tier-ink, var(--tier));
-    font-family: var(--early-label);
+    font-family: var(--font-family-ui);
     font-size: .6875rem;
-    font-weight: 600;
     letter-spacing: .06em;
     line-height: 1;
     text-transform: uppercase;
@@ -307,21 +294,19 @@
   .roller__trait-head:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
   .roller__trait-name {
-    font-family: var(--early-label);
+    font-family: var(--font-family-ui);
     font-size: .6875rem;
-    font-weight: 600;
     letter-spacing: .12em;
     text-transform: uppercase;
     color: var(--color-fg-muted);
   }
 
-  .roller__trait-value { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .roller__trait-value { min-width: 0; overflow-wrap: anywhere; }
 
   .roller__odds {
     color: var(--color-fg-muted);
-    font-family: var(--early-label);
+    font-family: var(--font-family-ui);
     font-size: .75rem;
-    font-weight: 600;
     font-variant-numeric: tabular-nums;
     text-align: end;
     white-space: nowrap;
@@ -375,7 +360,6 @@
   .roller__value[aria-current="true"] {
     background: color-mix(in srgb, var(--tier) 14%, transparent);
     box-shadow: inset 0 0 0 1px var(--tier);
-    font-weight: 600;
   }
 
   .early__footer {
@@ -384,9 +368,8 @@
     gap: var(--space-3);
     align-self: end;
     padding-block-start: var(--space-4);
-    font-family: var(--early-label);
+    font-family: var(--font-family-ui);
     font-size: .75rem;
-    font-weight: 600;
     letter-spacing: .1em;
     text-transform: uppercase;
   }

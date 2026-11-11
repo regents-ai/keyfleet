@@ -1,11 +1,10 @@
 import {expect, test, type Page} from "@playwright/test"
 
-// The homepage leads with Classic #1: the tagline, its figures and "Buy Next Key" with the
-// Key's card art and price, then Classic Keyfleet with "Buy Key", the Regents Club,
-// what a fleet can use and the starting ideas for a fleet's shared goal.
+// The homepage is the headline, one line under it, "Watch", Classic #1's figures and "Buy Key"
+// under the Key's card art and price.
 
-// No fleet in the test data is deployed, so Classic's sale is closed: "Buy Next Key" says it
-// can't be pressed, with the reason beside it.
+// No fleet in the test data is deployed, so Classic's sale is closed: "Buy Key" says it can't
+// be pressed, with the reason under it.
 
 const waitForHomepage = async (page: Page) => {
   await expect(page.locator("#public-home")).toBeVisible()
@@ -15,57 +14,20 @@ const waitForHomepage = async (page: Page) => {
   })
 }
 
-test("the homepage reads without scripts, top to bottom", async ({browser}) => {
+test("the homepage reads without scripts", async ({browser}) => {
   const context = await browser.newContext({javaScriptEnabled: false})
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "Your personal agent joins a Fleet with a Key.", level: 1}))
+  await expect(page.getByRole("heading", {name: "A persistent team for your AI agent.", level: 1}))
     .toBeVisible()
-  const buy = page.locator("#home-buy-next-key")
+  const buy = page.locator("#home-buy-key")
   await expect(buy).toBeDisabled()
-  await expect(buy).toContainText("Buy Next Key")
-  await expect(page.locator("#home-buy-price")).toHaveText("Key 1 · 10 USDC")
+  await expect(buy).toHaveText("Buy Key")
   await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
-  await expect(page.getByRole("heading", {name: "Regents Club", level: 2})).toBeVisible()
-  await expect(page.locator("#home-integration-tiles > li")).toHaveCount(9)
-  await expect(page.getByRole("heading", {name: "Initial Ideas for a Keyfleet to Pursue as a Shared Goal", level: 2}))
-    .toBeVisible()
-  await expect(page.locator("#home-goal-idea-tiles > li")).toHaveCount(8)
-  await context.close()
-})
-
-// The ideas are tiles four across on a wide screen, two on a tablet and one on a phone,
-// and their links name the sites they open.
-test("the starting ideas lay out by width, and each link names its site", async ({page}) => {
-  for (const [width, across] of [[1440, 4], [800, 2], [375, 1]] as const) {
-    await page.setViewportSize({width, height: 900})
-    await page.goto("/")
-    await waitForHomepage(page)
-
-    const tops = await page.locator("#home-goal-idea-tiles > li").evaluateAll(tiles =>
-      tiles.map(tile => Math.round(tile.getBoundingClientRect().top)))
-    expect(tops.filter(top => top === tops[0])).toHaveLength(across)
-  }
-
-  const ideas = page.locator("#home-goal-ideas")
-  await expect(ideas.getByRole("link", {name: "Yukon"})).toHaveAttribute("href", "https://yukon.org/")
-  await expect(ideas.getByRole("link", {name: "Autolaunch"})).toHaveCount(2)
-  await expect(ideas.getByRole("link", {name: "OpenEnv Arena"})).toHaveAttribute("target", "_blank")
-})
-
-test("Copy puts the instruction shown on the clipboard", async ({browser}) => {
-  const context = await browser.newContext({permissions: ["clipboard-read", "clipboard-write"]})
-  const page = await context.newPage()
-  await page.goto("/")
-  await waitForHomepage(page)
-
-  const shown = await page.locator("#home-instruction").evaluate(element => element.textContent!.replace(/\s+/g, " ").trim())
-  await page.getByRole("button", {name: "Copy the instruction"}).click()
-
-  await expect(page.locator("#home-instruction-copy-status")).toHaveText("Copied")
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shown)
+  await expect(page.getByRole("link", {name: "Watch", exact: true})).toHaveAttribute("href", "/classic/1")
+  await expect(page.locator("#home-classic-facts")).toBeVisible()
   await context.close()
 })
 
@@ -84,16 +46,14 @@ test("the homepage shows the saved theme and offers the switch", async ({browser
   }
 })
 
-// On a phone the page fits the screen, and "Buy Next Key" comes before the instruction.
-test("on a phone nothing scrolls sideways and Buy Next Key comes first", async ({page}) => {
+// On a phone the page fits the screen, with the hero's "Buy Key" on it.
+test("on a phone nothing scrolls sideways and Buy Key is there", async ({page}) => {
   for (const width of [320, 375]) {
     await page.setViewportSize({width, height: 812})
     await page.goto("/")
     await waitForHomepage(page)
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    const buy = await page.locator("#home-buy-next-key").boundingBox()
-    const give = await page.locator("#home-instruction").boundingBox()
-    expect(buy!.y).toBeLessThan(give!.y)
+    await expect(page.locator("#home-buy-key")).toBeVisible()
   }
 })

@@ -4,10 +4,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   early-access page and public NFT metadata. This plug runs in the endpoint before
   anything is served, and it is the one place that says what stays reachable:
 
-    * `/early` and its form, the Contact page (`/contact`), the Privacy Policy
-      (`/privacy`) and the Terms of Use (`/terms`), as pages or as Markdown;
+    * `/early` and its form, the Privacy Policy (`/privacy`) and the Terms of Use
+      (`/terms`), as pages or as Markdown;
     * `/healthz`, `/robots.txt`, `/sitemap.xml` (which then lists only those
-      four pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
+      three pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
       the keys the fleets' notebook hubs check this site's passes with;
     * the collection and Key metadata at `/metadata/collection.json` and
       `/metadata/keys/:token_id`, for GET and HEAD requests;
@@ -17,7 +17,8 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   Every other page a browser opens, `/` included, is sent to `/early` with a
   302. Every other address answers 503 with `Retry-After`: the `not_open_yet`
-  JSON refusal for the API, sign-in and the other JSON documents,
+  JSON refusal for the API, sign-in, the connected apps' MCP address and
+  token endpoints, and the other JSON documents,
   and one line of Markdown for the rest, among them the joining guide, the fleet
   directory and the contract. Signing out closes with the rest of sign-in.
 
@@ -34,7 +35,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   alias KeyfleetWeb.{ContentSecurityPolicy, Refusal}
 
-  @open_pages ~w(/early /contact /privacy /terms)
+  @open_pages ~w(/early /privacy /terms)
   @open_files ~w(/healthz /robots.txt /sitemap.xml /.well-known/security.txt /.well-known/hub-jwks.json)
   @static_folders ~w(assets fonts images)
   @contract "api-contract.openapiv3.yaml"
@@ -47,8 +48,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     ["api"],
     ["auth"],
     ["metadata"],
-    ["capabilities"],
-    [".well-known", "api-catalog"]
+    ["capabilities.json"],
+    ["mcp"],
+    ["oauth", "register"],
+    ["oauth", "token"],
+    ["oauth", "revoke"],
+    [".well-known", "api-catalog"],
+    [".well-known", "oauth-protected-resource"],
+    [".well-known", "oauth-authorization-server"]
   ]
 
   @doc "True while the product surfaces are open."

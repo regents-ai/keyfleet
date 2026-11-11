@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.Layouts do
         aria-label="Dismiss"
         phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")}
       >
-        ×
+        <Regent.Icons.icon name="x" />
       </button>
     </div>
     """
@@ -77,7 +77,8 @@ defmodule KeyfleetWeb.Layouts do
   @doc """
   The footer of the home page and every public page, the same on every Regent site:
   the social links, Buy $REGENT and the site's documents. Below a public page it
-  sits at the foot of the screen however short the page is.
+  sits at the foot of the screen however short the page is; the app's pages
+  (`KeyfleetWeb.Components.Shell`) end with it inside their scrolling page.
   """
   def product_links(assigns) do
     assigns = assign(assigns, :buy_regent, @buy_regent)
@@ -95,15 +96,15 @@ defmodule KeyfleetWeb.Layouts do
         <a href={@buy_regent} target="_blank" rel="noopener noreferrer">Buy $REGENT</a>
         <a href={~p"/about"}>About</a>
         <a href={~p"/docs"}>Developer docs</a>
+        <a href={~p"/changelog"}>Changelog</a>
         <button type="button" class="regent-footer__guide" popovertarget="footer-agent-guide">
           Agent guide
         </button>
         <div id="footer-agent-guide" class="rg-tip-body regent-footer__guide-body" popover>
           <p>Give your agent one of these.</p>
-          <a href={~p"/agents.md"}>What agents can do here</a>
+          <a href={~p"/agents.md"}>Agent access</a>
           <a href={~p"/llms.txt"}>The whole site in brief</a>
         </div>
-        <a href={~p"/contact"}>Contact</a>
         <span class="regent-footer__legal">
           <a href={~p"/privacy"}>Privacy policy</a>
           <a href={~p"/terms"}>Terms of use</a>

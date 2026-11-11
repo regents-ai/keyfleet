@@ -19,7 +19,7 @@ defmodule Keyfleet.FleetRoomsTest do
   # held, so these rooms are read on the Cascade fleet.
   @fleet "fibonacci_cascade"
   @system %Actors.System{}
-  @own_slugs ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
+  @own_slugs ~w(welcome general people business voting coding open-1 open-2 open-3 open-4 open-5)
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -29,13 +29,13 @@ defmodule Keyfleet.FleetRoomsTest do
     :ok
   end
 
-  test "every fleet starts with its five fixed rooms and five open rooms without topics" do
+  test "every fleet starts with its six fixed rooms and five open rooms without topics" do
     for fleet <- Fleets.catalog_ids() do
       assert Enum.map(
                Rooms.list_rooms!(fleet, authorize?: false),
                &{&1.slug, &1.kind, &1.topic, &1.head_seq}
              ) ==
-               Enum.map(~w(welcome general business voting coding), &{&1, :fixed, nil, 0}) ++
+               Enum.map(~w(welcome general people business voting coding), &{&1, :fixed, nil, 0}) ++
                  Enum.map(1..5, &{"open-#{&1}", :open, nil, 0})
     end
   end
@@ -245,7 +245,7 @@ defmodule Keyfleet.FleetRoomsTest do
             "Hull \u2066survey",
             # Invisible and format characters, and line and paragraph
             # separators, whether inside a name or all of it.
-            "General\u200B",
+            "Public\u200B",
             "\u200B",
             "Hull\u200Esurvey",
             "Hull\u200Fsurvey",
@@ -290,8 +290,8 @@ defmodule Keyfleet.FleetRoomsTest do
       # topic and a created room's name, in any case and in any Unicode form
       # that comes to the same name.
       for topic <- [
-            "General",
-            "Ｇｅｎｅｒａｌ",
+            "Public",
+            "Ｐｕｂｌｉｃ",
             "ｈｕｌｌ ＳＵＲＶＥＹ",
             " welcome AND intros ",
             "VOTING",
@@ -411,7 +411,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       # An open room's topic, a fixed room's name, an unnamed open room's name
       # and another created room's name.
-      for name <- ["hull", "GENERAL", "Open Room 2", "DECK"] do
+      for name <- ["hull", "PUBLIC", "Open Room 2", "DECK"] do
         assert {:error, %Postgrex.Error{postgres: %{code: :unique_violation}}} =
                  created.("lounge", name),
                name
@@ -505,8 +505,8 @@ defmodule Keyfleet.FleetRoomsTest do
       # A fixed room's name, an unnamed open room's name, an open room's topic
       # and another created room's name, in any case.
       for name <- [
-            "General",
-            "Ｇｅｎｅｒａｌ",
+            "Public",
+            "Ｐｕｂｌｉｃ",
             " welcome AND intros ",
             "open ROOM 2",
             "DRY dock",
@@ -526,7 +526,7 @@ defmodule Keyfleet.FleetRoomsTest do
       # Names that only start like another room's are free, and so is any
       # language and a name an open room had before it was named.
       for {slug, name} <- [
-            {"store", "General store"},
+            {"store", "Public store"},
             {"open-6", "Open room 6"},
             {"kai", "Kāi"},
             {"deck", "Open room 1"}
@@ -553,7 +553,7 @@ defmodule Keyfleet.FleetRoomsTest do
         for n <- 1..10, do: create!(agent, "made-#{runner}-#{n}", "Made #{runner}.#{n}")
       end
 
-      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 110
+      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 111
 
       assert {:error, %Ash.Error.Invalid{errors: [%CreatedRoomLimitError{limit: 100}]}} =
                Rooms.create_room(%{fleet_id: @fleet, slug: "made-101", name: "Made 101"},

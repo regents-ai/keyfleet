@@ -47,10 +47,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
     await_ready()
 
-    start_supervised!(
-      {Keyfleet.Graph.Projectors,
-       fleets: [@fleet], projection_wait: 30_000, catch_up_interval: 60_000}
-    )
+    start_supervised!({Keyfleet.Graph.Projectors, fleets: [@fleet], catch_up_interval: 60_000})
 
     %{conn: holder_conn()}
   end
@@ -123,7 +120,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   # so to every open page before the wait ends.
   defp create!(type, data, id) do
     {:ok, %{"result" => %{"id" => object_id}, "head_seq" => head}} =
-      command("create", %{type: type, scope: "fleet", data: data}, id)
+      command("create", %{project: "general", type: type, data: data}, id)
 
     {object_id, await(head)}
   end
@@ -140,7 +137,10 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   end
 
   defp command(op, body, id),
-    do: Writer.command(@fleet, op, body, fn _within -> {:ok, stamped(id)} end)
+    do: Writer.command(@fleet, op, body, {__MODULE__, :admit, [id]})
+
+  @doc false
+  def admit(id, _within), do: {:ok, stamped(id)}
 
   defp stamped(id) do
     %{
@@ -155,7 +155,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
       },
-      writable_scopes: ["fleet"]
+      projects: %{"general" => "active"}
     }
   end
 

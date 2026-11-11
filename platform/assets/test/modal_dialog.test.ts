@@ -10,14 +10,21 @@ function control(id: string) {
   return {id, focus: vi.fn()}
 }
 
+// What the page's window is listening for, as the dialogs listen.
+const pageListeners = new Map<string, Listener[]>()
+const firePage = (name: string) => (pageListeners.get(name) ?? []).forEach(listener => listener())
+
+// Every dialog a test opened, taken away after it.
+const mounted: object[] = []
+
 function mountDialog(dataset: Record<string, string>, page: Record<string, ReturnType<typeof control>> = {}) {
   const listeners = new Map<string, Listener>()
   const title = {focus: vi.fn()}
+  const body = {scrollTo: vi.fn()}
   const dialog = {
     open: false,
     modal: false,
     dataset,
-    scrollTop: 40,
     showModal: vi.fn(() => {
       dialog.open = true
       dialog.modal = true
@@ -30,12 +37,19 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
       dialog.open = false
     }),
     matches: (selector: string) => selector === ":modal" && dialog.modal,
-    querySelector: (selector: string) => (selector === "[data-modal-title]" ? title : null),
+    querySelector: (selector: string) =>
+      ({"[data-modal-title]": title, ".rg-dialog__body": body})[selector] ?? null,
     querySelectorAll: () => [],
     addEventListener: vi.fn((name: string, listener: Listener) => listeners.set(name, listener)),
   }
   const back = vi.fn()
   vi.stubGlobal("history", {back})
+  vi.stubGlobal("window", {
+    addEventListener: (name: string, listener: Listener) =>
+      pageListeners.set(name, [...(pageListeners.get(name) ?? []), listener]),
+    removeEventListener: (name: string, listener: Listener) =>
+      pageListeners.set(name, (pageListeners.get(name) ?? []).filter(kept => kept !== listener)),
+  })
   vi.stubGlobal("document", {
     activeElement: page.active ?? null,
     body: {},
@@ -44,13 +58,14 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
   const pushEvent = vi.fn()
   const hook = {el: dialog, pushEventTo: pushEvent}
   ModalDialog.mounted!.call(hook)
+  mounted.push(hook)
 
   const closeBy = () => {
     dialog.open = false
     listeners.get("close")?.()
   }
   const fire = (name: string, event?: unknown) => listeners.get(name)?.(event)
-  return {dialog, hook, title, pushEvent, back, closeBy, fire}
+  return {dialog, body, hook, title, pushEvent, back, closeBy, fire}
 }
 
 // The page-wide listeners that note each press, as `watchPresses` adds them.
@@ -60,6 +75,7 @@ watchPresses({addEventListener: listen, defaultView: {addEventListener: listen}}
 const press = (id: string) => presses.get("click")!({target: {closest: () => ({id})}, detail: 1})
 
 afterEach(() => {
+  mounted.splice(0).forEach(hook => ModalDialog.destroyed!.call(hook))
   vi.unstubAllGlobals()
   presses.get("keydown")!()
 })
@@ -89,13 +105,35 @@ it("asks the page to close it in place when the visitor arrived on it", () => {
   expect(back).not.toHaveBeenCalled()
 })
 
-it("hands focus back to whatever opened it once it has gone", () => {
+it("hands focus back to whatever opened it once it has gone, with its ring after a key", () => {
   const opener = control("fleet-key-link-12")
   const {hook} = mountDialog({close: "back", closeEvent: "close_key"}, {active: opener})
 
+  presses.get("keydown")!()
   ModalDialog.destroyed!.call(hook)
 
-  expect(opener.focus).toHaveBeenCalledOnce()
+  expect(opener.focus).toHaveBeenCalledExactlyOnceWith({focusVisible: true})
+})
+
+it("hands focus back with no ring when a pointer closed it", () => {
+  const opener = control("home-buy-key")
+  const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"}, {active: opener})
+
+  press("home-buy-key-close")
+  ModalDialog.destroyed!.call(hook)
+
+  expect(opener.focus).toHaveBeenCalledExactlyOnceWith({focusVisible: false})
+})
+
+it("counts a click a key made, Enter on the close button, as the key's", () => {
+  const opener = control("home-buy-key")
+  const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"}, {active: opener})
+
+  presses.get("keydown")!()
+  presses.get("click")!({target: {closest: () => ({id: "home-buy-key-close"})}, detail: 0})
+  ModalDialog.destroyed!.call(hook)
+
+  expect(opener.focus).toHaveBeenCalledExactlyOnceWith({focusVisible: true})
 })
 
 it("lets the sign-in window above it be used, and is modal again on a press back inside", () => {
@@ -118,8 +156,61 @@ it("lets the sign-in window above it be used, and is modal again on a press back
   expect(pushEvent).not.toHaveBeenCalled()
 })
 
+// Sean, 21 October 2026: after a sign-in cancelled from the Buy Key window,
+// the window was left without its backdrop and the page drew over it.
+it("is modal again, with focus on the button that opened sign-in, once the sign-in window has gone", () => {
+  const {dialog, fire, pushEvent, back} = mountDialog({close: "replace", closeEvent: "close_buy_key"})
+  const buy = {focus: vi.fn()}
+  const signIn = {closest: (selector: string) => (selector.includes("sign-in") ? buy : null)}
+
+  fire("click", {target: signIn})
+  fire("close")
+  expect(dialog.matches(":modal")).toBe(false)
+
+  firePage("ash:sign-in-closed")
+  fire("close")
+  expect(dialog.matches(":modal")).toBe(true)
+  expect(dialog.open).toBe(true)
+  expect(buy.focus).toHaveBeenCalledOnce()
+  expect(pushEvent).not.toHaveBeenCalled()
+  expect(back).not.toHaveBeenCalled()
+
+  // Already modal, it stays as it is.
+  firePage("ash:sign-in-closed")
+  expect(dialog.showModal).toHaveBeenCalledTimes(2)
+  expect(buy.focus).toHaveBeenCalledOnce()
+})
+
+// A Key's page is a dialog too, with the Buy Key window above it. Left modal,
+// it would keep the sign-in window out of reach.
+it("steps every dialog down for sign-in, and brings them back bottom first", () => {
+  const profile = mountDialog({close: "back", closeEvent: "close_key"})
+  const buyKey = mountDialog({close: "replace", closeEvent: "close_buy_key"})
+  const signIn = {closest: (selector: string) => (selector.includes("sign-in") ? {focus: vi.fn()} : null)}
+
+  buyKey.fire("click", {target: signIn})
+  expect(profile.dialog.matches(":modal")).toBe(false)
+  expect(buyKey.dialog.matches(":modal")).toBe(false)
+
+  firePage("ash:sign-in-closed")
+  expect(profile.dialog.matches(":modal")).toBe(true)
+  expect(buyKey.dialog.matches(":modal")).toBe(true)
+  expect(profile.dialog.showModal.mock.invocationCallOrder.at(-1)).toBeLessThan(
+    buyKey.dialog.showModal.mock.invocationCallOrder.at(-1)!,
+  )
+})
+
+it("stops listening for the sign-in window once it has gone", () => {
+  const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"})
+  expect(pageListeners.get("ash:sign-in-closed")).toHaveLength(1)
+
+  ModalDialog.destroyed!.call(hook)
+  mounted.splice(0)
+  expect(pageListeners.get("ash:sign-in-closed")).toEqual([])
+})
+
 it("focuses its title again when it comes to show another key", () => {
-  const {dialog, hook, title} = mountDialog({close: "back", closeEvent: "close_key", shown: "12"})
+  const {dialog, body, hook, title} = mountDialog({close: "back", closeEvent: "close_key", shown: "12"})
 
   ModalDialog.updated!.call(hook)
   expect(title.focus).toHaveBeenCalledOnce()
@@ -127,7 +218,7 @@ it("focuses its title again when it comes to show another key", () => {
   dialog.dataset.shown = "3"
   ModalDialog.updated!.call(hook)
   expect(title.focus).toHaveBeenCalledTimes(2)
-  expect(dialog.scrollTop).toBe(0)
+  expect(body.scrollTo).toHaveBeenCalledExactlyOnceWith({top: 0})
 })
 
 it("steps Tab and Shift+Tab through the dialog's controls, going round at either end", () => {

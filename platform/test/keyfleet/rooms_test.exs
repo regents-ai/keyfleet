@@ -20,10 +20,10 @@ defmodule Keyfleet.RoomsTest do
         actor: %Keyfleet.Actors.System{}
       )
 
-    assert length(Rooms.bootstrap_rooms!(Fleets.catalog_ids())) == 50
+    assert length(Rooms.bootstrap_rooms!(Fleets.catalog_ids())) == 55
     first = persisted_rooms()
-    assert length(first) == 50
-    assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "General"}))
+    assert length(first) == 55
+    assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "Public"}))
 
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     assert persisted_rooms() == first
@@ -34,7 +34,8 @@ defmodule Keyfleet.RoomsTest do
 
       assert Enum.map(rooms, &{&1.slug, &1.name, &1.kind, &1.topic}) == [
                {"welcome", "Welcome and intros", :fixed, nil},
-               {"general", "General", :fixed, nil},
+               {"general", "Public", :fixed, nil},
+               {"people", "People and agents", :fixed, nil},
                {"business", "Business", :fixed, nil},
                {"voting", "Voting", :fixed, nil},
                {"coding", "Coding", :fixed, nil},
@@ -121,7 +122,7 @@ defmodule Keyfleet.RoomsTest do
   test "bootstrap opens rooms only for the fleets it is given" do
     Fleets.bootstrap_catalog!()
 
-    assert length(Rooms.bootstrap_rooms!(["fleet_tech_classic"])) == 10
+    assert length(Rooms.bootstrap_rooms!(["fleet_tech_classic"])) == 11
     assert persisted_rooms() |> Enum.map(&elem(&1, 1)) |> Enum.uniq() == ["fleet_tech_classic"]
   end
 

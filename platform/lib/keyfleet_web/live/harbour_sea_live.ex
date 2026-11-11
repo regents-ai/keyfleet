@@ -1,14 +1,19 @@
 defmodule KeyfleetWeb.HarbourSeaLive do
   @moduledoc """
-  The sea behind the product's pages: one ship for each of the most recently
-  active Keys, sailing to the island of the Key's last action and circling it
+  The swarm city behind the product's pages: one disc for each of the most
+  recently active holders and each holder whose Keys the agents here act as,
+  flying to the district of their last action and circling its towers
   (`KeyfleetWeb.HarbourCrew`).
 
-  On a fleet's pages the ships are that fleet's Keys; anywhere else they are
-  the latest Keys of every open fleet. The visitor's own Keys come first, then
-  the most recent, sixteen at most. The sea takes no presses until its button
-  lifts the page away; then pressing a ship opens its card: the Key's last few
-  actions and a link to its profile.
+  On a fleet's pages the ships are that fleet's holders, one for each account
+  with all its Keys, showing the Key it writes as; anywhere else they are the
+  latest holders of every open fleet. The visitor's own ship comes first, then
+  the agents' here, then the most recent, twenty-four at most. The city takes
+  no presses until the button beside a fleet's name (`lift/1`) lifts the page
+  away; then a drag turns it, the mouse over a disc names its Key, and pressing
+  the disc or its name opens its card (`agent_card/1`). Its districts lead to the fleet's Public room, workspace and treasury
+  (`HarbourCrew.districts/1`), and a bar at the top names the fleet, brings the
+  page back (as Escape does) and opens its Chat or Workspace.
 
   The root layout renders it beside the page's own LiveView
   (`KeyfleetWeb.Router` marks the pages that have it), so it keeps running
@@ -17,9 +22,10 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   page itself would not.
 
   A fleet's ships are drawn from what every visitor who isn't a member sees
-  alike, `KeyfleetWeb.FleetNow`, read once for every open page. Only a
+  alike, `KeyfleetWeb.FleetNow` and `Keyfleet.Agents.Here`, read once for every
+  open page. Only a
   member's ships are read as the visitor, since a member sees more (rooms
-  other than General, every item's title). Which ships are the visitor's own
+  other than the Public room, every item's title). Which ships are the visitor's own
   is read as the visitor, when the fleet comes on show and when its Keys
   change hands.
   """
@@ -28,6 +34,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   alias Keyfleet.Access
   alias Keyfleet.Activity
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -36,7 +43,6 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
-    ActivityLines,
     Endpoint,
     FleetNow,
     HarbourCrew,
@@ -45,6 +51,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     Read,
     RouteCatalog,
     Router,
+    SharedFigures,
     ShellLive
   }
 
@@ -94,8 +101,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
            topics: [],
            watched: [],
            due: MapSet.new(),
-           agent: nil,
-           now: nil
+           agent: nil
          ), layout: false}
 
       {:halt, socket} ->
@@ -135,7 +141,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   def handle_event("show_agent", %{"id" => id}, socket) when is_binary(id) do
     if ship(on_sea(socket.assigns), id),
-      do: {:noreply, assign(socket, agent: id, now: DateTime.utc_now())},
+      do: {:noreply, assign(socket, agent: id)},
       else: {:noreply, socket}
   end
 
@@ -145,18 +151,22 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # A new reading of a fleet the visitor isn't a member of redraws its ships.
-  # One that has gone leaves the sea as it is drawn.
+  # One that has gone leaves the sea as it is drawn. A new reading of the
+  # agents here in a fleet the visitor is a member of reads its ships again.
   @impl true
-  def handle_info({:shared_reading, {:fleet_now, fleet_id} = key}, socket) do
-    if key in socket.assigns.watched,
-      do: {:noreply, socket |> draw([fleet_id]) |> close_sailed()},
-      else: {:noreply, socket}
+  def handle_info({:shared_reading, {kind, fleet_id} = key}, socket)
+      when kind in [:fleet_now, :fleet_agents] do
+    cond do
+      key not in socket.assigns.watched -> {:noreply, socket}
+      {fleet_id, :member} in socket.assigns.fleets -> {:noreply, crew_soon(socket)}
+      true -> {:noreply, socket |> draw([fleet_id]) |> close_sailed()}
+    end
   end
 
   # Anything new in a fleet the visitor is a member of is a nudge to read its
   # ships again, once for a burst; Keys changing hands, to read again which
   # are the visitor's and whether they are a member. Nothing else a fleet says
-  # moves a ship: a new reading of a treasury's balances, every minute, least
+  # moves a ship: a new reading of a treasury's balances, every five minutes, least
   # of all.
   def handle_info({:reread, shown}, %{assigns: %{shown: shown, due: due}} = socket) do
     socket = assign(socket, :due, MapSet.new())
@@ -292,13 +302,19 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   # What the visitor hears of each fleet on show. A member hears what the
   # shell hears for their class: its rooms, its workspace and its votes. Anyone
-  # else hears its shared reading, which hears those for everyone. A signed-in
+  # else hears its shared reading, which hears those for everyone. Everyone
+  # hears its agents here, whose Keys fly too. A signed-in
   # visitor also hears its Keys, which change which ships are theirs and
   # whether they are a member; a signed-out one holds none.
   defp follow(socket, actor) do
     %{fleets: fleets, topics: topics_was, watched: watched_was} = socket.assigns
     topics = Enum.flat_map(fleets, fn {fleet_id, class} -> topics(fleet_id, class, actor) end)
-    watched = for {fleet_id, class} <- fleets, class != :member, do: FleetNow.key(fleet_id)
+
+    watched =
+      Enum.flat_map(fleets, fn
+        {fleet_id, :member} -> [Here.fleet_key(fleet_id)]
+        {fleet_id, _class} -> [FleetNow.key(fleet_id), Here.fleet_key(fleet_id)]
+      end)
 
     Enum.each(topics_was -- topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
     Enum.each(topics -- topics_was, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
@@ -330,8 +346,14 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         Map.take(public, Enum.map(fleets, &elem(&1, 0))),
         fn fleet_id, public ->
           case FleetNow.fetch(fleet_id) do
-            {%{coming_soon?: false, feed: %{items: items}}, _degraded?} ->
-              Map.put(public, fleet_id, HarbourCrew.ships(fleet_id, items))
+            {%{coming_soon?: false, feed: %{items: items}, faces: faces}, _degraded?} ->
+              {agents, here_faces} = here(fleet_id)
+
+              Map.put(
+                public,
+                fleet_id,
+                HarbourCrew.ships(fleet_id, items, agents, Map.merge(here_faces, faces))
+              )
 
             {%{coming_soon?: true}, _degraded?} ->
               Map.put(public, fleet_id, [])
@@ -346,8 +368,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   end
 
   # The ships of the fleets the visitor is a member of are read beside the
-  # page, as the visitor, after listening to those fleets, so a change that
-  # lands while they load still reaches them.
+  # page, as the visitor with the class already read, after listening to
+  # those fleets, so a change that lands while they load still reaches them.
   defp read_crew(socket) do
     actor = ShellLive.human_actor(socket)
 
@@ -359,10 +381,27 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         Read.start(socket, :crew, reader(socket.assigns.access_context), fn ->
           {:ok,
            Map.new(fleet_ids, fn fleet_id ->
-             %{items: items} = Activity.page(fleet_id, nil, actor: actor)
-             {fleet_id, HarbourCrew.ships(fleet_id, items)}
+             %{items: items} =
+               Activity.page(fleet_id, nil,
+                 actor: actor,
+                 context: Access.context(actor, fleet_id, :member)
+               )
+
+             {agents, here_faces} = here(fleet_id)
+             faces = Keys.faces(fleet_id, HarbourCrew.keys(items))
+
+             {fleet_id, HarbourCrew.ships(fleet_id, items, agents, Map.merge(here_faces, faces))}
            end)}
         end)
+    end
+  end
+
+  # The agents here in a fleet and who holds their Keys and writes as which, from the reading every
+  # open page shares; none while it has not been read.
+  defp here(fleet_id) do
+    case SharedFigures.reading(Here.fleet_key(fleet_id)) do
+      %{agents: agents, faces: faces} -> {agents, faces}
+      nil -> {[], %{}}
     end
   end
 
@@ -370,7 +409,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   defp owned(actor, fleet_id), do: MapSet.new(Keys.held_keys(actor, fleet_id), & &1.token_id)
 
   # The ships on the sea: each fleet's, as the visitor's class there sees it,
-  # the visitor's own Keys first, then the most recently active. What was read
+  # the visitor's own ship first, then the most recently active. What was read
   # for the visitor shows only while they are signed in as they were then: a
   # sign-in that ends while the page is open takes it away with it. A fleet
   # the visitor has just joined shows as anyone sees it until their own read
@@ -389,7 +428,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
           do: read[fleet_id] || public[fleet_id],
           else: public[fleet_id]
 
-      for ship <- ships || [], do: Map.put(ship, :own?, MapSet.member?(mine, ship.token_id))
+      for ship <- ships || [],
+          do: Map.put(ship, :own?, Enum.any?(ship.keys, &MapSet.member?(mine, &1)))
     end)
     |> HarbourCrew.sea()
   end
@@ -410,8 +450,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       class="harbour-sea__harbour"
       phx-hook="HarbourSea"
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
-      data-harbour-layout="sea"
       data-harbour-crew={HarbourCrew.on_sea(drawn(@fleets, @public, @crew, @own, @access_context))}
+      data-harbour-districts={is_binary(@shown) && HarbourCrew.districts(@shown)}
       aria-hidden="true"
     >
       <div id="harbour-stage" class="harbour-sea__stage" phx-update="ignore" data-harbour-stage>
@@ -419,41 +459,88 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         <span class="harbour-sea__tag" data-harbour-tag hidden></span>
       </div>
     </div>
+    <nav :if={is_binary(@shown)} id="sea-bar" class="harbour-sea__bar" aria-label="The city">
+      <button
+        id="sea-return"
+        type="button"
+        class="harbour-sea__return"
+        title="Bring the page back"
+        phx-click={land()}
+      >
+        Keyfleet {Fleets.name(@shown)}
+      </button>
+      <.link
+        id="sea-chat"
+        class="rg-button rg-button--secondary"
+        navigate={KeyLinks.hall_path(@shown)}
+      >
+        Chat
+      </.link>
+      <.link
+        id="sea-workspace"
+        class="rg-button rg-button--secondary"
+        navigate={Fleets.path(@shown) <> "/workspace"}
+      >
+        Workspace
+      </.link>
+    </nav>
+    <.agent_card
+      :if={ship = @agent && ship(drawn(@fleets, @public, @crew, @own, @access_context), @agent)}
+      ship={ship}
+    />
+    """
+  end
+
+  @doc """
+  The button beside a fleet's name that lifts the page away to show the city,
+  handing focus to the bar's first button, which brings it back (`land/0`). A
+  press on the margin around the fleet's panel does the same
+  (`assets/js/hooks/harbour_sea.ts`).
+  """
+  def lift(assigns) do
+    ~H"""
     <button
       id="sea-lift"
       type="button"
       class="harbour-sea__lift"
       aria-controls="app-shell"
-      aria-pressed="false"
-      aria-label="Show the sea"
-      title="Show the sea"
-      phx-click={
-        JS.toggle_class("sea-lifted", to: "body")
-        |> JS.toggle_attribute({"aria-pressed", "true", "false"})
-        |> JS.toggle_attribute({"aria-label", "Bring the page back", "Show the sea"})
-        |> JS.toggle_attribute({"title", "Bring the page back", "Show the sea"})
-      }
+      aria-label="Show the city"
+      title="Show the city"
+      phx-click={JS.add_class("sea-lifted", to: "body") |> JS.focus(to: "#sea-return")}
     >
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M4 12l6-6 6 6M4 16h12" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <svg viewBox="0 0 20 18" fill="currentColor" aria-hidden="true">
+        <rect :for={{x, y, w, h} <- city_skyline()} x={x} y={y} width={w} height={h} />
+        <rect class="harbour-sea__lift-flag" x="7" y="0" width="2" height="2" />
       </svg>
     </button>
-    <.agent_card
-      :if={ship = @agent && ship(drawn(@fleets, @public, @crew, @own, @access_context), @agent)}
-      ship={ship}
-      now={@now}
-    />
     """
   end
 
-  attr :ship, :map, required: true
-  attr :now, DateTime, required: true
+  @doc "Brings the lifted page back, with focus on the button that lifted it."
+  def land, do: JS.remove_class("sea-lifted", to: "body") |> JS.focus(to: "#sea-lift")
 
-  # A Key's card: its name, its last actions and a link to its profile. It
-  # opens as it is rendered and closes with its X, Escape or a new page.
-  defp agent_card(assigns) do
+  # The lift button's picture, drawn in blocks like the Regents crown: four
+  # towers of a skyline. Each tower is {x, y, width, height}; the beacon on the
+  # tallest is drawn apart, in Tangerine.
+  defp city_skyline do
+    [
+      {1, 9, 4, 9},
+      {6, 3, 4, 15},
+      {11, 6, 3, 12},
+      {15, 11, 4, 7}
+    ]
+  end
+
+  attr :ship, :map, required: true
+
+  @doc """
+  A ship's card: its name and Key, the address of its holder to copy and how
+  many Keys they hold, their Keys' last few actions, and the Key's page. It
+  opens as it is rendered and closes with its X, Escape or a new page.
+  """
+  def agent_card(assigns) do
     ~H"""
-    <dialog
+    <Regent.Structure.dialog
       id="harbour-agent"
       class="harbour-card"
       phx-hook="ModalDialog"
@@ -470,29 +557,32 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         </div>
         <form method="dialog">
           <button type="submit" class="harbour-card__close" aria-label="Close">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path
-                d="M3 3l10 10M13 3L3 13"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              />
-            </svg>
+            <Regent.Icons.icon name="x" />
           </button>
         </form>
       </header>
+      <p :if={@ship.owner} id="harbour-agent-owner" class="harbour-card__owner">
+        <span>{Keyfleet.PublicIdentity.short_wallet(@ship.owner)}</span>
+        <Regent.Primitives.copy_icon
+          id="harbour-agent-owner-copy"
+          text={@ship.owner}
+          label="Copy the holder’s address"
+        />
+        <span :if={@ship.owned} class="harbour-card__owned">{keys_owned(@ship.owned)}</span>
+      </p>
       <ol class="harbour-card__actions" aria-label="Recent actions">
-        <li :for={action <- @ship.actions}>
+        <li :for={{action, i} <- Enum.with_index(@ship.actions)}>
           <span>{action.text}</span>
-          <time datetime={DateTime.to_iso8601(action.at)}>
-            {KeyfleetWeb.Time.moment(action.at, @now)}
-          </time>
+          <KeyfleetWeb.Time.local id={"harbour-agent-action-#{i}-at"} at={action.at} as={:moment} />
         </li>
       </ol>
-      <.link class="harbour-card__key" patch={KeyLinks.key_path(@ship.fleet_id, @ship.token_id)}>
-        Open {ActivityLines.key_name(@ship.token_id, nil)}
+      <.link class="harbour-card__key" navigate={KeyLinks.page_path(@ship.fleet_id, @ship.token_id)}>
+        View <Regent.Icons.icon name="arrow-right" />
       </.link>
-    </dialog>
+    </Regent.Structure.dialog>
     """
   end
+
+  defp keys_owned(1), do: "1 Key owned"
+  defp keys_owned(owned), do: "#{owned} Keys owned"
 end

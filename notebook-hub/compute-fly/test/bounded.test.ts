@@ -63,7 +63,17 @@ describe('readFileBounded', () => {
 	it('refuses a file one byte over the limit', async () => {
 		expect(
 			await instance().readFileBounded!(join(dir, 'ten.txt'), { maxBytes: 9, timeoutMs: 10_000 }),
-		).toEqual({ success: false, content: '', error: { code: 'READ_FAILED' } });
+		).toEqual({
+			success: false,
+			content: '',
+			error: {
+				code: 'READ_FAILED',
+				reason: 'size_limit',
+				exec_code: 'COMMAND_FAILED',
+				stdout_bytes: 0,
+				stderr: 'MARIMOHUB_BOUNDED_READ:size_limit\n',
+			},
+		});
 	});
 
 	it('refuses a symlink, even to a readable file', async () => {

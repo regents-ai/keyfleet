@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.KeyMap do
   until its close-up is made.
   """
 
-  import Keyfleet.Fleets.Rules, only: [grouped: 1]
+  import Keyfleet.Fleets.Rules, only: [grouped: 1, keys: 1]
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.Fleets.Presets
@@ -147,8 +147,7 @@ defmodule KeyfleetWeb.KeyMap do
   defp found(token_ids, words), do: %{keys: bitset(token_ids), words: words}
 
   defp keys_held([]), do: "no Keys"
-  defp keys_held([_one]), do: "1 Key"
-  defp keys_held(token_ids), do: "#{grouped(length(token_ids))} Keys"
+  defp keys_held(token_ids), do: keys(length(token_ids))
 
   @doc """
   The levels the map can go to, which are the levels it draws: each level

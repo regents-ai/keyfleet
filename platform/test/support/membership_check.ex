@@ -42,11 +42,18 @@ defmodule Keyfleet.MembershipCheck do
     LocalDatabaseFixture,
     Notebooks,
     PairingHelpers,
+    Projects,
     Rooms,
     WorkspaceFixtures
   }
 
-  alias KeyfleetWeb.{CodePassword, NotebookSocket, Refusal, SessionAuthorityHelpers}
+  alias KeyfleetWeb.{
+    CodePassword,
+    NotebookSocket,
+    Refusal,
+    SessionAuthorityHelpers,
+    SignedAgentHelpers
+  }
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
@@ -357,7 +364,7 @@ defmodule Keyfleet.MembershipCheck do
     end
   end
 
-  # Pairing guidance names this site's Account page, never regents.sh.
+  # Pairing guidance names this site's Agents page, never regents.sh.
   defp own_site do
     %{error: %{message: message, hint: hint}} = Refusal.body("agent_not_paired")
 
@@ -502,8 +509,10 @@ defmodule Keyfleet.MembershipCheck do
 
     for fleet_id <- [@fleet, @other_fleet] do
       WorkspaceFixtures.open_log(fleet_id)
-      Notebooks.record_hub!(fleet_id, "proj-" <> fleet_id, actor: %Actors.System{})
-      Code.record_repository!(fleet_id, @store_owner, actor: %Actors.System{})
+
+      general = Projects.project!(fleet_id, Projects.general(), actor: %Actors.System{})
+      Projects.record_space!(general, "proj-" <> fleet_id, actor: %Actors.System{})
+      Code.record_repository!(general.repository, @store_owner, actor: %Actors.System{})
     end
   end
 
@@ -532,7 +541,7 @@ defmodule Keyfleet.MembershipCheck do
   ## People and their agents
 
   # A person with a fresh wallet, and their agent, paired the way the person's
-  # Account page pairs one, with a profile so it may open the notebooks.
+  # Agents page pairs one, with a profile so it may open the notebooks.
   defp pair! do
     wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
     {:ok, signer} = Siwa.LocalSigner.new()
@@ -583,18 +592,20 @@ defmodule Keyfleet.MembershipCheck do
   # code host signed with the agent's own key, an empty body included.
   defp agent_git(c, agent, fleet_id) do
     path = "/#{fleet_id}.git/info/refs?service=git-upload-pack"
-    headers = signed_headers(c, agent, "GET", path, "")
-    send_request(c, "GET", Code.config()[:host], path, headers, nil)
+    host = Code.config()[:host]
+    headers = signed_headers(c, agent, host, "GET", path, "")
+    send_request(c, "GET", host, path, headers, nil)
   end
 
   # On the notebook host a GET signs the empty body too.
   defp notebooks(c, agent, fleet_id) do
-    headers = signed_headers(c, agent, "GET", "/", "")
-    send_request(c, "GET", Notebooks.host(fleet_id), "/", headers, nil)
+    host = Notebooks.host(fleet_id)
+    headers = signed_headers(c, agent, host, "GET", "/", "")
+    send_request(c, "GET", host, "/", headers, nil)
   end
 
   defp signed(c, agent, method, path, body) do
-    headers = signed_headers(c, agent, method, path, body)
+    headers = signed_headers(c, agent, "localhost", method, path, body)
     send_request(c, method, "localhost", path, headers, body)
   end
 
@@ -662,9 +673,10 @@ defmodule Keyfleet.MembershipCheck do
     send_request(c, "GET", Notebooks.host(@fleet), "/", headers, nil)
   end
 
-  # Signed as the docs say an agent signs ("Signing in as an agent"), under a
-  # fresh receipt from the stand-in sign-in server's secret.
-  defp signed_headers(c, agent, method, path, body) do
+  # Signed as the docs say an agent signs ("Sign-in"), under a
+  # fresh receipt from the stand-in sign-in server's secret, for the host the
+  # request is sent to.
+  defp signed_headers(c, agent, host, method, path, body) do
     {:ok, %{token: receipt}} =
       Siwa.Receipt.create(
         %{
@@ -685,6 +697,7 @@ defmodule Keyfleet.MembershipCheck do
         %{
           method: method,
           path: path,
+          authority: Siwa.Contract.authority("https://" <> host),
           body: body,
           headers: %{"content-type" => "application/json"}
         },
@@ -720,7 +733,8 @@ defmodule Keyfleet.MembershipCheck do
   # every request to the notebook host is.
   defp open_socket(c, agent, fleet_id) do
     path = "/api/v1/events"
-    headers = signed_headers(c, agent, "GET", path, "")
+    host = Notebooks.host(fleet_id)
+    headers = signed_headers(c, agent, host, "GET", path, "")
 
     with {:ok, conn} <-
            Mint.HTTP.connect(:https, "localhost", c.port,
@@ -729,7 +743,7 @@ defmodule Keyfleet.MembershipCheck do
            ),
          {:ok, conn, ref} <-
            Mint.WebSocket.upgrade(:wss, conn, path, [
-             {"host", Notebooks.host(fleet_id)} | Enum.to_list(headers)
+             {"host", host} | Enum.to_list(headers)
            ]),
          {:ok, conn, 101, response_headers, _body} <- upgraded(conn, ref, []),
          {:ok, conn, websocket} <- Mint.WebSocket.new(conn, ref, 101, response_headers) do
@@ -834,10 +848,11 @@ defmodule Keyfleet.MembershipCheck do
     {:ok, raw, conn} = read_body(conn)
     payload = Jason.decode!(raw)
 
-    case Siwa.verify_authenticated_request(payload,
+    case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           authorities: [payload["authority"]]
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
         json(conn, 200, %{

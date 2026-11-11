@@ -73,13 +73,16 @@ defmodule Keyfleet.Fleets.Presets do
   @doc """
   What the fleet's contract charged, or will charge, for key `token_id` when
   it is sold, in atomic USDC: the price `progress/2` offered once the key
-  before it had sold. `nil` for a Regents Club Key, which is given.
+  before it had sold. `nil` for a Regents Club Key, which is given, and for a
+  number past the last Key the fleet can ever have.
   """
   def issue_price(fleet_id, token_id) when is_integer(token_id) and token_id >= 1 do
-    case preset(fleet_id) do
-      :regents_club -> nil
-      preset -> next_price(preset, token_id - 1)
-    end
+    preset = preset(fleet_id)
+    supply = preset_supply(preset)
+
+    if preset == :regents_club or (supply != nil and token_id > supply),
+      do: nil,
+      else: next_price(preset, token_id - 1)
   end
 
   @doc "A fleet's preset: `:fibonacci`, `:classic`, `:accelerant` or `:regents_club`."
@@ -94,28 +97,9 @@ defmodule Keyfleet.Fleets.Presets do
   @doc "Whether a fleet's keys come in levels, as the two Fibonacci fleets' do."
   def levelled?(fleet_id), do: Map.fetch!(@presets, fleet_id) == :fibonacci
 
-  @doc """
-  The levels a Fibonacci key may write once `total_minted` keys are sold: its
-  own level, and each later level once every key of that level is sold. Never
-  an earlier level.
-  """
-  def writable_levels(token_id, total_minted)
-      when is_integer(total_minted) and total_minted >= 0 do
-    own = fibonacci_level_of(token_id)
-    [own | Enum.to_list((own + 1)..completed_levels(:fibonacci, total_minted)//1)]
-  end
-
   @doc "The Fibonacci level that owns a token id."
   def fibonacci_level_of(token_id) when is_integer(token_id) and token_id >= 1,
     do: level_ends() |> Enum.find_index(&(token_id <= &1)) |> Kernel.+(1)
-
-  @doc "How many keys a Fibonacci level has: 2, 3, 5, 8 and on."
-  def fibonacci_level_supply(level) when is_integer(level) and level >= 1,
-    do: level_supplies() |> Enum.at(level - 1)
-
-  @doc "The last token id of a Fibonacci level."
-  def fibonacci_level_end(level) when is_integer(level) and level >= 1,
-    do: level_ends() |> Enum.at(level - 1)
 
   @doc "A Fibonacci level's price: 10 USDC at level 1, then ×1.2 per level, rounded up at each step."
   def fibonacci_level_price(level) when is_integer(level) and level >= 1,

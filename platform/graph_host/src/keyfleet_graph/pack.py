@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.6.0` work pack.
+"""The pinned `keyfleet_work@0.9.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -16,10 +16,10 @@ from typing import Annotated, Literal, Optional
 from activegraph.packs import ObjectType, Pack, RelationType
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 
-from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
+from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, ProjectName, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.6.0"
+PACK_VERSION = "0.9.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -52,9 +52,8 @@ Uri = Annotated[str, StringConstraints(min_length=1), single_line, AfterValidato
 DecimalString = Annotated[str, StringConstraints(pattern=r"^(0|[1-9][0-9]{0,77})(\.[0-9]{1,18})?$")]
 Digest = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
 Title = _text(200, required=True)
-# What anyone may read of a goal or task beside its title and standing; every
-# other field is for the fleet's members only.
-PublicSummary = Optional[_text(500)]
+# The project every workspace starts with; the starting goals are its own.
+GENERAL = "general"
 
 
 def _items():
@@ -79,18 +78,46 @@ class Goal(WorkObject):
     # A question is never empty, so a goal's first one is always one to ask.
     open_questions: list[_text(500, required=True)] = _items()
     status: Literal["open", "achieved", "dropped"] = "open"
-    public_summary: PublicSummary = None
+
+
+# A file a rerun reads or writes: a path inside a fresh clone of the task's
+# commit, or an address outside it, with what it is for and its digest.
+class RerunFile(_Model):
+    path: _text(500, required=True)
+    role: Optional[_text(200)] = None
+    digest: Optional[Digest] = None
+
+
+# How anyone runs a task's work again from its `commit_ref`: the command, run
+# from the root of a fresh clone; the lockfile that pins its environment; the
+# files it reads; and the files it writes, with the digests a matching rerun
+# gives.
+class Rerun(_Model):
+    command: _text(4000, required=True, multiline=True)
+    lockfile: Optional[RerunFile] = None
+    inputs: list[RerunFile] = _items()
+    outputs: list[RerunFile] = _items()
 
 
 class Task(WorkObject):
-    """`progress` "done" and `result_ref` are written only by submitting the task."""
+    """`progress` "done" and `result_ref` are written only by submitting the task.
+
+    `reviewer_key` names the Key asked to review it. `commit_ref` is the exact
+    commit of the work and `notebook_ref` the notebook it was worked in; a
+    review judges the task version that holds both, so changing either asks
+    for review again. `rerun` says how to run the work again from that commit.
+    """
 
     deliverable: Optional[_text(2000, multiline=True)] = None
+    acceptance_criteria: list[_text(500)] = _items()
     assignee_key: Optional[Count] = None
+    reviewer_key: Optional[Count] = None
     progress: Literal["todo", "doing", "blocked", "done"] = "todo"
     next_step: Optional[_text(1000, multiline=True)] = None
+    commit_ref: Optional[Uri] = None
+    notebook_ref: Optional[Uri] = None
     result_ref: Optional[Uri] = None
-    public_summary: PublicSummary = None
+    rerun: Optional[Rerun] = None
 
 
 class Finding(WorkObject):
@@ -136,6 +163,15 @@ class Review(_Model):
     # Anything that could sway the reviewer, such as owning the submitting Key
     # or sharing in its pay; "none" when there is nothing to declare.
     conflicts_of_interest: _text(1000, required=True, multiline=True)
+    # Whether the reviewer ran the work again from the task's commit and got
+    # its result; absent when they did not try.
+    reproduction: Optional[Literal["passed", "failed"]] = None
+
+    @model_validator(mode="after")
+    def _failed_disputes(self):
+        if self.reproduction == "failed" and self.decision != "dispute":
+            raise ValueError("a review whose reproduction failed disputes the task")
+        return self
 
 
 class KeyCoordinate(_Model):
@@ -174,10 +210,15 @@ class ReviewReceipt(_Model):
     task_version: Annotated[int, Field(ge=1, le=MAX_INT)]
     submitted_by: Member
     evidence: list[ReviewedEvidence] = _items()
+    # The task's commit at the version judged, when it named one.
+    commit_ref: Optional[Uri] = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class Sys(_Model):
-    scope: Scope
+    # Every item belongs to one project of the fleet, set when it is made and
+    # never changed. Every member reads and builds on every project's items;
+    # only the Key an item belongs to changes or archives it.
+    project: ProjectName
     created_by: Member
     archived: bool
 
@@ -259,6 +300,8 @@ PACK = Pack(
         ),
         # From a review to the task it judged; only the review op makes one.
         RelationType("reviews", source_types=("review",), target_types=("task",)),
+        # From a forked task to the task it was copied from; only the fork op makes one.
+        RelationType("forks", source_types=("task",), target_types=("task",)),
     ],
     behaviors=[],
     tools=[],

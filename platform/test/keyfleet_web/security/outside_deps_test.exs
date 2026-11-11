@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.Security.OutsideDepsTest do
   @moduledoc """
-  Proofs for the three controls the 17 Oct red-team pass found outside this
+  Proofs for the two controls the 17 Oct red-team pass found outside this
   repository, run against the shared libraries' real code at the elixir-utils
   ref `mix.lock` pins (`docs/security/outside-dependencies-2026-10-18.md`):
 
@@ -10,7 +10,6 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
       used requests is the library's in-memory one; siwa-server keeps the same
       keys in Postgres.
     * Privy sign-in (`RegentPrivy.Session`), through `/auth/privy/session`.
-    * Credits debits (`RegentCredits.hold`), on this site's database.
 
   Every refused request is checked again with the library to name why it was
   refused, so a test cannot pass on a refusal for some other reason.
@@ -24,10 +23,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.System, as: SystemActor
-  alias Keyfleet.SandboxRace
   alias KeyfleetWeb.SignedAgentHelpers
-  alias RegentCredits.Actor
-  alias RegentCredits.Errors.NotEnoughCredits
 
   @moduletag :capture_log
 
@@ -52,7 +48,15 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
     end
 
     test "OD-SIWA-REPLAY: a signed request is served once and refused when sent again", ctx do
-      request = SignedAgentHelpers.sign(ctx.signer, ctx.secret, "POST", @join_path, body(@join))
+      request =
+        SignedAgentHelpers.sign(
+          ctx.signer,
+          ctx.secret,
+          authority(ctx),
+          "POST",
+          @join_path,
+          body(@join)
+        )
 
       assert %{status: 200} = deliver(ctx, "POST", @join_path, request)
       assert_receive {:broker_payload, _first}
@@ -66,7 +70,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
          ctx do
       own = "/api/v1/agent/fleets/#{fleet()}/keys/1/dms"
       other = "/api/v1/agent/fleets/#{fleet()}/keys/2/dms"
-      request = SignedAgentHelpers.sign(ctx.signer, ctx.secret, "GET", own, nil)
+      request = SignedAgentHelpers.sign(ctx.signer, ctx.secret, authority(ctx), "GET", own, nil)
 
       assert deliver(ctx, "GET", other, request).status == 401
       assert_receive {:broker_payload, %{"path" => ^other} = moved}
@@ -87,7 +91,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
 
       pathless =
         ctx.signer
-        |> SignedAgentHelpers.sign(ctx.secret, "GET", own, nil)
+        |> SignedAgentHelpers.sign(ctx.secret, authority(ctx), "GET", own, nil)
         |> sign_again_without("@path", ctx.signer)
 
       assert deliver(ctx, "GET", other, pathless).status == 401
@@ -100,6 +104,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
         SignedAgentHelpers.sign(
           ctx.signer,
           ctx.secret,
+          authority(ctx),
           "POST",
           @join_path,
           body(@join),
@@ -244,83 +249,14 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
     end
   end
 
-  describe "Credits debits never spend the same Credit twice (OD-CREDITS)" do
-    setup do
-      owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
-      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
-      admin!()
-    end
-
-    # The shared sandbox gives every caller the test's one connection, so the
-    # two callers take turns (`Keyfleet.SandboxRace`). What this proves is that
-    # whichever goes second reads the balance after the first one's debit; the
-    # test below proves the row lock between separate connections.
-    test "OD-CREDITS-LAST: two holds racing for the last Credit place one and refuse the other",
-         c do
-      person = fund!(c.admin, "1")
-
-      results =
-        SandboxRace.race_each([
-          fn -> hold(person, "last-a", "1") end,
-          fn -> hold(person, "last-b", "1") end
-        ])
-
-      assert [{:ok, %RegentCredits.Hold{}}] = Enum.filter(results, &match?({:ok, _}, &1))
-
-      assert [refused] = Enum.reject(results, &match?({:ok, _}, &1))
-      assert not_enough?(refused)
-
-      assert_balance(person, available: "0", held: "1")
-    end
-
-    test "OD-CREDITS-KEY: the same hold sent twice at once is placed once", c do
-      person = fund!(c.admin, "1")
-
-      assert [{:ok, first}, {:ok, second}] =
-               SandboxRace.race(fn -> hold(person, "same-key", "1") end, 2)
-
-      assert first.id == second.id
-      assert_balance(person, available: "0", held: "1")
-    end
-  end
-
-  describe "Credits debits on separate connections (OD-CREDITS-LOCK)" do
-    # Each caller has its own connection and transaction here, so the holds
-    # really wait on each other's row lock; eight callers and the test itself
-    # fit the test pool of ten connections. Their rows are committed to the test
-    # database and stay there, under people no other test names, because the
-    # ledger refuses to delete a transfer. Run it with --include external.
-    setup do
-      Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :auto)
-      on_exit(fn -> Ecto.Adapters.SQL.Sandbox.mode(Keyfleet.Repo, :manual) end)
-      admin!()
-    end
-
-    @tag :external
-    test "OD-CREDITS-LOCK: eight holds of 1 racing over 3 Credits place exactly three", c do
-      person = fund!(c.admin, "3")
-
-      results =
-        1..8
-        |> Task.async_stream(&hold(person, "lock-#{&1}", "1"),
-          max_concurrency: 8,
-          timeout: 30_000
-        )
-        |> Enum.map(fn {:ok, result} -> result end)
-
-      assert Enum.count(results, &match?({:ok, _}, &1)) == 3
-
-      assert results |> Enum.reject(&match?({:ok, _}, &1)) |> Enum.all?(&not_enough?/1)
-
-      assert_balance(person, available: "0", held: "3")
-    end
-  end
-
   # -- agent sign-in --
 
   defp body(map), do: Jason.encode!(map)
 
   # Sends a request already signed, as it was signed or at another address.
+  # The host the site is served at here, as a signed request names it.
+  defp authority(ctx), do: Siwa.Contract.authority(ctx.app)
+
   defp deliver(ctx, method, path, request) do
     Req.request!(
       method: method |> String.downcase() |> String.to_existing_atom(),
@@ -336,10 +272,11 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
   # the options the local sign-in server and siwa-server verify under.
   defp reason(ctx, payload) do
     assert {:error, reason} =
-             Siwa.verify_authenticated_request(payload,
+             Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
                secret: ctx.secret,
                audience: "keyfleet",
-               wallet_audiences: ["keyfleet"]
+               wallet_audiences: ["keyfleet"],
+               authorities: [payload["authority"]]
              )
 
     reason
@@ -389,6 +326,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
         %{
           method: method,
           path: path,
+          authority: authority(ctx),
           body: body,
           headers: %{"content-type" => "application/json"}
         },
@@ -465,43 +403,5 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
     assert json_response(response, 401)["error"]["code"] == "unauthorized"
     assert_receive {:privy_refused, ^stage, ^reason}
     assert {:ok, nil} = Accounts.get_by_privy_did(did, actor: %SystemActor{})
-  end
-
-  # -- Credits --
-
-  # A Credits admin for this test alone, who funds each person with a gift.
-  defp admin! do
-    admin = "did:privy:outside-deps-admin"
-    admins = Application.get_env(:regent_credits, :admins)
-    Application.put_env(:regent_credits, :admins, [admin])
-    on_exit(fn -> Application.put_env(:regent_credits, :admins, admins) end)
-    {:ok, admin: admin}
-  end
-
-  defp fund!(admin, amount) do
-    person = "did:privy:outside-deps-" <> Ecto.UUID.generate()
-
-    {:ok, [_gift]} =
-      RegentCredits.give("outside-deps-#{Ecto.UUID.generate()}", [person], Decimal.new(amount),
-        actor: Actor.admin(admin)
-      )
-
-    person
-  end
-
-  defp hold(person, key, amount) do
-    RegentCredits.hold("#{key}-#{person}", person, Decimal.new(amount), "probe",
-      actor: Actor.person(person, [], "keyfleet")
-    )
-  end
-
-  defp not_enough?({:error, %Ash.Error.Invalid{errors: [%NotEnoughCredits{} | _]}}), do: true
-  defp not_enough?(_result), do: false
-
-  defp assert_balance(person, available: available, held: held) do
-    balance = RegentCredits.balance(person)
-    assert Decimal.eq?(balance.available, available), inspect(balance)
-    assert Decimal.eq?(balance.held, held), inspect(balance)
-    refute Enum.any?([balance.given, balance.purchased, balance.held], &Decimal.negative?/1)
   end
 end

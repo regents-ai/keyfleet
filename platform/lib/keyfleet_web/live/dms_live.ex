@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.DmsLive do
           </.link>
 
           <form id="dms-auto-delete" class="dms-auto-delete" phx-change="dm_auto_delete">
-            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Delete after">
+            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Auto-delete">
               <select
                 id={field.id}
                 name="days"
@@ -167,7 +167,7 @@ defmodule KeyfleetWeb.DmsLive do
             >
               Delete conversation
             </Regent.Primitives.button>
-            <p :if={@confirm_delete} class="rooms-detail">Delete for both Keys?</p>
+            <p :if={@confirm_delete} class="rooms-detail">Delete for you only?</p>
             <div :if={@confirm_delete} class="dms-delete-choices">
               <Regent.Primitives.button id="dms-delete" type="button" phx-click="dm_delete">
                 Delete
@@ -205,12 +205,20 @@ defmodule KeyfleetWeb.DmsLive do
                   Key {Rules.grouped(message.from_token_id)}
                 </.link>
                 <small class="rooms-writer">
-                  <.sent_from via={arrival(message)} /> {writer(message)}
+                  <.sent_from via={arrival(message)} />
+                  <span :if={message.via_agent}>{message.via_agent.name}</span>
+                  <Regent.Primitives.address
+                    :if={!message.via_agent}
+                    id={"#{dom_id}-writer"}
+                    address={message.author_wallet}
+                  />
                 </small>
               </p>
               <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
               <.parts parts={message.parts} />
-              <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
+              <p class="rooms-detail">
+                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+              </p>
             </li>
           </ol>
 
@@ -278,7 +286,6 @@ defmodule KeyfleetWeb.DmsLive do
         :if={sign_in?(@dms)}
         id="dms-sign-in"
         type="button"
-        variant="secondary"
         data-account-target="sign-in"
       >
         Sign in
@@ -305,7 +312,11 @@ defmodule KeyfleetWeb.DmsLive do
         </.link>
         <span class="dms-preview">{preview(conversation, @dms.token_id)}</span>
         <small class="rooms-detail">
-          {RoomsLive.stamp(conversation.last_at)}
+          <KeyfleetWeb.Time.local
+            id={"dms-conversation-#{conversation.id}-at"}
+            at={conversation.last_at}
+            as={:stamp}
+          />
         </small>
       </li>
     </ul>
@@ -371,10 +382,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
   defp preview(%{last_body: body}, _token_id), do: body
-
-  # Who wrote as the Key: the agent that wrote it, or the holder's wallet.
-  defp writer(%{via_agent: %{name: name}}), do: name
-  defp writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
 
   # How a message reached Keyfleet: an agent's signed request, or the website.
   defp arrival(%{via_agent_id: nil}), do: :web
@@ -587,7 +594,9 @@ defmodule KeyfleetWeb.DmsLive do
     %{dms: dms} = socket.assigns
     days = if days == "", do: nil, else: days
 
-    case Dms.set_auto_delete(dms.conversation, days, actor: ShellLive.human_actor(socket)) do
+    case Dms.set_auto_delete(dms.conversation, dms.token_id, days,
+           actor: ShellLive.human_actor(socket)
+         ) do
       {:ok, conversation} ->
         {:noreply, assign(socket, dms: %{dms | conversation: conversation}, dm_notice: nil)}
 
@@ -614,8 +623,10 @@ defmodule KeyfleetWeb.DmsLive do
     do: {:noreply, assign(socket, :dm_confirm_delete, false)}
 
   def handle_event("dm_delete", _params, %{assigns: %{dms: %{conversation: %{}} = dms}} = socket) do
-    case Dms.delete_conversation(dms.conversation, actor: ShellLive.human_actor(socket)) do
-      :ok ->
+    case Dms.delete_conversation(dms.conversation, dms.token_id,
+           actor: ShellLive.human_actor(socket)
+         ) do
+      {:ok, _cleared} ->
         {:noreply, push_patch(socket, to: inbox_path(dms))}
 
       {:error, error} ->

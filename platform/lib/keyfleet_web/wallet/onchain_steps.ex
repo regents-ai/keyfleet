@@ -9,7 +9,8 @@ defmodule KeyfleetWeb.OnchainSteps do
   anyone presses. The page reports each press against the review it sent from.
   Every sent step is then read at the latest block of the review's chain, every
   two seconds, until it lands or the page stops asking. Nothing is kept beyond
-  the page.
+  the page. A step that lands asks every reader of its chain to read it again
+  (`Keyfleet.ChainRefresh`), so the fleets' figures show what it changed.
 
   The only wallet that may act is Privy's active wallet when it is one of the
   signed-in account's own (`signer/2`). Reads that show another wallet never
@@ -19,7 +20,7 @@ defmodule KeyfleetWeb.OnchainSteps do
   import Phoenix.Component, only: [assign: 2]
   import Phoenix.LiveView, only: [push_event: 3, start_async: 3]
 
-  alias Keyfleet.ChainClient
+  alias Keyfleet.{ChainClient, ChainRefresh}
   alias RegentChain.{Outcome, Presses}
 
   @recheck_ms 2_000
@@ -40,14 +41,6 @@ defmodule KeyfleetWeb.OnchainSteps do
     active = String.downcase(active)
     if active in Enum.map(linked, &String.downcase/1), do: active
   end
-
-  @doc """
-  The wallet a panel shows figures for. Signed in, the wallet that may act, or
-  with none the account's own wallet (`own`), so a wrong or missing active wallet
-  never empties the panel. Signed out (`linked` is `nil`), Privy's active wallet.
-  """
-  def shown_wallet(nil, _own, active), do: active
-  def shown_wallet(linked, own, active), do: signer(linked, active) || own
 
   @doc "Privy's active wallet as the page reported it, or `nil`."
   def active_wallet(%{"address" => address}) when is_binary(address) do
@@ -109,6 +102,7 @@ defmodule KeyfleetWeb.OnchainSteps do
 
       {entry, presses} ->
         socket = assign(socket, presses: presses)
+        if entry.outcome == :confirmed, do: ChainRefresh.request(entry.review.chain.chain_id)
         if Presses.reading?(entry), do: check(socket, entry), else: socket
     end
   end
@@ -138,8 +132,11 @@ defmodule KeyfleetWeb.OnchainSteps do
       reason == "step_unknown" ->
         "This can't be sent as it stands. Check the details above, then press again. Nothing was sent."
 
-      true ->
-        "Your wallet changed during the press, so nothing was sent. Press again."
+      # The wallet app didn't answer for the wallet the steps were built for:
+      # it is locked, open on another account, changed during the press, or
+      # failed before the send.
+      reason == "wallet_unavailable" ->
+        "Your wallet app didn't answer for #{short(signer(linked, active))}, so nothing was sent. Check it's unlocked and open on #{short(signer(linked, active))}, then press again."
     end
   end
 

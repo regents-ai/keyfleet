@@ -3,8 +3,9 @@ defmodule KeyfleetWeb.Components.RegentLinks do
   The shared brand links: the Regents Products menu, then X and GitHub, with a
   hairline between the menu and the marks.
 
-  The site header and the footer render the same controls. The X and GitHub
-  marks point at Regents, which runs Keyfleet.
+  The site header and the footer render the same controls; the header also
+  has the Regents crown beside the menu, which opens the $REGENT menu. The X
+  and GitHub marks point at Regents, which runs Keyfleet.
   """
 
   use Phoenix.Component
@@ -35,6 +36,56 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     """
   end
 
+  # REGENT on Base, and the Uniswap pool it trades in, as regents.sh names them.
+  @regent_address "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07"
+  @regent_pool "0x4ed3b69ac263ad86482f609b2c2105f64bcfd3a7e02e8e078ec9fec1f0324bed"
+
+  attr :id, :string, required: true
+
+  @doc """
+  The Regents crown on its charcoal tile, opening the $REGENT menu as regents.sh's
+  crown does: "$REGENT" copies the token's address, then Buy on Uniswap and View
+  Chart. A mouse opens it on hover; a press, a tap or the keyboard opens and
+  shuts it; Escape, a press elsewhere or focus leaving it shuts it
+  (`assets/js/hooks/token_menu.ts`).
+  """
+  def token_menu(assigns) do
+    assigns =
+      assign(assigns,
+        address: @regent_address,
+        buy: "https://app.uniswap.org/explore/tokens/base/#{@regent_address}",
+        chart: "https://dexscreener.com/base/#{@regent_pool}"
+      )
+
+    ~H"""
+    <details id={@id} class="rl-token-menu" phx-hook="TokenMenu">
+      <summary class="shell-tool shell-regents-crown" aria-label="$REGENT links">
+        <span class="shell-apps__tile" data-tone="protocol"><.crown /></span>
+      </summary>
+      <div class="rl-token-menu-panel">
+        <nav class="rl-token-menu-content" aria-label="$REGENT">
+          <Regent.Primitives.copy_button
+            id={"#{@id}-copy"}
+            text={@address}
+            variant="quiet"
+            class="rl-token-copy"
+            aria-label="Copy $REGENT contract address"
+          >
+            <span class="rl-token-copy__label">$REGENT</span>
+            <Regent.Icons.icon name="copy" class="rl-token-copy__icon" />
+          </Regent.Primitives.copy_button>
+          <a class="rg-button rl-token-link" href={@buy} target="_blank" rel="noopener noreferrer">
+            Buy on Uniswap
+          </a>
+          <a class="rg-button rl-token-link" href={@chart} target="_blank" rel="noopener noreferrer">
+            View Chart
+          </a>
+        </nav>
+      </div>
+    </details>
+    """
+  end
+
   # The other Regents Products, each shown with the crown in its own pair of
   # brand colours, as the template's menu has them, less this site.
   @regents_apps [
@@ -61,9 +112,7 @@ defmodule KeyfleetWeb.Components.RegentLinks do
       popovertarget={@id}
       aria-label="Regents Products"
     >
-      <svg class="shell-icon--apps" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <rect :for={{x, y} <- nine_dots()} x={x} y={y} width="4.5" height="4.5" />
-      </svg>
+      <Regent.Icons.icon name="grip" class="shell-icon--apps" />
       <span class="shell-tool__tip" aria-hidden="true">Regents Products</span>
     </button>
     <nav
@@ -85,16 +134,14 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     """
   end
 
-  # The Regents crown: thirteen blocks, drawn in the current text colour.
-  defp crown(assigns) do
+  @doc "The Regents crown: thirteen blocks, drawn in the current text colour."
+  def crown(assigns) do
     ~H"""
     <svg class="shell-apps__crown" viewBox="31 46 178 106" fill="currentColor" aria-hidden="true">
       <rect :for={{x, y} <- crown_blocks()} x={x} y={y} width="34" height="34" />
     </svg>
     """
   end
-
-  defp nine_dots, do: for(y <- [1.5, 9.75, 18], x <- [1.5, 9.75, 18], do: {x, y})
 
   defp crown_blocks do
     top = for x <- [31, 103, 175], do: {x, 46}

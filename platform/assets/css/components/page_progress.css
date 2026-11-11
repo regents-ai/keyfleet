@@ -4,7 +4,7 @@
 .page-progress {
   position: fixed;
   inset: 0 0 auto;
-  z-index: 100;
+  z-index: var(--rg-layer-tip);
   height: 2px;
   background: var(--ash-accent);
   transform: scaleX(0);

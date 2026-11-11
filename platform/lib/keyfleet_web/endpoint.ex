@@ -41,9 +41,10 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Plugs.ContractHeaders
 
   # Every answer, including the launch gate's and the Markdown and refusals the
-  # plugs below give before the router, lets browser agents use the tools this
-  # site's pages register, and no other site's.
-  plug :allow_page_tools
+  # plugs below give before the router, runs under the strict policy unless its
+  # route sets a wider one, and lets browser agents use the tools this site's
+  # pages register, and no other site's.
+  plug :secure_every_answer
 
   # While the site is closed, only the early-access page, the legal pages, the
   # operational files and the static files get past this.
@@ -81,12 +82,15 @@ defmodule KeyfleetWeb.Endpoint do
     plug Phoenix.CodeReloader
   end
 
+  # Which visit, and which kind of caller, each line of this request belongs to.
+  plug KeyfleetWeb.VisitLog
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
-  # One budget per client address, shared by the health check and every /api
-  # path, answered or not. Every answer, including a signed agent request
-  # refused before the router, says what is left of it; past it the answer is
-  # 429 with Retry-After.
+  # One budget per client address, shared by the health check, the browser's
+  # visit reports, every /api path and a Claude connector request without a
+  # token, answered or not; a connector request with a token has a ceiling of
+  # its own. Every answer, including a signed agent request refused before the
+  # router, says what is left of it; past it the answer is 429 with Retry-After.
   plug :limit_rate
 
   plug KeyfleetWeb.Plugs.SignedAgent
@@ -97,31 +101,58 @@ defmodule KeyfleetWeb.Endpoint do
     documents: &KeyfleetWeb.PublicDocuments.document/1,
     guide: "/llms.txt"
 
+  # After the error format is chosen, so a slash address is answered as any
+  # address that names nothing.
+  plug KeyfleetWeb.Plugs.NoTrailingSlash
+
   # The largest body the site takes is an agent's signed post or workspace
   # write, about 50 kilobytes, which SignedAgent reads under its own limit;
   # anything past a megabyte is refused before it is read.
   plug KeyfleetWeb.Plugs.Parsers,
     body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
-    parsers: [:urlencoded, :json],
+    parsers: [Plug.Parsers.URLENCODED, Plug.Parsers.JSON],
     pass: ["*/*"],
     length: 1_000_000,
     json_decoder: Phoenix.json_library()
 
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug :markdown_addresses
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
+  defp limit_rate(%Plug.Conn{method: "POST", path_info: ["visit-log"]} = conn, _opts),
+    do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+
   defp limit_rate(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+
+  # The Claude connector's address, and anything under it, which the router
+  # forwards there too. Every Claude user's request comes from Claude's own
+  # servers, so a per-address budget there is shared by all of them. A request
+  # carrying a bearer token therefore spends a ceiling of its own for this
+  # address instead, and its real budget is the per-account one the plug
+  # counts once the token verifies. The ceiling still bounds how many invented
+  # tokens one address can have looked up, each one indexed hash query; it is
+  # one bucket per address, not one per token, since an invented token would
+  # buy a fresh bucket. A request without a token is answered before any
+  # account is known, so it spends the /api budget, as does an agent's own
+  # signed request there, as its signed requests under /api do.
+  defp limit_rate(%Plug.Conn{path_info: ["mcp" | _]} = conn, _opts) do
+    case Plug.Conn.get_req_header(conn, "authorization") do
+      ["Bearer " <> _token] -> RegentAgentAccess.RateLimit.call(conn, connector_rate_limit())
+      _no_token -> RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+    end
+  end
 
   defp limit_rate(conn, _opts), do: conn
 
   @doc """
-  The per-address budget above, which a signed request to a fleet's notebooks
-  also spends (`KeyfleetWeb.Plugs.NotebookGateway`). Read on each request, as
+  The per-address budget above, which a signed request to a fleet's notebooks,
+  and a read of a saved page a Key made public, also spend
+  (`KeyfleetWeb.Plugs.NotebookGateway`). Read on each request, as
   the session budget is, so the test suite can run on a larger one and a
   focused test can put the release budget back.
   """
@@ -137,6 +168,42 @@ defmodule KeyfleetWeb.Endpoint do
     )
   end
 
-  defp allow_page_tools(conn, _opts),
-    do: Plug.Conn.put_resp_header(conn, "permissions-policy", "tools=(self)")
+  @doc """
+  The ceiling per client address for requests to the Claude connector's
+  address that carry a bearer token, a few thousand a minute: Claude's servers
+  send every connected person's requests, and each person also has the
+  plug's own 120 a minute. Read on each request, as `api_rate_limit/0` is.
+  """
+  def connector_rate_limit do
+    budget = Application.fetch_env!(:keyfleet, :connector_rate_limit)
+
+    RegentAgentAccess.RateLimit.init(
+      policy: "connector",
+      limit: Keyword.fetch!(budget, :limit),
+      window: Keyword.fetch!(budget, :window_seconds),
+      admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
+      key: &KeyfleetWeb.ClientAddress.key/1
+    )
+  end
+
+  # An address ending in .md is read as Markdown, so one that isn't here
+  # answers a Markdown not-found page rather than the HTML one.
+  defp markdown_addresses(%Plug.Conn{request_path: path} = conn, _opts) do
+    if String.ends_with?(path, ".md"), do: Phoenix.Controller.put_format(conn, "md"), else: conn
+  end
+
+  # Chrome offers a page's tools to a browser's agent only with this origin
+  # trial's token, which names https://keyfleet.ai and runs out on 30 March
+  # 2027. It is public; any other origin ignores it.
+  @webmcp_trial "ApE5dJwldD+NxqoTmRf87JNS8wnauCpxIybfmYu2mCqPCv/vW/9Ox6kYsrn5vxpVrbLvzQF7BJmfElX1/tgDGgoAAABLeyJvcmlnaW4iOiJodHRwczovL2tleWZsZWV0LmFpOjQ0MyIsImZlYXR1cmUiOiJXZWJNQ1AiLCJleHBpcnkiOjE4MDYzNjQ4MDB9"
+
+  # The policy is built by ContentSecurityPolicy; Sobelow cannot evaluate its value.
+  # sobelow_skip ["Config.CSP"]
+  defp secure_every_answer(conn, _opts) do
+    Phoenix.Controller.put_secure_browser_headers(conn, %{
+      "content-security-policy" => KeyfleetWeb.ContentSecurityPolicy.reading(),
+      "permissions-policy" => "tools=(self)",
+      "origin-trial" => @webmcp_trial
+    })
+  end
 end

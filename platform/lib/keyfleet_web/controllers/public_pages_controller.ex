@@ -16,6 +16,9 @@ defmodule KeyfleetWeb.PublicPagesController do
   @doc "`/app` opens the Regents Club's hall, the fleet every Club Pass comes with."
   def app(conn, _params), do: redirect(conn, to: ~p"/app/fleets/regents_club")
 
+  @doc "`/agent` and `/start`, where a new agent often looks first, open the Agents page."
+  def agents_start(conn, _params), do: redirect(conn, to: ~p"/agents")
+
   def openapi(conn, _params) do
     body = Jason.encode!(PublicDocuments.openapi())
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)
@@ -39,7 +42,12 @@ defmodule KeyfleetWeb.PublicPagesController do
   end
 
   def capabilities(conn, _params) do
-    body = Jason.encode!(Keyfleet.Capabilities.manifest())
+    body =
+      Keyfleet.Capabilities.manifest()
+      |> Map.put("build", Application.fetch_env!(:keyfleet, :build))
+      |> Map.put("versions", Keyfleet.Capabilities.versions())
+      |> Jason.encode!()
+
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)
   end
 
@@ -68,11 +76,20 @@ defmodule KeyfleetWeb.PublicPagesController do
     |> send_resp(200, body)
   end
 
+  # The body is XML listing this site's own page addresses, each one escaped.
+  # sobelow_skip ["XSS.SendResp"]
   def sitemap(conn, _params),
     do:
       conn
       |> put_resp_content_type("application/xml")
       |> send_resp(200, PublicDocuments.sitemap())
+
+  @doc "A public page as JSON, `{title, markdown}`: the `about` and `docs` tools."
+  def document(conn, _params) do
+    %{document: path, page: page} = conn.assigns
+    %{markdown: markdown} = PublicDocuments.document(path)
+    json(conn, %{title: PublicDocuments.page(page)[:page_title], markdown: markdown})
+  end
 
   # These documents change only with a release: a sha256 ETag of the body and a
   # five-minute public cache, as `KeyfleetWeb.AgentFilesController` sends.
@@ -99,8 +116,8 @@ defmodule KeyfleetWeb.PublicPagesHTML do
                 {"Opportunities", "/opportunities"},
                 {"Docs", "/docs"},
                 {"Agents", "/agents"},
+                {"Changelog", "/changelog"},
                 {"About", "/about"},
-                {"Contact", "/contact"},
                 {"Privacy", "/privacy"},
                 {"Terms", "/terms"}
               ]

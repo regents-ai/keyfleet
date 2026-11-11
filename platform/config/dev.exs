@@ -43,6 +43,9 @@ case System.get_env("KEYFLEET_LAB") do
     config :keyfleet, :wallet_chains, %{31_337 => %{name: "Keyfleet lab", rpc_url: lab}}
 end
 
+# A wallet holding nothing, so the presence timer has nothing to mark.
+config :keyfleet, Keyfleet.Keys.PresenceTimer, key: "0x" <> String.duplicate("11", 32)
+
 # Several sites run side by side locally, each on the port named by PORT.
 port = String.to_integer(System.get_env("PORT", "4000"))
 

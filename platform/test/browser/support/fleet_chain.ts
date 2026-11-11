@@ -62,6 +62,9 @@ export const moveKey = (fleet: string, key: number, owner: string) => void call(
 export const offerRewards = (fleet: string, key: number, atoms: number) =>
   void call("offer_rewards!", [fleet, key, atoms])
 
+/** The fleet's treasury was read just now, holding `atoms` USDC. */
+export const readTreasury = (fleet: string, atoms: number) => void call("read_treasury!", [fleet, atoms])
+
 /** A key's request for its random draw was turned down, or accepted, from now on. */
 export const refuseDraw = (fleet: string, key: number, refused: boolean) =>
   void call("refuse_draw!", [fleet, key, refused])
@@ -77,15 +80,35 @@ export const issueShard = (fleet: string, key: number, wallet: string, days: num
 export const endShard = (fleet: string, key: number, wallet: string, by: string) =>
   void call("end_shard!", [fleet, key, wallet, by])
 
+/** The chain records every Key `owner` holds in the fleet marked present just now. */
+export const markPresent = (fleet: string, owner: string) => void call("present!", [fleet, owner])
+
 /** `owner` has allowed every fleet `atoms` USDC from now on. */
 export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [owner, atoms])
 
 /**
  * Gives a deployed fleet a key sold to `owner` that says something in the
- * General room, a goal discussing it and a task assigned to the key in the
+ * Public room, a goal discussing it and a task assigned to the key in the
  * workspace, and proposal 1. Returns the key.
  */
 export const furnishFleet = (fleet: string, owner: string) => Number(call("furnish!", [fleet, owner]))
+
+/** Opens a fleet's workspace log, once, before `addWork`. */
+export const openWorkspace = (fleet: string) => void call("open_workspace!", [fleet])
+
+/** Has a Key add a task to a fleet's workspace and tells the pages showing its work. */
+export const addWork = (fleet: string, key: number, title: string) => call("work!", [fleet, key, title])
+
+/** Has a Key retitle a workspace item and tells the pages reading the workspace. */
+export const reworkItem = (fleet: string, key: number, id: string, title: string) =>
+  void call("rework!", [fleet, key, id, title])
+
+/** A workspace item's address. */
+export const itemPath = (fleet: string, id: string) => call("item_path", [fleet, id])
+
+/** Records that a Key's holder sent the fleet's code a change ending at `head`. */
+export const pushCode = (fleet: string, key: number, wallet: string, head: string) =>
+  void call("push!", [fleet, key, wallet, head])
 
 /** Opens the product pages, or closes them behind the launch gate. */
 export const setSurfaces = (open: boolean) => void call("surfaces!", [open])
@@ -97,9 +120,6 @@ export type SentTransaction = {from: string; to: string; data: string; value: st
 export const landStep = (hash: string, transaction: SentTransaction, succeeded: boolean) =>
   void call("land!", [hash, transaction, succeeded])
 
-/** Sells the fleet's next key to `owner`, who says `body` in the General room; returns the key. */
-export const sayInGeneral = (fleet: string, owner: string, body: string) =>
+/** Sells the fleet's next key to `owner`, who says `body` in the Public room; returns the key. */
+export const sayInPublic = (fleet: string, owner: string, body: string) =>
   Number(call("say!", [fleet, owner, body]))
-
-/** The holder of a Key, by its wallet `owner`, asks the fleet `question` in an hour-long poll; returns the poll's id. */
-export const startPoll = (fleet: string, owner: string, question: string) => call("poll!", [fleet, owner, question])

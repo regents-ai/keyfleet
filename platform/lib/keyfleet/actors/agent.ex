@@ -29,9 +29,16 @@ defmodule Keyfleet.Actors.Agent do
   `pairing_id` and `privy_user_id` identify the current server-resolved
   delegation episode. World ID is optional. Pairing admits protected work;
   Key and shard ownership still decide the product permissions.
+
+  `connection` is set when the agent is a connected app's own identity, such
+  as Claude's, acting at `/mcp` with the token its person approved: what
+  `RegentOAuth.verify/3` answered for that token. Its `verification_method`
+  is then `:connected_app`, its wallet the one the sign-in server holds for it
+  (`Keyfleet.Agents.HostedAddress`), and `credential_ref` names the token. The
+  same app may then also run its identity tools (`Keyfleet.Agents.Connection`).
   """
   @enforce_keys [:wallet_address, :chain_id, :verification_method, :audience]
-  @derive {Inspect, except: [:human_id]}
+  @derive {Inspect, except: [:human_id, :connection]}
   defstruct [
     :wallet_address,
     :chain_id,
@@ -45,6 +52,7 @@ defmodule Keyfleet.Actors.Agent do
     :pairing_id,
     :privy_user_id,
     :human_account_id,
+    :connection,
     role: :agent,
     pairing: :none
   ]
@@ -52,7 +60,7 @@ defmodule Keyfleet.Actors.Agent do
   @type t :: %__MODULE__{
           wallet_address: String.t(),
           chain_id: 1 | 8453,
-          verification_method: :eoa_recovery | :erc1271 | :erc6492,
+          verification_method: :eoa_recovery | :erc1271 | :erc6492 | :connected_app,
           audience: String.t(),
           credential_ref: String.t() | nil,
           receipt_expires_at: DateTime.t() | nil,
@@ -70,7 +78,7 @@ defmodule Keyfleet.Actors.Agent do
       })
       when is_binary(wallet) and
              ((method == :eoa_recovery and chain_id in [1, 8453]) or
-                (method in [:erc1271, :erc6492] and chain_id == 8453)),
+                (method in [:erc1271, :erc6492, :connected_app] and chain_id == 8453)),
       do: Regex.match?(~r/\A0x[0-9a-f]{40}\z/, wallet)
 
   def authenticated?(_), do: false

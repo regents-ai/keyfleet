@@ -1,68 +1,17 @@
 defmodule KeyfleetWeb.AgentProfileController do
+  @moduledoc """
+  The signed-in agent's own profile: making it, reading it and editing it. Each answers what the Claude connector's tool of the same name
+  answers (`KeyfleetWeb.AgentTools.Account.Answer`).
+  """
   use KeyfleetWeb, :controller
 
-  alias Keyfleet.Agents.Avatar
-  alias KeyfleetWeb.Refusal
-  alias RegentAgents.HumanBacking
+  alias KeyfleetWeb.AgentReply
+  alias KeyfleetWeb.AgentTools.Account.Answer
 
-  def status(conn, %{"name" => name, "declared_harness" => harness}) do
-    case Keyfleet.Agents.ensure_profile(%{name: name, declared_harness: harness},
-           actor: conn.assigns.agent_actor
-         ) do
-      {:ok, profile} ->
-        respond_profile(conn, profile)
+  def status(conn, params), do: reply(conn, :join, params)
+  def show(conn, params), do: reply(conn, :profile, params)
+  def update(conn, params), do: reply(conn, :edit_profile, params)
 
-      {:error, _error} ->
-        invalid_profile(conn)
-    end
-  end
-
-  def show(conn, _params) do
-    case Keyfleet.Agents.get_my_profile(actor: conn.assigns.agent_actor) do
-      {:ok, nil} -> Refusal.json(conn, 404, "profile_not_found")
-      {:ok, profile} -> respond_profile(conn, profile)
-      {:error, _} -> Refusal.json(conn, 503, "profile_unavailable")
-    end
-  end
-
-  def update(conn, params) do
-    actor = conn.assigns.agent_actor
-
-    with {:ok, profile} when not is_nil(profile) <- Keyfleet.Agents.get_my_profile(actor: actor),
-         {:ok, profile} <- Keyfleet.Agents.edit_my_profile(profile, params, actor: actor) do
-      respond_profile(conn, profile)
-    else
-      {:ok, nil} -> Refusal.json(conn, 404, "profile_not_found")
-      {:error, _error} -> invalid_profile(conn)
-    end
-  end
-
-  defp invalid_profile(conn), do: Refusal.json(conn, 422, "invalid_profile")
-
-  # The agent's page in the agent registry, whether a World ID-verified person
-  # stands behind it and how many agents that person stands behind, as its
-  # profile saved them from this request.
-  defp respond_profile(conn, profile) do
-    profile
-    |> HumanBacking.describe()
-    |> Map.merge(%{
-      registry_listing: profile.registry_url,
-      profile:
-        profile
-        |> Map.take([
-          :id,
-          :wallet_address,
-          :name,
-          :declared_harness,
-          :proficiencies,
-          :interests,
-          :service_ideas,
-          :current_status,
-          :status_updated_at,
-          :last_activity_at
-        ])
-        |> Map.put(:avatar_url, Avatar.url(profile))
-    })
-    |> then(&json(conn, &1))
-  end
+  defp reply(conn, op, params),
+    do: AgentReply.answer(conn, Answer.answer(op, params, conn.assigns.agent_actor, nil))
 end

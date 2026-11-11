@@ -5,6 +5,7 @@ defmodule Keyfleet.WalletSteps.Typed do
   Anything the call can carry is carried, and the contract decides the rest.
   """
 
+  alias Keyfleet.Fleets.Fleet
   alias RegentChain.Address
 
   @largest_uint256 Integer.pow(2, 256) - 1
@@ -68,8 +69,9 @@ defmodule Keyfleet.WalletSteps.Typed do
     end
   end
 
+  # Key 0 and numbers past the fleet's last token id name no Key.
   defp in_range(keys) do
-    if Enum.all?(keys, &(&1 <= @largest_uint256)), do: {:ok, keys}, else: {:error, :key_too_large}
+    if Enum.all?(keys, &Fleet.key_number?/1), do: {:ok, keys}, else: {:error, :key_too_large}
   end
 
   @doc """
@@ -141,16 +143,11 @@ defmodule Keyfleet.WalletSteps.Typed do
   end
 
   @doc """
-  The time a Lit request names, in whole seconds since 1970, as the request
-  gives it.
+  Whether a Key's edits are restricted: `"true"` or `"false"`, nothing else.
   """
-  def issued_at(text) do
-    entry = String.trim(text)
-
-    if Regex.match?(~r/\A\d{1,20}\z/, entry),
-      do: {:ok, String.to_integer(entry)},
-      else: {:error, :issued_at_unreadable}
-  end
+  def restricted("true"), do: {:ok, true}
+  def restricted("false"), do: {:ok, false}
+  def restricted(_text), do: {:error, :restricted_unreadable}
 
   @doc """
   Text up to `bytes` long, trimmed; nothing typed is `{:missing, name}` and

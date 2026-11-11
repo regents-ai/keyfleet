@@ -2,14 +2,15 @@ defmodule KeyfleetWeb.KeyLinks do
   @moduledoc """
   Where a key's profile opens: its fleet's page, with the key named in the
   address. The fleet page's view (the hall, the map with `view=map`, or the
-  Member List with `view=members`) and the Member List's `page` stay in the
-  address beside it, so closing the profile leaves the page as it was.
+  Member List with `view=members`), the Member List's `page` and the room open
+  in the hall (`room`) stay in the address beside it, so closing the profile
+  leaves the page as it was.
 
   A key's own page and its messages are under its fleet's address, such as
   `/classic/1/keys/72`.
   """
 
-  @kept ["page", "view"]
+  @kept ["page", "view", "room"]
 
   @doc "The fleet page with key `token_id`'s profile open, keeping what `params` kept."
   def key_path(fleet_id, token_id, params \\ %{}),
@@ -17,6 +18,13 @@ defmodule KeyfleetWeb.KeyLinks do
 
   @doc "Key `token_id`'s own page, where its holder manages it."
   def page_path(fleet_id, token_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/keys/#{token_id}"
+
+  @doc """
+  Key `token_id`'s page at the shard press for the person's paired agent with
+  `wallet`, which the holder sees for each agent with no shard of the Key yet.
+  """
+  def give_shard_path(fleet_id, token_id, wallet),
+    do: "#{page_path(fleet_id, token_id)}#key-issue-#{wallet}"
 
   @doc "The messages written to and from key `token_id`."
   def dms_path(fleet_id, token_id), do: "#{page_path(fleet_id, token_id)}/dms"
@@ -30,6 +38,9 @@ defmodule KeyfleetWeb.KeyLinks do
 
   @doc "The fleet page's hall, its first tab."
   def hall_path(fleet_id), do: fleet_path(fleet_id, [])
+
+  @doc "The fleet page's hall with the room at `slug` open in its middle."
+  def room_path(fleet_id, slug), do: fleet_path(fleet_id, [{"room", slug}])
 
   @doc "The fleet page's map of Keys."
   def map_path(fleet_id), do: fleet_path(fleet_id, [{"view", "map"}])

@@ -3,7 +3,7 @@
 Every recurring job is Oban work in the site's own schema (`keyfleet_app`),
 started by the Oban cron in `platform/config/config.exs`. There is no job
 dashboard. An operator works with three tools: the saved errors at
-`/admin/errors` (Credits admins), which Fly Sentinel reads every minute and
+`/admin/errors` (the site's admins), which Fly Sentinel reads every minute and
 emails; SQL on `keyfleet_app.oban_jobs`; and the running app's `rpc`.
 
 The site sends no transaction of its own. The treasury's daily split, the
@@ -16,14 +16,17 @@ long (see "Money nobody has moved" below).
 
 | Job | When | What it does | Queue | When it fails |
 | --- | --- | --- | --- | --- |
-| `Keyfleet.Chain.Watch` | every minute | gives each deployed fleet a history reading and a balance reading | default | No node named while fleets are deployed: saved error, every minute |
-| `Keyfleet.Chain.ReadFleet` | one long-lived job per fleet, a pass every 4 s | records the fleet's history from the chain | chain | A failed pass: saved error (one per worker), retried up to 20 times. A stop or another chain: saved error, one per kind (`docs/chain-reader.md`) |
-| `Keyfleet.Chain.ReadBalances` | every minute, per fleet | reads the treasury's balances and split figures | chain | saved error, 3 tries; the next minute's reading follows |
+| `Keyfleet.Chain.Watch` | every five minutes | gives each deployed fleet a history reading and a balance reading | default | No node named while fleets are deployed: saved error, every five minutes |
+| `Keyfleet.Chain.ReadFleet` | one long-lived job per fleet, a pass every five minutes, brought forward to ten seconds when a step sent from the site goes through | records the fleet's history from the chain | chain | A failed pass: saved error (one per worker), retried a minute later, up to 20 times. A stop or another chain: saved error, one per kind (`docs/chain-reader.md`) |
+| `Keyfleet.Chain.ReadBalances` | every five minutes, per fleet, and at once after a step sent from the site goes through or the Treasury's read-again icon is pressed | reads the treasury's balances and split figures | chain | saved error, 3 tries; the next turn's reading follows |
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
-| `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings a hub's members in step with the Keys | notebook_hubs | saved error, 20 tries |
+| `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings every project space's members in step with the Keys, and queues a space for any project without one | notebook_hubs | saved error, 20 tries |
+| `Keyfleet.Notebooks.Space` | queued when a project starts, and by Roster | makes one project's space in the fleet's hub | notebook_hubs | saved error, 20 tries |
+| `Keyfleet.Code.Setup` | queued when a project starts, and by an ask for a repository not made yet | makes one project's repository in the code store | code_store | saved error, 20 tries a minute apart; the next ask starts it again |
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
 | `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Accelerant #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |
+| `Keyfleet.Keys.PresenceTimer` | :07 past every hour | marks presence for the Keys whose shard the timer wallet holds once any has 24 hours or less left; saves an error for a failed send, a Key under 12 hours, low ETH or a shard ending within 30 days | chain | saved error, 1 try; the next hour reads again |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
 | Direct messages `remove_expired` (AshOban) | hourly | deletes expired direct messages | default | saved error |
 | Key pictures `close_up` and `small_card` (AshOban triggers) | every minute | makes each revealed Key's close-up and small card where one is missing | key_art | saved error, 5 tries; the next minute queues it again |
@@ -42,14 +45,14 @@ record is catching up; the SQL below shows when each job last ran.
 
 Three money jobs run only when someone presses them. Anyone may press each,
 from the fleet's Treasury tab (`/<type>/<number>/treasury`, such as
-`/classic/1/treasury`) or as an agent (`run_split`; `send_share` and
-`convert` once their agent routes are added).
+`/classic/1/treasury`) or as an agent (the `treasury_release`, `treasury_send_share` and
+`treasury_buy_regent` browser tools).
 
 | Job | Contract call | Saved as late when |
 | --- | --- | --- |
 | Daily Treasury Slice to Keys | treasury `runDailySplit()` | due (`nextRunAt`) for more than 6 hours |
 | Send to REGENT staking | manager `sendProtocolShare()` | something owed for more than 24 hours |
-| Turn into REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press | USDC waiting more than 3 hours with no piece turned for that fleet |
+| Buy REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press | USDC waiting more than 3 hours with no piece turned for that fleet |
 
 `Keyfleet.Treasury.OverdueCheck` reads each deployed fleet's latest balance
 reading every hour. Each kind is one error at `/admin/errors` listing every
@@ -59,7 +62,7 @@ from its first balance reading after it is recorded on the site.
 
 Classic #1 (manager `0xc73D8774Dfc51bc11207DC04B0ff5117C30458B6`, predicted)
 is covered this way once it is recorded. After a sell-out its manager holds
-about 36,036 USDC to turn into REGENT: about 145 presses of Turn into REGENT,
+about 36,036 USDC to turn into REGENT: about 145 presses of Buy REGENT,
 one each 15 minutes at the earliest, over about 36 hours. A press is refused
 when a full piece would move REGENT's price by more than 1%; a smaller amount
 typed in the field may still work. Then one press of Send to REGENT staking
@@ -77,6 +80,14 @@ sells and waits in Revealing. `Keyfleet.Keys.DeckEndCheck` saves one error at
 and its deck's size: for Accelerant #1, from Key 900 to Key 1,000. Sentinel emails
 once; each hour in that window adds an occurrence. Classic #1 and the Regents
 Club, whose supply is their deck, are never named.
+
+## Keys the timer keeps present
+
+An owner who wants a Key kept present issues a shard to the timer wallet
+`0x0890073F213c29EceBAaf2152392D0079bbE88dB` with agent voting off, from the
+Key's page, and the wallet needs ETH on Base. `Keyfleet.Keys.PresenceTimer` then
+marks those Keys. It sends only `present`, never a ballot. If its key is lost, make
+a new wallet, store its key as `KEYFLEET_PRESENCE_TIMER_KEY` and issue new shards.
 
 ## Seeing that a job ran
 
@@ -107,7 +118,7 @@ Finished jobs are kept for 7 days.
 Through the running app (untested on Fly):
 
 ```sh
-# Run the chain watch now, rather than at the next minute.
+# Run the chain watch now, rather than at its next turn.
 fly ssh console -C "/app/bin/keyfleet rpc 'Oban.insert!(Keyfleet.Chain.Watch.new(%{}))'"
 
 # Run one kind of shared reading again (fleet_agents or key_agents).
@@ -118,7 +129,7 @@ fly ssh console -C "/app/bin/keyfleet rpc 'Oban.retry_job(12345)'"
 ```
 
 A fleet's history job given up after 20 failures needs nothing: the watch
-starts a fresh one within a minute. A stopped fleet is cleared as
+starts a fresh one within five minutes. A stopped fleet is cleared as
 `docs/chain-reader.md` describes.
 
 ## Stopping and starting again

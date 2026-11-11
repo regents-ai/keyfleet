@@ -9,7 +9,6 @@
   min-width: 0;
 }
 
-.account-heading,
 .account-panel {
   min-width: 0;
   border: 1px solid var(--color-border);
@@ -37,53 +36,20 @@
   text-transform: uppercase;
 }
 
-.account-identity .account-kicker {
+.account-identity .rg-account-identity__kicker {
   color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
-}
-
-/* Heading */
-
-.account-heading {
-  display: grid;
-  gap: 1rem;
-  padding: var(--rg-panel-padding);
-}
-
-.account-heading h1 {
-  max-width: 18ch;
-  font-size: clamp(2rem, 5vw, 3.75rem);
-  line-height: 1;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-}
-
-.account-heading h1:focus {
-  outline: none;
-}
-
-.account-lede {
-  max-width: 56ch;
-  color: var(--color-fg-muted);
-  font-size: 1.05rem;
-  line-height: 1.5;
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* Panels */
 
-.account-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-  gap: 1.5rem;
-  align-items: start;
-}
-
-.account-identity {
-  grid-column: 1 / -1;
-}
-
 .account-panel,
 .account-identity .rg-holo__content {
   display: grid;
+  align-content: start;
   gap: 1rem;
   padding: var(--rg-panel-padding);
 }
@@ -100,34 +66,27 @@
   align-content: end;
 }
 
-.account-identity__who {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  min-width: 0;
+/* The shared account card stands on the holographic ground, in its ink. */
+.account-identity .rg-account-identity {
+  padding: 0;
+  color: var(--rg-holo-ink);
 }
 
-.account-identity__avatar {
-  flex: none;
-  width: 4rem;
-  height: 4rem;
-  border: 1px solid var(--rg-holo-edge);
+.account-identity .rg-account-identity__picture {
+  border-color: var(--rg-holo-edge);
+}
+
+.account-identity .rg-account-identity__picture img {
   object-fit: cover;
 }
 
-.account-identity__name {
-  display: grid;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.account-identity__name h2 {
+.account-identity .rg-account-identity__name h2 {
+  font-family: var(--font-family-title);
   font-size: clamp(1.5rem, 3vw, 2.25rem);
-  line-height: 1.05;
-  overflow-wrap: anywhere;
+  font-weight: 400;
 }
 
-.account-identity__name code {
+.account-identity .rg-account-identity__name p {
   color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
 }
 
@@ -168,6 +127,45 @@
   border-color: var(--ash-line-strong);
 }
 
+/* A new Key's time until it first shares the Treasury slice, beside it. */
+.account-keys__list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.account-keys__slice {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Key a person posts as where they hold several. Its line under the
+   choice keeps its height whether or not it says anything. */
+.account-keys__posting {
+  display: grid;
+  gap: 0.25rem;
+  max-inline-size: 18rem;
+}
+
+.account-keys__posting select {
+  inline-size: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: inherit;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-keys__notice {
+  min-block-size: 1lh;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
 /* Details */
 
 .account-details dl {
@@ -193,19 +191,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-}
-
-.account-wallet code {
-  flex: 1 1 16rem;
-  min-width: 0;
-}
-
-.account-wallet-list {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 /* Verified connections */
@@ -279,130 +264,25 @@ div.verified-connections__notice p {
 
 }
 
-/* The Points page's refresh note keeps its space while unseen, so a failed
-   refresh never moves the panels below it. */
-.points-stale[data-unseen] {
-  visibility: hidden;
-}
-
-/* A failed first read of the figures carries its Try again link beneath it. */
-.points-retry {
-  display: grid;
-  justify-items: start;
-  gap: 0.5rem;
-}
-
-.points-retry p {
-  margin: 0;
-}
-
-/* What earns points: the catalog as plain tables, then limits and bonus tiers. */
-.points-earn h3 {
-  margin: 0;
-  font-family: var(--font-family-ui);
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-fg-muted);
-}
-
-.points-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.points-table th,
-.points-table td {
-  padding: 0.6rem 0;
-  border-block-start: 1px solid var(--color-border);
-  text-align: start;
-  vertical-align: baseline;
-}
-
-.points-table thead th {
-  border-block-start: 0;
-  color: var(--color-fg-muted);
-  font-family: var(--font-family-ui);
-  font-size: 0.7rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-/* The action takes the width; points and limits sit right-aligned. */
-.points-table tbody th {
-  width: 100%;
-  font-weight: 400;
-}
-
-.points-table td,
-.points-table thead th + th {
-  padding-inline-start: 1rem;
-  text-align: end;
-}
-
-/* In a wide panel, points and limits stay on one line and the action's words
-   wrap instead; a phone-width panel wraps them all to fit. */
-.points-earn {
-  container-type: inline-size;
-}
-
-@container (min-width: 30rem) {
-  .points-table td {
-    white-space: nowrap;
-  }
-}
-
-/* A narrow screen wraps the tables' words rather than widening the panel. */
-.points-earn > * {
-  min-width: 0;
-}
-
-.points-earn__soon {
-  margin-inline-start: 0.5rem;
-  color: var(--color-fg-muted);
-  font-size: 0.85em;
-}
-
-.points-earn__notes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  gap: 1.5rem;
-}
-
-.points-earn__notes > div {
-  display: grid;
-  gap: 0.75rem;
-  align-content: start;
-}
-
-/* A phone-width points table sets its figures closer to the action, and,
-   where the panel has the room, keeps them wide enough that a limit such as
-   "100 a day" breaks once, not after every word. */
-@container (max-width: 29.99rem) {
-  .points-table td,
-  .points-table thead th + th {
-    padding-inline-start: var(--space-1);
-  }
-}
-
-@container (min-width: 16rem) and (max-width: 29.99rem) {
-  .points-table td {
-    min-inline-size: 4.5rem;
-  }
-}
-
 /* Every account section is a panel with the same inner edge as the others, so
    nothing behind the page shows through it. These rules sit outside the
    product layer, so they win over the shared account sections' own padding
    and open ground. */
-.account-grid > .rg-account,
+.account-agents > .rg-account,
+.rg-account-layout > * > .rg-account,
 .account-page > .rg-account--signed-out {
   padding: var(--rg-panel-padding);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+/* The shared sections' headings take the same face and size as the page's
+   other panels. */
+:is(.account-agents, .rg-account-layout > *) > .rg-account h2 {
+  font-family: var(--font-family-title);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.1;
 }
 
 /* On a phone the account's sections stack in one column. */
@@ -412,16 +292,6 @@ div.verified-connections__notice p {
     flex: 1 1 auto;
   }
 
-  /* Figures sit two to a row instead of one long column. */
-  .account-grid .rg-account__metrics {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
-  }
-
-  /* The link under the Credits figures stands apart from the last figure. */
-  #account-credits .rg-account__metrics {
-    margin-block-end: var(--space-2);
-  }
-
   /* An agent's name keeps the row's width; "World ID Connected" moves under
      it when both don't fit, instead of squeezing the name to nothing. */
   .rg-account__agent {
@@ -429,21 +299,16 @@ div.verified-connections__notice p {
     row-gap: 0;
   }
 
-  /* Each Key, each fleet's name above its Keys, the link under the agents
-     and under Credits, and each connected account are a full finger's
-     height. */
+  /* Each Key, each fleet's name above its Keys and each connected account are
+     a full finger's height. */
   .account-keys__fleet h3 a,
   .account-keys__list a,
-  #account-agents .rg-account__footer > a,
-  #account-credits > a,
   .verified-connections__list a {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
   }
 
-  #account-agents .rg-account__footer > a,
-  #account-credits > a,
   .verified-connections__list a {
     justify-self: start;
   }
@@ -452,13 +317,58 @@ div.verified-connections__notice p {
   .rg-account__pair-actions > .rg-button {
     flex: 1 1 auto;
   }
+}
 
-  /* Recent points activity: one entry after another, numbered at the panel's
-     inner edge rather than indented past it. */
-  .account-panel > ol {
-    display: grid;
-    gap: var(--space-2);
-    margin: 0;
-    padding-inline-start: 1.25rem;
-  }
+/* Pairing: the window every Pair New Agent opens, and the pairing link's page
+   (/pair), whose box keeps the window's width and whose start page wraps rather
+   than running off a narrow screen. Unlayered, like the shared pairing box. */
+.shell-pairing-dialog {
+  --rg-dialog-size: 30rem;
+  --shell-dialog-pad: clamp(var(--space-2), 4vw, var(--space-4));
+}
+
+.shell-pairing-dialog h2 {
+  margin: 0 0 var(--space-3);
+  padding-inline-end: 3rem;
+  font-family: var(--font-family-ui);
+  font-size: var(--type-headline-size);
+}
+
+/* The window's close button, square in its top right corner, and kept there
+   while the window scrolls. Its margins give back the room it takes, so what is
+   under it keeps its place. The pad is the window frame's own. */
+.shell-dialog-close {
+  position: sticky;
+  inset-block-start: calc(-1 * var(--shell-dialog-pad));
+  z-index: var(--rg-layer-card);
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  margin-block: calc(-1 * var(--shell-dialog-pad)) calc(var(--shell-dialog-pad) - 2.75rem);
+  margin-inline: auto calc(-1 * var(--shell-dialog-pad));
+  padding: 0;
+  border: 0;
+  border-radius: 0 calc(1.25rem - 1px) 0 0.75rem;
+}
+
+.shell-dialog-close svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.pair-page .rg-account__pair {
+  max-inline-size: 27rem;
+}
+
+.pair-page #pair-start {
+  overflow-wrap: anywhere;
+}
+
+/* Give It a Shard appears under the pairing box once an agent pairs; its line
+   keeps a button's height before, so the page below never moves. */
+.account-pairing-next {
+  min-block-size: 2.75rem;
+  margin: 0.75rem 0 0;
 }

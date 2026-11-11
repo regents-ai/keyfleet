@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Keyfleet share pictures</title>
+    <!--
+      Drawn by render.mjs, one picture per address:
+        ?card=home                         the site's picture: the cards from home.png
+                                           beside its words
+        ?card=fleet&name=…&keys=…&key=…    a fleet's picture, without its figures,
+                                           its Key's name or its Key's card
+      The fleet pictures' figures, Key name and card are added by the server
+      (KeyfleetWeb.ShareCard) at the places marked data-slot, which render.mjs
+      measures and writes to priv/share/layout.json.
+    -->
+    <style>
+      @font-face {
+        font-family: "Geist Serif";
+        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/GeistSerif-Regular.woff2") format("woff2");
+      }
+
+      :root {
+        --ink: #efeee4;
+        --muted: #a9a79a;
+        --accent: #f26b2a;
+        --paper: #161616;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .card {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        background:
+          radial-gradient(ellipse 70% 90% at 78% 30%, rgb(255 255 255 / 0.035), transparent 70%),
+          var(--paper);
+        color: var(--ink);
+        font-family: "Geist Serif", serif;
+      }
+
+      /* X keeps only the left part of a picture in its narrow view, about
+         660 of its 1200 pixels, and lays the site's name over the bottom-left
+         corner in both views. So the address and everything a fleet's
+         picture says sit in the left 660, above that corner. */
+      .brand {
+        position: absolute;
+        top: 62px;
+        left: 72px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand svg {
+        width: 36px;
+        height: 26px;
+      }
+
+      .address {
+        font-size: 26px;
+        line-height: 26px;
+        letter-spacing: -0.01em;
+      }
+
+      /* The cards from home.png; the words beside them are set here. */
+      .home {
+        position: absolute;
+        inset: 0;
+        width: 1200px;
+        height: 630px;
+        mask-image: linear-gradient(to right, transparent 517px, black 534px);
+      }
+
+      /* The site's picture: the address under its headline. */
+      .home-words {
+        position: absolute;
+        left: 72px;
+        top: 168px;
+        font-size: 60px;
+        line-height: 66px;
+        letter-spacing: -0.01em;
+      }
+      .home-words em {
+        font-style: normal;
+        color: var(--accent);
+      }
+
+      /* A fleet's picture: its name and figures at the left, its latest
+         Key's card beside them, and a faint mark filling the right, which
+         only the wide view shows. */
+      .fleet-name {
+        position: absolute;
+        left: 72px;
+        top: 124px;
+        font-family: "Geist Serif", serif;
+        font-size: 48px;
+        line-height: 52px;
+        letter-spacing: -0.01em;
+      }
+
+      .figure {
+        position: absolute;
+        left: 72px;
+        width: 292px;
+      }
+
+      .figure .label {
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 24px;
+      }
+
+      .figure .value {
+        margin-top: 6px;
+        height: 66px;
+      }
+
+      .figure .amounts {
+        margin-top: 8px;
+        height: 138px;
+      }
+
+      .figure.keys {
+        top: 212px;
+      }
+
+      .figure.treasury {
+        top: 330px;
+      }
+
+      .latest {
+        position: absolute;
+        left: 396px;
+        top: 124px;
+        width: 264px;
+        text-align: center;
+      }
+
+      .latest .picture {
+        width: 264px;
+        height: 330px;
+        box-shadow: 0 18px 40px rgb(0 0 0 / 0.65);
+      }
+
+      .latest .label {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 22px;
+      }
+
+      .latest .name {
+        height: 28px;
+        margin-top: 4px;
+      }
+
+      .watermark {
+        position: absolute;
+        left: 776px;
+        top: 196px;
+        width: 352px;
+        height: 210px;
+      }
+
+      /* One style's characters, side by side, for the server to set figures with. */
+      .glyphs {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: flex;
+        white-space: pre;
+        color: var(--ink);
+      }
+
+      .glyphs span {
+        display: block;
+      }
+
+      .glyphs.value {
+        font-family: "Geist Serif", serif;
+        font-size: 58px;
+        line-height: 66px;
+        letter-spacing: -0.01em;
+      }
+
+      .glyphs.amount {
+        font-family: "Geist Serif", serif;
+        font-size: 40px;
+        line-height: 46px;
+        letter-spacing: -0.01em;
+      }
+
+      .glyphs.name {
+        font-family: "Geist Serif", serif;
+        font-size: 20px;
+        line-height: 28px;
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card" id="card"></main>
+    <template id="mark">
+      <svg viewBox="31 46 178 106" aria-hidden="true">
+        <g fill="#e8e6d0">
+            <rect x="31" y="46" width="34" height="34" /><rect x="103" y="46" width="34" height="34" /><rect x="175" y="46" width="34" height="34" />
+            <rect x="31" y="82" width="34" height="34" /><rect x="67" y="82" width="34" height="34" /><rect x="103" y="82" width="34" height="34" /><rect x="139" y="82" width="34" height="34" /><rect x="175" y="82" width="34" height="34" />
+            <rect x="31" y="118" width="34" height="34" /><rect x="67" y="118" width="34" height="34" /><rect x="103" y="118" width="34" height="34" /><rect x="139" y="118" width="34" height="34" /><rect x="175" y="118" width="34" height="34" />
+          </g>
+      </svg>
+    </template>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const card = document.getElementById("card");
+      const text = (tag, className, words) => {
+        const el = document.createElement(tag);
+        el.className = className;
+        el.textContent = words;
+        return el;
+      };
+
+      const mark = () => document.getElementById("mark").content.firstElementChild.cloneNode(true);
+
+      const brand = () => {
+        const el = text("div", "brand", "");
+        el.append(mark(), text("span", "address", "keyfleet.ai"));
+        return el;
+      };
+
+      const draw = {
+        home() {
+          const base = document.createElement("img");
+          base.className = "home";
+          base.alt = "";
+          base.src = "home.png";
+          const words = document.createElement("div");
+          words.className = "home-words";
+          words.innerHTML = "agents:<br />join <em>//</em> start <em>//</em><br />invest in a fleet";
+          card.append(base, brand(), words);
+        },
+
+        fleet() {
+          card.append(brand(), text("h1", "fleet-name", params.get("name")));
+
+          for (const [place, label, kind] of [["keys", params.get("keys"), "value"], ["treasury", "Treasury", "amounts"]]) {
+            const figure = document.createElement("div");
+            figure.className = `figure ${place}`;
+            const value = text("div", kind, "");
+            value.dataset.slot = place;
+            figure.append(text("div", "label", label), value);
+            card.append(figure);
+          }
+
+          const latest = document.createElement("div");
+          latest.className = "latest";
+          const picture = text("div", "picture", "");
+          picture.dataset.slot = "picture";
+          const name = text("div", "name", "");
+          name.dataset.slot = "name";
+          latest.append(picture, text("div", "label", params.get("key")), name);
+
+          const watermark = mark();
+          watermark.classList.add("watermark");
+          watermark.querySelector("g").setAttribute("fill", "rgb(255 255 255 / 0.035)");
+          card.append(latest, watermark);
+        },
+
+        glyphs() {
+          for (const el of [document.documentElement, document.body]) el.style.background = "transparent";
+          card.remove();
+          const row = document.createElement("div");
+          row.className = `glyphs ${params.get("style")}`;
+          for (const character of params.get("characters")) row.append(text("span", "", character));
+          document.body.append(row);
+        },
+      };
+
+      draw[params.get("card")]();
+    </script>
+  </body>
+</html>

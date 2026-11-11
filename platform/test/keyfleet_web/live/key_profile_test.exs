@@ -1,18 +1,22 @@
 defmodule KeyfleetWeb.Live.KeyProfileTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  import Keyfleet.ProposalHelpers, only: [wallet: 1]
+  import Keyfleet.ProposalHelpers, only: [presence!: 3, scheduled!: 3, wallet: 1]
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
+  alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
   alias KeyfleetWeb.FleetNow
+  alias RegentChain.BuilderCode
   alias RegentChain.Call
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
@@ -20,6 +24,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   @fleet "fibonacci_cascade"
   @path "/cascade/1"
   @members_path @path <> "?view=members"
+  @key_20 @path <> "/keys/20"
   @system %Actors.System{}
   @rewards "0x" <> String.duplicate("8", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
@@ -62,23 +67,24 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     assert has_element?(
              view,
-             "img#key-profile-card[src='https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy']"
+             "img#key-profile-card-picture[src='https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy']"
            )
 
     assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
+    assert has_element?(view, ".key-profile__card[tabindex='0']")
     assert text(view, ".key-profile__card .key-profile__traits p") == "Revealing"
-    assert text(view, "#key-profile-holder") == "0xeeee..eeee"
+    assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
     holder = wallet("e")
-    assert has_element?(view, "#key-profile-holder-links-copy[data-copy-text='#{holder}']")
+    assert has_element?(view, "#key-profile-holder-address-copy[data-copy-text='#{holder}']")
+    fleet = Fleets.get_fleet!(@fleet)
+    item = "#{fleet.keys_address}/#{Fleets.Fleet.onchain_token_id(fleet, 12)}"
+    assert has_element?(view, "#key-profile-opensea[href='https://opensea.io/item/base/#{item}']")
+    # Its holder chose no Key to post as, so posts as their lowest.
+    assert text(view, "#key-profile-posts-as") == "Posts as Key 3"
 
     assert has_element?(
              view,
-             "#key-profile-holder-links-opensea[href='https://opensea.io/#{holder}']"
-           )
-
-    assert has_element?(
-             view,
-             "#key-profile-holder-links-basescan[href='https://basescan.org/address/#{holder}']"
+             "#key-profile-holder-address-explorer[href='https://basescan.org/address/#{holder}']"
            )
 
     assert render(view) =~ "17.28 USDC"
@@ -107,8 +113,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     {:ok, view, _html} = live(conn, @path <> "?key=21")
     render_async(view)
-    assert has_element?(view, "#key-profile-buy-order #key-profile-buy-button", "Buy Key 21")
     refute has_element?(view, "#key-profile-composer")
+
+    # Its Buy Key opens the fleet's Buy Key window above the profile, the Key
+    # on sale in its facts.
+    view |> element("#key-profile-buy") |> render_click()
+    render_async(view, 3_000)
+    assert text(view, "#buy-key #buy-key-button [data-press-label]") == "Buy Key"
+    assert text(view, "#buy-key #buy-key-number") == "21"
+    assert has_element?(view, "#key-profile")
   end
 
   test "another of the holder's keys opens in place of the one on show", %{conn: conn} do
@@ -151,7 +164,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert_patch(view, @path <> "?key=3")
     assert text(view, "#key-profile-title") == "Key 3"
 
-    {:ok, view, _html} = live(conn, @path <> "/rooms/general")
+    {:ok, view, _html} = live(conn, @path <> "?room=general")
     render_patch(view, @path <> "?key=3")
     assert text(view, "#key-profile-title") == "Key 3"
   end
@@ -208,9 +221,46 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert claim.step == "claim-#{@usdc}"
       assert claim.to == @rewards
-      assert claim.data == Call.encode("claim(uint256[],address[])", [[id(12)], [@usdc]])
+
+      assert claim.data ==
+               BuilderCode.append(Call.encode("claim(uint256[],address[])", [[id(12)], [@usdc]]))
+
       assert text(view, "#key-profile-claim-#{@usdc}") == "Claim 2.5 USDC"
       refute has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
+    end
+
+    # REGENT has 18 decimals; the window shows two of them.
+    test "REGENT waiting shows cut to two decimals", %{conn: conn} do
+      holder = wallet("e")
+      regent = "0x6f89bca4ea5931edfcb09786267b251dee752b07"
+      owner_of = Call.encode("ownerOf(uint256)", [id(12)])
+      accrued = Call.encode("accrued(address,uint256)", [regent, id(12)])
+
+      rewards_answer(
+        fn
+          _to, ^owner_of, _hash ->
+            {:ok, <<0::96>> <> Base.decode16!(String.duplicate("ee", 20), case: :lower)}
+
+          _to, ^accrued, _hash ->
+            {:ok, <<9_750_773_103_342_555_816_583::256>>}
+
+          _to, _credits, _hash ->
+            {:ok, <<0::256>>}
+        end,
+        [@usdc, regent]
+      )
+
+      {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
+      render_async(view)
+
+      view
+      |> with_target("#key-profile-claim-action")
+      |> render_hook("onchain_active_wallet", %{"address" => holder})
+
+      render_async(view)
+
+      assert text(view, "#key-profile-claim-#{regent}") == "Claim 9,750.77 REGENT"
+      assert text(view, "#key-profile-rewards") == "9,750.77 REGENT"
     end
 
     test "nothing waiting keeps the button in view, not pressable, and says so", %{conn: conn} do
@@ -226,6 +276,9 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       end)
 
       {:ok, view, _html} = conn |> signed_in_as(holder) |> live(@path <> "?key=12")
+      # The rewards read first; once they land, the Claim panel builds its step
+      # in a read of its own, which the second wait covers.
+      render_async(view)
       render_async(view)
 
       assert has_element?(view, "#key-profile-claim-#{@usdc}[disabled]")
@@ -257,21 +310,30 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       assert_push_event(view, "onchain-steps:review", %{
         component_id: "key-profile-reveal-action",
-        review: %{signer: ^signer, steps: [reveal]}
+        review: %{signer: ^signer, steps: [reveal, expire]}
       })
 
       assert reveal.step == "reveal"
       assert reveal.to == Fleets.get_fleet!(@fleet).keys_address
-      assert reveal.data == Call.encode("requestReveal(uint256)", [id(12)])
+      assert reveal.data == BuilderCode.append(Call.encode("requestReveal(uint256)", [id(12)]))
+      assert expire.step == "expire_reveal"
+      assert expire.data == BuilderCode.append(Call.encode("expireReveal(uint256)", [id(12)]))
 
       assert has_element?(view, "#key-profile-reveal-again[data-onchain-step='reveal']")
       refute has_element?(view, "#key-profile-reveal-again[phx-click]")
       assert text(view, "#key-profile-reveal-again") == "Ask again"
       refute has_element?(view, "#key-profile-reveal-again[disabled]")
 
+      # No draw waits, so there is no wait to end.
+      assert has_element?(view, "#key-profile-reveal-expire[data-onchain-step='expire_reveal']")
+      assert text(view, "#key-profile-reveal-expire") == "End the wait for good"
+      assert has_element?(view, "#key-profile-reveal-expire[disabled]")
+      assert text(view, "#key-profile-reveal-expire-why") == "No draw waiting"
+
       assert text(view, "#key-profile-reveal-tip") ==
                "A Key’s traits come from a random draw. If the request for it was turned " <>
-                 "down, anyone can ask again."
+                 "down, anyone can ask again. If the draw hasn’t come 24 hours after it was " <>
+                 "asked for, anyone can end the wait, and the Key then never gets traits."
     end
 
     test "Ask again pressed as the wallet becomes active is answered with its step",
@@ -287,11 +349,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       # still being read: the first read from now on takes its time.
       reads = :atomics.new(1, [])
       seed = Call.encode("revealSeed(uint256)", [id(12)])
+      record = Call.selector("fleet(uint256)")
 
       rewards_answer(fn
         _to, ^seed, _hash ->
           if :atomics.add_get(reads, 1, 1) == 1, do: Process.sleep(2_000)
           {:ok, <<0::256>>}
+
+        _to, ^record <> _fleet_id, _hash ->
+          {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
 
         _to, _data, _hash ->
           {:ok, <<0::256>>}
@@ -300,7 +366,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       render_hook(panel, "onchain_active_wallet", %{"address" => signer})
       render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "reveal"})
 
-      assert_reply(view, %{send: "reveal", review: %{signer: ^signer, steps: [%{step: "reveal"}]}})
+      assert_reply(view, %{
+        send: "reveal",
+        review: %{signer: ^signer, steps: [%{step: "reveal"}, %{step: "expire_reveal"}]}
+      })
     end
 
     test "a request that was accepted says the draw is on its way", %{conn: conn} do
@@ -309,9 +378,40 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
       render_async(view)
 
-      # Asking again is certain to fail while the draw is on its way.
+      # Asking again is certain to fail while the draw is on its way, and its
+      # wait can't be ended for 24 hours.
       assert has_element?(view, "#key-profile-reveal-again[disabled]")
       assert has_element?(view, "#key-profile-reveal-action", "Draw on its way")
+      assert has_element?(view, "#key-profile-reveal-expire[disabled]")
+      assert text(view, "#key-profile-reveal-expire-why") == "From 16 Jan, 08:00 UTC"
+    end
+
+    test "a draw that hasn't come in 24 hours offers anyone End the wait for good", %{
+      conn: conn
+    } do
+      signer = wallet("f")
+      draw_answer(1)
+
+      {:ok, view, _html} = conn |> signed_in_as(signer) |> live(@path <> "?key=12")
+      render_async(view)
+      panel = with_target(view, "#key-profile-reveal-action")
+      render_hook(panel, "onchain_active_wallet", %{"address" => signer})
+      render_async(view)
+
+      refute has_element?(view, "#key-profile-reveal-expire[disabled]")
+      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "expire_reveal"})
+      assert_reply(view, %{send: "expire_reveal", review: %{signer: ^signer}})
+    end
+
+    test "a key whose wait was ended says it never gets traits", %{conn: conn} do
+      draw_answer(1, expired?: true)
+
+      {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+      render_async(view)
+
+      assert has_element?(view, "#key-profile-reveal-again[disabled]")
+      assert has_element?(view, "#key-profile-reveal-expire[disabled]")
+      assert text(view, "#key-profile-reveal-again-why") == "Wait ended: it never gets traits"
     end
 
     test "shows while the key is revealing, and goes once its draw is recorded", %{conn: conn} do
@@ -342,6 +442,30 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
       {:ok, view, _html} = live(conn, @path <> "?key=12")
       refute has_element?(view, "#key-profile-reveal")
+    end
+
+    test "goes once the key's ended wait is recorded, and says it never gets traits", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      assert text(view, ".key-profile__traits") == "Traits Revealing"
+
+      Keys.record_reveal_expiry!(
+        %{
+          fleet_id: @fleet,
+          token_id: 12,
+          block_number: 500,
+          block_hash: "0x" <> String.duplicate("c", 64),
+          transaction_hash: Traits.keccak256("#{@fleet}/12/expired"),
+          log_index: 0
+        },
+        actor: @system
+      )
+
+      keys_changed([12])
+
+      refute has_element?(view, "#key-profile-reveal")
+      assert text(view, ".key-profile__traits") == "Traits Never gets traits"
     end
   end
 
@@ -463,8 +587,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
            )
   end
 
-  # Only the Key's holder takes a post off its wall, and it then leaves every
-  # page with the wall open.
+  # Only the Key's holder takes a post off its wall, once they say so in the
+  # window that asks first, and it then leaves every page with the wall open.
   test "a message written elsewhere to the key on show appears, and goes when its holder takes it off",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, @path <> "?key=12")
@@ -488,6 +612,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     {:ok, holder, _html} = conn |> signed_in_as(wallet("e")) |> live(@path <> "?key=12")
     holder |> element(remove) |> render_click()
+    assert has_element?(holder, "#key-wall-remove-dialog")
+    assert render(holder) =~ "Anyone aboard?"
+    holder |> element("#key-wall-remove-confirm") |> render_click()
+    refute has_element?(holder, "#key-wall-remove-dialog")
 
     for page <- [holder, writer, view] do
       refute render(page) =~ "Anyone aboard?"
@@ -506,12 +634,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   test "the key changing hands shows its new holder", %{conn: conn} do
     {:ok, view, _html} = live(conn, @path <> "?key=12")
-    assert text(view, "#key-profile-holder") == "0xeeee..eeee"
+    assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
 
     epoch!(12, 3, wallet("b"))
     keys_changed([12])
 
-    assert text(view, "#key-profile-holder") == "0xbbbb..bbbb"
+    assert text(view, "#key-profile-holder-address .rg-address__label") == "0xbbbb..bbbb"
     assert render(view) =~ "2 times"
     refute has_element?(view, "#key-profile-key-3")
   end
@@ -554,7 +682,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
       assert_receive {:reading, reader}
       assert text(view, "#key-profile-rewards") == "Loading rewards"
-      assert text(view, "#key-profile-holder") == "0xeeee..eeee"
+      assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
 
       send(reader, :answer)
       render_async(view)
@@ -592,7 +720,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-rewards") ==
                "Rewards aren’t showing right now. They update on their own."
 
-      assert text(view, "#key-profile-holder") == "0xeeee..eeee"
+      assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
 
       view
       |> form("#key-profile-composer", post: %{body: "Hull survey started"})
@@ -633,9 +761,159 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
   end
 
+  describe "the key's share of the Treasury slice" do
+    test "a key minted under two days ago counts down to its first share, an older one is eligible",
+         %{conn: conn} do
+      young = DateTime.utc_now() |> DateTime.add(47 * 3600 + 120) |> DateTime.to_unix()
+      matures = Call.encode("maturesAt(uint256)", [id(12)])
+
+      rewards_answer(fn
+        _to, ^matures, _hash -> {:ok, <<young::256>>}
+        _to, _data, _hash -> {:ok, <<0::256>>}
+      end)
+
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      render_async(view)
+      assert text(view, "#key-profile-slice") =~ ~r/^Eligible in 47:0[12]:\d\d$/
+
+      view |> element("#key-profile-key-3") |> render_click()
+      render_async(view)
+      assert text(view, "#key-profile-slice") == "Eligible"
+    end
+  end
+
+  # Key 20 is e's, and Your agent on its page shows the agent paired with e,
+  # which acts for the Key once given a shard of it.
+  test "a holder with no agent paired has no agent row on the Key's page", %{conn: conn} do
+    {:ok, view, _html} = conn |> signed_in_as(wallet("e")) |> live(@key_20)
+
+    assert has_element?(view, "#key-agent-setup[hidden]")
+    refute has_element?(view, "#key-agent-setup .agent-setup__agent")
+  end
+
+  describe "Your agent on the Key's page" do
+    # Signed in as e, with an agent paired with that account
+    # (`PairingHelpers.pair!/2` pairs with the account named after the first
+    # wallet).
+    setup %{conn: conn} do
+      did = "did:privy:test-" <> wallet("e")
+      account = Accounts.register_verified!(did, wallet("e"), [wallet("e")], actor: @system)
+      agent = PairingHelpers.agent_for!(Actors.Human.for_account(account))
+      %{agent: agent, conn: init_test_session(conn, %{human_account_id: account.id})}
+    end
+
+    test "a newly paired agent has Paired done, and each other dot says what to do", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert text(view, "#key-agent-setup .agent-setup__name") == "Test agent"
+      {states, words} = Enum.unzip(dots(view))
+      assert states == ~w(yes unknown no no no)
+
+      assert words == [
+               "Paired. This agent is paired with your account.",
+               "Gas. Nothing to pay for until it acts for a Key. Give it a shard.",
+               "Schedule. No daily run yet. Ask your agent to schedule one.",
+               "Marked. It acts for no Key yet. Give it a shard.",
+               "Repeated. Its daily run hasn’t come back on time yet. Check after its next run."
+             ]
+    end
+
+    # Marked reads a Key waiting for its automatic start as needing no mark,
+    # as the setup list's Present step does.
+    test "every dot is done once the run repeats, the wallet has ETH and the Key waits to start",
+         %{conn: conn, agent: agent} do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      scheduled!(@fleet, 20, DateTime.add(DateTime.utc_now(:second), 3_600))
+      repeating!(agent)
+      agent_chain!(balances: %{agent.wallet_address => 10 ** 18})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      {states, words} = Enum.unzip(dots(view))
+      assert states == ~w(yes yes yes yes yes)
+
+      assert words == [
+               "Paired. This agent is paired with your account.",
+               "Gas. Its wallet has the ETH on Base to mark your Keys.",
+               "Schedule. Its daily run is scheduled.",
+               "Marked. Every Key it acts for is present, or waits for its automatic start.",
+               "Repeated. Its daily run keeps arriving on time."
+             ]
+
+      refute has_element?(view, "#key-agent-setup .agent-setup__wrong")
+    end
+
+    test "an agent out of ETH, acting for a Key that lapsed, says how to put each right", %{
+      conn: conn,
+      agent: agent
+    } do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      presence!(@fleet, 20, DateTime.add(DateTime.utc_now(:second), -3, :day))
+      agent_chain!(balances: %{agent.wallet_address => 0})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert [_paired, {"no", gas}, _schedule, {"no", marked}, _repeated] = dots(view)
+      assert gas == "Gas. Its wallet is out of ETH. Send it ETH on Base."
+
+      assert marked ==
+               "Marked. A Key it acts for isn’t present. Ask your agent to mark it, or mark it yourself."
+    end
+
+    # The agent's check-in reaches the open page itself; the chain reader's
+    # notice of the Key marked present is sent here by hand. Neither asks the
+    # chain about gas again: its wallet empties here, and Gas stays as read.
+    test "Schedule ticks as the agent checks in, and Marked as the Key is marked present", %{
+      conn: conn,
+      agent: agent
+    } do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      agent_chain!(balances: %{agent.wallet_address => 10 ** 18})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+      assert [_paired, {"yes", _gas}, {"no", _schedule}, {"no", _marked}, _repeated] = dots(view)
+
+      agent_chain!(balances: %{agent.wallet_address => 0})
+      run = %{"kind" => "scheduled", "every_minutes" => 1440}
+      {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+      render(view)
+      render_async(view, 3_000)
+      assert [_paired, {"yes", _gas}, {"yes", _schedule}, {"no", _marked}, _repeated] = dots(view)
+
+      presence!(@fleet, 20, DateTime.utc_now(:second))
+      send(view.pid, {:keys_present, @fleet, [20]})
+      render(view)
+      render_async(view, 3_000)
+
+      assert [_paired, {"yes", _gas}, {"yes", _schedule}, {"yes", _marked}, _repeated] =
+               dots(view)
+    end
+
+    test "Gas is not known when the chain doesn't answer, and says to look again", %{
+      conn: conn,
+      agent: agent
+    } do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      agent_chain!(codes: %{agent.wallet_address => {:error, :timeout}})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert [_paired, gas | _rest] = dots(view)
+      assert gas == {"unknown", "Gas. The chain didn’t answer. Reload in a minute."}
+    end
+  end
+
   # What the fleet's contracts answer, at a head the chain has. Its reward
-  # ledger pays out USDC alone.
-  defp rewards_answer(calls) do
+  # ledger pays out `assets`, USDC alone unless a test names others; `chain`
+  # adds to what the chain holds, such as `:balances`.
+  defp rewards_answer(calls, assets \\ [@usdc], chain \\ []) do
     StubClient.put_chain(
       %{
         number: 1_000,
@@ -644,27 +922,64 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
         base_fee: 0
       },
       [],
-      calls: fn
+      Keyword.put(chain, :calls, fn
         @rewards, @reward_assets, _hash ->
-          {:ok,
-           <<32::256, 1::256, 0::96>> <>
-             Base.decode16!(String.slice(@usdc, 2..-1//1), case: :lower)}
+          {:ok, <<32::256, length(assets)::256>> <> Enum.map_join(assets, &address_word/1)}
 
         to, data, hash ->
           calls.(to, data, hash)
-      end
+      end)
     )
   end
 
-  # What the fleet answers for key 12's seed, which it has none of, and for
-  # when its request for a draw was accepted; anything else is zero.
-  defp draw_answer(requested_at) do
+  # The chain as the setup gives it, holding what `chain` says for the
+  # agent's wallet: its ETH, or the chain's answer for its code.
+  defp agent_chain!(chain),
+    do: rewards_answer(fn _to, _data, _hash -> {:ok, <<0::256>>} end, [@usdc], chain)
+
+  # Two scheduled check-ins half an hour apart: the agent's run is scheduled,
+  # confirmed and on time.
+  defp repeating!(agent) do
+    run = %{"kind" => "scheduled", "every_minutes" => 30}
+    {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - interval '30 minutes', counted_scheduled_at = counted_scheduled_at - interval '30 minutes'"
+    )
+
+    {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+  end
+
+  # The agent's dots on the Key's page, each as its state and the words it opens.
+  defp dots(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#key-agent-setup .agent-setup__states > li")
+    |> Enum.map(fn dot ->
+      [state] = LazyHTML.attribute(dot, "data-state")
+      words = dot |> LazyHTML.query(".rg-tip-body") |> LazyHTML.text() |> String.split()
+      {state, Enum.join(words, " ")}
+    end)
+  end
+
+  defp address_word("0x" <> hex), do: <<0::96>> <> Base.decode16!(hex, case: :lower)
+
+  # What the fleet answers for key 12's seed, which it has none of, for when
+  # its request for a draw was accepted, whether that request's wait was
+  # ended, and for its deck, which is set; anything else is zero.
+  defp draw_answer(requested_at, opts \\ []) do
     seed = Call.encode("revealSeed(uint256)", [id(12)])
     requested = Call.encode("revealRequestedAt(uint256)", [id(12)])
+    expired = Call.encode("revealExpired(uint256)", [id(12)])
+    expired? = if Keyword.get(opts, :expired?, false), do: 1, else: 0
+    record = Call.selector("fleet(uint256)")
 
     rewards_answer(fn
       _to, ^seed, _hash -> {:ok, <<0::256>>}
       _to, ^requested, _hash -> {:ok, <<requested_at::256>>}
+      _to, ^expired, _hash -> {:ok, <<expired?::256>>}
+      _to, ^record <> _fleet_id, _hash -> {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
       _to, _data, _hash -> {:ok, <<0::256>>}
     end)
   end

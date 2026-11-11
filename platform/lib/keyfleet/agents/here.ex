@@ -6,15 +6,20 @@ defmodule Keyfleet.Agents.Here do
 
   Two readings come from each pass over a fleet:
 
-    * `fleet_key/1`: "Who's here", the count of agents, the bar's count of
+    * `fleet_key/1`: "Here now", the count of agents, the bar's count of
       the addresses holding a Key and of those online now
       (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
-      the agents as the fleet's directory lists, each with its status line, the id
+      the agents as the fleet's directory lists, each with what its check-ins
+      say (its light, the light's meaning and its two lines, `seen_by/2`), the id
       that names its row and the address of its own picture, or nil when it
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
-      address. The wallet is never written into the page.
-    * `lines_key/2`: the agents' full status lines, for the open Key.
+      address. The wallet is never written into the page. Beside them,
+      `faces`: who holds each of their Keys, the Key they write as and how
+      many of the fleet's Keys they hold (`Keyfleet.Keys.faces/2`), for the city's
+      discs.
+    * `lines_key/2`: what each agent's check-ins say, by wallet, for the open
+      Key.
 
   A Key holds the second only while it has an active shard, and up to as
   many shards as a Key's page lists.
@@ -25,9 +30,9 @@ defmodule Keyfleet.Agents.Here do
   once a second however many arrive. It holds nothing but which fleets are due a
   read, and it never writes the database.
 
-  A status ages with the clock, and a check-in sends no notice, so each minute
+  A status ages with the clock, and a check-in tells only its person's pages, so each minute
   `Keyfleet.SharedReading.Heal` asks for every fleet to be read again. The words
-  ("last check-in 3 minutes ago") are written here with one moment for the
+  ("Seen 3 minutes ago") are written here with one moment for the
   whole pass, never on the page, so a page wakes only when what it shows has
   changed (`ash-frontend`, `references/public-figures.md`).
 
@@ -45,10 +50,20 @@ defmodule Keyfleet.Agents.Here do
 
   @kinds [:fleet_agents, :key_agents]
 
-  @doc "Where \"Who's here\" for `fleet_id` is held."
+  @did %{
+    post: "posted",
+    task: "took a task",
+    submit: "handed in a task",
+    review: "reviewed",
+    workspace: "worked",
+    notebook: "edited a notebook",
+    code: "pushed code"
+  }
+
+  @doc "Where \"Here now\" for `fleet_id` is held."
   def fleet_key(fleet_id), do: {:fleet_agents, fleet_id}
 
-  @doc "Where the full status lines of the agents on one Key are held."
+  @doc "Where what the check-ins of the agents on one Key say is held."
   def lines_key(fleet_id, token_id), do: {:key_agents, "#{fleet_id}:#{token_id}"}
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil)
@@ -66,6 +81,9 @@ defmodule Keyfleet.Agents.Here do
 
   @impl true
   def handle_info({:keys_changed, fleet_id, _token_ids}, due), do: {:noreply, due(due, fleet_id)}
+
+  # Keys marked present change no agent's line here.
+  def handle_info({:keys_present, _fleet_id, _token_ids}, due), do: {:noreply, due}
 
   def handle_info({:shared_reading_heal, _kind}, due),
     do: {:noreply, Enum.reduce(Fleets.catalog_ids(), due, &due(&2, &1))}
@@ -101,15 +119,13 @@ defmodule Keyfleet.Agents.Here do
   defp here(fleet_id, now) do
     agents =
       for profile <- Agents.agents_here!(fleet_id, query: [limit: Directory.agents_shown()]) do
-        {_label, line} = status(List.first(profile.check_ins), now)
-
         %{
           id: profile.id,
           name: profile.name,
           avatar_url: Avatar.url(profile),
           key: profile.key,
           wallet_address: profile.wallet_address,
-          line: line
+          seen: seen(List.first(profile.check_ins), now)
         }
       end
 
@@ -125,7 +141,15 @@ defmodule Keyfleet.Agents.Here do
         {:error, _failure} -> nil
       end
 
-    {:ok, %{here: count, agents: agents, holders: holders}}
+    keys = for %{key: token_id} <- agents, is_integer(token_id), uniq: true, do: token_id
+
+    {:ok,
+     %{
+       here: count,
+       agents: agents,
+       holders: holders,
+       faces: Keys.faces(fleet_id, keys)
+     }}
   rescue
     # The database not answering raises beneath Ash. It is a read not taken,
     # never a reason for this process, and the site with it, to stop.
@@ -151,7 +175,7 @@ defmodule Keyfleet.Agents.Here do
   defp put_key(fleet_id, token_id, shards) do
     SharedReading.put(
       lines_key(fleet_id, token_id),
-      for({wallet, %{line: line}} <- shards, do: {wallet, line})
+      for({wallet, %{} = seen} <- shards, do: {wallet, seen})
     )
   end
 
@@ -180,44 +204,58 @@ defmodule Keyfleet.Agents.Here do
 
   defp agent(nil, _check_ins, _now), do: nil
 
-  defp agent(profile, check_ins, now) do
-    {_label, line} = status(check_ins[profile.id], now)
-    %{line: line}
-  end
+  defp agent(profile, check_ins, now), do: seen(check_ins[profile.id], now)
 
-  # The agent's status label and its full status line.
-  defp status(check_in, now) do
+  @doc """
+  What one agent's check-ins say to a reader: its light, what the light
+  means, and one short line. A member of the fleet reads when the agent was
+  last seen, what it last did and how many times it came back on its own
+  schedule; anyone else reads when it was last active and how many times it
+  came back, since what it did may be in the fleet's own places.
+  """
+  def seen_by(%{members_line: members_line} = seen, true),
+    do: seen |> Map.delete(:members_line) |> Map.put(:line, members_line)
+
+  def seen_by(seen, false), do: Map.delete(seen, :members_line)
+
+  # Both lines are written once for the whole pass; each page picks its
+  # reader's with `seen_by/2`.
+  defp seen(check_in, now) do
     {_status, label} = CheckInStatus.derive(check_in, now)
 
-    {label,
-     line(
-       label,
-       check_in && check_in.last_check_in_at,
-       check_in && check_in.last_contribution_at,
-       check_in && check_in.last_contribution_kind,
-       now
-     )}
+    %{
+      light: CheckInStatus.light(check_in, now),
+      label: label,
+      line: line(check_in, now, &active/2),
+      members_line: line(check_in, now, &last/2)
+    }
   end
 
-  # An agent that never checked in has no times to give.
-  defp line(label, nil, _contribution_at, _kind, _now), do: label
+  defp line(nil, _now, _last), do: "Not seen yet"
 
-  defp line(label, check_in_at, contribution_at, kind, now) do
-    Enum.join(
-      [
-        label,
-        "last check-in #{RegentFormat.relative_time(check_in_at, now)}",
-        contribution(contribution_at, kind, now)
-      ],
-      " · "
-    )
+  defp line(check_in, now, last),
+    do: last.(check_in, now) <> returns(check_in.scheduled_check_ins)
+
+  defp active(check_in, now),
+    do: "Active #{RegentFormat.relative_time(check_in.last_seen_at, now)}"
+
+  # A contribution after the last check-in is when it was seen.
+  defp last(%{last_contribution_at: at, last_seen_at: at} = check_in, now),
+    do: upcase_first(contributed(check_in.last_contribution_kind, at, now))
+
+  defp last(%{last_contribution_at: nil} = check_in, now),
+    do: "Seen #{RegentFormat.relative_time(check_in.last_seen_at, now)}"
+
+  defp last(check_in, now) do
+    "Seen #{RegentFormat.relative_time(check_in.last_seen_at, now)} · " <>
+      contributed(check_in.last_contribution_kind, check_in.last_contribution_at, now)
   end
 
-  defp contribution(nil, _kind, _now), do: "no contributions yet"
+  defp contributed(kind, at, now), do: "#{@did[kind]} #{RegentFormat.relative_time(at, now)}"
 
-  defp contribution(at, kind, now),
-    do: "last contribution #{RegentFormat.relative_time(at, now)} (#{contribution_kind(kind)})"
+  defp returns(0), do: ""
+  defp returns(1), do: " · came back once"
+  defp returns(times), do: " · came back #{times} times"
 
-  defp contribution_kind(:post), do: "a post"
-  defp contribution_kind(:workspace), do: "in the workspace"
+  defp upcase_first(<<first::utf8, rest::binary>>), do: String.upcase(<<first::utf8>>) <> rest
 end

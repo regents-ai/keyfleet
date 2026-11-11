@@ -103,14 +103,12 @@ Count = Annotated[int, Field(ge=0, le=MAX_INT)]
 Version = Annotated[int, Field(ge=1, le=MAX_INT)]
 Epoch = Annotated[int, Field(ge=1, le=MAX_INT)]
 Address = Annotated[str, StringConstraints(pattern=r"^0x[0-9a-f]{40}$")]
-# The whole fleet, or one of a Fibonacci fleet's twenty levels.
-Scope = Annotated[str, StringConstraints(pattern=r"^(fleet|level:([1-9]|1[0-9]|20))$")]
-# Every scope a command could be granted: the fleet and each level.
-MAX_WRITABLE_SCOPES = 21
 Id = Annotated[str, StringConstraints(min_length=1, max_length=128), single_line]
 Name = Annotated[str, StringConstraints(max_length=64), single_line]
 Reason = Annotated[str, StringConstraints(max_length=1000), multi_line]
 Sha256Ref = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
+# A project's name inside its fleet, as the site's addresses use it.
+ProjectName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=32)]
 UtcTimestamp = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$")]
 
 
@@ -135,10 +133,10 @@ class Auth(_Shape):
 class Command(_Shape):
     id: Id
     principal: str
-    # Resolved by the gateway from the acting key and the fleet's sales, never
-    # by the member; see `Keyfleet.Graph.Checks.KeyActor`.
-    writable_scopes: Annotated[list[Scope], Field(max_length=MAX_WRITABLE_SCOPES)]
     auth: Auth
+    # Each of the fleet's projects that is not deleted, with its state, as the
+    # site read it at the write's turn.
+    projects: dict[ProjectName, Literal["active", "archived"]]
 
     @model_validator(mode="after")
     def _principal_names_the_audited_key(self) -> "Command":
@@ -174,7 +172,8 @@ class ChangesBody(_Shape):
 
 class CreateBody(_Shape):
     type: Name
-    scope: Scope
+    # One of the command's active projects; the graph keeps its name.
+    project: ProjectName
     data: dict[str, Any]
 
 class PatchBody(_Shape):
@@ -219,12 +218,17 @@ class SubmitBody(_Shape):
     reason: Optional[Reason] = None
 
 
+class ForkBody(_Shape):
+    id: Id
+
+
 class ReviewBody(_Shape):
     task: Id
     task_version: Version
     decision: str
     rationale: str
     conflicts_of_interest: str
+    reproduction: Optional[str] = None
 
 
 READ_OPS: dict[str, type[_Shape]] = {
@@ -242,4 +246,5 @@ WRITE_OPS: dict[str, type[_Shape]] = {
     "leave": LeaveBody,
     "submit": SubmitBody,
     "review": ReviewBody,
+    "fork": ForkBody,
 }

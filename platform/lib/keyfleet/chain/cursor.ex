@@ -3,24 +3,26 @@ defmodule Keyfleet.Chain.Cursor do
   How far one fleet's key history has been read from the chain, and whether it
   can be trusted right now.
 
-  Base makes a block about every two seconds and nothing here waits for
-  more: ownership is recorded at the head. A later reading that
+  Base makes five blocks a second from Denim (5 November 2026, 18:00 UTC;
+  one every two seconds before it), and nothing here waits for more: ownership is recorded at the head. A later reading that
   disagrees with what was recorded sets `rescan_from` and stops the fleet
   there until an operator has corrected the record by hand.
 
   It also numbers the fleet's proposal and budget records (`proposal_seq`),
-  its key reveals (`reveal_seq`), its ownership epochs (`ownership_seq`) and
-  its shards issued and ended (`shard_seq`).
+  its key reveals and ended draw waits (`reveal_seq`), its ownership epochs
+  (`ownership_seq`) and its shards issued and ended (`shard_seq`).
   """
   use Ash.Resource,
     domain: Keyfleet.Chain,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
-  # Ownership is fresh while the head was read within this many seconds, and
-  # the record reaches to within this many blocks of it (ten minutes of Base).
-  @fresh_seconds 120
-  @fresh_blocks 300
+  # Ownership is fresh while the head was read within this many seconds (one
+  # five-minute turn of `Keyfleet.Chain.ReadFleet` and two retries a minute
+  # apart), and the record reaches to within this many blocks of it (ten
+  # minutes of Base at five blocks a second).
+  @fresh_seconds 420
+  @fresh_blocks 3_000
 
   postgres do
     table "chain_cursors"
@@ -52,6 +54,11 @@ defmodule Keyfleet.Chain.Cursor do
       argument :fleet_id, :string, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id) and fresh?)
       get? true
+    end
+
+    # The fleets stopped at a disagreement until an operator corrects the record.
+    read :stopped do
+      filter expr(not is_nil(rescan_from))
     end
 
     # Starts reading a fleet at its deployment block; an existing cursor is
@@ -146,8 +153,8 @@ defmodule Keyfleet.Chain.Cursor do
       public?: true,
       constraints: [min: 0]
 
-    # The last number given to one of the fleet's key reveals. It is moved only
-    # by `Keyfleet.Chain.take_reveal_seq!/1`.
+    # The last number given to one of the fleet's key reveals or ended draw
+    # waits. It is moved only by `Keyfleet.Chain.take_reveal_seq!/1`.
     attribute :reveal_seq, :integer,
       allow_nil?: false,
       default: 0,

@@ -23,7 +23,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
   alias KeyfleetWeb.{FleetProposals, ProposalsPage}
-  alias RegentChain.{Abi, Call, Event, Outcome, Review}
+  alias RegentChain.{Abi, BuilderCode, Call, Event, Outcome, Review}
 
   @endpoint KeyfleetWeb.Endpoint
 
@@ -39,7 +39,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   @hour 3_600
   @day 86_400
   @eth "0x0000000000000000000000000000000000000000"
-  @money ["pay", "advance", "signature", "launch"]
+  @money ["pay", "launch"]
   @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
   # The site's one-card test deck, every lab fleet's.
   @deck "0xf11579d3bd868d9a111bc512d814d04c0f10beb44fba7f3a92fa26eb67500356"
@@ -123,6 +123,25 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert uint!(url, lab.manager, "totalMinted()") == 3
     end
 
+    test "Unlimited approves once, and every later purchase needs no approval",
+         %{url: url, lab: lab} do
+      send!(url, @second, lab.usdc, Call.encode("mint(address,uint256)", [@second, 100_000_000]))
+
+      built = build!(:buy, @second, inputs: %{"unlimited" => "true"})
+      assert names(built) == ["approve", "buy"]
+      assert pressed(url, built, "approve") == {:ok, :confirmed}
+
+      assert uint!(url, lab.usdc, "allowance(address,address)", [@second, lab.manager]) ==
+               2 ** 256 - 1
+
+      for key <- [3, 4] do
+        built = build!(:buy, @second)
+        assert names(built) == ["buy"]
+        assert pressed(url, built, "buy") == {:ok, :confirmed}
+        assert owner!(url, lab, key) == @second
+      end
+    end
+
     test "an allowance already there leaves only the purchase", %{url: url, lab: lab} do
       built = build!(:buy, @buyer)
       assert names(built) == ["buy"]
@@ -147,8 +166,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   end
 
   describe "being present" do
-    test "every Key at once, for 48 hours; a new Key waits two days; once they lapse, anyone tidies up",
-         %{url: url, lab: lab} do
+    test "every Key at once, for 48 hours; a new Key waits two days", %{url: url} do
       # Keys 1 and 2 have been present on their own since they turned two
       # days old.
       built = build!(:present, @buyer)
@@ -157,7 +175,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert DateTime.after?(until, DateTime.from_unix!(timestamp!(url)))
 
       assert Review.find(built.review, "present").data ==
-               Call.encode("present(uint256[])", [[id(1), id(2)]])
+               BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2)]]))
 
       assert pressed(url, built, "present") == {:ok, :confirmed}
       now = timestamp!(url)
@@ -165,7 +183,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       built = build!(:present, @buyer)
       assert [%{until: until}, %{until: until}] = built.figures.keys
       assert DateTime.to_unix(until) == now + 48 * @hour
-      refute built.figures.maintenance?
 
       # A wallet with no Keys may still press: the chain refuses it.
       stranger = build!(:present, @third)
@@ -184,17 +201,9 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert mixed.figures.blocked == %{}
 
       assert Review.find(mixed.review, "present").data ==
-               Call.encode("present(uint256[])", [[id(1), id(2)]])
+               BuilderCode.append(Call.encode("present(uint256[])", [[id(1), id(2)]]))
 
       assert pressed(url, mixed, "present") == {:ok, :confirmed}
-
-      skip!(url, 49 * @hour)
-      built = build!(:present, @third)
-      assert built.figures.maintenance?
-      assert pressed(url, built, "sweep") == {:ok, :confirmed}
-      refute present?(url, lab, 1)
-      refute present?(url, lab, 2)
-      refute build!(:present, @third).figures.maintenance?
     end
   end
 
@@ -248,8 +257,8 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       {:ok, list, _html} = live(conn, ProposalsPage.list_path(@fleet_id))
 
       assert cards(list) == [
-               {"2", "Cancelled", "0 yes, 0 no, 0 abstain, of 2 Keys counted"},
-               {"1", "Carried out", "2 yes, 0 no, 0 abstain, of 2 Keys counted"}
+               {"2", "Cancelled", "0 yes, 0 no, 0 abstain, 2 not voted, of 2 Keys counted"},
+               {"1", "Carried out", "2 yes, 0 no, 0 abstain, 0 not voted, of 2 Keys counted"}
              ]
 
       {:ok, carried, _html} = live(conn, ProposalsPage.detail_path(@fleet_id, 1))
@@ -284,24 +293,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       approved!(url, %{"kind" => "edits", "target" => "2", "restricted" => "true"})
       assert uint!(url, lab.votes, "editsRestricted(uint256)", [id(2)]) == 1
 
-      signed = lit_digest!(lab.treasury, 1_790_000_000)
-
-      approved!(url, %{
-        "kind" => "signature",
-        "signature" => "approve",
-        "issued_at" => "1790000000"
-      })
-
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 1
-
-      approved!(url, %{
-        "kind" => "signature",
-        "signature" => "revoke",
-        "issued_at" => "1790000000"
-      })
-
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 0
-
       # While a passed payment waits its day, No is the one ballot taken, and
       # here it cancels the payment.
       propose!(url, @buyer, pay)
@@ -321,22 +312,31 @@ defmodule Keyfleet.WalletStepsAnvilTest do
          %{url: url, lab: lab} do
       open_treasury!(url)
 
-      proposed =
-        approved!(url, %{
-          "kind" => "advance",
-          "asset" => lab.usdc,
-          "share" => "40",
-          "recipient" => @third,
-          "text" => "Hosting"
-        })
-
+      # The site makes no advance, but a proposal made on the chain directly
+      # may, and the site carries it out and takes it back like any other.
       usdc = lab.usdc
+      hosting = VoteSteps.content_hash("Hosting")
 
-      assert {:advance, 1, %{address: ^usdc}, @third, 400_000, 40_000_000} =
-               proposed.figures.action
+      advance =
+        Call.encode("advance(uint256,address,address,uint32,bytes32)", [
+          1,
+          @third,
+          usdc,
+          400_000,
+          hosting
+        ])
 
-      assert [@third, ^usdc, 40_000_000, purpose] = advance!(url, lab)
-      assert purpose == VoteSteps.content_hash("Hosting")
+      send!(
+        url,
+        @buyer,
+        lab.votes,
+        Call.encode(@propose, [id(1), hosting, [{lab.treasury, 0, advance}]])
+      )
+
+      scan!()
+      carried_out!(url, true)
+
+      assert [@third, ^usdc, 40_000_000, ^hosting] = advance!(url, lab)
 
       returned = build!(:return_advance, @third, advance_id: 1, inputs: %{"amount" => "15"})
       assert names(returned) == ["approve", "return"]
@@ -450,6 +450,27 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert pressed(url, stranger, "claim-#{@eth}") == {:ok, :reverted}
     end
 
+    test "Claim all pays every Key the wallet holds in one transaction", %{url: url, lab: lab} do
+      split = build!(:run_split, @third)
+      assert pressed(url, split, "run_split") == {:ok, :confirmed}
+      per_key = Enum.find(split.figures.assets, &(&1.asset == lab.usdc)).per_key
+
+      claim = build!(:claim_all, @buyer)
+      assert claim.figures.keys == [1, 2]
+      assert %{amount: owed} = Enum.find(claim.figures.waiting, &(&1.asset == lab.usdc))
+      assert owed == 2 * per_key
+      held = uint!(url, lab.usdc, "balanceOf(address)", [@buyer])
+      assert pressed(url, claim, "claim-#{lab.usdc}") == {:ok, :confirmed}
+      assert uint!(url, lab.usdc, "balanceOf(address)", [@buyer]) == held + owed
+
+      assert build!(:claim_all, @buyer).figures.blocked["claim-#{lab.usdc}"] ==
+               :nothing_to_claim
+
+      stranger = build!(:claim_all, @second)
+      assert stranger.figures.keys == []
+      assert stranger.figures.blocked["claim-#{@eth}"] == :nothing_to_claim
+    end
+
     test "the stakers' share is sent once by anyone; a repeat press finds nothing owed",
          %{url: url, lab: lab} do
       share = build!(:send_share, @third)
@@ -533,7 +554,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
       assert %{to: keys, data: data} = Review.find(built.review, "reveal")
       assert keys == lab.keys
-      assert data == Call.encode("requestReveal(uint256)", [id(2)])
+      assert data == BuilderCode.append(Call.encode("requestReveal(uint256)", [id(2)]))
 
       # Refused again: the press lands, and the Key is offered again.
       send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [true]))
@@ -589,7 +610,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert built.figures.blocked == %{}
       assert %{to: to, data: data} = Review.find(built.review, "club-claim")
       assert to == lab.club_claims
-      assert data == Call.encode("claim(uint256,address)", [1, @second])
+      assert data == BuilderCode.append(Call.encode("claim(uint256,address)", [1, @second]))
       assert pressed(url, built, "club-claim") == {:ok, :confirmed}
 
       key = Fleet.onchain_token_id(club, 1)
@@ -684,17 +705,23 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     built
   end
 
-  # A proposal made, voted yes with Keys 1 and 2, and carried out with its
-  # exact calls once its vote ends; one that moves money waits a day more,
-  # and a press during that day is refused. The steps it was proposed with.
+  # A proposal made and carried out; the steps it was proposed with.
   defp approved!(url, inputs) do
     proposed = propose!(url, @buyer, inputs)
+    carried_out!(url, inputs["kind"] in @money)
+    proposed
+  end
+
+  # The latest proposal, voted yes with Keys 1 and 2, and carried out with its
+  # exact calls once its vote ends; one that moves money waits a day more,
+  # and a press during that day is refused.
+  defp carried_out!(url, money?) do
     number = uint!(url, Fleets.get_fleet!(@fleet_id).votes_address, "proposalCount()")
     assert pressed(url, build!(:ballot, @buyer, proposal: number), "yes") == {:ok, :confirmed}
     skip!(url, @day + 1)
     carry_out = build!(:carry_out, @third, proposal: number)
 
-    if inputs["kind"] in @money do
+    if money? do
       assert %{"carry_out" => {:carry_out_from, from}} = carry_out.figures.blocked
       assert pressed(url, carry_out, "carry_out") == {:ok, :reverted}
       skip!(url, DateTime.to_unix(from) - timestamp!(url))
@@ -704,7 +731,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     assert carry_out.figures.blocked == %{}
     assert pressed(url, carry_out, "carry_out") == {:ok, :confirmed}
     scan!()
-    proposed
   end
 
   # Moves the clock on to when proposals may move the treasury's money.
@@ -749,7 +775,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     |> Enum.map(fn card ->
       {card |> LazyHTML.attribute("data-proposal") |> hd(),
        card |> LazyHTML.query(".proposals-badge") |> words(),
-       card |> LazyHTML.query(".proposals-detail") |> words()}
+       card |> LazyHTML.query(".proposals-share") |> LazyHTML.attribute("title") |> hd()}
     end)
   end
 
@@ -809,8 +835,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
   defp owner!(url, lab, key), do: address!(url, lab.keys, "ownerOf(uint256)", [id(key)])
 
-  defp present?(url, lab, key), do: uint!(url, lab.votes, "isActive(uint256)", [id(key)]) == 1
-
   defp advance!(url, lab),
     do:
       words!(url, lab.treasury, "advances(uint256)", [1], [
@@ -823,29 +847,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp uint!(url, to, signature, arguments \\ []) do
     "0x" <> hex = view!(url, to, signature, arguments)
     String.to_integer(hex, 16)
-  end
-
-  # The digest Lit checks for the treasury's CreateWallet request at
-  # `issued_at`, worked out here from Lit's typed data: domain "Lit
-  # ChainSecured", version 1 and the chain id, no verifying contract.
-  defp lit_digest!(treasury, issued_at) do
-    hash = &ExKeccak.hash_256/1
-
-    domain =
-      hash.(
-        hash.("EIP712Domain(string name,string version,uint256 chainId)") <>
-          hash.("Lit ChainSecured") <> hash.("1") <> <<@chain_id::256>>
-      )
-
-    {:ok, owner} = RegentChain.Address.decode(treasury)
-
-    message =
-      hash.(
-        hash.("CreateWallet(address address,uint256 issuedAt)") <>
-          <<0::96>> <> owner <> <<issued_at::256>>
-      )
-
-    "0x" <> Base.encode16(hash.(<<0x19, 0x01>> <> domain <> message), case: :lower)
   end
 
   defp address!(url, to, signature, arguments \\ []) do

@@ -175,6 +175,34 @@ defmodule Keyfleet.Proposals do
     |> then(fn {proposals, older} -> {proposals, older != []} end)
   end
 
+  @doc """
+  The fleet's proposals a vote can still change at `now`, oldest first, as
+  `status/2` needs them and with their votes: those still open, and those
+  approved and waiting to be carried out.
+  """
+  def votable(fleet_id, now) do
+    Proposal
+    |> Ash.Query.filter(
+      fleet_id == ^fleet_id and execution_expiry > ^DateTime.add(now, 48, :hour)
+    )
+    |> Ash.Query.sort(number: :asc)
+    |> Ash.Query.load([:votes | @summary])
+    |> Ash.read!()
+    |> Enum.filter(&(status(&1, now) in [:open, :waiting]))
+  end
+
+  @doc "The Keys that have cast a ballot on proposal `number` of the fleet."
+  def voted_keys(fleet_id, number) do
+    Proposal
+    |> Ash.Query.filter(fleet_id == ^fleet_id and number == ^number)
+    |> Ash.Query.load(:votes)
+    |> Ash.read_one!()
+    |> case do
+      nil -> []
+      proposal -> Enum.flat_map(proposal.votes, & &1.token_ids)
+    end
+  end
+
   @doc "The fleet's proposals carried out, newest first, with their executions."
   def executed(fleet_id) do
     Proposal
@@ -199,6 +227,14 @@ defmodule Keyfleet.Proposals do
 
   defp below(query, nil), do: query
   defp below(query, number), do: Ash.Query.filter(query, number < ^number)
+
+  @doc """
+  Each Key's vote on `proposal`, `%{yes: token_ids, no: token_ids, abstain:
+  token_ids, silent: token_ids}`, each in token id order: the Keys whose latest
+  vote is yes, no or abstain, and the Keys present when it opened that have not
+  voted.
+  """
+  def key_ballots(proposal), do: Ash.load!(proposal, :key_ballots).key_ballots
 
   @doc """
   The votes on a proposal after its record number `after_seq`, oldest first,

@@ -26,6 +26,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
   @holder %Actors.Human{human_account_id: 1, wallet_addresses: [@wallet]}
   @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
   @page_bytes 512 * 1024
+  # What the agent route adds around a read: the item's page, the posts its
+  # discussion names and its commit (KeyfleetWeb.AgentGraphController).
+  @around %{url: "https://keyfleet.ai/workspace/item", discussion: [], commit: nil}
 
   setup %{tmp_dir: tmp_dir} = context do
     if context[:independent_connections] do
@@ -80,7 +83,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     # A reader sees who asked for each write and what it did; the authority
     # stamp stays in the log.
     for %{type: "keyfleet.command", payload: payload} <- copied[Graph.Event] do
-      assert Enum.sort(Map.keys(payload)) == ~w(events op principal result)
+      assert Enum.sort(Map.keys(payload)) == ~w(command_id events op principal result)
     end
 
     stop_supervised!(Keyfleet.Graph.Projectors)
@@ -382,7 +385,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
     {:ok, read} = Graph.get_object(@fleet, ids.task, actor: @holder)
     assert length(read.relations) == 200
-    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+    assert ContractSchema.errors(Map.merge(read, @around), "WorkspaceObjectView") == []
     # The task's link to the goal came first, so the newest link is left out.
     assert hd(read.relations).target == ids.goal
 
@@ -395,7 +398,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
         actor: @holder
       )
 
-    assert ContractSchema.errors(rest, "WorkspaceObjectView") == []
+    assert ContractSchema.errors(Map.merge(rest, @around), "WorkspaceObjectView") == []
     assert Enum.map(rest.relations, & &1.id) == [links |> List.last() |> elem(1)]
     assert rest.relations_next_cursor == nil
   end
@@ -487,7 +490,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     goal = created!("goal", %{title: "Revenue", outcome: "One paying customer."}, "g-1")
 
     {:ok, %{"head_seq" => head, "result" => %{"id" => task}}} =
-      command("create", %{type: "task", scope: "fleet", data: %{title: "Draft"}}, "t-1")
+      command("create", %{project: "general", type: "task", data: %{title: "Draft"}}, "t-1")
 
     assert Projector.await(@fleet, run_id, head) == head
     created = Graph.read_object!(@fleet, task, actor: @holder)
@@ -505,6 +508,35 @@ defmodule Keyfleet.Graph.ProjectionTest do
     read = Graph.read_object!(@fleet, task, actor: @holder)
     assert {read.changed_seq, read.changed_at} == last_change(task)
     assert read.changed_seq > unlinked
+  end
+
+  # Live on 27 Oct 2026: items copied before projects keep no project in their
+  # `sys`, only in their `project` column, and the copy took that as a deleted
+  # project, so it dropped every change to them, the move into `general` first.
+  test "a change to an item copied before projects is copied, under its project" do
+    start_projector(catch_up_interval: 60_000)
+    run_id = log_id()
+
+    {:ok, %{"head_seq" => head, "result" => %{"id" => goal}}} =
+      command(
+        "create",
+        %{project: "general", type: "goal", data: %{title: "Revenue", outcome: "One customer."}},
+        "g-1"
+      )
+
+    assert Projector.await(@fleet, run_id, head) == head
+
+    Repo.query!(
+      "UPDATE keyfleet_app.graph_objects SET sys = sys - 'project' WHERE fleet_id = $1 AND id = $2",
+      [@fleet, goal]
+    )
+
+    archived = write!("archive", %{id: goal, expected_version: 1}, "a-1")
+    assert Projector.await(@fleet, run_id, archived) == archived
+    read = Graph.read_object!(@fleet, goal, actor: @holder)
+
+    assert {read.version, read.project, read.sys["project"], read.sys["archived"]} ==
+             {2, "general", "general", true}
   end
 
   # The place and time of the latest creation or patch of the object.
@@ -612,13 +644,13 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
   defp created!(type, data, id) do
     {:ok, %{"result" => %{"id" => object_id}}} =
-      command("create", %{type: type, scope: "fleet", data: data}, id)
+      command("create", %{project: "general", type: type, data: data}, id)
 
     object_id
   end
 
   defp note(title, body \\ "Ship it."),
-    do: %{type: "note", scope: "fleet", data: %{title: title, body: body}}
+    do: %{project: "general", type: "note", data: %{title: title, body: body}}
 
   defp write!(op, body, id) do
     {:ok, %{"head_seq" => head}} = command(op, body, id)
@@ -626,7 +658,10 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp command(op, body, id),
-    do: Writer.command(@fleet, op, body, fn _within -> {:ok, stamped(id)} end)
+    do: Writer.command(@fleet, op, body, {__MODULE__, :admit, [id]})
+
+  @doc false
+  def admit(id, _within), do: {:ok, stamped(id)}
 
   defp stamped(id) do
     %{
@@ -641,7 +676,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
       },
-      writable_scopes: ["fleet"]
+      projects: %{"general" => "active"}
     }
   end
 
@@ -783,13 +818,10 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp start_projector(opts),
-    do:
-      start_supervised!(
-        {Keyfleet.Graph.Projectors, [fleets: [@fleet], projection_wait: 30_000] ++ opts}
-      )
+    do: start_supervised!({Keyfleet.Graph.Projectors, [fleets: [@fleet]] ++ opts})
 
   defp writer do
-    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, @fleet)
+    [pid] = :pg.get_members(Keyfleet.Graph.Processes, {Keyfleet.Graph.Writer, @fleet})
     pid
   end
 
@@ -805,5 +837,5 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp places(graph_after_seq),
-    do: %{graph: graph_after_seq, proposals: 0, keys: [], dms: nil, quotes: nil}
+    do: %{graph: graph_after_seq, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil}
 end

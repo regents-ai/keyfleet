@@ -1,44 +1,15 @@
 /**
- * The homepage's moving parts around "Buy Next Key": the hex field behind the
- * hero, with the tiles nearest a mouse standing up out of it, and the next
- * Key's card with its turn, its dust and its shuffle. Each only presents; the
+ * The homepage's moving parts around "Buy Key": the hex field behind the
+ * hero, with the tiles nearest a mouse standing up out of it, and the
+ * Key on offer's card with its turn, its dust and its shuffle. Each only presents; the
  * page is complete and readable before any of it loads, and none of it decides
  * whether the button can be pressed.
  */
 import {animate, createAnimatable, createScope, type AnimatableObject, type JSAnimation, type Scope} from "animejs"
 import {createCanvasIsland, type CanvasIslandController} from "../canvas_island"
-import type {FieldRenderer, Rgb, Tile} from "../home_hero/renderer"
+import type {FieldRenderer, Tile} from "../home_hero/renderer"
 import {EASE_IN_OUT, EASE_OUT, FAST, still} from "./motion/shared"
-
-/** Any colour the page can state, as the three 0..1 sRGB channels a shader takes. */
-let swatch: CanvasRenderingContext2D | undefined
-
-const tone = (root: HTMLElement, property: string): Rgb => {
-  swatch ??= document.createElement("canvas").getContext("2d", {willReadFrequently: true})!
-  const probe = root.ownerDocument.createElement("span")
-  probe.hidden = true
-  probe.style.color = `var(${property})`
-  root.append(probe)
-  const color = getComputedStyle(probe).color
-  probe.remove()
-  swatch.clearRect(0, 0, 1, 1)
-  swatch.fillStyle = color
-  swatch.fillRect(0, 0, 1, 1)
-  const [red = 0, green = 0, blue = 0] = swatch.getImageData(0, 0, 1, 1).data
-  return [red / 255, green / 255, blue / 255]
-}
-
-/** Calls `retone` whenever the page's light or dark changes. */
-const watchTheme = (retone: () => void) => {
-  const scheme = matchMedia("(prefers-color-scheme: dark)")
-  const observer = new MutationObserver(retone)
-  observer.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]})
-  scheme.addEventListener("change", retone)
-  return () => {
-    observer.disconnect()
-    scheme.removeEventListener("change", retone)
-  }
-}
+import {tone, watchTheme} from "../theme_tone"
 
 /** A number the stylesheet states in a custom property. */
 const measure = (el: HTMLElement, property: string) => parseFloat(getComputedStyle(el).getPropertyValue(property)) || 0
@@ -679,7 +650,7 @@ export const NextKeyCard = {
     const onOver = (event: PointerEvent) => {
       if (event.pointerType !== "mouse") return
       const target = event.target as Element
-      point?.(!still(root) && target.closest("[data-key-card], #home-buy-next-key") !== null)
+      point?.(!still(root) && target.closest("[data-key-card], #home-buy-key") !== null)
     }
     const events = new AbortController()
     area.addEventListener("pointermove", onTurn, {signal: events.signal, passive: true})

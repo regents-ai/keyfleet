@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
-  Key ownership, reveals, shards, agent voting, presence and edit
-  restrictions projected from contract events, and which Keys have
+  Key ownership, reveals and ended draw waits, shards, agent voting, presence
+  and edit restrictions projected from contract events, and which Keys have
   their card picture.
   """
   use Ash.Domain
@@ -27,9 +27,14 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :owner_wallets],
         not_found_error?: false
 
+      define :newest_key_change,
+        action: :newest_in_fleet,
+        args: [:fleet_id],
+        not_found_error?: false
+
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
-      define :idle_keys_in_fleet, action: :idle_in_fleet, args: [:fleet_id]
       define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
+      define :keys_held_everywhere, action: :held_everywhere, args: [:owner_wallets]
 
       define :recorded_in_blocks,
         action: :recorded_in_blocks,
@@ -41,6 +46,8 @@ defmodule Keyfleet.Keys do
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
 
+      define :epochs_by_record_seq, action: :by_record_seq, args: [:fleet_id, :record_seqs]
+
       define :lowest_keys_held, action: :lowest_held, args: [:fleet_id, :owner_wallets]
     end
 
@@ -49,6 +56,19 @@ defmodule Keyfleet.Keys do
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
       define :reveals_of_keys, action: :of_keys, args: [:fleet_id, :token_ids]
+    end
+
+    resource Keyfleet.Keys.KeyRevealExpiry do
+      define :record_reveal_expiry, action: :record
+
+      define :get_reveal_expiry,
+        action: :read,
+        get_by: [:fleet_id, :token_id],
+        not_found_error?: false
+
+      define :reveal_expiries_recorded_since,
+        action: :recorded_since,
+        args: [:fleet_id, :after_seq]
     end
 
     resource Keyfleet.Keys.KeyPicture do
@@ -84,6 +104,10 @@ defmodule Keyfleet.Keys do
       define :active_shards_of_keys, action: :active_of_keys, args: [:fleet_id, :token_ids]
       define :active_shards_in_fleet, action: :active_in_fleet, args: [:fleet_id]
       define :keys_with_shards, action: :keys_with_shards, args: [:fleet_id]
+
+      define :shards_issued_by_owner,
+        action: :issued_by_owner,
+        args: [:fleet_id, :token_id, :owner]
     end
 
     resource Keyfleet.Keys.AgentVoting do
@@ -102,6 +126,15 @@ defmodule Keyfleet.Keys do
       define :presences_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+    end
+
+    resource Keyfleet.Keys.PostingKey do
+      define :choose_posting_key, action: :choose, args: [:fleet_id, :token_id]
+      define :posting_key, action: :in_fleet, args: [:fleet_id], not_found_error?: false
+
+      define :posting_keys_of_accounts,
+        action: :of_accounts,
+        args: [:fleet_id, :human_account_ids]
     end
 
     resource Keyfleet.Keys.EditsRestriction do
@@ -169,7 +202,8 @@ defmodule Keyfleet.Keys do
   Where a fleet's pages hear which of its keys have just changed: sold, changed
   hands, revealed, a shard issued or ended, agent voting turned on or off, or
   edits restricted or allowed, as
-  `{:keys_changed, fleet_id, token_ids}`.
+  `{:keys_changed, fleet_id, token_ids}`; and which were just marked present,
+  as `{:keys_present, fleet_id, token_ids}`.
   """
   def topic(fleet_id), do: "fleet:#{fleet_id}:keys"
 
@@ -178,17 +212,19 @@ defmodule Keyfleet.Keys do
   or `nil` when it neither holds one of the fleet's keys nor has a shard of one.
 
   Keys rank by the order they were sold, the first key sold ranking highest. A
-  person is the highest-ranked key their wallets hold, and `wallet` is the one
-  holding it. An agent is the highest-ranked key its wallet holds, or else the
-  highest-ranked key it holds an active shard of, and `wallet` is its own. Everything
-  either writes in the fleet is written as that key.
+  person is the key they chose to write as on the Account page while their
+  wallets hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key
+  their wallets hold, and `wallet` is the one holding it. An agent is the
+  highest-ranked key its wallet holds, or else the highest-ranked key it holds
+  an active shard of, and `wallet` is its own. Everything either writes in the
+  fleet is written as that key.
 
   An agent with neither, paired with a person whose account is here (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
   `for_person: true`: what it writes there is the person's, marked as the
   agent's.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
-    case held_identity_key!(fleet_id, wallets, actor: actor) do
+    case chosen_key(actor, fleet_id) || held_identity_key!(fleet_id, wallets, actor: actor) do
       nil -> nil
       key -> %{token_id: key.token_id, wallet: key.owner_wallet}
     end
@@ -208,6 +244,17 @@ defmodule Keyfleet.Keys do
   end
 
   def identity(_actor, _fleet_id), do: nil
+
+  # The key the person chose to write as, while one of their wallets holds it.
+  defp chosen_key(%Human{wallet_addresses: wallets} = actor, fleet_id) do
+    with %{token_id: token_id} <- posting_key!(fleet_id, actor: actor),
+         %{owner_wallet: owner} = key <- current_key!(fleet_id, token_id, actor: actor),
+         true <- owner in wallets do
+      key
+    else
+      _not_held -> nil
+    end
+  end
 
   defp for_person(%Human{} = person, fleet_id) do
     case identity(person, fleet_id) do
@@ -262,25 +309,43 @@ defmodule Keyfleet.Keys do
   def held_keys(_actor, _fleet_id), do: []
 
   @doc """
-  How many of the fleet's keys have no vote now (see the `idle` calculation of
-  `Keyfleet.Keys.KeyAttachment`), as `{:ok, count}`, or `{:error, failure}`
-  when the database doesn't answer (see `Keyfleet.Count`).
+  Each of `token_ids`' last presence record in the fleet, as `%{token_id =>
+  record}`, or its last one before `{block_number, log_index}`. A Key with none
+  isn't in the map.
   """
-  def count_idle_keys(fleet_id) do
-    Keyfleet.Keys.KeyAttachment
-    |> Ash.Query.for_read(:idle_in_fleet, %{fleet_id: fleet_id})
-    |> Keyfleet.Count.of()
+  def last_presence(fleet_id, token_ids, before \\ nil) do
+    Keyfleet.Keys.Presence
+    |> Ash.Query.filter(fleet_id == ^fleet_id and token_id in ^token_ids)
+    |> presence_before(before)
+    |> Ash.Query.distinct(:token_id)
+    |> Ash.Query.distinct_sort(block_number: :desc, log_index: :desc)
+    |> Ash.read!()
+    |> Map.new(&{&1.token_id, &1})
+  end
+
+  defp presence_before(query, nil), do: query
+
+  defp presence_before(query, {block, log}) do
+    Ash.Query.filter(
+      query,
+      block_number < ^block or (block_number == ^block and log_index < ^log)
+    )
   end
 
   @doc """
-  How many of the fleet's keys have a vote now, the ones a proposal opening
-  now would count, as `{:ok, count}`, or `{:error, failure}` when the database
-  doesn't answer (see `Keyfleet.Count`).
+  How many of the fleet's Keys a proposal opening now would count, and how many
+  of those have a day or less left (see the `present` and `expiring`
+  calculations of `Keyfleet.Keys.KeyAttachment`), as `{:ok, %{present, expiring}}`,
+  or `{:error, failure}` when the database doesn't answer (see `Keyfleet.Count`).
   """
-  def count_present_keys(fleet_id) do
-    Keyfleet.Keys.KeyAttachment
-    |> Ash.Query.for_read(:present_in_fleet, %{fleet_id: fleet_id})
-    |> Keyfleet.Count.of()
+  def presence_counts(fleet_id) do
+    query =
+      Ash.Query.for_read(Keyfleet.Keys.KeyAttachment, :present_in_fleet, %{fleet_id: fleet_id})
+
+    with {:ok, present} <- Keyfleet.Count.of(query),
+         {:ok, expiring} <- query |> Ash.Query.filter(expiring) |> Keyfleet.Count.of() do
+      {:ok, %{present: present, expiring: expiring}}
+    end
   end
 
   @doc """
@@ -334,6 +399,16 @@ defmodule Keyfleet.Keys do
     |> Keyfleet.Repo.all()
   end
 
+  @doc "The id of the Regent account linking `wallet`, as `holders/4` counts it, or nil."
+  def holder_account_id(wallet) do
+    from(linked in subquery(linked_wallets()),
+      where: linked.wallet == ^String.downcase(wallet),
+      select: linked.account_id
+    )
+    # Every address a Regent account links is public, as in holders/4.
+    |> Keyfleet.Repo.one()
+  end
+
   # Every address a Regent account links, lowercase, with the account it
   # belongs to; an address two accounts claim goes to the older one.
   defp linked_wallets do
@@ -383,6 +458,19 @@ defmodule Keyfleet.Keys do
     |> Ash.Query.for_read(:present_in_fleet, %{fleet_id: fleet_id})
     |> Ash.Query.filter(owner_wallet in ^wallets)
     |> Ash.Query.select([:owner_wallet])
+    |> Ash.read!()
+    |> MapSet.new(& &1.owner_wallet)
+  end
+
+  @doc """
+  Which of `wallets` hold a key of the fleet that has no vote now (see the
+  `idle` calculation of `Keyfleet.Keys.KeyAttachment`). A newly sold key
+  waiting for its automatic start is not idle.
+  """
+  def idle_holders(fleet_id, wallets) do
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(:held_in_fleet, %{fleet_id: fleet_id, owner_wallets: wallets})
+    |> Ash.Query.filter(idle)
     |> Ash.read!()
     |> MapSet.new(& &1.owner_wallet)
   end
@@ -449,6 +537,108 @@ defmodule Keyfleet.Keys do
     |> Map.new(fn {wallet, at} -> {wallet, DateTime.from_naive!(at, "Etc/UTC")} end)
   end
 
+  @doc """
+  The holder of each of `token_ids` today and the Key they write as, as
+  `%{token_id => %{holder: holder, face: token_id, owner: wallet, owned:
+  count}}`; a key nobody holds yet is left out. A holder is a Regent account
+  with every address it links, or an address no account links, as `holders/4`
+  counts them. `face` is the key they chose to write as while their wallets
+  hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key their
+  wallets hold, as `identity/2` picks it; `owner` is their main address and
+  `owned` how many of the fleet's keys their addresses hold together.
+  """
+  def faces(_fleet_id, []), do: %{}
+
+  def faces(fleet_id, token_ids) do
+    owners =
+      Keyfleet.Keys.KeyAttachment
+      |> Ash.Query.for_read(:owned_in_fleet, %{fleet_id: fleet_id, token_ids: token_ids})
+      |> Ash.Query.select([:token_id, :owner_wallet])
+      |> Ash.read!()
+      |> Map.new(&{&1.token_id, &1.owner_wallet})
+
+    linked = linked_to(owners |> Map.values() |> Enum.uniq())
+    account_ids = linked |> Map.values() |> Enum.uniq()
+    wallets = account_wallets(account_ids)
+    # Every address of those accounts, not only the ones holding `token_ids`.
+    holders =
+      for {account_id, own} <- wallets, wallet <- own, into: linked, do: {wallet, account_id}
+
+    holder = fn wallet -> holders[wallet] || wallet end
+    addresses = fn holder -> Map.get(wallets, holder, [holder]) end
+
+    held =
+      fleet_id
+      |> keys_held_in_fleet!(
+        owners
+        |> Map.values()
+        |> Enum.map(holder)
+        |> Enum.uniq()
+        |> Enum.flat_map(addresses)
+      )
+      |> Enum.group_by(&holder.(&1.owner_wallet), & &1.token_id)
+
+    chosen = chosen_keys(fleet_id, account_ids)
+    main = main_addresses(account_ids)
+
+    Map.new(owners, fn {token_id, wallet} ->
+      holder = holder.(wallet)
+      keys = Map.get(held, holder, [token_id])
+
+      {token_id,
+       %{
+         holder: holder,
+         face: if(chosen[holder] in keys, do: chosen[holder], else: Enum.min(keys)),
+         owner: main[holder] || wallet,
+         owned: length(keys)
+       }}
+    end)
+  end
+
+  # The account linking each of `wallets`, as `holders/4` counts them; an
+  # address no account links is left out.
+  defp linked_to(wallets) do
+    from(linked in subquery(linked_wallets()),
+      where: linked.wallet in ^wallets,
+      select: {linked.wallet, linked.account_id}
+    )
+    # Every address a Regent account links is public, as in holders/4.
+    |> Keyfleet.Repo.all()
+    |> Map.new()
+  end
+
+  # Every address each of `account_ids` links, as `holders/4` counts them.
+  defp account_wallets([]), do: %{}
+
+  defp account_wallets(account_ids) do
+    from(linked in subquery(linked_wallets()),
+      where: linked.account_id in ^account_ids,
+      select: {linked.account_id, linked.wallet}
+    )
+    # Every address a Regent account links is public, as in holders/4.
+    |> Keyfleet.Repo.all()
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+  end
+
+  # The key each of `account_ids` chose to write as in the fleet. What a
+  # person writes shows it beside their words, so it is no secret.
+  defp chosen_keys(_fleet_id, []), do: %{}
+
+  defp chosen_keys(fleet_id, account_ids) do
+    fleet_id
+    |> posting_keys_of_accounts!(account_ids, actor: %Keyfleet.Actors.System{})
+    |> Map.new(&{&1.human_account_id, &1.token_id})
+  end
+
+  # The main address of each of `account_ids`, as the Member List names them.
+  defp main_addresses([]), do: %{}
+
+  defp main_addresses(account_ids) do
+    account_ids
+    |> Keyfleet.Accounts.accounts_by_ids!(actor: %Keyfleet.Actors.System{})
+    |> Map.new(&{&1.id, &1.wallet_address && String.downcase(&1.wallet_address)})
+  end
+
   # The fleet's keys with their owners today, as `:owned_in_fleet` reads them.
   defp owned(fleet_id) do
     {:ok, query} =
@@ -509,28 +699,9 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  A hundred of the fleet's idle keys by key number, from the start or from
-  `position` (`[after: keyset]`), as `{:ok, page}`, or `{:error, failure}`
-  when the database doesn't answer, which is logged, so the page says it
-  couldn't list them rather than crashing.
-  """
-  def idle_keys_page(fleet_id, position) do
-    with {:error, failure} <- idle_keys_in_fleet(fleet_id, page: position),
-         do: idle_keys_unlisted(fleet_id, failure)
-  rescue
-    failure in [Postgrex.Error, DBConnection.ConnectionError] ->
-      idle_keys_unlisted(fleet_id, failure)
-  end
-
-  defp idle_keys_unlisted(fleet_id, failure) do
-    Logger.warning("Listing the idle keys of #{fleet_id} failed: " <> Exception.message(failure))
-    {:error, failure}
-  end
-
-  @doc """
   The fleet's keys a person's wallets hold: the lowest `shown` of them by
-  number, the lowest of all (who the person is in the fleet, `identity/2`) and
-  how many they hold, as `%{first: token_id, token_ids: token_ids, count: count}`,
+  number, the lowest of all (who the person is in the fleet unless they chose
+  another Key to write as, `identity/2`) and how many they hold, as `%{first: token_id, token_ids: token_ids, count: count}`,
   or `nil` for someone holding none. Reads `shown` keys and a count, however
   many the person holds.
   """

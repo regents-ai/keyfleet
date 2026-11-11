@@ -4,23 +4,42 @@
 #   scripts/deploy.sh production       # keyfleet, from platform/fly.toml
 #   scripts/deploy.sh staging          # keyfleet-staging, from platform/fly.staging.toml
 #
-# It refuses a working tree with any change, and a commit that is not on
-# origin/main, so what runs is always what the repository holds. The build
-# context is the one platform/scripts/build-release-context.sh assembles for
+# It refuses a working tree with any change, a commit that is not on
+# origin/main, and a commit that does not contain what each machine runs, so what
+# runs is always what the repository holds and never takes live work out. The
+# build context is the one platform/scripts/build-release-context.sh assembles for
 # amd64, which Fly runs: `git archive` of this commit's platform/ folder plus the
 # graph host's sealed Python supply, checked against its checksums. Fly's remote
 # builder builds the image from it, labelled with the short commit. Every deploy
 # runs /app/bin/migrate as its release command (platform/README.md, Deployment).
+#
+# The app has two machines (platform/fly.toml). The graph machine, which holds
+# the volume, takes the image first: it stops and starts again, and for those
+# seconds a workspace write answers "try again". The site machine then takes
+# the same image bluegreen, so a page is answered throughout.
+#
+# Releases from this Mac take turns, from any checkout: two of this app at once
+# can leave the two machines on different commits (21 October 2026), and every
+# site shares one production database, where a release briefly doubles a site's
+# connections. The script runs itself again under lockf(1) on the lock every
+# site's deploy takes, waits for any release holding it, and the system lets go
+# of it when the script ends, however it ends.
 set -euo pipefail
 
 case "${1:-}" in
-  production) config="platform/fly.toml" ;;
-  staging) config="platform/fly.staging.toml" ;;
+  production) config="platform/fly.toml" app="keyfleet" ;;
+  staging) config="platform/fly.staging.toml" app="keyfleet-staging" ;;
   *)
     echo "Usage: scripts/deploy.sh production|staging" >&2
     exit 2
     ;;
 esac
+
+lock=/tmp/regent-shared-db-release.lock
+if [[ "${DEPLOY_LOCK:-}" != "$lock" ]]; then
+  echo "==> Deploying to $app (waits for any other release holding $lock)"
+  DEPLOY_LOCK="$lock" exec lockf -k "$lock" bash "$0" "$@"
+fi
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -37,6 +56,17 @@ if ! git merge-base --is-ancestor "$commit" origin/main; then
   exit 1
 fi
 
+# Each machine's image is tagged with the short commit it was built from (the
+# --image-label below). A commit that does not contain every one would take
+# live work back out, which happens when two releases cross: bring this
+# checkout up to origin/main and deploy again.
+for live in $(fly image show --app "$app" --json | jq -r '.[].Tag' | sort -u); do
+  if ! git merge-base --is-ancestor "$live" "$commit"; then
+    echo "Refusing to deploy: ${commit:0:7} does not contain ${live:0:7}, which is live. Update to origin/main first." >&2
+    exit 1
+  fi
+done
+
 workspace="$(mktemp -d)"
 context="$workspace/context"
 
@@ -49,11 +79,21 @@ trap cleanup EXIT
 echo "==> Assembling the build context from commit ${commit:0:7}"
 platform/scripts/build-release-context.sh "$context" amd64
 
-echo "==> Deploying ${commit:0:7} with $config"
+echo "==> Deploying ${commit:0:7} to the graph machine with $config"
 fly deploy "$context" \
   --config "$context/$config" \
   --dockerfile "$context/Dockerfile" \
   --ignorefile "$context/Dockerfile.dockerignore" \
   --remote-only \
   --ha=false \
-  --image-label "${commit:0:7}"
+  --build-arg SOURCE_COMMIT="$commit" \
+  --image-label "${commit:0:7}" \
+  --process-groups graph
+
+echo "==> Deploying ${commit:0:7} to the site machine, bluegreen"
+fly deploy \
+  --config "$context/$config" \
+  --image "registry.fly.io/$app:${commit:0:7}" \
+  --ha=false \
+  --process-groups site \
+  --strategy bluegreen

@@ -1,0 +1,55 @@
+--- a/packages/api/src/log.ts
++++ b/packages/api/src/log.ts
+@@ -2,6 +2,7 @@
+ // core services and adapters can emit the same wide events; re-exported here
+ // for the API's existing call sites.
+ import { logEvent } from '@marimo-hub/core';
++import { storageMetadata } from '@marimo-hub/core/operational-log';
+ 
+ export { logEvent };
+ 
+@@ -111,6 +112,8 @@
+ 	if (e.reason !== undefined) out.reason = e.reason;
+ 	if (e.object !== undefined) out.object = e.object;
+ 	if (e.cause_name !== undefined) out.cause_name = e.cause_name;
++	const storage = storageMetadata(err);
++	if (storage) out.storage = storage;
+ 	// ZodError (duck-typed): surface the failing field paths so a corrupted stored
+ 	// object is identifiable from the log instead of a bare stack.
+ 	if (Array.isArray(e.issues)) {
+--- a/packages/core/src/operationalLog.ts
++++ b/packages/core/src/operationalLog.ts
+@@ -1,3 +1,24 @@
++/**
++ * What an object store said about a failed call (AWS SDK `$metadata`): its HTTP
++ * status, its request ids and how many tries were made. Ids and numbers only, so
++ * safe to log; a store support ticket needs the ids.
++ */
++export function storageMetadata(err: unknown): Record<string, string | number> | undefined {
++	const meta = (err as { $metadata?: Record<string, unknown> } | null)?.$metadata;
++	if (!meta || typeof meta !== 'object') return undefined;
++	const out: Record<string, string | number> = {};
++	for (const [key, field] of [
++		['http_status', meta.httpStatusCode],
++		['request_id', meta.requestId],
++		['extended_request_id', meta.extendedRequestId],
++		['attempts', meta.attempts],
++	] as const) {
++		if (typeof field === 'number' && Number.isFinite(field)) out[key] = field;
++		if (typeof field === 'string' && field.length <= 256) out[key] = field;
++	}
++	return Object.keys(out).length > 0 ? out : undefined;
++}
++
+ function safeError(err: unknown): Record<string, unknown> {
+ 	if (!(err instanceof Error)) return { name: `non-error(${typeof err})` };
+ 	const value = err as Error & {
+@@ -32,6 +53,8 @@
+ 			code: typeof issue.code === 'string' ? issue.code : undefined,
+ 		}));
+ 	}
++	const storage = storageMetadata(err);
++	if (storage) out.storage = storage;
+ 	return out;
+ }
+ 

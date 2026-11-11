@@ -2,7 +2,8 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
   @moduledoc """
   Holds each key to 300 posts an hour that people write themselves, and each
   agent to 300 an hour as each key it writes as, across the fleet's rooms and
-  keys' threads.
+  keys' threads. Someone writing as no key, in the People and agents room, is
+  held to the same from each wallet.
 
   People post from the page and its tools, which the API's per-address limit
   doesn't reach. Their posts are counted from the ones stored in the last
@@ -22,8 +23,6 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
   back, never refused.
   """
   use Ash.Resource.Change
-
-  require Ash.Query
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Limits
@@ -55,20 +54,16 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
 
   defp limit_person(changeset, actor) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
-    token_id = Ash.Changeset.get_attribute(changeset, :as_key)
+    {read, args, poster} = poster(changeset, fleet_id)
 
     Keyfleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-      Jason.encode!(["page_posts", fleet_id, token_id])
+      Jason.encode!(["page_posts", fleet_id, poster])
     ])
 
-    # The 300th newest post of the hour: while there is one, the key is at
-    # its limit until that post is an hour old.
+    # The 300th newest post of the hour: while there is one, the key or the
+    # wallet is at its limit until that post is an hour old.
     case Message
-         |> Ash.Query.for_read(
-           :page_posts_last_hour,
-           %{fleet_id: fleet_id, token_id: token_id},
-           actor: %System{}
-         )
+         |> Ash.Query.for_read(read, args, actor: %System{})
          |> Ash.Query.offset(@limit - 1)
          |> Ash.Query.limit(1)
          |> Ash.read!() do
@@ -78,6 +73,19 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
       [%Message{inserted_at: oldest}] ->
         seconds = DateTime.diff(DateTime.add(oldest, @hour), DateTime.utc_now(), :second)
         refuse(changeset, actor, max(seconds, 1))
+    end
+  end
+
+  # Whose posts are counted: the key the person writes as, or the wallet of
+  # someone writing as no key.
+  defp poster(changeset, fleet_id) do
+    case Ash.Changeset.get_attribute(changeset, :as_key) do
+      nil ->
+        wallet = Ash.Changeset.get_attribute(changeset, :author_wallet)
+        {:keyless_posts_last_hour, %{fleet_id: fleet_id, wallet: wallet}, wallet}
+
+      token_id ->
+        {:page_posts_last_hour, %{fleet_id: fleet_id, token_id: token_id}, token_id}
     end
   end
 

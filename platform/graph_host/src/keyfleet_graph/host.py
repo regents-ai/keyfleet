@@ -10,6 +10,10 @@ it and `Runtime.load` rebuilds memory from what is durable.
 
 Refusals are decided before the transaction begins, write nothing and are
 not remembered; each is a pure function of the request and the current state.
+
+Each command carries the fleet's projects as the site read them at the
+write's turn. A write goes only into an active project, and an object of a
+project the command does not list, one the site deleted, is not found.
 """
 
 import hashlib
@@ -26,6 +30,7 @@ from pydantic_core import from_json
 
 from keyfleet_graph import protocol
 from keyfleet_graph.pack import (
+    GENERAL,
     MAX_JOINED,
     MAX_STARTING,
     MEMBER_MODELS,
@@ -45,6 +50,9 @@ GATEWAY_ACTOR = "keyfleet:gateway"
 # The name on the writes that keep a workspace's starting goals as the site
 # lists them.
 STARTING_ACTOR = "keyfleet:starting_goals"
+# The name on the writes that put a workspace's items made before projects
+# into `general`. The release after the one that adds projects removes them.
+PROJECTS_ACTOR = "keyfleet:projects"
 # A `changes` page stops at this many bytes of encoded events, or after the
 # first event when that one alone is larger.
 CHANGES_PAGE_BYTES = 512 * 1024
@@ -103,6 +111,7 @@ class Host:
         with self._transaction():
             self.log_id = self._log_id()
             self.runtime.load_pack(PACK)
+            self._into_general()
             self._keep_starting_goals(starting_goals)
             self._settle()
         self._ledger = {
@@ -199,13 +208,12 @@ class Host:
     # ---------- planners: every check, then the closure that writes ----------
 
     def _plan_create(self, command: Command, body: protocol.CreateBody) -> Callable[[Reactions], dict]:
+        _check_active(command, body.project)
         member = MEMBER_MODELS.get(body.type)
         if member is None:
             raise _invalid("type", f"unknown object type {body.type!r}")
-        if body.scope not in command.writable_scopes:
-            raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": body.scope})
-        _check_fields(member, body.data.keys(), body.data, command)
-        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.scope)})
+        _check_fields(member, body.data.keys(), body.data, command, None)
+        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.project)})
 
         def apply(reactions: Reactions) -> dict:
             obj = self.graph.add_object(body.type, record, actor=command.principal)
@@ -214,11 +222,12 @@ class Host:
         return apply
 
     def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[Reactions], dict]:
-        obj = self._editable(body.id)
+        obj = self._editable(command, body.id)
+        _check_active(command, _project(obj))
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
-        _check_scope(command, obj)
-        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command)
+        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command, obj)
+        _check_owner(obj, command, taking=_taking(obj, body, command))
         merged = {**obj.data, **body.set}
         for field in body.unset:
             merged.pop(field, None)
@@ -240,10 +249,11 @@ class Host:
         return apply
 
     def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
-        obj = self._editable(body.id)
+        obj = self._editable(command, body.id)
+        _check_active(command, _project(obj))
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
-        _check_scope(command, obj)
+        _check_archiver(obj, command)
         archived = {**obj.data["sys"], "archived": True}
 
         def apply(reactions: Reactions) -> dict:
@@ -255,9 +265,9 @@ class Host:
         return apply
 
     def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[Reactions], dict]:
-        source = self._live(body.source, "source")
-        target = self._live(body.target, "target")
-        _check_scope(command, source, target)
+        source = self._live(command, body.source, "source")
+        target = self._live(command, body.target, "target")
+        _check_active(command, _project(source))
         endpoints = RELATION_ENDPOINTS.get(body.type)
         if endpoints is None:
             raise _invalid("type", f"unknown relation type {body.type!r}")
@@ -266,6 +276,7 @@ class Host:
             raise _invalid("type", f"{body.type} cannot link a {source.type} to a {target.type}")
         if body.type == "depends_on" and source.id == target.id:
             raise _invalid("target", "an object cannot depend on itself")
+        _check_owner(source, command)
         data = _validate(RelationData, {"note": body.note}, exclude_none=True)
 
         def apply(reactions: Reactions) -> dict:
@@ -285,8 +296,12 @@ class Host:
             raise Refusal("not_found", "no such relation", {"id": body.relation_id})
         if rel.type == "reviews":
             raise _invalid("relation_id", "a review stays linked to the task it judged")
+        if rel.type == "forks":
+            raise _invalid("relation_id", "a fork stays linked to the task it was copied from")
+        source = self._object(command, rel.source, "relation_id")
+        _check_active(command, _project(source))
+        _check_owner(source, command)
         target = self.graph.get_object(rel.target)
-        _check_scope(command, self.graph.get_object(rel.source), target)
 
         def apply(reactions: Reactions) -> dict:
             self.graph.remove_relation(rel.id, actor=command.principal)
@@ -297,8 +312,7 @@ class Host:
         return apply
 
     def _plan_join(self, command: Command, body: protocol.JoinBody) -> Callable[[Reactions], dict]:
-        goal = self._goal(body.id)
-        _check_scope(command, goal)
+        goal = self._goal(command, body.id)
         member = _member(command)
         recorded = goal.data["sys"].get("joined", [])
         joined = _unlapsed(recorded, member)
@@ -311,8 +325,7 @@ class Host:
         return self._rejoined(command, goal, [*joined, member])
 
     def _plan_leave(self, command: Command, body: protocol.LeaveBody) -> Callable[[Reactions], dict]:
-        goal = self._goal(body.id)
-        _check_scope(command, goal)
+        goal = self._goal(command, body.id)
         member = _member(command)
         recorded = goal.data["sys"].get("joined", [])
         joined = [entry for entry in _unlapsed(recorded, member) if not _same_member(entry, member)]
@@ -333,30 +346,24 @@ class Host:
     def _plan_submit(self, command: Command, body: protocol.SubmitBody) -> Callable[[Reactions], dict]:
         """Marks a task done for review, with its result and the evidence it rests on, in one write.
 
-        The task becomes the acting Key's; one taken by another Key is refused.
+        The task becomes the acting Key's; one held by another Key is refused.
         Each evidence item is linked as something the task `produces`. A
         submission is only a claim: whether the work is accepted is for its
         reviews to say.
         """
-        task = self._task(body.id, "id")
+        task = self._task(command, body.id, "id")
+        _check_active(command, _project(task))
         _check_version(task, body.expected_version)
-        _check_scope(command, task)
         key = command.auth.key.token_id
-        if task.data.get("assignee_key") not in (None, key):
-            raise Refusal(
-                "forbidden_field",
-                "the task is taken by another Key",
-                {"fields": ["assignee_key"], "assignee_key": task.data["assignee_key"]},
-            )
+        _check_holder(task, key, key)
         evidence = list(dict.fromkeys(body.evidence))
         if body.result_ref is None and not evidence:
             raise _invalid("evidence", "a submission names its result, its evidence or both")
         produced = []
         for index, item_id in enumerate(evidence):
-            item = self._live(item_id, f"evidence.{index}")
+            item = self._live(command, item_id, f"evidence.{index}")
             if item.type not in RELATION_ENDPOINTS["produces"][1]:
                 raise _invalid(f"evidence.{index}", f"a task cannot produce a {item.type}")
-            _check_scope(command, item)
             produced.append(item)
         submitted = {**_member(command), "version": task.version + 1, "evidence": evidence}
         merged = {
@@ -386,14 +393,15 @@ class Host:
     def _plan_review(self, command: Command, body: protocol.ReviewBody) -> Callable[[Reactions], dict]:
         """Records one member's decision on the task version they read.
 
-        A review binds itself to that version, to who submitted it and to each
-        piece of its evidence as it then stood. The Key or wallet that submitted
+        A review binds itself to that version, to who submitted it, to each
+        piece of its evidence as it then stood and to the commit the task then
+        named; it may say whether the reviewer reproduced the work from it. The Key or wallet that submitted
         the task cannot review it, and a Key reviews each version once. Whether
         two different Keys belong to different people is not something the
         graph knows, so a review never claims it.
         """
-        task = self._task(body.task, "task")
-        _check_scope(command, task)
+        task = self._task(command, body.task, "task")
+        _check_active(command, _project(task))
         submitted = task.data["sys"].get("submitted")
         if task.data["progress"] != "done" or submitted is None:
             raise _invalid("task", "the task has not been submitted for review")
@@ -415,16 +423,19 @@ class Host:
             "task_version": task.version,
             "submitted_by": submitted_by,
             "evidence": [
-                {"id": item_id, "version": self._object(item_id, "evidence").version}
+                {"id": item_id, "version": self._object(command, item_id, "evidence").version}
                 for item_id in submitted["evidence"]
             ],
+            "commit_ref": task.data.get("commit_ref"),
         }
         member = {
             "decision": body.decision,
             "rationale": body.rationale,
             "conflicts_of_interest": body.conflicts_of_interest,
+            "reproduction": body.reproduction,
         }
-        sys = {**_sys(command, task.data["sys"]["scope"]), "review": receipt}
+        # A review belongs to the project of the task it judged.
+        sys = {**_sys(command, _project(task)), "review": receipt}
         record = _validate(RECORD_MODELS["review"], {**member, "sys": sys})
 
         def apply(reactions: Reactions) -> dict:
@@ -433,6 +444,54 @@ class Host:
             return {"id": review.id, "version": review.version}
 
         return apply
+
+    def _plan_fork(self, command: Command, body: protocol.ForkBody) -> Callable[[Reactions], dict]:
+        """Copies a task for the acting Key to work on, in progress and theirs.
+
+        The fork stays in the task's project and keeps its title, deliverable, acceptance criteria and discussion, implements
+        the same goals and services, and links to the task with `forks`. The
+        task forked is left as it was, its holder included: forking is how a
+        member works on a task another Key holds.
+        """
+        task = self._task(command, body.id, "id")
+        _check_active(command, _project(task))
+        copied = {field: task.data[field] for field in ("title", "deliverable", "acceptance_criteria", "discussion") if task.data.get(field)}
+        member = {**copied, "assignee_key": command.auth.key.token_id, "progress": "doing"}
+        record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command, _project(task))})
+        implements = [
+            target.id
+            for rel in self.graph.relations(source=task.id, type="implements")
+            if _project(target := self.graph.get_object(rel.target)) in command.projects
+            and not target.data["sys"]["archived"]
+        ]
+
+        def apply(reactions: Reactions) -> dict:
+            fork = self.graph.add_object("task", record, actor=command.principal)
+            self.graph.add_relation(fork.id, task.id, "forks", {}, actor=command.principal)
+            for target in implements:
+                self.graph.add_relation(fork.id, target, "implements", {}, actor=command.principal)
+            return {"id": fork.id, "version": fork.version}
+
+        return apply
+
+    # ---------- projects ----------
+
+    def _into_general(self) -> None:
+        """Puts every item made before projects into `general`, once.
+
+        Each such item is rewritten whole by one replace: its `sys` names
+        `general` in place of its scope, and a goal or task loses the public
+        summary the pack no longer has. The release after the one that adds
+        projects removes this step.
+        """
+        for obj in self.graph.objects():
+            if "project" in obj.data["sys"]:
+                continue
+            sys = {field: value for field, value in obj.data["sys"].items() if field != "scope"}
+            data = {field: value for field, value in obj.data.items() if field != "public_summary"}
+            record = _validate(RECORD_MODELS[obj.type], {**data, "sys": {**sys, "project": GENERAL}})
+            patch = self.graph.propose_patch(obj.id, "replace", record, proposed_by=PROJECTS_ACTOR)
+            self.graph.apply_patch(patch.id, approved_by=PROJECTS_ACTOR)
 
     # ---------- starting goals ----------
 
@@ -451,7 +510,7 @@ class Host:
         for number, goal in reversed(list(enumerate(goals, start=1))):
             obj = held.get(number)
             if obj is None:
-                sys = {"scope": "fleet", "created_by": None, "starting": number, "archived": False}
+                sys = {"project": GENERAL, "created_by": None, "starting": number, "archived": False}
                 record = _validate(RECORD_MODELS["goal"], {**goal.model_dump(), "sys": sys})
                 self.graph.add_object("goal", record, actor=STARTING_ACTOR)
                 continue
@@ -468,33 +527,36 @@ class Host:
 
     # ---------- state helpers ----------
 
-    def _goal(self, object_id: str):
-        goal = self._live(object_id, "id")
+    def _goal(self, command: Command, object_id: str):
+        goal = self._live(command, object_id, "id")
         if goal.type != "goal":
             raise _invalid("id", f"only a goal can be joined, not a {goal.type}")
+        _check_active(command, _project(goal))
         return goal
 
-    def _object(self, object_id: str, path: str):
+    # An object of a project the command does not list belongs to a deleted
+    # project, and is not found.
+    def _object(self, command: Command, object_id: str, path: str):
         obj = self.graph.get_object(object_id)
-        if obj is None:
+        if obj is None or _project(obj) not in command.projects:
             raise Refusal("not_found", f"no such object ({path})", {"id": object_id})
         return obj
 
-    def _live(self, object_id: str, path: str):
-        obj = self._object(object_id, path)
+    def _live(self, command: Command, object_id: str, path: str):
+        obj = self._object(command, object_id, path)
         if obj.data["sys"]["archived"]:
             raise _invalid(path, "the object is archived")
         return obj
 
-    def _task(self, object_id: str, path: str):
-        obj = self._live(object_id, path)
+    def _task(self, command: Command, object_id: str, path: str):
+        obj = self._live(command, object_id, path)
         if obj.type != "task":
             raise _invalid(path, "the object is not a task")
         return obj
 
     # Reviews are written once and stay as written.
-    def _editable(self, object_id: str):
-        obj = self._live(object_id, "id")
+    def _editable(self, command: Command, object_id: str):
+        obj = self._live(command, object_id, "id")
         if obj.type == "review":
             raise _invalid("id", "a review cannot be changed")
         return obj
@@ -584,6 +646,7 @@ _PLANNERS = {
     "leave": Host._plan_leave,
     "submit": Host._plan_submit,
     "review": Host._plan_review,
+    "fork": Host._plan_fork,
 }
 
 
@@ -666,33 +729,113 @@ def _check_not_starting(obj) -> None:
         raise _invalid("id", "a starting goal stays as it is: join it, or link work to it")
 
 
-def _check_scope(command: Command, *objects) -> None:
-    for obj in objects:
-        scope = obj.data["sys"]["scope"]
-        if scope not in command.writable_scopes:
-            raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": scope})
 
-
-def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command) -> None:
+def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command, current) -> None:
     unknown = sorted(field for field in fields if field not in member.model_fields)
     if unknown:
-        raise Refusal("forbidden_field", "these fields are not member-writable", {"fields": unknown})
+        raise Refusal(
+            "forbidden_field",
+            "this kind of item has no such fields",
+            {"fields": unknown, "allowed": sorted(member.model_fields)},
+        )
     if "result_ref" in fields or values.get("progress") == "done":
         raise Refusal(
             "forbidden_field",
             "a task is marked done, with its result, only by submitting it",
             {"fields": sorted({"result_ref", "progress"} & set(fields))},
         )
-    if values.get("assignee_key") not in (None, command.auth.key.token_id):
+    if "assignee_key" in fields:
+        _check_holder(current, values.get("assignee_key"), command.auth.key.token_id)
+
+
+# A member takes an untaken task by setting it to their own Key. Only the Key
+# holding a task gives it to another Key or drops it; a task another Key holds
+# can be forked instead.
+def _check_holder(task, assignee: Optional[int], key: int) -> None:
+    holder = task.data.get("assignee_key") if task else None
+    if holder not in (None, key):
         raise Refusal(
             "forbidden_field",
-            "a task may be assigned only to the acting Key, or cleared",
+            "the task is held by another Key: only its holder gives it away or drops it, so fork it instead",
+            {"fields": ["assignee_key"], "assignee_key": holder},
+        )
+    if holder is None and assignee not in (None, key):
+        raise Refusal(
+            "forbidden_field",
+            "an untaken task is taken only by the acting Key",
             {"fields": ["assignee_key"]},
         )
 
 
-def _sys(command: Command, scope: str) -> dict[str, Any]:
-    return {"scope": scope, "created_by": _member(command), "archived": False}
+# An item belongs to the Key holding it, for a held task, and otherwise to the
+# Key that created it. Only its owner changes it or links from it; anyone else
+# forks it, or links their own item to it. The one change anyone may make is
+# taking an untaken task as their own.
+def _owner(obj) -> Optional[int]:
+    holder = obj.data.get("assignee_key") if obj.type == "task" else None
+    return _creator(obj) if holder is None else holder
+
+
+def _creator(obj) -> Optional[int]:
+    created_by = obj.data["sys"]["created_by"]
+    return None if created_by is None else created_by["key"]["token_id"]
+
+
+def _taking(obj, body: protocol.PatchBody, command: Command) -> bool:
+    return (
+        obj.type == "task"
+        and obj.data.get("assignee_key") is None
+        and set(body.set) == {"assignee_key"}
+        and not body.unset
+        and body.set["assignee_key"] == command.auth.key.token_id
+    )
+
+
+def _check_owner(obj, command: Command, *, taking: bool = False) -> None:
+    owner = _owner(obj)
+    if owner != command.auth.key.token_id and not taking:
+        raise Refusal(
+            "not_owner",
+            "only the Key this belongs to changes it or links from it: fork it, or link your own item to it",
+            {"id": obj.id, "owner_key": owner},
+        )
+
+
+# Archiving takes an item away from everyone, so only the Key that created it
+# archives it, and a task only once no other Key holds it.
+def _check_archiver(obj, command: Command) -> None:
+    key = command.auth.key.token_id
+    holder = obj.data.get("assignee_key") if obj.type == "task" else None
+    if _creator(obj) != key or holder not in (None, key):
+        raise Refusal(
+            "not_owner",
+            "only the Key that created this archives it, once no other Key holds it: fork it instead",
+            {"id": obj.id, "owner_key": _owner(obj)},
+        )
+
+
+def _project(obj) -> str:
+    return obj.data["sys"]["project"]
+
+
+def _check_active(command: Command, project: str) -> None:
+    """New work goes only into an active project; a refusal names the active ones."""
+    state = command.projects.get(project)
+    if state == "active":
+        return
+    active = sorted(name for name, held in command.projects.items() if held == "active")
+    if active:
+        where = f"New work goes into an active project: {', '.join(active)}."
+    else:
+        where = "No project is active; a Key starts one or takes one over."
+    details = {"project": project, "active": active}
+    if state is None:
+        raise Refusal("project_unknown", f"This fleet has no project named {project}. {where}", details)
+    raise Refusal("project_archived", f"{project} is archived. {where}", details)
+
+
+def _sys(command: Command, project: str) -> dict[str, Any]:
+    return {"project": project, "created_by": _member(command), "archived": False}
 
 
 def _member(command: Command) -> dict[str, Any]:

@@ -55,24 +55,50 @@ defmodule Keyfleet.DmsTest do
              Dms.changes(@fleet, %{}, human("b"))
   end
 
-  test "deleting a conversation removes its messages for both sides" do
+  test "deleting a conversation takes it from the deleting side only" do
     send!(human("a"), 1, 2, "Hello")
     send!(human("b"), 2, 1, "Hi")
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Dms.inbox_topic(@fleet, 1))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Dms.inbox_topic(@fleet, 2))
 
     conversation = Dms.get_conversation!(@fleet, 2, 1, actor: human("b"))
-    :ok = Dms.delete_conversation(conversation, actor: human("b"))
+    {:ok, _cleared} = Dms.delete_conversation(conversation, 2, actor: human("b"))
     conversation_id = conversation.id
 
     assert_receive %Phoenix.Socket.Broadcast{
+      topic: "dms:#{@fleet}:2",
       event: "dm_deleted",
       payload: %{conversation_id: ^conversation_id}
     }
 
-    for {person, token_id} <- [{"a", 1}, {"b", 2}] do
-      assert Dms.inbox!(@fleet, token_id, actor: human(person)) == []
-      assert Dms.read_conversation!(@fleet, token_id, 3 - token_id, actor: human(person)) == []
-    end
+    refute_receive %Phoenix.Socket.Broadcast{topic: "dms:#{@fleet}:1", event: "dm_deleted"}
+
+    assert Dms.inbox!(@fleet, 2, actor: human("b")) == []
+    assert Dms.read_conversation!(@fleet, 2, 1, actor: human("b")) == []
+    assert {:ok, %{messages: []}} = Dms.changes(@fleet, %{}, human("b"))
+
+    assert [%{last_body: "Hi"}] = Dms.inbox!(@fleet, 1, actor: human("a"))
+
+    assert ["Hello", "Hi"] =
+             Enum.map(Dms.read_conversation!(@fleet, 1, 2, actor: human("a")), & &1.body)
+
+    send!(human("a"), 1, 2, "Still there?")
+
+    assert [%{body: "Still there?"}] = Dms.read_conversation!(@fleet, 2, 1, actor: human("b"))
+    assert [%{last_body: "Still there?"}] = Dms.inbox!(@fleet, 2, actor: human("b"))
+  end
+
+  test "a Key can't delete a conversation for a Key it doesn't hold" do
+    send!(human("a"), 1, 2, "Hello")
+    conversation = Dms.get_conversation!(@fleet, 1, 2, actor: human("a"))
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Dms.delete_conversation(conversation, 2, actor: human("a"))
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Dms.set_auto_delete(conversation, 2, 1, actor: human("a"))
+
+    assert [%{body: "Hello"}] = Dms.read_conversation!(@fleet, 2, 1, actor: human("b"))
   end
 
   test "a Key's 301st message in an hour is refused" do
@@ -188,22 +214,48 @@ defmodule Keyfleet.DmsTest do
              Dms.changes(@fleet, Map.new(keys, &{&1.token_id, &1.cursor}), runner)
   end
 
-  test "the hourly job removes messages past their conversation's auto-delete days" do
+  test "auto-delete days drop old messages from the side that set them only" do
+    %{seq: seq} = send!(human("a"), 1, 2, "Old")
+    conversation = Dms.get_conversation!(@fleet, 1, 2, actor: human("a"))
+
+    assert %{auto_delete_days: 1, last_seq: ^seq} =
+             Dms.set_auto_delete!(conversation, 1, 1, actor: human("a"))
+
+    assert [%{auto_delete_days: nil}] = Dms.inbox!(@fleet, 2, actor: human("b"))
+
+    age_messages!()
+    send!(human("a"), 1, 2, "New")
+    remove_expired!()
+
+    assert [%{body: "New"}] = Dms.read_conversation!(@fleet, 1, 2, actor: human("a"))
+
+    assert ["Old", "New"] =
+             Enum.map(Dms.read_conversation!(@fleet, 2, 1, actor: human("b")), & &1.body)
+  end
+
+  test "the hourly job removes a message once neither side keeps it" do
     send!(human("a"), 1, 2, "Old")
     conversation = Dms.get_conversation!(@fleet, 1, 2, actor: human("a"))
-    Dms.set_auto_delete!(conversation, 1, actor: human("a"))
-
-    Repo.query!(
-      "UPDATE keyfleet_app.dm_messages SET inserted_at = inserted_at - interval '2 days'"
-    )
-
+    Dms.set_auto_delete!(conversation, 1, 1, actor: human("a"))
+    age_messages!()
     send!(human("a"), 1, 2, "New")
+    {:ok, _cleared} = Dms.delete_conversation(conversation, 2, actor: human("b"))
+    remove_expired!()
 
+    assert ["New"] =
+             Enum.map(Repo.query!("SELECT body FROM keyfleet_app.dm_messages").rows, &hd/1)
+  end
+
+  defp age_messages!,
+    do:
+      Repo.query!(
+        "UPDATE keyfleet_app.dm_messages SET inserted_at = inserted_at - interval '2 days'"
+      )
+
+  defp remove_expired! do
     Keyfleet.Dms.Message
     |> Ash.ActionInput.for_action(:remove_expired, %{}, actor: %Actors.System{})
     |> Ash.run_action!()
-
-    assert [%{body: "New"}] = Dms.read_conversation!(@fleet, 1, 2, actor: human("a"))
   end
 
   defp send!(actor, from, to, body) do

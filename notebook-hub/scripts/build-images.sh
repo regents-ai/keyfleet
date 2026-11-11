@@ -2,7 +2,8 @@
 # Builds the three local images from the pinned marimohub source:
 #   keyfleet/marimo-sandbox:<pin>  marimohub's sandbox image (runner base)
 #   keyfleet/notebook-runner:<pin> the runner machine image
-#   keyfleet/notebook-hub:<pin>    the hub image
+#   keyfleet/notebook-hub:<pin>-<patches> the hub image; <patches> names the
+#                                  marimohub patches it carries
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,6 +11,7 @@ work="$("$here/scripts/workspace.sh" | tail -n 1)"
 # shellcheck source=../marimohub/pin.env
 source "$here/marimohub/pin.env"
 tag="${MARIMOHUB_COMMIT:0:7}"
+hub_tag="$tag-$(cat "$here"/marimohub/*.patch | shasum -a 256 | cut -c1-7)"
 
 docker build \
   --build-context notebook_bridge="$work/packages/notebook-bridge" \
@@ -25,6 +27,7 @@ docker build \
 docker build \
   --build-arg "MARIMOHUB_REPO=$MARIMOHUB_REPO" \
   --build-arg "MARIMOHUB_COMMIT=$MARIMOHUB_COMMIT" \
-  -t "keyfleet/notebook-hub:$tag" \
+  -t "keyfleet/notebook-hub:$hub_tag" \
   -f "$here/hub/Dockerfile" \
   "$here"
+echo "hub image: keyfleet/notebook-hub:$hub_tag"

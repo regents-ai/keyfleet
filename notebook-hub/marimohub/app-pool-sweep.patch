@@ -1,0 +1,102 @@
+diff --git a/packages/api/src/appPools.ts b/packages/api/src/appPools.ts
+--- a/packages/api/src/appPools.ts
++++ b/packages/api/src/appPools.ts
+@@ -1,5 +1,8 @@
+ import {
+ 	AppPoolService,
++	AppPoolStore,
++	BUCKET_SCAN_CONCURRENCY,
++	mapWithConcurrency,
+ 	logOperationalError,
+ 	kernelActiveConnections,
+ 	localKernelBasePath,
+@@ -30,15 +33,22 @@
+ 		persistWorkspace: deps.sandbox.persistWorkspace,
+ 		workdir: deps.sandbox.workdir,
+ 	});
++	const store = new AppPoolStore(deps.bucket, deps.metrics);
+ 	let cursor: string | undefined;
+ 	do {
+ 		const page = await deps.bucket.list({ prefix: '_system/app-pools/', cursor });
+-		for (const object of page.objects) {
++		// Pools are independent, so a project with thousands of deleted notebooks
++		// still finishes inside the loop deadline.
++		await mapWithConcurrency(page.objects, BUCKET_SCAN_CONCURRENCY, async (object) => {
+ 			const match = /^_system\/app-pools\/([^/]+)\/([^/]+)\.json$/.exec(object.key);
+-			if (!match || !ProjectId.is(match[1]) || !NotebookId.is(match[2])) continue;
++			if (!match || !ProjectId.is(match[1]) || !NotebookId.is(match[2])) return;
+ 			const pid = match[1];
+ 			const nid = match[2];
+ 			try {
++				// A deleted notebook keeps its pool as a tombstone; once its members are
++				// reclaimed there is nothing left to reconcile.
++				const stored = await store.read(pid, nid);
++				if (stored?.deleted_at !== undefined && stored.members.length === 0) return;
+ 				const notebook = paths.project(pid).notebook(nid);
+ 				let metaKey = notebook.meta;
+ 				let metaObject = await deps.bucket.get(metaKey);
+@@ -119,7 +129,7 @@
+ 					error,
+ 				);
+ 			}
+-		}
++		});
+ 		cursor = page.truncated ? page.cursor : undefined;
+ 	} while (cursor);
+ }
+diff --git a/packages/api/src/routes/sessions.appPool.test.ts b/packages/api/src/routes/sessions.appPool.test.ts
+--- a/packages/api/src/routes/sessions.appPool.test.ts
++++ b/packages/api/src/routes/sessions.appPool.test.ts
+@@ -5,7 +5,10 @@
+ 	paths,
+ 	ProxyExposure,
+ 	AppPoolService,
++	AppPoolStore,
++	BUCKET_SCAN_CONCURRENCY,
+ 	UnavailableError,
++	createNotebookId,
+ 	createSandboxId,
+ 	createSessionId,
+ 	signProxyToken,
+@@ -1006,6 +1009,41 @@
+ 		});
+ 		await sweepAppPools(client.deps);
+ 		expect(destroy).toHaveBeenCalledTimes(2);
++	});
++
++	it('sweeps pools in parallel and passes over deleted notebooks with nothing left to reclaim', async () => {
++		const store = new AppPoolStore(bucket);
++		const live = new Set<string>();
++		const deleted = new Set<string>();
++		for (let i = 0; i < 3 * BUCKET_SCAN_CONCURRENCY; i++) {
++			const id = createNotebookId();
++			await store.retireForDeletion(pid, id);
++			const meta = paths.project(pid).notebook(id).meta;
++			if (i % 2 === 0) {
++				deleted.add(meta);
++				continue;
++			}
++			const { deleted_at: _, ...pool } = (await store.read(pid, id))!;
++			await bucket.put(paths.appPool(pid, id), JSON.stringify(pool));
++			live.add(meta);
++		}
++		const read = new Set<string>();
++		let inFlight = 0;
++		let peak = 0;
++		const get = bucket.get.bind(bucket);
++		vi.spyOn(bucket, 'get').mockImplementation(async (key) => {
++			if (!live.has(key) && !deleted.has(key)) return get(key);
++			read.add(key);
++			peak = Math.max(peak, ++inFlight);
++			await new Promise((resolve) => setTimeout(resolve, 5));
++			inFlight--;
++			return get(key);
++		});
++
++		await sweepAppPools(api().deps);
++		expect(read).toEqual(live);
++		expect(peak).toBeGreaterThan(1);
++		expect(peak).toBeLessThanOrEqual(BUCKET_SCAN_CONCURRENCY);
+ 	});
+ 
+ 	it('recovers interrupted teardown after generic stale-session expiry', async () => {

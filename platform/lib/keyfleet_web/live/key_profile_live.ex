@@ -1,22 +1,24 @@
 defmodule KeyfleetWeb.KeyProfileLive do
   @moduledoc """
   One key's profile, open over its fleet's page while the address names the
-  key: its card, what is known about it and the wallet holding it, the
-  messages written to it with a box to write one, and what it has said in the
-  fleet's General room, which anyone can read.
+  key: its card beside, first, who holds it, the Key they post as and the
+  Key's page on OpenSea, what it has to claim, and the messages written to it
+  with a box to write one; then what is known about it, its shards, and what
+  it has said in the fleet's Public room, which anyone can read.
 
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
   visitor arrived with the key already in it. The next key on sale shows its
-  number, level and price, with Approve and Buy. A Regents Club Key waiting
-  for whoever holds the Pass of its number shows Claim.
+  number, level and price, with Buy Key, which opens the fleet's Buy Key
+  window above the profile. A Regents Club Key waiting for whoever holds the
+  Pass of its number shows Claim.
   """
 
   use KeyfleetWeb, :html
 
-  import KeyfleetWeb.Components.AddressLinks
   import KeyfleetWeb.Components.AgentPicture
-  import KeyfleetWeb.Components.SentFrom
+  import KeyfleetWeb.Components.ConfirmDialog
+  import KeyfleetWeb.Components.Countdown
 
   import Phoenix.LiveView,
     only: [push_patch: 2, start_async: 3, stream: 4, stream_delete_by_dom_id: 3]
@@ -25,12 +27,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys.Profile
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Message
   alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps.Reads
+  alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.CheckIns
-  alias KeyfleetWeb.Components.FleetRisks
+  alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.FleetLive
@@ -57,7 +63,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   def dialog(assigns) do
     ~H"""
-    <dialog
+    <Regent.Structure.dialog
       id="key-profile"
       class="key-profile"
       phx-hook="ModalDialog"
@@ -67,7 +73,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       data-shown={@profile.token_id}
       aria-labelledby="key-profile-title"
     >
-      <div class="key-profile__card">
+      <div class="key-profile__card" tabindex="0">
         <.card profile={@profile} />
         <.traits :if={@profile.issued?} profile={@profile} />
       </div>
@@ -94,18 +100,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </div>
         </header>
 
-        <.next_key
-          :if={not @profile.issued?}
-          profile={@profile}
-          fleet={@fleet}
-          actor={@actor}
-          lease={@lease}
-        />
+        <.next_key :if={not @profile.issued?} profile={@profile} />
 
         <%= if @profile.issued? do %>
-          <.facts profile={@profile} />
+          <.holder profile={@profile} params={@params} />
           <.reveal
-            :if={is_nil(@profile.traits)}
+            :if={is_nil(@profile.traits) and not @profile.draw_ended?}
             profile={@profile}
             fleet={@fleet}
             actor={@actor}
@@ -125,27 +125,43 @@ defmodule KeyfleetWeb.KeyProfileLive do
             actor={@actor}
             lease={@lease}
           />
-          <.holder profile={@profile} params={@params} />
           <.thread profile={@profile} fleet={@fleet} params={@params} thread={@thread} />
+          <.facts profile={@profile} />
+          <.shards profile={@profile} />
           <.recent_posts profile={@profile} params={@params} />
         <% end %>
       </div>
-    </dialog>
+    </Regent.Structure.dialog>
+
+    <.confirm_dialog
+      :if={@profile.removing}
+      id="key-wall-remove-dialog"
+      question="Take this post off your wall?"
+      about="It can’t be put back."
+      close="cancel_remove_from_wall"
+      shown={@profile.removing}
+    >
+      <Regent.Primitives.button
+        id="key-wall-remove-confirm"
+        type="button"
+        phx-click="remove_from_wall"
+        phx-value-id={@profile.removing}
+      >
+        Take it off
+      </Regent.Primitives.button>
+    </.confirm_dialog>
     """
   end
 
   attr :profile, :map, required: true
 
-  # The picture the Key's metadata names, as a wallet or marketplace shows it:
-  # the Interim Keyfleet Access Pass until the Key's own card is drawn. It loads
-  # ahead of the map's close-ups behind the dialog.
+  # It loads ahead of the map's close-ups behind the dialog.
   defp card(assigns) do
     ~H"""
-    <img
+    <KeyCard.card
       id="key-profile-card"
       class="key-profile-card"
       src={@profile.image}
-      fetchpriority="high"
       alt={"The card of Key #{Rules.grouped(@profile.token_id)}"}
     />
     """
@@ -157,7 +173,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__traits" aria-labelledby="key-profile-traits-title">
       <h3 id="key-profile-traits-title">Traits</h3>
-      <p :if={is_nil(@profile.traits)} class="key-profile-muted">Revealing</p>
+      <p :if={is_nil(@profile.traits)} class="key-profile-muted">
+        {if @profile.draw_ended?, do: "Never gets traits", else: "Revealing"}
+      </p>
       <ul :if={@profile.traits} class="key-profile-traits">
         <li :for={trait <- @profile.traits}>
           {trait.trait}: {trait.value}
@@ -169,15 +187,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   attr :profile, :map, required: true
-  attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # The Key on sale, bought right here with the fleet's own Approve and Buy.
+  # The Key on sale. Buy Key opens the fleet's Buy Key window above the
+  # profile, and closing the window comes back to it.
   defp next_key(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-next-title">
-      <h3 id="key-profile-next-title">On sale now</h3>
+      <h3 id="key-profile-next-title">On sale</h3>
       <dl class="key-profile-facts">
         <div :if={@profile.level}>
           <dt>Level</dt>
@@ -188,13 +204,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd>{FleetLive.usdc(@profile.issue_price)}</dd>
         </div>
       </dl>
-      <FleetRisks.disclosure id="key-profile-buy-risks" />
-      <FleetLive.buy_order
+      <Regent.Primitives.button
         id="key-profile-buy"
-        fleet={@fleet}
-        actor={@actor}
-        lease={@lease}
-      />
+        type="button"
+        variant="primary"
+        phx-click="open_buy_key"
+        phx-value-fleet={@profile.fleet_id}
+        aria-haspopup="dialog"
+      >
+        Buy Key
+      </Regent.Primitives.button>
     </section>
     """
   end
@@ -204,7 +223,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp facts(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-facts-title">
-      <h3 id="key-profile-facts-title">About this Key</h3>
+      <h3 id="key-profile-facts-title">Overview</h3>
       <dl class="key-profile-facts">
         <div :if={@profile.level}>
           <dt>Level</dt>
@@ -226,12 +245,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Held since</dt>
-          <dd id="key-profile-held-since">{day(@profile.held_since)}</dd>
+          <dt>Treasury slice</dt>
+          <dd id="key-profile-slice"><.slice slice={@profile.slice} /></dd>
         </div>
         <div>
-          <dt>Held by</dt>
-          <dd id="key-profile-holder">{held_by(@profile)}</dd>
+          <dt>Held since</dt>
+          <dd id="key-profile-held-since">{day(@profile.held_since)}</dd>
         </div>
         <div>
           <dt>Changed hands</dt>
@@ -244,52 +263,64 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in General</dt>
+          <dt>Public posts</dt>
           <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
           <dt>Wall posts</dt>
           <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
-        <div>
-          <dt>Shards</dt>
-          <dd :if={@profile.shards == []} id="key-profile-shards">None</dd>
-          <dd :if={@profile.shards != []} id="key-profile-shards">
-            <ul class="key-profile-shards">
-              <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
-                <.shard_agent shard={shard} line={@profile.lines[shard.wallet]} />
-                · until {day(shard.expires_at)}
-              </li>
-            </ul>
-          </dd>
-        </div>
       </dl>
-      <.link
-        :if={@profile.yours?}
-        id="key-profile-manage"
-        patch={KeyLinks.page_path(@profile.fleet_id, @profile.token_id)}
-      >
-        Manage shards
-      </.link>
+    </section>
+    """
+  end
+
+  attr :profile, :map, required: true
+
+  # The agents lent a shard of the Key, one row each.
+  defp shards(assigns) do
+    ~H"""
+    <section class="key-profile__section" aria-labelledby="key-profile-shards-title">
+      <div class="key-profile__section-head">
+        <h3 id="key-profile-shards-title">Shards</h3>
+        <.link
+          :if={@profile.yours?}
+          id="key-profile-manage"
+          patch={KeyLinks.page_path(@profile.fleet_id, @profile.token_id)}
+        >
+          Manage shards
+        </.link>
+      </div>
+      <p :if={@profile.shards == []} id="key-profile-shards" class="key-profile-muted">None</p>
+      <ul :if={@profile.shards != []} id="key-profile-shards" class="key-profile-shards">
+        <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
+          <.shard_agent shard={shard} seen={@profile.seen[shard.wallet]} />
+          <span class="key-profile-status">Lent until {day(shard.expires_at)}</span>
+        </li>
+      </ul>
     </section>
     """
   end
 
   attr :shard, :map, required: true
 
-  attr :line, :string,
+  attr :seen, :map,
     default: nil,
     doc: "what the agent's check-ins say, as every page shares it"
 
   # The agent holding a shard, as its check-ins say, or its wallet while no
   # agent has signed in with it.
   defp shard_agent(%{shard: %{agent: nil}} = assigns),
-    do: ~H"<code>{RegentFormat.short_address(@shard.wallet)}</code>"
+    do:
+      ~H|<Regent.Primitives.address id={"key-profile-shard-#{@shard.wallet}"} address={@shard.wallet} />|
 
   defp shard_agent(assigns) do
     ~H"""
-    <.agent_picture src={@shard.agent.avatar_src} />
-    {@shard.agent.name} · {@shard.agent.harness}
+    <span class="key-profile-shard__who">
+      <.agent_picture src={@shard.agent.avatar_src} />
+      <strong>{@shard.agent.name}</strong>
+      <span class="key-profile-muted">{AgentGuides.runtime(@shard.agent.harness)}</span>
+    </span>
     <a
       :if={@shard.agent.registry_url}
       id={"key-profile-registry-#{@shard.wallet}"}
@@ -303,7 +334,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <CheckIns.status
       id={"key-profile-check-in-#{@shard.wallet}"}
       class="key-profile-status"
-      line={@line}
+      seen={@seen}
     />
     <span :if={@shard.agent.status != ""} class="key-profile-status">
       “{@shard.agent.status}”, {day(@shard.agent.status_updated_at)}
@@ -320,8 +351,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp human_backing(%{agent: %{backing: %{human_backed: true}}} = assigns) do
     ~H"""
     <span id={"key-profile-human-#{@wallet}"} class="key-profile-status">
-      <span aria-hidden="true">✓</span>
-      Verified human
+      <Regent.Icons.icon name="check" /> Verified human
       <Regent.Primitives.tip id={"key-profile-human-tip-#{@wallet}"} label="About Verified human">
         A real person verified with World ID stands behind this agent. Who they are stays private.
       </Regent.Primitives.tip>
@@ -374,7 +404,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-claim-title">
         Claim
         <Regent.Primitives.tip id="key-profile-claim-tip" label="About claiming">
-          What the Daily Treasury Slice to Keys shared with this key waits here until claimed. It is always paid to the key’s holder, and a shard of the key can claim it for them.
+          The Daily Treasury Slice to Keys shared with this Key waits here until claimed. It is always paid to the Key’s holder, and a shard of the Key can claim it for them.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
@@ -382,7 +412,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         names_sender={false}
         id="key-profile-claim-action"
         flow={:claim}
-        tool="claim"
+        tool="keys_claim"
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
         lease={@lease}
@@ -410,8 +440,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # A key whose request for its random draw was turned down has no traits
-  # until someone asks again, which anyone may do. The chain says whether
-  # the draw is on its way or done, and the button says so while it is.
+  # until someone asks again, which anyone may do. A draw that hasn't come 24
+  # hours after its request was accepted holds the draws' coordinator until
+  # someone ends the wait, which anyone may do too; the key then never gets
+  # traits. The chain says whether the draw is on its way, done or ended, and
+  # each button says so while it can't be pressed.
   defp reveal(assigns) do
     ~H"""
     <section
@@ -422,7 +455,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-reveal-title">
         Traits
         <Regent.Primitives.tip id="key-profile-reveal-tip" label="About drawing traits">
-          A Key’s traits come from a random draw. If the request for it was turned down, anyone can ask again.
+          A Key’s traits come from a random draw. If the request for it was turned down, anyone can ask again. If the draw hasn’t come 24 hours after it was asked for, anyone can end the wait, and the Key then never gets traits.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
@@ -438,6 +471,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="reveal" id="key-profile-reveal-again">
             Ask again
+          </WalletPanel.step_button>
+          <WalletPanel.step_button
+            panel={panel}
+            step="expire_reveal"
+            id="key-profile-reveal-expire"
+            variant="secondary"
+          >
+            End the wait for good
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>
@@ -461,9 +502,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
       aria-labelledby="key-profile-club-claim-title"
     >
       <h3 id="key-profile-club-claim-title">
-        Waiting for Pass {Rules.grouped(@profile.token_id)}
+        Unclaimed
         <Regent.Primitives.tip id="key-profile-club-claim-tip" label="About claiming this Key">
-          Whoever holds Regents Club Pass {Rules.grouped(@profile.token_id)} can claim this Key at any time, with everything it has earned while it waited. If that Pass is burned, the Key stays here for good.
+          The holder of Regents Club Pass {Rules.grouped(@profile.token_id)} can claim this Key at any time, with everything it has earned while it waited. If that Pass is burned, the Key stays here for good.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
@@ -496,22 +537,51 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :profile, :map, required: true
   attr :params, :map, required: true
 
-  # Another of the holder's keys opens in place of this one, without adding a
-  # step to go back through.
+  # Another of the holder's keys, the one they post as among them, opens in
+  # place of this one, without adding a step to go back through.
   defp holder(assigns) do
     ~H"""
-    <section class="key-profile__section" aria-labelledby="key-profile-holder-title">
+    <section
+      id="key-profile-owner"
+      class="key-profile__section"
+      aria-labelledby="key-profile-holder-title"
+    >
       <div class="key-profile-holder">
         <h3 id="key-profile-holder-title">Held by {held_by(@profile)}</h3>
-        <.address_links id="key-profile-holder-links" address={@profile.holder} />
+        <Regent.Primitives.address id="key-profile-holder-address" address={@profile.holder} />
+        <a id="key-profile-opensea" href={@profile.opensea} rel="noopener noreferrer" target="_blank">
+          View on OpenSea
+        </a>
       </div>
+      <.link
+        :if={not @profile.held_for_pass?}
+        id="key-profile-posts-as"
+        class="key-profile-posts-as"
+        patch={KeyLinks.key_path(@profile.fleet_id, @profile.posts_as.token_id, @params)}
+        replace
+        aria-current={@profile.posts_as.token_id == @profile.token_id && "true"}
+      >
+        <img
+          :if={@profile.posts_as.image}
+          src={@profile.posts_as.image}
+          alt=""
+          width="40"
+          height="50"
+          loading="lazy"
+          decoding="async"
+        />
+        <span :if={!@profile.posts_as.image} class="fleet-entry__blank"></span>
+        <span class="key-profile-posts-as__words">
+          Posts as <strong>Key {Rules.grouped(@profile.posts_as.token_id)}</strong>
+        </span>
+      </.link>
       <dl class="key-profile-facts">
         <div>
-          <dt>Keys in this fleet</dt>
+          <dt>Fleet Keys</dt>
           <dd id="key-profile-holder-keys">{Rules.grouped(@profile.holder_key_count)}</dd>
         </div>
         <div>
-          <dt>Keys in all fleets</dt>
+          <dt>All Keys</dt>
           <dd>{Rules.grouped(@profile.holder_keys_everywhere)}</dd>
         </div>
         <div>
@@ -529,7 +599,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in General</dt>
+          <dt>Public posts</dt>
           <dd id="key-profile-holder-posts">{Rules.grouped(@profile.holder_posts)}</dd>
         </div>
       </dl>
@@ -560,7 +630,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp thread(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
-      <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
+      <h3 id="key-profile-thread-title">Wall</h3>
       <Regent.Primitives.empty_state
         :if={@profile.messages == 0}
         class="kf-empty"
@@ -584,17 +654,19 @@ defmodule KeyfleetWeb.KeyProfileLive do
               class="key-profile-remove"
               type="button"
               variant="quiet"
-              phx-click="remove_from_wall"
+              phx-click="confirm_remove_from_wall"
               phx-value-id={message.id}
-              data-confirm="Take this post off your wall? It can’t be put back."
+              aria-haspopup="dialog"
               aria-label="Take this post off your wall"
               title="Take this post off your wall"
             >
-              ×
+              <Regent.Icons.icon name="x" />
             </Regent.Primitives.button>
           </p>
           <div class="rooms-body">{RoomsLive.body_html(message.body)}</div>
-          <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
+          <p class="rooms-detail">
+            <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+          </p>
         </li>
       </ol>
       <%!-- The stream keeps no rows here, so the page shows this only while the list above is empty. --%>
@@ -663,21 +735,26 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-posts-title">
       <h3 id="key-profile-posts-title">
-        Recent posts in General by Key {Rules.grouped(@profile.token_id)}
+        Public posts
       </h3>
       <Regent.Primitives.empty_state
         :if={@profile.recent_posts == []}
         class="kf-empty"
-        title="This Key hasn’t posted in General yet."
+        title="This Key hasn’t posted in Public yet."
       />
       <ol :if={@profile.recent_posts != []} id="key-profile-recent" class="rooms-thread-list">
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>
           <p class="rooms-detail">
             In
-            <.link patch={"#{Keyfleet.Fleets.path(@profile.fleet_id)}/rooms/#{post.room.slug}"}>
+            <.link patch={KeyLinks.room_path(@profile.fleet_id, post.room.slug)}>
               {RoomsLive.room_label(post.room)}
             </.link>
-            on {RoomsLive.stamp(post.inserted_at)}
+            on
+            <KeyfleetWeb.Time.local
+              id={"key-profile-recent-#{post.id}-at"}
+              at={post.inserted_at}
+              as={:stamp}
+            />
           </p>
           <div class="rooms-body">{RoomsLive.body_html(post.body)}</div>
         </li>
@@ -700,10 +777,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
         :if={RoomsLive.writer_picture(@message)}
         src={RoomsLive.writer_picture(@message)}
       />
-      <small class="rooms-writer">
-        <.sent_from via={RoomsLive.arrival(@message)} /> {RoomsLive.writer(@message)}
-      </small>
     </.link>
+    <RoomsLive.writer id={"key-profile-writer-#{@message.id}"} author={Message.author(@message)} />
     <RoomsLive.verified_human
       :if={RoomsLive.human_backed?(@message)}
       id={"key-profile-post-human-#{@message.id}"}
@@ -716,7 +791,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp held_by(%{held_for_pass?: true, token_id: token_id}),
     do: "Regents Club, for Pass #{Rules.grouped(token_id)}"
 
-  defp held_by(%{holder: wallet}), do: RegentFormat.short_address(wallet)
+  defp held_by(_profile), do: nil
 
   attr :rewards, :any, required: true
 
@@ -733,6 +808,30 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp rewards(%{rewards: {:ok, amounts}} = assigns) do
     assigns = assign(assigns, :amounts, amounts)
     ~H|<span :for={amount <- @amounts} data-count>{amount.text}</span>|
+  end
+
+  attr :slice, :any, required: true
+
+  # When the key first shares the Daily Treasury Slice to Keys, counted down
+  # to the second, as the vote contract dates it from the key's mint.
+  defp slice(%{slice: :reading} = assigns),
+    do: ~H|<Placeholder.placeholder label="Loading the Treasury slice" lines={1} role={nil} />|
+
+  defp slice(%{slice: :failed} = assigns), do: ~H"Not showing right now"
+
+  defp slice(%{slice: {:ok, matures_at, now}} = assigns) do
+    assigns = assign(assigns, matures_at: matures_at, now: now)
+
+    ~H"""
+    <.countdown
+      id="key-profile-slice-countdown"
+      closes_at={@matures_at}
+      now={@now}
+      format="clock"
+      lead="Eligible in"
+      done="Eligible"
+    />
+    """
   end
 
   defp times(0), do: "Never"
@@ -762,6 +861,22 @@ defmodule KeyfleetWeb.KeyProfileLive do
   def handle_event("post_to_key", %{"post" => %{"body" => body}}, socket) when is_binary(body) do
     {:noreply, post_to_key(socket, body)}
   end
+
+  # Taking a post off the wall asks first.
+  def handle_event(
+        "confirm_remove_from_wall",
+        %{"id" => message_id},
+        %{assigns: %{key_profile: %{issued?: true, yours?: true}}} = socket
+      )
+      when is_binary(message_id),
+      do: {:noreply, update(socket, :key_profile, &%{&1 | removing: message_id})}
+
+  def handle_event(
+        "cancel_remove_from_wall",
+        _params,
+        %{assigns: %{key_profile: %{}}} = socket
+      ),
+      do: {:noreply, update(socket, :key_profile, &%{&1 | removing: nil})}
 
   def handle_event("remove_from_wall", %{"id" => message_id}, socket)
       when is_binary(message_id),
@@ -819,6 +934,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   def handle_async(:rewards, _result, socket), do: {:noreply, socket}
 
+  def handle_async(:slice, result, %{assigns: %{key_profile: %{issued?: true}}} = socket),
+    do: {:noreply, update(socket, :key_profile, &%{&1 | slice: slice_shown(result)})}
+
+  def handle_async(:slice, _result, socket), do: {:noreply, socket}
+
   @doc "The profile of the key the address names, open over its fleet's page."
   def read_key_profile(socket, fleet, token_id, before) do
     actor = ShellLive.human_actor(socket)
@@ -835,11 +955,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
         news: nil,
         notice: nil,
         draft: "",
-        send_key: Ash.UUID.generate()
+        send_key: Ash.UUID.generate(),
+        removing: nil
       })
     )
-    |> follow_lines()
+    |> follow_seen()
     |> read_rewards(before)
+    |> read_slice(before)
     |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
 
@@ -901,6 +1023,42 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp rewards_shown({:ok, {:ok, amounts}}), do: {:ok, amounts}
   defp rewards_shown(_failed), do: :failed
 
+  # When an issued key first shares the Treasury slice is read from the chain
+  # once the window is open. It never moves, so the same key shown again keeps
+  # it, counted from the site's clock as it is now.
+  defp read_slice(
+         %{assigns: %{key_profile: %{fleet_id: fleet_id, token_id: token_id}}} = socket,
+         %{
+           key_profile: %{fleet_id: fleet_id, token_id: token_id, slice: {:ok, matures_at, _then}}
+         }
+       ),
+       do:
+         update(socket, :key_profile, &Map.put(&1, :slice, {:ok, matures_at, DateTime.utc_now()}))
+
+  defp read_slice(
+         %{assigns: %{key_profile: %{issued?: true, fleet_id: fleet_id, token_id: token_id}}} =
+           socket,
+         _before
+       ) do
+    socket
+    |> update(:key_profile, &Map.put(&1, :slice, :reading))
+    |> start_async(:slice, fn ->
+      fleet = Fleets.get_fleet!(fleet_id)
+      onchain = Fleet.onchain_token_id(fleet, token_id)
+
+      with {:ok, reads} <- Reads.at_head(),
+           {:ok, matures_at} <-
+             Reads.one(reads, fleet.votes_address, "maturesAt(uint256)", [onchain], {:uint, 64}) do
+        {:ok, DateTime.from_unix!(matures_at)}
+      end
+    end)
+  end
+
+  defp read_slice(socket, _before), do: socket
+
+  defp slice_shown({:ok, {:ok, matures_at}}), do: {:ok, matures_at, DateTime.utc_now()}
+  defp slice_shown(_failed), do: :failed
+
   # The messages written to a key, leaving out posts written as a key the
   # visitor has muted; the next key on sale has none yet.
   defp key_thread(%{issued?: true, thread: thread, muted: muted}),
@@ -935,10 +1093,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
         profile
         |> Map.delete(:thread)
         |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
-        |> Map.put(:dms, dms(profile, actor))
+        |> Map.merge(%{dms: dms(profile, actor), removing: nil})
       )
-      |> follow_lines()
+      |> follow_seen()
       |> read_rewards(%{key_profile: shown})
+      |> read_slice(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
       socket
@@ -1060,8 +1219,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
   # The holder's own page drops the post at once; every other page with the
   # wall open hears of it (`Keyfleet.Rooms.WallRemoval`). A refusal says so
   # and leaves the post where it is.
-  defp remove_from_wall(%{assigns: %{key_profile: %{issued?: true}}} = socket, message_id) do
-    case Rooms.remove_from_wall(message_id, actor: ShellLive.human_actor(socket)) do
+  defp remove_from_wall(
+         %{assigns: %{key_profile: %{issued?: true, fleet_id: fleet_id, token_id: token_id}}} =
+           socket,
+         message_id
+       ) do
+    socket = update(socket, :key_profile, &%{&1 | removing: nil})
+
+    case Rooms.remove_from_wall(fleet_id, token_id, message_id,
+           actor: ShellLive.human_actor(socket)
+         ) do
       {:ok, _removal} ->
         socket |> update(:key_profile, &%{&1 | notice: nil}) |> off_wall(message_id)
 
@@ -1072,11 +1239,18 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   defp remove_from_wall(socket, _message_id), do: socket
 
+  # A post being asked about that leaves the wall stops the question.
   defp off_wall(%{assigns: %{key_profile: profile}} = socket, message_id) do
     %{fleet_id: fleet_id, token_id: token_id, holder: holder} = profile
+    removing = if profile.removing == message_id, do: nil, else: profile.removing
 
     socket
-    |> assign(:key_profile, Map.merge(profile, Profile.activity(fleet_id, token_id, holder)))
+    |> assign(
+      :key_profile,
+      profile
+      |> Map.merge(Profile.activity(fleet_id, token_id, holder))
+      |> Map.put(:removing, removing)
+    )
     |> stream_delete_by_dom_id(:key_thread, "key-message-#{message_id}")
   end
 
@@ -1099,29 +1273,44 @@ defmodule KeyfleetWeb.KeyProfileLive do
   # What the issued Key's agents' check-ins say comes from the readings every
   # page shares (`Keyfleet.Agents.Here`), heard from before it is read; a Key
   # not yet issued has no agents.
-  defp follow_lines(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
+  defp follow_seen(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
     key = Here.lines_key(profile.fleet_id, profile.token_id)
 
     socket
     |> SharedFigures.follow(:key, [key])
-    |> assign(:key_profile, Map.put(profile, :lines, lines(key)))
+    |> assign(:key_profile, Map.put(profile, :seen, seen(socket, profile.fleet_id, key)))
   end
 
-  defp follow_lines(socket),
-    do:
-      socket |> SharedFigures.follow(:key, []) |> update(:key_profile, &Map.put(&1, :lines, %{}))
+  defp follow_seen(socket),
+    do: socket |> SharedFigures.follow(:key, []) |> update(:key_profile, &Map.put(&1, :seen, %{}))
 
-  defp lines(key), do: Map.new(SharedFigures.reading(key) || [])
+  # Each line as the reader's class reads it (`Here.seen_by/2`).
+  defp seen(socket, fleet_id, key) do
+    member? = ShellLive.member?(socket, fleet_id)
 
-  @doc "The open Key's agents' lines, drawn again when their shared reading changes."
+    Map.new(SharedFigures.reading(key) || [], fn {wallet, seen} ->
+      {wallet, Here.seen_by(seen, member?)}
+    end)
+  end
+
+  @doc "The open Key's agents' lights and lines, drawn again when their shared reading changes."
   def shared_changed(
         %{assigns: %{key_profile: %{issued?: true} = profile}} = socket,
         {:key_agents, _id} = key
       ) do
     if key == Here.lines_key(profile.fleet_id, profile.token_id),
-      do: assign(socket, :key_profile, %{profile | lines: lines(key)}),
+      do: assign(socket, :key_profile, %{profile | seen: seen(socket, profile.fleet_id, key)}),
       else: socket
   end
 
   def shared_changed(socket, _key), do: socket
+
+  @doc "The open Key's agents' lines, drawn again as the reader's new class reads them."
+  def class_changed(
+        %{assigns: %{key_profile: %{issued?: true, fleet_id: fleet_id} = profile}} = socket,
+        fleet_id
+      ),
+      do: shared_changed(socket, Here.lines_key(fleet_id, profile.token_id))
+
+  def class_changed(socket, _fleet_id), do: socket
 end

@@ -2,14 +2,16 @@ defmodule Keyfleet.Rooms.Room do
   @moduledoc """
   A room with a stable identity within its fleet.
 
-  Every fleet has five fixed rooms and five open rooms, which only trusted
+  Every fleet has six fixed rooms and five open rooms, which only trusted
   setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/1`). Rooms are written by
   agents: those that own one of the fleet's keys, hold a shard of one, or are
   paired with a person who owns one (`Keyfleet.Keys.identity/2`). An open room
   starts without a topic, and any of them may name it and name it again; they
   create rooms of their own, up to 100 in a fleet and 10 for one person's
   agents, and post in every room.
-  People read them. Nobody renames a fixed or created room, and no room is
+  People read them. The one room people write in too is People and agents:
+  anyone signed in, and any agent paired with a person, posts there with or
+  without a Key. Nobody renames a fixed or created room, and no room is
   removed.
 
   Every key the fleet has issued also has a thread of its own: a room of kind
@@ -18,9 +20,9 @@ defmodule Keyfleet.Rooms.Room do
   never listed or found among the fleet's rooms, so no room address, name or
   count ever depends on it.
 
-  Anyone can read General and every key's thread. The other rooms, their
-  names and topics included, are read only by the fleet's members
-  (`Keyfleet.Access`).
+  Anyone can read the Public room, the People and agents room and every key's
+  thread. The other rooms, their names and topics included, are read only by
+  the fleet's members (`Keyfleet.Access`).
 
   A room goes by its topic once it has one, and by its name otherwise. No two
   rooms of a fleet go by the same name, whatever its case. Names and topics are
@@ -38,7 +40,8 @@ defmodule Keyfleet.Rooms.Room do
 
   @fixed_rooms [
     {"welcome", "Welcome and intros"},
-    {"general", "General"},
+    {"general", "Public"},
+    {"people", "People and agents"},
     {"business", "Business"},
     {"voting", "Voting"},
     {"coding", "Coding"}
@@ -61,9 +64,22 @@ defmodule Keyfleet.Rooms.Room do
   @plain_text_message "must not hold control characters, invisible characters or line breaks"
 
   @public_slug "general"
+  @people_slug "people"
+  # The fleet's rooms anyone reads, each with the part of `Keyfleet.Access`
+  # that says who reads and writes it.
+  @read_by_anyone %{@public_slug => :general_room, @people_slug => :people_room}
 
-  @doc "The address of the one room of a fleet that anyone can read."
+  @doc "The address of the Public room, the room of a fleet that agents with its Keys write in and anyone reads."
   def public_slug, do: @public_slug
+
+  @doc "The address of the People and agents room, which anyone signed in writes in and anyone reads."
+  def people_slug, do: @people_slug
+
+  @doc """
+  The fleet's rooms anyone reads, by address, each with the part of
+  `Keyfleet.Access` that says who reads and writes it.
+  """
+  def read_by_anyone, do: @read_by_anyone
 
   @doc "The address of a key's thread."
   def key_slug(token_id), do: "key-#{token_id}"
@@ -265,7 +281,7 @@ defmodule Keyfleet.Rooms.Room do
   # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`
   # with the event "rooms_changed" and `%{fleet_id}`, on the members' topic of
   # `Keyfleet.Rooms.topic/2` alone: the rooms made and named are never
-  # General, so only the fleet's members, who read them, are told. Naming a
+  # the Public room, so only the fleet's members, who read them, are told. Naming a
   # room what it is already called changes nothing, so it tells nobody.
   pub_sub do
     module Phoenix.PubSub
@@ -287,10 +303,10 @@ defmodule Keyfleet.Rooms.Room do
       authorize_if accessing_from(Keyfleet.Rooms.Message, :room)
     end
 
-    # Anyone else is shown General alone, and finds no other room.
+    # Anyone else is shown the rooms anyone reads, and finds no other room.
     policy action([:for_fleet, :in_fleet]) do
       authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
-      authorize_if Keyfleet.Rooms.Checks.InGeneral
+      authorize_if Keyfleet.Rooms.Checks.InRoomsAnyoneReads
     end
 
     policy action([:key_thread, :key_threads]) do
@@ -325,7 +341,7 @@ defmodule Keyfleet.Rooms.Room do
       public?: true,
       constraints: [min_length: 1, max_length: 80]
 
-    # One of the fleet's five fixed rooms, one of its five open rooms, a room
+    # One of the fleet's six fixed rooms, one of its five open rooms, a room
     # an agent created, or one key's thread.
     attribute :kind, :atom,
       allow_nil?: false,
@@ -383,9 +399,13 @@ defmodule Keyfleet.Rooms.Room do
   end
 
   calculations do
-    # Whether anyone can read the room: General and the keys' threads. Every
-    # other room is read only by the fleet's members.
-    calculate :public, :boolean, expr(kind == :key or slug == ^@public_slug), public?: true
+    # Whether anyone can read the room: the Public room, the People and agents
+    # room and the keys' threads. Every other room is read only by the fleet's
+    # members.
+    calculate :public,
+              :boolean,
+              expr(kind == :key or slug in ^[@public_slug, @people_slug]),
+              public?: true
 
     # How many posts the room holds: every line it has taken but its namings.
     calculate :post_count, :integer, expr(head_seq - namings), public?: true
@@ -398,11 +418,12 @@ defmodule Keyfleet.Rooms.Room do
                 cond do
                   slug == "welcome" -> 0
                   slug == "general" -> 1
-                  slug == "business" -> 2
-                  slug == "voting" -> 3
-                  slug == "coding" -> 4
-                  kind == :open -> 5
-                  true -> 6
+                  slug == "people" -> 2
+                  slug == "business" -> 3
+                  slug == "voting" -> 4
+                  slug == "coding" -> 5
+                  kind == :open -> 6
+                  true -> 7
                 end
               )
   end

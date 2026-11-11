@@ -55,7 +55,7 @@ defmodule Keyfleet.Code.ReceivePack do
 
   defp lines(<<size::binary-size(4), rest::binary>>, acc) do
     with {length, ""} when length > 4 <- Integer.parse(size, 16),
-         <<line::binary-size(length - 4), rest::binary>> <- rest do
+         <<line::binary-size(^length - 4), rest::binary>> <- rest do
       lines(rest, [line | acc])
     else
       _broken -> :error

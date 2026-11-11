@@ -9,13 +9,12 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
-  alias Keyfleet.SharedReading
-  alias KeyfleetWeb.FleetPolls
 
   @fleet "fibonacci_syndicate"
   @list "/syndicate/1/polls"
   @starter ProposalHelpers.wallet("1")
   @voter ProposalHelpers.wallet("2")
+  @outsider ProposalHelpers.wallet("3")
   @notes "The left one creaks."
 
   setup do
@@ -24,96 +23,52 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     ChainHelpers.seed_cursor!(@fleet)
     ProposalHelpers.keys_sold!(@fleet, [1], @starter)
     ProposalHelpers.keys_sold!(@fleet, [2], @voter)
-
-    # The readings every page shares outlive a test's database, so each test
-    # starts with none held.
-    for kind <- [:fleet_polls, :poll],
-        id <- SharedReading.ids(kind),
-        do: SharedReading.delete({kind, id})
-
     :ok
   end
 
-  # Every open page draws the fleet's next reading and reads nothing itself;
-  # the time left is drawn in the browser from the poll's closing time.
-  test "a vote reaches every open page of the poll with the fleet's next reading", %{
+  # Polls are for the fleet's Keys: a visitor, signed in or not, is told so
+  # and is shown nothing of them.
+  test "anyone holding none of the fleet's Keys sees that polls are for its Keys", %{
     conn: conn
   } do
     poll = start!()
 
-    {:ok, view, _html} = open(conn, "#{@list}/#{poll.id}")
-    {:ok, list, _html} = live(conn, @list)
+    for reader <- [conn, signed_in_as(conn, @outsider)],
+        path <- [@list, "#{@list}/#{poll.id}"] do
+      {:ok, view, html} = live(reader, path)
+      assert has_element?(view, "#polls-locked", "Keys only")
+      refute html =~ "Which door next?"
+      refute html =~ @notes
+    end
 
-    assert has_element?(view, "#poll-votes-so-far", "0 votes so far")
-    assert has_element?(list, "#poll-#{poll.id}", "0 votes")
-
-    closes_at = DateTime.to_unix(poll.closes_at, :millisecond)
-
-    assert has_element?(
-             view,
-             ~s(#poll-left[phx-hook="PollCountdown"][data-closes-at="#{closes_at}"])
-           )
-
-    vote!(poll, @voter)
-    assert has_element?(view, "#poll-votes-so-far", "0 votes so far")
-
-    FleetPolls.read(@fleet)
-
-    assert shows?(fn -> has_element?(view, "#poll-votes-so-far", "1 vote so far") end)
-    assert shows?(fn -> has_element?(list, "#poll-#{poll.id}", "1 vote") end)
+    {:ok, view, _html} = live(conn, @list)
+    assert has_element?(view, "#polls-sign-in")
   end
 
-  # The reading every page shares holds what anyone may read of a poll and
-  # nothing more; a Key holder's page reads the notes and the votes as them.
-  test "a poll's notes and each Key's vote are read only for a Key holder", %{conn: conn} do
+  # A member's open page reads the poll again, as them, on each vote and on
+  # its ending.
+  test "a Key holder reads the notes, and each vote and the end reach their open page", %{
+    conn: conn
+  } do
     poll = start!()
-    vote!(poll, @voter)
-
-    {:ok, visitor, html} = open(conn, "#{@list}/#{poll.id}")
-    refute html =~ @notes
-    refute has_element?(visitor, "#poll-notes")
-
-    {reading, false} = FleetPolls.fetch(FleetPolls.poll_key(@fleet, poll.id))
-    refute Map.has_key?(reading, :notes)
 
     {:ok, holder, _html} = live(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
+    {:ok, list, _html} = live(signed_in_as(conn, @starter), @list)
+
     assert has_element?(holder, "#poll-notes", @notes)
-    assert has_element?(holder, "#poll-my-vote", "Your Key voted for Left door.")
-    refute has_element?(holder, "#poll-each-vote")
-
-    Polls.end_poll!(poll, @fleet, actor: human(@starter))
-    FleetPolls.read(@fleet)
-
-    # Once it closes, anyone sees the counts; only the holder reads every Key's
-    # vote, a moment later.
-    assert shows?(fn -> has_element?(visitor, "#poll-results", "Most votes: Left door") end)
-    assert shows?(fn -> has_element?(holder, "#poll-each-vote", "Key 2") end, 40)
-    refute has_element?(visitor, "#poll-each-vote")
-  end
-
-  test "a burst of votes is answered by one read of the fleet, for every open page", %{
-    conn: conn
-  } do
-    poll = start!()
-    producer = start_supervised!(FleetPolls)
-
-    # Watch the fleets the producer reads; the two open pages read nothing.
-    :erlang.trace_pattern({FleetPolls, :read, 1}, true, [:global])
-    :erlang.trace(producer, true, [:call])
-    on_exit(fn -> :erlang.trace_pattern({FleetPolls, :read, 1}, false, [:global]) end)
-
-    # The producer reads the fleet once more after it first hears the open
-    # poll; the burst starts after that read.
-    assert_receive {:trace, ^producer, :call, {FleetPolls, :read, [@fleet]}}, 2_000
-
-    {:ok, _view, _html} = live(conn, "#{@list}/#{poll.id}")
-    {:ok, _view, _html} = live(conn, "#{@list}/#{poll.id}")
+    assert has_element?(holder, "#poll-votes-so-far", "0 votes so far")
+    assert has_element?(list, "#poll-#{poll.id}", "0 votes")
 
     vote!(poll, @voter)
-    vote!(poll, @starter)
 
-    assert_receive {:trace, ^producer, :call, {FleetPolls, :read, [@fleet]}}, 2_000
-    refute_receive {:trace, ^producer, :call, {FleetPolls, :read, _}}, 1_500
+    assert shows?(fn -> has_element?(holder, "#poll-votes-so-far", "1 vote so far") end)
+    assert shows?(fn -> has_element?(list, "#poll-#{poll.id}", "1 vote") end)
+    assert has_element?(holder, "#poll-my-vote", "Your Key voted for Left door.")
+
+    Polls.end_poll!(poll, @fleet, actor: human(@starter))
+
+    assert shows?(fn -> has_element?(holder, "#poll-results", "Most votes: Left door") end)
+    assert has_element?(holder, "#poll-each-vote", "Key 2")
   end
 
   # Several agents act for one Key; a reader has to see which started a poll
@@ -135,14 +90,32 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     Polls.cast_vote!(%{fleet_id: @fleet, poll_id: poll.id, choice: "Left door"}, actor: agent)
     Polls.end_poll!(poll, @fleet, actor: human(@starter))
 
-    {:ok, list, _html} = open(conn, @list)
+    {:ok, list, _html} = live(signed_in_as(conn, @voter), @list)
     assert has_element?(list, "#poll-#{poll.id}", "Started by Their agent (Key 1)")
 
-    {:ok, holder, _html} = open(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
+    {:ok, holder, _html} = live(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
     assert has_element?(holder, "#poll-status", "Their agent (Key 1)")
+    assert has_element?(holder, "#poll-each-vote", ~r/Their agent \(Key 1\)\s+chose Left door/)
+  end
 
-    each_vote = ~r/Their agent \(Key 1\)\s+chose Left door/
-    assert shows?(fn -> has_element?(holder, "#poll-each-vote", each_vote) end, 40)
+  # Ending a poll can't be undone, so End poll asks first in Keyfleet's own
+  # window: Cancel leaves the poll open, and saying so ends it.
+  test "End poll asks first, Cancel keeps the poll open, and saying so ends it", %{conn: conn} do
+    poll = start!()
+    {:ok, view, _html} = live(signed_in_as(conn, @starter), "#{@list}/#{poll.id}")
+
+    view |> element("#poll-end") |> render_click()
+    assert has_element?(view, "#poll-end-dialog h2", "End this poll now?")
+
+    view |> render_hook("cancel_end_poll", %{})
+    refute has_element?(view, "#poll-end-dialog")
+    assert has_element?(view, "#poll-votes-so-far")
+
+    view |> element("#poll-end") |> render_click()
+    view |> element("#poll-end-confirm") |> render_click()
+    refute has_element?(view, "#poll-end-dialog")
+    assert shows?(fn -> has_element?(view, "#poll-results") end)
+    refute has_element?(view, "#poll-end")
   end
 
   defp start! do
@@ -176,14 +149,6 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
       )
 
     init_test_session(conn, %{human_account_id: account.id})
-  end
-
-  # Pages draw on the readings `KeyfleetWeb.FleetPolls` shares, and its
-  # producer doesn't run under test, so a page opens on a fresh read of the
-  # fleet, taken after the test has written what the page shows.
-  defp open(conn, path) do
-    FleetPolls.read(@fleet)
-    live(conn, path)
   end
 
   # Polls every tenth of a second, `tries` times.

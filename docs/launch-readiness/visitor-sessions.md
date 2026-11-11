@@ -115,8 +115,8 @@ it can't be bought yet ("sales open soon").
 
 **Note:**
 - How long until they say the price.
-- Whether they press the greyed-out Buy Next Key, and what they say when
-  nothing happens.
+- Whether they press the greyed-out Buy Key at the top, and what they say
+  when nothing happens.
 - Whether they open "Buy Key" further down, or the small "i" beside Price.
 - Whether "USDC" means anything to them.
 - Exact words of surprise or confusion.

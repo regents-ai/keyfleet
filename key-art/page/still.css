@@ -1,3 +1,7 @@
-/* The card's two faces, as the site's early-access page loads them. */
-@import "@fontsource-variable/bricolage-grotesque/opsz.css";
-@import "@fontsource/ibm-plex-mono/600.css";
+/* The card's lettering, the same file the site serves (regent_ui, SIL Open Font License). */
+@font-face {
+  font-family: "Geist Serif";
+  src: url("./GeistSerif-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+}

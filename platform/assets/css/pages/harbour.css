@@ -1,30 +1,20 @@
-/* The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`): the harbour
-   fills the screen behind everything, seen from low down so the water runs out
-   to the horizon. The header, sidebar, side panel, cards and reading column
-   stay solid over it; the open margins between them show the sea. Every rule
-   here applies only while the sea is on the page, so a page without it (the
-   homepage, /early) is drawn as before. Unlayered, so it wins over the shell's
-   own rules. */
+/* The swarm city behind the app's pages (`KeyfleetWeb.HarbourSeaLive`): it
+   fills the screen behind everything, seen from above its southern edge. The
+   header, sidebar, cards and reading column stay solid over it;
+   the open margins between them show the city. Every rule here applies only
+   while the city is on the page, so a page without it (the homepage, /early)
+   is drawn as before. Unlayered, so it wins over the shell's own rules. */
 
-/* The far sea fades into `--harbour-haze`, the page's ground in each theme; the
-   harbour reads it as a hex colour, so it is written out, not taken from a
-   variable. */
+/* The ground the city stands on in each theme, the colour of its far haze. */
 .harbour-sea__harbour {
-  --harbour-haze: #0b0b0b;
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: var(--harbour-haze);
+  background: #0e0e0e;
 }
 
 :root[data-theme="light"] .harbour-sea__harbour {
-  --harbour-haze: #f6f4ea;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .harbour-sea__harbour {
-    --harbour-haze: #f6f4ea;
-  }
+  background: #e5e3d2;
 }
 
 .harbour-sea__stage {
@@ -41,14 +31,21 @@
   height: 100%;
   opacity: 0;
   transition: opacity 600ms ease;
+  touch-action: none;
+  cursor: grab;
+}
+
+.harbour-sea__stage[data-harbour-dragging] canvas {
+  cursor: grabbing;
 }
 
 .harbour-sea__harbour[data-harbour-ready="true"] canvas {
   opacity: 1;
 }
 
-/* The name of the ship under the mouse, standing on its masthead. The hook
-   moves it with `translate`. */
+/* The name of the agent whose disc is under the mouse, or of the place the
+   district under it leads to, standing over it. The hook moves it with
+   `translate`. */
 .harbour-sea__tag {
   position: absolute;
   top: 0;
@@ -61,7 +58,7 @@
   border: 1px solid var(--ash-line-strong);
   background: var(--color-surface);
   color: var(--color-fg);
-  font: 0.68rem/1.2 var(--font-family-mono);
+  font: 0.68rem/1.2 var(--font-family-ui);
   letter-spacing: var(--tracking-microlabel);
   text-transform: uppercase;
   white-space: nowrap;
@@ -84,10 +81,31 @@
   content: "";
 }
 
-/* ---- The page over the sea ---- */
+/* A disc's name opens its card, as the disc does; a district's name is only a
+   name. The count of the holder's Keys rides raised after the Key. */
+.harbour-sea__tag[data-harbour-ship] {
+  cursor: pointer;
+  pointer-events: auto;
+}
 
-/* The html element keeps the ground, which shows while the sea loads and where
-   there is no WebGPU; everything above it lets the sea through. */
+.harbour-sea__tag sup {
+  align-self: flex-start;
+  margin-top: -0.3em;
+  color: var(--color-fg-muted);
+  font-size: 0.8em;
+  line-height: 1;
+  text-transform: none;
+}
+
+/* A district's name carries no agent's colour. */
+.harbour-sea__tag[data-harbour-district]::before {
+  content: none;
+}
+
+/* ---- The page over the city ---- */
+
+/* The html element keeps the ground, which shows while the city loads and where
+   there is no WebGPU; everything above it lets the city through. */
 body:has(> .harbour-sea) {
   --sea-lift: 560ms;
   background: transparent;
@@ -111,7 +129,7 @@ body:has(> .harbour-sea) #app-shell {
 
 /* The account tabs and the reading column (/about, /opportunities) carry text
    straight on the ground, so they keep it. Cards already paint their own. The
-   account pages stand on the ground whole, so the sea never shows through them. */
+   account pages stand on the ground whole, so the city never shows through them. */
 body:has(> .harbour-sea) #shell-tabs,
 body:has(> .harbour-sea) #route-content:has(.account-page) {
   background: var(--color-bg);
@@ -122,18 +140,13 @@ body:has(> .harbour-sea) #route-content .legal-page {
   background: var(--color-surface);
 }
 
-/* The footer is drawn above the sea, on the same ground as the header. */
-body:has(> .harbour-sea) > .regent-footer {
-  position: relative;
-  z-index: 1;
+/* The footer at the end of the page stands on the same ground as the header. */
+body:has(> .harbour-sea) #app-shell-scroller > .regent-footer {
   background: var(--color-bg);
-  transition:
-    opacity var(--sea-lift) ease,
-    visibility 0s;
 }
 
-/* The sea never takes a press meant for the page: it lies behind it and lets
-   every press through. Once the page is lifted away, the sea takes them. */
+/* The city never takes a press meant for the page: it lies behind it and lets
+   every press through. Once the page is lifted away, the city takes them. */
 .harbour-sea__harbour {
   pointer-events: none;
 }
@@ -142,126 +155,128 @@ body.sea-lifted .harbour-sea__harbour {
   pointer-events: auto;
 }
 
-/* ---- The lift button ---- */
+/* ---- The lift button and the city's bar ---- */
 
-/* It stands at the header's top right, in a slot the header
-   leaves empty for it, so it never covers a header control. It is centred on
-   the header's row, which its buttons make 4.75rem high (3.875rem on a
-   phone). */
-body:has(> .harbour-sea) #shell-header {
-  padding-inline-end: calc(2.75rem + 2 * var(--space-1));
-}
-
-/* It rides with the header, so once the page scrolls it never covers what
-   comes up under it; with the page lifted it stays on the screen. */
-.harbour-sea .harbour-sea__lift {
-  position: absolute;
-  top: calc(1px + (4.75rem - 2.75rem) / 2);
-  right: var(--space-1);
-  z-index: 2;
+/* The button that lifts the page away stands before a fleet's name
+   (`HarbourSeaLive.lift/1`, `.fleet-bar__title` in pages/fleet.css): a
+   skyline, unboxed, its press target the height of the name beside it. Its
+   rules name its place, so the plain button's frame never applies. */
+.fleet-bar__title > .harbour-sea__lift {
   display: grid;
   place-items: center;
   width: 2.75rem;
   height: 2.75rem;
   min-height: 0;
   padding: 0;
-  border: 1px solid var(--ash-line-strong);
+  border: 0;
   border-radius: 0;
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-fg);
   cursor: pointer;
 }
 
-body.sea-lifted .harbour-sea .harbour-sea__lift {
-  position: fixed;
-}
-
 @media (hover: hover) {
-  .harbour-sea .harbour-sea__lift:hover {
-    background: color-mix(in oklab, var(--color-fg) 6%, var(--color-bg));
+  .harbour-sea__lift:hover {
+    background: color-mix(in oklab, var(--color-fg) 6%, transparent);
   }
 }
 
-.harbour-sea .harbour-sea__lift:focus-visible {
+.harbour-sea__lift:focus-visible {
   outline: 2px solid var(--ash-accent);
   outline-offset: 2px;
 }
 
-.harbour-sea .harbour-sea__lift svg {
-  width: 1.1rem;
-  height: 1.1rem;
-  transition: rotate 300ms ease;
+.harbour-sea__lift svg {
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
-.harbour-sea .harbour-sea__lift[aria-pressed="true"] svg {
-  rotate: 180deg;
+.harbour-sea__lift-flag {
+  fill: var(--palette-tangerine-tango);
 }
 
-/* A phone's header is one short row; the slot is the button and a hair more. */
-@media (max-width: 47.99rem) {
-  body:has(> .harbour-sea) #shell-header {
-    padding-inline-end: calc(2.75rem + 2 * 4px);
-  }
+/* With the page lifted, the bar at the top centre names the fleet, and its
+   first button brings the page back; Chat and Workspace open those pages. It
+   stands on the page's ground so it stays easy to find over the city. */
+.harbour-sea__bar {
+  display: none;
+}
 
-  /* The row's controls draw a little tighter to make that room. */
-  body:has(> .harbour-sea) #shell-header .mobile-menu-button {
-    padding-inline: 0.5rem;
-  }
+body.sea-lifted .harbour-sea__bar {
+  position: fixed;
+  z-index: 2;
+  inset-block-start: var(--space-2);
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: max-content;
+  max-width: calc(100% - 2 * var(--space-2));
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
 
-  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet) {
+.harbour-sea__bar > .harbour-sea__return {
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .harbour-sea__return:hover {
+    background: color-mix(in oklab, var(--color-fg) 6%, transparent);
+  }
+}
+
+.harbour-sea__return:focus-visible {
+  outline: 2px solid var(--ash-accent);
+  outline-offset: 2px;
+}
+
+/* On a phone the bar tightens and its buttons drop their arrows, so the name,
+   Chat and Workspace share one row on a 390-wide screen. Narrower than that,
+   the name takes the first row and Chat and Workspace share the second. */
+@media (max-width: 30rem) {
+  body.sea-lifted .harbour-sea__bar {
     gap: 0.25rem;
-    padding-inline: 0.5rem;
+    padding: 0.25rem;
+    font-size: 0.9375rem;
   }
 
-  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
-    margin-inline: 0;
+  .harbour-sea__bar > .harbour-sea__return {
+    padding: 0 0.375rem;
   }
 
-  .harbour-sea .harbour-sea__lift {
-    top: calc(1px + (3.875rem - 2.75rem) / 2);
-    right: 4px;
+  .harbour-sea__bar > .rg-button {
+    padding-inline: 0.625rem;
+    font-size: inherit;
   }
-}
 
-/* Just past the shell's phone row, the header's links give their place to the
-   slot; the footer carries the same links. */
-@media (min-width: 48rem) and (max-width: 48.49rem) {
-  body:has(> .harbour-sea) #shell-header .rl-header-links {
-    display: none;
+  .harbour-sea__bar > .rg-button::after {
+    content: none;
   }
 }
 
-/* Under 480px the brand is its mark alone, as the shell's row leaves it, so the
-   name never shows cut short. */
-@media (max-width: 29.99rem) {
-  body:has(> .harbour-sea) #shell-header .shell-brand__name {
-    display: none;
-  }
-}
-
-/* Below 392px the theme switch gives way sooner than the shell's own 360px,
-   as the shell does: the device's setting applies until the screen is wider. */
-@media (max-width: 24.49rem) {
-  body:has(> .harbour-sea) #shell-header:has(.shell-get-key, .shell-credits) .theme-control {
-    display: none;
-  }
-}
-
-/* On a 320px phone, signed in beside the Credits balance, the buttons drop
-   their arrows and the balance and name tighten. */
-@media (max-width: 22.49rem) {
-  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
-    display: none;
-  }
-
-  body:has(> .harbour-sea) #app-shell #shell-header :is(.shell-credits, .account-chip) {
-    padding-inline: 0.35rem;
+@media (max-width: 24rem) {
+  .harbour-sea__bar > .harbour-sea__return {
+    flex-basis: 100%;
   }
 }
 
 /* Lifted: the page, menus and footer included, rises off the top and only the
-   sea is left. Hidden once it has gone, so the keyboard and screen readers
-   skip it and land on the button and the sea. */
+   city is left. Hidden once it has gone, so the keyboard and screen readers
+   skip it and land on the button and the city. */
 body.sea-lifted:has(> .harbour-sea) {
   height: 100dvh;
   min-height: 0;
@@ -278,29 +293,15 @@ body.sea-lifted:has(> .harbour-sea) #app-shell {
     visibility 0s var(--sea-lift);
 }
 
-body.sea-lifted:has(> .harbour-sea) > .regent-footer {
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity var(--sea-lift) ease,
-    visibility 0s var(--sea-lift);
-}
-
 /* ---- An agent's card: who it is, its Key and its last few actions ---- */
 
 .harbour-card {
-  width: min(24rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 2rem);
-  padding: 0;
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
+  --rg-dialog-size: 24rem;
   color: var(--color-fg);
-  overflow-y: auto;
 }
 
-/* The sea stays in sight behind it. */
-.harbour-card::backdrop {
-  background: color-mix(in oklch, var(--palette-charcoal) 30%, transparent);
+.harbour-card .rg-dialog__body {
+  padding: 0;
 }
 
 .harbour-card__head {
@@ -343,7 +344,7 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
 .harbour-card time {
   margin: 0;
   color: var(--color-fg-muted);
-  font: 0.72rem/1.4 var(--font-family-mono);
+  font: 0.72rem/1.4 var(--font-family-ui);
   letter-spacing: var(--tracking-microlabel);
   text-transform: uppercase;
   white-space: nowrap;
@@ -375,6 +376,20 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
 .harbour-card__close svg {
   width: 1rem;
   height: 1rem;
+}
+
+.harbour-card__owner {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin: 0;
+  padding: var(--space-1) var(--space-3) 0;
+  font: 0.8rem/1.4 var(--font-family-ui);
+}
+
+.harbour-card__owned {
+  margin-inline-start: auto;
+  color: var(--color-fg-muted);
 }
 
 .harbour-card__actions {
@@ -415,9 +430,8 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
   text-decoration: none;
 }
 
-.harbour-card__key::after {
+.harbour-card__key .rg-icon {
   margin-inline-start: 0.4em;
-  content: "\2192";
 }
 
 @media (hover: hover) {
@@ -428,16 +442,9 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
 
 @media (prefers-reduced-motion: reduce) {
   .harbour-sea__stage canvas,
-  .harbour-sea .harbour-sea__lift svg,
   body:has(> .harbour-sea) #app-shell,
-  body:has(> .harbour-sea) > .regent-footer,
-  body.sea-lifted:has(> .harbour-sea) #app-shell,
-  body.sea-lifted:has(> .harbour-sea) > .regent-footer {
+  body.sea-lifted:has(> .harbour-sea) #app-shell {
     transition: none;
-  }
-
-  .harbour-sea .harbour-sea__lift[aria-pressed="true"] svg {
-    rotate: none;
   }
 
   /* No slide: the page simply goes. */

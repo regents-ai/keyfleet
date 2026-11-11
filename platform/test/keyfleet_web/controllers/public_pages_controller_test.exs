@@ -3,6 +3,12 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
 
   alias KeyfleetWeb.PublicDocuments
 
+  test "/agent and /start, where a new agent often looks first, open the Agents page" do
+    for path <- ["/agent", "/start"] do
+      assert redirected_to(get(build_conn(), path)) == "/agents"
+    end
+  end
+
   test "PRIVACY: the policy is on /privacy and does not carry draft placeholders" do
     conn = get(build_conn(), "/privacy")
     body = html_response(conn, 200)
@@ -21,11 +27,35 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     refute body =~ "INSERT"
   end
 
+  test "every code block and table on the docs page can take keyboard focus, so a wide one can be scrolled" do
+    blocks = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
+    blocks = LazyHTML.query(blocks, ".public-document :is(pre, table)")
+
+    refute Enum.empty?(blocks)
+    assert blocks |> LazyHTML.filter("[tabindex='0']") |> Enum.count() == Enum.count(blocks)
+  end
+
+  test "every link the guides make to a docs section opens at that section" do
+    docs = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
+
+    sections =
+      for file <- Path.wildcard("priv/public/*.md"),
+          [_, id] <- Regex.scan(~r{/docs#([a-z0-9-]+)}, File.read!(file)),
+          uniq: true,
+          do: id
+
+    refute sections == []
+
+    for id <- sections do
+      assert docs |> LazyHTML.query("##{id}") |> Enum.count() == 1, "/docs##{id} opens nowhere"
+    end
+  end
+
   # Each page names itself in the tab and describes itself for search, from
   # the one list in PublicDocuments; the site name is added once.
   test "every reading page has its own title and description" do
     pages =
-      for path <- ~w(/docs /about /contact /opportunities /privacy /terms) do
+      for path <- ~w(/docs /about /opportunities /privacy /terms) do
         document = build_conn() |> get(path) |> html_response(200) |> LazyHTML.from_document()
         title = document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim()
 
@@ -36,26 +66,47 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         {title, description}
       end
 
-    assert pages |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length() == 6
-    assert pages |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 6
+    assert pages |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length() == 5
+    assert pages |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 5
 
     assert {"Terms of Use · Keyfleet", "The terms that apply when you use Keyfleet."} in pages
   end
 
-  test "the homepage is titled with the site name alone" do
+  test "the homepage is titled with the site name and what it is for" do
     document = build_conn() |> get("/") |> html_response(200) |> LazyHTML.from_document()
-    assert document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim() == "Keyfleet"
-  end
-
-  test "a page inside the app is titled by its route" do
-    document =
-      build_conn()
-      |> get("/syndicate/1")
-      |> html_response(200)
-      |> LazyHTML.from_document()
 
     assert document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim() ==
-             "Fleet · Keyfleet"
+             "Keyfleet · Persistent teams for personal AI agents"
+  end
+
+  test "a fleet's pages are titled with its name, after their own title on all but its own" do
+    Keyfleet.Fleets.bootstrap_catalog!()
+    Keyfleet.ChainHelpers.deploy!("fibonacci_syndicate")
+
+    title = fn path ->
+      build_conn()
+      |> get(path)
+      |> html_response(200)
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("title")
+      |> LazyHTML.text()
+      |> String.trim()
+    end
+
+    assert title.("/syndicate/1") == "Syndicate #1 · Keyfleet"
+    assert title.("/syndicate/1/treasury") == "Treasury · Syndicate #1 · Keyfleet"
+    assert title.("/syndicate/1/keys/1") == "Key 1 · Syndicate #1 · Keyfleet"
+    assert title.("/about") == "About · Keyfleet"
+
+    # A Key not sold yet still names its fleet above its number.
+    assert build_conn()
+           |> get("/syndicate/1/keys/1")
+           |> html_response(200)
+           |> LazyHTML.from_document()
+           |> LazyHTML.query(".key-kicker")
+           |> LazyHTML.text()
+           |> String.trim()
+           |> String.starts_with?("Syndicate #1")
   end
 
   test "reading and home first renders honor the saved theme" do
@@ -79,7 +130,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     end
   end
 
-  test "before any choice a reading page and home carry no theme and follow the device" do
+  test "before any choice a reading page and home are light" do
     for path <- ["/privacy", "/"] do
       document =
         build_conn()
@@ -87,18 +138,15 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         |> html_response(200)
         |> LazyHTML.from_document()
 
-      assert document |> LazyHTML.query("html[data-theme]") |> Enum.count() == 0
+      assert document |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == ["light"]
 
       assert document
              |> LazyHTML.query("meta[name=color-scheme]")
-             |> LazyHTML.attribute("content") == ["dark light"]
+             |> LazyHTML.attribute("content") == ["light"]
 
       assert document
              |> LazyHTML.query("meta[name=theme-color]")
-             |> LazyHTML.attribute("media") == [
-               "(prefers-color-scheme: light)",
-               "(prefers-color-scheme: dark)"
-             ]
+             |> LazyHTML.attribute("content") == ["#e5e3d2"]
     end
   end
 
@@ -111,7 +159,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
 
   test "the discovery files carry an ETag of their body and a five-minute public cache" do
     for path <-
-          ~w(/openapi.json /robots.txt /llms.txt /capabilities /.well-known/security.txt /.well-known/api-catalog) do
+          ~w(/openapi.json /robots.txt /llms.txt /capabilities.json /.well-known/security.txt /.well-known/api-catalog) do
       answer = get(build_conn(), path)
       digest = Base.encode16(:crypto.hash(:sha256, answer.resp_body), case: :lower)
 
@@ -130,7 +178,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert fields["Contact"] == "mailto:build@regents.sh"
     assert DateTime.diff(expires, DateTime.utc_now(), :day) in 300..366
     assert fields["Canonical"] == PublicDocuments.url("/.well-known/security.txt")
-    assert fields["Policy"] == PublicDocuments.url("/contact")
+    assert fields["Policy"] == PublicDocuments.url("/about")
   end
 
   test "the API catalog is an RFC 9727 linkset naming the OpenAPI file and the docs" do
@@ -160,8 +208,50 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
            end)
   end
 
+  test "the sitemap lists each open fleet's page, not one still coming soon" do
+    Keyfleet.Fleets.bootstrap_catalog!()
+    Keyfleet.ChainHelpers.deploy!("fibonacci_syndicate")
+
+    locations =
+      Regex.scan(~r{<loc>([^<]+)</loc>}, build_conn() |> get("/sitemap.xml") |> response(200),
+        capture: :all_but_first
+      )
+      |> List.flatten()
+
+    assert PublicDocuments.url("/syndicate/1") in locations
+    refute PublicDocuments.url("/cascade/1") in locations
+  end
+
   defp field(line) do
     [name, value] = String.split(line, ": ", parts: 2)
     {name, value}
+  end
+
+  test "a Markdown address that isn't here answers in Markdown and points to the agent guide" do
+    guide = "(#{PublicDocuments.url("/llms.txt")})"
+
+    for path <- ["/nope.md", "/docs/nope.md"] do
+      answer = get(build_conn(), path)
+      assert response_content_type(answer, :md) =~ "text/markdown", path
+      assert response(answer, 404) =~ guide, path
+    end
+
+    {404, headers, body} =
+      assert_error_sent(404, fn -> get(build_conn(), "/agents/nope/skill.md") end)
+
+    assert {"content-type", "text/markdown; charset=utf-8"} in headers
+    assert body =~ guide
+  end
+
+  test "a Markdown address under a fleet's pages points to the fleet's Markdown" do
+    fleet = "(#{PublicDocuments.url("/fleets/fleet_tech_classic.md")})"
+
+    for path <- ["/classic/1.md", "/classic/1/workspace.md"] do
+      answer = get(build_conn(), path)
+      assert response_content_type(answer, :md) =~ "text/markdown", path
+      assert response(answer, 404) =~ fleet, path
+    end
+
+    assert get(build_conn(), "/classic/10.md") |> response(404) =~ "/llms.txt"
   end
 end

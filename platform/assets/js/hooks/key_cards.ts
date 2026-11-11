@@ -1,9 +1,9 @@
 /**
- * The Key cards turning over in a fleet's section of the homepage. The
- * stylesheet turns them, only while this marks them `data-cards-turning`: on
- * screen. Scrolled away, they hold the card they reached and go on from it when
- * they come back. Without this hook, or for a visitor who asked for less
- * motion, the first card stays.
+ * The Key cards turning over in the "Buy Key" window. The stylesheet turns
+ * them, only while this marks them `data-cards-turning`: on screen. Scrolled
+ * away, they hold the card they reached and go on from it when they come
+ * back. Without this hook, or for a visitor who asked for less motion, the
+ * first card stays.
  */
 import type {Hook} from "../hook_composition"
 

@@ -30,16 +30,8 @@ const stops: Stop[] = [
   at("Regents Club Keys", `${club}?view=map`),
   at("Regents Club members", `${club}?view=members`),
   at("a Key", `${club}/keys/1`),
-  at("a room", `${club}/rooms/general`),
+  at("a room", `${club}?room=general`),
   at("the polls", `${club}/polls`),
-  {
-    name: "a poll",
-    open: async page => {
-      await visit(page, `${club}/polls`)
-      await page.locator("#polls-page .polls-card h3 a").first().click()
-      await expect(page).toHaveURL(/\/polls\/[0-9a-f-]{36}$/)
-    },
-  },
   at("About", "/about"),
   at("Opportunities", "/opportunities"),
 ]
@@ -54,7 +46,7 @@ for (const scheme of ["light", "dark"] as const) {
     for (const stop of stops) {
       test(`${stop.name}, ${scheme}, ${screen.name}`, async ({page}) => {
         await page.setViewportSize(screen.viewport)
-        await page.emulateMedia({colorScheme: scheme})
+        await page.context().addCookies([{name: "regent_theme", value: scheme, url: test.info().project.use.baseURL as string}])
         await stop.open(page)
         // What the page reads once connected is drawn, and the faces it
         // writes in are loaded, so the colours axe reads are the final ones.

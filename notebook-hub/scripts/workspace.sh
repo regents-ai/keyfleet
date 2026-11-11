@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepares the marimohub workspace that compute-fly is typechecked, tested and
 # bundled in: marimohub at the pinned commit, with compute-fly added as
-# packages/compute-fly and the matching lockfile entry applied. The hub image
+# packages/compute-fly and the matching lockfile change applied. The hub image
 # builds the same way (hub/Dockerfile).
 set -euo pipefail
 
@@ -25,7 +25,7 @@ if [ "$head" != "$MARIMOHUB_COMMIT" ]; then
 fi
 
 node_want="$(cat "$work/.node-version")"
-node_have="$(node -p 'process.versions.node.split(".")[0]')"
+node_have="$(node -p 'process.versions.node')"
 if [ "$node_have" != "$node_want" ]; then
   echo "marimohub builds with Node $node_want; this shell has Node $(node -v). Put Node $node_want first on PATH." >&2
   exit 1
@@ -34,8 +34,8 @@ fi
 mkdir -p "$work/packages/compute-fly"
 rsync -a --delete --exclude node_modules --exclude dist "$here/compute-fly/" "$work/packages/compute-fly/"
 
-# The patch only adds lines, so it would apply again on top of itself: apply it
-# only when the lockfile still matches the pinned commit.
+# Apply the patch only when the lockfile still matches the pinned commit, so a
+# second run never applies it twice.
 if git -C "$work" diff --quiet -- pnpm-lock.yaml; then
   git -C "$work" apply "$patch"
 fi

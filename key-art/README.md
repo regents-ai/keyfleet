@@ -8,8 +8,9 @@ Draws a revealed key's card as a 767×959 PNG for the site's picture job
   and draws the card off screen, so the picture is the same card the Key Lab and
   the early-access page's roller show.
 - `server.mjs` keeps one headless Chromium (CPU rendering, no graphics chip) and
-  answers:
-  - `GET /healthz`: 200 once the browser is up.
+  answers as soon as it starts, while the browser is still starting, so the draw
+  that wakes a stopped machine is answered once the browser is up:
+  - `GET /healthz`: 200 once the browser is up, 503 while it starts.
   - `POST /draw` with JSON `{"seed", "top_line", "table"}`: 200 and the PNG;
     400 and `{"error": <reason>}` for a body that is not JSON with those three
     strings; 422 and `{"error": <reason>}` for a seed that is not 32 bytes of

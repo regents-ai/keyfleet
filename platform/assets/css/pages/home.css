@@ -1,6 +1,5 @@
-/* Homepage-only composition: Classic #1 with "Buy Next Key", the box saying
-   how a fleet runs itself, the Regents Club and what a fleet can use. The
-   legal pages share the .rl-root colours and spacing. */
+/* Homepage-only composition: the hero, with Classic #1's figures and "Buy
+   Key". The legal pages share the .rl-root colours and spacing. */
 @layer regents-product {
   .rl-root {
     /* The colours the GPU pictures read, per theme. */
@@ -29,15 +28,14 @@
     .rl-header-links > a:not(.rg-button) { min-width: 2.75rem; min-height: 2.75rem; }
   }
 
-  .rl-overline { font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; }
-  .rl-eyebrow { color: var(--rl-muted); font-family: var(--font-family-ui); font-size: .8125rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
 
-  /* The hero. Wide: the headline, the facts and the instruction in the left
-     half, "Buy Next Key" centred in the right half. Narrow: the headline, then the button, then
-     the instruction. The hex field sits behind all of it. */
+  /* The hero. Wide: the headline, "Watch" and Classic #1's figures in
+     the left half, "Buy Key" centred in the right half. Narrow: the headline
+     down to the figures, then the button. The hex field sits behind all of
+     it. */
   .rl-hero {
     position: relative; isolation: isolate; overflow: hidden;
-    display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "buy" "give";
+    display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "buy";
     gap: var(--space-5) var(--space-6);
     padding: clamp(2rem, 6svh, 4.5rem) var(--rg-panel-padding);
   }
@@ -47,21 +45,29 @@
     line-height: 1.02; letter-spacing: -.035em; text-wrap: balance; overflow-wrap: anywhere;
   }
   .rl-hero__accent { color: var(--ash-accent-warm); }
+  .rl-hero__lead { max-inline-size: 34ch; color: var(--rl-muted); font-size: clamp(1.0625rem, 1rem + .35vw, 1.25rem); line-height: 1.45; text-wrap: pretty; }
+  .rl-hero__ways { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
+
+  /* Classic #1 as it is now: its label, its figures and the goal it is working on. */
+  .rl-now { display: grid; gap: var(--space-1); padding-block-start: var(--space-3); }
+  .rl-now__label { color: var(--rl-muted); font-size: .875rem; }
+  .rl-now__goal { max-inline-size: 44ch; color: var(--rl-muted); font-size: .9375rem; text-wrap: pretty; }
+  .rl-now__goal a { color: var(--rl-ink); }
 
   /* Classic in three figures, side by side, each in a cell of its own height.
      Every label and figure starts at the top of its cell, so a figure that
      takes a second line leaves the other labels in line with its own. */
   .rl-facts {
     display: grid; grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start;
-    margin: var(--space-2) 0 0; border-block: 1px solid var(--rl-line);
+    margin: 0; border-block: 1px solid var(--rl-line);
   }
   .rl-facts > div { display: grid; align-content: start; gap: .25rem; min-width: 0; padding: var(--space-2) var(--space-4) var(--space-2) 0; }
   .rl-facts > div + div { padding-inline-start: var(--space-4); border-inline-start: 1px solid var(--rl-line); }
   .rl-facts dt { display: flex; align-items: center; gap: .25rem; min-block-size: 1.5rem; color: var(--rl-muted); font-size: .8125rem; }
   .rl-facts dd { margin: 0; font-size: clamp(1.0625rem, 1rem + .3vw, 1.25rem); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-  /* "Buy Next Key": the next Key's card over the button that names it and its
-     price, and under them a line kept for the reason it can't be pressed. */
+  /* "Buy Key": the Key on offer's card over the button, and under them one
+     line, the Key's number and price or the reason it can't be pressed. */
   .rl-buy { grid-area: buy; display: grid; gap: var(--space-2); justify-self: center; inline-size: min(100%, 22rem); }
   /* The card's picture is cut out of its backdrop, so the page shows around
      its rounded corners and the Key's head on its left side. */
@@ -88,14 +94,14 @@
   .rl-buy__tag {
     position: absolute; inset-inline-start: calc(197 / 716 * 100% + var(--space-2)); inset-block-end: calc(40 / 900 * 100%);
     padding: .25rem .5rem; background: rgb(22 22 22 / .82); color: var(--palette-platinum);
-    font-family: var(--font-family-mono); font-size: .75rem; font-variant-numeric: tabular-nums;
+    font-family: var(--font-family-ui); font-size: .75rem; font-variant-numeric: tabular-nums;
     border: 1px solid rgb(229 227 210 / .18);
   }
-  .rl-buy__button { inline-size: 100%; }
-  .rl-buy__label { display: grid; justify-items: center; gap: .125rem; }
-  .rl-buy__action { font-size: 1.0625rem; }
-  .rl-buy__price { font-weight: 400; font-size: .875rem; font-variant-numeric: tabular-nums; }
-  .rl-buy__why { min-block-size: 1.5em; color: var(--rl-muted); font-size: .875rem; text-align: center; }
+  /* The button and the line under it span the card itself, columns 52 to 598
+     of the picture's 600, not the Key's head beside it. */
+  .rl-buy__button,
+  .rl-buy__line { justify-self: start; inline-size: calc(546 / 600 * 100%); margin-inline-start: calc(52 / 600 * 100%); }
+  .rl-buy__line { min-block-size: 1.5em; color: var(--rl-muted); font-size: .875rem; font-variant-numeric: tabular-nums; text-align: center; }
 
   /* Under a mouse the card waits a step back, with its price hidden. Pointing
      at the card or the button, or tabbing to the button, brings it forward
@@ -124,21 +130,11 @@
   /* While the sale is closed the button reads as off: the inert grey fill and
      muted ink a disabled button has, set through the colours the button
      paints with. It stays focusable, so its preview and its reason are too. */
-  .rl-buy__button[aria-disabled="true"],
-  .rl-fleet__closed[aria-disabled="true"] {
+  .rl-buy__button[aria-disabled="true"] {
     --color-accent: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
     --color-fg-on-accent: var(--color-fg-muted);
     cursor: default;
   }
-
-  .rl-give { grid-area: give; display: grid; align-content: start; gap: var(--space-1); min-width: 0; max-inline-size: 38rem; }
-  .rl-give__label { color: var(--rl-muted); font-size: .875rem; }
-  .rl-give__command {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2);
-    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-    border: 1px solid var(--rl-line); background: var(--rl-panel);
-  }
-  .rl-give__text { font-family: var(--font-family-mono); font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
 
   /* The hex field: the stylesheet's still drawing of the tiles, and the GPU's
      over it once its first frame has landed. The field fades out toward its
@@ -166,7 +162,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .rl-field__still, .rl-field__canvas { transition: opacity 240ms ease; }
   }
-  /* Narrow: a band across the middle, between the headline and the instruction. */
+  /* Narrow: a band across the middle, between the headline and the Key. */
   .rl-hero__field {
     --rl-fade-x: .5; --rl-fade-y: .58; --rl-fade-width: 10; --rl-fade-height: .28;
     --rl-fade-from: .43; --rl-fade-to: 1;
@@ -174,10 +170,9 @@
 
   @media (min-width: 64rem) {
     .rl-hero {
-      grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto 1fr;
-      grid-template-areas: "head buy" "give buy"; align-items: start;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-areas: "head buy"; align-items: start;
     }
-    .rl-give { align-self: end; }
     .rl-hero__field {
       --rl-fade-x: .75; --rl-fade-y: .5; --rl-fade-width: .6; --rl-fade-height: .95;
       --rl-fade-from: .25; --rl-fade-to: .8;
@@ -185,179 +180,27 @@
   }
 
   /* The hero settles in once as the page first paints: the field, the
-     headline, the figures, the Key and the instruction, one after another.
+     headline, "Watch", the figures and the Key, one after another.
      It plays from the stylesheet, so it runs before the page connects and
-     never replays when the page updates. Less motion, and it is simply there. */
+     never replays when the page updates. Less motion, and it is simply there.
+     The Key only rises, never starting unseen, so a slow phone counts it as
+     drawn with the first paint. */
   @keyframes rl-settle { from { opacity: 0; transform: translateY(.75rem); } }
-  @keyframes rl-card-settle { from { opacity: 0; transform: translateY(1rem) scale(.98); } }
+  @keyframes rl-card-settle { from { transform: translateY(1rem) scale(.98); } }
   @keyframes rl-fade { from { opacity: 0; } }
   @media (prefers-reduced-motion: no-preference) {
-    .rl-hero :is(.rl-hero__head > *, .rl-give) { animation: rl-settle 320ms var(--rl-ease) backwards; }
+    .rl-hero .rl-hero__head > * { animation: rl-settle 320ms var(--rl-ease) backwards; }
     .rl-hero .rl-buy { animation: rl-card-settle 420ms var(--rl-ease) 180ms backwards; }
     .rl-hero .rl-hero__field { animation: rl-fade 600ms ease-out backwards; }
     .rl-hero .rl-hero__title { animation-delay: 60ms; }
-    .rl-hero .rl-facts { animation-delay: 120ms; }
-    .rl-hero .rl-give { animation-delay: 240ms; }
-  }
-
-  /* Classic Keyfleet and the Regents Club: each fleet's sea beside what it
-     is, the cards turning over and its buttons. */
-  .rl-fleet {
-    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
-    padding: var(--rg-panel-padding);
-  }
-
-  /* A fleet's sea, its far water fading into `--harbour-haze`, the page's
-     ground in each theme, which the harbour reads as a hex colour. Until the
-     GPU's first frame lands, and where there is none, the box shows that
-     fleet's harbour still. */
-  .rl-sea {
-    --harbour-haze: #0b0b0b;
-    position: relative; overflow: hidden; min-width: 0; aspect-ratio: 16 / 10;
-    border: 1px solid var(--hairline-strong);
-    background: var(--harbour-haze) var(--rl-sea-still) 50% 50% / cover no-repeat;
-  }
-  .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-night.webp"); }
-  .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-night.webp"); }
-  :root[data-theme="light"] .rl-sea { --harbour-haze: #f6f4ea; }
-  :root[data-theme="light"] .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
-  :root[data-theme="light"] .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme]) .rl-sea { --harbour-haze: #f6f4ea; }
-    :root:not([data-theme]) .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
-    :root:not([data-theme]) .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
-  }
-  .rl-sea__stage { position: absolute; inset: 0; color: var(--color-fg); }
-  .rl-sea__stage canvas {
-    position: absolute; inset: 0; display: block; inline-size: 100%; block-size: 100%;
-    opacity: 0; transition: opacity 600ms ease;
-  }
-  .rl-sea[data-harbour-ready="true"] canvas { opacity: 1; }
-
-  /* Thirty Key cards turning over, a fifth of a second each, only while they
-     are on screen (`KeyCards` marks them turning). The sheet holds them six
-     across and five down: the rows step down one every six cards while the
-     sheet steps across one each card, so they show in order, and the rows
-     and the sheet stop and start together. Less motion shows the first card
-     alone. */
-  .rl-cards { inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
-  .rl-cards__rows { inline-size: 600%; block-size: 500%; }
-  .rl-cards__sheet { display: block; inline-size: 100%; block-size: 100%; }
-  @keyframes rl-cards-down { to { translate: 0 -100%; } }
-  @keyframes rl-cards-across { to { translate: -100% 0; } }
-  @media (prefers-reduced-motion: no-preference) {
-    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) infinite paused; }
-    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) infinite paused; }
-    .rl-cards[data-cards-turning] :is(.rl-cards__rows, .rl-cards__sheet) { animation-play-state: running; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .rl-sea__stage canvas { transition: none; }
-  }
-  .rl-fleet__copy { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
-  .rl-fleet__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-fleet__line { max-inline-size: 42ch; color: var(--rl-muted); text-wrap: pretty; }
-  .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
-  .rl-fleet__why { margin: 0; color: var(--rl-muted); font-size: .875rem; }
-
-  /* The window "Buy Key" opens: the Key cards turning, the split, and the sale's
-     figures in a ruled list. Phones see it across the whole width. */
-  .rl-buy-key {
-    inline-size: min(26rem, calc(100vw - 2rem)); max-inline-size: none; max-block-size: calc(100dvh - 2rem);
-    padding: clamp(1rem, 4vw, 1.5rem); font-size: 1rem;
-    border: 1px solid var(--ash-line-strong); background: var(--color-surface); color: var(--color-fg);
-  }
-  .rl-buy-key[open] { display: grid; gap: var(--space-3); }
-  .rl-buy-key::backdrop { background: var(--ash-scrim); }
-  .rl-buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
-  .rl-buy-key h2:focus { outline: none; }
-  .rl-buy-key .rl-cards { justify-self: center; inline-size: min(100%, 12rem); }
-  .rl-buy-key__split { margin: 0; font-size: .875rem; text-align: center; color: var(--rl-muted); }
-  .rl-buy-key__facts { display: grid; margin: 0; border-block-start: 1px solid var(--rl-line); }
-  .rl-buy-key__facts > div {
-    display: flex; justify-content: space-between; gap: var(--space-2); padding-block: var(--space-1);
-    border-block-end: 1px solid var(--rl-line);
-  }
-  .rl-buy-key__facts dt { color: var(--rl-muted); }
-  .rl-buy-key__facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
-  .rl-buy-key__actions { display: grid; justify-items: start; gap: var(--space-2); }
-  .rl-buy-key__actions form { margin: 0; }
-  .rl-buy-key__why { min-block-size: 1.5em; margin: 0; color: var(--rl-muted); font-size: .875rem; }
-  /* Room for its count, its goal, one featured item and its latest, each
-     clamped, so the button under them never moves. */
-  .rl-club__now {
-    display: grid; align-content: start; gap: var(--space-1); min-block-size: 10rem;
-    padding-block-start: var(--space-2); border-block-start: 1px solid var(--rl-line);
-  }
-  .rl-club__now p { font-size: .9375rem; line-height: 1.45; overflow-wrap: anywhere; }
-  .rl-club__who { min-block-size: 1.45em; color: var(--rl-muted); font-variant-numeric: tabular-nums; }
-  .rl-club__trying, .rl-club__featured, .rl-club__latest > span {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
-  }
-  .rl-club__featured { -webkit-line-clamp: 3; }
-  .rl-club__featured .rl-overline { display: block; margin-block-end: .125rem; color: var(--rl-muted); }
-  .rl-club__latest { display: grid; gap: .125rem; color: var(--rl-muted); }
-  .rl-club__latest time { font-size: .8125rem; font-variant-numeric: tabular-nums; }
-  .rl-club__failed { color: var(--rl-muted); }
-  @media (min-width: 64rem) {
-    .rl-fleet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
-  }
-
-  /* What a fleet can use: three tiles across, two on a tablet, one on a
-     phone, ruled on a shared grid; a last tile alone keeps its width. */
-  .rl-integrations { display: grid; gap: var(--space-4); padding: var(--rg-panel-padding); }
-  .rl-integrations > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-integration-tiles {
-    display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
-    border-block-start: 1px solid var(--rl-line); border-inline-start: 1px solid var(--rl-line);
-  }
-  .rl-integration-tiles > li {
-    display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3);
-    border-block-end: 1px solid var(--rl-line); border-inline-end: 1px solid var(--rl-line);
-  }
-  .rl-integration-tiles h3 { font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
-  .rl-integration-tiles p { color: var(--rl-muted); font-size: .9375rem; line-height: 1.45; }
-  @media (min-width: 40rem) {
-    .rl-integration-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (min-width: 64rem) {
-    .rl-integration-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  }
-
-  /* Starting ideas for a shared goal: numbered tiles on the same ruled grid,
-     four across on a wide screen, two on a tablet, one on a phone. Links to
-     other sites are underlined in the text around them. */
-  .rl-ideas { display: grid; gap: var(--space-4); padding: var(--rg-panel-padding); }
-  .rl-ideas > h2 { max-inline-size: 24ch; font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-ideas__intro, .rl-ideas__closing { max-inline-size: 60ch; font-size: 1rem; line-height: 1.5; }
-  .rl-ideas__intro { color: var(--rl-muted); }
-  .rl-ideas__closing strong { font-weight: 500; }
-  .rl-ideas a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .2em; }
-  .rl-ideas__tiles {
-    display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
-    border-block-start: 1px solid var(--rl-line); border-inline-start: 1px solid var(--rl-line);
-  }
-  .rl-ideas__tiles > li {
-    display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3);
-    border-block-end: 1px solid var(--rl-line); border-inline-end: 1px solid var(--rl-line);
-  }
-  .rl-ideas__n { color: var(--rl-muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
-  .rl-ideas__tiles h3 { font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
-  .rl-ideas__tiles p { color: var(--rl-muted); font-size: .9375rem; line-height: 1.45; }
-  @media (min-width: 40rem) {
-    .rl-ideas__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (min-width: 80rem) {
-    .rl-ideas__tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .rl-hero .rl-hero__lead { animation-delay: 90ms; }
+    .rl-hero .rl-hero__ways { animation-delay: 120ms; }
+    .rl-hero .rl-now { animation-delay: 150ms; }
   }
 
   /* On a phone the card stays small enough that its button shows with it. */
   @media (max-width: 39.99rem) {
     .rl-buy { inline-size: min(100%, 17rem); }
-  }
-  /* The narrowest phones let a figure take a second line rather than run
-     into the next one. */
-  @media (max-width: 25.99rem) {
-    .rl-facts dd { white-space: normal; }
   }
 
   @media (max-width: 47.99rem) {
@@ -366,27 +209,26 @@
     .rl-facts > div { padding-inline-end: var(--space-2); }
     .rl-facts > div + div { padding-inline-start: var(--space-2); }
     .rl-facts dd { font-size: 1rem; }
-    .rl-give__command { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: var(--space-2); }
-    .rl-give__text { font-size: .8125rem; }
+  }
+
+  /* On a phone the three figures become rows, label left and figure right,
+     so no figure breaks across lines. It follows the rule above, whose cell
+     padding it replaces. */
+  @media (max-width: 25.99rem) {
+    .rl-facts { grid-template-columns: minmax(0, 1fr); }
+    .rl-facts > div { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--space-2); padding: .125rem 0; }
+    .rl-facts > div + div { padding-inline-start: 0; border-inline-start: 0; border-block-start: 1px solid var(--rl-line); }
+    .rl-facts dd { text-align: end; }
   }
 }
 
 /* Outside the layer, because the button's edge ink is drawn by an unlayered
    rule: while the sale is closed the edge takes the same inert grey as the
    fill, in both themes. */
-:root .rl-buy .rl-buy__button[aria-disabled="true"]::after,
-:root .rl-fleet .rl-fleet__closed[aria-disabled="true"]::after,
-:root .rl-buy-key [aria-disabled="true"]::after {
+:root .rl-buy .rl-buy__button[aria-disabled="true"]::after {
   --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
   --rg-button-cut-ink: transparent;
 }
-
-/* A button that leaves for another site carries the arrow in its words, so
-   it drops the chevron, which an unlayered rule draws. */
-.rl-fleet .rl-fleet__out::after { content: none; }
-
-/* Close goes nowhere, so it carries no chevron either. */
-.rl-buy-key .rl-buy-key__close::after { content: none; }
 
 /* Outside the layer, because the header's own rules are unlayered. Here the
    header sits in the page rather than the app's grid, so the brand only fills

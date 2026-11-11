@@ -1,16 +1,17 @@
 defmodule KeyfleetWeb.AgentCompatibility do
   @moduledoc """
   Which agent runtimes have passed Keyfleet's compatibility checks, and through
-  which connection: the page at `/agents/compatibility` and the status line on
-  each runtime's page at `/agents/SLUG`.
+  which connection: the page at `/agents/compatibility` and the Verified line on
+  the page at `/agents/SLUG` of each runtime that passed.
 
   The checks, the connections and the runtimes are `priv/agent_compatibility.yml`,
   which also describes a run. Each run is one Markdown file in
   `priv/agent_runs/`. A cell is the newest run's result for that runtime and
   connection, and NOT RUN without one. A runtime is Verified through a
   connection only when that newest run is witnessed and every check passed or
-  is not supported there; otherwise it is Unverified. A run that doesn't follow
-  the file's rules stops the build. Nothing here reads the database.
+  is not supported there; any other runtime carries no status. A run that
+  doesn't follow the file's rules stops the build. Nothing here reads the
+  database.
   """
 
   alias KeyfleetWeb.AgentGuides
@@ -88,42 +89,28 @@ defmodule KeyfleetWeb.AgentCompatibility do
     do: @runs_directory |> Path.join("*.md") |> Path.wildcard() |> Enum.sort() != @run_files
 
   @doc """
-  Where the runtime `slug` stands, as its label, Verified or Unverified, and one
-  line of Markdown saying why, linked to its checks. Nil for a page the checks
-  don't cover, such as Any agent.
+  The line of Markdown under the name of a runtime that passed Keyfleet's
+  checks through at least one connection: Verified through which, linked to its
+  checks. Nil for any other runtime, and for a page the checks don't cover,
+  such as Any agent.
   """
   def status(slug) when slug in @runtimes do
-    {label, line} = standing(slug)
-    {label, "#{line} [See each check](#{link(AgentGuides.name(slug))})."}
+    case standing(slug) do
+      nil -> nil
+      line -> "#{line} [See each check](#{link(AgentGuides.name(slug))})."
+    end
   end
 
   def status(_slug), do: nil
 
   defp standing(slug) do
-    newest =
-      for interface <- @interfaces, run <- List.wrap(newest_run(slug, interface)) do
-        {interface["through"], run}
-      end
+    verified =
+      for interface <- @interfaces,
+          run <- List.wrap(newest_run(slug, interface)),
+          verified?(run),
+          do: interface["through"]
 
-    verified = for {through, run} <- newest, verified?(run), do: through
-    checked = for {through, %{"witnessed" => true}} <- newest, do: through
-    reported = for {through, %{"witnessed" => false}} <- newest, do: through
-
-    cond do
-      verified != [] ->
-        {"Verified", "**Verified** through #{words(verified)}."}
-
-      checked != [] ->
-        {"Unverified",
-         "**Unverified.** Keyfleet checked its run through #{words(checked)}, and not every check passed."}
-
-      reported != [] ->
-        {"Unverified",
-         "**Unverified.** Its results through #{words(reported)} were reported by the agent and haven't been checked by Keyfleet yet."}
-
-      true ->
-        {"Unverified", "**Unverified.** It hasn't been through Keyfleet's checks yet."}
-    end
+    if verified != [], do: "**Verified** through #{words(verified)}."
   end
 
   @doc "The page as Markdown, its addresses written from `{{origin}}`."
@@ -131,7 +118,7 @@ defmodule KeyfleetWeb.AgentCompatibility do
     """
     # Agent compatibility
 
-    An agent is Verified through a connection only after it has passed every check below that the connection offers, through that connection alone, at a recorded version, and Keyfleet has matched the run against its own records. Every other agent and connection is Unverified. A result marked * was reported by the agent and hasn't been checked by Keyfleet yet.
+    An agent is Verified through a connection only after it has passed every check below that the connection offers, through that connection alone, at a recorded version, and Keyfleet has matched the run against its own records. A result marked * was reported by the agent and hasn't been checked by Keyfleet yet.
 
     Version #{@version}, #{day(@date)}.
 
@@ -139,7 +126,7 @@ defmodule KeyfleetWeb.AgentCompatibility do
     | --- |#{String.duplicate(" --- |", length(@interfaces))}
     #{Enum.map_join(@runtimes, "\n", &summary_row/1)}
 
-    ## The checks
+    ## Checks
 
     Every run makes each check in the Regents Club through one connection:
 
@@ -147,13 +134,13 @@ defmodule KeyfleetWeb.AgentCompatibility do
 
     A result through one connection never counts for another. The proposal, treasury and Classic #1 checks only read: no run makes a payment or an on-chain transaction.
 
-    | Check | Passes when |
+    | Check | Pass rule |
     | --- | --- |
     #{Enum.map_join(@checks, "\n", &"| #{&1["id"]} #{&1["name"]} | #{&1["passes"]} |")}
 
-    ## Checks with two agents
+    ## Pair checks
 
-    | Check | Passes when | Result |
+    | Check | Pass rule | Result |
     | --- | --- | --- |
     #{Enum.map_join(@scenarios, "\n", &scenario_row/1)}
 
@@ -186,8 +173,14 @@ defmodule KeyfleetWeb.AgentCompatibility do
   end
 
   defp runtime_section(slug) do
-    {_label, line} = standing(slug)
     name = AgentGuides.name(slug)
+    setup = "[Set up #{name}]({{origin}}/agents/#{slug})."
+
+    lead =
+      case standing(slug) do
+        nil -> setup
+        line -> "#{line} #{setup}"
+      end
 
     rows =
       Enum.map_join(@interfaces, "\n", fn interface ->
@@ -198,7 +191,7 @@ defmodule KeyfleetWeb.AgentCompatibility do
     """
     ## #{name}
 
-    #{line} [Set up #{name}]({{origin}}/agents/#{slug}).
+    #{lead}
 
     | Connection | #{Enum.map_join(@checks, " | ", & &1["id"])} |
     | --- |#{String.duplicate(" --- |", length(@checks))}

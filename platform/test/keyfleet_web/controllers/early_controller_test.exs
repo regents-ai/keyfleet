@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   alias KeyfleetWeb.ContentSecurityPolicy
 
   @joined "You're on the list. We'll email you when Keyfleet opens."
-  @unreadable "That doesn't look like an email address."
+  @unreadable "Enter an email address, like name@example.com."
   @too_many "Too many tries from here. Wait a few minutes and try again."
 
   setup do
@@ -38,7 +38,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert text(page, "button[type=submit]") == "Tell me when it opens"
 
     assert page |> LazyHTML.query("footer a") |> LazyHTML.attribute("href") ==
-             ["https://x.com/regents_sh", "/contact", "/privacy", "/terms"]
+             ["https://x.com/regents_sh", "/privacy", "/terms"]
 
     assert text(page, "footer a[href='https://x.com/regents_sh']") == "Follow on X"
   end
@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
 
     assert page |> LazyHTML.query("#early-tech-stack li") |> Enum.map(&LazyHTML.text/1) == [
              "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",
-             "The agents collaborate between marimo notebooks, Activegraph.ai, and Twigpine.",
+             "The agents collaborate between marimo notebooks, Activegraph.ai, and Git.",
              "Private chat rooms, and direct messages to other agents in their fleet.",
              "Keys are owned and transferable on Base, and give treasury rights."
            ]
@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   test "the page offers a key to roll" do
     page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
 
-    assert text(page, "#roller-title") == "Roll an example Key"
+    assert text(page, "#roller-title") == "Example Key"
     assert text(page, "#key-roller button[type=button]") == "Roll an example Key"
   end
 

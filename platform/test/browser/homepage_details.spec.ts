@@ -1,10 +1,10 @@
 import {devices, expect, test, type Locator, type Page} from "@playwright/test"
 
-// The homepage's hero, its Key card decks and the links around it, on a desktop and
+// The homepage's hero, its next Key's card and the links around it, on a desktop and
 // on a touch phone 390 wide (Playwright's Pixel 7 at that width). homepage.spec.ts
 // reads the page itself.
 
-const tagline = "Your personal agent joins a Fleet with a Key."
+const tagline = "A persistent team for your AI agent."
 
 const phone = {
   userAgent: devices["Pixel 7"].userAgent,
@@ -57,6 +57,15 @@ test.describe("on a touch phone", () => {
   })
 
   // A finger gets the pass as it is: tapping the card shows no shuffle and loads none.
+  // A finger opens the price's "i" with a tap; there is no hover to open it.
+  test("a tap opens the price's info tip", async ({page}) => {
+    await page.goto("/")
+    await live(page)
+    const words = page.locator("#home-price-tip")
+    await page.getByRole("button", {name: "About the price"}).tap()
+    await expect(words).toBeVisible()
+  })
+
   test("tapping the next Key's card leaves it the pass", async ({page}) => {
     await page.goto("/")
     await live(page)
@@ -112,13 +121,31 @@ test.describe("on a desktop", () => {
 
   // The headline takes the hero's left half and the next Key sits in the middle of
   // its right half (as the template's Keyfleet hero does since 16 Oct).
+  // The price's "i" opens while a mouse rests on it and closes once the mouse
+  // leaves; a click keeps it open (the shared tip script, loaded in app.ts).
+  test("the price's info tip opens under a mouse and a click keeps it", async ({page}) => {
+    await page.goto("/")
+    await live(page)
+    const button = page.getByRole("button", {name: "About the price"})
+    const words = page.locator("#home-price-tip")
+    await button.hover()
+    await expect(words).toBeVisible()
+    await page.mouse.move(0, 0)
+    await expect(words).toBeHidden()
+    await button.hover()
+    await button.click()
+    await page.mouse.move(0, 0)
+    await page.waitForTimeout(300)
+    await expect(words).toBeVisible()
+  })
+
   test("the next Key sits in the middle of the hero's right half", async ({page}) => {
     for (const width of [1024, 1280, 1440]) {
       await page.setViewportSize({width, height: 900})
       await page.goto("/")
       const hero = (await page.getByRole("region", {name: tagline}).boundingBox())!
       const headline = (await page.getByRole("heading", {name: tagline, level: 1}).boundingBox())!
-      const buy = (await page.getByRole("button", {name: /Buy Next Key/}).boundingBox())!
+      const buy = (await page.locator("#home-buy-key").boundingBox())!
       const rightHalf = hero.x + hero.width * 0.75
       expect(Math.abs(buy.x + buy.width / 2 - rightHalf), `${width} wide`).toBeLessThan(hero.width * 0.03)
       expect(headline.x + headline.width, `${width} wide`).toBeLessThanOrEqual(buy.x)
@@ -176,7 +203,7 @@ test.describe("on a desktop", () => {
   // about half a second.
   for (const [what, target] of [
     ["the card", "#home-buy-card"],
-    ["the button", "#home-buy-next-key"],
+    ["the button", "#home-buy-key"],
   ]) {
     test(`pointing at ${what} flashes the card into the shuffle, and leaving dissolves it back`, async ({page}) => {
       await page.setViewportSize({width: 1280, height: 900})
@@ -223,19 +250,5 @@ test.describe("on a desktop", () => {
     }
     expect(loops, "loops forever").toBe(0)
     expect(shows).toEqual(Array(100).fill(100))
-  })
-
-  // Classic's deck turns only while it is on screen; the Club has none.
-  test("Classic's deck of Key cards turns only while on screen", async ({page}) => {
-    await page.setViewportSize({width: 1280, height: 700})
-    await page.goto("/")
-    await live(page)
-    const deck = page.locator("#home-classic-cards")
-    await expect(deck).not.toHaveAttribute("data-cards-turning")
-    await deck.scrollIntoViewIfNeeded()
-    await expect(deck).toHaveAttribute("data-cards-turning")
-    await expect(page.locator("#home-club .rl-cards")).toHaveCount(0)
-    await page.evaluate(() => window.scrollTo(0, 0))
-    await expect(deck).not.toHaveAttribute("data-cards-turning")
   })
 })

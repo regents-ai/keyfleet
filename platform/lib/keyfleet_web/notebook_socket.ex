@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.NotebookSocket do
   is answered as a plain refusal. Once both sides are open, every frame is
   passed along as it is. The connection registers under its fleet and holder
   (`Keyfleet.Notebooks.access_topic/2`) and, for a person, under the Keyfleet
-  sign-in it came from: when the holder loses their key, the person signs out
+  sign-in it came from: when the holder loses their key or a vote of the
+  fleet restricts its edits (heard on `Keyfleet.Keys.topic/1`), the person signs out
   of Keyfleet, an agent's person ends its pairing (announced on
   `RegentAgents.topic/1`), or the sign-in it was opened with runs out (the
   person's notebook cookie or the Keyfleet sign-in it came from, whichever ends first,
@@ -23,6 +24,7 @@ defmodule KeyfleetWeb.NotebookSocket do
   alias Keyfleet.Notebooks
 
   @closed_reason "Your Key no longer opens these notebooks."
+  @restricted_reason "A vote of the fleet has stopped your Key changing its work, so this notebook connection closed. You can still open and read the notebooks."
   @signed_out_reason "You signed out of Keyfleet."
   @unpaired_reason "Your pairing ended, so this notebook connection closed."
   @sign_in_ended_reason "Your sign-in ran out. Sign in again to reopen the notebooks."
@@ -85,6 +87,9 @@ defmodule KeyfleetWeb.NotebookSocket do
         Notebooks.access_topic(state.fleet_id, state.subject)
       )
 
+    # A vote that restricts the Key's edits closes the connection.
+    :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keyfleet.Keys.topic(state.fleet_id))
+
     # A person's Keyfleet sign-in also ends when they sign out there.
     if state.sign_in_topic,
       do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, state.sign_in_topic)
@@ -106,12 +111,13 @@ defmodule KeyfleetWeb.NotebookSocket do
 
   defp still_holds(state) do
     with {:ok, actor} <- signed_in(state.holder),
-         {:ok, true} <- Notebooks.member?(actor, state.fleet_id) do
+         {:ok, %{restricted?: false}} <- Notebooks.membership(actor, state.fleet_id) do
       :ok
     else
       :signed_out -> {:closed, @signed_out_reason}
       :unpaired -> {:closed, @unpaired_reason}
-      {:ok, false} -> {:closed, @closed_reason}
+      {:ok, nil} -> {:closed, @closed_reason}
+      {:ok, %{restricted?: true}} -> {:closed, @restricted_reason}
       {:error, _error} -> :unreadable
     end
   end
@@ -153,13 +159,8 @@ defmodule KeyfleetWeb.NotebookSocket do
   def handle_in({data, opcode: opcode}, state), do: to_hub(state, {opcode, data})
 
   @impl WebSock
-  def handle_info(:agents_changed, state) do
-    case still_holds(state) do
-      :ok -> {:ok, state}
-      {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
-      :unreadable -> {:stop, :normal, 1011, state}
-    end
-  end
+  def handle_info(:agents_changed, state), do: recheck(state)
+  def handle_info({:keys_changed, _fleet_id, _token_ids}, state), do: recheck(state)
 
   def handle_info(:notebook_access_ended, state),
     do: {:stop, :normal, {1008, @closed_reason}, state}
@@ -185,6 +186,14 @@ defmodule KeyfleetWeb.NotebookSocket do
 
       :unknown ->
         {:ok, state}
+    end
+  end
+
+  defp recheck(state) do
+    case still_holds(state) do
+      :ok -> {:ok, state}
+      {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
+      :unreadable -> {:stop, :normal, 1011, state}
     end
   end
 

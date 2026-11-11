@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.{Human, System}
-  alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks}
+  alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Notebooks.Roster
   alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers, SignedAgentHelpers}
 
@@ -58,8 +58,14 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       Keyword.put(notebooks, :fleets, %{@fleet => hub, @other_fleet => hub})
     )
 
-    Notebooks.record_hub!(@fleet, "proj-fleet", actor: %System{})
-    Notebooks.record_hub!(@other_fleet, "proj-other", actor: %System{})
+    for {fleet_id, space} <- [{@fleet, "proj-fleet"}, {@other_fleet, "proj-other"}] do
+      fleet_id
+      |> Projects.project!(Projects.general(), actor: %System{})
+      |> Projects.record_space!(space, actor: %System{})
+    end
+
+    # Key 1 takes over the fleet's archived `general`, so its notebooks take changes.
+    Projects.take_over_project!(@fleet, 1, Projects.general(), actor: holder)
 
     %{holder: holder, buyer: buyer}
   end
@@ -120,9 +126,19 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert json_response(signed_out, 200) == %{"ok" => true}
     assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
 
-    refused = get_notebook(@host, "/", cookie)
+    refused = get_notebook(@host, "/api/v1/me", cookie)
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
     assert Notebooks.open(c.holder, lineage, @fleet) == {:error, :signed_out}
+
+    # A link to the notebooks goes to Keyfleet to sign in again.
+    for page <- ["/", "/projects/proj-0000000000000001/notebooks/nb-0000000000000001"] do
+      again = get_notebook(@host, page, cookie)
+      assert again.status == 303
+
+      assert get_resp_header(again, "location") == [
+               KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, page)
+             ]
+    end
   end
 
   # Costly failure: a sign-out or a Key changing hands between the gateway's
@@ -158,6 +174,228 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
              NotebookSocket.init(opening)
   end
 
+  # Costly failure: a Key a fleet vote restricted from editing goes on
+  # changing the fleet's notebooks, by a request or a live connection.
+  test "a Key a vote restricted reads the notebooks and changes nothing until a vote allows it",
+       c do
+    session = SessionAuthorityHelpers.signed_in_session(c.holder.human_account_id)
+    cookie = enter!(c.holder, session["session_lineage"])
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    assert post_notebook(@host, notebooks, cookie).status == 201
+    assert_receive {:hub, "POST", ^notebooks, "u_" <> _, _body}
+
+    # The vote passes; the chain reader then checks everyone afresh.
+    restrict!(1, true, 1)
+    Notebooks.end_access(@fleet)
+
+    assert get_notebook(@host, notebooks, cookie).status == 200
+    assert_receive {:hub, "GET", ^notebooks, "u_" <> _, _body}
+
+    refused = post_notebook(@host, notebooks, cookie)
+    assert json_response(refused, 403)["error"]["code"] == "notebooks_edits_restricted"
+    refute_received {:hub, "POST", ^notebooks, _, _body}
+
+    {:ok, %{"session_authority_id" => sign_in}} =
+      Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, "notebook session", cookie)
+
+    {:ok, _person, topic, ends_at} = Notebooks.person(sign_in, c.holder.human_account_id)
+
+    opening = %{
+      fleet_id: @fleet,
+      subject: Notebooks.subject(c.holder),
+      holder: {:person, sign_in, c.holder.human_account_id},
+      sign_in_topic: topic,
+      sign_in_ends_at: ends_at
+    }
+
+    assert {:stop, :normal, {1008, "A vote of the fleet has stopped your Key" <> _}, _state} =
+             NotebookSocket.init(opening)
+
+    restrict!(1, false, 2)
+    Notebooks.end_access(@fleet)
+
+    assert post_notebook(@host, notebooks, cookie).status == 201
+    assert_receive {:hub, "POST", ^notebooks, "u_" <> _, _body}
+  end
+
+  # Costly failure: work is added to an archived project's notebooks, which
+  # take nothing until a Key takes the project over.
+  test "nobody changes an archived project's notebooks, and they can still be read", c do
+    cookie = enter!(c.holder)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    Projects.archive_project!(@fleet, 1, actor: c.holder)
+
+    assert get_notebook(@host, notebooks, cookie).status == 200
+    assert_receive {:hub, "GET", ^notebooks, "u_" <> _, _body}
+
+    for {method, path} <- [
+          {:post, notebooks},
+          {:post, notebooks <> "/nb-0000000000000002/sessions"},
+          {:post, notebooks <> "/nb-0000000000000002/sessions/sess-mine/heartbeat"},
+          {:put, notebooks <> "/nb-0000000000000002/workspace/files?path=/mine.csv"}
+        ] do
+      refused = send_notebook(method, path, cookie, "{}")
+      assert json_response(refused, 403)["error"]["code"] == "notebooks_project_archived"
+    end
+
+    refute_received {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks" <> _, _subject, _body}
+    refute_received {:hub, "PUT", "/api/v1/projects/proj-fleet/notebooks" <> _, _subject, _body}
+
+    Projects.take_over_project!(@fleet, 1, Projects.general(), actor: c.holder)
+    assert post_notebook(@host, notebooks, cookie).status == 201
+    assert_receive {:hub, "POST", ^notebooks, "u_" <> _, _body}
+  end
+
+  # Costly failure: a page a member's notebook wrote runs on the fleet's
+  # notebook host as whoever opened it, and removes their files.
+  test "a notebook's own pages run in a sandbox", c do
+    cookie = enter!(c.holder)
+    notebook = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001"
+
+    for page <- ["/html", "/versions/ver_1/html", "/jobs/job-1/runs/run_1/html"] do
+      answer = send_notebook(:get, notebook <> page, cookie, "")
+      assert answer.status == 200
+      assert "sandbox allow-scripts" in get_resp_header(answer, "content-security-policy")
+    end
+
+    refute "sandbox allow-scripts" in get_resp_header(
+             send_notebook(:get, notebook, cookie, ""),
+             "content-security-policy"
+           )
+  end
+
+  # Costly failure: one member deletes, stops or writes over another's
+  # notebook work, which the group can no longer use.
+  test "members open, copy and run each other's work, and only its maker removes or stops it",
+       c do
+    cookie = enter!(c.holder)
+    theirs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001"
+    mine = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000002"
+
+    for {method, path} <- [
+          {:delete, theirs},
+          {:patch, theirs <> "/source"},
+          {:post, theirs <> "/versions/ver_1/restore"},
+          {:post, theirs <> "/editor-session/takeover"},
+          {:put, theirs <> "/security-labels"},
+          {:delete, theirs <> "/security-labels"},
+          {:delete, theirs <> "/deep-links/shared-link"},
+          {:delete, theirs <> "/sessions/sess-theirs"},
+          {:post, theirs <> "/sessions/sess-theirs/leave"},
+          {:delete, theirs <> "/jobs/job-theirs"},
+          {:post, theirs <> "/jobs/job-theirs/runs/run_theirs/cancel"},
+          {:put, theirs <> "/workspace/files?path=/theirs.csv"},
+          {:delete, theirs <> "/workspace/entries?path=data"}
+        ] do
+      refused = send_notebook(method, path, cookie, "{}")
+      assert json_response(refused, 403)["error"]["code"] == "notebooks_maker_only"
+      hub_method = method |> Atom.to_string() |> String.upcase()
+      bare = path |> String.split("?") |> hd()
+      refute_received {:hub, ^hub_method, ^bare, _subject, _body}
+    end
+
+    # Editing someone else's notebook opens a sandbox that saves nothing.
+    assert send_notebook(:post, theirs <> "/sessions", cookie, "").status == 201
+    sessions = theirs <> "/sessions"
+    assert_receive {:hub, "POST", ^sessions, "u_" <> _, body}
+    assert Jason.decode!(body) == %{"edit_intent" => "temporary"}
+
+    own_sessions = mine <> "/sessions"
+    assert send_notebook(:post, own_sessions, cookie, ~s({"mode":"edit"})).status == 201
+    assert_receive {:hub, "POST", ^own_sessions, "u_" <> _, ~s({"mode":"edit"})}
+    assert send_notebook(:delete, mine, cookie, "").status == 200
+
+    # A file added to someone else's notebook is its adder's to write over and remove.
+    files = theirs <> "/workspace/files"
+    assert send_notebook(:put, files <> "?path=/mine.csv&create=true", cookie, "a").status == 200
+    assert send_notebook(:put, files <> "?path=mine.csv", cookie, "b").status == 200
+    assert_receive {:hub, "PUT", ^files, "u_" <> _, "b"}
+
+    entries = theirs <> "/workspace/entries"
+    assert send_notebook(:delete, entries <> "?path=/mine.csv", cookie, "").status == 200
+    assert_receive {:hub, "DELETE", ^entries, "u_" <> _, _body}
+
+    assert {:ok, []} =
+             Notebooks.file_makers_at_or_under(@fleet, "nb-0000000000000001", "mine.csv",
+               actor: %System{}
+             )
+
+    twice = send_notebook(:put, files <> "?path=a&path=b&create=true", cookie, "a")
+    assert json_response(twice, 400)["error"]["code"] == "invalid_request"
+
+    # Another spelling of a file's path would miss its maker, so it never
+    # reaches the hub.
+    for path <- ["./theirs.csv", "data//theirs.csv", "data/", "data\\theirs.csv", "//theirs.csv"] do
+      query = URI.encode_query(%{path: path})
+      written = send_notebook(:put, files <> "?" <> query, cookie, "c")
+      assert json_response(written, 400)["error"]["code"] == "invalid_request"
+      removed = send_notebook(:delete, entries <> "?" <> query, cookie, "")
+      assert json_response(removed, 400)["error"]["code"] == "invalid_request"
+    end
+
+    refute_received {:hub, _method, _path, _subject, "c"}
+
+    # A folder is its adder's to remove when they made all of it, and never
+    # the notebook's maker's while another member's file is in it.
+    assert send_notebook(:put, files <> "?path=kept/mine.csv&create=true", cookie, "a").status ==
+             200
+
+    assert send_notebook(:delete, entries <> "?path=kept", cookie, "").status == 200
+
+    {:ok, _maker} =
+      Notebooks.record_file_maker(@fleet, "nb-0000000000000002", "shared/theirs.csv", "u_other",
+        actor: %System{}
+      )
+
+    shared = send_notebook(:delete, mine <> "/workspace/entries?path=shared", cookie, "")
+    assert json_response(shared, 403)["error"]["code"] == "notebooks_maker_only"
+
+    # A version's saved result is its notebook's maker's to remove.
+    version = "ver_" <> String.duplicate("0", 26)
+
+    for notebook <- ["nb-0000000000000001", "nb-0000000000000002"] do
+      Notebooks.keep_saved_output!(@fleet, notebook, version, 1, "<p>saved</p>", actor: %System{})
+    end
+
+    kept =
+      send_notebook(:delete, Notebooks.result_path("nb-0000000000000001", version, 1), cookie, "")
+
+    assert json_response(kept, 403)["error"]["code"] == "notebooks_maker_only"
+
+    removed =
+      send_notebook(:delete, Notebooks.result_path("nb-0000000000000002", version, 1), cookie, "")
+
+    assert removed.status == 204
+  end
+
+  # Costly failure: a file a person adds while its maker can't be kept stays
+  # as the notebook maker's, out of its adder's reach.
+  test "a new file whose maker can't be kept is removed again, a folder is kept", c do
+    cookie = enter!(c.holder)
+    theirs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001"
+    entries = theirs <> "/workspace/entries"
+
+    # Renamed inside the test's own transaction, so keeping the maker fails the
+    # way it does while the database can't be reached; the rename ends with the test.
+    prefix = Keyfleet.Repo.default_prefix()
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.notebook_file_makers RENAME TO makers_away")
+
+    added =
+      send_notebook(:put, theirs <> "/workspace/files?path=/mine.csv&create=true", cookie, "a")
+
+    made = send_notebook(:post, theirs <> "/workspace/directories", cookie, ~s({"path":"notes/"}))
+
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.makers_away RENAME TO notebook_file_makers")
+
+    for answer <- [added, made] do
+      assert json_response(answer, 502)["error"]["code"] == "notebooks_unavailable"
+    end
+
+    # The folder may have been there already, with other members' files in it.
+    assert_received {:hub, "DELETE", ^entries, "u_" <> _, _body}
+    refute_received {:hub, "DELETE", ^entries, _subject, _body}
+  end
+
   # Costly failure: a copied or replayed sign-in code opens the notebooks again.
   test "an Open notebooks code works once", c do
     {:ok, entry} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
@@ -174,6 +412,21 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert again.status == 403
     assert json_response(again, 403)["error"]["code"] == "notebooks_link_used"
     assert again.resp_cookies == %{}
+  end
+
+  # Costly failure: a browser that won't keep the notebook sign-in is sent
+  # between Keyfleet and the notebooks round and round, spending a code each time.
+  test "Keyfleet sends a holder to the notebooks by itself, then waits for a press", c do
+    session = SessionAuthorityHelpers.signed_in_session(c.holder.human_account_id)
+    open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: "/")
+
+    first = build_conn() |> SessionAuthorityHelpers.init_test_session(session) |> get(open)
+    assert html_response(first, 200) =~ ~s[getElementById("notebook-entry").submit()]
+
+    again = first |> recycle() |> get(open)
+    page = html_response(again, 200)
+    assert page =~ "Open notebooks"
+    refute page =~ "submit()"
   end
 
   # Costly failure: a page on another site, or a pasted link, sends someone's
@@ -259,9 +512,9 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   test "a sign-in cookie for one fleet signs no one in on another fleet's host", c do
     cookie = enter!(c.holder)
 
-    refused = get_notebook(@other_host, "/", cookie)
-    assert refused.status == 401
+    refused = get_notebook(@other_host, "/api/v1/me", cookie)
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
+    assert get_notebook(@other_host, "/", cookie).status == 303
     refute_received {:hub, _method, _path, _subject, _body}
 
     create = "/api/v1/projects/proj-fleet/notebooks"
@@ -421,6 +674,16 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
            }
   end
 
+  # Costly failure: while a fleet's ownership is being read again, every
+  # ten-minute run leaves one more waiting run behind, each waking every few
+  # seconds on the one-at-a-time hub queue.
+  test "a run while the fleet's ownership is being read again ends, and leaves the hub alone" do
+    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
+
+    assert {:cancel, :ownership_refreshing} = perform_job(Roster, %{fleet_id: @fleet})
+    refute_received {:hub, "POST", "/api/v1/projects/proj-fleet/members", _, _}
+  end
+
   # Costly failure: an agent whose shard has run out keeps working in the
   # fleet's notebooks until the next ten-minute check, and a run booked for
   # that moment holds back the run a key changing hands needs now.
@@ -429,7 +692,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       ChainHelpers.issue_shard!(@fleet, 1, "0x" <> String.duplicate("c", 40), 2)
 
     assert_enqueued(worker: Roster, args: %{fleet_id: @fleet}, scheduled_at: ends_at)
-    assert %{success: 1, failure: 0} = Oban.drain_queue(queue: :notebook_hubs)
+    assert %{failure: 0, discard: 0} = Oban.drain_queue(queue: :notebook_hubs)
 
     epoch!(1, 2, @buyer_wallet)
 
@@ -451,7 +714,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     [plain, extra] =
       for extra <- [%{}, %{"x-agent-role" => "admin"}] do
-        request = SignedAgentHelpers.sign(signer, secret, "GET", "/", "")
+        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", "/", "")
 
         %{build_conn() | host: @host, remote_ip: {198, 51, 100, 130}}
         |> then(
@@ -489,7 +752,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     created = ~s({"name":"orbit.py"})
 
     for {method, path, body, status} <- [{"GET", "/", "", 200}, {"POST", notebooks, created, 201}] do
-      request = SignedAgentHelpers.sign(signer, secret, method, path, body)
+      request = SignedAgentHelpers.sign(signer, secret, @host, method, path, body)
 
       conn =
         Enum.reduce(
@@ -525,7 +788,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     [unbound, bound] =
       for body <- [nil, ""] do
-        request = SignedAgentHelpers.sign(signer, secret, "GET", code, body)
+        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", code, body)
 
         Enum.reduce(
           request.headers,
@@ -576,7 +839,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   @tag hub_delay_ms: %{
          {"POST", "/api/v1/projects/proj-fleet/notebooks/nb-cold/sessions"} => 300,
          {"POST", "/api/v1/projects/proj-fleet/notebooks/nb-stuck/sessions"} => 2_500,
-         {"GET", "/api/v1/projects/proj-fleet/notebooks/nb-cold"} => 300
+         {"GET", "/api/v1/projects/proj-fleet/notebooks/nb-slow"} => 300
        }
   test "a cold session start outlasts the ordinary timeout and is forwarded only once", c do
     cookie = enter!(c.holder)
@@ -593,7 +856,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_receive {:hub, "POST", ^path, "u_" <> _, _body}
     refute_received {:hub, "POST", ^path, _, _}
 
-    read_path = "/api/v1/projects/proj-fleet/notebooks/nb-cold"
+    read_path = "/api/v1/projects/proj-fleet/notebooks/nb-slow"
     refused = get_notebook(@host, read_path, cookie)
     assert json_response(refused, 502)["error"]["code"] == "notebooks_unavailable"
     assert_receive {:hub, "GET", ^read_path, "u_" <> _, _body}
@@ -631,6 +894,22 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     )
   end
 
+  # The key's edits restricted or allowed, as the `number`th setting on the chain.
+  defp restrict!(token_id, restricted, number) do
+    Keys.record_edits_restriction!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        restricted: restricted,
+        block_number: 20 + number,
+        block_hash: "0x" <> String.duplicate("b", 64),
+        transaction_hash: "0x" <> String.duplicate("e#{number}", 32),
+        log_index: 0
+      },
+      actor: %System{}
+    )
+  end
+
   ## The notebook host
 
   # The lineage of a fresh Keyfleet sign-in for `person`.
@@ -651,6 +930,14 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   defp get_notebook(host, path, cookie), do: notebook(host, :get, path, cookie)
+
+  defp send_notebook(method, path, cookie, body) do
+    %{build_conn() | host: @host}
+    |> put_req_header("cookie", "__Host-kf_notebooks=" <> cookie)
+    |> put_req_header("content-type", "application/json")
+    |> dispatch(@endpoint, method, path, body)
+  end
+
   defp post_notebook(host, path, cookie), do: notebook(host, :post, path, cookie)
 
   defp notebook(host, method, path, cookie, headers \\ []) do
@@ -688,10 +975,11 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
         payload = Jason.decode!(raw)
 
         {status, body} =
-          case Siwa.verify_authenticated_request(payload,
+          case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
                  secret: secret,
                  audience: "keyfleet",
-                 wallet_audiences: ["keyfleet"]
+                 wallet_audiences: ["keyfleet"],
+                 authorities: [payload["authority"]]
                ) do
             {:ok, verified} ->
               SignedAgentHelpers.granted(verified, payload)
@@ -735,6 +1023,14 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
        ),
        do: json(conn, 200, %{success: true, data: %{items: [], next_cursor: nil}})
 
+  # Notebook nb-0000000000000001, and everything in it, someone else made.
+  defp hub_answer(
+         %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/notebooks/" <> rest} =
+           conn,
+         holder
+       ),
+       do: notebook_answer(conn, holder, String.split(rest, "/"))
+
   defp hub_answer(
          %Plug.Conn{method: "POST", request_path: "/api/v1/projects/" <> _} = conn,
          _holder
@@ -747,6 +1043,32 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   defp hub_answer(conn, _holder), do: json(conn, 200, %{success: true, data: %{}})
+
+  defp notebook_answer(conn, holder, [notebook]) do
+    author = if notebook == "nb-0000000000000001", do: "u_other", else: Notebooks.subject(holder)
+    json(conn, 200, %{success: true, data: %{meta: %{author: author}}})
+  end
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000001", "sessions", _session]),
+    do: json(conn, 200, %{success: true, data: %{user_id: "u_other"}})
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000001", "jobs", _job]),
+    do: json(conn, 200, %{success: true, data: %{created_by: "u_other"}})
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000001", "jobs", _job, "runs", _run]),
+    do: json(conn, 200, %{success: true, data: %{triggered_by: "u_other"}})
+
+  defp notebook_answer(conn, _holder, [_notebook, "workspace", "entries"]) do
+    items = entries(fetch_query_params(conn).query_params["path"])
+    json(conn, 200, %{success: true, data: %{items: items}})
+  end
+
+  defp notebook_answer(conn, _holder, _other), do: json(conn, 200, %{success: true, data: %{}})
+
+  defp entries("data"), do: [%{path: "/data/theirs.csv", kind: "file"}]
+  defp entries("kept"), do: [%{path: "/kept/mine.csv", kind: "file"}]
+  defp entries("shared"), do: [%{path: "/shared/theirs.csv", kind: "file"}]
+  defp entries(_file), do: []
 
   defp json(conn, status, body),
     do:

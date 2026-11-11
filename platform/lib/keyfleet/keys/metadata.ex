@@ -8,11 +8,13 @@ defmodule Keyfleet.Keys.Metadata do
   A Key is known once its mint is recorded. A Key within its fleet's deck has
   its card from then on; a later Key shows the Interim Keyfleet Access Pass,
   the same picture for every Key in every fleet, and `Status: Revealing` until
-  its reveal is recorded. A Key with its card (`Keyfleet.Keys.card_seed/2`)
-  shows the card's traits from the fleet's trait table, which change only if
-  an operator corrects a reveal by hand after a reorg. While its card is being
-  drawn (`Keyfleet.Keys.DrawPicture`) it keeps the pass; once the card is kept
-  on IPFS, it shows the card and names its IPFS address in `properties`.
+  its reveal is recorded, or `Status: Never Revealed` for good once the wait
+  for its draw is recorded as ended (`Keyfleet.Keys.KeyRevealExpiry`). A Key
+  with its card (`Keyfleet.Keys.card_seed/2`) shows the card's traits from the
+  fleet's trait table, which change only if an operator corrects a reveal by
+  hand after a reorg. While its card is being drawn
+  (`Keyfleet.Keys.DrawPicture`) it keeps the pass; once the card is kept on
+  IPFS, it shows the card and names its IPFS address in `properties`.
   """
 
   alias Keyfleet.Fleets
@@ -41,8 +43,9 @@ defmodule Keyfleet.Keys.Metadata do
 
   @doc """
   The metadata of the Key with token id `token_id`, as the URL gives it:
-  `{:revealing, metadata}`, `{:drawing, metadata}` (its card known, not
-  drawn yet), `{:revealed, metadata}`, or `:not_found` for no recorded Key.
+  `{:revealing, metadata}`, `{:never_revealed, metadata}` (the wait for its
+  draw was ended), `{:drawing, metadata}` (its card known, not drawn yet),
+  `{:revealed, metadata}`, or `:not_found` for no recorded Key.
   """
   def for_key(token_id) do
     with true <- token_id =~ @token_id,
@@ -53,7 +56,7 @@ defmodule Keyfleet.Keys.Metadata do
       key = %{fleet: fleet, token_id: number}
 
       case Keys.card_seed(fleet, number) do
-        nil -> {:revealing, revealing(key)}
+        nil -> unrevealed(key, Keys.get_reveal_expiry!(fleet.id, number))
         seed -> revealed(key, seed, Keys.get_picture!(fleet.id, number, seed))
       end
     else
@@ -65,10 +68,13 @@ defmodule Keyfleet.Keys.Metadata do
   The picture the metadata of minted Key `token_id` of `fleet` names: the
   pass until its card is kept on IPFS, then the card.
   """
-  def image(fleet, token_id) do
+  def image(fleet, token_id), do: KeyArt.link(image_cid(fleet, token_id))
+
+  @doc "The IPFS address of the picture `image/2` names."
+  def image_cid(fleet, token_id) do
     case Keys.card_seed(fleet, token_id) do
-      nil -> picture(nil)
-      seed -> picture(Keys.get_picture!(fleet.id, token_id, seed))
+      nil -> cid(nil)
+      seed -> cid(Keys.get_picture!(fleet.id, token_id, seed))
     end
   end
 
@@ -99,8 +105,10 @@ defmodule Keyfleet.Keys.Metadata do
   @doc "The picture a Key not minted yet shows: the pass."
   def pass, do: picture(nil)
 
-  defp picture(nil), do: KeyArt.link(@interim_pass_cid)
-  defp picture(%{cid: cid}), do: KeyArt.link(cid)
+  defp picture(kept), do: KeyArt.link(cid(kept))
+
+  defp cid(nil), do: @interim_pass_cid
+  defp cid(%{cid: cid}), do: cid
 
   defp fleet_of(token_id),
     do:
@@ -109,13 +117,30 @@ defmodule Keyfleet.Keys.Metadata do
         &match?({:ok, _number}, Fleet.key_number(&1, token_id))
       )
 
-  defp revealing(%{fleet: fleet, token_id: token_id} = key) do
+  defp unrevealed(%{fleet: fleet, token_id: token_id} = key, nil) do
+    {:revealing,
+     without_traits(
+       key,
+       "Key #{token_id} of #{fleet.name}. Its traits appear here once they are drawn.",
+       "Revealing"
+     )}
+  end
+
+  defp unrevealed(%{fleet: fleet, token_id: token_id} = key, _ended) do
+    {:never_revealed,
+     without_traits(
+       key,
+       "Key #{token_id} of #{fleet.name}. It never gets traits: the wait for its draw was ended.",
+       "Never Revealed"
+     )}
+  end
+
+  defp without_traits(key, description, status) do
     %{
       name: name(key),
-      description:
-        "Key #{token_id} of #{fleet.name}. Its traits appear here once they are drawn.",
+      description: description,
       image: picture(nil),
-      attributes: set(key) ++ level(key) ++ [%{trait_type: "Status", value: "Revealing"}]
+      attributes: set(key) ++ level(key) ++ [%{trait_type: "Status", value: status}]
     }
   end
 

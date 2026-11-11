@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.ProposalJSON do
       no: Integer.to_string(proposal.no_keys),
       abstain: Integer.to_string(proposal.abstain_keys),
       counted: Integer.to_string(proposal.opening_count + proposal.late_keys),
+      opened_at: proposal.opened_at,
       closes_at: proposal.closes_at,
       text: text(proposal.words)
     }

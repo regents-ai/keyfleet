@@ -1,0 +1,143 @@
+--- a/packages/core/src/services/catalog/CatalogService.ts
++++ b/packages/core/src/services/catalog/CatalogService.ts
+@@ -130,17 +130,21 @@
+ 			return snapshot;
+ 		} catch (err) {
+ 			if (err instanceof PreconditionFailedError) {
++				// A storage client that retries a put whose response was lost sees its own
++				// landed write as a lost race, so the catalog decides who won.
++				if (await this.catalogNames(snapshotId)) return snapshot;
+ 				// Another initializer won the race. The snapshot we just wrote is now
+ 				// unreferenced — delete it best-effort and return the committed state.
+ 				//
+ 				// INVARIANT (corruption safety): a writer only ever deletes a snapshot
+ 				// it itself just wrote and never committed (`snapshotId` here is local to
+-				// this call and was never pointed at by catalog.json). Only a
+-				// PreconditionFailedError proves that; after any other catalog write error
+-				// the write may have committed, so the snapshot is kept. No code path
+-				// deletes a committed snapshot, so the pointer can never be left dangling
+-				// by a writer. Snapshot retention (MaintenanceService) upholds the same
+-				// rule by refusing to delete the current/previous snapshot.
++				// this call and catalog.json does not name it). Only a
++				// PreconditionFailedError followed by a catalog that does not name the
++				// snapshot proves that; after any other catalog write error the write may
++				// have committed, so the snapshot is kept. No code path deletes a committed
++				// snapshot, so the pointer can never be left dangling by a writer. Snapshot
++				// retention (MaintenanceService) upholds the same rule by refusing to
++				// delete the current/previous snapshot.
+ 				await this.bucket.delete(paths.snapshot(snapshotId)).catch(() => {});
+ 				return this.getCurrentSnapshot();
+ 			}
+@@ -350,22 +354,39 @@
+ 				catalogObj ? { onlyIfEtagMatches: catalogObj.etag } : { onlyIfNotExists: true },
+ 			);
+ 		} catch (err) {
+-			// A lost CAS proves the snapshot was never committed, so delete it (see the
+-			// initialize() invariant). Any other error may follow a commit whose response was
+-			// lost, so the snapshot is kept.
+-			if (err instanceof PreconditionFailedError) {
++			// Any error but a lost CAS may follow a commit whose response was lost, so the
++			// snapshot is kept. A lost CAS whose catalog does not name the snapshot proves it
++			// was never committed, so delete it (see the initialize() invariant).
++			if (!(err instanceof PreconditionFailedError)) throw err;
++			if (!(await this.catalogNames(snapshot.snapshot_id))) {
+ 				this.metrics.increment('catalog.cas.conflict');
+ 				await this.bucket.delete(key).catch(() => {});
+ 				throw new ConflictError('Catalog recovery lost a write conflict. Inspect storage again.', {
+ 					cause: err,
+ 				});
+ 			}
+-			throw err;
+ 		}
+ 		await this.appendAudit(snapshot.operation, snapshot.actor, context);
+ 		return snapshot;
+ 	}
+ 
++	/**
++	 * Whether catalog.json names `snapshotId` as its current or previous snapshot. A
++	 * refused catalog put does not prove the pointer never moved: a client retry of a put
++	 * that landed is refused by the precondition the first attempt already satisfied.
++	 */
++	private async catalogNames(snapshotId: Snapshot['snapshot_id']): Promise<boolean> {
++		const catalogObj = await this.bucket.get(paths.catalog);
++		if (!catalogObj) return false;
++		// A catalog this service could not have written is not the one its put wrote.
++		const catalog = CatalogSchema.safeParse(await catalogObj.json().catch(() => null));
++		return (
++			catalog.success &&
++			(catalog.data.current_snapshot_id === snapshotId ||
++				catalog.data.previous_snapshot_id === snapshotId)
++		);
++	}
++
+ 	private async appendAudit(operation: string, actor: UserId, context?: Record<string, unknown>) {
+ 		// Never let a failed append break the committed mutation.
+ 		if (!this.events) return;
+@@ -435,10 +456,12 @@
+ 					});
+ 					return newSnapshot;
+ 				} catch (err) {
+-					// Only a lost CAS proves the pointer never moved; any other error may follow a
+-					// commit whose response was lost, so the snapshot is kept (see initialize()).
+-					// `cas.put` wraps the PreconditionFailedError so withCasRetry can retry it.
++					// Only a lost CAS whose catalog does not name the snapshot proves the pointer
++					// never moved; any other error may follow a commit whose response was lost,
++					// so the snapshot is kept (see initialize()). `cas.put` wraps the
++					// PreconditionFailedError so withCasRetry can retry it.
+ 					if (err instanceof Error && err.cause instanceof PreconditionFailedError) {
++						if (await this.catalogNames(newSnapshotId)) return newSnapshot;
+ 						await this.bucket.delete(paths.snapshot(newSnapshotId)).catch(() => {});
+ 					}
+ 					throw err;
+--- a/packages/core/src/services/catalog/recovery.test.ts
++++ b/packages/core/src/services/catalog/recovery.test.ts
+@@ -801,5 +801,49 @@
+ 		});
+ 		await expect(catalog.mutateSnapshot('lost', ACTOR, (s) => s)).rejects.toThrow('conflict');
+ 		expect((await listAllObjects(bucket, paths.snapshotsPrefix)).map((o) => o.key)).toEqual(before);
++	});
++
++	// A storage client that retries a catalog put whose response was lost gets the
++	// precondition refused by its own landed write. The catalog names the snapshot, so
++	// it is committed and must be kept.
++	function landThenRefuseCatalogPut(bucket: MemoryBucket) {
++		const put = bucket.put.bind(bucket);
++		vi.spyOn(bucket, 'put').mockImplementation(async (key, value, options) => {
++			const result = await put(key, value, options);
++			if (key === paths.catalog) throw new PreconditionFailedError('Retried after landing');
++			return result;
++		});
++	}
++
++	it('keeps a mutation snapshot whose pointer write landed before a refused retry', async () => {
++		const { bucket, services } = await fixture();
++		landThenRefuseCatalogPut(bucket);
++		const committed = await services.catalog.mutateSnapshot('landed', ACTOR, (s) => s);
++		vi.restoreAllMocks();
++		const current = await services.catalog.getCurrentSnapshot();
++		expect(current.snapshot_id).toBe(committed.snapshot_id);
++		expect(current.operation).toBe('landed');
++	});
++
++	it('keeps an initialize snapshot whose pointer write landed before a refused retry', async () => {
++		const bucket = new MemoryBucket();
++		landThenRefuseCatalogPut(bucket);
++		const committed = await freshCatalog(bucket).initialize(ACTOR);
++		vi.restoreAllMocks();
++		expect((await freshCatalog(bucket).getCurrentSnapshot()).snapshot_id).toBe(
++			committed.snapshot_id,
++		);
+ 	});
++
++	it('keeps a recovery snapshot whose pointer write landed before a refused retry', async () => {
++		const { bucket, services } = await fixture();
++		await eraseIndex(bucket);
++		const report = await services.catalog.planRecovery(SOURCE);
++		landThenRefuseCatalogPut(bucket);
++		const committed = await applyRecovery(services.catalog, report);
++		vi.restoreAllMocks();
++		const current = await services.catalog.getCurrentSnapshot();
++		expect(current.snapshot_id).toBe(committed.snapshot_id);
++		expect(current.projects).toHaveLength(1);
++	});
+ });

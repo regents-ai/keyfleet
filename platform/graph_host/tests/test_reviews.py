@@ -40,9 +40,9 @@ REVIEWER = {"token_id": 18, "wallet": OTHER_WALLET}
 @pytest.fixture
 def host(db):
     host = Host("fleet_a", str(db), [])
-    _ok(host, "create", {"type": "task", "scope": "fleet", "data": {"title": "Draft"}}, command("t"))
-    _ok(host, "create", {"type": "evidence", "scope": "fleet", "data": EVIDENCE}, command("e1"))
-    _ok(host, "create", {"type": "evidence", "scope": "fleet", "data": EVIDENCE}, command("e2"))
+    _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Draft"}}, command("t"))
+    _ok(host, "create", {"project": "general", "type": "evidence", "data": EVIDENCE}, command("e1"))
+    _ok(host, "create", {"project": "general", "type": "evidence", "data": EVIDENCE}, command("e2"))
     return host
 
 
@@ -145,10 +145,36 @@ def test_a_review_stays_as_written(host):
         ("unlink", {"relation_id": rel.id}),
         ("link", {"source": review, "target": "task#1", "type": "references"}),
         ("link", {"source": review, "target": "task#1", "type": "reviews"}),
-        ("create", {"type": "review", "scope": "fleet", "data": {"decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}}),
+        ("create", {"project": "general", "type": "review", "data": {"decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}}),
     ]
     for n, (op, body) in enumerate(attempts):
         reply = _call(host, op, body, command(f"a{n}", **REVIEWER))
         assert reply["error"]["code"] == "invalid", (op, reply)
 
     assert host.graph.get_object(review).version == 1
+
+
+COMMIT = "https://keyfleet.ai/classic/1/code/classic_1/commits/" + "a" * 40
+
+
+def test_a_review_says_whether_it_reproduced_the_work_from_the_commit_the_task_named(host):
+    _ok(host, "patch", {"id": "task#1", "expected_version": 1, "set": {"commit_ref": COMMIT}}, command("pin"))
+    _submit(host, "s1", 2, result_ref="https://example.com/result")
+
+    result = _ok(host, "review", _review(3, reproduction="passed"), command("r", **REVIEWER))
+
+    review = host.graph.get_object(result["id"])
+    assert review.data["reproduction"] == "passed"
+    assert review.data["sys"]["review"]["commit_ref"] == COMMIT
+
+
+def test_a_review_that_could_not_reproduce_the_work_disputes_it(host):
+    _submit(host, "s1", 1)
+
+    reply = _call(host, "review", _review(2, "accept", reproduction="failed"), command("r1", **REVIEWER))
+    assert reply["error"]["code"] == "invalid"
+
+    result = _ok(host, "review", _review(2, "dispute", reproduction="failed"), command("r2", **REVIEWER))
+    review = host.graph.get_object(result["id"])
+    assert review.data["reproduction"] == "failed"
+    assert "commit_ref" not in review.data["sys"]["review"]

@@ -6,14 +6,6 @@ import {anythingMoved, clippedByClass, forget, leftovers, moved, rolled, watchMo
 // asked for less motion, and every piece hands its element back to the
 // stylesheet when it ends. fleet_motion.spec.ts covers the fleet pages.
 
-async function openHomepage(page: Page) {
-  await watchMotion(page)
-  await page.setViewportSize({width: 1280, height: 720})
-  await page.goto("/")
-  await expect(page.locator(".phx-connected").first()).toBeAttached()
-  await forget(page)
-}
-
 async function openConnections(page: Page) {
   const auth = await installAuthenticatedPrivy(page, "valid")
   await auth.establishLocalSession()
@@ -48,21 +40,6 @@ async function refuseStyleAttributes(page: Page, path: string) {
   })
   return refusals
 }
-
-test("the homepage's tiles settle in once, when first scrolled to, and end clean", async ({page}) => {
-  await openHomepage(page)
-
-  await page.locator("#home-integration-tiles").scrollIntoViewIfNeeded()
-  await expect.poll(() => moved(page, "#home-integration-tiles > li")).toBe(true)
-  await expect.poll(() => leftovers(page)).toEqual([])
-
-  await page.evaluate(() => scrollTo(0, 0))
-  await page.waitForTimeout(300)
-  await forget(page)
-  await page.locator("#home-integration-tiles").scrollIntoViewIfNeeded()
-  await page.waitForTimeout(600)
-  expect(await moved(page, "#home-integration-tiles > li")).toBe(false)
-})
 
 test("a page's headline rises in and is left exactly as the server drew it", async ({page, request}) => {
   const served = await (await request.get("/docs")).text()
@@ -126,7 +103,6 @@ test("a reader who asked for less motion sees refusals and cards without movemen
 
   await page.goto("/")
   await expect(page.locator(".phx-connected").first()).toBeAttached()
-  await page.locator("#home-integration-tiles").scrollIntoViewIfNeeded()
   await page.waitForTimeout(600)
   expect(await anythingMoved(page), "the homepage").toBe(false)
 

@@ -2,7 +2,9 @@ defmodule Keyfleet.AccessCache do
   @moduledoc """
   Who was let into one of a fleet's private places lately (`:notebooks`,
   `:code`), so its gateway checks key ownership at most once in that place's
-  time for each of them. Only a yes is kept, with what the check found.
+  time for each of them, and who was made an editor of the fleet's hub
+  projects (`:hub_editor`), so the hub is not asked again. Only a yes is
+  kept, with what the check found.
 
   `end_access/3` clears one subject on every node at once and `end_fleet/2`
   everyone in one place of a fleet; this process owns the table and hears

@@ -10,11 +10,12 @@ import {
 
 // The walk a first-time visitor takes, signed out, on the device in their
 // hand: the homepage and Classic #1's sale, Classic #1's own page, the
-// Regents Club and its five tabs, a room anyone can read, and a poll. Each
+// Regents Club and its five tabs, a room anyone can read, and its polls, which
+// are for its Keys. Each
 // step must fit the screen, keep its controls big enough to press, raise no
 // error and stay connected.
 //
-// The site is as it launches (support/club_world.ts): Classic #1 is coming
+// The site is as it launches (support/club_world.ts): Classic #1's sales open
 // soon, so its sale waits and its page has no tabs yet; the Regents Club is
 // open. Everything below is reached through the pages' own links.
 
@@ -30,44 +31,30 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   const errors = watchErrors(page)
   await visit(page, "/")
 
-  await expect(page.locator("#home-hero-fleet")).toHaveText("Classic #1")
+  await expect(page.locator("#home-hero-fleet")).toHaveText("Classic #1 now")
   const facts = page.locator("#home-classic-facts")
-  await expect(facts).toContainText("1,024")
-  await expect(facts).toContainText("10–100 USDC")
+  await expect(facts).toContainText("Open soon")
+  await expect(page.locator("#home-classic-price")).toHaveText(/^[0-9][0-9.]* USDC$/)
   await expectOnFirstScreen(page, facts, "Classic #1's Keys and price")
 
-  const buy = page.locator("#home-buy-next-key")
-  await expect(buy).toContainText("Buy Next Key")
+  const buy = page.locator("#home-buy-key")
+  await expect(buy).toHaveText("Buy Key")
   await expect(buy).toBeDisabled()
-  await expect(page.locator("#home-buy-price")).toHaveText("Key 1 · 10 USDC")
+  await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
   // The hero puts the Key's card above its button, so on a phone the button
   // sits below the first screen. That is a layout choice, so the run reports
   // how far below rather than failing on it.
   const below = await belowFirstScreen(page, buy)
-  test.info().annotations.push({type: "Buy Next Key below the first screen", description: `${below}px`})
+  test.info().annotations.push({type: "Buy Key below the first screen", description: `${below}px`})
   await expectComfortable(page, errors)
-
-  // "Buy Key" opens the sale's window: nothing sold yet, the first Key's
-  // price, and its Buy closed with the same reason.
-  await page.locator("#home-classic-buy").click()
-  const sale = page.getByRole("dialog", {name: "Buy Key"})
-  await expect(sale).toBeVisible()
-  await expect(sale.locator("#home-buy-key-sold")).toHaveText("0 of 1,024")
-  await expect(sale.locator("#home-buy-key-next")).toHaveText("Key 1 · 10 USDC")
-  await expectOnFirstScreen(page, sale.locator("#home-buy-key-next"), "the next Key's price")
-  await expect(sale.locator("#home-buy-key-go")).toBeDisabled()
-  await expect(sale.locator("#home-buy-key-why")).toHaveText("Sales open soon")
-  await expectComfortable(page, errors)
-  await sale.getByRole("button", {name: "Close", exact: true}).click()
-  await expect(sale).toBeHidden()
   await expectConnected(page)
 })
 
-test("Classic #1's page says it is coming soon and leads back to the fleets", async ({page}) => {
+test("Classic #1's page says its sales open soon and leads back to the fleets", async ({page}) => {
   const errors = watchErrors(page)
   await visit(page, "/")
-  await page.locator("#home-classic-public").click()
+  await page.locator("#home-watch").click()
 
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expectConnected(page)
@@ -80,7 +67,7 @@ test("Classic #1's page says it is coming soon and leads back to the fleets", as
   await expectComfortable(page, errors)
 
   await back.click()
-  await expect(page).toHaveURL(/\/(#home-classic)?$/)
+  await expect(page).toHaveURL(/\/$/)
   await expect(page.locator("#public-home")).toBeVisible()
   await expectConnected(page)
 })
@@ -100,7 +87,7 @@ test("the Regents Club opens on its hall, and each of its five tabs opens", asyn
     {tab: "#fleet-tab-treasury", path: /\/treasury$/, shows: "#treasury-page"},
     {tab: "#fleet-tab-proposals", path: /\/proposals$/, shows: "#proposals-page"},
     {tab: "#fleet-tab-workspace", path: /\/workspace$/, shows: "#workspace-page"},
-    {tab: "#fleet-tab-keys", path: /\?view=map$/, shows: "#fleet-map"},
+    {tab: "#fleet-tab-keys", path: /\?view=members$/, shows: "#fleet-members"},
     {tab: "#fleet-tab-hall", path: /regents_club$/, shows: "#fleet-hall"},
   ]
   for (const {tab, path, shows} of tabs) {
@@ -112,44 +99,35 @@ test("the Regents Club opens on its hall, and each of its five tabs opens", asyn
     await expectComfortable(page, errors)
   }
 
-  // Under Keys, List shows who holds which Key.
+  // Under Keys, Grid shows the Keys on the fleet's map.
   await page.locator("#fleet-tab-keys").click()
-  await page.locator("#fleet-keys-map-list").click()
-  await expect(page).toHaveURL(/\?view=members$/)
-  await expect(page.locator("#fleet-members")).toBeVisible()
+  await page.locator("#fleet-keys-members-grid").click()
+  await expect(page).toHaveURL(/\?view=map$/)
+  await expect(page.locator("#fleet-map")).toBeVisible()
   await expectComfortable(page, errors)
 })
 
-test("General opens from the hall, and anyone can read it", async ({page}) => {
+test("the Public room opens from the hall, and anyone can read it", async ({page}) => {
   const errors = watchErrors(page)
   await openClub(page)
 
-  await page.locator("#fleet-channels").getByRole("link", {name: "General", exact: true}).click()
-  await expect(page).toHaveURL(/\/rooms\/general$/)
-  const title = page.getByRole("heading", {level: 1, name: "General", exact: true})
+  await page.locator("#fleet-channels").getByRole("link", {name: "Public", exact: true}).click()
+  await expect(page).toHaveURL(/\?room=general$/)
+  const title = page.getByRole("heading", {level: 2, name: "Public", exact: true})
   await expectOnFirstScreen(page, title, "the room's name")
   await expect(page.locator("#rooms-thread-list [data-post]").first()).toBeVisible()
-  await expect(page.locator("#rooms-page")).toContainText("Anyone can read this room.")
+  await expect(page.locator("#rooms-thread")).toContainText("Anyone can read this room.")
   await expectComfortable(page, errors)
 })
 
-test("a poll opens from the hall, with its question and choices", async ({page}) => {
+test("the polls are for the fleet's Keys: the hall doesn't list them, and their address says so", async ({page}) => {
   const errors = watchErrors(page)
   await openClub(page)
+  await expect(page.locator("#fleet-polls-link")).toHaveCount(0)
 
-  await page.locator("#fleet-polls-link").click()
-  await expect(page).toHaveURL(/\/polls$/)
-  await expect(page.getByRole("heading", {level: 1, name: "Polls"})).toBeVisible()
-  await expectComfortable(page, errors)
-
-  const poll = page.locator("#polls-page .polls-card h3 a").first()
-  const question = (await poll.textContent())!.trim()
-  await poll.click()
-  await expect(page).toHaveURL(/\/polls\/[0-9a-f-]{36}$/)
-  await expectOnFirstScreen(page, page.getByRole("heading", {level: 1, name: question, exact: true}), "the poll's question")
-  await expect(page.locator("#poll-choices .polls-options li, #poll-results li").first()).toBeVisible()
-  // Signed out, a visitor follows along; holding a Key is what lets someone vote.
-  await expect(page.locator("#poll-vote-form")).toHaveCount(0)
-  await expect(page.locator("#poll-choices")).toContainText("Anyone can follow along.")
+  await visit(page, `${club}/polls`)
+  await expectOnFirstScreen(page, page.locator("#polls-locked"), "who the polls are for")
+  await expect(page.locator("#polls-locked")).toContainText("Keys only")
+  await expect(page.locator("#polls-sign-in")).toBeVisible()
   await expectComfortable(page, errors)
 })

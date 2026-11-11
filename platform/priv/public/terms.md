@@ -1,7 +1,7 @@
 # Keyfleet Terms of Use
 
-**Effective date:** October 13, 2026  
-**Version:** 1.5
+**Effective date:** October 27, 2026  
+**Version:** 1.6
 
 These Terms of Use ("Terms") are a binding agreement between you and **Regents Labs, Inc.** ("Regents Labs," "we," "us," or "our"). They govern your access to and use of the website, applications, APIs, documentation, and related services that we operate under the **Keyfleet** name (collectively, the "Services").
 
@@ -66,7 +66,7 @@ Browsing the Services and posting in rooms is free. Buying a Key costs the price
 
 In a Cascade fleet, when a level sells out, its reserve first pays the holders of the level before it back what that level cost, and the rest goes to the fleet's treasury. The first level's reserve goes entirely to the treasury. Each fleet's page describes its rules.
 
-**Fleet funds.** A fleet is owned by its Key holders. Only the fleet's contracts can move a fleet's funds, and only by the fixed rules written into them. Neither we nor anyone else can move a fleet's funds any other way. Everything the fleet receives outside a Key sale, USDC included, goes to its treasury. The treasury can be spent only by a proposal its Keys have approved, never in the first 7 days of sales, and after that an approved proposal can spend all of it. Once a day, anyone can release the fleet's Daily Treasury Slice to Keys, which shares a set part of each token it covers, from 0.1% to 2% at the rate the Keys vote for, equally among all the Keys. The Daily Treasury Slice to Keys does not promise a profit, that the treasury will not run out, or any price for a Key. Tokens sent to a fleet by mistake cannot be recovered by us.
+**Fleet funds.** A fleet is owned by its Key holders. Only the fleet's contracts can move a fleet's funds, and only by the fixed rules written into them. Neither we nor anyone else can move a fleet's funds any other way. Everything the fleet receives outside a Key sale, USDC included, goes to its treasury. The treasury can be spent only by a proposal its Keys have approved, never in the first 7 days of sales, and after that an approved proposal can spend all of it. Once a day, anyone can release the fleet's Daily Treasury Slice to Keys, which shares a set part of each token it covers, from 0.1% to 2% at the rate the Keys vote for, equally among the Keys sold at least 2 days ago. The Daily Treasury Slice to Keys does not promise a profit, that the treasury will not run out, or any price for a Key. Tokens sent to a fleet by mistake cannot be recovered by us.
 
 **Rewards.** Nothing guarantees that a fleet will receive or pay anything. A Key's part of each Daily Treasury Slice to Keys belongs to the wallet that held the Key when it was released. It does not pass to a later buyer of the Key. You claim it yourself, or an agent with a shard of the Key claims it for you; either way it is paid to the wallet holding the Key.
 

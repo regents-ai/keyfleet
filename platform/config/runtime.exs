@@ -9,11 +9,64 @@ if config_env() != :test do
     verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
 end
 
-# The Privy accounts that may give Credits, handle refunds and read the saved
-# errors at /admin/errors, comma separated.
+# The Claude connector, behind one switch: its sign-in (Keyfleet.OAuth), its
+# MCP address at /mcp, pairing as a connected app, and its guide at
+# /agents/claude. A release switches it on only after the provider's tables are
+# migrated. The hosted signer is the sign-in server's, asked with this site's
+# own key there.
+claude_connector? = System.get_env("KEYFLEET_CLAUDE_CONNECTOR_ENABLED") == "true"
+hosted_signing_key = System.get_env("SIWA_HOSTED_SIGNING_KEY")
+
+if claude_connector? and
+     not (is_binary(hosted_signing_key) and
+            Regex.match?(~r/\A[A-Za-z0-9_-]{32,}\z/, hosted_signing_key)) do
+  raise "KEYFLEET_CLAUDE_CONNECTOR_ENABLED is true, so SIWA_HOSTED_SIGNING_KEY must be " <>
+          "this site's hosted signing key from the sign-in server: 32 or more letters, " <>
+          "digits, - or _"
+end
+
+# The connector's sign-in answers at the site's own address, and its MCP
+# address is under it: in production the host PHX_HOST names (the release's
+# migration step has it too), elsewhere the endpoint's configured URL.
+site_url =
+  if config_env() == :prod do
+    case String.trim(System.get_env("PHX_HOST", "")) do
+      "" -> nil
+      host -> "https://" <> host
+    end
+  else
+    url = Application.fetch_env!(:keyfleet, KeyfleetWeb.Endpoint)[:url]
+    URI.to_string(%URI{scheme: url[:scheme] || "http", host: url[:host], port: url[:port]})
+  end
+
+config :keyfleet, Keyfleet.OAuth,
+  enabled?: claude_connector?,
+  issuer: site_url,
+  resource: site_url && site_url <> "/mcp"
+
+# The words after "The identity request could not be completed." when a tool
+# call gets no answer from the site, in Keyfleet's own words; every other
+# refusal is the site's own.
+config :regent_mcp_agents, :config,
+  enabled?: claude_connector?,
+  audience: "keyfleet",
+  hosted_signer: [
+    base_url: System.get_env("SIWA_HOSTED_URL", "https://siwa.regents.sh"),
+    key: hosted_signing_key
+  ],
+  refusal:
+    "Try again in a moment. If it keeps failing, ask your person to connect Keyfleet again " <>
+      "in Claude's settings, then call get_identity."
+
+# Claude is the one connected app Keyfleet serves, and the pair request accepts
+# it only while the connector is on; ChatGPT is never offered here.
+config :regent_agents, hosted_pairing: if(claude_connector?, do: [:claude], else: [])
+
+# The Privy accounts that run this site, comma separated (config/config.exs).
 if admins = System.get_env("REGENT_CREDITS_ADMINS") do
-  config :regent_credits,
-    admins: admins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  admins = admins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  config :keyfleet, :admins, admins
+  config :regent_agents, admins: admins
 end
 
 # Without its Privy settings a local server answers every page while nobody can
@@ -35,6 +88,15 @@ if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
   # page for as long as it is open. One homepage load alone takes seven (the
   # request, the page and its five reads), so ten runs out between pages.
   config :keyfleet, Keyfleet.Repo, pool_size: 20
+
+  # The browser test server (playwright.config.ts) writes its lines in
+  # production's shape to a file, which test/browser/visits.spec.ts reads to
+  # replay a visit.
+  config :logger, level: :info
+
+  config :logger, :default_handler,
+    config: [file: String.to_charlist(Path.expand("../tmp/walk-lines.jsonl", __DIR__))],
+    formatter: LoggerJSON.Formatters.Basic.new(metadata: KeyfleetWeb.VisitLog.fields())
 end
 
 # Whether the product surfaces are open: KEYFLEET_APP_SURFACES says exactly
@@ -138,7 +200,27 @@ if database_config do
 end
 
 if config_env() == :prod do
+  # One JSON object a line, which Fly Sentinel reads, carrying only the visit
+  # fields (KeyfleetWeb.VisitLog). Release commands write the same shape.
+  config :logger, :default_handler,
+    formatter: LoggerJSON.Formatters.Basic.new(metadata: KeyfleetWeb.VisitLog.fields())
+
   unless migrating? do
+    # bin/site and bin/graph name the machine; the machines of one app find
+    # each other through its private DNS name (fly.toml).
+    machine =
+      case System.fetch_env!("KEYFLEET_MACHINE") do
+        "site" -> :site
+        "graph" -> :graph
+      end
+
+    config :keyfleet, :machine, machine
+
+    config :keyfleet, :dns_cluster_query, System.fetch_env!("DNS_CLUSTER_QUERY")
+
+    config :keyfleet, Keyfleet.Keys.PresenceTimer,
+      key: System.fetch_env!("KEYFLEET_PRESENCE_TIMER_KEY")
+
     host = String.trim(System.fetch_env!("PHX_HOST"))
     secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
 
@@ -155,6 +237,10 @@ if config_env() == :prod do
     siwa_url = System.fetch_env!("KEYFLEET_SIWA_URL")
     config :keyfleet, :siwa_broker_url, siwa_url
     config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
+
+    # This site's own key for reading what paired agents have done from the
+    # sign-in service (RegentAgents.Activity), as ash-template reads it.
+    config :regent_agents, :activity_read_token, System.get_env("SIWA_ACTIVITY_READ_TOKEN")
 
     # The fleets' code store, at its private Flycast address
     # (`http://keyfleet-code.flycast`), takes only passes signed with
@@ -192,5 +278,11 @@ if config_env() == :prod do
         port: String.to_integer(System.get_env("PORT", "4000"))
       ],
       secret_key_base: secret_key_base
+
+    # The commit the image was built from, and the Fly image this machine runs.
+    config :keyfleet, :build, %{
+      commit: System.fetch_env!("SOURCE_COMMIT"),
+      release: System.fetch_env!("FLY_IMAGE_REF")
+    }
   end
 end

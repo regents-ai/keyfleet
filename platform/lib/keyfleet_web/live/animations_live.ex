@@ -262,7 +262,7 @@ defmodule KeyfleetWeb.AnimationsLive do
                       phx-value-id={toast.id}
                       aria-label="Dismiss"
                     >
-                      ×
+                      <Regent.Icons.icon name="x" />
                     </button>
                   </li>
                 </ol>
@@ -524,7 +524,7 @@ defmodule KeyfleetWeb.AnimationsLive do
             aria-expanded="false"
             aria-controls="lab-menu"
           >
-            Share <span aria-hidden="true">▾</span>
+            Share <Regent.Icons.icon name="chevron-down" />
           </P.button>
           <div id="lab-menu" class="motion-lab__menu" data-lab-panel="menu" hidden>
             <button :for={label <- @menu_items} type="button" data-item data-close>{label}</button>
@@ -577,7 +577,9 @@ defmodule KeyfleetWeb.AnimationsLive do
     >
       <header>
         <h3 id={"lab-#{@name}-title"}>{@title}</h3>
-        <button type="button" class="motion-lab__close" data-close aria-label="Close">×</button>
+        <button type="button" class="motion-lab__close" data-close aria-label="Close">
+          <Regent.Icons.icon name="x" />
+        </button>
       </header>
       {render_slot(@inner_block)}
     </section>

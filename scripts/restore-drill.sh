@@ -24,6 +24,7 @@
 set -euo pipefail
 
 APP="keyfleet"
+# The graph machine, which holds the graph volume (platform/fly.toml).
 LIVE_MACHINE="d891115dbe7098"
 GRAPH_VOLUME="keyfleet_graph"
 CODE_APP="keyfleet-code"
@@ -540,8 +541,10 @@ rollback() {
   local config
   config="$(mktemp -d)/fly.toml"
   git -C "$root" show "$commit:platform/fly.toml" >"$config"
-  say "Deploying v$version's image $image with its own fly.toml"
-  fly deploy --app "$APP" --config "$config" --image "$image" --ha=false
+  say "Deploying v$version's image $image with its own fly.toml, the graph machine then the site machine"
+  fly deploy --app "$APP" --config "$config" --image "$image" --ha=false --process-groups graph
+  fly deploy --app "$APP" --config "$config" --image "$image" --ha=false --process-groups site \
+    --strategy bluegreen
   site_answers
 }
 

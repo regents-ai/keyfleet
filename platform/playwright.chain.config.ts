@@ -6,7 +6,12 @@ import {defineConfig, devices} from "@playwright/test"
 // send. A key's profile is checked in Chromium, Firefox and WebKit; the map,
 // the fleet page's motion, the wallet buttons, a key's shards, muting a key
 // in a room, the copy buttons, the pages' security policy, the links
-// between the in-app pages and the agent tools the pages register in Chromium.
+// between the in-app pages, the agent tools the pages register and managing
+// paired agents on the Agents page, the Treasury's last reading and its
+// refresh icon, new work gliding into a fleet's workstream, a visit told
+// again from the server's lines, the city button beside an open fleet's name
+// with its bar, and a new owner's setup list from the purchase to its last
+// step, in Chromium.
 // They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
 // over Erlang distribution, so the server runs as a named node on the loopback
 // address, with a secret cookie and a fixed distribution port instead of epmd.
@@ -32,7 +37,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
@@ -47,7 +52,7 @@ export default defineConfig({
   },
   webServer: {
     command: [
-      "mkdir -p tmp/cert",
+      "mkdir -p tmp/cert && rm -f tmp/walk-lines.jsonl",
       "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
       `${env} mix ecto.create --quiet`,
       `${env} mix keyfleet.setup_local_auth`,

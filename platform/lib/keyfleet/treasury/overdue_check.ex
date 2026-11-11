@@ -59,7 +59,7 @@ defmodule Keyfleet.Treasury.OverdueCheck do
     with [_ | _] = late <- late(readings, &waiting_since/1, @waiting_late) do
       OverdueError.report(
         "USDC from Key sales has waited more than 3 hours with no piece turned into REGENT: " <>
-          "#{named(late)}. Anyone may press Turn into REGENT on the fleet's Treasury tab; " <>
+          "#{named(late)}. Anyone may press Buy REGENT on the fleet's Treasury tab; " <>
           "if every press fails, the price is moving too much for the buyer."
       )
     end

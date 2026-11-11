@@ -37,8 +37,38 @@
 
 .key-heading {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.key-heading__words {
+  display: grid;
   gap: 1rem;
+  align-content: center;
+  justify-items: start;
   padding: var(--rg-panel-padding);
+}
+
+/* The Key's own card, its stage reaching the panel's edges beside the number. */
+.key-heading__card {
+  --key-stage-pad: clamp(1.25rem, 3vw, 2rem);
+
+  padding: var(--key-stage-pad) clamp(1.5rem, 4vw, 3.5rem);
+}
+
+.key-heading__card .key-card__tilt {
+  width: clamp(9rem, 22vw, 15rem);
+}
+
+/* Phones: the stage under the number, the card and its stage two-fifths of
+   the screen tall at most, so what follows starts on the first screen. */
+@media (max-width: 599px) {
+  .key-heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .key-heading__card .key-card__tilt {
+    width: min(70vw, (40svh - 2 * var(--key-stage-pad)) * 767 / 959);
+  }
 }
 
 .key-heading h1 {
@@ -53,22 +83,17 @@
   outline: none;
 }
 
-.key-lede {
-  max-width: 56ch;
-  color: var(--color-fg-muted);
-  font-size: 1.05rem;
-  line-height: 1.5;
-}
-
+/* Panels side by side share one height, so each row reads as one band;
+   their contents stay at the top. */
 .key-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   gap: 1.5rem;
-  align-items: start;
 }
 
 .key-panel {
   display: grid;
+  align-content: start;
   gap: 1rem;
   padding: var(--rg-panel-padding);
   justify-items: start;
@@ -85,10 +110,6 @@
   border-inline-start: 3px solid var(--ash-accent);
 }
 
-.key-notice--error {
-  border-inline-start-color: var(--ash-accent-warm);
-}
-
 .key-wallet {
   display: flex;
   flex-wrap: wrap;
@@ -96,6 +117,16 @@
   gap: 0.5rem 0.75rem;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+/* On a phone OpenSea is a full finger's height, level with the address's
+   icons. */
+@media (max-width: 47.99rem) {
+  #key-owner-opensea {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
 }
 
 .key-detail {
@@ -132,19 +163,6 @@
   color: var(--color-fg-muted);
 }
 
-.key-address {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  max-width: 100%;
-}
-
-.key-address code {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .key-shard-actions {
   display: flex;
   flex-wrap: wrap;
@@ -171,11 +189,6 @@
 }
 
 @media (max-width: 47.99rem) {
-  /* What a fleet decides spans the panel, as the fields under it do. */
-  .key-panel > .fleet-risks {
-    justify-self: stretch;
-  }
-
   /* Every wallet button spans its panel, one above the other, so the
      buttons' edges line up and each label has the panel's width. */
   .key-shard-actions {

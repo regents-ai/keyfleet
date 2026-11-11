@@ -22,7 +22,7 @@ them to the hub. That part is built separately, in `platform/`.
   one hub secret and the machine's id, and a time limit after which it shuts
   itself down even if the hub never asks.
 - **`runner/`**: the notebook machine's image. It is marimohub's own notebook
-  image at the pinned version (marimo 0.25.0 and its usual libraries), plus:
+  image at the pinned version (marimo 0.25.2 and its usual libraries), plus:
   - a small helper the hub uses to run commands and read and write the
     notebook's files on the machine;
   - a relay so the hub can reach the notebook over Fly's private network.
@@ -33,7 +33,26 @@ them to the hub. That part is built separately, in `platform/`.
   with `compute-fly` added), the two Fly app templates, and
   `hub.env.example`, which lists every hub setting with a one-line meaning.
 - **`marimohub/`**: the exact marimohub version used (`pin.env`) and the
-  one-entry lockfile change that adds `compute-fly` to marimohub's workspace.
+  patches the hub image applies to it, in this order:
+  - `pnpm-lock.patch`, the lockfile change (made by pnpm) that adds
+    `compute-fly` to marimohub's workspace and declares `@smithy/core`;
+  - `catalog-commit.patch`, our fix to marimohub's catalog (below);
+  - `storage-errors.patch`, which puts the store's answer in error lines
+    (below);
+  - `sweep-concurrency.patch`, which cleans up deleted notebooks 16 at a time;
+  - `storage-read-retry.patch`, which tries again a read the store cancels
+    with 408;
+  - `app-pool-sweep.patch`, which sweeps app pools 16 at a time and passes over
+    a deleted notebook's empty pool;
+  - `storage-calls.patch`, which names each failed store call and its object in
+    its log line, and gives the storage client five tries, 1, 2, 4 and 8
+    seconds apart;
+  - `maintenance-lock-landed.patch`, which keeps a lease whose write landed
+    before the store refused the client's retry of it, and logs who holds a
+    lease whenever a loop is refused it;
+  - `notebook-prune-hourly.patch`, which moves each notebook's upload and
+    thumbnail cleanup to its own hourly loop, and skips reading a notebook's
+    thumbnail record when no image is over a day old.
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -41,7 +60,8 @@ them to the hub. That part is built separately, in `platform/`.
 
 ## Building and checking
 
-You need Node 24 (marimohub's version) first on your PATH, plus Docker.
+You need marimohub's exact Node version (24.22.1 at this pin, from its
+`.node-version`) first on your PATH, plus Docker.
 
 ```sh
 make check-notebook-hub              # from the repository root; or notebook-hub/scripts/check.sh
@@ -55,9 +75,11 @@ things:
    first run only).
 2. Runs the type check, lint and tests for `compute-fly`, and bundles it.
 3. Builds the three images:
-   - `keyfleet/marimo-sandbox:f103eb2`, marimohub's notebook image, about 3 GB;
-   - `keyfleet/notebook-runner:f103eb2`;
-   - `keyfleet/notebook-hub:f103eb2`, about 440 MB.
+   - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
+   - `keyfleet/notebook-runner:626ec14`;
+   - `keyfleet/notebook-hub:626ec14-24dafab`, about 440 MB. The part after
+     the dash names the patches in `marimohub/`, so a changed patch gives a
+     new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
 
 The first image build takes a while; later runs reuse Docker's cache.
@@ -125,14 +147,15 @@ For four fleets, setting this up means:
   - notebook machines, charged only while sessions run;
   - Tigris storage.
 
-The Regents Club's is being set up (13 October 2026). The other fleets have
-none of this yet, and nothing here creates it.
+The Regents Club's was set up on 13 October 2026 and Classic #1's on 21 October
+2026 (Sean's go in Classic #1's pilot). The other fleets have none of this yet,
+and nothing here creates it.
 
 ## Setting up one fleet
 
 Each step names the command. The flags were checked against the help text of
-flyctl v0.4.107. Steps 1 to 3, 5, 8 and 9 have run on real Fly for the Regents
-Club; the bucket and the hub's deploy have not yet.
+flyctl v0.4.107. Every step has run on real Fly, for the Regents Club and for
+Classic #1 (Classic #1's with flyctl v0.4.120).
 
 Each fleet's hub and runner apps share a private network of their own,
 `kf-nb-<fleet>-net`. Notebook machines therefore cannot reach the shared
@@ -151,8 +174,10 @@ Keyfleet's server puts on each request, which the hub checks.
    Apple Silicon Mac the check above builds `arm64` images, so build again for
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
-   - tag `keyfleet/notebook-runner:f103eb2` as `registry.fly.io/kf-nbk-<fleet>:f103eb2` and push it;
-   - tag `keyfleet/notebook-hub:f103eb2` as `registry.fly.io/kf-nb-<fleet>:f103eb2` and push it.
+   - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
+   - tag `keyfleet/notebook-hub:626ec14-24dafab` as `registry.fly.io/kf-nb-<fleet>:626ec14-24dafab`
+     and push it, then set the same tag in `[build] image` of
+     `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
    `fly storage create --app kf-nb-<fleet> --name <bucket>`. Fly sets the
    bucket's key on the hub app itself, as the secrets `AWS_ACCESS_KEY_ID` and
@@ -198,7 +223,7 @@ Keyfleet's server puts on each request, which the hub checks.
    `hub/fly.runner.toml` into `hub/fleets/` as `<fleet>.hub.toml` and
    `<fleet>.runner.toml`, and replace every `<…>` placeholder
    (`hub/hub.env.example` says what each setting means). The Regents Club's
-   copies are there.
+   and Classic #1's copies are there.
 7. **Deploy the hub, private, as one machine**:
    `fly deploy --config notebook-hub/hub/fleets/<fleet>.hub.toml --no-public-ips --ha=false`.
    Nothing is deployed to `kf-nbk-<fleet>`: the hub starts its machines there.
@@ -208,8 +233,11 @@ Keyfleet's server puts on each request, which the hub checks.
    the `keyfleet` app is on and which has no name to pass, not on the fleet's
    own network.
 9. **Give the fleet's notebooks their web address.** In Vercel DNS, point
-   `<fleet, hyphenated>.notebooks.keyfleet.ai` at the `keyfleet` app as a CNAME
-   to `keyfleet.fly.dev`, then
+   `<fleet, hyphenated>.notebooks.keyfleet.ai` at the `keyfleet` app's own
+   addresses, as `regents-club.notebooks` is: an A record and an AAAA record
+   with the addresses `fly ips list --app keyfleet` shows
+   (`vercel dns add keyfleet.ai <fleet, hyphenated>.notebooks A <v4>`, and the
+   same with `AAAA <v6>`), then
    `fly certs add <fleet, hyphenated>.notebooks.keyfleet.ai --app keyfleet` and
    `fly certs check` until it is issued.
 10. **Point Keyfleet's server at the hub**: add
@@ -226,6 +254,10 @@ its listed ID.
 | Fleet | Token name | Listed ID | Made | Last day |
 | --- | --- | --- | --- | --- |
 | Regents Club | `kf-nb-regents-club-hub` | `60XMXnbzk4eybuLoxgj02GxemnCgP23j2v2DXkMFZ7` | 13 October 2026 | 13 October 2027, 17:48 UTC |
+| Classic #1 | `kf-nb-fleet-tech-classic-hub` | `3KZ2ZnjxkaoyjCw9k7lMKRko8OCavNkxlpywokgS8` | 21 October 2026 | 21 October 2027, 07:09 UTC |
+| Syndicate #1 | `kf-nb-fibonacci-syndicate-hub` | `gRAgA4abnyV5aIqVmNRyQOmx6vC9jNkZqv9V2OJCz8` | 23 October 2026 | 23 October 2027, 01:36 UTC |
+| Cascade #1 | `kf-nb-fibonacci-cascade-hub` | `zQgwgYqbO69nqf9qXZzvRQXnkKCB5amyGwBlK6AFPX` | 23 October 2026 | 23 October 2027, 01:36 UTC |
+| Accelerant #1 | `kf-nb-fleet-tech-accelerant-hub` | `3KZ2ZnjxkaoyjCw9k7lMKRko8OCpoD028NpMn9GCmv` | 23 October 2026 | 23 October 2027, 01:36 UTC |
 
 ## Things to know
 
@@ -255,3 +287,26 @@ its listed ID.
 - **Machine names.** Each machine is named after its marimohub session sandbox,
   so the hub finds an existing machine again after a restart instead of
   starting a second one.
+- **The hub keeps a snapshot its catalog names (`catalog-commit.patch`).**
+  marimohub moves its catalog to a new snapshot with a conditional write. Its
+  storage client retries a write whose answer was lost; when the first try
+  had already landed, the retry is refused, and marimohub at the pin then
+  deleted the snapshot its catalog had just moved to. The hub stopped with
+  "Catalog has not been initialized" until the catalog was rebuilt (Classic #1
+  and the Regents Club, 27 Oct 2026). With the patch, the hub reads the catalog
+  before deleting, and keeps the snapshot when the catalog names it. The patch
+  adds three tests to marimohub's `recovery.test.ts`. Drop the patch when
+  marimohub ships the same fix.
+- **A failed storage call names the store's answer (`storage-errors.patch`).**
+  marimohub logs a refused storage call with only the client's error name, so a
+  reply with no error code reads "Unknown". With the patch, `request_error` and
+  the other error lines carry `error.storage`: the HTTP status, the store's
+  request ids and how many tries were made. A support ticket to the store needs
+  those ids (Classic #1 saves refused with "Unknown", 27 Oct 2026).
+- **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
+  integrations hold data-source settings and their secrets for notebooks.
+  Keyfleet's gateway never opens their routes and nothing in Keyfleet makes
+  one, so every hub runs with them off and needs no `MARIMOHUB_SECRETS_KEK`.
+  With them on and no key, each hub warned "integration secret sources: none"
+  at every start (27 Oct 2026). Turning them on later means opening the routes
+  in the gateway and giving each hub its own key.

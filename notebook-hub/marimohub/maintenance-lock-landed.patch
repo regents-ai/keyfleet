@@ -1,0 +1,617 @@
+diff --git a/packages/core/src/services/catalog/MaintenanceLock.ts b/packages/core/src/services/catalog/MaintenanceLock.ts
+--- a/packages/core/src/services/catalog/MaintenanceLock.ts
++++ b/packages/core/src/services/catalog/MaintenanceLock.ts
+@@ -30,6 +30,24 @@
+ });
+ type LockRecord = z.infer<typeof LockRecordSchema>;
+ 
++/**
++ * What {@link MaintenanceLock.acquire} found: this holder owns the lease, or the
++ * holder and expiry of the lease that refused it (null when none could be read).
++ */
++export type LeaseAcquisition =
++	| { acquired: true }
++	| { acquired: false; heldBy: string | null; heldUntil: string | null };
++
++const ACQUIRED: LeaseAcquisition = { acquired: true };
++
++function refused(current: LockRecord | null): LeaseAcquisition {
++	return {
++		acquired: false,
++		heldBy: current?.holder ?? null,
++		heldUntil: current?.expires_at ?? null,
++	};
++}
++
+ export class MaintenanceLock {
+ 	constructor(
+ 		private bucket: Bucket,
+@@ -38,24 +56,24 @@
+ 	) {}
+ 
+ 	/**
+-	 * Try to acquire (or steal an expired) lease. Returns true iff this holder now
++	 * Try to acquire (or steal an expired) lease, and say whether this holder now
+ 	 * owns it. Acquisition is atomic via create-if-absent / CAS, so concurrent
+ 	 * callers can never both win.
+ 	 */
+-	async acquire(holder: string, ttlMs: number = DEFAULT_TTL_MS): Promise<boolean> {
+-		const acquired = await this.tryAcquire(holder, ttlMs);
++	async acquire(holder: string, ttlMs: number = DEFAULT_TTL_MS): Promise<LeaseAcquisition> {
++		const outcome = await this.tryAcquire(holder, ttlMs);
+ 		// Contention is not an error, so surface it as an attribute on the caller's span.
+-		trace.getActiveSpan()?.setAttribute('marimohub.lock.acquired', acquired);
+-		return acquired;
++		trace.getActiveSpan()?.setAttribute('marimohub.lock.acquired', outcome.acquired);
++		return outcome;
+ 	}
+ 
+-	private async tryAcquire(holder: string, ttlMs: number): Promise<boolean> {
++	private async tryAcquire(holder: string, ttlMs: number): Promise<LeaseAcquisition> {
+ 		const now = Date.now();
+ 		const record: LockRecord = { holder, expires_at: new Date(now + ttlMs).toISOString() };
+ 		const body = JSON.stringify(record);
+ 
+ 		// Fast path: no lock yet.
+-		if (await this.tryCreate(body)) return true;
++		if (await this.tryCreate(body)) return ACQUIRED;
+ 
+ 		// A lock exists — read it. Renew if we already hold it, steal if it's
+ 		// expired, otherwise back off. The write is CAS on the current ETag so two
+@@ -63,7 +81,7 @@
+ 		const existing = await this.bucket.get(this.key);
+ 		if (!existing) {
+ 			// Vanished between the failed create and this read — one more create try.
+-			return this.tryCreate(body);
++			return (await this.tryCreate(body)) ? ACQUIRED : this.afterConflict(record);
+ 		}
+ 
+ 		const current = this.parse(await existing.text(), 'maintenance_lock.acquire');
+@@ -71,20 +89,35 @@
+ 		// Re-read the clock: a release that landed during the awaits above stamps a
+ 		// later `expires_at` than the pre-await `now`.
+ 		if (heldByOther && new Date(current.expires_at).getTime() > Date.now()) {
+-			return false; // someone else holds it and it hasn't expired
++			return refused(current); // someone else holds it and it hasn't expired
+ 		}
+ 
+ 		// Either ours (renew, extending the TTL) or expired (steal).
+ 		try {
+ 			await this.bucket.put(this.key, body, { onlyIfEtagMatches: existing.etag });
+-			return true;
++			return ACQUIRED;
+ 		} catch (err) {
+-			if (err instanceof PreconditionFailedError) return false; // another writer won the CAS
+-			throw err;
++			if (!(err instanceof PreconditionFailedError)) throw err;
++			return this.afterConflict(record);
+ 		}
+ 	}
+ 
+ 	/**
++	 * Settle a refused write by the lease it left. The storage client retries a write
++	 * whose answer it lost, and a retry of a write that had landed is refused just as
++	 * a lost race is. Only this write's own record (its holder, which callers make
++	 * unique to each attempt, and the expiry it stamped) means it won.
++	 */
++	private async afterConflict(written: LockRecord): Promise<LeaseAcquisition> {
++		const stored = await this.bucket.get(this.key);
++		const current = stored ? this.parse(await stored.text(), 'maintenance_lock.acquire') : null;
++		if (current?.holder === written.holder && current.expires_at === written.expires_at) {
++			return ACQUIRED;
++		}
++		return refused(current);
++	}
++
++	/**
+ 	 * Release the lease (best-effort) by expiring it in place. The write is CAS on
+ 	 * the ETag read here, so a lease another replica stole after this holder's TTL
+ 	 * lapsed is never clobbered. The TTL is the real safety net; this frees it sooner.
+diff --git a/packages/core/src/services/catalog/MaintenanceLock.test.ts b/packages/core/src/services/catalog/MaintenanceLock.test.ts
+--- a/packages/core/src/services/catalog/MaintenanceLock.test.ts
++++ b/packages/core/src/services/catalog/MaintenanceLock.test.ts
+@@ -4,6 +4,9 @@
+ import { paths } from '../../paths';
+ import { MaintenanceLock } from './MaintenanceLock';
+ 
++const ACQUIRED = { acquired: true };
++const REFUSED = { acquired: false };
++
+ describe('MaintenanceLock', () => {
+ 	let bucket: MemoryBucket;
+ 	let lock: MaintenanceLock;
+@@ -21,42 +24,42 @@
+ 	});
+ 
+ 	it('acquires a free lease', async () => {
+-		expect(await lock.acquire('A', 1000)).toBe(true);
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
+ 		expect(await bucket.get(paths.maintenanceLock)).not.toBeNull();
+ 	});
+ 
+ 	it('refuses a second holder while held and unexpired', async () => {
+-		expect(await lock.acquire('A', 10_000)).toBe(true);
+-		expect(await lock.acquire('B', 10_000)).toBe(false);
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
++		expect(await lock.acquire('B', 10_000)).toMatchObject(REFUSED);
+ 	});
+ 
+ 	it('lets the same holder renew (and extend) its own lease', async () => {
+-		expect(await lock.acquire('A', 10_000)).toBe(true);
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
+ 		clock.set(5000); // still within the original TTL
+-		expect(await lock.acquire('A', 10_000)).toBe(true); // renew, not lock-out
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED); // renew, not lock-out
+ 		// The renewal extended the expiry; another holder still can't take it.
+ 		clock.set(12_000);
+-		expect(await lock.acquire('B', 10_000)).toBe(false);
++		expect(await lock.acquire('B', 10_000)).toMatchObject(REFUSED);
+ 	});
+ 
+ 	it('lets a new holder steal an expired lease', async () => {
+-		expect(await lock.acquire('A', 1000)).toBe(true);
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
+ 		clock.set(2000); // past A's expiry
+-		expect(await lock.acquire('B', 1000)).toBe(true);
++		expect(await lock.acquire('B', 1000)).toEqual(ACQUIRED);
+ 	});
+ 
+ 	it('release by the holder frees the lease', async () => {
+-		expect(await lock.acquire('A', 10_000)).toBe(true);
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
+ 		await lock.release('A');
+ 		expect(await (await bucket.get(paths.maintenanceLock))!.json()).toEqual({
+ 			holder: 'A',
+ 			expires_at: new Date(0).toISOString(),
+ 		});
+-		expect(await lock.acquire('B', 10_000)).toBe(true);
++		expect(await lock.acquire('B', 10_000)).toEqual(ACQUIRED);
+ 	});
+ 
+ 	it('treats a lease released between the failed create and the read as free', async () => {
+-		expect(await lock.acquire('A', 10_000)).toBe(true);
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
+ 		const originalGet = bucket.get.bind(bucket);
+ 		let released = false;
+ 		vi.spyOn(bucket, 'get').mockImplementation(async (key) => {
+@@ -68,15 +71,15 @@
+ 			return originalGet(key);
+ 		});
+ 
+-		expect(await lock.acquire('B', 10_000)).toBe(true);
++		expect(await lock.acquire('B', 10_000)).toEqual(ACQUIRED);
+ 	});
+ 
+ 	it('release does not clobber a lease stolen between its read and write', async () => {
+-		expect(await lock.acquire('A', 1000)).toBe(true);
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
+ 		const stale = (await bucket.get(paths.maintenanceLock))!;
+ 		vi.spyOn(bucket, 'get').mockImplementationOnce(async () => {
+ 			clock.set(2000);
+-			expect(await lock.acquire('B', 10_000)).toBe(true);
++			expect(await lock.acquire('B', 10_000)).toEqual(ACQUIRED);
+ 			return stale;
+ 		});
+ 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+@@ -108,7 +111,7 @@
+ 			await Promise.resolve();
+ 			controller.abort();
+ 			clock.set(2000);
+-			expect(await lock.acquire('B', 1000)).toBe(true);
++			expect(await lock.acquire('B', 1000)).toEqual(ACQUIRED);
+ 			read.resolve();
+ 			await releasing;
+ 			expect(await (await bucket.get(paths.maintenanceLock))!.json()).toMatchObject({
+@@ -118,17 +121,17 @@
+ 	);
+ 
+ 	it('release by a non-holder is a no-op', async () => {
+-		expect(await lock.acquire('A', 10_000)).toBe(true);
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
+ 		await lock.release('B'); // not the holder
+ 		expect(await bucket.get(paths.maintenanceLock)).not.toBeNull();
+-		expect(await lock.acquire('B', 10_000)).toBe(false); // A still holds it
++		expect(await lock.acquire('B', 10_000)).toMatchObject(REFUSED); // A still holds it
+ 	});
+ 
+ 	it('steals a lock whose stored record is malformed', async () => {
+ 		const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+ 		await bucket.put(paths.maintenanceLock, 'not-json-do-not-log');
+ 
+-		expect(await lock.acquire('A', 1000)).toBe(true);
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
+ 		const stored = await bucket.get(paths.maintenanceLock);
+ 		expect((await stored!.json<{ holder: string }>()).holder).toBe('A');
+ 		const line = log.mock.calls[0]?.[0] as string;
+@@ -136,24 +139,92 @@
+ 		expect(line).not.toContain('not-json-do-not-log');
+ 	});
+ 
+-	it('returns false when it loses the CAS on a contended steal', async () => {
+-		expect(await lock.acquire('A', 1000)).toBe(true);
++	it('refuses, naming the winner, when it loses the CAS on a contended steal', async () => {
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
+ 		clock.set(2000); // A's lease expired → eligible to steal
+ 
+ 		const originalPut = bucket.put.bind(bucket);
++		const winner = JSON.stringify({ holder: 'C', expires_at: new Date(3000).toISOString() });
+ 		vi.spyOn(bucket, 'put').mockImplementation(async (key, value, opts) => {
+ 			// Another writer wins the steal first: the conditional CAS fails.
+-			if (opts?.onlyIfEtagMatches) throw new PreconditionFailedError('lost the steal');
++			if (opts?.onlyIfEtagMatches) {
++				await originalPut(key, winner);
++				throw new PreconditionFailedError('lost the steal');
++			}
+ 			return originalPut(key, value, opts);
+ 		});
+ 
+-		expect(await lock.acquire('B', 1000)).toBe(false);
++		expect(await lock.acquire('B', 1000)).toEqual({
++			acquired: false,
++			heldBy: 'C',
++			heldUntil: new Date(3000).toISOString(),
++		});
+ 	});
+ 
++	it('names the holder and expiry of the lease that refused it', async () => {
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
++		expect(await lock.acquire('B', 10_000)).toEqual({
++			acquired: false,
++			heldBy: 'A',
++			heldUntil: new Date(10_000).toISOString(),
++		});
++	});
++
++	// The storage client retries a write whose answer it lost; when the first try had
++	// landed, the retry finds the new ETag and the store refuses it with 412.
++	function landThenRefuseConditionalWrites() {
++		const originalPut = bucket.put.bind(bucket);
++		vi.spyOn(bucket, 'put').mockImplementation(async (key, value, opts) => {
++			const written = await originalPut(key, value, opts);
++			if (opts?.onlyIfEtagMatches || opts?.onlyIfNotExists)
++				throw new PreconditionFailedError('retry of a landed write');
++			return written;
++		});
++	}
++
++	it('keeps a stolen lease whose write landed before the store refused its retry', async () => {
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
++		clock.set(2000); // A's lease expired → eligible to steal
++		landThenRefuseConditionalWrites();
++
++		expect(await lock.acquire('B', 10_000)).toEqual(ACQUIRED);
++		vi.mocked(bucket.put).mockRestore();
++		expect(await lock.acquire('C', 10_000)).toEqual({
++			acquired: false,
++			heldBy: 'B',
++			heldUntil: new Date(12_000).toISOString(),
++		});
++	});
++
++	it('keeps a new lease whose create landed before the store refused its retry', async () => {
++		landThenRefuseConditionalWrites();
++
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
++		vi.mocked(bucket.put).mockRestore();
++		expect(await lock.acquire('B', 10_000)).toMatchObject({ acquired: false, heldBy: 'A' });
++	});
++
++	it('refuses after a conflict that left an older lease of the same holder', async () => {
++		expect(await lock.acquire('A', 10_000)).toEqual(ACQUIRED);
++		clock.set(5000);
++		const originalPut = bucket.put.bind(bucket);
++		vi.spyOn(bucket, 'put').mockImplementation(async (key, value, opts) => {
++			// The renewal never lands: only this write's own record counts as won.
++			if (opts?.onlyIfEtagMatches) throw new PreconditionFailedError('conflict');
++			return originalPut(key, value, opts);
++		});
++
++		expect(await lock.acquire('A', 10_000)).toEqual({
++			acquired: false,
++			heldBy: 'A',
++			heldUntil: new Date(10_000).toISOString(),
++		});
++	});
++
+ 	it('release does not delete a lease another holder stole after a TTL overrun', async () => {
+-		expect(await lock.acquire('A', 1000)).toBe(true);
++		expect(await lock.acquire('A', 1000)).toEqual(ACQUIRED);
+ 		clock.set(2000); // A overran its TTL
+-		expect(await lock.acquire('B', 10_000)).toBe(true); // B steals the expired lease
++		expect(await lock.acquire('B', 10_000)).toEqual(ACQUIRED); // B steals the expired lease
+ 
+ 		await lock.release('A'); // must not delete B's freshly-acquired lease
+ 
+diff --git a/apps/server/src/backgroundLoops.ts b/apps/server/src/backgroundLoops.ts
+--- a/apps/server/src/backgroundLoops.ts
++++ b/apps/server/src/backgroundLoops.ts
+@@ -141,15 +141,22 @@
+ 				},
+ 			};
+ 			if (options.shouldRun && !(await context.step(options.shouldRun))) return undefined;
+-			if (
+-				lease &&
+-				!(await context.step(() =>
++			if (lease) {
++				const lockout = await context.step(() =>
+ 					lease.lock.acquire(lease.holder, Math.max(1, deadlineMs - (Date.now() - started))),
+-				))
+-			) {
+-				if (options.notLeaderEvent)
+-					logEvent({ level: 'debug', event: options.notLeaderEvent, holder: lease.holder });
+-				return undefined;
++				);
++				if (!lockout.acquired) {
++					// A refused tick says who holds the lease and until when, so a lockout is never silent.
++					if (options.notLeaderEvent)
++						logEvent({
++							level: 'info',
++							event: options.notLeaderEvent,
++							holder: lease.holder,
++							held_by: lockout.heldBy,
++							held_until: lockout.heldUntil,
++						});
++					return undefined;
++				}
+ 			}
+ 			try {
+ 				// A stop that landed while a setup step was pending must still release the lease.
+diff --git a/apps/server/src/backgroundLoops.test.ts b/apps/server/src/backgroundLoops.test.ts
+--- a/apps/server/src/backgroundLoops.test.ts
++++ b/apps/server/src/backgroundLoops.test.ts
+@@ -4,11 +4,19 @@
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import { MaintenanceLock } from '@marimo-hub/core';
+ import type { Metrics } from '@marimo-hub/core';
++import { PreconditionFailedError } from '@marimo-hub/core/errors';
+ import { MemoryBucket } from '@marimo-hub/core/testing/memory-bucket';
+ import { BackgroundLoops } from './backgroundLoops';
+ 
+ type LoopOptions = Parameters<BackgroundLoops['start']>[0];
+ 
++const ACQUIRED = { acquired: true } as const;
++const HELD = {
++	acquired: false,
++	heldBy: 'other:1:holder',
++	heldUntil: new Date(10_000).toISOString(),
++} as const;
++
+ function events() {
+ 	return vi
+ 		.mocked(console.log)
+@@ -304,17 +312,18 @@
+ 	it.each(['eligibility', 'acquire'] as const)(
+ 		'does not start work when a timed-out %s resolves late',
+ 		async (phase) => {
+-			const late = Promise.withResolvers<boolean>();
+-			const acquire = vi.spyOn(lock, 'acquire').mockResolvedValue(true);
++			const late = Promise.withResolvers<void>();
++			const acquire = vi.spyOn(lock, 'acquire').mockResolvedValue(ACQUIRED);
+ 			vi.spyOn(lock, 'release').mockResolvedValue(undefined);
+ 			const shouldRun = vi.fn(async () => true);
+-			(phase === 'eligibility' ? shouldRun : acquire).mockReturnValueOnce(late.promise);
++			if (phase === 'eligibility') shouldRun.mockReturnValueOnce(late.promise.then(() => true));
++			else acquire.mockReturnValueOnce(late.promise.then(() => ACQUIRED));
+ 			const run = vi.fn(async () => {});
+ 			start(run, { shouldRun, lock });
+ 			await vi.advanceTimersByTimeAsync(300);
+ 			expect(loops.health().loops.test.status).toBe('stalled');
+ 			expect(run).not.toHaveBeenCalled();
+-			late.resolve(true);
++			late.resolve();
+ 			await vi.advanceTimersByTimeAsync(0);
+ 			expect(run).not.toHaveBeenCalled();
+ 			await vi.advanceTimersByTimeAsync(100);
+@@ -331,7 +340,7 @@
+ 		'counts repeated %s errors as failures and recovers',
+ 		async (phase) => {
+ 			const shouldRun = vi.fn(async () => true);
+-			const acquire = vi.spyOn(lock, 'acquire').mockResolvedValue(true);
++			const acquire = vi.spyOn(lock, 'acquire').mockResolvedValue(ACQUIRED);
+ 			const release = vi.spyOn(lock, 'release').mockResolvedValue(undefined);
+ 			const run = vi.fn(async () => {});
+ 			const operation = { eligibility: shouldRun, acquire, work: run }[phase];
+@@ -358,7 +367,7 @@
+ 	it.each([false, true])(
+ 		'keeps the sweep outcome when release fails (sweep failed: %s)',
+ 		async (failed) => {
+-			vi.spyOn(lock, 'acquire').mockResolvedValue(true);
++			vi.spyOn(lock, 'acquire').mockResolvedValue(ACQUIRED);
+ 			vi.spyOn(lock, 'release').mockRejectedValue(new Error('release unavailable'));
+ 			const onSuccess = vi.fn();
+ 			start(
+@@ -382,7 +391,7 @@
+ 
+ 	it('reports success only after lease release', async () => {
+ 		const release = Promise.withResolvers<void>();
+-		vi.spyOn(lock, 'acquire').mockResolvedValue(true);
++		vi.spyOn(lock, 'acquire').mockResolvedValue(ACQUIRED);
+ 		vi.spyOn(lock, 'release').mockReturnValueOnce(release.promise);
+ 		const reports: unknown[] = [];
+ 		const onSuccess = vi.fn(() => {
+@@ -413,8 +422,8 @@
+ 		]);
+ 	});
+ 
+-	it('treats lease contention as healthy progress', async () => {
+-		vi.spyOn(lock, 'acquire').mockResolvedValue(false);
++	it('treats lease contention as healthy progress and says who holds the lease', async () => {
++		vi.spyOn(lock, 'acquire').mockResolvedValue(HELD);
+ 		const run = vi.fn();
+ 		start(run, { lock, notLeaderEvent: 'test_not_leader' });
+ 		await vi.advanceTimersByTimeAsync(1000);
+@@ -423,9 +432,35 @@
+ 			status: 'ok',
+ 			loops: { test: { last_success_at: 1000 } },
+ 		});
+-		expect(events()[0]).toMatchObject({ level: 'debug', event: 'test_not_leader' });
++		expect(events()[0]).toEqual({
++			ts: expect.any(String),
++			level: 'info',
++			event: 'test_not_leader',
++			holder: expect.any(String),
++			held_by: HELD.heldBy,
++			held_until: HELD.heldUntil,
++		});
+ 	});
+ 
++	it('runs the attempt whose lease write landed before the store refused its retry', async () => {
++		const bucket = new MemoryBucket();
++		const key = '_system/_test.lock';
++		await bucket.put(key, JSON.stringify({ holder: 'old', expires_at: new Date(0).toISOString() }));
++		const put = bucket.put.bind(bucket);
++		// The storage client retries a write whose answer it lost; the retry of a write
++		// that had landed finds the new ETag and is refused with 412.
++		vi.spyOn(bucket, 'put').mockImplementation(async (object, value, options) => {
++			const written = await put(object, value, options);
++			if (options?.onlyIfEtagMatches) throw new PreconditionFailedError('retry of a landed write');
++			return written;
++		});
++		const run = vi.fn(async () => {});
++		start(run, { lock: new MaintenanceLock(bucket, key), notLeaderEvent: 'test_not_leader' });
++		await vi.advanceTimersByTimeAsync(0);
++		expect(run).toHaveBeenCalledOnce();
++		expect(events()).toEqual([]);
++	});
++
+ 	it('contains a synchronous throw and clears the deadline timer', async () => {
+ 		const run = vi
+ 			.fn(async () => {})
+@@ -501,14 +536,14 @@
+ 	});
+ 
+ 	it('skips the run when stop lands while the lease acquire is pending', async () => {
+-		const acquired = Promise.withResolvers<boolean>();
++		const acquired = Promise.withResolvers<typeof ACQUIRED>();
+ 		vi.spyOn(lock, 'acquire').mockReturnValue(acquired.promise);
+ 		const release = vi.spyOn(lock, 'release');
+ 		const run = vi.fn(async () => {});
+ 		const handle = start(run, { lock, deadlineMs: 10_000 });
+ 		await vi.advanceTimersByTimeAsync(0);
+ 		handle.stop();
+-		acquired.resolve(true);
++		acquired.resolve(ACQUIRED);
+ 		await handle.drain();
+ 		expect(run).not.toHaveBeenCalled();
+ 		expect(release).toHaveBeenCalledOnce();
+diff --git a/apps/server/src/cron.ts b/apps/server/src/cron.ts
+--- a/apps/server/src/cron.ts
++++ b/apps/server/src/cron.ts
+@@ -223,6 +223,7 @@
+ 		name: 'session_lifecycle',
+ 		intervalMs: lifetime.sweepIntervalMs,
+ 		lock,
++		notLeaderEvent: 'session_lifecycle_skipped_not_leader',
+ 		run: async ({ holder, step }) => {
+ 			await step(() => maintenanceSteps.sweepAppPools(deps));
+ 			const r = await step(() => svc.sweep());
+@@ -304,6 +305,7 @@
+ 		name: 'job_scheduler',
+ 		intervalMs: tickMs,
+ 		lock,
++		notLeaderEvent: 'job_scheduler_skipped_not_leader',
+ 		run: async ({ holder, step }) => {
+ 			const r = await step(() => scheduler.tick());
+ 			if (Object.values(r).some((n) => n > 0) || scheduler.inFlightCount > 0) {
+diff --git a/apps/server/src/cron.test.ts b/apps/server/src/cron.test.ts
+--- a/apps/server/src/cron.test.ts
++++ b/apps/server/src/cron.test.ts
+@@ -198,7 +198,7 @@
+ 	});
+ 
+ 	it('reports loop heartbeat gauges after work and lease release complete', async () => {
+-		vi.spyOn(MaintenanceLock.prototype, 'acquire').mockResolvedValue(true);
++		vi.spyOn(MaintenanceLock.prototype, 'acquire').mockResolvedValue({ acquired: true });
+ 		vi.spyOn(MaintenanceLock.prototype, 'release').mockImplementation(
+ 			() => new Promise((resolve) => setTimeout(resolve, 10)),
+ 		);
+@@ -757,6 +757,7 @@
+ 		lockKey: paths.sessionLifecycleLock,
+ 		intervalMs: SESSION_SWEEP_INTERVAL_MS,
+ 		failureEvent: 'session_lifecycle_failed',
++		notLeaderEvent: 'session_lifecycle_skipped_not_leader',
+ 		start(deps, loops, work) {
+ 			deps.sandbox.sessionLifetime = makeSessionLifetime();
+ 			vi.spyOn(SessionLifecycleService.prototype, 'sweep').mockImplementation(async () => {
+@@ -771,6 +772,7 @@
+ 		lockKey: paths.jobSchedulerLock,
+ 		intervalMs: 60_000,
+ 		failureEvent: 'job_scheduler_failed',
++		notLeaderEvent: 'job_scheduler_skipped_not_leader',
+ 		start(deps, loops, work) {
+ 			vi.spyOn(JobScheduler.prototype, 'tick').mockImplementation(async () => {
+ 				await work();
+@@ -848,13 +850,25 @@
+ 	it.each(LOOPS.filter((loop) => loop.lockKey))(
+ 		'$name skips work while another replica holds the lease',
+ 		async (loop) => {
+-			vi.spyOn(MaintenanceLock.prototype, 'acquire').mockResolvedValue(false);
++			const heldUntil = new Date(Date.now() + FIVE_MINUTES_MS).toISOString();
++			vi.spyOn(MaintenanceLock.prototype, 'acquire').mockResolvedValue({
++				acquired: false,
++				heldBy: 'other-replica:1:holder',
++				heldUntil,
++			});
+ 			const work: LoopWork = vi.fn<(...args: unknown[]) => Promise<void>>();
+ 			h.track(loop.start(deps, loops, work));
+ 			await flushRun();
+ 			expect(work).not.toHaveBeenCalled();
+ 			if (loop.notLeaderEvent)
+-				expect(h.events()).toEqual([expect.objectContaining({ event: loop.notLeaderEvent })]);
++				expect(h.events()).toEqual([
++					expect.objectContaining({
++						level: 'info',
++						event: loop.notLeaderEvent,
++						held_by: 'other-replica:1:holder',
++						held_until: heldUntil,
++					}),
++				]);
+ 		},
+ 	);
+ 
+diff --git a/examples/cloudflare-worker/src/index.ts b/examples/cloudflare-worker/src/index.ts
+--- a/examples/cloudflare-worker/src/index.ts
++++ b/examples/cloudflare-worker/src/index.ts
+@@ -255,7 +255,7 @@
+ 		// The Workers scheduled trigger is already a platform singleton; the lease
+ 		// is belt-and-suspenders, matching the Node deployment's contract.
+ 		const lock = new MaintenanceLock(bucket);
+-		if (await lock.acquire('cloudflare-scheduled')) {
++		if ((await lock.acquire('cloudflare-scheduled')).acquired) {
+ 			try {
+ 				await sweepAppPools({
+ 					bucket,
+@@ -303,7 +303,7 @@
+ 		// the watchdog reclaims anything that outlives it.
+ 		if (!parseJobsToggle(env.MARIMOHUB_JOBS)) return;
+ 		const jobsLock = new MaintenanceLock(bucket, paths.jobSchedulerLock);
+-		if (!(await jobsLock.acquire('cloudflare-scheduled'))) return;
++		if (!(await jobsLock.acquire('cloudflare-scheduled')).acquired) return;
+ 		try {
+ 			const deps = buildDeps(new Request('https://scheduled.invalid/'), env, ctx);
+ 			const scheduler = new JobScheduler({
+diff --git a/examples/cloudflare-worker/src/index.test.ts b/examples/cloudflare-worker/src/index.test.ts
+--- a/examples/cloudflare-worker/src/index.test.ts
++++ b/examples/cloudflare-worker/src/index.test.ts
+@@ -314,8 +314,8 @@
+ 
+ 	it('runs the job scheduler when the maintenance lease is unavailable', async () => {
+ 		vi.spyOn(MaintenanceLock.prototype, 'acquire')
+-			.mockResolvedValueOnce(false)
+-			.mockResolvedValueOnce(true);
++			.mockResolvedValueOnce({ acquired: false, heldBy: 'other', heldUntil: null })
++			.mockResolvedValueOnce({ acquired: true });
+ 		vi.spyOn(MaintenanceLock.prototype, 'release').mockResolvedValue(undefined);
+ 		const tick = vi.spyOn(JobScheduler.prototype, 'tick').mockResolvedValue({
+ 			fired: 0,
+@@ -339,8 +339,8 @@
+ 
+ 	it('registers the execution drain before pruning', async () => {
+ 		vi.spyOn(MaintenanceLock.prototype, 'acquire')
+-			.mockResolvedValueOnce(false)
+-			.mockResolvedValueOnce(true);
++			.mockResolvedValueOnce({ acquired: false, heldBy: 'other', heldUntil: null })
++			.mockResolvedValueOnce({ acquired: true });
+ 		vi.spyOn(MaintenanceLock.prototype, 'release').mockResolvedValue(undefined);
+ 		vi.spyOn(JobScheduler.prototype, 'tick').mockResolvedValue({
+ 			fired: 0,

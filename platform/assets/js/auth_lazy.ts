@@ -109,6 +109,11 @@ export function finishWalletSignOut(
 
 const bridgePath = /^\/assets\/js\/privy_bridge(?:-[a-f0-9]{32})?\.js$/
 
+// Privy brings a Google or other redirect sign-in back to the page with these.
+export function returnedFromOAuth(search: string): boolean {
+  return new URLSearchParams(search).has("privy_oauth_code")
+}
+
 export function reloadDocumentOnce(documentRoot: Document, reload: () => void): void {
   if (reloadedDocuments.has(documentRoot)) return
   reloadedDocuments.add(documentRoot)
@@ -198,7 +203,19 @@ export async function csrfToken(
 let openRotations = 0
 let unreadRenewal = false
 let adoptingRenewal: Promise<void> | null = null
+let documentLeaving = false
 const heldSockets = new Set<() => void>()
+
+// A document that has begun to leave, by a reload or any other full
+// navigation, is replaced by one rendered for the cookie its own request
+// carries. An adoption read this document sent after that would write a newer
+// cookie behind the new page's back: the new page's socket would then carry a
+// CSRF token its cookie no longer backs, Phoenix would refuse the join as stale
+// and load the page a second time. So from `beforeunload` on, a held socket
+// here stays held and reads nothing; the page that replaces it reads its own.
+export function holdAdoptionWhileLeaving(view: Pick<Window, "addEventListener"> = window): void {
+  view.addEventListener("beforeunload", () => { documentLeaving = true }, {once: true})
+}
 
 // True only while this tab is known to hold the CSRF state of the cookie it
 // would connect under.
@@ -253,7 +270,8 @@ function adoptUnreadRenewal(fetcher: typeof fetch): Promise<void> {
     // one of them may already have read what the cookie carries by the time it
     // runs. Reading again would answer for a renewal this tab no longer has,
     // and closing it again would strand a transport that is already current.
-    if (!unreadRenewal) return
+    // A document already leaving reads nothing (`holdAdoptionWhileLeaving`).
+    if (!unreadRenewal || documentLeaving) return
     await csrfToken(fetcher, signal)
     // A rotation that opened while this read was in flight latched a renewal
     // newer than the one it answers for, and only that rotation can say this
@@ -387,6 +405,50 @@ export function retireRefusedSession(
 
 type SignOutHandoff = {version: 1; issuedAtMs: number}
 
+// Where Privy 3.49 keeps, in this browser, a session of its own and the wallets
+// connected through it (`@privy-io/react-auth`, pinned in package.json).
+const privySessionKeys = ["privy:token", "privy:refresh_token"]
+const privyConnectionsKey = "privy:connections"
+
+/**
+ * Whether Privy could name an active wallet here before anyone presses
+ * anything: it holds a session, or a wallet connected through it before. A
+ * visitor it has never seen has no active wallet to show, so the bridge waits
+ * for their first Sign in or wallet button instead of loading with the page.
+ */
+export function privyRemembersVisitor(storage: Pick<Storage, "getItem"> | null): boolean {
+  if (!storage) return false
+  if (privyHoldsSession(storage)) return true
+  try {
+    const connections: unknown = JSON.parse(storage.getItem(privyConnectionsKey) ?? "[]")
+    return Array.isArray(connections) && connections.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether Privy still holds a sign-in of its own in this browser. A member
+ * whose sign-in here has lapsed is then signed back in on whatever page they
+ * open, without pressing anything.
+ */
+export function privyHoldsSession(storage: Pick<Storage, "getItem"> | null): boolean {
+  if (!storage) return false
+  try {
+    return privySessionKeys.some(key => storage.getItem(key) !== null)
+  } catch {
+    return false
+  }
+}
+
+function localStorageOrNull(): Pick<Storage, "getItem"> | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
 function handoffStorageOrNull(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">,
 ) {
@@ -488,15 +550,22 @@ export function consumeSignOutHandoff(
   return captured !== null && validSignOutHandoff(captured, nowMs)
 }
 
+export const SIGN_IN_CLOSED_EVENT = "ash:sign-in-closed"
+
 // The one place account-action failure copy lives, so a failure raised inside
 // the Privy bridge's own login callbacks says exactly what a failure raised here
-// says.
+// says. Every sign-in that ends without a reload ends here, closed by the
+// visitor or failed, so this also says the sign-in window has gone: a window
+// the page opened sign-in from (`ModalDialog`) takes the page back then.
 export function showAccountAuthFailure(
   request: AccountRequest,
   documentRoot: Document | undefined = globalThis.document,
   signInFailure: SignInFailureKind = "startup",
 ): void {
   if (!documentRoot) return
+  if (request === "sign-in") {
+    ;(documentRoot.defaultView ?? documentRoot).dispatchEvent(new Event(SIGN_IN_CLOSED_EVENT))
+  }
   if (request === "sign-in" && signInFailure !== "closed") {
     terminalSignInFailures.set(documentRoot, signInFailure)
     disableSignInControls(documentRoot)
@@ -1076,7 +1145,11 @@ export function installAccountAuthLazyLoader(
   // A wallet page asks for the wallets Privy already holds as soon as it
   // mounts, so a returning customer sees their wallet without a click. Nothing
   // is shown when that cannot happen: the page still offers the connection.
-  const onWalletSync = () => void loader.request("sync").catch(() => undefined)
+  // A visitor Privy has never seen holds none, so their page never loads it.
+  const onWalletSync = () => {
+    if (!privyRemembersVisitor(localStorageOrNull())) return
+    void loader.request("sync").catch(() => undefined)
+  }
   const reconcileSignedInStartup = () => {
     clearStatus()
     void withinWindow(
@@ -1098,6 +1171,15 @@ export function installAccountAuthLazyLoader(
     })
   } else if (documentRoot.querySelector("#account-control [data-account-target='profile']")) {
     reconcileSignedInStartup()
+  } else if (
+    returnedFromOAuth(documentRoot.location?.search ?? "") ||
+    privyHoldsSession(localStorageOrNull())
+  ) {
+    // Privy finishes a redirect sign-in only once it is running on the page.
+    // The visitor pressed Sign in on the page before, so it loads now even
+    // though Privy holds no session for them yet. A member whose sign-in here
+    // lapsed while Privy still holds theirs is signed back in on any page.
+    void loader.request("sync").catch(() => undefined)
   }
   return () => {
     installed = false

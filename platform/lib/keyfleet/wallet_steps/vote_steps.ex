@@ -31,7 +31,10 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   @launch_fields [name: 64, symbol: 16, description: 512, website: 256, image: 256]
   # The kinds of proposal whose calls move money, which the vote contract
   # refuses during a fleet's first 7 days of sales.
-  @money_kinds ["pay", "advance", "signature", "launch"]
+  @money_kinds ["pay", "launch"]
+  # How many lapsed presences the vote contract clears inside a proposal, and
+  # in one press of the step that clears them first.
+  @sweep_limit 256
 
   @doc false
   def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
@@ -59,7 +62,13 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           )
         end
 
-      {:ok, steps, %{keys: keys, status: status, blocked: ballot_blocked(status, governed, keys)}}
+      {:ok, steps,
+       %{
+         keys: keys,
+         undecided: keys -- Proposals.voted_keys(fleet.id, proposal),
+         status: status,
+         blocked: ballot_blocked(status, governed, keys)
+       }}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -123,8 +132,10 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   # is hashed into the proposal; the text itself stays off the chain. The vote
   # contract refuses a Key sold less than two days ago, and a proposal that
   # moves money during the fleet's first 7 days of sales, so those presses are
-  # certain to fail. `governs?` says whether the signer may vote the Key at
-  # all, whatever else blocks the step.
+  # certain to fail. So is one made while more lapsed presences wait than the
+  # contract clears inside a proposal: the steps then start with clearing
+  # them, which anyone may do. `governs?` says whether the signer may vote the
+  # Key at all, whatever else blocks the step.
   def steps(:propose, %{fleet: fleet, signer: signer, inputs: inputs}) do
     kind = Build.field(inputs, "kind")
 
@@ -135,20 +146,14 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          {:ok, action, details} <- action(kind, fleet, inputs, reads, text, figures),
          {:ok, %{^key => {_holder, governs?}}} <- acting(reads, fleet, signer, key, figures),
          {:ok, opens_at} <- read(reads, fleet.votes_address, "treasuryOpensAt()", figures),
-         {:ok, matures_at} <- matures_at(reads, fleet, key, figures) do
+         {:ok, matures_at} <- matures_at(reads, fleet, key, figures),
+         {:ok, lapsed?} <- lapsed?(reads, fleet, figures) do
       now = DateTime.to_unix(Reads.now(reads))
       hours = Proposals.vote_hours()
       closes_at = now + hours * 3600
       content_hash = content_hash(text)
       calls = Actions.encode(action, fleet)
-
-      reason =
-        cond do
-          not governs? -> :not_your_key
-          matures_at == nil or matures_at > now -> :too_new
-          kind in @money_kinds and (opens_at == 0 or opens_at > now) -> opening(opens_at)
-          true -> nil
-        end
+      reason = propose_blocked(kind, governs?, matures_at, opens_at, lapsed?, now)
 
       figures =
         Map.merge(figures, %{
@@ -160,14 +165,47 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           blocked: if(reason, do: %{"propose" => reason}, else: %{})
         })
 
-      {:ok,
-       [
-         Review.step(
-           "propose",
-           fleet.votes_address,
-           Call.encode(@propose, [Fleet.onchain_token_id(fleet, key), content_hash, calls])
-         )
-       ], figures}
+      propose =
+        Review.step(
+          "propose",
+          fleet.votes_address,
+          Call.encode(@propose, [Fleet.onchain_token_id(fleet, key), content_hash, calls])
+        )
+
+      {:ok, clear_first(lapsed?, fleet) ++ [propose], figures}
+    end
+  end
+
+  defp propose_blocked(kind, governs?, matures_at, opens_at, lapsed?, now) do
+    cond do
+      not governs? -> :not_your_key
+      matures_at == nil or matures_at > now -> :too_new
+      kind in @money_kinds and (opens_at == 0 or opens_at > now) -> opening(opens_at)
+      lapsed? -> :clear_first
+      true -> nil
+    end
+  end
+
+  defp clear_first(false, _fleet), do: []
+
+  defp clear_first(true, fleet),
+    do: [
+      Review.step(
+        "sweep",
+        fleet.votes_address,
+        Call.encode("sweepExpired(uint256)", [@sweep_limit])
+      )
+    ]
+
+  # Whether more lapsed presences wait than a proposal clears itself, asked of
+  # the vote contract by simulating a clear of that many.
+  defp lapsed?(reads, fleet, figures) do
+    case Reads.many(reads, fleet.votes_address, "sweepExpired(uint256)", [@sweep_limit], [
+           {:uint, 256},
+           :bool
+         ]) do
+      {:ok, [_moved, due?]} -> {:ok, due?}
+      {:error, _reason} -> {:problem, :unread, figures}
     end
   end
 
@@ -201,35 +239,15 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
-  # An advance is numbered with the number this proposal is about to take,
-  # which no other advance has.
-  defp action("advance", fleet, inputs, reads, text, figures) do
-    with {:ok, asset, share, amount, operator} <- payment(fleet, inputs, reads, figures),
-         {:ok, count} <- read(reads, fleet.votes_address, "proposalCount()", figures) do
-      id = count + 1
-
-      {:ok, {:advance, id, operator, asset.address, share, content_hash(text)},
-       {:advance, id, asset, operator, share, amount}}
-    end
-  end
-
   defp action("rate", _fleet, inputs, _reads, _text, figures) do
     with {:ok, bps} <- Build.typed(inputs, "rate", &Typed.rate/1, figures),
          do: {:ok, {:rate, bps}, {:rate, bps}}
   end
 
   defp action("edits", _fleet, inputs, _reads, _text, figures) do
-    restricted? = Build.field(inputs, "restricted") == "true"
-
     with {:ok, target} <- Build.typed(inputs, "target", &Typed.target/1, figures),
+         {:ok, restricted?} <- Build.typed(inputs, "restricted", &Typed.restricted/1, figures),
          do: {:ok, {:edits, target, restricted?}, {:edits, target, restricted?}}
-  end
-
-  defp action("signature", _fleet, inputs, _reads, _text, figures) do
-    way = if Build.field(inputs, "signature") == "revoke", do: :revoke, else: :approve
-
-    with {:ok, issued_at} <- Build.typed(inputs, "issued_at", &Typed.issued_at/1, figures),
-         do: {:ok, {:signature, way, issued_at}, {:signature, way, issued_at}}
   end
 
   defp action("launch", _fleet, inputs, _reads, _text, figures) do
@@ -247,7 +265,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          do: {:ok, {name, value}}
   end
 
-  # The token, share and wallet of a payment or an advance: a token the
+  # The token, share and wallet of a payment: a token the
   # treasury holds, by address, and a share of the treasury's balance of it,
   # in parts per million. The treasury pays that share of its balance when the
   # proposal is carried out; `amount` is what it comes to at the latest block.

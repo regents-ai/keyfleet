@@ -13,6 +13,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   except one the chain's own state at the latest block makes certain to fail,
   whose button stays in view, disabled, with a few words saying why.
 
+  The treasury's figures are read again when a step sent from the fleet's
+  page goes through, and when someone presses its refresh, which each
+  person may do once every 30 seconds (`refresh_treasury/2`).
+
   Everything shown is what `KeyfleetWeb.ProposalsPage` read. The pages most
   visitors open, the first page of the list, the Treasury page and the first
   page of each proposal on that list, are the ones every open page shares
@@ -23,14 +27,19 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.Countdown
+  import KeyfleetWeb.Components.VoteTally
   import KeyfleetWeb.Components.LoadFailed
 
+  alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Limits
+  alias Keyfleet.Proposals
   alias KeyfleetWeb.ActivityLines
-  alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.FleetProposals
+  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProposalsPage
@@ -57,10 +66,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   @kinds [
     {"decision", "Decision"},
     {"pay", "Payment"},
-    {"advance", "Advance"},
     {"rate", "Daily Treasury Slice to Keys rate"},
     {"edits", "A Key’s edits"},
-    {"signature", "Signature"},
     {"launch", "Token launch"}
   ]
 
@@ -85,11 +92,6 @@ defmodule KeyfleetWeb.ProposalsLive do
   def list(assigns) do
     ~H"""
     <article id="proposals-page" class="proposals-page">
-      <header class="proposals-heading">
-        <h2 tabindex="-1">Proposals</h2>
-        <p>Decisions and payments put to this fleet’s Key holders.</p>
-      </header>
-
       <.catching_up :if={@page.catching_up?} />
 
       <PresenceCard.card
@@ -99,7 +101,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
-        tool="mark_present"
+        tool="keys_mark_present"
       />
 
       <section class="proposals-panel" aria-labelledby="proposals-list-title">
@@ -143,8 +145,18 @@ defmodule KeyfleetWeb.ProposalsLive do
               <span class="proposals-badge" data-status={proposal.status}>
                 {status_word(proposal)}
               </span>
-              <span :if={proposal.status == :waiting} class="proposals-detail">
-                from {at(proposal.carry_out_from)}
+              <span class="proposals-type">{proposal.kind}</span>
+              <span class="proposals-when">
+                <.countdown
+                  :if={proposal.status == :open}
+                  id={"proposals-left-#{proposal.number}"}
+                  closes_at={proposal.closes_at}
+                  now={DateTime.utc_now()}
+                  format="hours"
+                />
+                <span :if={proposal.status == :waiting}>
+                  From {at(proposal.carry_out_from)}
+                </span>
               </span>
             </p>
             <h3>
@@ -152,12 +164,21 @@ defmodule KeyfleetWeb.ProposalsLive do
                 Proposal {proposal.number}
               </.link>
             </h3>
+            <p
+              :for={{action, index} <- Enum.with_index(proposal.actions)}
+              class="proposals-card-action"
+            >
+              {action.text}
+              <Regent.Primitives.address
+                :if={action.address}
+                id={"proposals-action-#{proposal.number}-#{index}"}
+                address={action.address}
+              />
+            </p>
             <p :if={proposal.text} class="proposals-words proposals-words--short">
               {proposal.text}
             </p>
-            <p class="proposals-detail">
-              <.tally proposal={proposal} />
-            </p>
+            <.yes_share id={"proposals-share-#{proposal.number}"} votes={proposal} />
           </li>
         </ol>
 
@@ -196,8 +217,19 @@ defmodule KeyfleetWeb.ProposalsLive do
     <article id="proposal-page" class="proposals-page">
       <.detail_heading page={@page} />
       <section id="proposal-missing" class="proposals-panel">
-        <h2>There is no proposal {@page.number} in this fleet yet.</h2>
-        <.link patch={ProposalsPage.list_path(@page.fleet_id)}>See every proposal</.link>
+        <Regent.Primitives.empty_state
+          class="kf-empty"
+          title={"There is no proposal #{@page.number} in this fleet yet."}
+        >
+          <:action>
+            <.link
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.list_path(@page.fleet_id)}
+            >
+              <span class="rg-button__label">See every proposal</span>
+            </.link>
+          </:action>
+        </Regent.Primitives.empty_state>
       </section>
     </article>
     """
@@ -210,111 +242,9 @@ defmodule KeyfleetWeb.ProposalsLive do
       <.catching_up :if={@page.catching_up?} />
 
       <div class="proposals-grid">
-        <.standing on_chain={@page.on_chain} proposal={@page.proposal} />
-
-        <section
-          :if={@page.deployed?}
-          id="proposal-vote"
-          class="proposals-panel"
-          aria-labelledby="proposal-vote-title"
-        >
-          <h2 id="proposal-vote-title">
-            Vote
-            <Regent.Primitives.tip id="proposal-vote-tip" label="About voting">
-              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes. A proposal that moves money then waits a day, when only No can be voted; enough No votes cancel it.
-            </Regent.Primitives.tip>
-          </h2>
-          <.live_component
-            module={WalletPanel}
-            id="proposal-vote-action"
-            class="proposals-action"
-            flow={:ballot}
-            tool="vote"
-            fleet={fleet(@page)}
-            actor={@actor}
-            lease={@lease}
-            proposal={@page.proposal.number}
-          >
-            <:buttons :let={panel}>
-              <WalletPanel.step_button panel={panel} step="yes" id="proposal-vote-yes">
-                Yes
-              </WalletPanel.step_button>
-              <WalletPanel.step_button
-                panel={panel}
-                step="no"
-                id="proposal-vote-no"
-                variant="secondary"
-              >
-                No
-              </WalletPanel.step_button>
-              <WalletPanel.step_button
-                panel={panel}
-                step="abstain"
-                id="proposal-vote-abstain"
-                variant="secondary"
-              >
-                Abstain
-              </WalletPanel.step_button>
-            </:buttons>
-          </.live_component>
-        </section>
-
-        <section
-          :if={@page.deployed?}
-          id="proposal-carry-out"
-          class="proposals-panel"
-          aria-labelledby="proposal-carry-out-title"
-        >
-          <h2 id="proposal-carry-out-title">
-            Carry it out
-            <Regent.Primitives.tip id="proposal-carry-out-tip" label="About carrying it out">
-              Anyone can carry out an approved proposal until its time runs out. A proposal that moves money waits a day after voting closes, then has 48 hours; any other can be carried out once voting closes. It makes exactly the calls below.
-            </Regent.Primitives.tip>
-          </h2>
-          <.live_component
-            module={WalletPanel}
-            id="proposal-carry-out-action"
-            class="proposals-action"
-            flow={:carry_out}
-            tool="carry_out"
-            fleet={fleet(@page)}
-            actor={@actor}
-            lease={@lease}
-            proposal={@page.proposal.number}
-          >
-            <:buttons :let={panel}>
-              <WalletPanel.step_button panel={panel} step="carry_out" id="proposal-carry-out-button">
-                Carry it out
-              </WalletPanel.step_button>
-            </:buttons>
-          </.live_component>
-          <.live_component
-            module={WalletPanel}
-            id="proposal-cancel-action"
-            class="proposals-action"
-            flow={:cancel}
-            tool="cancel_proposal"
-            fleet={fleet(@page)}
-            actor={@actor}
-            lease={@lease}
-            proposal={@page.proposal.number}
-          >
-            <:buttons :let={panel}>
-              <WalletPanel.step_button
-                panel={panel}
-                step="cancel"
-                id="proposal-cancel-button"
-                variant="quiet"
-              >
-                Cancel proposal
-              </WalletPanel.step_button>
-            </:buttons>
-          </.live_component>
-        </section>
-
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
           <h2 id="proposal-content-title">
-            What it does
+            Proposed action
             <Regent.Primitives.tip
               :if={@page.proposal.calls != []}
               id="proposal-calls-tip"
@@ -323,9 +253,6 @@ defmodule KeyfleetWeb.ProposalsLive do
               Carrying it out makes exactly these calls, in this order. The words are Keyfleet’s reading of each one; the contract, function and data are what the network runs.
             </Regent.Primitives.tip>
           </h2>
-          <p :if={@page.proposal.text} id="proposal-text" class="proposals-words">
-            {@page.proposal.text}
-          </p>
           <p :if={@page.proposal.calls == []} id="proposal-no-calls">
             A decision. Nothing moves.
           </p>
@@ -354,9 +281,12 @@ defmodule KeyfleetWeb.ProposalsLive do
               </dl>
             </li>
           </ol>
+          <p :if={@page.proposal.text} id="proposal-text" class="proposals-words">
+            {@page.proposal.text}
+          </p>
           <p id="proposal-proposer" class="proposals-detail">
             {ActivityLines.key_name(@page.proposal.author_key, @page.agents[@page.proposal.proposer])},
-            <.wallet address={@page.proposal.proposer} />
+            <.wallet id="proposal-proposer-wallet" address={@page.proposal.proposer} />
             <Regent.Primitives.tip id="proposal-content-tip" label="About the proposal’s text">
               {if @page.proposal.text,
                 do: "Its words match the fingerprint recorded on Base:",
@@ -364,15 +294,129 @@ defmodule KeyfleetWeb.ProposalsLive do
             </Regent.Primitives.tip>
           </p>
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
-            Carried out by <.wallet address={@page.proposal.executor} />
+            Carried out by <.wallet id="proposal-executor-wallet" address={@page.proposal.executor} />
           </p>
           <p :if={@page.proposal.cancelled_by} id="proposal-canceller" class="proposals-detail">
-            Cancelled by <.wallet address={@page.proposal.cancelled_by} />
+            Cancelled by
+            <.wallet id="proposal-canceller-wallet" address={@page.proposal.cancelled_by} />
           </p>
         </section>
 
+        <section
+          :if={@page.deployed?}
+          id="proposal-vote"
+          class="proposals-panel"
+          aria-labelledby="proposal-vote-title"
+        >
+          <h2 id="proposal-vote-title">
+            Vote
+            <Regent.Primitives.tip id="proposal-vote-tip" label="About voting">
+              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes. A proposal that moves money then waits a day, when only No can be voted; enough No votes cancel it.
+            </Regent.Primitives.tip>
+          </h2>
+          <.live_component
+            module={WalletPanel}
+            id="proposal-vote-action"
+            class="proposals-action"
+            flow={:ballot}
+            tool="proposals_vote"
+            fleet={fleet(@page)}
+            actor={@actor}
+            lease={@lease}
+            proposal={@page.proposal.number}
+          >
+            <:buttons :let={panel}>
+              <WalletPanel.step_button
+                panel={panel}
+                step="yes"
+                id="proposal-vote-yes"
+                variant="secondary"
+              >
+                Yes
+              </WalletPanel.step_button>
+              <WalletPanel.step_button
+                panel={panel}
+                step="no"
+                id="proposal-vote-no"
+                variant="secondary"
+              >
+                No
+              </WalletPanel.step_button>
+              <WalletPanel.step_button
+                panel={panel}
+                step="abstain"
+                id="proposal-vote-abstain"
+                variant="secondary"
+              >
+                Abstain
+              </WalletPanel.step_button>
+            </:buttons>
+          </.live_component>
+        </section>
+
+        <.standing on_chain={@page.on_chain} proposal={@page.proposal} />
+        <.ballots fleet_id={@page.fleet_id} ballots={@page.ballots} />
+
+        <section
+          :if={@page.deployed?}
+          id="proposal-carry-out"
+          class="proposals-panel"
+          aria-labelledby="proposal-carry-out-title"
+        >
+          <h2 id="proposal-carry-out-title">
+            Execution
+            <Regent.Primitives.tip id="proposal-carry-out-tip" label="About carrying it out">
+              Anyone can carry out an approved proposal until its time runs out. A proposal that moves money waits a day after voting closes, then has 48 hours; any other can be carried out once voting closes. It makes exactly the calls below.
+            </Regent.Primitives.tip>
+          </h2>
+          <.live_component
+            module={WalletPanel}
+            id="proposal-carry-out-action"
+            class="proposals-action"
+            flow={:carry_out}
+            tool="proposals_carry_out"
+            fleet={fleet(@page)}
+            actor={@actor}
+            lease={@lease}
+            proposal={@page.proposal.number}
+          >
+            <:buttons :let={panel}>
+              <WalletPanel.step_button
+                panel={panel}
+                step="carry_out"
+                id="proposal-carry-out-button"
+                variant="secondary"
+              >
+                Execution
+              </WalletPanel.step_button>
+            </:buttons>
+          </.live_component>
+          <.live_component
+            module={WalletPanel}
+            id="proposal-cancel-action"
+            class="proposals-action"
+            flow={:cancel}
+            tool="proposals_cancel"
+            fleet={fleet(@page)}
+            actor={@actor}
+            lease={@lease}
+            proposal={@page.proposal.number}
+          >
+            <:buttons :let={panel}>
+              <WalletPanel.step_button
+                panel={panel}
+                step="cancel"
+                id="proposal-cancel-button"
+                variant="quiet"
+              >
+                Cancel proposal
+              </WalletPanel.step_button>
+            </:buttons>
+          </.live_component>
+        </section>
+
         <section class="proposals-panel proposals-votes" aria-labelledby="proposal-votes-title">
-          <h2 id="proposal-votes-title">Votes</h2>
+          <h2 id="proposal-votes-title">History</h2>
           <Regent.Primitives.empty_state
             :if={@page.votes == [] and is_nil(@page.first_votes)}
             id="proposal-no-votes"
@@ -389,7 +433,8 @@ defmodule KeyfleetWeb.ProposalsLive do
             <li :for={vote <- @page.votes} data-vote={vote.id}>
               <span>{vote_word(vote.choice)}</span>
               <span>
-                {voter(vote.voter, @page.agents)}, with {key_list(vote.keys)}
+                <.voter id={"proposal-voter-#{vote.id}"} wallet={vote.voter} agents={@page.agents} />
+                with {key_list(vote.keys)}
               </span>
             </li>
           </ol>
@@ -431,6 +476,19 @@ defmodule KeyfleetWeb.ProposalsLive do
         <span :if={!is_map(@on_chain)} id="proposal-status">Standing</span>
         <.approval_rule id="proposal-rule" />
       </h2>
+      <p class="proposals-kind">
+        <span id="proposal-kind" class="proposals-type">{@proposal.kind}</span>
+        <span :if={is_map(@on_chain)} class="proposals-when">
+          <.countdown
+            :if={@on_chain.status == :open}
+            id="proposal-left"
+            closes_at={@proposal.closes_at}
+            now={DateTime.utc_now()}
+            format="hours"
+          />
+        </span>
+      </p>
+      <.yes_share :if={is_map(@on_chain)} id="proposal-share" votes={@on_chain} />
       <p :if={@on_chain == :unreadable} id="proposal-unread" class="proposals-notice" role="status">
         Can’t reach the network right now. Refresh to try again.
       </p>
@@ -454,6 +512,17 @@ defmodule KeyfleetWeb.ProposalsLive do
           </dd>
         </div>
         <div>
+          <dt>Not voted</dt>
+          <dd id="proposal-silent">
+            <Count.count
+              id="proposal-silent-count"
+              value={@on_chain.counted - @on_chain.yes - @on_chain.no - @on_chain.abstain}
+              one="Key"
+              many="Keys"
+            />
+          </dd>
+        </div>
+        <div>
           <dt>
             Keys counted
             <Regent.Primitives.tip id="proposal-counted-tip" label="About Keys counted">
@@ -467,16 +536,58 @@ defmodule KeyfleetWeb.ProposalsLive do
       </dl>
       <dl class="proposals-facts">
         <div>
-          <dt>Closes</dt>
+          <dt>Voting ends</dt>
           <dd id="proposal-closes">{at(@proposal.closes_at)}</dd>
         </div>
         <div :if={@proposal.carry_out_from && not settled?(@on_chain)}>
-          <dt>Can be carried out from</dt>
+          <dt>Carry-out starts</dt>
           <dd id="proposal-carry-out-from">{at(@proposal.carry_out_from)}</dd>
         </div>
         <div :if={not settled?(@on_chain)}>
-          <dt>Carry out by</dt>
+          <dt>Carry-out ends</dt>
           <dd id="proposal-expiry">{at(@proposal.execution_expiry)}</dd>
+        </div>
+      </dl>
+    </section>
+    """
+  end
+
+  attr :fleet_id, :string, required: true
+  attr :ballots, :map, required: true, doc: "`Keyfleet.Proposals.key_ballots/1`"
+
+  # Each Key's vote, from the votes recorded: the Keys whose latest vote is
+  # each choice, and the Keys present when it opened that have not voted.
+  defp ballots(assigns) do
+    assigns =
+      assign(assigns,
+        sides:
+          for(
+            {side, word} <- [yes: "Yes", no: "No", abstain: "Abstain", silent: "Not voted"],
+            do: {side, word, Map.fetch!(assigns.ballots, side)}
+          )
+      )
+
+    ~H"""
+    <section id="proposal-ballots" class="proposals-panel" aria-labelledby="proposal-ballots-title">
+      <h2 id="proposal-ballots-title">
+        Votes
+        <Regent.Primitives.tip id="proposal-ballots-tip" label="About votes">
+          Each Key’s latest vote: a Key may vote again, and only its latest counts. Keys present when the proposal opened that have not voted count against it, as a No does.
+        </Regent.Primitives.tip>
+      </h2>
+      <dl class="proposals-ballots">
+        <div :for={{side, word, keys} <- @sides} data-side={side}>
+          <dt>{word} <span class="proposals-detail">{Rules.grouped(length(keys))}</span></dt>
+          <dd id={"proposal-ballots-#{side}"}>
+            <ul :if={keys != []} class="proposals-ballot-keys">
+              <li :for={token_id <- keys} data-key={token_id}>
+                <.link navigate={KeyLinks.page_path(@fleet_id, token_id)}>
+                  Key {Rules.grouped(token_id)}
+                </.link>
+              </li>
+            </ul>
+            <span :if={keys == []} class="proposals-detail">None</span>
+          </dd>
         </div>
       </dl>
     </section>
@@ -499,7 +610,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h2 id="propose-title">
         Propose
         <Regent.Primitives.tip id="propose-tip" label="About proposing">
-          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment or advance names one token and a share of the treasury’s balance of it when it is carried out, a day after its vote passes. Approved proposals are carried out exactly as written.
+          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment names one token and a share of the treasury’s balance of it when it is carried out, a day after its vote passes. Approved proposals are carried out exactly as written.
         </Regent.Primitives.tip>
       </h2>
       <.live_component
@@ -507,7 +618,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="propose-action"
         class="proposals-action"
         flow={:propose}
-        tool="propose"
+        tool="proposals_create"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
@@ -522,8 +633,6 @@ defmodule KeyfleetWeb.ProposalsLive do
             "rate" => "",
             "target" => "",
             "restricted" => "true",
-            "signature" => "approve",
-            "issued_at" => "",
             "name" => "",
             "symbol" => "",
             "description" => "",
@@ -556,107 +665,104 @@ defmodule KeyfleetWeb.ProposalsLive do
               value={panel.inputs["text"]}
             />
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] not in ["pay", "advance"]}>
-              <.select_field
-                id="propose-asset"
-                name="asset"
-                label="Token"
-                value={panel.inputs["asset"]}
-                options={Enum.map(@page.propose.assets, &{&1.address, &1.name})}
-              />
-              <.text_field
-                id="propose-share"
-                name="share"
-                label="Share of the treasury’s balance, %"
-                inputmode="decimal"
-                value={panel.inputs["share"]}
-              >
-                0.0001 to 99
-              </.text_field>
-              <.text_field
-                id="propose-recipient"
-                name="recipient"
-                label="To wallet"
-                value={panel.inputs["recipient"]}
-              />
-            </div>
+            <%!-- Every kind's fields share one place, so choosing a kind never
+            changes the form's height: the others stay there, unseen. --%>
+            <div class="proposals-kinds">
+              <div class="proposals-form" inert={panel.inputs["kind"] != "pay"}>
+                <.select_field
+                  id="propose-asset"
+                  name="asset"
+                  label="Token"
+                  value={panel.inputs["asset"]}
+                  options={Enum.map(@page.propose.assets, &{&1.address, &1.name})}
+                />
+                <.text_field
+                  id="propose-share"
+                  name="share"
+                  label="Share of the treasury’s balance, %"
+                  inputmode="decimal"
+                  value={panel.inputs["share"]}
+                >
+                  0.0001 to 99
+                </.text_field>
+                <.text_field
+                  id="propose-recipient"
+                  name="recipient"
+                  label="To wallet"
+                  value={panel.inputs["recipient"]}
+                />
+              </div>
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "rate"}>
-              <.text_field
-                id="propose-rate"
-                name="rate"
-                label="Daily Treasury Slice to Keys, %"
-                inputmode="decimal"
-                value={panel.inputs["rate"]}
-              >
-                0.1 to 2
-              </.text_field>
-            </div>
+              <div class="proposals-form" inert={panel.inputs["kind"] != "rate"}>
+                <.text_field
+                  id="propose-rate"
+                  name="rate"
+                  label="Daily Treasury Slice to Keys, %"
+                  inputmode="decimal"
+                  value={panel.inputs["rate"]}
+                >
+                  0.1 to 2
+                </.text_field>
+              </div>
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "edits"}>
-              <.text_field
-                id="propose-target"
-                name="target"
-                label="Key"
-                inputmode="numeric"
-                value={panel.inputs["target"]}
-              />
-              <.select_field
-                id="propose-restricted"
-                name="restricted"
-                label="Edits"
-                value={panel.inputs["restricted"]}
-                options={[{"true", "Restrict"}, {"false", "Allow"}]}
-              />
-            </div>
+              <div class="proposals-form" inert={panel.inputs["kind"] != "edits"}>
+                <.text_field
+                  id="propose-target"
+                  name="target"
+                  label="Key"
+                  inputmode="numeric"
+                  value={panel.inputs["target"]}
+                />
+                <.select_field
+                  id="propose-restricted"
+                  name="restricted"
+                  label="Edits"
+                  value={panel.inputs["restricted"]}
+                  options={[{"true", "Restrict"}, {"false", "Allow"}]}
+                />
+              </div>
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "signature"}>
-              <.select_field
-                id="propose-signature"
-                name="signature"
-                label="Signature"
-                value={panel.inputs["signature"]}
-                options={[{"approve", "Sign"}, {"revoke", "Withdraw"}]}
-              />
-              <.text_field
-                id="propose-issued-at"
-                name="issued_at"
-                label="Request time"
-                value={panel.inputs["issued_at"]}
-              />
-            </div>
-
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "launch"}>
-              <.text_field id="propose-name" name="name" label="Name" value={panel.inputs["name"]} />
-              <.text_field
-                id="propose-symbol"
-                name="symbol"
-                label="Symbol"
-                value={panel.inputs["symbol"]}
-              />
-              <.text_area
-                id="propose-description"
-                name="description"
-                label="Description"
-                rows="3"
-                value={panel.inputs["description"]}
-              />
-              <.text_field
-                id="propose-website"
-                name="website"
-                label="Website"
-                value={panel.inputs["website"]}
-              />
-              <.text_field
-                id="propose-image"
-                name="image"
-                label="Image link"
-                value={panel.inputs["image"]}
-              />
+              <div class="proposals-form" inert={panel.inputs["kind"] != "launch"}>
+                <.text_field id="propose-name" name="name" label="Name" value={panel.inputs["name"]} />
+                <.text_field
+                  id="propose-symbol"
+                  name="symbol"
+                  label="Symbol"
+                  value={panel.inputs["symbol"]}
+                />
+                <.text_area
+                  id="propose-description"
+                  name="description"
+                  label="Description"
+                  rows="3"
+                  value={panel.inputs["description"]}
+                />
+                <.text_field
+                  id="propose-website"
+                  name="website"
+                  label="Website"
+                  value={panel.inputs["website"]}
+                />
+                <.text_field
+                  id="propose-image"
+                  name="image"
+                  label="Image link"
+                  value={panel.inputs["image"]}
+                />
+              </div>
             </div>
           </div>
         </:fields>
         <:buttons :let={panel}>
+          <WalletPanel.step_button
+            :if={WalletPanel.has_step?(panel, "sweep")}
+            panel={panel}
+            step="sweep"
+            id="propose-clear"
+            variant="secondary"
+          >
+            Clear lapsed Keys
+          </WalletPanel.step_button>
           <WalletPanel.step_button panel={panel} step="propose" id="propose-button">
             Propose
           </WalletPanel.step_button>
@@ -670,12 +776,15 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :page, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+  attr :reread, :integer, required: true, doc: "counts the times its figures were asked for again"
+  attr :resting?, :boolean, required: true, doc: "whether its refresh waits to be pressed again"
 
   @doc """
   The shared money: the treasury's address on Base, to check and to send to;
   each asset's balance and what is set aside for claims, the daily split's
   rate and when it next opens with its preview, the advances still out, and
-  the share owed to REGENT staking.
+  the share owed to REGENT staking. A visitor sees the figures only; the
+  buttons that move the money show once they sign in.
   """
   def treasury(assigns) do
     ~H"""
@@ -683,44 +792,11 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h2 id="proposals-budget-title">Treasury</h2>
 
       <div id="proposals-treasury-address" class="proposals-address">
-        <span>Treasury · Base</span>
-        <code title={@treasury.address}>{RegentFormat.short_address(@treasury.address)}</code>
-        <Regent.Primitives.copy_button
-          id="proposals-treasury-copy"
-          text={@treasury.address}
-          variant="quiet"
-          aria-label="Copy treasury address"
-          title="Copy treasury address"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            aria-hidden="true"
-          ><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></svg>
-        </Regent.Primitives.copy_button>
-        <a
-          id="proposals-treasury-link"
-          href={AddressLinks.basescan(@treasury.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="View treasury on BaseScan"
-          title="View treasury on BaseScan"
-        ><svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          aria-hidden="true"
-        ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
+        <span>Base</span>
+        <Regent.Primitives.address id="proposals-treasury" address={@treasury.address} />
       </div>
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
-        Balances usually show up within a minute.
+        Balances usually show up within five minutes.
       </p>
 
       <div
@@ -730,12 +806,12 @@ defmodule KeyfleetWeb.ProposalsLive do
         phx-hook="MotionCount"
         data-variant={Motion.standard("count")}
       >
-        <table id="proposals-balances" class="proposals-table">
+        <table id="proposals-balances" class="proposals-table" tabindex="0">
           <thead>
             <tr>
-              <th scope="col">In the treasury</th>
+              <th scope="col">Treasury</th>
               <th scope="col">
-                Unclaimed Key rewards
+                Unclaimed rewards
                 <Regent.Primitives.tip id="proposals-backed-tip" label="About set aside">
                   Held separately by the rewards contract, waiting for Key holders to claim. These amounts are not part of the treasury balance.
                 </Regent.Primitives.tip>
@@ -744,26 +820,47 @@ defmodule KeyfleetWeb.ProposalsLive do
           </thead>
           <tbody>
             <tr :for={balance <- @treasury.balances} data-asset={balance.asset}>
-              <td><.amount value={balance.held} count /></td>
-              <td><.amount value={balance.backed} count /></td>
+              <td><.amount id={"proposals-held-#{balance.asset}"} value={balance.held} count /></td>
+              <td>
+                <.amount id={"proposals-backed-#{balance.asset}"} value={balance.backed} count />
+              </td>
             </tr>
           </tbody>
         </table>
+        <p id="proposals-waiting">
+          Key sales waiting to become REGENT:
+          <.amount id="proposals-waiting-amount" value={@treasury.waiting} count />
+        </p>
         <p class="proposals-detail">
-          Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
+          <Regent.Primitives.last_read
+            id="proposals-read"
+            at={@treasury.as_of}
+            label="Refresh balances"
+            phx-click="refresh_treasury"
+            disabled={@resting?}
+          />
         </p>
       </div>
 
-      <.split_preview page={@page} treasury={@treasury} actor={@actor} lease={@lease} />
+      <.split_preview
+        page={@page}
+        treasury={@treasury}
+        actor={@actor}
+        lease={@lease}
+        reread={@reread}
+      />
 
       <h3 :if={@treasury.advances != []} id="proposals-advances-title">Advances out</h3>
       <ol :if={@treasury.advances != []} id="proposals-advances" class="proposals-lines">
         <li :for={advance <- @treasury.advances} data-advance={advance.id}>
           <span>
-            Advance {advance.id}: <.amount value={advance.outstanding} /> of
-            <.amount value={advance.amount} />, <.wallet address={advance.operator} />
+            Advance {advance.id}:
+            <.amount id={"proposals-advance-#{advance.id}-outstanding"} value={advance.outstanding} />
+            of <.amount id={"proposals-advance-#{advance.id}-amount"} value={advance.amount} />,
+            <.wallet id={"proposals-advance-#{advance.id}-operator"} address={advance.operator} />
           </span>
           <.live_component
+            :if={@actor}
             module={WalletPanel}
             id={"proposals-return-#{advance.id}"}
             class="proposals-action"
@@ -790,9 +887,9 @@ defmodule KeyfleetWeb.ProposalsLive do
                 panel={panel}
                 step="approve"
                 id={"proposals-return-#{advance.id}-approve"}
-                variant="secondary"
+                done={WalletPanel.approved?(panel)}
               >
-                Approve
+                {if WalletPanel.approved?(panel), do: "Approved", else: "Approve"}
               </WalletPanel.step_button>
               <WalletPanel.step_button
                 panel={panel}
@@ -806,21 +903,23 @@ defmodule KeyfleetWeb.ProposalsLive do
         </li>
       </ol>
 
-      <h3 id="proposals-share-title">
-        REGENT staking share
-        <Regent.Primitives.tip id="proposals-share-tip" label="About the REGENT staking share">
-          10% of every key sale is set aside for REGENT staking. Anyone can send it.
+      <h3 :if={@actor} id="proposals-share-title">
+        Staking share
+        <Regent.Primitives.tip id="proposals-share-tip" label="About the Staking share">
+          10% of every Key sale is set aside for REGENT staking. Anyone can send it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
+        :if={@actor}
         module={WalletPanel}
         id="proposals-regents-share"
         class="proposals-action"
         flow={:send_share}
-        tool="send_share"
+        tool="treasury_send_share"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
+        refresh={@reread}
       >
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="send_share" id="proposals-send-share">
@@ -829,35 +928,37 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:buttons>
       </.live_component>
 
-      <h3 id="proposals-convert-title">
-        USDC to REGENT
-        <Regent.Primitives.tip id="proposals-convert-tip" label="About turning USDC into REGENT">
-          Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
+      <h3 :if={@actor} id="proposals-convert-title">
+        REGENT conversion
+        <Regent.Primitives.tip id="proposals-convert-tip" label="About converting USDC to REGENT">
+          Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. A piece that would move the price more than 1% can’t go through; the button then says how much can. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
+        :if={@actor}
         module={WalletPanel}
         id="proposals-convert"
         class="proposals-action"
         flow={:convert}
-        tool="convert_to_regent"
+        tool="treasury_buy_regent"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
+        refresh={@reread}
         inputs={%{"amount" => @treasury.convert_typed}}
       >
         <:fields :let={panel}>
           <.text_field
             id="proposals-convert-amount"
             name="amount"
-            label="USDC to turn"
+            label="USDC to convert"
             inputmode="decimal"
             value={panel.inputs["amount"]}
           />
         </:fields>
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="convert" id="proposals-convert-button">
-            Turn into REGENT
+            Buy REGENT
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>
@@ -867,7 +968,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         class="treasury-history"
         aria-labelledby="treasury-history-title"
       >
-        <h3 id="treasury-history-title">Money in and out</h3>
+        <h3 id="treasury-history-title">Cash flow</h3>
         <Regent.Primitives.empty_state
           :if={@treasury.history == []}
           id="proposals-no-history"
@@ -876,12 +977,15 @@ defmodule KeyfleetWeb.ProposalsLive do
         />
         <ol :if={@treasury.history != []} id="proposals-history" class="proposals-lines">
           <li :for={line <- @treasury.history} data-history={line.id}>
-            <span>{history_word(line.kind)} <.amount value={line.amount} /></span>
+            <span>
+              {history_word(line.kind)}
+              <.amount id={"proposals-history-#{line.id}-amount"} value={line.amount} />
+            </span>
             <span :if={line.account} class="proposals-detail">
-              to <.wallet address={line.account} />
+              to <.wallet id={"proposals-history-#{line.id}-account"} address={line.account} />
             </span>
             <span :if={line.spent} class="proposals-detail">
-              with <.amount value={line.spent} />
+              with <.amount id={"proposals-history-#{line.id}-spent"} value={line.spent} />
             </span>
           </li>
         </ol>
@@ -896,6 +1000,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   attr :treasury, :map, required: true
+  attr :reread, :integer, required: true
 
   # What the daily split would share now, per asset, as the treasury works it
   # out at the latest block, and the button that runs it once it is due.
@@ -906,10 +1011,11 @@ defmodule KeyfleetWeb.ProposalsLive do
       id="proposals-split-action"
       class="proposals-action"
       flow={:run_split}
-      tool="run_split"
+      tool="treasury_release"
       fleet={fleet(@page)}
       actor={@actor}
       lease={@lease}
+      refresh={@reread}
     >
       <:notes :let={panel}>
         <h3 id="proposals-split-title">
@@ -918,11 +1024,11 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposals-split-tip"
             label="About the Daily Treasury Slice to Keys"
           >
-            Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
+            Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across the Keys sold at least 2 days ago.
           </Regent.Primitives.tip>
         </h3>
         <p :if={@treasury.read?} id="proposals-split-rate" class="proposals-detail">
-          {@treasury.split_rate} of eligible balances, shared equally across issued Keys.
+          {@treasury.split_rate} of eligible balances, shared equally across Keys sold at least 2 days ago.
         </p>
         <p
           :if={
@@ -939,10 +1045,10 @@ defmodule KeyfleetWeb.ProposalsLive do
           :if={split(panel)[:assets] not in [nil, []]}
           id="proposals-split-preview"
           class="proposals-table"
+          tabindex="0"
         >
           <thead>
             <tr>
-              <th scope="col">Asset</th>
               <th scope="col">Balance</th>
               <th scope="col">Minimum</th>
               <th scope="col">Per Key</th>
@@ -950,10 +1056,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           </thead>
           <tbody>
             <tr :for={asset <- split(panel).assets} data-asset={asset.address}>
-              <td>{asset_name(asset)}</td>
-              <td>{WalletWords.token_amount(Map.put(asset, :amount, asset.balance))}</td>
-              <td>{WalletWords.token_amount(Map.put(asset, :amount, asset.threshold))}</td>
-              <td>{WalletWords.token_amount(Map.put(asset, :amount, asset.per_key))}</td>
+              <td>{slice_amount(asset, asset.balance)}</td>
+              <td>{slice_amount(asset, asset.threshold)}</td>
+              <td>{slice_amount(asset, asset.per_key)}</td>
             </tr>
           </tbody>
         </table>
@@ -987,9 +1092,153 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp opens(%{blocked: %{"run_split" => {:opens_at, opens_at}}}), do: at(opens_at)
   defp opens(_figures), do: "Open now"
 
-  defp asset_name(%{usdc?: true}), do: "USDC"
-  defp asset_name(%{symbol: symbol}) when is_binary(symbol), do: symbol
-  defp asset_name(%{address: address}), do: RegentFormat.short_address(address)
+  # The slice's figures, cut as the balances above them are.
+  defp slice_amount(%{usdc?: false, known?: true, symbol: symbol, decimals: decimals}, atoms)
+       when symbol != "REGENT" and is_binary(symbol) and is_integer(decimals),
+       do: "#{ProposalsPage.figure(atoms, decimals)} #{symbol}"
+
+  defp slice_amount(asset, atoms), do: WalletWords.token_amount(Map.put(asset, :amount, atoms))
+
+  attr :fleet, :map, required: true, doc: "the fleet on show, with its `open_proposals`"
+  attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+
+  @doc """
+  The proposals a vote can still change, beside a fleet's workspace:
+  what each one does and how long is left, with one press to vote. Yes and No
+  are the same size, as on the proposal's own page. It takes no room while
+  nothing is open.
+  """
+  def open_list(assigns) do
+    ~H"""
+    <section
+      :if={@fleet.open_proposals != []}
+      id="open-proposals"
+      class="open-proposals"
+      aria-labelledby="open-proposals-title"
+    >
+      <h2 id="open-proposals-title">Proposals</h2>
+      <ol class="open-proposals__list">
+        <li
+          :for={proposal <- @fleet.open_proposals}
+          class="open-proposal"
+          data-proposal={proposal.number}
+        >
+          <p class="open-proposal__head">
+            <.link patch={ProposalsPage.detail_path(@fleet.fleet_id, proposal.number)}>
+              Proposal {proposal.number}
+            </.link>
+            <.countdown
+              id={"open-proposal-#{proposal.number}-left"}
+              closes_at={left_until(proposal)}
+              now={DateTime.utc_now()}
+              format="hours"
+            />
+          </p>
+          <p
+            :for={{action, index} <- Enum.with_index(proposal.actions)}
+            class="proposals-card-action"
+          >
+            {action.text}
+            <Regent.Primitives.address
+              :if={action.address}
+              id={"open-proposal-#{proposal.number}-action-#{index}"}
+              address={action.address}
+            />
+          </p>
+          <.vote_tally yes={proposal.yes} no={proposal.no} abstain={proposal.abstain} />
+          <p class="open-proposal__count">
+            {proposal.counted} counted · {Proposals.approvals_needed(proposal.counted)} needed
+          </p>
+          <.live_component
+            module={WalletPanel}
+            id={"open-proposal-#{proposal.number}"}
+            class="open-proposal__vote"
+            flow={:ballot}
+            names_sender={false}
+            fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+            actor={@actor}
+            lease={@lease}
+            proposal={proposal.number}
+          >
+            <:notes :let={panel}>
+              <p
+                :if={Map.get(WalletPanel.figures(panel), :undecided, []) != []}
+                class="open-proposal__yours"
+              >
+                Yours: undecided
+              </p>
+            </:notes>
+            <:buttons :let={panel}>
+              <WalletPanel.step_button
+                panel={panel}
+                step="yes"
+                id={"open-proposal-#{proposal.number}-yes"}
+                variant="secondary"
+              >
+                Vote yes
+              </WalletPanel.step_button>
+              <WalletPanel.step_button
+                panel={panel}
+                step="no"
+                id={"open-proposal-#{proposal.number}-no"}
+                variant="secondary"
+              >
+                Vote no
+              </WalletPanel.step_button>
+            </:buttons>
+          </.live_component>
+        </li>
+      </ol>
+    </section>
+    """
+  end
+
+  attr :fleet, :map, required: true, doc: "the fleet on show, with its `open_proposals`"
+
+  @doc """
+  The proposals a vote can still change, above the fleet's hall: one line
+  each, its number, its kind and how long is left, opening the proposal in
+  the Proposals tab, where the vote is cast. It takes no room while nothing
+  is open.
+  """
+  def open_lines(assigns) do
+    ~H"""
+    <section
+      :if={@fleet.open_proposals != []}
+      id="hall-proposals"
+      class="hall-proposals"
+      aria-labelledby="hall-proposals-title"
+    >
+      <h2 id="hall-proposals-title">Proposals</h2>
+      <ol class="hall-proposals__list">
+        <li :for={proposal <- @fleet.open_proposals} data-proposal={proposal.number}>
+          <.link
+            patch={ProposalsPage.detail_path(@fleet.fleet_id, proposal.number)}
+            class="hall-proposal"
+          >
+            <span class="hall-proposal__number">
+              {ActivityLines.proposal_name(proposal.number)}
+            </span>
+            <span class="hall-proposal__kind">{proposal.kind}</span>
+            <.countdown
+              id={"hall-proposal-#{proposal.number}-left"}
+              class="hall-proposal__left"
+              closes_at={left_until(proposal)}
+              now={DateTime.utc_now()}
+              format="hours"
+            />
+          </.link>
+        </li>
+      </ol>
+    </section>
+    """
+  end
+
+  # A proposal still open counts down to its close; one waiting its day counts
+  # down to the end of that day, the last of the time a No can stop it.
+  defp left_until(%{status: :open, closes_at: closes_at}), do: closes_at
+  defp left_until(%{status: :waiting, carry_out_from: carry_out_from}), do: carry_out_from
 
   # The fleet the wallet buttons act on, and the network they send on.
   defp fleet(page), do: %{fleet_id: page.fleet_id, chain_id: page.chain_id}
@@ -1062,32 +1311,29 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
+  attr :id, :string, required: true
   attr :value, :map, required: true
   attr :count, :boolean, default: false, doc: "whether the amount rolls when it changes"
 
-  # An amount, with its token's address beside it, shortened and in full on
-  # hover, unless it is the fleet's own USDC. Kept on one line, since it sits
-  # inside text.
+  # An amount, with its token's address beside it, unless it is the fleet's own
+  # USDC. Only the figure rolls; the address stays still beside it.
   defp amount(%{value: %{token: nil}} = assigns),
     do: ~H|<span class="proposals-amount" data-count={@count}>{@value.text}</span>|
 
   defp amount(assigns) do
     ~H"""
-    <span class="proposals-amount" data-count={@count}>{@value.text} <.token address={@value.token} /></span>
+    <span class="proposals-amount">
+      <span data-count={@count}>{@value.text}</span>
+      <Regent.Primitives.address id={"#{@id}-token"} class="proposals-token" address={@value.token} />
+    </span>
     """
   end
 
+  attr :id, :string, required: true
   attr :address, :string, required: true
 
-  defp token(assigns),
-    do:
-      ~H|<code class="proposals-token" title={@address}>{RegentFormat.short_address(@address)}</code>|
-
-  attr :address, :string, required: true
-
-  # A wallet shortened, in full on hover.
   defp wallet(assigns),
-    do: ~H|<code title={@address}>{RegentFormat.short_address(@address)}</code>|
+    do: ~H|<Regent.Primitives.address id={@id} address={@address} />|
 
   attr :page, :map, required: true
 
@@ -1177,33 +1423,123 @@ defmodule KeyfleetWeb.ProposalsLive do
   # Where a proposal stands, in the words its pages use.
   defp status_word(%{status: status}), do: Map.fetch!(@status_words, status)
 
-  attr :proposal, :map, required: true
+  attr :id, :string, required: true
+  attr :votes, :map, required: true, doc: "a proposal's `yes`, `no`, `abstain` and `counted` Keys"
 
-  # How a proposal's votes stand; the yes and no figures roll when votes arrive.
-  defp tally(assigns) do
-    assigns = assign(assigns, :id, "proposals-tally-#{assigns.proposal.number}")
+  # How a proposal's vote stands at a glance: the Keys counted that voted yes
+  # and no, as a bar with the 60% it needs marked on it, then each count: No
+  # is the Keys that voted no, and the counted Keys that have not voted are
+  # counted on their own. The whole tally shows on hover, and the counts roll
+  # when votes arrive.
+  defp yes_share(assigns) do
+    %{yes: yes, no: no, abstain: abstain, counted: counted} = assigns.votes
+    share = fn keys -> if counted > 0, do: min(div(keys * 100, counted), 100), else: 0 end
+    silent = counted - yes - no - abstain
 
-    ~H|<span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@proposal.yes}</span>
-yes, <span data-count>{@proposal.no}</span>
-no, <span data-count>{@proposal.abstain}</span>
-abstain, of {keys(@proposal.counted)} counted</span>|
+    assigns =
+      assign(assigns,
+        yes: yes,
+        no: no,
+        abstain: abstain,
+        silent: silent,
+        counted: counted,
+        yes_share: share.(yes),
+        no_share: share.(yes + no) - share.(yes),
+        tally:
+          "#{yes} yes, #{no} no, #{abstain} abstain, #{silent} not voted, " <>
+            "of #{Rules.keys(counted)} counted"
+      )
+
+    ~H"""
+    <div class="proposals-share" title={@tally}>
+      <span
+        class="proposals-share__bar"
+        style={"--yes: #{@yes_share}%; --no: #{@no_share}%"}
+        aria-hidden="true"
+      ></span>
+      <ul
+        id={@id}
+        class="proposals-share__counts"
+        phx-hook="MotionCount"
+        data-variant={Motion.standard("count")}
+      >
+        <li data-side="yes"><span data-count>{Rules.grouped(@yes)}</span> yes</li>
+        <li data-side="no"><span data-count>{Rules.grouped(@no)}</span> no</li>
+        <li :if={@abstain > 0} data-side="abstain">
+          <span data-count>{Rules.grouped(@abstain)}</span> abstain
+        </li>
+        <li :if={@silent > 0} data-side="silent">
+          <span data-count>{Rules.grouped(@silent)}</span> not voted
+        </li>
+      </ul>
+      <span class="proposals-detail">of {Rules.keys(@counted)}</span>
+    </div>
+    """
   end
 
-  defp keys(1), do: "1 Key"
-  defp keys(count), do: "#{count} Keys"
+  attr :id, :string, required: true
+  attr :wallet, :string, required: true
+  attr :agents, :map, required: true
 
-  # An agent names itself, so its name never stands in for the wallet that voted.
-  defp voter(wallet, agents) do
-    case agents[wallet] do
-      nil -> RegentFormat.short_address(wallet)
-      name -> "#{name} (#{RegentFormat.short_address(wallet)})"
-    end
+  # An agent names itself, so its name never stands in for the wallet that
+  # voted, which shows as every address does.
+  defp voter(assigns) do
+    assigns = assign(assigns, :name, assigns.agents[assigns.wallet])
+
+    ~H|<span :if={@name}>{@name}</span> <Regent.Primitives.address id={@id} address={@wallet} />|
   end
 
   defp key_list([token_id]), do: "Key #{Rules.grouped(token_id)}"
   defp key_list(token_ids), do: "Keys #{Enum.map_join(token_ids, ", ", &Rules.grouped/1)}"
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
+
+  @doc """
+  A press of the Treasury's refresh: the open fleet's balances are read at
+  once, and the figures its wallet buttons show are read again. Each person,
+  `who` (their account, or a visitor's visit), may press it once every 30
+  seconds (`:treasury_refresh` in `Keyfleet.Limits`); the button rests
+  until then, and a press it refuses rests it for what is left.
+  """
+  def refresh_treasury(
+        %{assigns: %{proposals: %{fleet_id: fleet_id, treasury: %{}}}} = socket,
+        who
+      ) do
+    case Limits.admit(:treasury_refresh, who) do
+      :ok ->
+        ReadBalances.now(fleet_id)
+        socket |> reread_treasury() |> rest(Limits.window(:treasury_refresh))
+
+      {:limited, seconds} ->
+        rest(socket, seconds)
+    end
+  end
+
+  def refresh_treasury(socket, _who), do: socket
+
+  @doc """
+  A step sent from the open fleet's page went through
+  (`KeyfleetWeb.WalletPanel`), which read its balances again: the figures
+  its other wallet buttons show are read again too.
+  """
+  def onchain_landed(%{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket, fleet_id),
+    do: reread_treasury(socket)
+
+  def onchain_landed(socket, _fleet_id), do: socket
+
+  @doc "The refresh may be pressed again, unless a later press rested it anew."
+  def refresh_ready(%{assigns: %{treasury_resting: rest}} = socket, rest),
+    do: assign(socket, treasury_resting: nil)
+
+  def refresh_ready(socket, _rest), do: socket
+
+  defp reread_treasury(socket), do: update(socket, :treasury_reread, &(&1 + 1))
+
+  defp rest(socket, seconds) do
+    rest = make_ref()
+    Process.send_after(self(), {:treasury_refresh_ready, rest}, :timer.seconds(seconds))
+    assign(socket, treasury_resting: rest)
+  end
 
   @doc """
   A wait begun for a proposals page the page has since left reads nothing. A
@@ -1332,9 +1668,6 @@ abstain, of {keys(@proposal.counted)} counted</span>|
 
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposals}}}),
     do: ProposalsPage.list(params["fleet_id"], params)
-
-  defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :treasury}}}),
-    do: ProposalsPage.treasury_page(params["fleet_id"])
 
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
     do: ProposalsPage.detail(params["fleet_id"], params["number"], params)

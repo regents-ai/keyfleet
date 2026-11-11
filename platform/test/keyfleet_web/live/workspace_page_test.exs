@@ -1,17 +1,21 @@
 defmodule KeyfleetWeb.Live.WorkspacePageTest do
   use KeyfleetWeb.ConnCase, async: false
+  use Oban.Testing, repo: Keyfleet.Repo
 
   import Keyfleet.WorkspaceFixtures
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.CodeHistory
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
+  # `general`'s repository is named after its fleet.
+  @repository @fleet
   @other "fibonacci_cascade"
   # A fleet whose name sorts after this one's.
   @later "fleet_tech_classic"
@@ -19,6 +23,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   @board "/syndicate/1/workspace"
   @notice "Every Key holder can read this. Never put passwords or private data here."
   @holder "0x" <> String.duplicate("d", 40)
+  @member "0x" <> String.duplicate("c", 40)
 
   # The fleet is recorded as deployed, because a fleet still coming soon
   # has no workspace to show. Each page is read by the owner of one of its
@@ -30,19 +35,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
 
-    Keys.record_epoch!(
-      %{
-        fleet_id: @fleet,
-        token_id: 1,
-        ownership_epoch: 1,
-        owner_wallet: @holder,
-        block_number: 10,
-        block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash: "0x" <> String.duplicate("a", 64),
-        log_index: 0
-      },
-      actor: %Actors.System{}
-    )
+    hold!(1, @holder)
 
     %{conn: signed_in_as(conn, @holder), visitor: conn}
   end
@@ -182,21 +175,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert card_text(view, first) =~ "Added by Key 17"
     end
 
-    test "an item kept to one level says which level", %{conn: conn} do
-      level =
-        create(@fleet, "task", %{"title" => "Level work", "progress" => "todo"}, scope: "level:3")
-
-      fleet_wide = create(@fleet, "task", %{"title" => "Fleet work", "progress" => "todo"})
-
-      {:ok, view, _html} = live(conn, @board)
-
-      assert has_element?(view, ~s(#{card(level)} [data-level="3"]), "Level 3")
-      refute has_element?(view, ~s(#{card(fleet_wide)} [data-level]))
-
-      {:ok, item, _html} = live(conn, item_path(level))
-      assert has_element?(item, ~s(#workspace-item-page [data-level="3"]), "Level 3")
-    end
-
     test "archived items are hidden until asked for", %{conn: conn} do
       kept = create(@fleet, "note", %{"title" => "Kept", "body" => "b"})
       gone = create(@fleet, "note", %{"title" => "Gone", "body" => "b"})
@@ -317,7 +295,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert cards(view) == [note]
     end
 
-    test "the goals lead the workspace, the newest change first, and Keyfleet added the starting ones",
+    test "the places to work come first", %{conn: conn} do
+      {:ok, _board, html} = live(conn, @board)
+
+      ids =
+        html
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#workspace-page > *")
+        |> Enum.map(&(&1 |> LazyHTML.attribute("class") |> List.first()))
+
+      assert List.first(ids) == "workspace-places"
+    end
+
+    test "the goals lead the work, the newest change first, and Keyfleet added the starting ones",
          %{conn: conn} do
       second = starting_goal(@fleet, 2, %{"title" => "Compete", "outcome" => "Pick a board."})
       first = starting_goal(@fleet, 1, %{"title" => "Plan a service", "outcome" => "Find one."})
@@ -328,7 +318,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert html =~ @notice
       assert goals(board) == [goal, first, second]
       assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Starting idea")
-      assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Open")
+      refute has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Open")
       refute has_element?(board, ~s(#workspace-goals [data-item="#{goal}"]), "Starting idea")
       refute has_element?(board, ~s(#workspace-goals [data-item="#{second}"]), "joined")
       assert has_element?(board, ~s(#workspace-all-goals[href="#{@board}?type=goal"]))
@@ -361,25 +351,27 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "h2", "This item isn’t in the workspace.")
     end
 
-    test "nothing on the pages writes", %{conn: conn} do
+    test "the only presses are pins, the Key's projects, and opening the notebooks or the code",
+         %{conn: conn} do
       task = create(@fleet, "task", %{"title" => "A task", "progress" => "todo"})
       {:ok, board, _html} = live(conn, @board)
       {:ok, item, _html} = live(conn, item_path(task))
+      {:ok, docs, _html} = live(conn, @board <> "?place=docs")
+      {:ok, code, _html} = live(conn, @board <> "?place=code")
 
-      for view <- [board, item] do
+      assert workspace(board) |> LazyHTML.to_html() =~ "A task"
+      assert workspace(item) |> LazyHTML.to_html() =~ "A task"
+
+      # Key 1 holds no active project, so it may start one.
+      for {view, forms, presses} <- [
+            {board, ["project_start"], []},
+            {item, [], []},
+            {docs, ["project_start"], []},
+            {code, ["project_start"], ["get_code_password"]}
+          ] do
         page = workspace(view)
-        html = LazyHTML.to_html(page)
-        assert html =~ "A task"
-        refute html =~ "<form"
-        refute html =~ "phx-submit"
-
-        # The board's Code panel copies its address and asks for a git
-        # password, and neither writes the workspace; nothing else is pressed.
-        assert Enum.count(LazyHTML.query(page, "button")) ==
-                 Enum.count(LazyHTML.query(page, "#workspace-code button"))
-
-        assert page |> LazyHTML.query("[phx-click]") |> LazyHTML.attribute("phx-click") ==
-                 if(view == board, do: ["get_code_password"], else: [])
+        assert page |> LazyHTML.query("[phx-submit]") |> LazyHTML.attribute("phx-submit") == forms
+        assert page |> LazyHTML.query("[phx-click]") |> LazyHTML.attribute("phx-click") == presses
       end
     end
   end
@@ -502,21 +494,21 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/business"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}?room=business"]),
                "Message 4 in Business"
              )
 
       # An open room goes by the name its members gave it.
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/open-2"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}?room=open-2"]),
                "Message 1 in Hull survey"
              )
 
       # So does a room an agent created.
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/ship-ops"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}?room=ship-ops"]),
                "Message 3 in Ship ops"
              )
 
@@ -530,13 +522,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                goal_view,
-               ~s(#workspace-goal-items [data-item="#{task}"] a[href="#{item_path(task)}"]),
+               ~s(#workspace-goal-map-items [data-item="#{task}"] a[href="#{item_path(task)}"]),
                "Draft the brief"
              )
 
       assert has_element?(
                goal_view,
-               ~s(#workspace-goal-items [data-item="#{task}"]),
+               ~s(#workspace-goal-map-items [data-item="#{task}"]),
                "In progress"
              )
 
@@ -571,8 +563,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         end)
 
       assert fields == [
-               {"What was tried", "Paged through the archive."},
-               {"Why it didn’t work", "It needs a login."}
+               {"Approach tried", "Paged through the archive."},
+               {"Reason", "It needs a login."}
              ]
 
       assert has_element?(
@@ -604,6 +596,24 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              ]
     end
 
+    test "a fork reads as the task being forked, and the copy names the task it copies", %{
+      conn: conn
+    } do
+      task = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"})
+      fork = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"}, by: 9)
+      link(@fleet, fork, task, "forks", by: 9)
+
+      {:ok, view, _html} = live(conn, item_path(fork))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-links [data-direction="from"]),
+               "This task copies"
+             )
+
+      assert history(view) == ["Key 9 forked “Draft”.", "Key 9 added the task “Draft”."]
+    end
+
     test "a goal's page lists the work around it, its notebook results and its commits",
          %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
@@ -613,7 +623,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       link(@fleet, finding, goal, "supports")
 
       hash = String.duplicate("ab", 20)
-      commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash)
+      commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash)
 
       result =
         Keyfleet.Notebooks.result_url(
@@ -637,9 +647,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
-      assert work(view) == [run, code, finding, task]
-      assert has_element?(view, ~s(#workspace-goal-items [data-item="#{task}"]), "Task")
-      refute has_element?(view, "#workspace-goal-work-more")
+      assert work(view) == [task, code, run, finding]
+      assert has_element?(view, ~s(#workspace-goal-map-items [data-item="#{task}"]), "Task")
+      refute has_element?(view, "#workspace-goal-map-more")
 
       assert has_element?(
                view,
@@ -649,7 +659,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-code-rows [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
+               ~s(#workspace-goal-code-rows [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, @repository, hash)}"]),
                "The price page"
              )
 
@@ -662,7 +672,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               "#workspace-goal-work-empty",
+               "#workspace-goal-map-empty",
                "No work is linked to this goal yet."
              )
 
@@ -681,12 +691,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       refute has_element?(view, "#workspace-goal-folder")
     end
 
-    test "a goal's page lists the hundred most recently changed items around it",
+    test "a goal's map holds the goal and the 119 most recently changed items around it",
          %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
 
       notes =
-        for n <- 1..101 do
+        for n <- 1..120 do
           note = create(@fleet, "note", %{"title" => "Note #{n}", "body" => "b"})
           link(@fleet, note, goal, "references")
           note
@@ -694,8 +704,15 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
-      assert work(view) == notes |> Enum.reverse() |> Enum.take(100)
-      assert has_element?(view, "#workspace-goal-work-more", "The 100 most recently changed.")
+      # The goal changed longest ago, yet it stays in its own map, so the
+      # oldest note is the one left out and the notes hang from the goal.
+      assert Enum.sort(work(view)) == notes |> Enum.drop(1) |> Enum.sort()
+      assert has_element?(view, "#workspace-goal-map-more", "The 120 most recently changed.")
+
+      {:ok, graph, _html} =
+        live(conn, @board <> "?view=graph&goal=" <> URI.encode_www_form(goal))
+
+      assert has_element?(graph, "#workspace-graph-goal", "Hub")
     end
 
     test "a review is told once, as its decision on the task", %{conn: conn} do
@@ -721,6 +738,51 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, item, _html} = live(conn, item_path(review))
       assert history(item) == ["Key 4 disputed “Draft”."]
+    end
+
+    test "a task's page shows its reviewer, what must hold, its notebook and commit, and whether each review reproduced it",
+         %{conn: conn} do
+      hash = String.duplicate("cd", 20)
+      notebook = "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef"
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Fewer notices",
+          "progress" => "doing",
+          "reviewer_key" => 4,
+          "acceptance_criteria" => ["At most one notice a minute"],
+          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash),
+          "notebook_ref" => Keyfleet.Notebooks.url(@fleet, notebook)
+        })
+
+      submit(@fleet, task, "https://example.com/result", by: 9)
+      review = review(@fleet, task, "accept", by: 4, reproduction: "passed")
+      commit_path = Keyfleet.Code.commit_path(@fleet, @repository, hash)
+      open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: notebook)
+
+      {:ok, item, _html} = live(conn, item_path(task))
+      assert has_element?(item, "#workspace-fields", "Key 4")
+      assert has_element?(item, "#workspace-fields", "At most one notice a minute")
+
+      assert has_element?(
+               item,
+               ~s(#workspace-fields a[data-commit="#{hash}"][href="#{commit_path}"])
+             )
+
+      assert has_element?(item, ~s(#workspace-fields a[data-notebook][href="#{open}"]))
+      assert has_element?(item, "#workspace-links", "Review: accepted, reproduced")
+
+      {:ok, item, _html} = live(conn, item_path(review))
+      assert has_element?(item, "#workspace-fields", "Yes")
+      assert has_element?(item, ~s(#workspace-fields a[href="#{commit_path}"]))
+
+      {:ok, commit, _html} = live(conn, commit_path)
+
+      assert has_element?(
+               commit,
+               ~s(#workspace-commit-citing [data-item="#{task}"]),
+               "Fewer notices"
+             )
     end
 
     test "links and history come fifty at a time", %{conn: conn} do
@@ -819,18 +881,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-folder[href="#{Keyfleet.Code.files_path(@fleet, folder)}"]),
+               ~s(#workspace-goal-folder[href="#{Keyfleet.Code.files_path(@fleet, @repository, folder)}"]),
                folder
              )
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-code-rows [data-file="plan.md"] a[href="#{Keyfleet.Code.files_path(@fleet, folder <> "/plan.md")}"])
+               ~s(#workspace-goal-code-rows [data-file="plan.md"] a[href="#{Keyfleet.Code.files_path(@fleet, @repository, folder <> "/plan.md")}"])
              )
 
       file = view
       file |> element(~s(#workspace-goal-code-rows [data-file="plan.md"] a)) |> render_click()
-      assert_patch(file, Keyfleet.Code.files_path(@fleet, folder <> "/plan.md"))
+      assert_patch(file, Keyfleet.Code.files_path(@fleet, @repository, folder <> "/plan.md"))
 
       assert text(file, "#workspace-file") == "# Plan\nSell one Key.\n"
 
@@ -849,7 +911,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "a goal's page says so when the code can't be read", %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
-      Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+      Keyfleet.Code.record_repository!(@repository, "z6MkOwner", actor: %Actors.System{})
       Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
 
       {:ok, view, _html} = live(conn, item_path(goal))
@@ -871,7 +933,15 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       notebook = "nb-0123456789abcdef"
 
       hub!(project, fn %{"tag" => ^tag, "limit" => "50"} ->
-        [%{"id" => notebook, "title" => "Price model"}]
+        [
+          %{
+            "id" => notebook,
+            "title" => "Price model",
+            "description" => "",
+            "created_at" => "2026-10-20T09:00:00Z",
+            "tags" => []
+          }
+        ]
       end)
 
       {:ok, view, _html} = live(conn, item_path(goal))
@@ -887,6 +957,135 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       refute has_element?(view, "#workspace-goal-notebooks-none")
+    end
+
+    # A task is cited by its own fields: the goal's page found only what
+    # evidence cited, so a task's notebook and commit never showed there.
+    test "a goal's page lists the notebook, result and commit its tasks cite",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      project = "proj-0123456789abcdef"
+      notebook = "nb-0123456789abcdef"
+      hash = String.duplicate("cd", 20)
+
+      result =
+        Keyfleet.Notebooks.result_url(
+          @fleet,
+          notebook,
+          "run_01M539TC83WX2ZRQFZB4VHH178",
+          1_792_186_134_702
+        )
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Price check",
+          "progress" => "doing",
+          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash),
+          "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook),
+          "result_ref" => result
+        })
+
+      link(@fleet, task, goal, "implements")
+
+      hub!(project, fn
+        %{"tag" => _tag} ->
+          []
+
+        {:notebook, ^notebook} ->
+          %{
+            "id" => notebook,
+            "title" => "Price model",
+            "description" => "",
+            "status" => "active",
+            "created_at" => "2026-10-20T09:00:00Z",
+            "tags" => []
+          }
+      end)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-notebook="#{notebook}"]),
+               "Price model"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-item="#{task}"] a[href="#{result}"]),
+               "Price check"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-code-rows [data-item="#{task}"] a[href="#{Keyfleet.Code.commit_path(@fleet, @repository, hash)}"]),
+               "Price check"
+             )
+    end
+
+    # Cited notebooks were looked for among the fleet's newest 50 only, so an
+    # older one vanished from the goal's page; then each was asked for with no
+    # cap or deadline, and one failed answer blanked the list.
+    test "a goal's page asks for each cited notebook by its id, keeping what the hub answers in time",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      project = "proj-0123456789abcdef"
+
+      [old, deleted, gone, down, slow] =
+        ~w(nb-00000000000000a1 nb-00000000000000d2 nb-00000000000000e3 nb-00000000000000f4 nb-00000000000000b5)
+
+      cite!(goal, project, [old, deleted, gone, down, slow])
+      meta = &meta(&1, &2, "active")
+
+      hub!(project, fn
+        %{"tag" => _tag} -> []
+        {:notebook, ^old} -> meta.(old, "Old model")
+        {:notebook, ^deleted} -> meta(deleted, "Deleted", "deleted")
+        {:notebook, ^gone} -> nil
+        {:notebook, ^down} -> :down
+        {:notebook, ^slow} -> {:slow, meta.(slow, "Slow")}
+      end)
+
+      notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+      Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :page_timeout_ms, 200))
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-notebook="#{old}"]),
+               "Old model"
+             )
+
+      for id <- [deleted, gone, down, slow] do
+        refute has_element?(view, ~s(#workspace-goal-notebook-rows [data-notebook="#{id}"]))
+      end
+
+      assert has_element?(view, "#workspace-goal-notebooks-unshown", "2 more not shown.")
+      refute has_element?(view, "#workspace-goal-notebooks-unreadable")
+    end
+
+    test "a goal's page asks the hub for the 20 most recently cited notebooks only",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      project = "proj-0123456789abcdef"
+      ids = for n <- 1..21, do: "nb-" <> String.pad_leading(Integer.to_string(n), 16, "0")
+      cite!(goal, project, ids)
+      test = self()
+
+      hub!(project, fn
+        %{"tag" => _tag} ->
+          []
+
+        {:notebook, id} ->
+          send(test, {:asked, id})
+          meta(id, "Notebook " <> id, "active")
+      end)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(view, "#workspace-goal-notebooks-unshown", "1 more not shown.")
+      assert collect_asked() |> Enum.uniq() |> length() == 20
     end
 
     test "a goal's page says so when the notebooks can't be read", %{conn: conn} do
@@ -921,11 +1120,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "opens at the top folder, folders first, with how to copy it and what was sent lately",
          %{conn: conn} do
-      Keyfleet.Code.record_pushes(@fleet, %{token_id: 1, wallet: @holder}, [
+      Keyfleet.Code.record_pushes(@fleet, "general", %{token_id: 1, wallet: @holder}, [
         %{ref: "refs/heads/main", head: String.duplicate("5", 40)}
       ])
 
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, ""))
 
       assert rows(view, "#workspace-file-rows") == [
                ["Folder", "goals"],
@@ -934,20 +1133,24 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(view, "#workspace-files-page h2", "Code")
       refute has_element?(view, "#workspace-files-crumbs")
-      assert has_element?(view, "#workspace-files-clone", Keyfleet.Code.clone_url(@fleet))
+      assert has_element?(view, "#workspace-files-clone", Keyfleet.Code.clone_url(@repository))
       assert has_element?(view, "#workspace-files-pushes", "Key 1 sent changes to main")
 
       view |> element(~s(#workspace-file-rows [data-file="goals"] a)) |> render_click()
-      assert_patch(view, Keyfleet.Code.files_path(@fleet, "goals"))
+      assert_patch(view, Keyfleet.Code.files_path(@fleet, @repository, "goals"))
       assert rows(view, "#workspace-file-rows") == [["Folder", "goal-1"]]
     end
 
     test "names a file that isn't text, or is too large, without showing it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "goals/goal-1/data.bin"))
+      {:ok, view, _html} =
+        live(conn, Keyfleet.Code.files_path(@fleet, @repository, "goals/goal-1/data.bin"))
+
       assert has_element?(view, "#workspace-file-not-text")
       refute has_element?(view, "#workspace-file")
 
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "goals/goal-1/big.txt"))
+      {:ok, view, _html} =
+        live(conn, Keyfleet.Code.files_path(@fleet, @repository, "goals/goal-1/big.txt"))
+
       assert has_element?(view, "#workspace-file-too-large")
       refute has_element?(view, "#workspace-file")
     end
@@ -956,7 +1159,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
          %{conn: conn} do
       for path <- ["goals/goal-2", "goals//goal-1", "goals/../README.md", "/README.md", ""] do
         assert_raise KeyfleetWeb.NotFoundError, fn ->
-          live(conn, Keyfleet.Code.files_path(@fleet, "") <> "?" <> URI.encode_query(path: path))
+          live(
+            conn,
+            Keyfleet.Code.files_path(@fleet, @repository, "") <>
+              "?" <> URI.encode_query(path: path)
+          )
         end
       end
 
@@ -965,9 +1172,25 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       end
     end
 
+    test "a file a later change removed says so, and leads back to the top of the code",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, "README.md"))
+      assert has_element?(view, "#workspace-file")
+
+      serve_code(%{"goals/goal-1/notes/one.md" => "one"})
+      send(view.pid, :refresh_workspace)
+
+      assert has_element?(view, "#workspace-files-removed", "A later change removed this")
+      refute has_element?(view, "#workspace-file")
+
+      view |> element("#workspace-files-removed a") |> render_click()
+      assert_patch(view, Keyfleet.Code.files_path(@fleet, @repository, ""))
+      assert rows(view, "#workspace-file-rows") == [["Folder", "goals"]]
+    end
+
     test "says so when the code can't be read", %{conn: conn} do
       Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "README.md"))
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, "README.md"))
 
       assert has_element?(
                view,
@@ -978,7 +1201,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "shows only that it is members' code to anyone else, and offers Sign in to a visitor",
          %{visitor: visitor} do
-      path = Keyfleet.Code.files_path(@fleet, "README.md")
+      path = Keyfleet.Code.files_path(@fleet, @repository, "README.md")
 
       {:ok, signed_out, _html} = live(visitor, path)
       assert has_element?(signed_out, "#workspace-files-members-only")
@@ -990,6 +1213,321 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(signed_in, "#workspace-files-members-only")
       refute has_element?(signed_in, "#workspace-files-sign-in")
       refute_received {:store, _path, _pass}
+    end
+  end
+
+  describe "the workspace's three places" do
+    setup do
+      open_log(@fleet)
+      take_over_general()
+      :ok
+    end
+
+    test "the switch leads to each place, and a place the workspace doesn't have is a page that doesn't exist",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board)
+
+      assert has_element?(
+               view,
+               ~s(#workspace-tab-project[aria-selected="true"][href="#{@board}"])
+             )
+
+      assert has_element?(view, ~s(#workspace-tab-docs[href="#{@board}?place=docs"]))
+      assert has_element?(view, ~s(#workspace-tab-code[href="#{@board}?place=code"]))
+      assert has_element?(view, "#workspace-goals")
+
+      view |> element("#workspace-tab-docs") |> render_click()
+      assert_patch(view, @board <> "?place=docs")
+      assert has_element?(view, ~s(#workspace-tab-docs[aria-selected="true"]))
+      assert has_element?(view, "#workspace-notebooks")
+      refute has_element?(view, "#workspace-goals")
+
+      view |> element("#workspace-tab-code") |> render_click()
+      assert_patch(view, @board <> "?place=code")
+      assert has_element?(view, "#workspace-code")
+
+      assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, @board <> "?place=chat") end
+    end
+
+    test "Docs lists the newest notebooks, and a pin keeps one at hand for every member",
+         %{conn: conn, visitor: visitor} do
+      project = "proj-0123456789abcdef"
+      price = "nb-0123456789abcdef"
+      plan = "nb-fedcba9876543210"
+      test = self()
+
+      hub!(project, fn query ->
+        send(test, {:listed, query})
+
+        [
+          %{
+            "id" => plan,
+            "title" => "Launch plan",
+            "description" => "Who buys first.",
+            "created_at" => "2026-10-20T09:00:00Z",
+            "tags" => ["goal-1", "folder/plans/launch"]
+          },
+          %{
+            "id" => price,
+            "title" => "Price model",
+            "description" => "",
+            "created_at" => "2026-10-19T09:00:00Z",
+            "tags" => []
+          }
+        ]
+      end)
+
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
+      assert_received {:listed, %{"limit" => "24"} = query}
+      refute Map.has_key?(query, "tag")
+
+      # Notebooks in no folder come first, then each folder under its name.
+      assert rows(view, "#workspace-notebook-rows section:not([data-folder]) ol") == [
+               ["Price model", "Locked 19 Oct 2026"]
+             ]
+
+      assert text(view, ~s(#workspace-notebook-rows [data-folder="plans/launch"] h3)) ==
+               "plans/launch"
+
+      assert rows(view, ~s(#workspace-notebook-rows [data-folder="plans/launch"] ol)) == [
+               ["Launch plan", "Locked 20 Oct 2026"]
+             ]
+
+      assert has_element?(
+               view,
+               ~s([data-notebook="#{plan}"] .workspace-row-text),
+               "Who buys first."
+             )
+
+      assert has_element?(view, "#workspace-docs-pins-empty")
+      assert has_element?(view, "#open-notebooks")
+
+      view
+      |> element(~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
+      |> render_click()
+
+      open =
+        "/fleets/#{@fleet}/notebooks/open?" <>
+          URI.encode_query(to: Keyfleet.Notebooks.notebook_path(project, price))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-docs-pins-rows [data-pin="#{price}"] a[href="#{open}"]),
+               "Price model"
+             )
+
+      assert has_element?(view, ~s(#workspace-notebook-#{price}-pin[aria-pressed="true"]))
+
+      # Another holder of one of the fleet's Keys sees the same pin, but only
+      # its pinner lifts it.
+      other = "0x" <> String.duplicate("b", 40)
+      hold!(2, other)
+
+      {:ok, theirs, _html} =
+        live(signed_in_as(visitor, other), @board <> "?place=docs&project=general")
+
+      assert has_element?(
+               theirs,
+               ~s(#workspace-docs-pins-rows [data-pin="#{price}"]),
+               "Price model"
+             )
+
+      assert has_element?(
+               theirs,
+               ~s(#workspace-docs-pins-rows [data-pin="#{price}"] button[disabled])
+             )
+
+      view
+      |> element(~s(#workspace-docs-pins-rows [data-pin="#{price}"] button))
+      |> render_click()
+
+      assert has_element?(view, "#workspace-docs-pins-empty")
+      assert has_element?(view, ~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
+    end
+
+    test "Docs says so when the notebooks aren't connected, or can't be read", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
+      assert has_element?(view, "#workspace-notebooks-none")
+      refute has_element?(view, "#workspace-docs-pins")
+      refute has_element?(view, "#workspace-docs-info")
+
+      hub!("proj-0123456789abcdef", :down)
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
+
+      assert has_element?(
+               view,
+               "#workspace-notebooks-unreadable",
+               "The notebooks can’t be read right now. Try again in a minute."
+             )
+    end
+
+    test "Code lists the top folder with how to copy it, and a pinned file stays at hand",
+         %{conn: conn} do
+      store!(%{"README.md" => "Hello", "goals/goal-1/plan.md" => "Plan"})
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
+
+      assert rows(view, "#workspace-code-rows") == [
+               ["Folder", "goals"],
+               ["File", "README.md", "5 B"]
+             ]
+
+      assert text(view, "#workspace-code-address") == Keyfleet.Code.clone_url(@repository)
+      assert has_element?(view, ~s(#workspace-code-address-copy))
+      assert has_element?(view, "#code-pushes-empty")
+      assert has_element?(view, "#workspace-code-files")
+
+      view |> element(~s(#workspace-code-rows [data-file="goals"] button)) |> render_click()
+      view |> element(~s(#workspace-code-rows [data-file="README.md"] button)) |> render_click()
+
+      # Newest pin first, each opening what it names.
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("#workspace-code-pins-rows > li")
+             |> LazyHTML.attribute("data-pin") == ["README.md", "goals"]
+
+      assert has_element?(
+               view,
+               ~s(#workspace-code-pins-rows [data-pin="README.md"] a[href="#{Keyfleet.Code.files_path(@fleet, @repository, "README.md")}"])
+             )
+
+      # The code's own pages show the same pin, and lift it.
+      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, ""))
+      pin = ~s(#workspace-file-rows [data-file="README.md"] button)
+      assert has_element?(files, pin <> ~s([aria-pressed="true"]))
+      files |> element(pin) |> render_click()
+      assert has_element?(files, pin <> ~s([aria-pressed="false"]))
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
+      refute has_element?(view, ~s(#workspace-code-pins-rows [data-pin="README.md"]))
+      assert has_element?(view, ~s(#workspace-code-pins-rows [data-pin="goals"]))
+    end
+
+    test "Code offers nothing to browse before files reach main, even after changes were sent",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
+      assert has_element?(view, "#workspace-code-empty")
+      refute has_element?(view, "#workspace-code-files")
+
+      Keyfleet.Code.record_pushes(@fleet, "general", %{token_id: 1, wallet: @holder}, [
+        %{ref: "refs/heads/draft", head: String.duplicate("6", 40)}
+      ])
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
+      assert has_element?(view, "#code-pushes")
+      assert has_element?(view, "#workspace-code-main-empty")
+      refute has_element?(view, "#workspace-code-empty")
+      refute has_element?(view, "#workspace-code-files")
+    end
+
+    test "Code gives a holder a git password, and says until when in the reader's own time",
+         %{conn: conn} do
+      store!(%{"README.md" => "Hello"})
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
+      refute has_element?(view, "#code-password")
+
+      view |> element("#get-code-password") |> render_click()
+
+      assert {:ok, _subject, %Actors.Human{}} =
+               view |> text("#code-password-text") |> KeyfleetWeb.CodePassword.read(@fleet)
+
+      ttl = Keyfleet.Code.config()[:password_ttl_seconds]
+
+      {:ok, until, 0} =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s(#code-password-until[phx-hook="LocalTime"][data-as="stamp"]))
+        |> LazyHTML.attribute("datetime")
+        |> List.first()
+        |> DateTime.from_iso8601()
+
+      assert_in_delta DateTime.diff(until, DateTime.utc_now()), ttl, 5
+    end
+
+    test "a pin is one per notebook or file, and only the fleet's members set or lift one" do
+      holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+
+      pin = %{
+        fleet_id: @fleet,
+        project: "general",
+        place: :code,
+        target: "README.md",
+        title: "README.md"
+      }
+
+      assert {:ok, first} = Graph.pin(pin, actor: holder)
+      assert {:ok, again} = Graph.pin(%{pin | title: "Read me"}, actor: holder)
+      assert again.id == first.id
+      assert [%{title: "Read me"}] = Graph.pins!(@fleet, :code, "general", actor: holder)
+
+      outsider = %Actors.Human{
+        human_account_id: 0,
+        wallet_addresses: ["0x" <> String.duplicate("e", 40)]
+      }
+
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: outsider)
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: outsider)
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Graph.pins(@fleet, :code, "general", actor: outsider)
+
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: %Actors.System{})
+
+      # A pin is its pinner's: another member neither lifts nor retitles it.
+      hold!(2, @member)
+      member = %Actors.Human{human_account_id: 2, wallet_addresses: [@member]}
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: member)
+      assert {:ok, kept} = Graph.pin(%{pin | title: "Mine now"}, actor: member)
+      assert {kept.id, kept.human_account_id} == {first.id, 1}
+
+      assert [%{title: "Read me", human_account_id: 1}] =
+               Graph.pins!(@fleet, :code, "general", actor: member)
+
+      assert :ok = Graph.unpin(first, actor: holder)
+      assert [] = Graph.pins!(@fleet, :code, "general", actor: holder)
+
+      # Lifting a pin already lifted, from another tab, finds no pin of theirs
+      # to lift, and the page then reads afresh.
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: holder)
+    end
+
+    test "another member's pin shows pinned, but only its pinner lifts it", %{conn: conn} do
+      store!(%{"README.md" => "Hello"})
+      hold!(2, @member)
+      member = %Actors.Human{human_account_id: 2, wallet_addresses: [@member]}
+
+      Graph.pin!(
+        %{
+          fleet_id: @fleet,
+          project: "general",
+          place: :code,
+          target: "README.md",
+          title: "README.md"
+        },
+        actor: member
+      )
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
+
+      for pin <- [
+            ~s(#workspace-code-rows [data-file="README.md"] button),
+            ~s(#workspace-code-pins-rows [data-pin="README.md"] button)
+          ] do
+        assert has_element?(
+                 view,
+                 pin <>
+                   ~s([aria-pressed="true"][disabled][title="Pinned by another member"])
+               )
+      end
+
+      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, ""))
+
+      assert has_element?(
+               files,
+               ~s(#workspace-file-rows [data-file="README.md"] button[aria-pressed="true"][disabled])
+             )
     end
   end
 
@@ -1051,11 +1589,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       event(@fleet, "patch.applied", %{
         "target" => task,
-        "diff" => %{"sys" => %{"old" => sys, "new" => Map.put(sys, "scope", "level:2")}}
-      })
-
-      event(@fleet, "patch.applied", %{
-        "target" => task,
         "diff" => %{
           "progress" => %{"old" => "todo", "new" => "blocked"},
           "sys" => %{"old" => sys, "new" => sys}
@@ -1064,12 +1597,16 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, @board)
 
-      assert Enum.take(activity(view), 2) == [
-               "Keyfleet updated “Draft”: progress is now blocked.",
-               "Keyfleet updated “Draft”."
+      assert Enum.take(activity(view), 1) == [
+               "Keyfleet updated “Draft”: progress is now blocked."
              ]
 
-      assert has_element?(view, "#workspace-activity .workspace-detail", "at 12:05 UTC")
+      assert has_element?(
+               view,
+               ~s(#workspace-activity .workspace-detail time[datetime$="T12:03:00Z"])
+             )
+
+      assert has_element?(view, "#workspace-activity .workspace-detail time", "22 Sep")
     end
 
     test "a change made by Keyfleet itself names no key", %{conn: conn} do
@@ -1193,6 +1730,116 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "deleting a project" do
+    setup do
+      open_log(@fleet)
+      holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+      Keyfleet.Projects.start_project!(@fleet, 1, "lab", "Lab", actor: holder)
+      Keyfleet.Projects.archive_project!(@fleet, 1, actor: holder)
+      :ok
+    end
+
+    # Deleting takes the project's work with it, so Delete asks first in
+    # Keyfleet's own window: Cancel keeps the project, and saying so deletes it.
+    test "Delete asks first, Cancel keeps the project, and saying so deletes it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?project=lab")
+
+      view |> element("#project-delete") |> render_click()
+      assert has_element?(view, "#project-delete-dialog h2", "Delete Lab for good?")
+
+      view |> render_hook("cancel_project_delete", %{})
+      refute has_element?(view, "#project-delete-dialog")
+      assert %{state: :archived} = lab()
+
+      view |> element("#project-delete") |> render_click()
+      view |> element("#project-delete-confirm") |> render_click()
+      refute has_element?(view, "#project-delete-dialog")
+      assert lab() == nil
+    end
+  end
+
+  describe "a shown project's page" do
+    setup do
+      open_log(@fleet)
+
+      start_project(@fleet, "lab", "Lab")
+      |> Ash.Changeset.for_update(:shown, %{shown_to_everyone: true, key: 20},
+        actor: %Actors.System{}
+      )
+      |> Ash.update!()
+
+      # One goal more than the page lists, so its Goals part has more to see.
+      for n <- 1..6,
+          do: create(@fleet, "goal", %{"title" => "Goal #{n}", "outcome" => "O"}, project: "lab")
+
+      goal =
+        create(@fleet, "goal", %{"title" => "Try the new model", "outcome" => "O"},
+          project: "lab"
+        )
+
+      task = create(@fleet, "task", %{"title" => "Draft the price"}, project: "lab")
+      link(@fleet, task, goal, "implements")
+      %{goal: goal, task: task}
+    end
+
+    # Costly failure: a visitor sent from a title or a workspace link to the
+    # general Public place, when the workspace is only the members'.
+    test "its titles and workspace links open the workspace for a member and are gone for anyone else",
+         %{conn: conn, visitor: visitor, goal: goal, task: task} do
+      {:ok, view, _html} = live(conn, "/syndicate/1/projects/lab")
+      goal_path = KeyfleetWeb.WorkspacePage.item_path(@fleet, goal)
+      task_path = KeyfleetWeb.WorkspacePage.item_path(@fleet, task)
+
+      assert has_element?(
+               view,
+               ~s(#project-goals a.project-title[href="#{goal_path}"]),
+               "Try the new model"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#project-work a.project-title[href="#{task_path}"]),
+               "Draft the price"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#project-open a.project-title[href="#{task_path}"]),
+               "Draft the price"
+             )
+
+      assert has_element?(
+               view,
+               ~s(.project-goal-tasks [data-item="#{task}"] a[href="#{task_path}"]),
+               "Draft the price"
+             )
+
+      assert has_element?(view, ~s(#project-workspace[href="/syndicate/1/workspace?project=lab"]))
+
+      assert has_element?(
+               view,
+               ~s(#project-goals a.project-more[href="/syndicate/1/workspace?project=lab"])
+             )
+
+      {:ok, view, _html} = live(visitor, "/syndicate/1/projects/lab")
+
+      refute has_element?(view, "#project-workspace")
+      refute has_element?(view, ".project-more")
+      assert has_element?(view, "#project-goals span.project-title", "Try the new model")
+      assert has_element?(view, "#project-work span.project-title", "Draft the price")
+      assert has_element?(view, "#project-open span.project-title", "Draft the price")
+
+      assert has_element?(
+               view,
+               ~s(.project-goal-tasks [data-item="#{task}"] span),
+               "Draft the price"
+             )
+
+      refute has_element?(view, "#project-parts a.project-title")
+      refute has_element?(view, "#project-parts .project-goal-tasks a")
+    end
+  end
+
   describe "another fleet's workspace" do
     test "never shows up in this one", %{conn: conn} do
       open_log(@fleet)
@@ -1223,6 +1870,385 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, missing, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}/workspace/goal%237")
       assert has_element?(missing, "h2", "This item isn’t in the workspace.")
+    end
+  end
+
+  describe "how the work stands" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    # Costly failure: a count that took in archived, achieved or another
+    # fleet's or project's items would tell members the work stands where it
+    # doesn't, in a line they read before anything else.
+    test "the Project counts each goal and task where it stands, in both views",
+         %{conn: conn} do
+      create(@fleet, "goal", %{"title" => "Revenue"})
+      edit(@fleet, create(@fleet, "goal", %{"title" => "Shipped"}), %{"status" => "achieved"})
+      archive(@fleet, create(@fleet, "goal", %{"title" => "Old plan"}))
+      starting_goal(@fleet, 1, %{"title" => "Nobody joined"})
+      join(@fleet, starting_goal(@fleet, 2, %{"title" => "Someone joined"}))
+
+      create(@fleet, "task", %{"title" => "Untaken"})
+      create(@fleet, "task", %{"title" => "Taken", "assignee_key" => 4})
+      create(@fleet, "task", %{"title" => "Doing", "progress" => "doing", "assignee_key" => 4})
+      create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked", "assignee_key" => 5})
+      submit(@fleet, create(@fleet, "task", %{"title" => "Waiting"}), "https://example.com/r1")
+
+      accepted = create(@fleet, "task", %{"title" => "Accepted"})
+      submit(@fleet, accepted, "https://example.com/r2")
+      review(@fleet, accepted, "accept", by: 6)
+
+      reproduced = create(@fleet, "task", %{"title" => "Reproduced"})
+      submit(@fleet, reproduced, "https://example.com/r3")
+      review(@fleet, reproduced, "accept", by: 6, reproduction: "passed")
+
+      disputed = create(@fleet, "task", %{"title" => "Disputed"})
+      submit(@fleet, disputed, "https://example.com/r4")
+      review(@fleet, disputed, "dispute", by: 6)
+
+      archive(@fleet, create(@fleet, "task", %{"title" => "Archived"}))
+
+      open_log(@other)
+      create(@other, "task", %{"title" => "Theirs"})
+
+      for path <- [@board, @board <> "?view=graph"] do
+        {:ok, view, _html} = live(conn, path)
+
+        assert counts(view) == %{
+                 open_goals: "2",
+                 open_tasks: "2",
+                 working: "1",
+                 waiting_review: "1",
+                 blocked: "2",
+                 accepted: "2"
+               }
+      end
+
+      # The Graph colours a reproduced task as done, as the count does.
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, ~s([data-node="#{reproduced}"][data-tone="done"]), "Reproduced")
+    end
+
+    test "one project's counts leave out the others' work", %{conn: conn} do
+      start_project(@fleet, "lab", "Lab")
+      create(@fleet, "task", %{"title" => "In general"})
+      create(@fleet, "task", %{"title" => "In the lab"}, project: "lab")
+      create(@fleet, "goal", %{"title" => "Lab goal"}, project: "lab")
+
+      {:ok, view, _html} = live(conn, @board <> "?project=lab")
+      assert %{open_goals: "1", open_tasks: "1"} = counts(view)
+
+      {:ok, view, _html} = live(conn, @board)
+      assert %{open_goals: "1", open_tasks: "2"} = counts(view)
+    end
+
+    test "a visitor sees no counts", %{visitor: visitor} do
+      create(@fleet, "task", %{"title" => "Untaken"})
+
+      {:ok, view, _html} = live(visitor, @board)
+      assert has_element?(view, "#workspace-members-only")
+      refute has_element?(view, "#workspace-counts")
+    end
+
+    defp counts(view) do
+      for standing <- [:open_goals, :open_tasks, :working, :waiting_review, :blocked, :accepted],
+          into: %{} do
+        figure =
+          view
+          |> element("#workspace-count-#{standing}")
+          |> render()
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.text()
+          |> String.trim()
+
+        {standing, figure}
+      end
+    end
+  end
+
+  describe "the workspace's graph" do
+    # Costly failure: the graph is a second way into the workspace, so a graph
+    # that skipped the board's members-only rule would show anyone every item.
+    test "draws this fleet's items for a member, and anyone else the members-only page",
+         %{conn: conn, visitor: visitor} do
+      open_log(@fleet)
+      open_log(@other)
+      create(@fleet, "task", %{"title" => "Ours", "progress" => "todo"}, id: "task#1")
+      create(@other, "task", %{"title" => "Theirs", "progress" => "todo"}, id: "task#2")
+      path = @board <> "?view=graph"
+
+      {:ok, graph, _html} = live(conn, path)
+      assert has_element?(graph, "#workspace-graph")
+      assert render(graph) =~ "Ours"
+      refute render(graph) =~ "Theirs"
+
+      outsider = signed_in_as(visitor, "0x" <> String.duplicate("e", 40))
+
+      for someone <- [visitor, outsider] do
+        {:ok, refused, _html} = live(someone, path)
+        assert has_element?(refused, "#workspace-members-only")
+        refute has_element?(refused, "#workspace-graph")
+        refute render(refused) =~ "Ours"
+      end
+    end
+  end
+
+  describe "one goal's map" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    # Costly failure: a map that took in work from outside the goal, or left
+    # out a fork or a review, would show a goal's work as other than it is.
+    test "holds the goal, what is linked to it, and its tasks' outputs, reviews and forks",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+      other_goal = create(@fleet, "goal", %{"title" => "Elsewhere"})
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
+      link(@fleet, task, goal, "implements")
+      finding = create(@fleet, "finding", %{"title" => "Funds read briefs", "statement" => "S"})
+      link(@fleet, task, finding, "produces")
+      note = create(@fleet, "note", %{"title" => "Call notes", "body" => "B"})
+      link(@fleet, note, goal, "references")
+      fork = create(@fleet, "task", %{"title" => "Draft it shorter"}, by: 7)
+      link(@fleet, fork, task, "forks")
+      submit(@fleet, task, "https://example.com/brief")
+      review = review(@fleet, task, "accept", by: 6)
+      stray = create(@fleet, "task", %{"title" => "Unrelated"})
+      link(@fleet, stray, other_goal, "implements")
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph&goal=" <> URI.encode_www_form(goal))
+
+      shown =
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#workspace-graph-list > li")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-row"))
+        |> Enum.sort()
+
+      assert shown == Enum.sort([goal, task, finding, note, fork, review])
+      assert view |> element("#workspace-graph-goal") |> render() =~ "Revenue"
+
+      view |> element("#workspace-graph-every-goal") |> render_click()
+      assert render(view) =~ "Unrelated"
+    end
+
+    # Costly failure: a fork shown as the owner's own work, or work hung
+    # under the wrong task, would misstate who did what for the goal.
+    test "stands on the goal's page as cards, each under the item it hangs from",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+      task = create(@fleet, "task", %{"title" => "Draft the brief", "assignee_key" => 4})
+      link(@fleet, task, goal, "implements")
+      finding = create(@fleet, "finding", %{"title" => "Funds read briefs", "statement" => "S"})
+      link(@fleet, task, finding, "produces")
+      fork = create(@fleet, "task", %{"title" => "Draft it shorter"}, by: 7)
+      link(@fleet, fork, task, "forks")
+      note = create(@fleet, "note", %{"title" => "Call notes", "body" => "B"})
+      link(@fleet, note, goal, "references")
+
+      {:ok, view, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, goal))
+
+      branch = fn id ->
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query(~s([data-item="#{id}"] > ol > li))
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-item"))
+      end
+
+      top =
+        view
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#workspace-goal-map-items > li")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "data-item"))
+
+      assert top == [task, note]
+      assert branch.(task) == [finding, fork]
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-map-items[phx-hook="MotionCascade"][data-variant="cascade"])
+             )
+
+      assert has_element?(view, ~s([data-item="#{fork}"][data-via="forks"]))
+      assert has_element?(view, ~s([data-item="#{finding}"][data-via="produces"]))
+
+      card = ~s([data-item="#{task}"] > .workspace-map-card)
+      assert has_element?(view, card, "Key 4")
+      assert has_element?(view, card <> " .workspace-map-standing", "To do")
+      assert has_element?(view, ~s([data-item="#{fork}"] > .workspace-map-card), "Key 7")
+    end
+
+    test "steps from goal to goal on the stage, in the order they were added",
+         %{conn: conn} do
+      [first, second, third] =
+        for title <- ["Revenue", "Hiring", "Research"],
+            do: create(@fleet, "goal", %{"title" => title})
+
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
+      link(@fleet, task, second, "implements")
+      submit(@fleet, task, "https://example.com/brief")
+      map = fn goal -> @board <> "?view=graph&goal=" <> URI.encode_www_form(goal) end
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, "#workspace-stage .workspace-stage-live", "Live")
+      assert has_element?(view, "#workspace-step", "Every goal")
+      assert has_element?(view, "#workspace-step", "3 goals")
+      refute has_element?(view, "#workspace-step-back")
+
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, map.(first))
+      assert has_element?(view, "#workspace-step", "Goal 1 of 3")
+
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, map.(second))
+      assert has_element?(view, "#workspace-step", "Goal 2 of 3")
+      assert has_element?(view, "#workspace-graph-goal", "Hiring")
+      assert has_element?(view, "#workspace-step", "1 task")
+      assert has_element?(view, "#workspace-step", "1 awaiting review")
+
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, map.(third))
+      refute has_element?(view, "#workspace-step-on")
+
+      view |> element("#workspace-step-back") |> render_click()
+      assert_patch(view, map.(second))
+    end
+
+    test "has small panels under the stage: workstream, Active Keys, Docs and Code",
+         %{conn: conn} do
+      doing =
+        create(@fleet, "task", %{"title" => "Draft", "progress" => "doing", "assignee_key" => 4})
+
+      waiting = create(@fleet, "task", %{"title" => "Price", "assignee_key" => 4})
+      submit(@fleet, waiting, "https://example.com/price", by: 4)
+      create(@fleet, "task", %{"title" => "Nobody's yet"})
+      assert doing
+
+      take_over_general()
+      holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+
+      {:ok, _pin} =
+        Graph.pin(
+          %{
+            fleet_id: @fleet,
+            project: "general",
+            place: :code,
+            target: "README.md",
+            title: "README.md"
+          },
+          actor: holder
+        )
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+
+      assert has_element?(view, "#workspace-instrument-work li", "submitted “Price” for review")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-instrument-keys [data-key="4"] [aria-label="1 in progress, 1 awaiting review, 0 done"])
+             )
+
+      assert view
+             |> element("#workspace-instrument-keys")
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("li")
+             |> Enum.count() == 1
+
+      assert has_element?(view, "#workspace-instrument-code li", "README.md")
+      assert has_element?(view, "#workspace-instruments p", "Nothing pinned yet.")
+    end
+
+    test "the foot of the stage keeps its place before the first change", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, "#workspace-stage #workspace-ticker")
+      refute has_element?(view, "#workspace-ticker li")
+    end
+
+    test "the foot of the stage shows the newest change, and the next one once it comes",
+         %{conn: conn} do
+      create(@fleet, "task", %{"title" => "Draft"})
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      board = watch_reads(view)
+
+      assert has_element?(view, "#workspace-ticker li", "Key 17 added the task “Draft”.")
+
+      assert view
+             |> element("#workspace-ticker")
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("li")
+             |> Enum.count() == 1
+
+      create(@fleet, "note", %{"title" => "Call notes", "body" => "b"})
+
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        Graph.head_topic(@fleet),
+        {:graph_head, @fleet, "log_fixture", 3}
+      )
+
+      assert_receive {:workspace_read, ^board}, 2_000
+      assert has_element?(view, "#workspace-ticker li", "Key 17 added the note “Call notes”.")
+      refute has_element?(view, "#workspace-ticker li", "Draft")
+    end
+
+    test "an archived goal's page still hangs its work from it", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Old plan"})
+      task = create(@fleet, "task", %{"title" => "Draft"})
+      link(@fleet, task, goal, "implements")
+      archive(@fleet, goal)
+
+      {:ok, view, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, goal))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-map-items > li[data-item="#{task}"][data-via="implements"])
+             )
+    end
+
+    test "a step to a goal shows its whole map, whatever kind was picked", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph&type=task")
+      view |> element("#workspace-step-on") |> render_click()
+      assert_patch(view, @board <> "?view=graph&goal=" <> URI.encode_www_form(goal))
+      assert has_element?(view, "#workspace-graph-goal", "Revenue")
+    end
+
+    test "is linked from the goal's page", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+
+      {:ok, view, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, goal))
+      view |> element("#workspace-goal-graph") |> render_click()
+
+      assert_patch(
+        view,
+        @board <> "?view=graph&project=general&goal=" <> URI.encode_www_form(goal)
+      )
+    end
+
+    test "an id that names no goal draws nothing, and the Board has no goal's map",
+         %{conn: conn} do
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph&goal=goal%23999")
+      assert has_element?(view, "#workspace-graph-empty")
+      refute has_element?(view, "[data-node], [data-row]")
+
+      for path <- [
+            @board <> "?view=graph&goal=" <> URI.encode_www_form(task),
+            @board <> "?goal=goal%231"
+          ] do
+        assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, path) end
+      end
     end
   end
 
@@ -1353,7 +2379,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       :ok
     end
 
-    # A background run's saved result, the address `read_notebook_result`
+    # A background run's saved result, the address `notebooks_result`
     # answers, showed as a plain link (Grok Bot, 18 October 2026).
     test "a background run's saved result is shown as a saved notebook result, as a version's is",
          %{conn: conn} do
@@ -1409,19 +2435,123 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         actor: Keyfleet.PairingHelpers.pair_wallet!(agent)
       )
 
-      hash = String.duplicate("5", 40)
+      hash = CodeHistory.hash(1)
+      store!(%{"README.md" => "Hello"}, [CodeHistory.commit(1)])
 
       Keyfleet.Code.record_pushes(
         @fleet,
+        "general",
         %{token_id: 1, wallet: @holder, acting_agent_wallet: agent},
         [%{ref: "refs/heads/main", head: hash}]
       )
 
-      {:ok, board, _html} = live(conn, @board)
+      {:ok, board, _html} = live(conn, @board <> "?place=code&project=general")
       assert has_element?(board, "#code-pushes", "Mate (Key 1) sent changes to main")
 
-      {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, hash))
-      assert has_element?(commit, "#workspace-commit-pushes", "Mate (Key 1) sent changes to main")
+      [job] = all_enqueued(worker: Keyfleet.Code.Sent)
+      assert :ok = perform_job(Keyfleet.Code.Sent, job.args)
+
+      {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, @repository, hash))
+      assert has_element?(commit, "#workspace-commit-byline", "Mate (Key 1)")
+      assert has_element?(commit, "#workspace-commit-byline", "sent changes to main")
+    end
+
+    test "the History reads thirty commits a page, each with what cites it, and a commit shows its changes",
+         %{conn: conn} do
+      commits = Enum.map(32..1//-1, &CodeHistory.commit/1)
+      store!(%{"steps/3.txt" => "step 3"}, commits)
+      newest = CodeHistory.hash(32)
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Take step 3",
+          "progress" => "doing",
+          "commit_ref" =>
+            KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, CodeHistory.hash(3))
+        })
+
+      {:ok, history, _html} = live(conn, Keyfleet.Code.history_path(@fleet, @repository))
+      assert length(rows(history)) == 30
+      assert has_element?(history, "#code-history-#{newest}", "Step 32")
+      refute has_element?(history, "#workspace-history-newer")
+
+      older = Keyfleet.Code.history_path(@fleet, @repository, newest, 2)
+      assert has_element?(history, ~s(#workspace-history-older[href="#{older}"]))
+
+      {:ok, history, _html} = live(conn, older)
+      assert length(rows(history)) == 2
+      assert has_element?(history, "#code-history-#{CodeHistory.hash(1)}", "Step 1")
+      assert has_element?(history, "#workspace-history-newer")
+      assert has_element?(history, "#workspace-history-latest")
+
+      # Step 3 is on the first page, cited by its task.
+      {:ok, history, _html} = live(conn, Keyfleet.Code.history_path(@fleet, @repository))
+
+      assert has_element?(
+               history,
+               ~s(#code-history-#{CodeHistory.hash(3)} a[href="#{item_path(task)}"]),
+               "Take step 3"
+             )
+
+      {:ok, commit, _html} =
+        live(conn, Keyfleet.Code.commit_path(@fleet, @repository, CodeHistory.hash(3)))
+
+      assert has_element?(commit, "#workspace-commit-subject", "Step 3")
+      assert has_element?(commit, "#workspace-commit-message", "Why step 3 was taken.")
+      assert has_element?(commit, "#workspace-commit-changes", "steps/3.txt")
+      assert has_element?(commit, "#workspace-commit-changes", "step 3")
+
+      assert has_element?(
+               commit,
+               "#workspace-commit-parents",
+               String.slice(CodeHistory.hash(2), 0, 12)
+             )
+    end
+
+    # Page 300 of a long history offered Older, which led to a page that
+    # doesn't exist.
+    test "the last History page a reader can open offers no Older page, and says where the rest is",
+         %{conn: conn} do
+      commits = Enum.map(9_001..1//-1, &CodeHistory.commit/1)
+      store!(%{}, commits)
+      newest = CodeHistory.hash(9_001)
+
+      {:ok, before_last, _html} =
+        live(conn, Keyfleet.Code.history_path(@fleet, @repository, newest, 299))
+
+      last = Keyfleet.Code.history_path(@fleet, @repository, newest, 300)
+      assert has_element?(before_last, ~s(#workspace-history-older[href="#{last}"]))
+      refute has_element?(before_last, "#workspace-history-end")
+
+      {:ok, history, _html} = live(conn, last)
+      assert length(rows(history)) == 30
+      assert has_element?(history, "#code-history-#{CodeHistory.hash(2)}")
+      refute has_element?(history, "#workspace-history-older")
+      assert has_element?(history, "#workspace-history-end")
+      assert has_element?(history, "#workspace-history-newer")
+    end
+
+    test "a commit written with no message still has words to open it by", %{conn: conn} do
+      commit = %{CodeHistory.commit(1) | "message" => "\n"}
+      store!(%{}, [commit])
+
+      {:ok, history, _html} = live(conn, Keyfleet.Code.history_path(@fleet, @repository))
+      link = text(history, "#code-history-#{commit["hash"]} .code-history-subject")
+      assert String.trim(link) != ""
+
+      {:ok, page, _html} =
+        live(conn, Keyfleet.Code.commit_path(@fleet, @repository, commit["hash"]))
+
+      assert String.trim(text(page, "#workspace-commit-subject")) != ""
+    end
+
+    test "a commit the repository doesn't have says so", %{conn: conn} do
+      store!(%{}, [CodeHistory.commit(1)])
+
+      {:ok, commit, _html} =
+        live(conn, Keyfleet.Code.commit_path(@fleet, @repository, CodeHistory.hash(2)))
+
+      assert has_element?(commit, "#workspace-commit-not-sent")
     end
 
     # A visitor who followed a commit link an agent posted saw no sign of
@@ -1429,7 +2559,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "a commit page someone can't read still names the commit, and offers Sign in to a visitor",
          %{visitor: visitor} do
       hash = String.duplicate("5", 40)
-      path = Keyfleet.Code.commit_path(@fleet, hash)
+      path = Keyfleet.Code.commit_path(@fleet, @repository, hash)
 
       {:ok, signed_out, _html} = live(visitor, path)
       assert has_element?(signed_out, "#workspace-commit-page code", hash)
@@ -1474,74 +2604,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
-  test "a visitor who holds none of the fleet's Keys reads each goal and task by title, standing and public summary alone",
-       %{visitor: visitor} do
-    open_log(@fleet)
-
-    goal =
-      create(@fleet, "goal", %{
-        "title" => "Revenue",
-        "outcome" => "One paying customer.",
-        "status" => "open",
-        "public_summary" => "Finding a first customer."
-      })
-
-    task =
-      create(@fleet, "task", %{
-        "title" => "Draft the brief",
-        "progress" => "doing",
-        "next_step" => "Call the fund on Tuesday.",
-        "public_summary" => "Writing the first brief."
-      })
-
-    create(@fleet, "note", %{"title" => "Standup", "body" => "Ship it."})
-
-    for conn <- [visitor, signed_in_as(visitor, "0x" <> String.duplicate("e", 40))],
-        path <- [@board, item_path(task)] do
-      {:ok, view, html} = live(conn, path)
-
-      assert has_element?(
-               view,
-               "#workspace-members-only",
-               "A public outline of this fleet’s work."
-             )
-
-      assert has_element?(
-               view,
-               ~s(#workspace-members-only + a[href="#{Keyfleet.Fleets.path(@fleet)}?view=members"])
-             )
-
-      assert has_element?(view, ~s(#workspace-public-goals [data-item="#{goal}"]), "Revenue")
-      assert has_element?(view, ~s(#workspace-public-goals [data-item="#{goal}"]), "Open")
-
-      assert has_element?(
-               view,
-               ~s(#workspace-public-goals [data-item="#{goal}"]),
-               "Finding a first customer."
-             )
-
-      assert has_element?(
-               view,
-               ~s(#workspace-public-tasks [data-item="#{task}"]),
-               "Draft the brief"
-             )
-
-      assert has_element?(view, ~s(#workspace-public-tasks [data-item="#{task}"]), "In progress")
-
-      assert has_element?(
-               view,
-               ~s(#workspace-public-tasks [data-item="#{task}"]),
-               "Writing the first brief."
-             )
-
-      refute html =~ "One paying customer."
-      refute html =~ "Call the fund on Tuesday."
-      refute html =~ "Standup"
-      refute html =~ "Ship it."
-      refute html =~ @notice
-    end
-  end
-
   test "the fleet's page leads to its workspace", %{conn: conn} do
     {:ok, view, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}")
 
@@ -1552,19 +2614,35 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   # The fleet's repository, holding `files` by their paths, answered as the
   # code store answers: a folder's names, or one file's bytes.
-  defp store!(files) do
-    Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+  defp store!(files, commits \\ []) do
+    Keyfleet.Code.record_repository!(@repository, "z6MkOwner", actor: %Actors.System{})
+    serve_code(files, commits)
+  end
+
+  # The commits a History page lists.
+  defp rows(history),
+    do:
+      history
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#code-history > li")
+      |> Enum.to_list()
+
+  # The code store, holding `files` and the history `commits` (newest
+  # first) from now on.
+  defp serve_code(files, commits \\ []) do
     test = self()
 
     Req.Test.stub(Keyfleet.Code.NodeClient, fn conn ->
       send(test, {:store, conn.request_path, Plug.Conn.get_req_header(conn, "authorization")})
 
-      ["", "api", "v1", "repos", "z6MkOwner", @fleet, read | path] =
+      ["", "api", "v1", "repos", "z6MkOwner", @fleet, read | segments] =
         String.split(conn.request_path, "/")
 
-      path = Enum.map_join(path, "/", &URI.decode/1)
+      path = Enum.map_join(segments, "/", &URI.decode/1)
 
       case read do
+        "commits" -> CodeHistory.answer(conn, commits, segments)
         "tree" -> Req.Test.json(conn, %{"entries" => entries(files, path), "path" => path})
         "blob" when is_map_key(files, path) -> Plug.Conn.send_resp(conn, 200, files[path])
         "blob" -> Plug.Conn.send_resp(conn, 404, "")
@@ -1572,6 +2650,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end)
   end
 
+  # Each entry as the store answers it: its `git ls-tree -l` line.
   defp entries(files, folder) do
     prefix = if folder == "", do: "", else: folder <> "/"
 
@@ -1579,8 +2658,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     |> Enum.filter(fn {path, _bytes} -> String.starts_with?(path, prefix) end)
     |> Enum.map(fn {path, bytes} ->
       case path |> String.replace_prefix(prefix, "") |> String.split("/", parts: 2) do
-        [name] -> %{"kind" => "blob", "path" => name, "size" => byte_size(bytes)}
-        [name, _rest] -> %{"kind" => "tree", "path" => name, "size" => nil}
+        [name] ->
+          %{
+            "mode" => "100644",
+            "type" => "blob",
+            "hash" => "b10b",
+            "name" => name,
+            "size" => byte_size(bytes)
+          }
+
+        [name, _rest] ->
+          %{"mode" => "040000", "type" => "tree", "hash" => "7ee", "name" => name, "size" => nil}
       end
     end)
     |> Enum.uniq()
@@ -1588,30 +2676,82 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   # The fleet's notebook hub, answering a listing of the project's notebooks
   # with what `answer` makes of its query, or nothing at all when `:down`.
+  # Tasks of the goal, each citing one of the notebooks, the last made first.
+  defp cite!(goal, project, notebooks) do
+    for notebook <- notebooks do
+      task =
+        create(@fleet, "task", %{
+          "title" => "Uses " <> notebook,
+          "progress" => "doing",
+          "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook)
+        })
+
+      link(@fleet, task, goal, "implements")
+    end
+  end
+
+  defp meta(id, title, status) do
+    %{
+      "id" => id,
+      "title" => title,
+      "description" => "",
+      "status" => status,
+      "created_at" => "2025-01-02T09:00:00Z",
+      "tags" => []
+    }
+  end
+
+  defp collect_asked(asked \\ []) do
+    receive do
+      {:asked, id} -> collect_asked([id | asked])
+    after
+      0 -> asked
+    end
+  end
+
   defp hub!(project_id, answer) do
     hub =
       KeyfleetWeb.SignedAgentHelpers.serve!(:hub, fn conn, _opts ->
-        conn = Plug.Conn.fetch_query_params(conn)
-
-        case answer do
-          :down ->
-            Plug.Conn.send_resp(conn, 503, "")
-
-          answer ->
-            "/api/v1/projects/" <> ^project_id <> "/notebooks" = conn.request_path
-
-            Req.Test.json(conn, %{
-              "success" => true,
-              "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
-            })
-        end
+        conn |> Plug.Conn.fetch_query_params() |> hub_answer(project_id, answer)
       end)
 
     notebooks = Application.fetch_env!(:keyfleet, :notebooks)
     on_exit(fn -> Application.put_env(:keyfleet, :notebooks, notebooks) end)
     Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :fleets, %{@fleet => hub}))
-    Keyfleet.Notebooks.record_hub!(@fleet, project_id, actor: %Actors.System{})
+
+    @fleet
+    |> Keyfleet.Projects.project!(Keyfleet.Projects.general(), actor: %Actors.System{})
+    |> Keyfleet.Projects.record_space!(project_id, actor: %Actors.System{})
   end
+
+  defp hub_answer(conn, _project_id, :down), do: Plug.Conn.send_resp(conn, 503, "")
+
+  defp hub_answer(conn, project_id, answer) do
+    case conn.request_path do
+      "/api/v1/projects/" <> ^project_id <> "/notebooks" ->
+        Req.Test.json(conn, %{
+          "success" => true,
+          "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
+        })
+
+      # One notebook, asked for by its id.
+      "/api/v1/projects/" <> ^project_id <> "/notebooks/" <> id ->
+        notebook_answer(conn, answer.({:notebook, id}))
+    end
+  end
+
+  defp notebook_answer(conn, nil),
+    do: conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"success" => false})
+
+  defp notebook_answer(conn, :down), do: Plug.Conn.send_resp(conn, 503, "")
+
+  defp notebook_answer(conn, {:slow, meta}) do
+    Process.sleep(500)
+    Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
+  end
+
+  defp notebook_answer(conn, meta),
+    do: Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
 
   defp claims(pass) do
     [_header, payload, _signature] = String.split(pass, ".")
@@ -1632,6 +2772,33 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       )
 
     init_test_session(conn, %{human_account_id: account.id})
+  end
+
+  # The fleet's project `lab`, or nil once it is deleted.
+  defp lab, do: Keyfleet.Projects.project!(@fleet, "lab", actor: %Actors.System{})
+
+  # Records `wallet` as the owner of the fleet's Key `token_id`.
+  # Key 1 takes over the fleet's archived `general`, so it takes new work.
+  defp take_over_general do
+    Keyfleet.Projects.take_over_project!(@fleet, 1, Keyfleet.Projects.general(),
+      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+    )
+  end
+
+  defp hold!(token_id, wallet) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        ownership_epoch: 1,
+        owner_wallet: wallet,
+        block_number: 10,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("a", 64),
+        log_index: token_id - 1
+      },
+      actor: %Actors.System{}
+    )
   end
 
   defp id_number(id), do: id |> String.split("#") |> List.last()
@@ -1681,7 +2848,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#workspace-goal-items > li")
+    |> LazyHTML.query("#workspace-goal-map-items li")
     |> LazyHTML.attribute("data-item")
   end
 

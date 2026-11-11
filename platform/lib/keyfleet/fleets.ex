@@ -13,13 +13,12 @@ defmodule Keyfleet.Fleets do
   # `path` is where the fleet's pages are on the site: its type and its number
   # within that type, so the next Classic is `/classic/2`. The Regents Club's
   # are where they have been since it opened. `sidebar` is how the fleet shows
-  # in the site's sidebar: `:link` to its page, `:name` as its name alone, or
-  # `nil`, left out.
+  # in the site's sidebar: `:link` to its page, or `nil`, left out.
   @catalog [
     %{
       id: "fleet_tech_classic",
       path: "/classic/1",
-      sidebar: :name,
+      sidebar: :link,
       name: "Classic #1",
       card: "CLASSIC",
       type_number: 1,
@@ -55,7 +54,7 @@ defmodule Keyfleet.Fleets do
     %{
       id: "regents_club",
       path: "/app/fleets/regents_club",
-      sidebar: :link,
+      sidebar: nil,
       name: "Regents Club",
       card: "REGENTS CLUB",
       type_number: 1,
@@ -82,6 +81,13 @@ defmodule Keyfleet.Fleets do
 
   @doc "Where the fleet's pages are on the site, such as `/classic/1`."
   def path(fleet_id), do: Enum.find(@catalog, &(&1.id == fleet_id)).path
+
+  @doc "The fleet's name, such as `Classic #1`."
+  def name(fleet_id), do: Enum.find(@catalog, &(&1.id == fleet_id)).name
+
+  @doc "The fleet whose pages hold the site path `path` (its own page or one under it), or nil."
+  def at_path(path),
+    do: Enum.find(@catalog, &(path == &1.path or String.starts_with?(path, &1.path <> "/")))
 
   @doc """
   A Key's name, on its card and in its metadata: the fleet's type, the
@@ -125,8 +131,10 @@ defmodule Keyfleet.Fleets do
   Seeds the fixed catalog from trusted application setup code.
 
   Reruns preserve machine identities and restore canonical display names. The
-  whole catalog commits together. This internal entry point must never be exposed
-  as a user action.
+  whole catalog commits together. Every fleet then has its first project,
+  `general` (`Keyfleet.Projects.bootstrap_general!/1`), and the two projects
+  it shares (`Keyfleet.Projects.bootstrap_shared!/1`). This internal entry
+  point must never be exposed as a user action.
   """
   def bootstrap_catalog! do
     %Ash.BulkResult{records: fleets} =
@@ -141,6 +149,8 @@ defmodule Keyfleet.Fleets do
         sorted?: true
       )
 
+    :ok = Keyfleet.Projects.bootstrap_general!(Enum.map(fleets, & &1.id))
+    :ok = Keyfleet.Projects.bootstrap_shared!(fleets)
     fleets
   end
 

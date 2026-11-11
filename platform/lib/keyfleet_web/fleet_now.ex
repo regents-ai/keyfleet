@@ -9,19 +9,22 @@ defmodule KeyfleetWeb.FleetNow do
     * `deployed?`, `current?` and `minted`: how far it has sold, as far as its
       Key history has been read (`Keyfleet.Chain.minted/2`, `fresh?/1`);
     * `feed`: the first page of its activity with no actor
-      (`Keyfleet.Activity.page/3`), its items and the cursor for the page
-      after them;
-    * `trying`: "Trying now", its open goals and the work on them
-      (`KeyfleetWeb.FleetPage.read_trying_now/1`);
+      (`Keyfleet.Activity.page/3`), its items, the cursor for the page after
+      them and `receivers`, the wallet each transfer among them went to
+      (`Keyfleet.Activity.receivers/2`), for the hall's lines; and `faces`:
+      who holds each Key that acted in them, the Key they write as and how
+      many Keys they hold (`Keyfleet.Keys.faces/2`), for the city's discs;
+    * `recent_work`: "Recent Work", each of its projects by title with the titles
+      of its open goals (`KeyfleetWeb.FleetPage.read_recent_work/1`);
     * `goal`: the title of its most recently changed open goal, and
       `headline`: the item it features (`Keyfleet.Activity.headline/2`), which
       the homepage shows.
 
   Pages showing a fleet to a reader who isn't a member draw it from here: the
-  homepage, the fleet hall and the harbour's sea; the header's "Get a Key"
+  homepage, the fleet hall and the harbour's sea; the header's "Buy Key"
   reads from it whether its fleet is open. A member's reading differs
-  (rooms other than General, every item's title), so a member's page still
-  reads under its own scope.
+  (rooms other than the Public room, the workspace's changes), so a member's
+  page still reads under its own scope.
 
   This is a reread on notice, the second of the two shapes the `elixir-stack`
   skill lets keep a shared reading. It hears what an open page of a fleet hears
@@ -46,11 +49,8 @@ defmodule KeyfleetWeb.FleetNow do
   use GenServer
 
   alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms, SharedReading}
-  alias KeyfleetWeb.{FleetPage, PageRead}
+  alias KeyfleetWeb.{FleetPage, HarbourCrew, PageRead}
   alias Phoenix.Socket.Broadcast
-
-  # The longest the first read of every fleet may take as the site starts.
-  @first_read 5_000
 
   @doc "Where the reading of `fleet_id` is held."
   def key(fleet_id), do: {:fleet_now, fleet_id}
@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.FleetNow do
     fleet_ids
     |> Task.async_stream(&__MODULE__.read/1,
       max_concurrency: length(fleet_ids),
-      timeout: @first_read,
+      timeout: Application.fetch_env!(:keyfleet, :first_read_ms),
       on_timeout: :kill_task
     )
     |> Enum.zip(fleet_ids)
@@ -111,6 +111,9 @@ defmodule KeyfleetWeb.FleetNow do
 
   def handle_info({:keys_changed, fleet_id, _token_ids}, state),
     do: {:noreply, due(state, fleet_id)}
+
+  # Presence isn't in the reading.
+  def handle_info({:keys_present, _fleet_id, _token_ids}, state), do: {:noreply, state}
 
   def handle_info({:proposals_changed, fleet_id}, state), do: {:noreply, due(state, fleet_id)}
 
@@ -160,10 +163,12 @@ defmodule KeyfleetWeb.FleetNow do
     %{
       coming_soon?: false,
       deployed?: deployed?,
+      chain_id: if(deployed?, do: recorded.chain_id),
       current?: deployed? and Chain.fresh?(fleet_id),
       minted: if(deployed?, do: minted!(fleet_id), else: 0),
-      feed: %{items: items, cursor: cursor},
-      trying: FleetPage.read_trying_now(fleet_id),
+      feed: %{items: items, cursor: cursor, receivers: Activity.receivers(fleet_id, items)},
+      faces: Keys.faces(fleet_id, HarbourCrew.keys(items)),
+      recent_work: FleetPage.read_recent_work(fleet_id),
       goal: goal(fleet_id),
       headline: Activity.headline(fleet_id, now)
     }
@@ -177,7 +182,7 @@ defmodule KeyfleetWeb.FleetNow do
   end
 
   defp goal(fleet_id) do
-    case Graph.open_work!(fleet_id, :goals_open, query: [limit: 1]) do
+    case Graph.open_goals!(fleet_id, query: [limit: 1]) do
       [goal] -> goal.title
       [] -> nil
     end

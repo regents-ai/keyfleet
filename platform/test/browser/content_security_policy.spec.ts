@@ -81,7 +81,7 @@ test("opening sign-in starts Privy with nothing refused", async ({page}) => {
 test("reading pages load with nothing refused", async ({page}) => {
   const refusals = await watchRefusals(page)
 
-  for (const path of ["/docs", "/contact"]) {
+  for (const path of ["/docs", "/privacy"]) {
     await page.goto(path)
     await page.waitForLoadState("networkidle")
     expect(refusals, path).toEqual([])

@@ -74,7 +74,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
         </p>
 
         <section class="key-map-reference__notes">
-          <h2>What the marks mean</h2>
+          <h2>Legend</h2>
           <ul>
             <li>An orange rim is a Key you hold.</li>
             <li>A blue dot is a Key with an agent.</li>

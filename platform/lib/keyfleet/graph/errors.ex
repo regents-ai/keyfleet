@@ -5,6 +5,13 @@ defmodule Keyfleet.Graph.Errors.UnknownFleetError do
   def message(%{fleet_id: fleet_id}), do: "there is no fleet #{fleet_id}"
 end
 
+defmodule Keyfleet.Graph.Errors.ComingSoonFleetError do
+  @moduledoc "Raised when a request names a fleet of the catalog that hasn't opened yet."
+  use Splode.Error, fields: [:fleet_id], class: :invalid
+
+  def message(%{fleet_id: fleet_id}), do: "fleet #{fleet_id} hasn't opened yet"
+end
+
 defmodule Keyfleet.Graph.Errors.NotKeyHolderError do
   @moduledoc """
   Raised when the actor neither owns nor holds a shard of the key it acts as,
@@ -66,4 +73,28 @@ defmodule Keyfleet.Graph.Errors.IndeterminateError do
   def message(%{fleet_id: fleet_id}),
     do:
       "the workspace of #{fleet_id} did not confirm the change in time; it may have been applied"
+end
+
+defmodule Keyfleet.Graph.Errors.WriteLimitError do
+  @moduledoc """
+  Returned when the acting wallet has used its allowance of workspace writes
+  in the fleet for now (`Keyfleet.Graph.Validations.WriteAllowance`).
+  `retry_after` is the seconds until it starts again. Nothing was written.
+  """
+  use Splode.Error, fields: [:fleet_id, :retry_after], class: :forbidden
+
+  def message(%{fleet_id: fleet_id, retry_after: seconds}),
+    do:
+      "this wallet has used its workspace writes in #{fleet_id} for now; try again in #{seconds} seconds"
+end
+
+defmodule Keyfleet.Graph.Errors.MembersOnlyError do
+  @moduledoc """
+  Returned when a reader of a fleet's workspace is none of its members today
+  (`Keyfleet.Graph.Checks.KeyReader`), while the fleet's key ownership is
+  fresh enough to say so.
+  """
+  use Splode.Error, fields: [:fleet_id], class: :forbidden
+
+  def message(%{fleet_id: fleet_id}), do: "only the members of #{fleet_id} read its workspace"
 end

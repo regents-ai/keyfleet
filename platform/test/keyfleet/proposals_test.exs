@@ -75,9 +75,10 @@ defmodule Keyfleet.ProposalsTest do
 
       assert %{yes_keys: 1, no_keys: 2, abstain_keys: 1} = Proposals.get_by_number(@fleet, 1)
 
-      ProposalHelpers.vote!(@fleet, 1, @owner, :yes, [2, 3])
+      ProposalHelpers.vote!(@fleet, 1, @owner, :yes, [3, 2])
       voted = Proposals.get_by_number(@fleet, 1)
       assert {voted.yes_keys, voted.no_keys, voted.abstain_keys} == {3, 0, 1}
+      assert Proposals.key_ballots(voted) == %{yes: [1, 2, 3], no: [], abstain: [4], silent: []}
     end
 
     # `KeyfleetVotes.wasActiveAtOpening`: a key voting counts toward the bar
@@ -89,7 +90,8 @@ defmodule Keyfleet.ProposalsTest do
       ProposalHelpers.presence!(@fleet, 2, DateTime.add(opened, -172_800))
       ProposalHelpers.presence!(@fleet, 3, DateTime.add(opened, -3_600))
       ProposalHelpers.presence!(@fleet, 3, nil)
-      ProposalHelpers.proposal!(@fleet, 1, opened_at: opened, opening_count: 1)
+      ProposalHelpers.presence!(@fleet, 6, DateTime.add(opened, -7_200))
+      ProposalHelpers.proposal!(@fleet, 1, opened_at: opened, opening_count: 2)
       # Renewed after the opening: still late on this proposal.
       ProposalHelpers.presence!(@fleet, 4, opened)
 
@@ -98,7 +100,12 @@ defmodule Keyfleet.ProposalsTest do
 
       # Key 1 was present; key 2's renewal had run out, key 3 changed hands,
       # key 4 was renewed only after and key 5 never was. Key 5 counts once.
-      assert %{late_keys: 4} = Proposals.get_by_number(@fleet, 1)
+      # Key 6 was present and has not voted.
+      proposal = Proposals.get_by_number(@fleet, 1)
+      assert %{late_keys: 4} = proposal
+
+      assert Proposals.key_ballots(proposal) ==
+               %{yes: [1, 2, 3, 4], no: [5], abstain: [], silent: [6]}
     end
   end
 
@@ -169,7 +176,7 @@ defmodule Keyfleet.ProposalsTest do
         Rooms.sync(
           @fleet,
           [],
-          %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+          %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
           owner,
           false
         )
@@ -181,7 +188,7 @@ defmodule Keyfleet.ProposalsTest do
         Rooms.sync(
           @fleet,
           [],
-          %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+          %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
           owner,
           false
         )
@@ -192,7 +199,7 @@ defmodule Keyfleet.ProposalsTest do
         Rooms.sync(
           @fleet,
           [],
-          %{graph: 0, proposals: 50, keys: [], dms: nil, quotes: nil},
+          %{graph: 0, project: nil, proposals: 50, keys: [], dms: nil, quotes: nil},
           owner,
           false
         )

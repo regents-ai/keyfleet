@@ -2,9 +2,10 @@ defmodule Keyfleet.Code.StoreDownError do
   @moduledoc """
   The code store did not take or answer a git exchange the code gateway passed
   on (`KeyfleetWeb.Plugs.CodeGateway`): it could not be reached, stopped
-  mid-exchange, or answered with a fault of its own. Git told whoever ran it
-  that the code is unavailable, so a clone or push failed. Or making a
-  fleet's repository in it gave up and starts again (`Keyfleet.Code.Setup`).
+  mid-exchange, answered with a fault of its own or refused the site's pass.
+  Git told whoever ran it that the code is unavailable, so a clone or push
+  failed. Or making a fleet's repository in it gave up and starts again
+  (`Keyfleet.Code.Setup`).
 
   `report/1` saves it with the site's errors (`Keyfleet.Alert`), each place
   that reports its own error listing every occurrence with its own message.

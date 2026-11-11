@@ -4,12 +4,14 @@ defmodule Keyfleet.Graph.Event do
 
   Only the events that change the workspace, the attention each write asks
   for and the command record each write leaves are copied; the runtime's own
-  bookkeeping is not. Each keeps
+  bookkeeping is not. Each keeps the projects whose items it touched
+  (`projects`), so a member reads one project's changes, and each keeps
   `byte_size`, the length of the event as a reader receives it, so a page of
   events is cut to size by the database. Only the projector writes here. Only
   the fleet's members read its events (`Keyfleet.Graph.Checks.KeyReader`),
-  except the lines of its latest activity a fleet shows anyone, which carry no
-  text an event holds.
+  except which of its changes are notable, when, as which Key and in which
+  projects, which the workspace pulse shows anyone without any text an event
+  holds.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -29,8 +31,6 @@ defmodule Keyfleet.Graph.Event do
   @history 50
   @brief_fields [:fleet_id, :seq, :type, :actor, :timestamp]
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
-  # How many of the latest notable events a featured change is looked for in.
-  @marks_window 200
 
   # The changes worth telling people who watch a fleet: every new object; a
   # patch that moves a status, progress or who has taken a task, archives an
@@ -42,9 +42,6 @@ defmodule Keyfleet.Graph.Event do
   @notable """
   type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress', 'assignee_key']) OR (payload #> '{diff,sys,new,archived}') = 'true'::jsonb OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service')))\
   """
-
-  # The oldest place in the fleet's latest 200 notable changes.
-  @window_floor "COALESCE((SELECT w.seq FROM keyfleet_app.graph_events AS w WHERE w.fleet_id = ? AND (#{@notable}) ORDER BY w.seq DESC OFFSET ? LIMIT 1), 0)"
 
   postgres do
     table "graph_events"
@@ -70,27 +67,46 @@ defmodule Keyfleet.Graph.Event do
 
       # The fleet's notable changes, newest first, for its activity.
       index(["fleet_id", "seq DESC"], name: "graph_events_notable_index", where: @notable)
+
+      # The record each write left of itself, by its command id.
+      index(["fleet_id", "(payload ->> 'command_id')"],
+        name: "graph_events_command_id_index",
+        where: "type = 'keyfleet.command'",
+        concurrently: true
+      )
     end
   end
 
+  @doc "The most bytes of events one page of changes holds."
+  def page_bytes, do: @page_bytes
+
   actions do
-    # The events after one place in the log, oldest first: at most `limit` of
-    # them, and no more than `@page_bytes` of them unless the first alone is
-    # larger. The cut is found from the recorded sizes inside the query, so
-    # only the page's own rows are loaded.
+    # The events after one place in the log, oldest first, the whole fleet's
+    # or one project's: at most `limit` of them, and no more than `max_bytes`
+    # of them unless the first alone is larger. The cut is found from the
+    # recorded sizes inside the query, so only the page's own rows are loaded.
     read :page do
       argument :fleet_id, :string, allow_nil?: false
       argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 500]
+      argument :project, :string, constraints: @text
+
+      argument :max_bytes, :integer,
+        allow_nil?: false,
+        default: @page_bytes,
+        constraints: [min: 1, max: @page_bytes]
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq) and
+                 (is_nil(^arg(:project)) or fragment("? = ANY(?)", ^arg(:project), projects)) and
                  seq <=
                    fragment(
-                     "(SELECT COALESCE(max(p.seq) FILTER (WHERE p.total <= ?), min(p.seq)) FROM (SELECT e.seq, sum(e.byte_size) OVER (ORDER BY e.seq) AS total FROM keyfleet_app.graph_events AS e WHERE e.fleet_id = ? AND e.seq > ? ORDER BY e.seq LIMIT ?) AS p)",
-                     ^@page_bytes,
+                     "(SELECT COALESCE(max(p.seq) FILTER (WHERE p.total <= ?), min(p.seq)) FROM (SELECT e.seq, sum(e.byte_size) OVER (ORDER BY e.seq) AS total FROM keyfleet_app.graph_events AS e WHERE e.fleet_id = ? AND e.seq > ? AND (?::text IS NULL OR ?::text = ANY(e.projects)) ORDER BY e.seq LIMIT ?) AS p)",
+                     ^arg(:max_bytes),
                      ^arg(:fleet_id),
                      ^arg(:after_seq),
+                     ^arg(:project),
+                     ^arg(:project),
                      ^arg(:limit)
                    )
              )
@@ -103,15 +119,84 @@ defmodule Keyfleet.Graph.Event do
       end
     end
 
-    # The fleet's latest changes, newest first, for its workspace page. The
-    # record each write leaves of itself is left out: the changes it made are
-    # listed on their own. So is a review's link to its task, which the
-    # review's own creation already tells.
+    # Every change to one object after one place in the log, oldest first, at
+    # most `limit` of them: its creation, its edits and archiving, the links
+    # made to or from it, a review's of a task included, and those links'
+    # removals. Each kind is looked up on its own index from `after_seq` on,
+    # as `:history` looks them up back from the newest.
+    read :about_object do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :object_id, :string, allow_nil?: false, constraints: @text
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 501]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   """
+                   ? = ANY(ARRAY(
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'id') = ? AND e.type = 'object.created' AND e.seq > ?
+                      ORDER BY e.seq LIMIT ?)
+                     UNION ALL
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'target') = ? AND e.type IN ('patch.applied', 'relation.created') AND e.seq > ?
+                      ORDER BY e.seq LIMIT ?)
+                     UNION ALL
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'source') = ? AND e.type = 'relation.created' AND e.seq > ?
+                      ORDER BY e.seq LIMIT ?)
+                     UNION ALL
+                     (SELECT d.seq
+                      FROM keyfleet_app.graph_events AS r
+                      CROSS JOIN LATERAL (
+                        SELECT d.seq FROM keyfleet_app.graph_events AS d
+                        WHERE d.fleet_id = r.fleet_id AND (d.payload ->> 'id') = (r.payload ->> 'id') AND d.type = 'relation.removed' AND d.seq > ?
+                        LIMIT 1
+                      ) AS d
+                      WHERE r.fleet_id = ? AND r.type = 'relation.created' AND ((r.payload ->> 'source') = ? OR (r.payload ->> 'target') = ?)
+                      ORDER BY d.seq LIMIT ?)))
+                   """,
+                   seq,
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:after_seq),
+                   ^arg(:limit),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:after_seq),
+                   ^arg(:limit),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:after_seq),
+                   ^arg(:limit),
+                   ^arg(:after_seq),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:object_id),
+                   ^arg(:limit)
+                 )
+             )
+
+      prepare fn query, _context ->
+        query
+        |> Ash.Query.unset([:sort, :limit, :offset])
+        |> Ash.Query.sort(seq: :asc)
+        |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
+      end
+    end
+
+    # The fleet's latest changes, or one project's, newest first, for its
+    # workspace page. The record each write leaves of itself is left out: the
+    # changes it made are listed on their own. So is a review's link to its
+    # task, which the review's own creation already tells.
     read :activity do
       argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and type != "keyfleet.command" and
+                 (is_nil(^arg(:project)) or fragment("? = ANY(?)", ^arg(:project), projects)) and
                  not (type == "relation.created" and
                         fragment("(? #>> '{relation,type}') = 'reviews'", payload))
              )
@@ -132,43 +217,36 @@ defmodule Keyfleet.Graph.Event do
     read :notable_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @bigint]
-      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 60]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
 
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
       prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: [:before_seq]}
-      prepare build(select: @brief_fields, load: [:brief])
+      prepare build(select: [:projects | @brief_fields], load: [:brief])
     end
 
-    # The latest disagreement (`:contradiction`, a `contradicts` link) or the
-    # latest finished work (`:completion`, a goal achieved or a review that
-    # accepts a task)
-    # among the fleet's 200 latest notable changes, or none.
-    read :latest_mark do
+    # The fleet's notable changes after `after_seq`, oldest first, `limit` at
+    # most, each with what a line about it needs and not the text it carries.
+    read :notable_after do
       argument :fleet_id, :string, allow_nil?: false
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
 
-      argument :mark, :atom,
-        allow_nil?: false,
-        constraints: [one_of: [:contradiction, :completion]]
+      filter expr(fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq))
 
-      filter expr(fleet_id == ^arg(:fleet_id))
+      prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
 
       prepare fn query, _context ->
-        fleet_id = Ash.Query.get_argument(query, :fleet_id)
-
-        query
-        |> Ash.Query.filter(^sql(@notable))
-        |> Ash.Query.filter(seq >= ^sql(@window_floor, [fleet_id, @marks_window - 1]))
-        |> mark(Ash.Query.get_argument(query, :mark))
-        |> Ash.Query.unset([:sort, :limit, :offset])
-        |> Ash.Query.sort(seq: :desc)
-        |> Ash.Query.limit(1)
-        |> Ash.Query.select(@brief_fields)
-        |> Ash.Query.load(:brief)
+        Ash.Query.before_action(query, fn query ->
+          query
+          |> Ash.Query.unset([:sort, :limit, :offset])
+          |> Ash.Query.sort(seq: :asc)
+          |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
+        end)
       end
 
-      get? true
+      prepare build(select: [:projects | @brief_fields], load: [:brief])
     end
 
     # Every change to one object up to `through_seq`, newest first, one more
@@ -245,11 +323,50 @@ defmodule Keyfleet.Graph.Event do
               )
     end
 
+    # The record a write left of itself under one command id, from every Key
+    # it was sent as: the caller keeps those of its own wallet
+    # (`KeyfleetWeb.AgentReceiptController`). The type is written out so
+    # `graph_events_command_id_index` serves every plan of it.
+    read :command do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and fragment("? = 'keyfleet.command'", type) and
+                 fragment("(? ->> 'command_id') = ?", payload, ^arg(:command_id))
+             )
+
+      prepare build(sort: [seq: :asc], limit: 20)
+    end
+
+    # The events a page's command records name that an earlier page copied.
+    read :with_event_ids do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :event_ids, {:array, :string}, allow_nil?: false, constraints: [items: @text]
+      filter expr(fleet_id == ^arg(:fleet_id) and event_id in ^arg(:event_ids))
+    end
+
+    # Every change that touched one project, for its deletion.
+    read :of_project do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and fragment("? = ANY(?)", ^arg(:project), projects)
+             )
+    end
+
+    destroy :forget do
+      public? false
+    end
+
     create :record do
       public? false
-      accept [:fleet_id, :seq, :event_id, :type, :actor, :timestamp, :payload]
+      accept [:fleet_id, :seq, :event_id, :type, :actor, :timestamp, :payload, :projects]
       upsert? true
-      upsert_fields [:event_id, :type, :actor, :timestamp, :payload, :byte_size]
+      upsert_fields [:event_id, :type, :actor, :timestamp, :payload, :projects, :byte_size]
 
       change fn changeset, _context ->
         encoded = changeset.attributes |> view() |> Jason.encode_to_iodata!()
@@ -259,16 +376,17 @@ defmodule Keyfleet.Graph.Event do
   end
 
   policies do
-    # The latest activity a fleet shows anyone.
-    policy action([:notable_before, :latest_mark]) do
+    # Which changes are notable, and when, without their words: the
+    # workspace pulse shows anyone that much.
+    policy action([:notable_before, :notable_after]) do
       authorize_if always()
     end
 
-    policy action([:page, :activity, :history]) do
+    policy action([:page, :about_object, :activity, :history, :command]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action(:record) do
+    policy action([:record, :with_event_ids, :of_project, :forget]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -287,6 +405,11 @@ defmodule Keyfleet.Graph.Event do
     attribute :actor, :string, allow_nil?: false, public?: true, constraints: @text
     attribute :timestamp, :string, allow_nil?: false, public?: true, constraints: @text
     attribute :payload, :map, allow_nil?: false, public?: true
+
+    # The projects whose items the change touched: an item's creation or
+    # change, its project; a link, both ends'; a write's own record, every
+    # project its changes touched.
+    attribute :projects, {:array, :string}, allow_nil?: false, default: [], public?: true
     attribute :byte_size, :integer, allow_nil?: false, constraints: [min: 1]
   end
 
@@ -382,35 +505,9 @@ defmodule Keyfleet.Graph.Event do
   # A fragment of SQL kept in one module attribute, so the same words can
   # make an index and the reads that use it; the expression macro takes only
   # literal SQL.
-  defp sql(sql, args \\ []) do
-    {:ok, fragment} = Ash.Query.Function.Fragment.new([sql | args])
+  defp sql(sql) do
+    {:ok, fragment} = Ash.Query.Function.Fragment.new([sql])
     fragment
-  end
-
-  defp mark(query, :contradiction) do
-    Ash.Query.filter(
-      query,
-      type == "relation.created" and
-        fragment("(? #>> '{relation,type}') = 'contradicts'", payload)
-    )
-  end
-
-  defp mark(query, :completion) do
-    Ash.Query.filter(
-      query,
-      (type == "patch.applied" and
-         fragment(
-           "split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved'",
-           payload,
-           payload
-         )) or
-        (type == "object.created" and
-           fragment(
-             "(? #>> '{object,type}') = 'review' AND (? #>> '{object,data,decision}') = 'accept'",
-             payload,
-             payload
-           ))
-    )
   end
 
   @doc """

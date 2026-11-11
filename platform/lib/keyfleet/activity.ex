@@ -2,7 +2,9 @@ defmodule Keyfleet.Activity do
   @moduledoc """
   What has been happening in a fleet, newest first, read from the records the
   fleet already keeps: its rooms, its workspace, its keys, their shards and
-  its proposals. Nothing is stored for it; every page is read fresh.
+  its proposals. Nothing is stored for it; every page is read fresh. The
+  workspace's changes are told only to those who read the workspace
+  (`Keyfleet.Access`); anyone else reads the rest.
 
   `page/3` answers a page of items and the cursor to read the next one with;
   `headline/2` answers the one item a fleet's card features, as anyone reads
@@ -18,21 +20,20 @@ defmodule Keyfleet.Activity do
       did the thing, for posts and workspace changes. `nil` means a person,
       and always for a key a task was given to.
     * an item of the workspace: `%{id: "task#4", type: "task", title: title | nil}`,
-      `title` nil when the item is no longer there, or when it is not a goal
-      and the reader is not one of the fleet's members
-      (`Keyfleet.Graph.Checks.KeyReader`): anyone else reads goals by title
-      and every other item by its type alone. A finding with its title also
-      carries `confidence`.
+      `title` nil when the item is no longer there. A finding with its title
+      also carries `confidence`.
     * a room: `%{slug: slug, name: name, topic: topic | nil}`.
 
   The kinds and their facts:
 
-    * `:post`: `room`, `by` (the key it was written as), `excerpt` (the
-      first 160 characters).
+    * `:post`: `room`, `by` (the key it was written as, with its writer's
+      `wallet`; `token_id` is nil for a post written as no key, in the People
+      and agents room), `excerpt` (its start, up to 160 characters ending on
+      a whole word with "…").
     * `:posts`: consecutive posts in one room, at most an hour apart, six
       hours from first to last and fifty in all: `room`, `count`, `keys` (up to
-      three different keys, newest first), `others` (how many more keys
-      wrote), `excerpt` (of the newest).
+      three different writers, each as `by` is, newest first), `others` (how
+      many more wrote), `excerpt` (of the newest).
     * `:room_named`: `room`, `by`, `topic` (what the room was named).
     * Workspace changes carry `by` (a key, or nil when the workspace itself
       made the change) and `item`:
@@ -52,7 +53,16 @@ defmodule Keyfleet.Activity do
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
-    * `:sale`: `token_ids`, the keys bought one after another, lowest first.
+    * `:tasks`: a run of tasks one key added, took on, or gave to other
+      keys, by the same rules as `:posts`: `by`, `added` (how many it added),
+      `taken` (how many it took on), `given` (how many it gave), `to` (up to
+      three of the keys given tasks, lowest first) and `others` (how many
+      more keys were given tasks).
+    * `:changes`: a run of one change (`change`: `:archived`, `:submitted`
+      or `:revised`) one key made to items of one type, by the same rules as
+      `:posts`: `by`, `change`, `type` and `count`.
+    * `:sale`: `token_ids`, the keys bought, lowest first: consecutive
+      purchases are one item, by the same rules as `:posts`.
     * `:given`: the same, for a fleet whose Keys are given rather than sold
       (`Keyfleet.Fleets.Presets.given?/1`).
     * `:transfer`: `token_id`, a key that changed hands.
@@ -68,10 +78,9 @@ defmodule Keyfleet.Activity do
       calls the treasury makes if it is carried out.
     * `:votes`: consecutive votes on one proposal: `number`, and `yes`, `no`
       and `abstain`, each `%{count: keys, token_ids: up to three, lowest
-      first}`.
+      first}`; and `totals`, how the whole proposal stood when this was read,
+      `%{yes: keys, no: keys, abstain: keys}`.
     * `:executed`: `number`.
-    * `:open_question` (from `headline/2` only): `goal` (an item) and
-      `question`, as `Keyfleet.Graph.open_question/1` finds them.
 
   ## Times
 
@@ -108,6 +117,7 @@ defmodule Keyfleet.Activity do
   once per change.
   """
 
+  alias Keyfleet.Access
   alias Keyfleet.Agents
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
@@ -117,12 +127,13 @@ defmodule Keyfleet.Activity do
   alias Keyfleet.Rooms
 
   @type position :: nil | integer() | {DateTime.t(), term()}
+  # A reader who doesn't read the workspace walks no `:graph`.
   @type cursor :: %{
-          posts: position(),
-          graph: position(),
-          keys: position(),
-          shards: position(),
-          proposals: position()
+          required(:posts) => position(),
+          optional(:graph) => position(),
+          required(:keys) => position(),
+          required(:shards) => position(),
+          required(:proposals) => position()
         }
   @type item :: %{id: String.t(), at: DateTime.t(), kind: atom(), facts: map()}
 
@@ -134,12 +145,15 @@ defmodule Keyfleet.Activity do
   # A source is read at most this many times for one page.
   @reads_per_page 2
   @posts_read 200
+  @graph_read 200
   @votes_read 100
   @keys_read 100
   @group_cap 50
   @post_gap 3_600_000_000
   @post_span 21_600_000_000
   @listed_keys 3
+  # The changes a run of which, by one key to items of one type, is one item.
+  @repeated [:archived, :submitted, :revised]
   @recent 7 * 86_400
 
   @doc """
@@ -147,42 +161,58 @@ defmodule Keyfleet.Activity do
 
   `cursor` is nil for the newest page, or the cursor a page answered to read
   the one after it. Options: `:limit`, the most items a page holds (1 to
-  #{@page}, #{@page} by default), and `:actor`, who reads it. Posts in rooms
-  other than General, and the titles of items other than goals (see Items),
-  show only to the people and agents holding the fleet's keys or a shard of one.
+  #{@page}, #{@page} by default), `:actor`, who reads it, and `:context`, the
+  class already read for them (`Keyfleet.Access.context/3`). Posts in rooms
+  other than the ones anyone reads, and the workspace's changes, show only to
+  the people and agents holding the fleet's keys or a shard of one.
   """
   @spec page(String.t(), cursor() | nil, keyword()) :: %{items: [item()], cursor: cursor() | nil}
   def page(fleet_id, cursor, opts \\ []) do
     limit = Keyword.get(opts, :limit, @page)
     true = limit in 1..@page
-    actor = Keyword.get(opts, :actor)
+    read_as = Keyword.take(opts, [:actor, :context])
+    sources = sources(fleet_id, read_as)
     positions = cursor || start()
 
     # A read that came back full leaves out its last entry, which may be the
     # start of a group it did not read to the end.
     fetch = fn source, position, reads ->
-      {entries, more?, top} = read(source, fleet_id, position, limit, actor)
+      {entries, more?, top} = read(source, fleet_id, position, limit, read_as)
       entries = if more?, do: Enum.drop(entries, -1), else: entries
       %{entries: entries, more?: more?, position: position || top, reads: reads + 1}
     end
 
-    streams = Map.new(@sources, &{&1, fetch.(&1, positions[&1], 0)})
+    streams = Map.new(sources, &{&1, fetch.(&1, positions[&1], 0)})
     {taken, streams} = merge(streams, limit, [], fetch)
 
-    %{items: name(taken, fleet_id, actor), cursor: next_cursor(streams)}
+    %{items: name(taken, fleet_id, read_as[:actor]), cursor: next_cursor(streams)}
   end
 
   @doc """
-  The fleet's latest workspace changes, newest first, told as `page/3` tells
-  them. Options: `:limit` (1 to #{@page}, #{@page} by default) and `:actor`.
+  The wallet each `:transfer` among `items` moved its key to, by the item's
+  id. The items name no wallet; a page that shows a run of transfers to one
+  wallet as one line reads them here.
   """
-  @spec work(String.t(), keyword()) :: [item()]
-  def work(fleet_id, opts \\ []) do
-    limit = Keyword.get(opts, :limit, @page)
-    true = limit in 1..@page
-    actor = Keyword.get(opts, :actor)
-    {entries, _more?, _top} = read(:graph, fleet_id, nil, limit, actor)
-    entries |> Enum.take(limit) |> name(fleet_id, actor)
+  @spec receivers(String.t(), [item()]) :: %{String.t() => String.t()}
+  def receivers(fleet_id, items) do
+    case for %{kind: :transfer, id: "transfer:" <> seq} <- items, do: String.to_integer(seq) do
+      [] ->
+        %{}
+
+      seqs ->
+        fleet_id
+        |> Keys.epochs_by_record_seq!(seqs)
+        |> Map.new(&{"transfer:#{&1.record_seq}", &1.owner_wallet})
+    end
+  end
+
+  # The workspace's changes are read only by whoever reads the workspace.
+  defp sources(fleet_id, read_as) do
+    class =
+      get_in(read_as, [:context, :shared, :access, :class]) ||
+        Access.class(read_as[:actor], fleet_id)
+
+    if Access.enough?(class, :read, :workspace), do: @sources, else: @sources -- [:graph]
   end
 
   # Where a walk begins in each source. Posts are read up to now by the
@@ -202,39 +232,17 @@ defmodule Keyfleet.Activity do
   end
 
   @doc """
-  The item a fleet features at `now`, by the first rule that finds one:
-
-    1. the latest `contradicts` link, if made in the last seven days;
-    2. the latest goal achieved, task accepted in a review or proposal
-       carried out, if in the last seven days;
-    3. the first open question of the most recently changed open goal.
-
-  Nil when no rule finds one, and the fleet's latest item, the first of
-  `page/3`, is featured instead; the caller has read it already.
-
-  Links, achieved goals and accepted tasks are looked for among the fleet's
-  200 latest notable workspace changes.
+  The item a fleet features at `now`, as anyone reads it: the latest
+  proposal carried out, if in the last seven days. Nil otherwise, and the
+  fleet's latest item, the first of `page/3`, is featured instead; the caller
+  has read it already.
   """
   @spec headline(String.t(), DateTime.t()) :: item() | nil
   def headline(fleet_id, %DateTime{} = now) do
-    since = DateTime.add(now, -@recent, :second)
+    execution = last_execution(fleet_id)
 
-    featured =
-      recent(mark(fleet_id, :contradiction), since) ||
-        newest([
-          recent(mark(fleet_id, :completion), since),
-          recent(last_execution(fleet_id), since)
-        ]) ||
-        open_question(fleet_id)
-
-    if featured, do: [featured] |> name(fleet_id, nil) |> hd()
-  end
-
-  defp mark(fleet_id, mark) do
-    case Graph.latest_mark!(fleet_id, mark) do
-      nil -> nil
-      event -> graph_entry(event)
-    end
+    if execution && not DateTime.before?(execution.at, DateTime.add(now, -@recent, :second)),
+      do: hd(name([execution], fleet_id, nil))
   end
 
   defp last_execution(fleet_id) do
@@ -242,26 +250,6 @@ defmodule Keyfleet.Activity do
     |> Proposals.executions_recorded_before!(nil, 1)
     |> Enum.map(&execution_entry/1)
     |> List.first()
-  end
-
-  defp recent(nil, _since), do: nil
-  defp recent(entry, since), do: if(DateTime.before?(entry.at, since), do: nil, else: entry)
-
-  defp newest(entries) do
-    entries |> Enum.reject(&is_nil/1) |> Enum.max_by(&stamp(&1.at), fn -> nil end)
-  end
-
-  defp open_question(fleet_id) do
-    case Graph.open_question(fleet_id) do
-      %{goal: goal, question: question} ->
-        entry("question:#{goal.id}", at(goal.changed_at), :open_question, nil, %{
-          goal: {:item, goal.id},
-          question: question
-        })
-
-      nil ->
-        nil
-    end
   end
 
   # Merging: the newest head among the sources goes next, until the page is
@@ -272,7 +260,7 @@ defmodule Keyfleet.Activity do
   defp merge(streams, 0, taken, _fetch), do: {Enum.reverse(taken), streams}
 
   defp merge(streams, left, taken, fetch) do
-    case Enum.find(@sources, &(streams[&1].entries == [] and streams[&1].more?)) do
+    case Enum.find(order(streams), &(streams[&1].entries == [] and streams[&1].more?)) do
       nil ->
         take(streams, left, taken, fetch)
 
@@ -300,7 +288,8 @@ defmodule Keyfleet.Activity do
   end
 
   defp next_source(streams) do
-    @sources
+    streams
+    |> order()
     |> Enum.with_index()
     |> Enum.filter(fn {source, _rank} -> streams[source].entries != [] end)
     |> Enum.max_by(fn {source, rank} -> {stamp(hd(streams[source].entries).at), -rank} end, fn ->
@@ -311,6 +300,9 @@ defmodule Keyfleet.Activity do
       {source, _rank} -> source
     end
   end
+
+  # The sources read, in their fixed order.
+  defp order(streams), do: Enum.filter(@sources, &Map.has_key?(streams, &1))
 
   defp next_cursor(streams) do
     if Enum.all?(streams, fn {_source, s} -> s.entries == [] and not s.more? end),
@@ -324,31 +316,35 @@ defmodule Keyfleet.Activity do
   # more beyond them, and, for a source kept in record order, the place just
   # past the newest record read, where a walk begins. Each entry carries the
   # place in its source just past it.
-  defp read(:posts, fleet_id, {at, id}, _limit, actor) do
-    lines = Rooms.fleet_lines_before!(fleet_id, at, id, @posts_read, actor: actor)
+  defp read(:posts, fleet_id, {at, id}, _limit, read_as) do
+    lines = Rooms.fleet_lines_before!(fleet_id, at, id, @posts_read, read_as)
     {group_lines(lines), length(lines) == @posts_read, nil}
   end
 
-  defp read(:graph, fleet_id, seq, limit, _actor) do
-    events = Graph.notable_before!(fleet_id, seq, limit + 1)
-    {Enum.map(events, &graph_entry/1), length(events) > limit, top(events, :seq)}
+  defp read(:graph, fleet_id, seq, _limit, _read_as) do
+    events = Graph.notable_before!(fleet_id, seq, @graph_read)
+
+    {events |> Enum.map(&graph_entry/1) |> group_work(), length(events) == @graph_read,
+     top(events, :seq)}
   end
 
-  defp read(:keys, fleet_id, seq, _limit, _actor) do
+  defp read(:keys, fleet_id, seq, _limit, _read_as) do
     epochs = Keys.epochs_recorded_before!(fleet_id, seq, @keys_read)
     first = if Presets.given?(fleet_id), do: :given, else: :sale
     {group_epochs(epochs, first), length(epochs) == @keys_read, top(epochs, :record_seq)}
   end
 
-  defp read(:shards, fleet_id, seq, limit, _actor) do
+  defp read(:shards, fleet_id, seq, limit, _read_as) do
     events = Keys.shard_events_recorded_before!(fleet_id, seq, limit + 1, load: [:agent_profile])
     {Enum.map(events, &shard_entry/1), length(events) > limit, top(events, :record_seq)}
   end
 
-  defp read(:proposals, fleet_id, seq, limit, _actor) do
+  defp read(:proposals, fleet_id, seq, limit, _read_as) do
     reads = [
       {Proposals.proposals_recorded_before!(fleet_id, seq, limit + 1), limit + 1},
-      {Proposals.votes_recorded_before!(fleet_id, seq, @votes_read), @votes_read},
+      {Proposals.votes_recorded_before!(fleet_id, seq, @votes_read,
+         load: [proposal: [:yes_keys, :no_keys, :abstain_keys]]
+       ), @votes_read},
       {Proposals.executions_recorded_before!(fleet_id, seq, limit + 1), limit + 1}
     ]
 
@@ -391,8 +387,23 @@ defmodule Keyfleet.Activity do
   defp entry(id, at, kind, position, facts),
     do: %{id: id, at: at, kind: kind, position: position, facts: facts}
 
-  # Posts: a run of posts in one room, each at most an hour after the one
-  # before, six hours at most from the first and fifty in all, is one item.
+  # A run: from the head of `rest`, the entries `joins?` lets follow
+  # `first`, each at most an hour before the one after it, six hours at most
+  # from `first` and fifty in all, by the time `at` gives. The run comes
+  # newest first, `first` at its head.
+  defp take_run(rest, first, joins?, at), do: take_run(rest, first, [first], joins?, at)
+
+  defp take_run([next | rest], first, [last | _] = run, joins?, at) do
+    if joins?.(next) and length(run) < @group_cap and
+         DateTime.diff(at.(last), at.(next), :microsecond) <= @post_gap and
+         DateTime.diff(at.(first), at.(next), :microsecond) <= @post_span,
+       do: take_run(rest, first, [next | run], joins?, at),
+       else: {Enum.reverse(run), [next | rest]}
+  end
+
+  defp take_run([], _first, run, _joins?, _at), do: {Enum.reverse(run), []}
+
+  # Posts: a run of posts in one room is one item.
   defp group_lines([]), do: []
 
   defp group_lines([%{kind: :room_named} = line | rest]) do
@@ -407,19 +418,11 @@ defmodule Keyfleet.Activity do
   end
 
   defp group_lines([first | rest]) do
-    {run, rest} = take_run(rest, first, [first])
-    [posts_entry(Enum.reverse(run)) | group_lines(rest)]
-  end
+    {run, rest} =
+      take_run(rest, first, &(&1.kind == :post and &1.room_id == first.room_id), & &1.inserted_at)
 
-  defp take_run([next | rest], first, [last | _] = run) do
-    if next.kind == :post and next.room_id == first.room_id and length(run) < @group_cap and
-         DateTime.diff(last.inserted_at, next.inserted_at, :microsecond) <= @post_gap and
-         DateTime.diff(first.inserted_at, next.inserted_at, :microsecond) <= @post_span,
-       do: take_run(rest, first, [next | run]),
-       else: {run, [next | rest]}
+    [posts_entry(run) | group_lines(rest)]
   end
-
-  defp take_run([], _first, run), do: {run, []}
 
   defp posts_entry([newest] = _run) do
     entry("posts:#{newest.id}", newest.inserted_at, :post, line_position(newest), %{
@@ -430,7 +433,7 @@ defmodule Keyfleet.Activity do
   end
 
   defp posts_entry([newest | _] = run) do
-    keys = run |> Enum.map(&author/1) |> Enum.uniq_by(& &1.token_id)
+    keys = run |> Enum.map(&author/1) |> Enum.uniq_by(&(&1.token_id || &1.wallet))
 
     entry("posts:#{newest.id}", newest.inserted_at, :posts, line_position(List.last(run)), %{
       room: room(newest.room),
@@ -445,19 +448,21 @@ defmodule Keyfleet.Activity do
 
   defp room(room), do: %{slug: room.slug, name: room.name, topic: room.topic}
 
+  # The key a line was written as, or the wallet of someone who wrote as no key.
   defp author(line),
-    do: %{token_id: line.as_key, agent: line.agent_profile && line.agent_profile.name}
+    do: %{
+      token_id: line.as_key,
+      agent: line.agent_profile && line.agent_profile.name,
+      wallet: line.author_wallet
+    }
 
-  # Keys: consecutive first owners are one item, fifty at most, of `kind`:
-  # `:sale`, or `:given` where the fleet's Keys are given. The item is named
-  # for its earliest Key, so a Key bought after it joins the same line.
+  # Keys: a run of first owners, from one purchase or several, is one item of
+  # `kind`: `:sale`, or `:given` where the fleet's Keys are given. The item is
+  # named for its earliest Key.
   defp group_epochs([], _kind), do: []
 
-  defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs, kind) do
-    {sold, rest} =
-      epochs |> Enum.take(@group_cap) |> Enum.split_while(&(&1.ownership_epoch == 1))
-
-    rest = rest ++ Enum.drop(epochs, @group_cap)
+  defp group_epochs([%{ownership_epoch: 1} = first | rest], kind) do
+    {sold, rest} = take_run(rest, first, &(&1.ownership_epoch == 1), & &1.observed_at)
     last = List.last(sold)
 
     item =
@@ -502,7 +507,12 @@ defmodule Keyfleet.Activity do
           number: first.proposal_number,
           yes: tally(sides[:yes]),
           no: tally(sides[:no]),
-          abstain: tally(sides[:abstain])
+          abstain: tally(sides[:abstain]),
+          totals: %{
+            yes: first.proposal.yes_keys,
+            no: first.proposal.no_keys,
+            abstain: first.proposal.abstain_keys
+          }
         }
       )
 
@@ -546,7 +556,73 @@ defmodule Keyfleet.Activity do
     %{count: length(token_ids), token_ids: Enum.take(token_ids, @listed_keys)}
   end
 
-  # Workspace changes.
+  # Workspace changes: a run of tasks one key added, or gave to other keys,
+  # is one item, and so is a run of one change one key made to items of one
+  # type.
+  defp group_work([]), do: []
+
+  defp group_work([first | rest]) do
+    cond do
+      handing_out?(first, first.facts.by) ->
+        {run, rest} = take_run(rest, first, &handing_out?(&1, first.facts.by), & &1.at)
+        [tasks_entry(run) | group_work(rest)]
+
+      first.kind in @repeated ->
+        {run, rest} = take_run(rest, first, &same_change?(&1, first), & &1.at)
+        [changes_entry(run) | group_work(rest)]
+
+      true ->
+        [first | group_work(rest)]
+    end
+  end
+
+  defp same_change?(entry, first),
+    do:
+      entry.kind == first.kind and entry.facts.by == first.facts.by and type(entry) == type(first)
+
+  # Every item's id starts with its type, as in "task#4".
+  defp type(%{facts: %{item: {:item, id}}}), do: id |> String.split("#") |> hd()
+
+  defp changes_entry([only]), do: only
+
+  defp changes_entry([newest | _] = run) do
+    entry("changes:#{newest.position}", newest.at, :changes, List.last(run).position, %{
+      by: newest.facts.by,
+      change: newest.kind,
+      type: type(newest),
+      count: length(run)
+    })
+  end
+
+  # A task `by` added, or gave to a key other than its own.
+  defp handing_out?(%{kind: :created, facts: %{by: by, item: {:item, "task#" <> _}}}, by),
+    do: by != nil
+
+  defp handing_out?(%{kind: :claimed, facts: %{by: by}}, by), do: by != nil
+
+  defp handing_out?(_entry, _by), do: false
+
+  defp token_id({:actor, token_id, _wallet}), do: token_id
+  defp token_id(%{token_id: token_id}), do: token_id
+
+  defp tasks_entry([only]), do: only
+
+  defp tasks_entry([newest | _] = run) do
+    by = token_id(newest.facts.by)
+    claimed = for %{kind: :claimed, facts: %{to: to}} <- run, do: to.token_id
+    {taken, given} = Enum.split_with(claimed, &(&1 == by))
+    keys = given |> Enum.uniq() |> Enum.sort()
+
+    entry("tasks:#{newest.position}", newest.at, :tasks, List.last(run).position, %{
+      by: newest.facts.by,
+      added: Enum.count(run, &(&1.kind == :created)),
+      taken: length(taken),
+      given: length(given),
+      to: Enum.take(keys, @listed_keys),
+      others: max(length(keys) - @listed_keys, 0)
+    })
+  end
+
   defp graph_entry(event) do
     {kind, facts} = change(event.type, event.brief)
 

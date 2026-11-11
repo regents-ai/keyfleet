@@ -85,8 +85,8 @@ defmodule KeyfleetWeb.Security.AccessControlProbesTest do
           %{
             "as_key" => 2,
             "command_id" => idem(),
+            "project" => "general",
             "type" => "note",
-            "scope" => "fleet",
             "data" => %{"title" => "x"}
           }
         )
@@ -98,7 +98,7 @@ defmodule KeyfleetWeb.Security.AccessControlProbesTest do
   describe "mass-assignment — a profile update takes only its editable fields (RT-MASS-ASSIGN)" do
     # Toggle to break: add a field (e.g. "role") to `@editable` in
     # signed_agent.ex, or to the agent_profile `:update` accept list.
-    for field <- ["role", "human_account_id", "pairing_id", "credits_admin", "standing"] do
+    for field <- ["role", "human_account_id", "pairing_id", "admin", "standing"] do
       test "rejects a profile update naming #{field}", ctx do
         resp =
           send_signed(ctx, ctx.signer, "POST", "/api/v1/agent/profile/update", %{

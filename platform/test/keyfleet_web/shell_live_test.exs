@@ -1,9 +1,11 @@
 defmodule KeyfleetWeb.ShellLiveTest do
   use KeyfleetWeb.ConnCase, async: false
+  use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
   alias Keyfleet.AccessContext.AccountControl
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -11,6 +13,24 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.RouteCatalog
+  alias RegentChain.Call
+
+  # The Account and Key pages read the chain after they open: a chain where
+  # every contract read answers zero, unless a test puts another.
+  setup do
+    StubClient.put_chain(
+      %{
+        number: 1_000,
+        hash: "0x" <> String.duplicate("c", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
+      [],
+      calls: fn _to, _data, _hash -> {:ok, <<0::256>>} end
+    )
+
+    :ok
+  end
 
   test "an anonymous visitor to /account is asked to sign in, without private content", %{
     conn: conn
@@ -23,6 +43,15 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-page button[data-account-target=sign-in]", "Sign in")
     refute has_element?(view, "#account-identity")
     refute has_element?(view, "#route-content .verified-connections")
+  end
+
+  test "the sidebar marks a fleet on every one of its pages", %{conn: conn} do
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!("fleet_tech_classic")
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    {:ok, view, _html} = live(conn, "/classic/1?room=general")
+
+    assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Classic #1")
   end
 
   test "an anonymous socket rejects a forged verified connection request", %{conn: conn} do
@@ -75,7 +104,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  test "signed-in account control renders its address avatar and Sign out", %{conn: conn} do
+  test "the signed-in name opens the account menu, which holds Sign out", %{conn: conn} do
     account = register_account("signed-in-control", "0x1111111111111111111111111111111111111111")
 
     {:ok, view, _html} =
@@ -92,24 +121,51 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#account-control button[type=button][data-account-target=sign-out]",
+             "#account-control button#account-chip[popovertarget=account-menu]"
+           )
+
+    refute has_element?(view, "#account-control [data-account-target=sign-out]")
+    # Fleets beside the name is the homepage's alone.
+    refute has_element?(view, "#shell-fleets")
+
+    assert has_element?(
+             view,
+             "#account-menu[popover] button[type=button][data-account-target=sign-out]",
              "Sign out"
+           )
+
+    assert has_element?(
+             view,
+             ~s{#account-menu a[href="/account"]:not([target])},
+             "Manage Account"
+           )
+
+    assert has_element?(
+             view,
+             ~s{#account-menu button[data-pair-open][aria-controls="shell-pairing"]},
+             "Pair New Agent"
+           )
+
+    assert has_element?(
+             view,
+             ~s{#shell-agents a[href="/account/agents"]:not([target])},
+             "Manage"
            )
 
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the Account page pairs only an offered agent, with a new code",
+  test "the pairing window pairs only an offered agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/account")
+      |> live("/account/agents")
 
-    box = "#account-agents-pair"
+    box = "#shell-pairing-box"
     assert has_element?(view, "#{box} input[name=harness][value=hermes]")
     refute has_element?(view, "#{box} input[name=harness][value=chatgpt]")
 
@@ -123,37 +179,46 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
   end
 
-  test "the Account page makes pairing codes only within the account's allowance",
+  # Sean, 27 Oct 2026: switching agents made a new code each time and soon said
+  # none could be made; each agent keeps its code until it expires.
+  test "each agent in the pairing window keeps its own code until a new one is asked for",
        %{conn: conn} do
-    limits = Application.fetch_env!(:keyfleet, :limits)
-    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
-
-    Application.put_env(
-      :keyfleet,
-      :limits,
-      Keyword.put(limits, :pairing_codes, limit: 1, window_seconds: 3600)
-    )
-
-    account = register_account("pairing-budget", "0x5555555555555555555555555555555555555555")
+    account = register_account("pairing-codes", "0x5555555555555555555555555555555555555555")
 
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/account")
+      |> live("/account/agents")
 
-    box = "#account-agents-pair"
+    box = "#shell-pairing-box"
+
+    code = fn html ->
+      Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html, capture: :all_but_first)
+    end
+
     html = view |> element(box) |> render_change(%{})
-    refute html =~ ~r/Pairing code: (?!X+\b)\S+/
+    assert code.(html) == nil
 
-    html = view |> element(box) |> render_change(%{"harness" => "hermes"})
-    assert [_, code] = Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html)
+    hermes = view |> element(box) |> render_change(%{"harness" => "hermes"}) |> code.()
+    codex = view |> element(box) |> render_change(%{"harness" => "codex"}) |> code.()
+    assert [_] = hermes
+    assert [_] = codex
+    refute hermes == codex
 
-    html = view |> element(box) |> render_change(%{"harness" => "hermes"})
-    refute html =~ code
-    refute html =~ ~r/Pairing code: (?!X+\b)\S+/
+    for _again <- 1..25 do
+      assert view |> element(box) |> render_change(%{"harness" => "hermes"}) |> code.() ==
+               hermes
+
+      assert view |> element(box) |> render_change(%{"harness" => "codex"}) |> code.() == codex
+    end
+
+    view |> element(box) |> render_change(%{"harness" => "hermes"})
+    new = view |> element(box) |> render_submit(%{"harness" => "hermes"}) |> code.()
+    assert [_] = new
+    refute new == hermes
   end
 
-  test "the Account page lists a paired agent with its picture and harness", %{conn: conn} do
+  test "the Agents page lists a paired agent with its picture and harness", %{conn: conn} do
     account = register_account("paired-agent", "0x3333333333333333333333333333333333333333")
 
     %{code: code} =
@@ -165,8 +230,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
       actor: %RegentAgents.Agent{wallet: "0x4444444444444444444444444444444444444444"}
     )
 
-    {view, _html} = open_account(conn, account)
+    {profile, _html} = open_account(conn, account)
+    refute has_element?(profile, "#account-agents")
+    assert has_element?(profile, "dialog#shell-pairing form#shell-pairing-box")
 
+    {view, _html} = open_account(conn, account, "/account/agents")
+
+    assert has_element?(view, "#account-agents-title", "Paired")
     assert has_element?(view, "#account-agents li", "Astra")
 
     assert has_element?(
@@ -175,6 +245,30 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
 
     assert has_element?(view, "#account-agents li", "Hermes")
+    assert has_element?(view, "#account-agents li .rg-account__wallet", "0x4444..4444")
+
+    # An agent that never came to Keyfleet has no check-in light; once it has,
+    # the Agents page and the account menu show it.
+    refute has_element?(view, "#account-agents .rg-account__light")
+
+    {:ok, agent} =
+      Keyfleet.Agents.with_pairing(%Keyfleet.Actors.Agent{
+        wallet_address: "0x4444444444444444444444444444444444444444",
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      })
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Astra", declared_harness: "hermes"}, actor: agent)
+
+    {view, _html} = open_account(conn, account, "/account/agents")
+
+    for list <- ["#account-agents", "#shell-agents"] do
+      assert has_element?(
+               view,
+               ~s(#{list} li .rg-account__light[data-light="off"][aria-label="Hasn’t checked in"])
+             )
+    end
   end
 
   test "stale wallet evidence cannot retain protected human shell access", %{conn: conn} do
@@ -189,7 +283,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> live("/account")
 
     assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
-    refute has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
+    refute has_element?(view, "[data-account-target=sign-out]")
+    refute has_element?(view, "#account-menu")
   end
 
   test "signed-in account presentation survives an in-shell patch", %{conn: conn} do
@@ -211,10 +306,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert view.pid == pid
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
     assert has_element?(view, "#account-control [data-account-target=profile]", "0x2222..2222")
-    assert has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
+    assert has_element?(view, "#account-menu [data-account-target=sign-out]", "Sign out")
   end
 
-  test "the signed-in account chip shows the picture, the name and Sign out" do
+  test "the signed-in account chip shows the picture and the name, and opens the account menu" do
     html =
       render_shell(%AccountControl{
         kind: :signed_in,
@@ -225,6 +320,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert html =~ ~r/data-account-target="profile">\s*Ada\s*</
     assert html =~ ~s(class="account-avatar")
     assert html =~ ~s(src="data:image/svg+xml;base64,PHN2Zy8+")
+    assert html =~ ~r/<button[^>]*id="account-chip"[^>]*popovertarget="account-menu"/s
+    assert html =~ ~r/<section[^>]*id="account-menu"[^>]*popover/s
     assert html =~ "Sign out"
     refute html =~ "Sign Out"
   end
@@ -266,7 +363,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
     {view, html} = open_account(conn, account)
 
     refute html =~ "Sign in to see your account"
-    assert has_element?(view, "#account-identity h2", "0x6666..6666")
+
+    assert has_element?(
+             view,
+             "#account-identity h2 #account-who-wallet-copy[data-copy-text='#{wallet}']"
+           )
+
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
     assert has_element?(view, ".account-details dd", "Not set")
     assert has_element?(view, "#account-page button[data-account-target=sign-out]", "Sign out")
@@ -274,9 +376,21 @@ defmodule KeyfleetWeb.ShellLiveTest do
     view |> element("#shell-tabs a", "Wallets") |> render_click()
     assert_patch(view, "/account/wallets")
     assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Account")
-    assert has_element?(view, ".account-details code", wallet)
-    assert has_element?(view, "#account-wallet-copy[data-copy-text='#{wallet}']", "Copy")
-    assert has_element?(view, ".account-wallet-list code", other)
+
+    assert has_element?(
+             view,
+             "#wallets-list-#{wallet} .rg-address__label",
+             RegentFormat.short_address(wallet)
+           )
+
+    assert has_element?(view, "#wallets-list-#{wallet}-address-copy[data-copy-text='#{wallet}']")
+
+    assert has_element?(
+             view,
+             "#wallets-list-#{wallet}-address-explorer[href='https://basescan.org/address/#{wallet}']"
+           )
+
+    assert has_element?(view, "#wallets-list-#{other}-address-copy[data-copy-text='#{other}']")
 
     view |> element("#shell-tabs a", "Connections") |> render_click()
     assert_patch(view, "/account/connections")
@@ -315,6 +429,93 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
+  # The account pages carry their headings and data, with no helper sentence
+  # under a title or behind a tip beside it.
+  test "each account page shows its title with no tagline", %{conn: conn} do
+    wallet = "0x6767676767676767676767676767676767676767"
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-taglines", wallet, [wallet],
+               actor: %System{}
+             )
+
+    for path <-
+          ~w(/account /account/agents /account/wallets /account/connections /account/points) do
+      {view, _html} = open_account(conn, account, path)
+
+      assert has_element?(view, ".page-head h1")
+      refute has_element?(view, "#page-title-tip"), path
+    end
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, ".account-session h2", "Session")
+    refute has_element?(view, ".account-session p")
+
+    {view, _html} = open_account(conn, account, "/account/agents")
+    refute has_element?(view, "#account-agents-about", "Once paired")
+
+    {view, _html} = open_account(conn, account, "/account/connections")
+    refute has_element?(view, "#account-verified-connections > div > p:not([role])")
+
+    {view, _html} = open_account(conn, account, "/account/points")
+    refute has_element?(view, ".rg-points-total__about")
+    refute has_element?(view, "#points-bonus-about")
+  end
+
+  test "Account says which wallet is the Regents wallet and which is active",
+       %{conn: conn} do
+    own = "0x8888888888888888888888888888888888888888"
+    regents = "0xabababababababababababababababababababab"
+    elsewhere = "0x1212121212121212121212121212121212121212"
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-wallets", own, [own, regents],
+               actor: %System{}
+             )
+
+    {view, _html} = open_account(conn, account)
+
+    # Until the browser says, each wallet shows and copies as linked, with no mark.
+    for address <- [own, regents] do
+      assert has_element?(
+               view,
+               "#account-wallets-#{address} .account-wallets__label",
+               "Linked to this account"
+             )
+
+      assert has_element?(
+               view,
+               "#account-wallets-#{address}-address-copy[data-copy-text='#{address}']"
+             )
+    end
+
+    refute has_element?(view, "#account-wallets .rg-status")
+
+    seen!(
+      view,
+      "#account-wallets",
+      "0x" <> String.upcase("abababababababababababababababababababab"),
+      [regents]
+    )
+
+    assert has_element?(view, "#account-wallets-#{own} .account-wallets__label", "Your wallet")
+    refute has_element?(view, "#account-wallets-#{own} .rg-status")
+
+    assert has_element?(
+             view,
+             "#account-wallets-#{regents} .account-wallets__label",
+             "Regents wallet"
+           )
+
+    assert has_element?(view, "#account-wallets-#{regents} .rg-status", "Active")
+
+    # A wallet the account isn't linked to, such as a wallet app left connected
+    # from before a Google sign-in, is never shown and never marked.
+    seen!(view, "#account-wallets", elsewhere, [regents])
+    refute has_element?(view, "#account-wallets-#{elsewhere}")
+    refute has_element?(view, "#account-wallets .rg-status")
+  end
+
   test "Account lists the keys the person's wallets hold, fleet by fleet", %{conn: conn} do
     wallet = "0x5555555555555555555555555555555555555555"
     other = "0x4444444444444444444444444444444444444444"
@@ -328,7 +529,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
              )
 
     {view, _html} = open_account(conn, account)
-    assert has_element?(view, "#account-keys p", "Your wallets don’t hold any Keys yet.")
+    assert has_element?(view, "#account-keys p", "No Keys yet.")
 
     issue!("fleet_tech_classic", 2, wallet)
     issue!("fibonacci_cascade", 5, other)
@@ -351,6 +552,87 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     view |> element("#account-keys a", "Key 5") |> render_click()
     assert_patch(view, "/cascade/1?key=5")
+  end
+
+  test "Account counts a new Key down to its first Treasury slice, and an older one shows nothing",
+       %{conn: conn} do
+    wallet = "0x7777777777777777777777777777777777777777"
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!("fleet_tech_classic")
+    ChainHelpers.open_cursor!("fleet_tech_classic")
+    issue!("fleet_tech_classic", 2, wallet)
+    issue!("fleet_tech_classic", 3, wallet)
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-slice", wallet, [wallet],
+               actor: %System{}
+             )
+
+    young = DateTime.utc_now() |> DateTime.add(47 * 3600 + 120) |> DateTime.to_unix()
+
+    matures =
+      Call.encode("maturesAt(uint256)", [ChainHelpers.onchain_id("fleet_tech_classic", 2)])
+
+    StubClient.put_chain(
+      %{
+        number: 1_000,
+        hash: "0x" <> String.duplicate("c", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
+      [],
+      calls: fn
+        _to, ^matures, _hash -> {:ok, <<young::256>>}
+        _to, _data, _hash -> {:ok, <<0::256>>}
+      end
+    )
+
+    {view, _html} = open_account(conn, account)
+
+    assert view |> element("#account-slice-fleet_tech_classic-2") |> render() =~
+             ~r/>Eligible in 47:0[12]:\d\d</
+
+    refute has_element?(view, "#account-slice-fleet_tech_classic-3")
+  end
+
+  test "where a person holds several Keys of a fleet, Account sets the one they post as", %{
+    conn: conn
+  } do
+    wallet = "0x6666666666666666666666666666666666666666"
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.open_cursor!("fibonacci_cascade")
+    ChainHelpers.open_cursor!("fleet_tech_classic")
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:posting-key", wallet, [wallet],
+               actor: %System{}
+             )
+
+    issue!("fleet_tech_classic", 2, wallet)
+    issue!("fibonacci_cascade", 25, wallet)
+    issue!("fibonacci_cascade", 41, wallet)
+
+    {view, _html} = open_account(conn, account)
+    choice = "#account-posting-key-fibonacci_cascade"
+
+    refute has_element?(view, "#account-posting-key-fleet_tech_classic")
+    assert has_element?(view, "#{choice} option[selected]", "Key 25")
+
+    view |> element(choice) |> render_change(%{"token_id" => "41"})
+
+    assert has_element?(view, "#{choice} [role=status]", "Saved.")
+    assert has_element?(view, "#{choice} option[selected]", "Key 41")
+
+    view |> element(choice) |> render_change(%{"token_id" => "7"})
+
+    assert has_element?(view, "#{choice} [role=alert]", "Reload")
+    assert has_element?(view, "#{choice} option[selected]", "Key 41")
+
+    person = Keyfleet.Actors.Human.for_account(account)
+    assert %{token_id: 41} = Keys.identity(person, "fibonacci_cascade")
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#{choice} option[selected]", "Key 41")
   end
 
   test "a connection is only called connected once the account's own record says so", %{
@@ -473,12 +755,17 @@ defmodule KeyfleetWeb.ShellLiveTest do
     ChainHelpers.deploy!("fleet_tech_classic")
     ChainHelpers.deploy!("fibonacci_cascade")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    FleetNow.read("fleet_tech_classic")
     FleetNow.read("fibonacci_cascade")
-    {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
+    {:ok, view, _html} = live(conn, "/classic/1?room=general")
 
-    # General's own posts too, while it is open (`Keyfleet.Rooms.Message.topic/2`).
+    # A room open in the hall hears the fleet's rooms as anyone does, and
+    # the Public room's own posts too (`Keyfleet.Rooms.Message.topic/2`).
     {[_general], heard} =
-      Enum.split_with(topics(view), &String.starts_with?(&1, "public:room:fleet_tech_classic:"))
+      view
+      |> topics()
+      |> Enum.reject(&String.starts_with?(&1, "shared_reading:"))
+      |> Enum.split_with(&String.starts_with?(&1, "public:room:fleet_tech_classic:"))
 
     assert heard ==
              Enum.sort([
@@ -495,7 +782,211 @@ defmodule KeyfleetWeb.ShellLiveTest do
            ]
   end
 
+  test "the Agents page looks at, renames and unpairs a paired agent", %{conn: conn} do
+    account = register_account("agent-manage", "0x3434343434343434343434343434343434343434")
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(
+        actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-manage"}
+      )
+
+    RegentAgents.pair_agent!(code, "Astra", :hermes,
+      actor: %RegentAgents.Agent{wallet: "0x4545454545454545454545454545454545454545"}
+    )
+
+    {view, _html} = open_account(conn, account, "/account/agents")
+
+    view |> element("#account-agents button", "See what it has done") |> render_click()
+    render_async(view)
+
+    assert has_element?(view, "#account-agent-dialog h2", "Astra")
+
+    view
+    |> form("#account-agent-dialog form.rg-account__name", %{"name" => "Sol​"})
+    |> render_submit()
+
+    assert has_element?(view, "#account-agent-dialog [role=alert]", "That name can’t be used.")
+    assert has_element?(view, "#account-agents li", "Astra")
+
+    view
+    |> form("#account-agent-dialog form.rg-account__name", %{"name" => "Sol"})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#account-agent-dialog [role=status]",
+             "Saved. This agent is now called Sol on every Regent site."
+           )
+
+    assert has_element?(view, "#account-agents li", "Sol")
+
+    view |> element("#account-agent-dialog button", "Unpair") |> render_click()
+    assert has_element?(view, "#account-unpair-dialog h2", "Unpair Sol?")
+    view |> element("#account-unpair-confirm") |> render_click()
+
+    refute has_element?(view, "#account-unpair-dialog")
+    refute has_element?(view, "#account-agent-dialog")
+    refute has_element?(view, "#account-agents li")
+    assert has_element?(view, "#account-agents [role=status]", "Sol is unpaired.")
+
+    assert {:ok, []} =
+             RegentAgents.list_my_agents(
+               actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-manage"}
+             )
+  end
+
+  test "Account says whether World ID has verified the person", %{conn: conn} do
+    account = register_account("world-id", "0x5656565656565656565656565656565656565656")
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-world-id dd", "Not verified")
+
+    Keyfleet.Repo.query!(
+      "UPDATE regent_names.platform_human_users SET world_verified_at = '2026-10-18 09:30:00' WHERE id = $1",
+      [account.id]
+    )
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-world-id dd", "Verified on 18 October 2026")
+  end
+
+  test "Account shows the wallet's ENS name, or why there is none", %{conn: conn} do
+    wallet = "0x6767676767676767676767676767676767676767"
+    account = register_account("ens-states", wallet)
+
+    ens_row!(account, wallet, nil, "done")
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-ens-name dd", "Not set")
+
+    ens_row!(account, wallet, "crew.eth", "done")
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-ens .rg-address__label", "crew.eth")
+    assert has_element?(view, "#account-ens-copy[data-copy-text='#{wallet}']")
+
+    # A name read for a wallet the account no longer uses is never shown.
+    ens_row!(account, "0x" <> String.duplicate("8", 40), "old.eth", "done")
+    {view, _html} = open_account(conn, account)
+    refute render(view) =~ "old.eth"
+  end
+
+  test "opening Account asks Ethereum again after a failed lookup", %{conn: conn} do
+    wallet = "0x7878787878787878787878787878787878787878"
+    account = register_account("ens-retry", wallet)
+    ens_row!(account, wallet, nil, "failed")
+
+    rpc = Application.get_env(:keyfleet, :ethereum_read_rpc_url)
+    Application.put_env(:keyfleet, :ethereum_read_rpc_url, "http://127.0.0.1:1")
+    on_exit(fn -> Application.put_env(:keyfleet, :ethereum_read_rpc_url, rpc) end)
+
+    {view, _html} = open_account(conn, account)
+
+    assert_enqueued(worker: Keyfleet.Accounts.EnsIdentity.Workers.LookUp)
+
+    assert has_element?(
+             view,
+             "#account-ens-name dd[role=status]",
+             "Checking…"
+           )
+  end
+
+  describe "an agent's Keys on the Agents page" do
+    @fleet "fleet_tech_classic"
+    @person "0x6767676767676767676767676767676767676767"
+    @agent "0x7878787878787878787878787878787878787878"
+    @second "0x8989898989898989898989898989898989898989"
+
+    setup do
+      Fleets.bootstrap_catalog!()
+      ChainHelpers.deploy!(@fleet)
+      ChainHelpers.seed_cursor!(@fleet)
+      account = register_account("agent-keys", @person)
+      issue!(@fleet, 1, @person)
+
+      %{code: code} =
+        RegentAgents.issue_pairing_code!(
+          actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
+        )
+
+      RegentAgents.pair_agent!(code, "Astra", :hermes, actor: %RegentAgents.Agent{wallet: @agent})
+      %{account: account}
+    end
+
+    test "a shard issued while the page is open names its Key on the agent's row", c do
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
+
+      assert has_element?(
+               view,
+               ~s(#account-agents li a[href="/classic/1/keys/1#key-issue-#{@agent}"]),
+               "Give it a shard"
+             )
+
+      ChainHelpers.issue_shard!(@fleet, 1, @agent)
+      Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
+      # The page hands the change to the agents panel, which reads afresh.
+      render(view)
+
+      assert has_element?(view, ~s(#account-agents li a[href="/classic/1/keys/1"]), "Key 1")
+      refute has_element?(view, "#account-agents li", "Give it a shard")
+    end
+
+    test "Keys that can't be read leave the page up and say so on the agent's row", c do
+      Keyfleet.Repo.query!(
+        "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.shard_events RENAME TO shard_events_gone"
+      )
+
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
+
+      assert has_element?(view, "#account-agents li", "Astra")
+      assert has_element?(view, "#account-agents li", "Couldn’t read Keys")
+    end
+
+    test "the Key's page gives each paired agent with no shard of it a press of its own", c do
+      view = open_key(c.conn, c.account, "/classic/1/keys/1")
+
+      assert has_element?(view, "#key-issue-#{@agent}", "Astra")
+      assert has_element?(view, "#key-issue-#{@agent}-button", "Issue shard")
+      refute has_element?(view, "#key-issue-pair")
+
+      assert has_element?(
+               view,
+               ~s{details#key-other-wallet:not([open]) input#key-shard-wallet[value=""]}
+             )
+
+      # A second agent paired anywhere while the page is open gets its press.
+      %{code: code} =
+        RegentAgents.issue_pairing_code!(
+          actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
+        )
+
+      RegentAgents.pair_agent!(code, "Vega", :codex, actor: %RegentAgents.Agent{wallet: @second})
+
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        RegentAgents.topic("did:privy:agent-keys"),
+        :agents_changed
+      )
+
+      assert has_element?(view, "#key-issue-#{@second}", "Vega")
+
+      # An agent given its shard leaves for the Shards list, where it renews.
+      ChainHelpers.issue_shard!(@fleet, 1, @agent)
+      ChainHelpers.issue_shard!(@fleet, 1, @second)
+      Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
+
+      refute has_element?(view, "#key-issue-#{@agent}")
+      assert has_element?(view, "#key-shard-renew-#{@agent}")
+      assert has_element?(view, "#key-issue-pair[data-pair-open]", "Pair New Agent")
+    end
+  end
+
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()
+
+  # What the page's wallet hook reports for the wallet list `list`.
+  defp seen!(view, list, active, regents),
+    do:
+      view
+      |> with_target(list)
+      |> render_hook("wallets_seen", %{"active" => active, "regents" => regents})
 
   defp open_account(conn, account, path \\ "/account") do
     {:ok, view, _html} =
@@ -504,6 +995,16 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> live(path)
 
     {view, render_async(view)}
+  end
+
+  # The Key page's form is drawn as it opens; its wallet steps are read after.
+  defp open_key(conn, account, path) do
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{human_account_id: account.id})
+      |> live(path)
+
+    view
   end
 
   defp keys_listed(html),
@@ -530,6 +1031,17 @@ defmodule KeyfleetWeb.ShellLiveTest do
     )
   end
 
+  # The ENS lookup the account's open pages read, as the lookup job leaves it.
+  defp ens_row!(account, wallet, name, state) do
+    Keyfleet.Repo.query!(
+      "INSERT INTO keyfleet_app.account_ens_identities (id, human_account_id, wallet_address, " <>
+        "ens_name, lookup_state, inserted_at, updated_at) " <>
+        "VALUES (gen_random_uuid(), $1, $2, $3, $4, now(), now()) " <>
+        "ON CONFLICT (human_account_id) DO UPDATE SET wallet_address = $2, ens_name = $3, lookup_state = $4",
+      [account.id, wallet, name, state]
+    )
+  end
+
   defp register_account(suffix, wallet) do
     assert {:ok, account} =
              Accounts.register_verified("did:privy:#{suffix}", wallet, [wallet], actor: %System{})
@@ -545,7 +1057,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
       account_control: account_control,
       shell_instance: 1,
       get_key: true,
-      content: [%{inner_block: fn _, _ -> "Fixture content" end}]
+      content: [%{inner_block: fn _, _ -> "Fixture content" end}],
+      agents: []
     )
   end
 end

@@ -1,0 +1,422 @@
+diff --git a/apps/server/src/cron.ts b/apps/server/src/cron.ts
+--- a/apps/server/src/cron.ts
++++ b/apps/server/src/cron.ts
+@@ -199,6 +199,27 @@
+ }
+ 
+ /**
++ * Per-notebook upload and thumbnail cleanup, hourly: nothing it removes expires in
++ * under a day, and visiting every notebook is most of a cycle's bucket reads. Its
++ * own lease, so a long prune never holds off the five-minute maintenance cycle.
++ */
++export function startNotebookPrune(deps: ApiDeps, loops = new BackgroundLoops()): () => void {
++	return loops.start({
++		name: 'notebook_prune',
++		intervalMs: Millis.hours(1),
++		lock: maintenanceLock(deps, paths.notebookPruneLock),
++		notLeaderEvent: 'notebook_prune_skipped_not_leader',
++		run: async ({ holder, step }) => ({
++			holder,
++			notebooks: await step(() => deps.services.notebooks.pruneNotebooks()),
++		}),
++		onSuccess: (counts) => {
++			logEvent({ level: 'info', event: 'notebook_prune_cycle', ...counts });
++		},
++	}).stop;
++}
++
++/**
+  * Keep session teardown and snapshot cadence independent of the heavier prune
+  * cycle. A separate lease lets both loops run on the maintenance replica.
+  */
+diff --git a/apps/server/src/cron.test.ts b/apps/server/src/cron.test.ts
+--- a/apps/server/src/cron.test.ts
++++ b/apps/server/src/cron.test.ts
+@@ -20,6 +20,7 @@
+ 	startPreviewPreparation,
+ 	startJobScheduler,
+ 	startMaintenance,
++	startNotebookPrune,
+ 	startSessionLifecycle,
+ 	startWarmPools,
+ } from './cron';
+@@ -750,6 +751,20 @@
+ 				return 0;
+ 			});
+ 			return startMaintenance(deps, new WideEventMetrics(), loops);
++		},
++	},
++	{
++		name: 'notebook_prune',
++		lockKey: paths.notebookPruneLock,
++		intervalMs: 60 * 60 * 1000,
++		failureEvent: 'notebook_prune_failed',
++		notLeaderEvent: 'notebook_prune_skipped_not_leader',
++		start(deps, loops, work) {
++			vi.spyOn(deps.services.notebooks, 'pruneNotebooks').mockImplementation(async () => {
++				await work();
++				return 0;
++			});
++			return startNotebookPrune(deps, loops);
+ 		},
+ 	},
+ 	{
+@@ -872,6 +887,15 @@
+ 		},
+ 	);
+ 
++	it('notebook_prune reports how many notebooks it visited', async () => {
++		vi.spyOn(deps.services.notebooks, 'pruneNotebooks').mockResolvedValue(3);
++		h.track(startNotebookPrune(deps, loops));
++		await flushRun();
++		expect(h.events()).toEqual([
++			expect.objectContaining({ level: 'info', event: 'notebook_prune_cycle', notebooks: 3 }),
++		]);
++	});
++
+ 	it.each(LOOPS)(
+ 		'$name holds hung work past its deadline and ignores its late completion',
+ 		async (loop) => {
+diff --git a/apps/server/src/bootstrap.ts b/apps/server/src/bootstrap.ts
+--- a/apps/server/src/bootstrap.ts
++++ b/apps/server/src/bootstrap.ts
+@@ -12,6 +12,7 @@
+ 	startPreviewPreparation,
+ 	startJobScheduler,
+ 	startMaintenance,
++	startNotebookPrune,
+ 	startSessionLifecycle,
+ 	startWarmPools,
+ } from './cron';
+@@ -182,6 +183,7 @@
+ 		const warmPools = startWarmPools(deps, loops);
+ 		if (warmPools) stops.push(warmPools.stop);
+ 		stops.push(startMaintenance(deps, wideEvents, loops));
++		stops.push(startNotebookPrune(deps, loops));
+ 		const stopPreviews = startPreviewPreparation(deps, loops);
+ 		if (stopPreviews) stops.push(stopPreviews);
+ 		const stopLifecycle = startSessionLifecycle(deps, loops);
+diff --git a/apps/server/src/bootstrap.test.ts b/apps/server/src/bootstrap.test.ts
+--- a/apps/server/src/bootstrap.test.ts
++++ b/apps/server/src/bootstrap.test.ts
+@@ -9,6 +9,7 @@
+ import {
+ 	startJobScheduler,
+ 	startMaintenance,
++	startNotebookPrune,
+ 	startPreviewPreparation,
+ 	startSessionLifecycle,
+ 	startWarmPools,
+@@ -20,6 +21,7 @@
+ vi.mock('./cron', () => ({
+ 	startPreviewPreparation: vi.fn(() => vi.fn()),
+ 	startMaintenance: vi.fn(() => vi.fn()),
++	startNotebookPrune: vi.fn(() => vi.fn()),
+ 	startWarmPools: vi.fn(),
+ 	startSessionLifecycle: vi.fn(() => vi.fn()),
+ 	startJobScheduler: vi.fn(() => ({ stop: vi.fn(), drain: vi.fn(async () => {}) })),
+@@ -81,6 +83,7 @@
+ 		vi.spyOn(console, 'log').mockImplementation(() => {});
+ 		vi.spyOn(console, 'error').mockImplementation(() => {});
+ 		vi.mocked(startMaintenance).mockImplementation(() => vi.fn());
++		vi.mocked(startNotebookPrune).mockImplementation(() => vi.fn());
+ 		vi.mocked(startPreviewPreparation).mockImplementation(() => vi.fn());
+ 		vi.mocked(startSessionLifecycle).mockImplementation(() => vi.fn());
+ 	});
+@@ -822,6 +825,7 @@
+ 		await bootstrap({ ...BASE_ENV, MARIMOHUB_RUN_MAINTENANCE: enabled }, harness.overrides);
+ 
+ 		expect(startMaintenance).toHaveBeenCalledTimes(calls);
++		expect(startNotebookPrune).toHaveBeenCalledTimes(calls);
+ 		expect(startWarmPools).toHaveBeenCalledTimes(calls);
+ 		expect(startPreviewPreparation).toHaveBeenCalledTimes(calls);
+ 		expect(startSessionLifecycle).toHaveBeenCalledTimes(calls);
+@@ -847,9 +851,11 @@
+ 
+ 	it('cancels maintenance loops before draining connections', async () => {
+ 		const stopMaintenance = vi.fn();
++		const stopPrune = vi.fn();
+ 		const stopLifecycle = vi.fn();
+ 		const stopPreviews = vi.fn();
+ 		vi.mocked(startMaintenance).mockReturnValueOnce(stopMaintenance);
++		vi.mocked(startNotebookPrune).mockReturnValueOnce(stopPrune);
+ 		vi.mocked(startSessionLifecycle).mockReturnValueOnce(stopLifecycle);
+ 		vi.mocked(startPreviewPreparation).mockReturnValueOnce(stopPreviews);
+ 		const harness = makeHarness(deps);
+@@ -857,7 +863,7 @@
+ 
+ 		harness.signals.get('SIGTERM')?.();
+ 
+-		for (const stop of [stopMaintenance, stopLifecycle, stopPreviews]) {
++		for (const stop of [stopMaintenance, stopPrune, stopLifecycle, stopPreviews]) {
+ 			expect(stop).toHaveBeenCalledOnce();
+ 			expect(stop.mock.invocationCallOrder[0]).toBeLessThan(
+ 				harness.close.mock.invocationCallOrder[0],
+diff --git a/packages/core/src/services/content/NotebookService.ts b/packages/core/src/services/content/NotebookService.ts
+--- a/packages/core/src/services/content/NotebookService.ts
++++ b/packages/core/src/services/content/NotebookService.ts
+@@ -1509,6 +1509,8 @@
+ 	 * Notebooks under a soft-deleted project are skipped — `sweepDeletedProjects`
+ 	 * reclaims that whole subtree in one shot, so run it first. `notebook_count`
+ 	 * was already decremented at soft-delete time, so it is left untouched here.
++	 * Per-notebook upload and thumbnail cleanup is {@link pruneNotebooks}, on its own
++	 * slower cadence.
+ 	 */
+ 	async sweepDeletedNotebooks(
+ 		retentionMs: number = DEFAULT_DELETED_NOTEBOOK_RETENTION_MS,
+@@ -1516,8 +1518,8 @@
+ 		const snapshot = await this.catalog.getCurrentSnapshot();
+ 		const now = Date.now();
+ 
+-		// Each project and notebook cleanup is a few bucket round trips; an account
+-		// with thousands of them would outlast the maintenance deadline one by one.
++		// Each project cleanup is a few bucket round trips; an account with thousands
++		// of them would outlast the maintenance deadline one by one.
+ 		const live = snapshot.projects.filter((p) => p.status !== 'deleted'); // deleted ones are owned by sweepDeletedProjects
+ 		await mapWithConcurrency(live, BUCKET_SCAN_CONCURRENCY, async (project) => {
+ 			await new ResumableUploads(this.bucket, paths.project(project.id).objectUploadsPrefix)
+@@ -1537,24 +1539,8 @@
+ 				);
+ 			});
+ 		});
+-		const notebooks = live.flatMap((project) => project.notebooks.map((nb) => ({ project, nb })));
+-		await mapWithConcurrency(notebooks, BUCKET_SCAN_CONCURRENCY, async ({ project, nb }) => {
+-			await this.workspace.sweepUploads(project.id, nb.id).catch((error) => {
+-				logOperationalError(
+-					'workspace_uploads.cleanup_failed',
+-					{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
+-					error,
+-				);
+-			});
+-			await this.thumbnails.prune(project.id, nb.id).catch((error) => {
+-				logOperationalError(
+-					'thumbnails.cleanup_failed',
+-					{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
+-					error,
+-				);
+-			});
+-		});
+-		const stale = notebooks
++		const stale = live
++			.flatMap((project) => project.notebooks.map((nb) => ({ project, nb })))
+ 			.filter(({ nb }) => nb.status === 'deleted' && now - Date.parse(nb.updated_at) >= retentionMs)
+ 			.map(({ project, nb }) => ({ projectId: project.id, notebookId: nb.id }));
+ 		if (stale.length === 0) return { purged: 0, orphanedSnapshots: [] };
+@@ -1595,6 +1581,38 @@
+ 		);
+ 
+ 		return { purged: stale.length, orphanedSnapshots };
++	}
++
++	/**
++	 * Drop each notebook's expired workspace uploads and its thumbnail images and
++	 * attempts over a day old, in every project not awaiting `sweepDeletedProjects`.
++	 * Nothing here expires in under a day, so an hourly pass keeps up at a twelfth of
++	 * the bucket reads of running it with every five-minute maintenance cycle.
++	 * Returns the number of notebooks visited.
++	 */
++	async pruneNotebooks(): Promise<number> {
++		const snapshot = await this.catalog.getCurrentSnapshot();
++		const notebooks = snapshot.projects
++			.filter((p) => p.status !== 'deleted')
++			.flatMap((project) => project.notebooks.map((nb) => ({ project, nb })));
++		// Each notebook is a few bucket round trips, so they run side by side.
++		await mapWithConcurrency(notebooks, BUCKET_SCAN_CONCURRENCY, async ({ project, nb }) => {
++			await this.workspace.sweepUploads(project.id, nb.id).catch((error) => {
++				logOperationalError(
++					'workspace_uploads.cleanup_failed',
++					{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
++					error,
++				);
++			});
++			await this.thumbnails.prune(project.id, nb.id).catch((error) => {
++				logOperationalError(
++					'thumbnails.cleanup_failed',
++					{ operation: 'prune', project_id: project.id, notebook_id: nb.id },
++					error,
++				);
++			});
++		});
++		return notebooks.length;
+ 	}
+ }
+ 
+diff --git a/packages/core/src/services/content/NotebookService.test.ts b/packages/core/src/services/content/NotebookService.test.ts
+--- a/packages/core/src/services/content/NotebookService.test.ts
++++ b/packages/core/src/services/content/NotebookService.test.ts
+@@ -2547,7 +2547,40 @@
+ 			expect(await notebooks.getNotebookContent(projectId, sibling.id)).toBe('s1');
+ 		});
+ 
+-		it('cleans up notebooks across projects in parallel, at most BUCKET_SCAN_CONCURRENCY at a time', async () => {
++		it('leaves per-notebook upload and thumbnail cleanup to pruneNotebooks', async () => {
++			const nb = await notebooks.createNotebook(
++				projectId,
++				{ title: 'NB', description: 'D', code: 'v1' },
++				ACTOR,
++			);
++			const list = vi.spyOn(bucket, 'list');
++
++			expect((await notebooks.sweepDeletedNotebooks()).purged).toBe(0);
++
++			const notebookBase = `${paths.project(projectId).notebook(nb.id).base}/`;
++			const prefixes = list.mock.calls.map(([options]) => options?.prefix ?? '');
++			expect(prefixes.filter((prefix) => prefix.startsWith(notebookBase))).toEqual([]);
++		});
++
++		it('skips notebooks under a soft-deleted project (the project sweep owns them)', async () => {
++			const nb = await notebooks.createNotebook(
++				projectId,
++				{ title: 'NB', description: 'D', code: 'v1' },
++				ACTOR,
++			);
++			await notebooks.deleteNotebook(projectId, nb.id, ACTOR);
++			await projects.deleteProject(projectId, ACTOR);
++
++			// The project is soft-deleted, so the notebook sweep leaves it for the
++			// project sweep — even with a zero grace period.
++			expect((await notebooks.sweepDeletedNotebooks(0)).purged).toBe(0);
++			const prefix = `${paths.project(projectId).notebook(nb.id).base}/`;
++			expect((await listAllKeys(bucket, prefix)).length).toBeGreaterThan(0);
++		});
++	});
++
++	describe('pruneNotebooks', () => {
++		it('prunes notebooks across projects in parallel, at most BUCKET_SCAN_CONCURRENCY at a time', async () => {
+ 			// One notebook per project, so only cleanup that spans projects runs in parallel.
+ 			const thumbnailPrefixes = new Set<string>();
+ 			for (let i = 0; i < 3 * BUCKET_SCAN_CONCURRENCY; i++) {
+@@ -2575,26 +2608,26 @@
+ 				return list(options);
+ 			});
+ 
+-			expect((await notebooks.sweepDeletedNotebooks()).purged).toBe(0);
++			expect(await notebooks.pruneNotebooks()).toBe(3 * BUCKET_SCAN_CONCURRENCY);
+ 			expect(listed).toEqual(thumbnailPrefixes);
+ 			expect(peak).toBeGreaterThan(1);
+ 			expect(peak).toBeLessThanOrEqual(BUCKET_SCAN_CONCURRENCY);
+ 		});
+ 
+-		it('skips notebooks under a soft-deleted project (the project sweep owns them)', async () => {
++		it('skips projects awaiting the project sweep', async () => {
+ 			const nb = await notebooks.createNotebook(
+ 				projectId,
+ 				{ title: 'NB', description: 'D', code: 'v1' },
+ 				ACTOR,
+ 			);
+-			await notebooks.deleteNotebook(projectId, nb.id, ACTOR);
+ 			await projects.deleteProject(projectId, ACTOR);
++			const list = vi.spyOn(bucket, 'list');
+ 
+-			// The project is soft-deleted, so the notebook sweep leaves it for the
+-			// project sweep — even with a zero grace period.
+-			expect((await notebooks.sweepDeletedNotebooks(0)).purged).toBe(0);
+-			const prefix = `${paths.project(projectId).notebook(nb.id).base}/`;
+-			expect((await listAllKeys(bucket, prefix)).length).toBeGreaterThan(0);
++			expect(await notebooks.pruneNotebooks()).toBe(0);
++
++			const notebookBase = `${paths.project(projectId).notebook(nb.id).base}/`;
++			const prefixes = list.mock.calls.map(([options]) => options?.prefix ?? '');
++			expect(prefixes.filter((prefix) => prefix.startsWith(notebookBase))).toEqual([]);
+ 		});
+ 	});
+ 
+diff --git a/packages/core/src/services/content/ThumbnailService.ts b/packages/core/src/services/content/ThumbnailService.ts
+--- a/packages/core/src/services/content/ThumbnailService.ts
++++ b/packages/core/src/services/content/ThumbnailService.ts
+@@ -303,7 +303,8 @@
+ 		});
+ 		const candidates = images.filter((o) => now - o.uploaded.getTime() > Millis.days(1));
+ 		// New publications only reference newly-created objects, so old unreferenced IDs cannot return.
+-		const current = await this.get(pid, nid);
++		// The record only decides which old images stay, so with none it is not read.
++		const current = candidates.length > 0 ? await this.get(pid, nid) : null;
+ 		const keep = new Set(
+ 			[current?.custom?.id, current?.automatic?.id]
+ 				.filter(Boolean)
+diff --git a/packages/core/src/services/content/ThumbnailService.test.ts b/packages/core/src/services/content/ThumbnailService.test.ts
+--- a/packages/core/src/services/content/ThumbnailService.test.ts
++++ b/packages/core/src/services/content/ThumbnailService.test.ts
+@@ -242,6 +242,20 @@
+ 		expect(await env.bucket.get(paths.project(pid).notebook(nid).thumbnailImage(first))).toBeNull();
+ 		expect(await thumbnails.image(pid, nid)).not.toBeNull();
+ 	});
++	it('reads the thumbnail record only once an image is over a day old', async () => {
++		const { pid, nid, thumbnails } = await notebook();
++		await thumbnails.setCustom(pid, nid, thumbnailPng());
++		const record = paths.project(pid).notebook(nid).thumbnail;
++		const get = vi.spyOn(env.bucket, 'get');
++		const reads = () => get.mock.calls.filter(([key]) => key === record).length;
++
++		await thumbnails.prune(pid, nid);
++		expect(reads()).toBe(0);
++
++		await thumbnails.prune(pid, nid, Date.now() + Millis.days(1) + 1);
++		expect(reads()).toBe(1);
++		expect(await thumbnails.image(pid, nid)).not.toBeNull();
++	});
+ 	it('skips identical HTML across versions and retains the rendered version as provenance', async () => {
+ 		const { pid, nid, thumbnails } = await notebook();
+ 		const html = '<div>same output</div>';
+@@ -339,16 +353,20 @@
+ 	});
+ 
+ 	it.each(['record', 'listing'] as const)(
+-		'continues notebook GC when thumbnail %s pruning fails',
++		"keeps pruning other notebooks when one notebook's thumbnail %s fails",
+ 		async (stage) => {
+-			const { pid, nid } = await notebook();
+-			const other = await env.notebooks.createNotebook(
++			vi.useFakeTimers();
++			const { pid, nid, thumbnails } = await notebook();
++			const broken = await env.notebooks.createNotebook(
+ 				pid,
+-				{ title: 'Keep', description: '', code: 'x = 1' },
++				{ title: 'Broken', description: '', code: 'x = 1' },
+ 				ACTOR,
+ 			);
+-			await env.notebooks.deleteNotebook(pid, nid, ACTOR);
+-			const nb = paths.project(pid).notebook(other.id);
++			await thumbnails.setCustom(pid, nid, thumbnailPng());
++			const orphan = (await thumbnails.get(pid, nid))!.custom!.id;
++			await thumbnails.setCustom(pid, nid, thumbnailPng());
++			await thumbnails.setCustom(pid, broken.id, thumbnailPng());
++			const nb = paths.project(pid).notebook(broken.id);
+ 			if (stage === 'record') await env.bucket.put(nb.thumbnail, 'invalid');
+ 			else {
+ 				const list = env.bucket.list.bind(env.bucket);
+@@ -357,9 +375,18 @@
+ 					return list(options);
+ 				});
+ 			}
+-			expect((await env.notebooks.sweepDeletedNotebooks(0)).purged).toBe(1);
+-			expect(await listAllKeys(env.bucket, `${paths.project(pid).notebook(nid).base}/`)).toEqual(
+-				[],
++			const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
++			vi.setSystemTime(Date.now() + Millis.days(1) + 1);
++
++			expect(await env.notebooks.pruneNotebooks()).toBe(2);
++
++			expect(
++				await env.bucket.get(paths.project(pid).notebook(nid).thumbnailImage(orphan)),
++			).toBeNull();
++			expect(await thumbnails.image(pid, nid)).not.toBeNull();
++			const failures = errors.mock.calls.map(([line]) => JSON.parse(String(line)));
++			expect(failures).toContainEqual(
++				expect.objectContaining({ event: 'thumbnails.cleanup_failed', notebook_id: broken.id }),
+ 			);
+ 		},
+ 	);
+diff --git a/packages/core/src/paths.ts b/packages/core/src/paths.ts
+--- a/packages/core/src/paths.ts
++++ b/packages/core/src/paths.ts
+@@ -401,6 +401,9 @@
+ 	sessionLifecycleLock: '_system/_session_lifecycle.lock',
+ 	/** Advisory lease for the job scheduler tick — its own key for the same reason. */
+ 	jobSchedulerLock: '_system/_jobs.lock',
++	/** Advisory lease for the hourly per-notebook upload and thumbnail prune — its own
++	 * key, so a long prune never holds off the maintenance sweep. */
++	notebookPruneLock: '_system/_notebook_prune.lock',
+ 	/**
+ 	 * Org-scoped integration instance, inherited by every project:
+ 	 * `_system/integrations/{iid}/…`. Same layout and mutability classes as the

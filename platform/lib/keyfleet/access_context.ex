@@ -27,11 +27,13 @@ defmodule Keyfleet.AccessContext do
   def account_control(%__MODULE__{principal: :anonymous}),
     do: %AccountControl{kind: :sign_in, label: "Sign in"}
 
-  def account_control(%__MODULE__{principal: {:human, account}}) do
+  def account_control(%__MODULE__{principal: {:human, account}} = context) do
     %AccountControl{
       kind: :signed_in,
       label: PublicIdentity.label(account),
-      avatar_src: PublicIdentity.avatar_src(account)
+      avatar_src: PublicIdentity.avatar_src(account),
+      wallet: own_wallet(context),
+      ens_name: account.ens_name
     }
   end
 end

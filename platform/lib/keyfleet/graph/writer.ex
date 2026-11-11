@@ -28,11 +28,10 @@ defmodule Keyfleet.Graph.Writer do
 
   require Logger
 
-  alias Keyfleet.Graph.Registry, as: GraphRegistry
   alias Keyfleet.Graph.StalledError
 
   @read_ops ~w(hello changes)
-  @write_ops ~w(create patch link unlink archive join leave submit review)
+  @write_ops ~w(create patch link unlink archive join leave submit review fork)
 
   # How long a killed host gets to be reaped before the writer moves on.
   @reap_ms 5_000
@@ -52,19 +51,13 @@ defmodule Keyfleet.Graph.Writer do
   @host_env [{~c"LANG", ~c"C.UTF-8"}]
 
   @type reply :: {:ok, map()} | {:error, map() | :indeterminate | :unavailable | Exception.t()}
-  @type authorize :: (non_neg_integer() -> {:ok, map()} | {:error, Exception.t()})
+  @type authorize :: {module(), atom(), [term()]}
 
   def child_spec(opts) do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
   end
 
-  def start_link(opts) do
-    fleet_id = Keyword.fetch!(opts, :fleet_id)
-    # The longest the writer spends on one request once it is that request's turn.
-    turn = Keyword.fetch!(opts, :check_timeout) + Keyword.fetch!(opts, :reply_timeout)
-    name = {:via, Registry, {GraphRegistry, fleet_id, turn}}
-    GenServer.start_link(__MODULE__, opts, name: name)
-  end
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   @doc """
   Sends a read of the log itself (`hello` or `changes`) to the fleet's graph.
@@ -82,12 +75,15 @@ defmodule Keyfleet.Graph.Writer do
   @doc """
   Sends a write to the fleet's graph on behalf of a member.
 
-  `authorize` runs inside the writer when the write's turn comes, just before
-  the write reaches the host, and is given the milliseconds it may spend. It
-  answers `{:ok, command}`, the command's `:id`, `:principal`, `:auth` and
-  `:writable_scopes` as they stand at that moment, or `{:error, error}`, which
-  is returned as it is with nothing sent; one that exits or raises is
-  answered `{:error, :unavailable}`, also with nothing sent.
+  `authorize` is `{module, function, args}`, called inside the writer when the
+  write's turn comes, just before the write reaches the host, with the
+  milliseconds it may spend added to `args`. It is a named function, not an
+  anonymous one, so a write still works while a release has the site and graph
+  machines on different code. It answers `{:ok, command}`, the command's
+  `:id`, `:principal`, `:auth` and the fleet's `:projects` as they stand at
+  that moment, or `{:error, error}`, which is returned as it is with nothing
+  sent; one that exits or raises is answered `{:error, :unavailable}`, also
+  with nothing sent.
   """
   @spec command(String.t(), String.t(), map(), authorize()) :: reply()
   def command(fleet_id, op, body, authorize) when op in @write_ops do
@@ -102,21 +98,19 @@ defmodule Keyfleet.Graph.Writer do
     with {:error, _reason} <- Jason.encode(term), do: {:error, @unencodable}
   end
 
+  # The writer may run on another machine: it joins its fleet's group in the
+  # `Keyfleet.Graph.Processes` scope, which every machine of the site shares.
   defp send_to_writer(fleet_id, request) do
-    case lookup(fleet_id) do
-      {:ok, pid, turn} -> call_writer(pid, request, turn + @reap_ms + 1_000)
-      :error -> {:error, :unavailable}
+    case :pg.get_members(Keyfleet.Graph.Processes, {__MODULE__, fleet_id}) do
+      [pid] -> call_writer(pid, request, turn() + @reap_ms + 1_000)
+      [] -> {:error, :unavailable}
     end
   end
 
-  defp lookup(fleet_id) do
-    case Registry.lookup(GraphRegistry, fleet_id) do
-      [{pid, turn}] -> {:ok, pid, turn}
-      [] -> :error
-    end
-  rescue
-    # The registry is absent while the graph is switched off or restarting.
-    ArgumentError -> :error
+  # The longest a writer spends on one request once it is that request's turn.
+  defp turn do
+    graph = Application.fetch_env!(:keyfleet, :graph)
+    Keyword.fetch!(graph, :check_timeout) + Keyword.fetch!(graph, :reply_timeout)
   end
 
   # A writer that is gone before the call reaches it has done nothing; one
@@ -131,6 +125,9 @@ defmodule Keyfleet.Graph.Writer do
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
+
+    :ok =
+      :pg.join(Keyfleet.Graph.Processes, {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, self())
 
     state = %{
       fleet_id: Keyword.fetch!(opts, :fleet_id),
@@ -177,8 +174,8 @@ defmodule Keyfleet.Graph.Writer do
   # A database pool that is down or out of time exits its caller, and a fault
   # in the check raises; either would stop the writer, so a check that exits
   # or raises is answered as unavailable, with nothing sent.
-  defp check(authorize, state) do
-    authorize.(state.check_timeout)
+  defp check({module, function, args}, state) do
+    apply(module, function, args ++ [state.check_timeout])
   rescue
     error ->
       Logger.warning(

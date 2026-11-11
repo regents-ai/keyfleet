@@ -13,7 +13,7 @@ defmodule Keyfleet.SharedReadingPropertyTest do
 
   # Kinds with room for a key no producer writes; the size check is the same
   # function for every kind.
-  @kinds [:key_agents, :proposal, :poll]
+  @kinds [:key_agents, :proposal]
   @id "property-probe"
   @held %{"held" => 1}
 
@@ -48,6 +48,27 @@ defmodule Keyfleet.SharedReadingPropertyTest do
       assert held == if(expected == :ok, do: reading, else: @held)
       assert :erlang.external_size(held) <= SharedReading.bytes(kind)
     end
+  end
+
+  test "every reading offered reports its size against its kind's limit, refused ones too" do
+    test = self()
+    key = {:key_agents, @id}
+    limit = SharedReading.bytes(:key_agents)
+
+    :telemetry.attach(
+      "shared-reading-size-test",
+      [:keyfleet, :shared_reading, :size],
+      fn _, size, %{kind: kind}, _ -> send(test, {kind, size}) end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach("shared-reading-size-test") end)
+
+    assert :ok = SharedReading.put(key, @held)
+    assert {:error, :too_large} = SharedReading.put(key, :binary.copy("x", limit))
+
+    assert_received {:key_agents, %{bytes: small, limit: ^limit}} when small <= limit
+    assert_received {:key_agents, %{bytes: large, limit: ^limit}} when large > limit
   end
 
   # Half the sizes anywhere up to twice the kind's limit, half within a few

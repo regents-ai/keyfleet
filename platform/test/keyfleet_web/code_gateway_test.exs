@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   use Oban.Testing, repo: Keyfleet.Repo
   use ExUnitProperties
 
+  import Ecto.Query
   import Phoenix.ConnTest
   import Plug.Conn
 
@@ -19,6 +20,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
   @host "code.localhost"
+  # The user name in the address a fleet's workspace gives a person.
+  @user "holder"
   @owner "did:key:z6MkfleetOwner"
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
@@ -48,8 +51,13 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     on_exit(fn -> Application.put_env(:keyfleet, :code, code) end)
     Application.put_env(:keyfleet, :code, Keyword.put(code, :node, store))
 
+    # Each fleet's `general` repository, named after the fleet.
     Code.record_repository!(@fleet, @owner, actor: %System{})
     Code.record_repository!(@other_fleet, @owner, actor: %System{})
+    # Key 1 takes over the fleet's archived `general`, so its code takes pushes.
+    Keyfleet.Projects.take_over_project!(@fleet, 1, "general",
+      actor: %Human{human_account_id: 1, wallet_addresses: [@holder_wallet]}
+    )
 
     %{holder: holder, buyer: buyer}
   end
@@ -130,6 +138,26 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, _method, _path, _claims, _body}
   end
 
+  # Costly failure: git asks a person for a user name that nothing checks.
+  test "the address a person copies names the user, so git asks only for the password" do
+    assert %URI{userinfo: @user, host: @host, path: "/#{@fleet}.git"} =
+             URI.parse(Code.clone_url(@fleet))
+  end
+
+  # Costly failure: a person opens the address their workspace shows in a
+  # browser and is told there is no code there.
+  test "a browser opening a repository's address is sent to its code on the site" do
+    opened = git(:get, "/#{@fleet}.git", nil)
+    assert opened.status == 302
+
+    assert get_resp_header(opened, "location") ==
+             [KeyfleetWeb.Endpoint.url() <> Code.files_path(@fleet, @fleet, "")]
+
+    assert git(:get, "/fleet_nobody_made.git", nil).status == 404
+    assert git(:get, "/#{@fleet}", nil).status == 404
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
   # Costly failure: one wallet pushes to a fleet's code as often as a script
   # can, each push up to `max_pack_bytes`.
   test "each push spends its wallet's allowance in the fleet, and copying spends none", c do
@@ -159,8 +187,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     assert git(:get, "/#{@fleet}.git/info/refs?service=git-receive-pack", password).status == 200
   end
 
-  # Costly failure: a fleet's code is never set up, or set up twice.
-  test "the first ask sets the fleet's repository up, and setting it up again is safe", c do
+  # Costly failure: a repository is never set up, or set up twice.
+  test "an ask for a repository not made yet sets it up, and setting it up again is safe", c do
     fleet = "fleet_tech_classic"
     ChainHelpers.seed_cursor!(fleet)
     epoch!(fleet, 1, 1, @holder_wallet)
@@ -168,7 +196,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     {:ok, %{password: password}} =
       CodePassword.for_person(c.holder, signed_in!(c.holder), fleet)
 
-    assert_enqueued(worker: Setup, args: %{fleet_id: fleet})
+    assert_enqueued(worker: Setup, args: %{repository: fleet})
     waiting = git(:get, "/#{fleet}.git/info/refs?service=git-upload-pack", password)
     assert waiting.status == 503
 
@@ -179,8 +207,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
       Req.Test.json(conn, %{"name" => fleet, "owner_did" => @owner})
     end)
 
-    assert :ok = perform_job(Setup, %{fleet_id: fleet})
-    assert :ok = perform_job(Setup, %{fleet_id: fleet})
+    assert :ok = perform_job(Setup, %{repository: fleet})
+    assert :ok = perform_job(Setup, %{repository: fleet})
     assert_received {:create, %{"scope" => "create", "fleet" => ^fleet}, %{"name" => ^fleet}}
     refute_received {:create, _claims, _body}
 
@@ -188,6 +216,22 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   end
 
   ## What a push sends
+
+  test "an agent's push the store took is its latest contribution to the fleet" do
+    agent = key_holding_agent!(4)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Pusher", declared_harness: "local"},
+        actor: agent.actor
+      )
+
+    command =
+      String.duplicate("0", 40) <>
+        " " <> String.duplicate("5", 40) <> " refs/heads/main\0report-status side-band-64k\n"
+
+    assert signed(agent, "/#{@fleet}.git/git-receive-pack", pkt(command) <> "0000").status == 200
+    assert Keyfleet.Agents.get_check_in!(profile.id, @fleet).last_contribution_kind == :code
+  end
 
   # Costly failure: an agent's push reaches the store changed, or not at all.
   test "a Key-holding agent's push reaches the store as the exact bytes it signed" do
@@ -213,13 +257,13 @@ defmodule KeyfleetWeb.CodeGatewayTest do
             at <- integer(0..(byte_size(pack) - 1)),
             max_runs: 20
           ) do
-      <<before::binary-size(at), byte, rest::binary>> = pack
+      <<before::binary-size(^at), byte, rest::binary>> = pack
       changed = before <> <<Bitwise.bxor(byte, 1)>> <> rest
 
       refused = signed(agent, "/#{@fleet}.git/git-receive-pack", pack, changed)
 
       assert refused.status == 400
-      assert refused.resp_body =~ "isn't what this request's signature covers"
+      assert refused.resp_body =~ "doesn't match what its signature covers"
       refute_received {:store, _method, _path, _claims, _body}
       assert spooled() == []
     end
@@ -287,6 +331,92 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, _method, _path, _claims, _body}
   end
 
+  # Costly failure: a large push on a slow link uploads in full, then fails
+  # because the store's pass ran out while it arrived.
+  test "a push slower than a pass lasts reaches the store with a pass made once it is in", c do
+    password = person_password!(c.holder)
+    socket = open_site!()
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "POST /#{@fleet}.git/git-receive-pack HTTP/1.1\r\n",
+        "host: #{@host}\r\n",
+        "authorization: #{Plug.BasicAuth.encode_basic_auth("git", password)}\r\n",
+        "content-type: application/x-git-receive-pack-request\r\n",
+        "content-length: 4\r\n\r\n",
+        "00"
+      ])
+
+    Process.sleep(2_100)
+    finished = Elixir.System.os_time(:second)
+    :ok = :gen_tcp.send(socket, "00")
+
+    assert {:ok, "HTTP/1.1 200" <> _answer} = :gen_tcp.recv(socket, 0, 5_000)
+    assert_receive {:store, "POST", _path, claims, "0000"}
+    assert claims["iat"] >= finished
+  end
+
+  # Costly failure: a push begun before its project was archived lands in the
+  # archived project once its body is in.
+  test "a push whose project is archived while it arrives is refused and reaches nothing", c do
+    password = person_password!(c.holder)
+    socket = open_site!()
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "POST /#{@fleet}.git/git-receive-pack HTTP/1.1\r\n",
+        "host: #{@host}\r\n",
+        "authorization: #{Plug.BasicAuth.encode_basic_auth("git", password)}\r\n",
+        "content-type: application/x-git-receive-pack-request\r\n",
+        "content-length: 4\r\n\r\n",
+        "00"
+      ])
+
+    # The site has checked the project and waits for the rest of the body.
+    Process.sleep(300)
+
+    Keyfleet.Projects.archive_project!(@fleet, 1,
+      actor: %Human{human_account_id: 1, wallet_addresses: [@holder_wallet]}
+    )
+
+    :ok = :gen_tcp.send(socket, "00")
+
+    assert {:ok, "HTTP/1.1 403" <> answer} = :gen_tcp.recv(socket, 0, 5_000)
+    assert answer =~ "This project is archived"
+    refute_received {:store, "POST", _path, _claims, _body}
+  end
+
+  # Costly failure: the site can't record a push the store took, and git is
+  # told the push failed though it landed.
+  test "a push the site can't record still gets the store's answer, and the failure is saved",
+       c do
+    password = person_password!(c.holder)
+
+    command =
+      String.duplicate("0", 40) <>
+        " " <> String.duplicate("5", 40) <> " refs/heads/main\0report-status side-band-64k\n"
+
+    # Renamed inside the test's own transaction, so recording fails the way it
+    # does while the database can't be reached; the rename ends with the test.
+    prefix = Keyfleet.Repo.default_prefix()
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.code_pushes RENAME TO code_pushes_away")
+
+    pushed = git(:post, "/#{@fleet}.git/git-receive-pack", password, pkt(command) <> "0000")
+
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.code_pushes_away RENAME TO code_pushes")
+
+    assert pushed.status == 200
+    assert pushed.resp_body == report()
+    assert_receive {:store, "POST", _path, _claims, _body}
+    assert spooled() == []
+
+    assert Keyfleet.Repo.exists?(
+             from(error in ErrorTracker.Error,
+               where: like(error.reason, ^"A push to #{@fleet}'s general could not be recorded%")
+             )
+           )
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do
@@ -331,7 +461,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     conn =
       if password,
         do:
-          put_req_header(conn, "authorization", Plug.BasicAuth.encode_basic_auth("git", password)),
+          put_req_header(conn, "authorization", Plug.BasicAuth.encode_basic_auth(@user, password)),
         else: conn
 
     conn =
@@ -349,15 +479,15 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
     wallet = String.downcase(signer.address)
-    Keyfleet.PairingHelpers.pair_wallet!(wallet)
+    actor = Keyfleet.PairingHelpers.pair_wallet!(wallet)
     epoch!(token_id, 1, wallet)
-    %{signer: signer, secret: secret, wallet: wallet}
+    %{signer: signer, secret: secret, wallet: wallet, actor: actor}
   end
 
   # `signed` is what the agent signed; `sent` is what arrives. Each agent
   # sends from its own address, so no other test spent its budget.
   defp signed(agent, path, signed, sent \\ nil) do
-    request = SignedAgentHelpers.sign(agent.signer, agent.secret, "POST", path, signed)
+    request = SignedAgentHelpers.sign(agent.signer, agent.secret, @host, "POST", path, signed)
 
     %{build_conn() | host: @host, remote_ip: {198, 51, 100, 140}}
     |> then(
@@ -376,9 +506,13 @@ defmodule KeyfleetWeb.CodeGatewayTest do
         Keyword.merge(Application.fetch_env!(:keyfleet, :code), settings)
       )
 
-  # The files bodies are written to while they arrive.
-  defp spooled,
-    do: Path.wildcard(Path.join([Elixir.System.tmp_dir!(), "plug-*", "keyfleet-code-*"]))
+  # The files this run's bodies are written to while they arrive. Plug ends each
+  # VM's folders with its own random suffix, so another test run on the same
+  # machine never counts.
+  defp spooled do
+    {roots, suffix} = :persistent_term.get(Plug.Upload)
+    Enum.flat_map(roots, &Path.wildcard(Path.join([&1, "plug-*-#{suffix}", "keyfleet-code-*"])))
+  end
 
   # The site, served on a real socket, so a body can arrive slowly.
   defp open_site! do

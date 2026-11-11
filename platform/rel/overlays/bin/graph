@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+# Runs the fleets' graph writers beside their logs on this machine's volume.
+KEYFLEET_MACHINE=graph exec "$(dirname "$0")/keyfleet" start

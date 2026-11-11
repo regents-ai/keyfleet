@@ -27,8 +27,9 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 keyfleet-*.tar
 
-# Ignore assets that are produced by build tools.
+# Ignore assets that are produced by build tools, and esbuild's record of them.
 /priv/static/assets/
+/priv/esbuild-meta.json
 
 # Ignore digested assets cache.
 /priv/static/cache_manifest.json

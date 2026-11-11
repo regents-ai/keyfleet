@@ -6,9 +6,7 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
   a body carries an undocumented field, and when a body is over its cap.
 
   These lock in the server-side gates so a future change that moves a money
-  endpoint out from behind a gate is caught. The true parallel credit
-  double-spend proof is out of this repo (debit lives in RegentCredits) and is
-  tagged `:dynamic` for the Mac's non-sandboxed / fork run.
+  endpoint out from behind a gate is caught.
 
   See `priv/security/redteam_checks.yml` and
   `docs/security/redteam-2026-10-17.md`.
@@ -138,8 +136,7 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
     #
     # NOTE: under the test sandbox all callers share one connection and
     # serialize, so this proves the unique index/upsert decides one winner, not
-    # true parallel timing. The genuine parallel credit double-spend proof needs
-    # a non-sandboxed DB and the RegentCredits debit action — Mac / fork only.
+    # true parallel timing.
     @tag :dynamic
     test "two identical sends yield one message id", ctx do
       body = %{"body" => "same", "idempotency_key" => "dup-1"}
@@ -194,8 +191,8 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
           %{
             "as_key" => 2,
             "command_id" => Ecto.UUID.generate(),
+            "project" => "general",
             "type" => "note",
-            "scope" => "fleet",
             "data" => %{"title" => "x"}
           }
         )

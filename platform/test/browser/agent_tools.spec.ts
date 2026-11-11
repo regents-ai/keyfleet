@@ -1,15 +1,16 @@
 import {randomBytes, randomUUID} from "node:crypto"
 import {readFileSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
-import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent} from "./support/agent_tools"
-import {prepareFleet, sayInGeneral, sellKey} from "./support/fleet_chain"
+import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent, pairingCode, sendSigned} from "./support/agent_tools"
+import {offerRewards, prepareFleet, readTreasury, sayInPublic, sellKey} from "./support/fleet_chain"
 
 // An agent in a person's browser uses Keyfleet through the tools its pages
 // register (priv/tool_manifest.json), as the WebMCP acceptance of 16 October
 // 2026 does on the live site: it finds them, reads without signing in, checks
-// who it is, and talks in a fleet's General room. Each signed tool is called
-// as an agent calls it: the page prepares the exact request, the agent's own
-// signer signs it, and the page sends it with that proof. The server checks
+// who it is, and talks in a fleet's Public room. Each signed tool is called
+// as an agent calls it: the page builds the exact request, the agent's own
+// signer signs it through a stand-in browser host (window.regentsSign), and
+// the page sends it with that proof. The server checks
 // each signature through a stand-in sign-in server (`Keyfleet.BrowserAgents`).
 //
 // The workspace steps are left out: the work graph's Python host does not run
@@ -77,84 +78,97 @@ test("the homepage and a fleet's pages offer every site tool, one set however th
 test("with nobody signed in and no proof, every public read answers, and an unknown fleet is refused", async ({page}) => {
   await open(page, fleetPath)
 
-  for (const name of ["about", "docs", "list_fleets"]) {
+  for (const name of ["about", "docs"]) {
     const read = await callTool(page, name, {})
     expect(read, name).toMatchObject({ok: true, status: 200})
-    expect(read.data.length, name).toBeGreaterThan(0)
+    expect(read.data.title.length, name).toBeGreaterThan(0)
+    expect(read.data.markdown.length, name).toBeGreaterThan(0)
   }
 
-  // The directory lists the fleet with the address read_fleet reads it at.
-  expect((await callTool(page, "list_fleets", {})).data).toContain(`/fleets/${fleet}.md`)
-  const fleetRead = await callTool(page, "read_fleet", {fleet_id: fleet})
-  expect(fleetRead).toMatchObject({ok: true, status: 200})
-  expect(fleetRead.data.length).toBeGreaterThan(0)
+  // The directory lists the fleet by the id fleets_show reads it with.
+  const list = await callTool(page, "fleets_list", {})
+  expect(list).toMatchObject({ok: true, status: 200})
+  expect(list.data.fleets.map((entry: {id: string}) => entry.id)).toContain(fleet)
+  expect(await callTool(page, "fleets_show", {fleet_id: fleet})).toMatchObject({ok: true, status: 200, data: {id: fleet}})
 
-  for (const name of ["read_treasury", "list_proposals", "read_workspace_pulse"]) {
+  for (const name of ["treasury_show", "proposals_list", "workspace_pulse"]) {
     const read = await callTool(page, name, {fleet_id: fleet})
-    expect(read, name).toMatchObject({ok: true, status: 200})
-    expect(JSON.parse(read.data).fleet_id, name).toBe(fleet)
+    expect(read, name).toMatchObject({ok: true, status: 200, data: {fleet_id: fleet}})
   }
 
-  const unknown = await callTool(page, "read_fleet", {fleet_id: "no_such_fleet"})
+  const pulse = await callTool(page, "workspace_pulse", {fleet_id: fleet})
+  const since = await callTool(page, "workspace_pulse", {fleet_id: fleet, after: pulse.data.next_after})
+  expect(since).toMatchObject({ok: true, status: 200, data: {activity: [], next_after: pulse.data.next_after, has_more: false}})
+
+  const unknown = await callTool(page, "fleets_show", {fleet_id: "no_such_fleet"})
   expect(unknown).toMatchObject({ok: false, status: 404, error: {code: "fleet_unknown"}})
 })
 
-test("a paired agent learns who it is and who it acts for, and reading Credits spends none", async ({page}) => {
+test("a paired agent learns who it is and who it acts for, and reading Points changes nothing", async ({page}) => {
   const agent = newAgent()
   const person = wallet()
   pairAgent(agent, person)
   await open(page, "/")
 
-  const whoami = await callSigned(page, agent, "agent_whoami", {})
+  const whoami = await callSigned(page, agent, "agents_whoami", {})
   expect(whoami).toMatchObject({ok: true, status: 200})
   expect(whoami.data.data.agent.wallet).toBe(agent)
-  expect(whoami.data.data.effective_access.paired).toBe(true)
+  expect(whoami.data.data.status).toBe("paired")
 
-  const status = await callSigned(page, agent, "agent_status", {})
+  const status = await callSigned(page, agent, "agents_status", {})
   expect(status).toMatchObject({ok: true, status: 200})
   expect(status.data.data.wallet).toBe(agent)
   expect(status.data.data.account.wallet_address).toBe(person)
 
-  const first = await callSigned(page, agent, "account_balances", {})
+  const first = await callSigned(page, agent, "account_points", {})
   expect(first).toMatchObject({ok: true, status: 200})
-  const again = await callSigned(page, agent, "account_balances", {})
+  const again = await callSigned(page, agent, "account_points", {})
   expect(again).toMatchObject({ok: true, status: 200})
-  expect(again.data.credits).toEqual(first.data.credits)
+  expect(again.data.points).toEqual(first.data.points)
 })
 
-test("a tool that needs a pairing refuses an unpaired agent, and answers once it is paired", async ({page}) => {
+test("a tool that needs a pairing refuses an unpaired agent, and answers once it pairs with its person's code", async ({page}) => {
   const agent = newAgent()
   await open(page, "/")
 
-  const refused = await callSigned(page, agent, "account_balances", {})
+  const refused = await callSigned(page, agent, "account_points", {})
   expect(refused).toMatchObject({ok: false, status: 403, error: {code: "agent_not_paired"}})
 
-  pairAgent(agent, wallet())
-  expect(await callSigned(page, agent, "account_balances", {})).toMatchObject({ok: true, status: 200})
+  const code = pairingCode(wallet())
+  const pairing = {code, name: "Walker", harness: "codex"}
+  const paired = await callSigned(page, agent, "agents_pair", pairing)
+  expect(paired).toMatchObject({ok: true, status: 201, data: {data: {name: "Walker", harness: "codex"}}})
+  expect(paired.data.data.wallet).toBe(agent)
+
+  // A code works once.
+  const again = await callSigned(page, agent, "agents_pair", pairing)
+  expect(again).toMatchObject({ok: false, status: 400, error: {code: "pairing_failed"}})
+
+  expect(await callSigned(page, agent, "account_points", {})).toMatchObject({ok: true, status: 200})
 })
 
-test("an agent posts one line in General, and catching up again after a reconnect repeats nothing and misses nothing", async ({page}) => {
-  // Another member has spoken in General; the agent's person holds a Key of the fleet.
-  sayInGeneral(fleet, wallet(), said("The survey starts at noon."))
+test("an agent posts one line in the Public room, and catching up again after a reconnect repeats nothing and misses nothing", async ({page}) => {
+  // Another member has spoken in the Public room; the agent's person holds a Key of the fleet.
+  sayInPublic(fleet, wallet(), said("The survey starts at noon."))
   const person = wallet()
   const key = sellKey(fleet, person)
   const agent = newAgent()
   pairAgent(agent, person)
   await open(page, fleetPath)
 
-  expect(await callSigned(page, agent, "join_as_agent", {name: "Browser tools agent", declared_harness: "test"}))
+  expect(await callSigned(page, agent, "agents_join", {name: "Browser tools agent", declared_harness: "test"}))
     .toMatchObject({ok: true, status: 200})
 
-  const rooms = await callSigned(page, agent, "list_rooms", {fleet_id: fleet})
+  const rooms = await callSigned(page, agent, "rooms_list", {fleet_id: fleet})
   expect(rooms).toMatchObject({ok: true, status: 200})
   expect(rooms.data.rooms.map((room: {slug: string}) => room.slug)).toContain("general")
 
-  const general = await callSigned(page, agent, "read_room", {fleet_id: fleet, slug: "general"})
+  const general = await callSigned(page, agent, "rooms_messages", {fleet_id: fleet, slug: "general"})
   expect(general).toMatchObject({ok: true, status: 200})
   const readTo: number = general.data.room.head_seq
 
   const line = said("Hull survey started.")
-  const sent = await callSigned(page, agent, "post_to_room", {
+  const sent = await callSigned(page, agent, "rooms_post", {
     fleet_id: fleet,
     slug: "general",
     body: line,
@@ -163,7 +177,7 @@ test("an agent posts one line in General, and catching up again after a reconnec
   expect(sent).toMatchObject({ok: true, status: 201, data: {message: {body: line, as_key: key}}})
 
   const sync = (afterSeq: number) =>
-    callSigned(page, agent, "sync_fleet", {
+    callSigned(page, agent, "fleets_sync", {
       fleet_id: fleet,
       rooms: [{slug: "general", after_seq: afterSeq}],
       graph: {after_seq: 0},
@@ -182,7 +196,7 @@ test("an agent posts one line in General, and catching up again after a reconnec
   await page.reload()
   await settle(page)
   const meanwhile = said("Survey moved to one o'clock.")
-  sayInGeneral(fleet, wallet(), meanwhile)
+  sayInPublic(fleet, wallet(), meanwhile)
 
   // Catching up from where the last catch-up ended repeats none of it, and has what was said since.
   const resumed = await sync(first.cursor)
@@ -191,4 +205,29 @@ test("an agent posts one line in General, and catching up again after a reconnec
   const seen = new Set(first.messages.map(message => message.id))
   expect(since.filter(message => seen.has(message.id))).toEqual([])
   expect(since.filter(message => message.body === meanwhile)).toHaveLength(1)
+})
+
+test("an agent's own wallet gets the same split and claim steps from the browser tools as from its signed requests", async ({page}) => {
+  // The agent's own wallet holds a Key with USDC waiting, and the treasury was just read.
+  const agent = newAgent()
+  pairAgent(agent, wallet())
+  const key = sellKey(fleet, agent)
+  offerRewards(fleet, key, 2_500_000)
+  readTreasury(fleet, 40_000_000)
+  await open(page, fleetPath)
+
+  for (const [name, input] of [
+    ["chain_claim", {fleet_id: fleet, token_id: String(key)}],
+    ["chain_split", {fleet_id: fleet}],
+  ] as const) {
+    const tool = await callSigned(page, agent, name, input)
+    const http = await sendSigned(page, agent, name, input)
+    expect(tool.status, name).toBe(http.status)
+    expect(tool.ok ? tool.data : {error: tool.error}, name).toEqual(http.data)
+  }
+
+  // The claim is steps for the agent's own wallet to send; Keyfleet sent nothing.
+  const claim = await callSigned(page, agent, "chain_claim", {fleet_id: fleet, token_id: String(key)})
+  expect(claim).toMatchObject({ok: true, status: 200})
+  expect(claim.data.transactions.length).toBeGreaterThan(0)
 })

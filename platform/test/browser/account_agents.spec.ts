@@ -1,0 +1,135 @@
+import {expect, test, type Page} from "@playwright/test"
+import {newAgent, pairPerson, useCode} from "./support/agent_tools"
+import {installAuthenticatedPrivy} from "./support/authenticated_privy"
+import {issueShard, prepareFleet, sellKey} from "./support/fleet_chain"
+import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
+
+// A person manages their paired agents on the Agents page, as on regents.sh:
+// See what it has done opens the agent's window, Done closes it, and Unpair,
+// once confirmed in a window of its own, takes the agent off the account. The window is the shared
+// cut-corner dialog, on a wide screen and on a phone.
+const person = "did:privy:verified"
+
+async function signIn(page: Page) {
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  return errors
+}
+
+async function openAgents(page: Page) {
+  await page.goto("/account/agents")
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+}
+
+for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) {
+  test(`at ${viewport.width} px, an agent's window opens and closes, and Unpair takes the agent off the account`, async ({page}) => {
+    await page.setViewportSize(viewport)
+    const name = `Astra ${viewport.width}`
+    pairPerson(newAgent(), person, name)
+    const errors = await signIn(page)
+    await openAgents(page)
+
+    const row = page.locator("#account-agents li", {hasText: name})
+    const dialog = page.locator("#account-agent-dialog")
+    await row.getByRole("button", {name: `See what ${name} has done`}).click()
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("heading", {name})).toBeVisible()
+    const box = (await dialog.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
+
+    await dialog.getByRole("button", {name: "Done"}).click()
+    await expect(dialog).toBeHidden()
+
+    await row.getByRole("button", {name: `See what ${name} has done`}).click()
+    await expect(dialog).toBeVisible()
+    const confirm = page.locator("#account-unpair-dialog")
+    await dialog.getByRole("button", {name: "Unpair"}).click()
+    await expect(confirm.getByRole("heading", {name: `Unpair ${name}?`})).toBeFocused()
+    await confirm.getByRole("button", {name: "Cancel"}).click()
+    await expect(confirm).toHaveCount(0)
+    await expect(dialog.getByRole("button", {name: "Unpair"})).toBeFocused()
+
+    await dialog.getByRole("button", {name: "Unpair"}).click()
+    await confirm.getByRole("button", {name: "Unpair"}).click()
+
+    await expect(confirm).toHaveCount(0)
+    await expect(dialog).toBeHidden()
+    await expect(row).toHaveCount(0)
+    await expect(page.locator("#account-agents [role=status]")).toHaveText(
+      `${name} is unpaired. It will need a new code to pair again.`,
+    )
+    expect(errors).toEqual([])
+  })
+}
+
+// Five tabs are wider than a 320 px phone, so the strip scrolls on its own, as the
+// template's does, and the page itself never scrolls sideways.
+test("on a 320 px phone, each account tab is a whole thumb wide, the open one is in view and the page never scrolls sideways", async ({page}) => {
+  await page.setViewportSize({width: 320, height: 700})
+  await signIn(page)
+  await openAgents(page)
+
+  const tabs = page.locator("#shell-tabs a")
+  await expect(tabs).toHaveCount(5)
+  for (const tab of await tabs.all()) {
+    const box = (await tab.boundingBox())!
+    expect.soft(box.width, await tab.innerText()).toBeGreaterThanOrEqual(44)
+    expect.soft(box.height, await tab.innerText()).toBeGreaterThanOrEqual(44)
+  }
+  await expect(page.locator("#shell-tabs a[aria-current=page]")).toBeInViewport({ratio: 1})
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+})
+
+// Once an agent pairs, the person is offered a shard of their own Key for it:
+// the link opens that Key's page at the agent's own shard press, and the press
+// reaches the wallet. With the shard on the chain, the agent's row names the
+// Key.
+test("an agent that pairs is offered a shard of the person's Key, and its row then names the Key", async ({page}) => {
+  const fleet = "fleet_tech_classic"
+  const me = "0x1111111111111111111111111111111111111111"
+  prepareFleet(fleet)
+  sellKey(fleet, me)
+  const agent = newAgent()
+  const name = `Shard ${agent.slice(2, 8)}`
+  const errors = await signIn(page)
+  await openAgents(page)
+
+  await page.locator("#account-agents").getByRole("button", {name: "Pair New Agent"}).click()
+  await expect(page.locator("#shell-pairing")).toBeVisible()
+  const box = page.locator("#shell-pairing-box")
+  const next = page.locator("#shell-pairing-box-next")
+  const radio = box.getByRole("radio", {name: "Hermes", exact: true})
+  await radio.locator("xpath=ancestor::label").click()
+  const message = box.locator("pre")
+  await expect(message).toContainText(/Pairing code:\s*\S{12,}/)
+  const before = (await next.boundingBox())!.height
+  const [, code] = (await message.innerText()).match(/Pairing code:\s*(\S+)/)!
+  useCode(agent, code, name)
+
+  const give = page.locator("#shell-pairing-box-give-shard")
+  await expect(give).toHaveText(`Give ${name} a shard`)
+  expect((await next.boundingBox())!.height).toBe(before)
+  await expect(page.locator("#account-agents li", {hasText: name}).getByRole("link", {name: "Give it a shard"})).toBeVisible()
+
+  await give.click()
+  await expect(page.locator("#shell-pairing")).toBeHidden()
+  const press = page.locator(`#key-issue-${agent}-button`)
+  await expect(page.locator(`#key-issue-${agent}`)).toContainText(name)
+  await expect(press).toBeInViewport()
+  const key = Number(new URL(page.url()).pathname.split("/").pop())
+  expect(new URL(page.url()).pathname).toBe(`/classic/1/keys/${key}`)
+  await useStandInWallet(page, me)
+  await press.click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [{transaction}] = await sentByStandIn(page)
+  expect(transaction.data.toLowerCase()).toContain(agent.slice(2))
+
+  issueShard(fleet, key, agent, 30)
+  await openAgents(page)
+  const row = page.locator("#account-agents li", {hasText: name})
+  await expect(row.getByRole("link", {name: `Classic #1 Key ${key}`})).toHaveAttribute("href", `/classic/1/keys/${key}`)
+  await expect(row.getByRole("link", {name: "Give it a shard"})).toHaveCount(0)
+  expect(errors).toEqual([])
+})

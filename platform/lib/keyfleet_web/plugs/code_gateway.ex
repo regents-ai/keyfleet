@@ -5,9 +5,14 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   code store only once this site knows who sent it and that they hold one of
   the fleet's keys now.
 
-  Git asks at `/<fleet id>.git` for the three things it needs, and nothing
-  else is answered: what the repository holds (`info/refs`), a copy
-  (`git-upload-pack`) and changes sent (`git-receive-pack`). Who sent it:
+  Git asks at `/<repository>.git`, a project's repository
+  (`Keyfleet.Projects.Project`), for the three things it needs, and nothing
+  else is answered, but for a browser opening `/<repository>.git` itself, which
+  is sent to the project's code on the site: what the repository holds
+  (`info/refs`), a copy (`git-upload-pack`) and changes sent
+  (`git-receive-pack`). Who sent it, checked against the fleet the
+  repository's name begins with, before anyone learns whether that project
+  is there:
 
     * An agent signs every request with its own sign-in (SIWA, as on
       `/api/v1/agent`): its method, its path with the query, and the
@@ -23,30 +28,35 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   body at most `body_timeout_ms`, so a sender trickling bytes is cut off. An
   agent's body reaches the store only if it is the one its signature declared;
   any other is refused and its file deleted, and nothing was sent to the store.
+  Once the body is in, the key is checked again and only then is the store's
+  pass made, so a body that arrives slowly still carries a pass that holds,
+  and a key that changed hands meanwhile is refused.
 
-  A key changing hands clears the fleet's admissions at once.
+  A key changing hands clears the fleet's admissions at once. An archived
+  project's repository is copied and never changed: a push to it is refused.
 
   What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of
   any sign-in, with only the headers git's exchange needs. The store's answer
   streams back. Each push spends `:code_pushes` for the wallet it is sent as
   (`Keyfleet.Limits`), before its body is read. When the store reports changes
   done, each branch or tag moved, up to `@recorded` of them, is recorded for
-  the fleet's workspace, under the key and, for an agent, the agent too. A
-  store that cannot be reached, stops mid-exchange or answers with a fault of
-  its own is saved with the site's errors (`Keyfleet.Code.StoreDownError`).
+  the fleet's workspace, under the project and the key and, for an agent, the
+  agent too. A store that cannot be reached, stops mid-exchange, answers with
+  a fault of its own or refuses the pass is saved with the site's errors
+  (`Keyfleet.Code.StoreDownError`).
   """
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
 
   import Plug.Conn
 
-  alias Keyfleet.{Code, Limits}
+  alias Keyfleet.{Code, Limits, Projects}
   alias Keyfleet.Code.{Pass, ReceivePack, RecordsDownError, StoreDownError}
+  alias Keyfleet.Projects.Project
   alias KeyfleetWeb.{CodePassword, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
   @services ~w(git-upload-pack git-receive-pack)
-  @fleet_id ~r/\A[a-z0-9_]{1,64}\z/
 
   # Only what git's exchange needs passes either way.
   @kept_request ~w(accept accept-encoding content-encoding content-type git-protocol user-agent)
@@ -80,71 +90,102 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     end
   end
 
+  # A browser opening a repository's address, as its workspace shows it, is
+  # sent to the project's code on the site.
+  defp serve_open(%Plug.Conn{method: "GET", path_info: [address]} = conn) do
+    with {:ok, repository, fleet_id} <- repository(address),
+         true <- fleet_id in Keyfleet.Fleets.catalog_ids() do
+      conn
+      |> put_resp_header(
+        "location",
+        KeyfleetWeb.Endpoint.url() <> Code.files_path(fleet_id, repository, "")
+      )
+      |> send_resp(302, "")
+    else
+      _other -> refuse(conn, 404, "code_not_found")
+    end
+  end
+
   # The body's path is the one Plug.Upload.random_file/1 made, never the sender's.
   # sobelow_skip ["Traversal.FileModule"]
   defp serve_open(conn) do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
-    with {:route, {:ok, fleet_id, need, target}} <- {:route, route(conn)},
+    with {:route, {:ok, repository, fleet_id, need, target}} <- {:route, route(conn)},
          {:signed_in, {:ok, conn, subject, actor}} <- {:signed_in, identify(conn, fleet_id)},
          {:holder, {:ok, %{} = holder}} <-
            {:holder, reported(fleet_id, current_holder(fleet_id, subject, actor))},
-         {:allowed, {:ok, pass}} <- {:allowed, pass(fleet_id, holder, need)},
-         {:owner, {:ok, owner}} <- {:owner, Code.owner(fleet_id)},
+         {:allowed, :ok} <- {:allowed, allowed(holder, need)},
+         {:project, {:ok, %Project{} = project}} <- {:project, project(repository)},
+         {:open, :ok} <- {:open, open(project, need)},
+         {:owner, {:ok, owner}} <- {:owner, Code.owner(repository)},
          {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)},
          {:body, {:ok, conn, body}} <- {:body, spool(conn)} do
-      conn
-      |> forward(fleet_id, "/#{owner}/#{fleet_id}/#{target}", pass, body, fn response ->
-        sent(conn, fleet_id, holder, body.head, response)
-      end)
-      |> tap(fn _conn -> File.rm!(body.path) end)
+      check = fn -> reported(fleet_id, current_holder(fleet_id, subject, actor)) end
+
+      try do
+        send_checked(conn, project, "/#{owner}/#{repository}/#{target}", need, check, body, actor)
+      after
+        File.rm!(body.path)
+      end
     else
-      {:route, :error} ->
-        refuse(conn, 404, "code_not_found")
-
-      {:body, {:too_large, conn}} ->
-        refuse(conn, 413, "code_too_large")
-
-      {:body, {:error, conn}} ->
-        refuse(conn, 400, "invalid_request")
-
-      {:body, {:not_signed, conn}} ->
-        refuse(conn, 400, "code_body_not_signed")
-
-      {:signed_in, {:refused, conn}} ->
-        conn
-
-      {:holder, {:ok, nil}} ->
-        refuse(conn, 403, "code_not_holder")
-
-      {:holder, {:error, _error}} ->
-        refuse(conn, 503, "code_catching_up")
-
-      {:allowed, :restricted} ->
-        refuse(conn, 403, "code_edits_restricted")
-
-      {:pushes, {:limited, seconds}} ->
-        conn
-        |> put_resp_header("retry-after", Integer.to_string(seconds))
-        |> refuse(429, "code_pushes_limit_reached")
-
-      {:owner, {:setting_up, seconds}} ->
-        # The next try, and a minute for it to finish.
-        wait = seconds + 60
-
-        conn
-        |> put_resp_header("retry-after", Integer.to_string(wait))
-        |> refuse(503, Refusal.code_setting_up(wait))
-
-      {:owner, :setup_restarted} ->
-        conn
-        |> put_resp_header("retry-after", "180")
-        |> refuse(503, "code_setup_restarted")
-
-      {:owner, {:error, _error}} ->
-        refuse(conn, 503, "code_unavailable")
+      refused -> refused(conn, refused)
     end
   end
+
+  # A body may take far longer to arrive than a pass lasts, and meanwhile the
+  # key may change hands and the project be archived or deleted, so both are
+  # read again once the body is in and the pass is made then.
+  defp send_checked(conn, project, path, need, check, body, actor) do
+    with {:holder, {:ok, %{} = holder}} <- {:holder, check.()},
+         {:allowed, :ok} <- {:allowed, allowed(holder, need)},
+         {:project, {:ok, %Project{} = project}} <- {:project, project(project.repository)},
+         {:open, :ok} <- {:open, open(project, need)} do
+      forward(conn, project.repository, path, pass(project.repository, holder, need), body, fn
+        response -> sent(conn, project, holder, actor, body.head, response)
+      end)
+    else
+      refused -> refused(conn, refused)
+    end
+  end
+
+  defp refused(conn, {:route, :error}), do: refuse(conn, 404, "code_not_found")
+  defp refused(conn, {:project, {:ok, nil}}), do: refuse(conn, 404, "code_not_found")
+  defp refused(conn, {:project, {:error, _error}}), do: refuse(conn, 503, "code_unavailable")
+  defp refused(conn, {:open, :archived}), do: refuse(conn, 403, "code_project_archived")
+  defp refused(_conn, {:body, {:too_large, conn}}), do: refuse(conn, 413, "code_too_large")
+  defp refused(_conn, {:body, {:error, conn}}), do: refuse(conn, 400, "invalid_request")
+
+  defp refused(_conn, {:body, {:not_signed, conn}}),
+    do: refuse(conn, 400, "code_body_not_signed")
+
+  defp refused(_conn, {:signed_in, {:refused, conn}}), do: conn
+  defp refused(conn, {:holder, {:ok, nil}}), do: refuse(conn, 403, "code_not_holder")
+  defp refused(conn, {:holder, {:error, _error}}), do: refuse(conn, 503, "code_catching_up")
+  defp refused(conn, {:allowed, :restricted}), do: refuse(conn, 403, "code_edits_restricted")
+
+  defp refused(conn, {:pushes, {:limited, seconds}}) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(seconds))
+    |> refuse(429, "code_pushes_limit_reached")
+  end
+
+  defp refused(conn, {:owner, {:setting_up, seconds}}) do
+    # The next try, and a minute for it to finish.
+    wait = seconds + 60
+
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(wait))
+    |> refuse(503, Refusal.code_setting_up(wait))
+  end
+
+  defp refused(conn, {:owner, :setup_restarted}) do
+    conn
+    |> put_resp_header("retry-after", "180")
+    |> refuse(503, "code_setup_restarted")
+  end
+
+  defp refused(conn, {:owner, {:error, _error}}), do: refuse(conn, 503, "code_unavailable")
 
   # A key that could not be checked is saved with the site's errors; the sender
   # is told to try again shortly.
@@ -173,47 +214,62 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   defp spend_push(_conn, _fleet_id, _holder), do: :ok
 
-  # When the store took a push, what it moved is recorded under the holder.
+  # When the store took a push, what it moved is recorded under the holder,
+  # and an agent's push as its latest contribution.
   defp sent(
          %Plug.Conn{method: "POST", path_info: [_repository, "git-receive-pack"]},
-         fleet_id,
+         project,
          holder,
+         actor,
          request,
          response
        ) do
-    updates = request |> ReceivePack.updates(response) |> Enum.take(@recorded)
-    Code.record_pushes(fleet_id, holder, updates)
+    case request |> ReceivePack.updates(response) |> Enum.take(@recorded) do
+      [] ->
+        :ok
+
+      updates ->
+        Code.record_pushes(project.fleet_id, project.name, holder, updates)
+        Keyfleet.Agents.record_contribution(actor, project.fleet_id, :code)
+    end
   end
 
-  defp sent(_conn, _fleet_id, _holder, _request, _response), do: :ok
+  defp sent(_conn, _project, _holder, _actor, _request, _response), do: :ok
 
   ## What is asked
 
-  defp route(%Plug.Conn{method: "GET", path_info: [repository, "info", "refs"]} = conn) do
+  defp route(%Plug.Conn{method: "GET", path_info: [address, "info", "refs"]} = conn) do
     conn = fetch_query_params(conn)
 
-    with {:ok, fleet_id} <- fleet(repository),
+    with {:ok, repository, fleet_id} <- repository(address),
          %{"service" => service} when service in @services <- conn.query_params do
-      {:ok, fleet_id, need(service), "info/refs?service=" <> service}
+      {:ok, repository, fleet_id, need(service), "info/refs?service=" <> service}
     else
       _other -> :error
     end
   end
 
-  defp route(%Plug.Conn{method: "POST", path_info: [repository, service]})
+  defp route(%Plug.Conn{method: "POST", path_info: [address, service]})
        when service in @services do
-    with {:ok, fleet_id} <- fleet(repository), do: {:ok, fleet_id, need(service), service}
+    with {:ok, repository, fleet_id} <- repository(address),
+         do: {:ok, repository, fleet_id, need(service), service}
   end
 
   defp route(_conn), do: :error
 
-  defp fleet(repository) do
-    fleet_id = String.replace_suffix(repository, ".git", "")
+  defp repository(address) do
+    repository = String.replace_suffix(address, ".git", "")
 
-    if fleet_id <> ".git" == repository and Regex.match?(@fleet_id, fleet_id),
-      do: {:ok, fleet_id},
-      else: :error
+    with true <- repository <> ".git" == address,
+         {:ok, fleet_id} <- Code.repository_fleet(repository) do
+      {:ok, repository, fleet_id}
+    else
+      _other -> :error
+    end
   end
+
+  defp project(repository),
+    do: Projects.project_of_repository(repository, actor: %Keyfleet.Actors.System{})
 
   defp need("git-upload-pack"), do: :read
   defp need("git-receive-pack"), do: :push
@@ -348,9 +404,14 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   end
 
   # A key whose edits a vote restricted may still copy the code.
-  defp pass(fleet_id, %{restricted?: true}, :read), do: {:ok, Pass.read(fleet_id)}
-  defp pass(_fleet_id, %{restricted?: true}, :push), do: :restricted
-  defp pass(fleet_id, %{wallet: wallet}, _need), do: {:ok, Pass.push(fleet_id, wallet)}
+  defp allowed(%{restricted?: true}, :push), do: :restricted
+  defp allowed(_holder, _need), do: :ok
+
+  defp open(%Project{state: :archived}, :push), do: :archived
+  defp open(_project, _need), do: :ok
+
+  defp pass(repository, %{restricted?: true}, :read), do: Pass.read(repository)
+  defp pass(repository, %{wallet: wallet}, _need), do: Pass.push(repository, wallet)
 
   # Git shows a plain-text answer to the person running it, and the signing
   # helper reads the same.
@@ -367,7 +428,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   # `done` is told the start of the answer once the store has answered in
   # full and the answer reached the client.
-  defp forward(conn, fleet_id, path, pass, body, done) do
+  defp forward(conn, repository, path, pass, body, done) do
     %URI{scheme: scheme, host: host, port: port} = URI.parse(Code.config()[:node])
 
     headers = [
@@ -395,11 +456,16 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
           conn
 
         {:done, conn, %{status: status}} when status in 500..599 ->
-          StoreDownError.report("The code store answered #{status} for #{fleet_id}")
+          StoreDownError.report("The code store answered #{status} for #{repository}")
+          conn
+
+        # Only a pass this site made reaches the store, so its refusal is a fault.
+        {:done, conn, %{status: status}} when status in [401, 403] ->
+          StoreDownError.report("The code store refused the pass for #{repository} (#{status})")
           conn
 
         {:failed, conn, _answer} ->
-          StoreDownError.report("The code store stopped answering for #{fleet_id}")
+          StoreDownError.report("The code store stopped answering for #{repository}")
           conn
 
         {_ended, conn, _answer} ->
@@ -408,7 +474,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     else
       unreachable ->
         StoreDownError.report(
-          "The code store could not be reached for #{fleet_id}: #{inspect(unreachable)}"
+          "The code store could not be reached for #{repository}: #{inspect(unreachable)}"
         )
 
         refuse(conn, 502, "code_unavailable")

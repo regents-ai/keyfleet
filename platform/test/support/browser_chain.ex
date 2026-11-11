@@ -22,7 +22,8 @@ defmodule Keyfleet.BrowserChain do
   was accepted until `refuse_draw!/3` says it was turned down. A wallet has
   allowed a fleet the USDC `allow!/2` names, and none until then. A step a
   page's wallet sent is on the chain once `land!/3` puts it on the server's
-  `Keyfleet.TestChainNode`.
+  `Keyfleet.TestChainNode`. A Key is marked present once `present!/2` logs
+  it.
   """
 
   alias Keyfleet.Actors.Agent
@@ -40,13 +41,13 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.GoalIdeas
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
-  alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.SharedReading
   alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
+  alias KeyfleetWeb.FleetNow
   alias RegentChain.Call
   alias RegentChain.Event
 
@@ -59,6 +60,7 @@ defmodule Keyfleet.BrowserChain do
   @allowance Call.selector("allowance(address,address)")
   @reveal_seed Call.selector("revealSeed(uint256)")
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
+  @fleet_record Call.selector("fleet(uint256)")
   @owner_of Call.selector("ownerOf(uint256)")
   @sales_open_at Call.selector("salesOpenAt(uint256)")
   @total_minted Call.selector("totalMinted()")
@@ -67,6 +69,7 @@ defmodule Keyfleet.BrowserChain do
   @shard_is_active Call.selector("isActive(uint256,address)")
   @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
   @shard_ended Event.topic0("ShardEnded(uint256,address,address)")
+  @present Event.topic0("Present(uint256,uint64,uint64,uint64)")
   # A plain wallet signed in on Base, where the keys are.
   @agent %Agent{
     wallet_address: "0x" <> String.duplicate("c", 40),
@@ -136,6 +139,10 @@ defmodule Keyfleet.BrowserChain do
       calls: &answer/3
     )
 
+    TestChainNode.answer_calls(&answer/3)
+
+    # Read now, so the first page opened already finds the fleet on sale.
+    FleetNow.read(fleet_id)
     reread()
     minted(fleet_id)
   end
@@ -153,6 +160,12 @@ defmodule Keyfleet.BrowserChain do
   def refuse_draw!(fleet_id, token_id, refused) do
     %{keys_address: keys} = fleet = Fleets.get_fleet!(fleet_id)
     remember({:draw_refused, keys, Fleet.onchain_token_id(fleet, token_id)}, refused)
+  end
+
+  @doc "The fleet's treasury was read just now, holding `amount` atomic USDC."
+  def read_treasury!(fleet_id, amount) do
+    ProposalHelpers.treasury_reading!(fleet_id, [%{asset: @usdc, held: amount, backed: 0}])
+    :ok
   end
 
   @doc "`owner` has allowed every fleet `amount` atomic USDC from now on."
@@ -223,6 +236,10 @@ defmodule Keyfleet.BrowserChain do
   end
 
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
+
+  # Every fleet's deck is set on the chain.
+  defp answer(_keys, @fleet_record <> _fleet_id, _block_hash),
+    do: {:ok, <<0::256, 0::256, 1::256, 1::256, 1::256>>}
 
   defp answer(keys, @reveal_requested_at <> token_id, _block_hash) do
     refused? = Map.get(answers(), {:draw_refused, keys, String.to_integer(token_id, 16)}, false)
@@ -334,9 +351,33 @@ defmodule Keyfleet.BrowserChain do
   end
 
   @doc """
+  Every Key `owner` holds in the fleet was marked present just now, as an
+  agent's daily mark logs it on the fleet's vote contract.
+  """
+  def present!(fleet_id, owner) do
+    keys = Keys.keys_held_in_fleet!(fleet_id, [owner], actor: @system)
+    at = DateTime.to_unix(DateTime.utc_now())
+
+    pass!(fleet_id, fn fleet, block ->
+      keys
+      |> Enum.with_index()
+      |> Enum.map(fn {key, index} ->
+        log(
+          fleet.votes_address,
+          [@present, word(Fleet.onchain_token_id(fleet, key.token_id))],
+          word_data([at, block, key.ownership_epoch]),
+          fleet.id,
+          block,
+          index
+        )
+      end)
+    end)
+  end
+
+  @doc """
   Gives a deployed fleet something on each of its pages to link to the
   others: the agent of `owner`, sold a key, says something for them in the
-  General room, the workspace holds its starting goals, a goal that discusses
+  Public room, the workspace holds its starting goals, a goal that discusses
   that message and a task assigned to the Key the message speaks as, and the
   fleet has proposal 1.
   Returns that Key's number: an owner who already holds a lower Key speaks as
@@ -370,16 +411,16 @@ defmodule Keyfleet.BrowserChain do
     message.as_key
   end
 
-  # The fleet's proposals and polls as every visitor shares them
-  # (`KeyfleetWeb.FleetProposals`, `KeyfleetWeb.FleetPolls`) are read again a
-  # second later, as the minute's heal would have them read; no job runs on
-  # the browser test server, and a deployment or a proposal written here
-  # sends no notice of its own.
-  defp reread, do: Enum.each([:fleet_proposals, :fleet_polls], &SharedReading.heal/1)
+  # The fleet's proposals as every visitor shares them
+  # (`KeyfleetWeb.FleetProposals`) are read again a second later, as the
+  # minute's heal would have them read; no job runs on the browser test
+  # server, and a deployment or a proposal written here sends no notice of
+  # its own.
+  defp reread, do: SharedReading.heal(:fleet_proposals)
 
   @doc """
   Sells the fleet's next key to `owner`, whose agent says `body` for them in the
-  General room.
+  Public room.
   Returns the key's number.
   """
   def say!(fleet_id, owner, body) do
@@ -387,19 +428,63 @@ defmodule Keyfleet.BrowserChain do
     token_id
   end
 
-  @doc """
-  The person holding a Key of the fleet with the wallet `owner` asks it
-  `question` in a poll open for an hour, choosing between "Yes" and "Not yet".
-  Returns the poll's id. Each Key starts one poll a day, so an owner asks once.
-  """
-  def poll!(fleet_id, owner, question) do
-    poll =
-      Polls.start_poll!(
-        %{fleet_id: fleet_id, question: question, choices: ["Yes", "Not yet"], minutes: 60},
-        actor: %Human{human_account_id: 1, wallet_addresses: [owner]}
-      )
+  @doc "Opens the fleet's workspace log, once per fleet, before `work!/2`."
+  def open_workspace!(fleet_id) do
+    WorkspaceFixtures.open_log(fleet_id)
+    :ok
+  end
 
-    poll.id
+  @doc """
+  Has Key `key` add a task called `title` to the fleet's workspace and tells
+  the pages that show the fleet's work to anyone, as the graph's copier does
+  after a change. Returns its id.
+  """
+  def work!(fleet_id, key, title) do
+    id = WorkspaceFixtures.create(fleet_id, "task", %{"title" => title}, by: key)
+
+    Phoenix.PubSub.broadcast(
+      Keyfleet.PubSub,
+      Keyfleet.Graph.notable_topic(fleet_id),
+      {:graph_notable, fleet_id}
+    )
+
+    id
+  end
+
+  @doc """
+  Has Key `key` retitle the workspace item `id`, and tells the pages that read
+  the fleet's workspace, as the graph's copier does after a change. The notice
+  names a run of its own, so every page reads the workspace again.
+  """
+  def rework!(fleet_id, key, id, title) do
+    WorkspaceFixtures.edit(fleet_id, id, %{"title" => title}, by: key)
+
+    Phoenix.PubSub.broadcast(
+      Keyfleet.PubSub,
+      Keyfleet.Graph.head_topic(fleet_id),
+      {:graph_head, fleet_id, "browser", 0}
+    )
+
+    :ok
+  end
+
+  @doc "The address of the workspace item `id`."
+  def item_path(fleet_id, id), do: KeyfleetWeb.WorkspacePage.item_path(fleet_id, id)
+
+  @doc """
+  Records that `wallet`, holding Key `key`, sent `general`'s repository a
+  change ending at `head`, as the code store's gateway does after git has its
+  answer.
+  """
+  def push!(fleet_id, key, wallet, head) do
+    Keyfleet.Code.record_pushes(
+      fleet_id,
+      Keyfleet.Projects.general(),
+      %{token_id: key, wallet: wallet},
+      [%{ref: "refs/heads/main", head: head}]
+    )
+
+    :ok
   end
 
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
@@ -459,7 +544,8 @@ defmodule Keyfleet.BrowserChain do
   end
 
   # One pass over a chain whose next block holds the logs `logs_at` makes for
-  # the fleet and that block, and whose head is well past it.
+  # the fleet and that block, and whose head is past the 300 blocks the
+  # scanner reads again, so the next pass never reads this block again.
   defp pass!(fleet_id, logs_at) do
     fleet = Fleets.get_fleet!(fleet_id)
 
@@ -471,7 +557,7 @@ defmodule Keyfleet.BrowserChain do
 
     StubClient.put_chain(
       %{
-        number: block + 40,
+        number: block + 340,
         hash: "0x" <> String.duplicate("f", 64),
         timestamp: DateTime.utc_now(),
         base_fee: 0

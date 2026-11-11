@@ -39,17 +39,17 @@ async function copies(page: Page, id: string, value: string) {
   await expect(page.locator(`#${id}-status`)).toHaveText("")
 }
 
-test("a fleet's Send your agent copies its instruction", async ({page}) => {
+test("a fleet's Pair New Agent opens the pairing window, which copies its message", async ({page}) => {
   const errors = await signIn(page)
   await open(page, `/classic/1`)
-  await page.locator("#fleet-send-agent").click()
-  await expect(page.locator("#fleet-send-agent-dialog")).toBeVisible()
+  await page.locator("#fleet-pair").click()
+  await expect(page.locator("#shell-pairing")).toBeVisible()
+  const box = page.locator("#shell-pairing-box")
+  await box.getByRole("radio", {name: "Hermes", exact: true}).locator("xpath=ancestor::label").click()
+  const message = box.locator("pre")
+  await expect(message).toContainText(/Pairing code:\s*\S{12,}/)
 
-  await copies(
-    page,
-    "fleet-send-agent-copy",
-    "Install the Keyfleet skill from keyfleet.ai/skill.md and follow it. Then look at the Classic #1 fleet.",
-  )
+  await copies(page, "shell-pairing-box-copy", (await message.locator("code").textContent())!)
   expect(errors).toEqual([])
 })
 
@@ -57,7 +57,7 @@ test("the Wallets tab copies the account's wallet", async ({page}) => {
   const errors = await signIn(page)
   await open(page, "/account/wallets")
 
-  await copies(page, "account-wallet-copy", me)
+  await copies(page, `wallets-list-${me}-address-copy`, me)
   expect(errors).toEqual([])
 })
 
@@ -67,6 +67,6 @@ test("a key's page copies the wallet of an agent with a shard of it", async ({pa
   const errors = await signIn(page)
   await open(page, `/classic/1/keys/${key}`)
 
-  await copies(page, `key-shard-address-${agentWallet}`, agentWallet)
+  await copies(page, `key-shard-address-${agentWallet}-copy`, agentWallet)
   expect(errors).toEqual([])
 })

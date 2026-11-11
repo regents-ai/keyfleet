@@ -173,7 +173,26 @@ defmodule Keyfleet.Keys.KeyAttachment do
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [record_seq: :desc], before: [:before_seq]}
 
-      prepare build(select: [:fleet_id, :token_id, :ownership_epoch, :record_seq, :observed_at])
+      prepare build(
+                select: [
+                  :fleet_id,
+                  :token_id,
+                  :ownership_epoch,
+                  :transaction_hash,
+                  :record_seq,
+                  :observed_at
+                ]
+              )
+    end
+
+    # The fleet's epochs with these epoch numbers, each with the wallet its
+    # key went to, so a page can show a run of transfers to one wallet as one.
+    read :by_record_seq do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :record_seqs, {:array, :integer}, allow_nil?: false
+
+      filter expr(fleet_id == ^arg(:fleet_id) and record_seq in ^arg(:record_seqs))
+      prepare build(select: [:fleet_id, :record_seq, :owner_wallet])
     end
 
     # The lowest-numbered key each of these wallets holds in the fleet right
@@ -265,19 +284,6 @@ defmodule Keyfleet.Keys.KeyAttachment do
       pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
     end
 
-    # The fleet's keys that have no vote now, each with its owner today, a
-    # page at a time by key number.
-    read :idle_in_fleet do
-      argument :fleet_id, :string, allow_nil?: false
-
-      filter expr(
-               fleet_id == ^arg(:fleet_id) and ownership_epoch == current_ownership_epoch and idle
-             )
-
-      prepare build(sort: [token_id: :asc])
-      pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
-    end
-
     # The fleet's keys that have a vote now: the ones a proposal opening now
     # would count.
     read :present_in_fleet do
@@ -297,6 +303,15 @@ defmodule Keyfleet.Keys.KeyAttachment do
       argument :fleet_id, :string, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id))
       prepare build(sort: [token_id: :desc], limit: 1, select: [:token_id])
+      get? true
+    end
+
+    # The fleet's newest change of hands read so far: the latest sale or
+    # transfer of any of its keys, by its place on the chain.
+    read :newest_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id))
+      prepare build(sort: [block_number: :desc, log_index: :desc], limit: 1, select: [:token_id])
       get? true
     end
 
@@ -328,14 +343,20 @@ defmodule Keyfleet.Keys.KeyAttachment do
       prepare build(select: [:token_id, :ownership_epoch, :owner_wallet], sort: [token_id: :asc])
     end
 
-    # Every key one wallet holds right now, in every fleet.
-    read :held_by_wallet do
-      argument :owner_wallet, :string, allow_nil?: false
+    # Every key a person's wallets hold right now, in every fleet, by fleet
+    # and number.
+    read :held_everywhere do
+      argument :owner_wallets, {:array, :string}, allow_nil?: false
 
       filter expr(
-               owner_wallet == ^arg(:owner_wallet) and
+               owner_wallet in ^arg(:owner_wallets) and
                  ownership_epoch == current_ownership_epoch
              )
+
+      prepare build(
+                select: [:fleet_id, :token_id, :ownership_epoch, :owner_wallet],
+                sort: [fleet_id: :asc, token_id: :asc]
+              )
     end
 
     # Every record of one wallet holding any of some of the fleet's keys, then
@@ -465,6 +486,30 @@ defmodule Keyfleet.Keys.KeyAttachment do
                     ) AS last
                     WHERE last.kind IN ('present', 'scheduled')
                       AND last.at <= (now() AT TIME ZONE 'utc')
+                      AND (now() AT TIME ZONE 'utc') < last.at + interval '48 hours'
+                  )
+                  """,
+                  fleet_id,
+                  token_id
+                )
+              )
+
+    # Whether a present key has a day or less of its 48 hours left.
+    calculate :expiring,
+              :boolean,
+              expr(
+                fragment(
+                  """
+                  EXISTS (
+                    SELECT 1 FROM (
+                      SELECT presence.kind, presence.at
+                      FROM keyfleet_app.key_presences AS presence
+                      WHERE presence.fleet_id = ? AND presence.token_id = ?
+                      ORDER BY presence.block_number DESC, presence.log_index DESC
+                      LIMIT 1
+                    ) AS last
+                    WHERE last.kind IN ('present', 'scheduled')
+                      AND (now() AT TIME ZONE 'utc') >= last.at + interval '24 hours'
                       AND (now() AT TIME ZONE 'utc') < last.at + interval '48 hours'
                   )
                   """,

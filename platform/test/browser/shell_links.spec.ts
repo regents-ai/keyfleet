@@ -81,7 +81,7 @@ async function enterShell(page: Page) {
 }
 
 const fleetPage: Stop = {path: fleetPath, shows: "#fleet-view"}
-const general: Stop = {path: `${fleetPath}/rooms/general`, shows: "#rooms-page"}
+const general: Stop = {path: `${fleetPath}?room=general`, shows: "#rooms-thread"}
 const board: Stop = {path: `${fleetPath}/workspace`, shows: "#workspace-page"}
 const plan: Stop = {path: planPath, shows: "#workspace-item-page"}
 const proposals: Stop = {path: `${fleetPath}/proposals`, shows: "#proposals-page"}
@@ -90,7 +90,7 @@ const account: Stop = {path: "/account", shows: "#account-page"}
 
 test("the walk from home through every page, back, forward and the sidebar keeps one shell", async ({page}) => {
   const sidebar = page.locator("#shell-sidebar")
-  const keyProfile: Stop = {path: `${fleetPath}?key=${key}`, shows: "dialog#key-profile"}
+  const keyProfile: Stop = {path: `${fleetPath}?room=general&key=${key}`, shows: "dialog#key-profile"}
 
   // Home is its own page and links to no Syndicate page, so the walk enters
   // the shell with one full load of the fleet's page.
@@ -109,8 +109,8 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     [page.locator("#fleet-tab-workspace"), board],
     [page.locator("#workspace-goals .workspace-row-title", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
-    // Other specs may have posted in General too; this one's Key is the one to open.
-    [page.locator(`#rooms-page .rooms-author a[href$="?key=${key}"]`).first(), keyProfile],
+    // Other specs may have posted in the Public room too; this one's Key is the one to open.
+    [page.locator(`#rooms-thread .rooms-author a[href$="&key=${key}"]`).first(), keyProfile],
     [page.locator("#key-profile-recent a").first(), general],
     [sidebar.getByRole("link", {name: "Account"}), account],
   ]
@@ -127,9 +127,9 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     await walk.arrive(visited[visited.length - 1 - back])
   }
 
-  // The sidebar's links: the Regents Club and the Account page.
-  await walk.follow(sidebar.getByRole("link", {name: "Regents Club"}), {
-    path: "/app/fleets/regents_club",
+  // The sidebar's links: Classic and the Account page.
+  await walk.follow(sidebar.getByRole("link", {name: "Classic #1"}), {
+    path: "/classic/1",
     shows: "#fleet-page",
   })
   await walk.follow(sidebar.getByRole("link", {name: "Account"}), account)
@@ -144,7 +144,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
 
   // The fleet's rooms, workspace and proposals.
   // The sidebar has no link to this fleet, so the way back from a room is the browser's own.
-  await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "General"}), general)
+  await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "Public"}), general)
   await page.goBack()
   await walk.arrive(fleetPage)
   await walk.follow(page.locator("#fleet-tab-workspace"), board)
@@ -174,4 +174,87 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.follow(page.locator("#fleet-tab-proposals"), proposals)
 
   await walk.settled()
+})
+
+// Before the page is live, the tab of the page on show carries its mark on
+// the tab's own fill, where the fill cannot cover it; the other tabs carry
+// none. Once live, one gliding mark takes over (fleet_motion.spec.ts), so this
+// reads the page as it first arrives, with scripts off.
+test("a fleet's current tab is marked", async ({browser}) => {
+  const context = await browser.newContext({javaScriptEnabled: false})
+  const page = await context.newPage()
+  await page.goto(`${fleetPath}/proposals`)
+  const marks = await page.locator("#fleet-tabs a").evaluateAll(tabs =>
+    tabs.map(tab => [tab.id, getComputedStyle(tab, "::before").boxShadow]),
+  )
+
+  for (const [id, mark] of marks) {
+    if (id === "fleet-tab-proposals") expect(mark).toContain("inset")
+    else expect(mark).toBe("none")
+  }
+  await context.close()
+})
+
+// On a phone a Workstream line's links stay part of their sentence: the
+// closing quote and full stop after an item never wrap onto a line alone.
+test("on a phone, a Workstream item keeps its closing quote beside its name", async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844})
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(board.path as string)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  const items = page.locator("#workspace-activity a[data-item-link]")
+  await expect(items.first()).toBeVisible()
+  for (const item of await items.all()) {
+    // The name's last letter and the quote after it share one line.
+    const apart = await item.evaluate(link => {
+      const top = (node: Node, at: number) => {
+        const range = document.createRange()
+        range.setStart(node, at)
+        range.setEnd(node, at + 1)
+        return range.getBoundingClientRect().top
+      }
+      const name = link.lastChild!
+      return Math.abs(top(name, name.textContent!.length - 1) - top(link.nextSibling!, 0)) > 1
+    })
+    expect(apart).toBe(false)
+  }
+})
+
+// An "i" tip at the end of a line of small print stays beside the line's last
+// word, so on a narrow phone it never wraps onto a line by itself, whichever
+// phone width puts that word at the end of a line.
+test("on a narrow phone, a footnote's tip stays beside its last word", async ({page}) => {
+  for (const [path, tip] of [
+    [`${fleetPath}?room=general`, "rooms-who-posts"],
+    [`${fleetPath}/polls`, "polls-who-tip"],
+  ]) {
+    await page.setViewportSize({width: 390, height: 800})
+    await page.goto(path)
+    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+    const button = page.locator(`[popovertarget="${tip}"]`)
+    await expect(button).toBeVisible()
+    for (let width = 300; width <= 430; width += 2) {
+      await page.setViewportSize({width, height: 800})
+      // The middle of the tip's button sits on the line of the last letter
+      // before it.
+      const apart = await button.evaluate(element => {
+        const tipBox = element.getBoundingClientRect()
+        const walker = document.createTreeWalker(element.closest("p")!, NodeFilter.SHOW_TEXT)
+        let last: Text | null = null
+        while (walker.nextNode()) {
+          const text = walker.currentNode as Text
+          if (element.closest(".rg-tip")!.contains(text)) break
+          if (text.textContent!.trim()) last = text
+        }
+        const end = last!.textContent!.trimEnd().length
+        const range = document.createRange()
+        range.setStart(last!, end - 1)
+        range.setEnd(last!, end)
+        const letter = range.getBoundingClientRect()
+        const middle = (tipBox.top + tipBox.bottom) / 2
+        return middle < letter.top || middle > letter.bottom
+      })
+      expect(apart, `${path} at ${width}px`).toBe(false)
+    }
+  }
 })

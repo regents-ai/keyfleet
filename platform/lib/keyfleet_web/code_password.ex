@@ -1,16 +1,18 @@
 defmodule KeyfleetWeb.CodePassword do
   @moduledoc """
   The password a person's git signs in to a fleet's code with
-  (`KeyfleetWeb.Plugs.CodeGateway`), with any user name. It is sealed by this
-  site, names one fleet and the Keyfleet sign-in it was made under, and lasts
-  `password_ttl_seconds` or until that sign-in ends. The sign-in and holding
-  the key are checked again on every use. Agents have no password: each of
-  their requests carries their own signature.
+  (`KeyfleetWeb.Plugs.CodeGateway`), with any user name, for every project's
+  repository in the fleet. It is sealed by this site, names one fleet and the
+  Keyfleet sign-in it was made under, and lasts `password_ttl_seconds` or
+  until that sign-in ends. The sign-in and holding the key are checked again
+  on every use. Agents have no password: each of their requests carries their
+  own signature.
   """
 
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.Human
-  alias Keyfleet.{Code, Notebooks}
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Code, Notebooks, Projects}
 
   @salt "code password"
 
@@ -50,8 +52,6 @@ defmodule KeyfleetWeb.CodePassword do
     end
   end
 
-  defp actor(_old_or_invalid_password), do: :error
-
   defp holder(actor, fleet_id) do
     case Code.holder(actor, fleet_id) do
       {:ok, nil} -> {:error, :not_holder}
@@ -62,8 +62,9 @@ defmodule KeyfleetWeb.CodePassword do
   # `expires_at` is when the password stops working: `password_ttl_seconds`
   # from now, sooner if the person signs out.
   defp issue(sealed) do
-    # The store's repository is made the first time anyone asks.
-    Code.owner(sealed["fleet_id"])
+    # A repository whose setup gave up is set up again.
+    for project <- Projects.projects!(sealed["fleet_id"], actor: %System{}),
+        do: Code.owner(project.repository)
 
     {:ok,
      %{

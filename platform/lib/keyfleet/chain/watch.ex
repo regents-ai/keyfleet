@@ -1,19 +1,23 @@
 defmodule Keyfleet.Chain.Watch do
   @moduledoc """
-  Every minute (`config :keyfleet, Oban, cron:`), where a node is configured
-  (`KEYFLEET_RPC_URL`): makes sure each deployed fleet has a
+  Every five minutes (`config :keyfleet, Oban, cron:`), where a node is
+  configured (`KEYFLEET_RPC_URL`): makes sure each deployed fleet has a
   `Keyfleet.Chain.ReadFleet` job reading its history, and queues a
   `Keyfleet.Chain.ReadBalances` reading of its balances. A fleet recorded
-  while the site runs is read from the next minute on.
+  while the site runs is read from the next turn on, or sooner when a
+  person's on-chain press lands (`refresh/1`).
 
-  With fleets deployed and no node named, nothing reads them; each minute
-  says so with the site's errors (`Keyfleet.Chain.ReadingStoppedError`).
+  With fleets deployed and no node named, nothing reads them; each turn says
+  so with the site's errors (`Keyfleet.Chain.ReadingStoppedError`).
   """
   use Oban.Worker, queue: :default, max_attempts: 1
+
+  @behaviour Keyfleet.ChainRefresh
 
   alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Chain.ReadFleet
   alias Keyfleet.Chain.ReadingStoppedError
+  alias Keyfleet.ChainRefresh
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -22,12 +26,39 @@ defmodule Keyfleet.Chain.Watch do
     :ok
   end
 
+  @doc """
+  A person's on-chain press on chain `chain_id` landed: each fleet deployed on
+  it reads its history ten seconds from now, instead of at its next turn, and
+  its balances at once. A history read already under way is left to finish.
+  """
+  @impl ChainRefresh
+  def refresh(chain_id) do
+    soon = DateTime.add(DateTime.utc_now(), ChainRefresh.gap_s())
+
+    Keyfleet.Fleets.list_deployed_fleets!()
+    |> Enum.filter(&(&1.chain_id == chain_id))
+    |> Enum.each(fn fleet ->
+      %{fleet_id: fleet.id} |> ReadFleet.new() |> Oban.insert!() |> bring_forward(soon)
+      Oban.insert!(ReadBalances.new(%{fleet_id: fleet.id}))
+    end)
+  end
+
+  # A waiting history read due later than `soon` moves to `soon`; one due
+  # sooner keeps its time, so presses that keep coming never put the read off.
+  defp bring_forward(%Oban.Job{state: state, scheduled_at: at} = job, soon)
+       when state in ["scheduled", "retryable"] do
+    if DateTime.after?(at, soon), do: {:ok, _job} = Oban.update_job(job, %{scheduled_at: soon})
+    :ok
+  end
+
+  defp bring_forward(%Oban.Job{}, _soon), do: :ok
+
   defp read([], _rpc_url), do: :ok
 
   defp read(fleets, nil) do
     ReadingStoppedError.report(
       "No fleet is being read: KEYFLEET_RPC_URL names no node. Deployed fleets waiting: " <>
-        "#{length(fleets)}. Set it to a Base node; the watch starts reading within a minute."
+        "#{length(fleets)}. Set it to a Base node; the watch starts reading within five minutes."
     )
 
     :ok

@@ -33,12 +33,7 @@ defmodule Keyfleet.Graph.Projector do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
   end
 
-  def start_link(opts) do
-    fleet_id = Keyword.fetch!(opts, :fleet_id)
-    wait = Keyword.fetch!(opts, :projection_wait)
-    name = {:via, Registry, {Keyfleet.Graph.ProjectorRegistry, fleet_id, wait}}
-    GenServer.start_link(__MODULE__, opts, name: name)
-  end
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   @doc """
   Waits, up to `:projection_wait`, until the fleet's read tables reach `seq`
@@ -52,19 +47,22 @@ defmodule Keyfleet.Graph.Projector do
   """
   @spec await(String.t(), String.t(), non_neg_integer()) :: non_neg_integer()
   def await(fleet_id, run_id, seq) do
-    case Registry.lookup(Keyfleet.Graph.ProjectorRegistry, fleet_id) do
-      [{pid, wait}] -> GenServer.call(pid, {:await, run_id, seq}, wait)
+    # The projector may run on another machine; see `Keyfleet.Graph.Writer`.
+    case :pg.get_members(Keyfleet.Graph.Processes, {__MODULE__, fleet_id}) do
+      [pid] -> GenServer.call(pid, {:await, run_id, seq}, wait())
       [] -> 0
     end
-  rescue
-    # The registry is absent while the projectors are switched off or restarting.
-    ArgumentError -> 0
   catch
     :exit, _reason -> 0
   end
 
+  defp wait, do: Keyword.fetch!(Application.fetch_env!(:keyfleet, :graph), :projection_wait)
+
   @impl true
   def init(opts) do
+    :ok =
+      :pg.join(Keyfleet.Graph.Processes, {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, self())
+
     state = %{
       fleet_id: Keyword.fetch!(opts, :fleet_id),
       interval: Keyword.fetch!(opts, :catch_up_interval),

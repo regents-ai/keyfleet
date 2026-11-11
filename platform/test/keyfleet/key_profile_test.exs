@@ -49,6 +49,7 @@ defmodule Keyfleet.KeyProfileTest do
 
     assert %{
              traits: nil,
+             draw_ended?: false,
              shards: [],
              changed_hands: 0,
              votes_cast: 0,
