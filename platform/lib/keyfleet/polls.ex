@@ -54,9 +54,9 @@ defmodule Keyfleet.Polls do
   @doc """
   The Key `actor` takes part as in the fleet's polls, as `%{key: token_id,
   wallet: wallet}`, or nil: by `Keyfleet.Keys.identity/2`, so a person is the
-  highest-ranked Key their wallets hold, an agent the Key its own wallet holds
-  or holds a shard of, and an agent paired with a person here is that person's
-  Key. `wallet` is the one that acted: the agent's own, or the person's wallet
+  highest-ranked Key their wallets hold, an agent the Key its own wallet
+  holds, the Key its person put it on or a Key it holds a shard of, and an
+  agent paired with a person here otherwise that person's Key. `wallet` is the one that acted: the agent's own, or the person's wallet
   holding the Key.
   """
   def voter(actor, fleet_id) do

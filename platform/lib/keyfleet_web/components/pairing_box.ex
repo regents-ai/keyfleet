@@ -7,9 +7,10 @@ defmodule KeyfleetWeb.PairingBox do
   (`RegentAgents.Harness.hosted/0`, read at runtime), then the message to paste with
   its code in a short box with icons to copy it and make a new code. Each agent keeps its own code until it expires, so choosing another
   agent and coming back shows the same message. Once the agent uses the code, the
-  box names it, and Give It a Shard under the box leads to the agent's shard
-  press on the page of one of the person's Keys (`KeyfleetWeb.AgentKeys`); that
-  line keeps its space before, so the page below never moves.
+  box names it, and, when the person holds a Key, a link under the box leads to
+  Your Keys on the Account page, where they put the agent on one
+  (`KeyfleetWeb.AgentKeys`); that line keeps its space before, so the page below
+  never moves.
 
   The parent passes `account` (the signed-in account), its `session_lease` as
   `lease` and `id`, and sends `agents_changed: true` when an agent pairs, checks
@@ -67,7 +68,7 @@ defmodule KeyfleetWeb.PairingBox do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :give, give(assigns.codes[assigns.chosen]))
+    assigns = assign(assigns, :assign, assign_key(assigns.codes[assigns.chosen]))
 
     ~H"""
     <div>
@@ -81,14 +82,14 @@ defmodule KeyfleetWeb.PairingBox do
       />
       <p id={"#{@id}-next"} class="account-pairing-next">
         <.link
-          :if={is_map(@give)}
-          id={"#{@id}-give-shard"}
-          navigate={@give.path}
+          :if={is_map(@assign)}
+          id={"#{@id}-assign-key"}
+          navigate={KeyfleetWeb.AgentKeys.assign_path()}
           class="rg-button rg-button--primary"
         >
-          <span class="rg-button__label">Give {@give.name} a shard</span>
+          <span class="rg-button__label">Assign {@assign.name} a Key</span>
         </.link>
-        <span :if={@give == :unavailable} class="rg-muted">
+        <span :if={@assign == :unavailable} class="rg-muted">
           Couldn’t read your Keys. Refresh to try again.
         </span>
       </p>
@@ -118,7 +119,7 @@ defmodule KeyfleetWeb.PairingBox do
       expires: Calendar.strftime(code.expires_at, "%H:%M UTC")
     }
 
-  defp pairing(harness, {:paired, agent, _give}, _start),
+  defp pairing(harness, {:paired, agent, _keys}, _start),
     do: %{chosen: to_string(harness), outcome: {:paired, agent.name}}
 
   defp pairing(harness, :unavailable, _start),
@@ -143,7 +144,7 @@ defmodule KeyfleetWeb.PairingBox do
   defp usable?(%PairingCode.Issued{expires_at: expires_at}),
     do: DateTime.after?(expires_at, DateTime.utc_now())
 
-  defp usable?({:paired, _agent, _give}), do: true
+  defp usable?({:paired, _agent, _keys}), do: true
   defp usable?(_missing_or_unavailable), do: false
 
   # The code on screen gives way to the agent that used it, so a spent code is
@@ -154,23 +155,23 @@ defmodule KeyfleetWeb.PairingBox do
          %{} = agent <- Enum.find(agents, &(DateTime.compare(&1.paired_at, issued_at) != :lt)) do
       VisitLog.step("agent_paired", to_string(chosen))
 
-      give =
-        case KeyfleetWeb.AgentKeys.read(socket.assigns.account, [agent.wallet]) do
-          {:ok, keys} -> keys[agent.wallet]
+      keys =
+        case KeyfleetWeb.AgentKeys.read(socket.assigns.account, [agent]) do
+          {:ok, keys} -> keys[agent.id]
           {:error, _failure} -> :unavailable
         end
 
-      assign(socket, codes: Map.put(codes, chosen, {:paired, agent, give}))
+      assign(socket, codes: Map.put(codes, chosen, {:paired, agent, keys}))
     else
       _unchanged -> socket
     end
   end
 
-  # The paired agent and where to give it a shard, when it has none and the
-  # person holds a Key, or `:unavailable` when the Keys couldn't be read.
-  defp give({:paired, agent, {:give, path}}), do: %{name: agent.name, path: path}
-  defp give({:paired, _agent, :unavailable}), do: :unavailable
-  defp give(_code), do: nil
+  # The paired agent, to put on a Key when it is on none and the person holds
+  # one, or `:unavailable` when the Keys couldn't be read.
+  defp assign_key({:paired, agent, :assign}), do: %{name: agent.name}
+  defp assign_key({:paired, _agent, :unavailable}), do: :unavailable
+  defp assign_key(_code), do: nil
 
   defp issue(socket, harness) do
     code =

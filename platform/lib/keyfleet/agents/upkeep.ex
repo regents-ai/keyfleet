@@ -94,9 +94,10 @@ defmodule Keyfleet.Agents.Upkeep do
   first, each as `%{token_id, from, until}`: the 48 hours the chain reader
   last recorded it counting in votes, an automatic start included, or nil for
   both. `agents` are `person_agents/2`. `done` holds the four steps, each true
-  once the records show it: an agent paired, an agent acting for a Key, an
-  agent's daily run scheduled, and every Key needing no mark, the same reading
-  as an agent's `marked` state: present, or waiting for its automatic start.
+  once the records show it: an agent paired, an agent holding a Key or a shard
+  of one, an agent's daily run scheduled, and every Key needing no mark, the
+  same reading as an agent's `marked` state: present, or waiting for its
+  automatic start.
   Nothing here reads the chain.
   """
   def person_setup(%Human{} = person, fleet_id) do

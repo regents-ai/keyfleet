@@ -3,9 +3,10 @@ defmodule KeyfleetWeb.AccountLive do
   The signed-in person's account, one tab each: Profile (who the site knows
   them as, their wallets and which one is active (`KeyfleetWeb.AccountWallets`),
   their ENS name and World ID, the keys their wallets hold, each new one with
-  the time left until it first shares the Daily Treasury Slice to Keys, with
-  one Claim per fleet for all of them at once and, in a fleet where they hold
-  several, the one they post as
+  the time left until it first shares the Daily Treasury Slice to Keys and,
+  once they have paired an agent, the agent on it, those with an agent first
+  (`KeyfleetWeb.KeyAgentChoice`), with one Claim per fleet for all of them at
+  once and, in a fleet where they hold several, the one they post as
   (`KeyfleetWeb.PostingKeyChoice`), and this browser's session, in
   the layout every Regent site shares, `Regent.Account.layout`, Keyfleet's own
   sections first), Agents (the agents paired with their account, which they may
@@ -32,7 +33,6 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.WalletSteps.Reads
-  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
 
@@ -55,6 +55,10 @@ defmodule KeyfleetWeb.AccountLive do
     default: %KeyfleetWeb.Read{},
     doc:
       "the read of when each held key still too new first shares the Treasury slice (`slices/1`)"
+
+  attr :key_agents, :map,
+    default: %{agents: [], on_keys: %{}},
+    doc: "the person's paired agents and the agent on each of their Keys (`key_agents/1`)"
 
   def profile(assigns) do
     ~H"""
@@ -90,12 +94,20 @@ defmodule KeyfleetWeb.AccountLive do
               <h3>
                 <.link patch={Keyfleet.Fleets.path(fleet.fleet_id)}>{fleet.name}</.link>
               </h3>
-              <ul class="account-keys__list">
-                <li :for={token_id <- fleet.token_ids}>
-                  <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
+              <.live_component
+                module={KeyfleetWeb.KeyAgentChoice}
+                id={"account-key-agents-#{fleet.fleet_id}"}
+                fleet_id={fleet.fleet_id}
+                token_ids={fleet.token_ids}
+                agents={@key_agents.agents}
+                on_keys={Map.get(@key_agents.on_keys, fleet.fleet_id, %{})}
+                account={@account}
+                lease={@lease}
+              >
+                <:key :let={token_id}>
                   <.slice slices={@slices} fleet_id={fleet.fleet_id} token_id={token_id} />
-                </li>
-              </ul>
+                </:key>
+              </.live_component>
               <.live_component
                 :if={fleet.chain_id}
                 module={WalletPanel}
@@ -399,6 +411,31 @@ defmodule KeyfleetWeb.AccountLive do
           name: name,
           token_ids: Enum.map(keys, & &1.token_id)
         }
+  end
+
+  @doc """
+  The agents paired with the signed-in person now and the agent on each of
+  their Keys, fleet by fleet, as `%{agents: agents, on_keys: %{fleet_id =>
+  %{token_id => agent}}}` (`Keyfleet.Keys.AgentKey`), read in one go for
+  every fleet.
+  """
+  def key_agents(nil), do: %{agents: [], on_keys: %{}}
+
+  def key_agents(%Human{} = actor) do
+    agents = Keys.person_agents(actor)
+
+    on_keys =
+      for {{fleet_id, token_id}, agent} <- Keys.agents_on_keys(actor, agents),
+          reduce: %{},
+          do: (on_keys ->
+                 Map.update(
+                   on_keys,
+                   fleet_id,
+                   %{token_id => agent},
+                   &Map.put(&1, token_id, agent)
+                 ))
+
+    %{agents: agents, on_keys: on_keys}
   end
 
   @doc """

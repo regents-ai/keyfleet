@@ -309,6 +309,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
             {"projects_list", %{"fleet_id" => fleet}},
             {"fleets_doctor", %{"fleet_id" => fleet}},
             {"keys_show", %{"fleet_id" => fleet, "token_id" => "1"}},
+            {"keys_agents", %{"fleet_id" => fleet}},
             {"fleets_show", %{"fleet_id" => fleet}},
             {"publications_list", %{"fleet_id" => fleet, "project" => "main"}},
             {"code_pushes", %{"fleet_id" => fleet, "project" => "main"}},
