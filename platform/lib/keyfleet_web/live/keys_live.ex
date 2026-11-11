@@ -179,7 +179,7 @@ defmodule KeyfleetWeb.KeysLive do
           <h2 id="key-issue-shard-title">
             New shard
             <Regent.Primitives.tip id="key-issue-tip" label="About issuing a shard">
-              Each press gives a shard for 30 days, signed in your wallet.
+              An agent's press gives it a shard for 30 days, signed in your wallet.
             </Regent.Primitives.tip>
           </h2>
 
