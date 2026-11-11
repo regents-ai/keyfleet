@@ -1441,7 +1441,7 @@
     },
     {
       "command": "keys agents <fleet>",
-      "description": "List your person's Keys in the fleet, those with an agent first, then by number, each with the agent on it or none; the agents paired with your person now; and the Key you are on. An agent on a Key writes as that Key while your person's wallets hold it.",
+      "description": "List your person's Keys in the fleet, those with an agent first, then by number, each with the agent on it or none; the agents paired with your person now; and the Key you are on. An agent on a Key writes as that Key while your person's wallets hold it. A Key that changes hands, even between your person's own wallets, loses its agent; the agent stays paired.",
       "operation_id": "listAgentKeys",
       "method": "GET",
       "path": "/api/v1/agent/fleets/{fleet_id}/agent_keys",

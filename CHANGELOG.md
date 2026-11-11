@@ -7510,3 +7510,37 @@ one, or takes one off. An agent on no Key acts as before (5.a).
 Check: the two 4.a tests in `platform/test/keyfleet/agent_key_test.exs`, the
 `person_only` route test and the tool and refusal tests in
 `platform/test/keyfleet_web/agent_key_route_test.exs`.
+
+## 2026-11-11 — A Key that changes hands loses its agent
+
+Owner's answer on decision 4, 11 November: "If a Key is transferred, all
+agents must be unpaired". Read as: the agent comes off that Key and stays
+paired with its person; it is on no Key in the fleet until the person, or an agent of theirs,
+puts it on one. 4.a is unchanged.
+
+- `Keyfleet.Keys.AgentKey` keeps the Key's ownership record as it stood when
+  the agent was put on it (`ownership_epoch`, not null, at least 1). Every
+  transfer starts a new record (`Keyfleet.Keys.KeyAttachment`), so a Key that
+  changes hands, even between the person's own wallets or back to them, has
+  no agent; the same rule `AgentVoting` keeps.
+- One rule, `Keys.placed_on?/3`: a row stands while its Key is still in the
+  record it was saved with and one of the person's wallets holds it.
+  `Keys.assigned_keys/2` (an agent acting, the fleet's agent list) and
+  `Keys.agents_on_keys/2` (Your Keys, the Agents page, `keys_agents`) both
+  ask it.
+- `Keyfleet.Keys.Changes.PutAgent` reads the Keys it touches under its locks;
+  a row that no longer stands counts as no agent. A Key's own is overwritten,
+  and one the named agent left on another Key is cleared, whoever writes, so
+  an agent of the person may put an agent whose Key changed hands onto a Key
+  with none. 4.a's "that place comes back with the Key" is gone.
+- Migration `20261111164247_agent_keys` gains the column and its check; the
+  table has not shipped, so it stays one additive migration. No production
+  data.
+- `cli/COMMANDS.md`, `cli/commands.json`, the tool manifest, the contract
+  (28.1.0, descriptions only), docs, llms.md, the public changelog and the
+  feature map say so.
+
+Check: "a Key whose agent was unpaired, or that changed hands, has none" and
+"a Key moved between the person's own wallets loses its agent too" in
+`platform/test/keyfleet/agent_key_test.exs`; both fail with the record left
+out of `placed_on?/3`.

@@ -3,8 +3,9 @@ defmodule KeyfleetWeb.AgentKeys do
   The Keys a person's agents act for, as the Agents page shows them beside
   each agent (`KeyfleetWeb.AgentsPanel`) and once an agent pairs
   (`KeyfleetWeb.PairingBox`): the Key the person put each agent on in a fleet
-  (`Keyfleet.Keys.AgentKey`) while their wallets hold it, and each Key the
-  agent's wallet holds an active shard of, each linked to its page. For an
+  (`Keyfleet.Keys.AgentKey`) while it stands there
+  (`Keyfleet.Keys.placed_on?/3`), and each Key the agent's wallet holds an
+  active shard of, each linked to its page. For an
   agent with neither whose person holds a Key, the page links to Your Keys on
   the Account page (`assign_path/0`), where the person puts it on one. An
   agent with neither whose person holds no Key has nothing there.

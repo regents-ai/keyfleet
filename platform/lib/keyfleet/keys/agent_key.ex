@@ -20,13 +20,20 @@ defmodule Keyfleet.Keys.AgentKey do
   is saved: unpairing an agent ends its place on a Key, and pairing it again
   starts with none. Only its own person, or their agent, sets it, and only on
   a Key the person's wallets hold now (`Keyfleet.Keys.Validations.HeldByPerson`).
-  Only the person takes an agent off a Key or moves one they put on a Key,
-  even one they no longer hold; an agent of theirs puts an agent that is on no
-  Key in the fleet, itself included, onto a Key with none
-  (`Keyfleet.Keys.Errors.PersonOnlyError` otherwise).
-  Two writes at once run one after the other (`Keyfleet.Keys.Changes.PutAgent`).
-  Each reads only their own person's; which Key any agent is on is read by
-  trusted code alone, through `Keyfleet.Keys.assigned_keys/2`.
+
+  It is kept with the Key's ownership record as it stood when it was saved
+  (`ownership_epoch`), and counts only while the Key stays in that record and
+  one of the person's wallets holds it (`Keyfleet.Keys.placed_on?/3`): a Key
+  that changes hands, even between the person's own wallets or back to them,
+  has no agent on it. The agent stays paired; it is on no Key in the fleet.
+
+  Only the person takes an agent off a Key or moves one that is on a Key; an
+  agent of theirs puts an agent that is on no Key in the fleet, itself
+  included, onto a Key with none (`Keyfleet.Keys.Errors.PersonOnlyError`
+  otherwise). Two writes at once run one after the other
+  (`Keyfleet.Keys.Changes.PutAgent`). Each reads only their own person's;
+  which Key any agent is on is read by trusted code alone, through
+  `Keyfleet.Keys.assigned_keys/2`.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -41,6 +48,10 @@ defmodule Keyfleet.Keys.AgentKey do
 
     check_constraints do
       check_constraint(:token_id, "agent_keys_positive_token", check: "token_id > 0")
+
+      check_constraint(:ownership_epoch, "agent_keys_positive_epoch",
+        check: "ownership_epoch >= 1"
+      )
     end
   end
 
@@ -55,7 +66,7 @@ defmodule Keyfleet.Keys.AgentKey do
       change set_attribute(:human_account_id, actor(:human_account_id))
       upsert? true
       upsert_identity :one_agent_per_key
-      upsert_fields [:paired_agent_id, :updated_at]
+      upsert_fields [:paired_agent_id, :ownership_epoch, :updated_at]
       validate Keyfleet.Graph.Validations.KnownFleet
       # Checked once the policy has let a person through, in this order.
       validate Keyfleet.Keys.Validations.HeldByPerson, before_action?: true
@@ -64,7 +75,9 @@ defmodule Keyfleet.Keys.AgentKey do
 
     # The agent the person's other Key in the fleet had, taken off it when
     # the person puts the agent onto another (`Keyfleet.Keys.Changes.PutAgent`),
-    # read from the person's own rows.
+    # read from the person's own rows. A row whose Key has changed hands puts
+    # no agent anywhere, and `PutAgent` clears it for whoever's write needs
+    # its place.
     destroy :release do
       require_atomic? false
     end
@@ -145,6 +158,13 @@ defmodule Keyfleet.Keys.AgentKey do
     # The agent's pairing (`RegentAgents.PairedAgent`), nil once its person
     # took it off the Key.
     attribute :paired_agent_id, :uuid, public?: true
+
+    # The Key's ownership record (`Keyfleet.Keys.KeyAttachment`) when the row
+    # was saved; the row counts only while the Key is still in it.
+    attribute :ownership_epoch, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: @max_bigint]
 
     update_timestamp :updated_at, public?: true
   end
