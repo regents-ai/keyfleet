@@ -728,7 +728,49 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       assert left.body["result"] == %{"id" => task["id"], "version" => version}
     end
 
-    assert archive.(7).status == 200
+    # A Key that changed the task worked on it, so it never reviews it, even
+    # after leaving; one that only joined and left may.
+    submitted =
+      graph(
+        c,
+        ann,
+        "submit",
+        %{
+          as_key: 1,
+          command_id: "s-1",
+          id: task["id"],
+          expected_version: 7,
+          result_ref: "https://example.com/brief"
+        },
+        @cascade
+      )
+
+    assert submitted.body["result"] == %{"id" => task["id"], "version" => 8}
+
+    worked = graph(c, ann, "get", %{id: task["id"]}, @cascade).body
+    assert Enum.map(worked["object"]["sys"]["worked"], & &1["key"]["token_id"]) == [3]
+    assert ContractSchema.errors(worked, "WorkspaceObjectView") == []
+
+    review = fn agent, key ->
+      body = %{
+        as_key: key,
+        command_id: "r-#{key}",
+        task: task["id"],
+        task_version: 8,
+        decision: "accept",
+        rationale: "The brief answers the deliverable.",
+        conflicts_of_interest: "none"
+      }
+
+      graph(c, agent, "review", body, @cascade)
+    end
+
+    refused = review.(cal, 3)
+    assert {refused.status, refused.body["error"]["code"]} == {403, "self_review"}
+    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
+    assert review.(bea, 2).status == 200
+
+    assert archive.(8).status == 200
     assert graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["sys"]["archived"]
 
     # A fork is a Key's own copy to take another way; nobody has joined it.
