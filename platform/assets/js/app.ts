@@ -23,6 +23,7 @@ import {
 } from "./shell_state"
 import {installCopyButtons} from "./copy_buttons"
 import {installPublicTools} from "./public_tools"
+import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
@@ -291,6 +292,7 @@ const hooks = {
   ...showcaseHooks,
   ...labHooks,
   ...colocatedHooks,
+  CurrentTab,
   FleetPreview,
   HexField,
   HolographicCard,

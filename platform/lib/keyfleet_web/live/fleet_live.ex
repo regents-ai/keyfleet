@@ -274,7 +274,7 @@ defmodule KeyfleetWeb.FleetLive do
             <.agent_files />
           </div>
 
-          <nav class="fleet-bar__nav" aria-label="This fleet">
+          <nav id="fleet-tabs" class="fleet-bar__nav" aria-label="This fleet" phx-hook="CurrentTab">
             <.link
               id="fleet-tab-hall"
               class="rg-button rg-button--secondary"

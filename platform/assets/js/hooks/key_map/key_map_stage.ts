@@ -23,6 +23,7 @@ import {
   type KeyMapSnapshot,
   type KeyMapState,
 } from "./state"
+import {createPictures} from "./pictures"
 import {createTiles} from "./tiles"
 
 export type KeyMapStage = {
@@ -121,6 +122,8 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   let width = 0
   let height = 0
   let placedAt = ""
+  // Loads the close-ups a few at a time, nearest where the view is heading first.
+  const loads = createPictures()
 
   const cursorKey = () => (cursor && grid ? grid.valueAt(...cursor) : 0)
 
@@ -132,11 +135,25 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     picture: key => pictures.get(key) ?? "",
     sale: level => levelSale(onSaleLevel(grid!, state!), level),
     heading: level => levelHeading(level, levelSale(onSaleLevel(grid!, state!), level)),
-  })
+  }, loads)
+
+  // Asks where the close-ups of `keys` are shown, a hundred at a time, then
+  // runs `then`. A key with no close-up is forgotten, so one whose card was
+  // drawn again is not left with its old picture.
+  const ask = (keys: number[], then: () => void) => {
+    for (let from = 0; from < keys.length; from += picturesAsked) {
+      const batch = keys.slice(from, from + picturesAsked)
+      options.pictures(batch, found => {
+        batch.forEach(key => pictures.delete(key))
+        found.forEach(([key, address]) => pictures.set(key, address))
+        tiles.refresh()
+        then()
+      })
+    }
+  }
 
   // Asks for the close-ups of the sold keys in view not asked about yet, once
-  // the view has stayed put for a moment. A key with no close-up is forgotten,
-  // so one whose card was drawn again is not left with its old picture.
+  // the view has stayed put for a moment.
   const seek = () => {
     for (const key of tiles.keys()) {
       if (key > state!.minted || asked.has(key)) continue
@@ -148,15 +165,33 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
       asking = 0
       const keys = wanted
       wanted = []
-      for (let from = 0; from < keys.length; from += picturesAsked) {
-        const batch = keys.slice(from, from + picturesAsked)
-        options.pictures(batch, found => {
-          batch.forEach(key => pictures.delete(key))
-          found.forEach(([key, address]) => pictures.set(key, address))
-          tiles.refresh()
-        })
-      }
+      ask(keys, () => {})
     }, picturesWait)
+  }
+
+  // Starts on the close-ups of the sold keys in a view centred on world point
+  // (x, y) as soon as the map sets off there, so they are on their way before
+  // it lands. Each key loads once, at its copy nearest that point.
+  const land = (x: number, y: number) => {
+    const [colPitch, rowPitch] = [SQRT3 * size, 1.5 * size]
+    const [left, top, right, bottom] = [x - width / 2, y - height / 2, x + width / 2, y + height / 2]
+    const landing = new Map<number, Point>()
+    for (let r = Math.floor(top / rowPitch); r <= Math.ceil(bottom / rowPitch); r++) {
+      for (let q = Math.floor(left / colPitch - r / 2); q <= Math.ceil(right / colPitch - r / 2); q++) {
+        const key = grid!.valueAt(q, r)
+        if (key > 0 && key <= state!.minted && !landing.has(key)) landing.set(key, axialToPixel(q, r, size))
+      }
+    }
+    const preload = () => {
+      const ahead: [string, number, number][] = []
+      landing.forEach(([kx, ky], key) => pictures.has(key) && ahead.push([pictures.get(key)!, kx, ky]))
+      loads.ahead(ahead)
+    }
+    const unasked = [...landing.keys()].filter(key => !asked.has(key))
+    unasked.forEach(key => asked.add(key))
+    loads.focus(x, y)
+    preload()
+    if (unasked.length) ask(unasked, preload)
   }
 
   const periods = (): [Point, Point] => [axialToPixel(...grid!.periodA, size), axialToPixel(...grid!.periodB, size)]
@@ -173,6 +208,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     const j = Math.round((a[0] * camera.y - a[1] * camera.x) / det)
     if (i === 0 && j === 0) return
     camera.shift(-(i * a[0] + j * b[0]), -(i * a[1] + j * b[1]))
+    loads.shift(-(i * a[0] + j * b[0]), -(i * a[1] + j * b[1]))
     if (cursor) cursor = [cursor[0] - i * grid!.periodA[0] - j * grid!.periodB[0], cursor[1] - i * grid!.periodA[1] - j * grid!.periodB[1]]
     placedAt = ""
   }
@@ -181,6 +217,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     if (!grid) return
     recentre()
     layer.style.transform = `translate3d(${width / 2 - camera.x}px, ${height / 2 - camera.y}px, 0)`
+    loads.focus(...camera.heading())
     const cell = `${Math.floor(camera.x / (SQRT3 * size))},${Math.floor(camera.y / (1.5 * size))}`
     if (cell === placedAt) return
     placedAt = cell
@@ -231,7 +268,9 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     const [x, y] = axialToPixel(...cell, size)
     const margin = SQRT3 * size
     const hidden = Math.abs(x - camera.x) > width / 2 - margin || Math.abs(y - camera.y) > height / 2 - margin
-    if (centre || hidden) camera.glideTo(x, y)
+    if (!centre && !hidden) return
+    land(x, y)
+    camera.glideTo(x, y)
   }
 
   // The cursor goes to a key shown on the map, in the view's middle.
@@ -360,6 +399,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
     destroy() {
       window.clearTimeout(asking)
+      loads.destroy()
       camera.destroy()
       resize.disconnect()
       root.removeEventListener("keydown", keydown)
