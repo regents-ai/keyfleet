@@ -364,7 +364,7 @@ defmodule Keyfleet.BrowserChain do
       |> Enum.map(fn {key, index} ->
         log(
           fleet.votes_address,
-          [@present, word(key.token_id)],
+          [@present, word(Fleet.onchain_token_id(fleet, key.token_id))],
           word_data([at, block, key.ownership_epoch]),
           fleet.id,
           block,
