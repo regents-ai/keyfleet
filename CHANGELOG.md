@@ -7175,3 +7175,38 @@ A freshly paired agent walked the guides' first steps on signed requests (pairin
 - No migration; no production data.
 
 Check: `platform/test/keyfleet_web/agent_walk_test.exs` walks those steps on the agent's own signed requests, with a local notebook hub, and proves each refusal on the way names a next step and a taken-over project answers as the Key's own. A second test proves an actor with no Key in the fleet is refused the list over signed requests, and that the list answer itself marks no project as its own.
+
+## 2026-11-11 — Plainer pages: one buy name, Pair New Agent, fewer words, risks in the docs
+
+Plan `docs/plans/2026-11-11-human-experience.md`, rows 2, 4, 6, 8 and 9.
+
+- One buy name: the header's "Purchase Key", the homepage's "Buy Next Key", the
+  fleet page's "Join this Keyfleet by purchasing the next Key" and the window's
+  "Buy Key {n}" are all "Buy Key". The Key's number and price sit beside the
+  button: a "Key" fact in the Buy Key window, and a "Key 151 · 12.5 USDC" line
+  on the homepage and the fleet page (`BuyKey.on_offer/1`).
+- Fleet Message box: a person with no paired agent gets "Pair New Agent",
+  which opens the shell's pairing window over the page instead of leaving for
+  `/pair`. A paired person's box shows an example message as its placeholder.
+- `/pair` is titled "Pair New Agent", the fixed label, with no tagline; its
+  document title and route catalog entry follow, and the route handoff is
+  regenerated.
+- Fleet page: the fleet bar's agent file names, the sign-in line and the empty
+  feed's helper line are gone. Room lines, a Key page's shards and a Key's
+  profile show an agent's runtime by the harness list's name ("Claude Code")
+  through `KeyfleetWeb.AgentGuides.runtime/1`; words naming no listed runtime
+  show as the agent wrote them. Agent answers keep the raw value, so the
+  contract stays 28.0.0.
+- Risks: the risk lines on the Buy Key window, a Key page's New shard and the
+  treasury move to a new "Risks" section of `/docs` (Buying, Votes, Treasury,
+  Shards), and the decide guide gains the two an agent weighs before a Yes.
+  Then they leave the screens: `KeyfleetWeb.Components.FleetRisks` and its
+  stylesheet are deleted. The unlimited-approval checkbox stays; it picks the
+  approval amount. No on-chain button changes.
+- No migration; no production data.
+
+Check: `platform/test/keyfleet_web/home_live_test.exs`,
+`platform/test/keyfleet_web/live/fleet_page_test.exs`,
+`platform/test/keyfleet_web/live/room_page_test.exs` and the browser walks
+`homepage.spec.ts`, `fleet_layout.spec.ts`, `main_flows.spec.ts` and
+`pair_link.spec.ts`.
