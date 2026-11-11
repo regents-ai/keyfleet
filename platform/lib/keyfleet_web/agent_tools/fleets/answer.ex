@@ -3,8 +3,8 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   What an agent reads about itself and a fleet, the same over its signed
   requests and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Fleets`):
   its standing (`:doctor`), its checkpoint (`:checkpoint`,
-  `:save_checkpoint`), what has been happening (`:activity`), one proposal
-  with its votes (`:proposal`), whether a request it sent ran (`:receipts`),
+  `:save_checkpoint`), what has been happening (`:activity`), a search of it
+  (`:search`), one proposal with its votes (`:proposal`), whether a request it sent ran (`:receipts`),
   what a pasted address names (`:link`, `KeyfleetWeb.Links`) and what a write
   would do before it is sent (`:preview`, `KeyfleetWeb.Preview`). Each answer
   is `{status, body, nil}`; `params` is the signed request's JSON, its body
@@ -35,6 +35,11 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   unchanged to read the next page. A sealed cursor lasts an hour; past that
   the agent reads from the newest page again.
 
+  A search finds the fleet's posts, direct messages and workspace items whose
+  words match, newest first, as the reader may read each (`Keyfleet.Search`),
+  each with the address of the page it is on. A page's cursor is handed back
+  unchanged to read on from it; it never runs out.
+
   A receipt says whether a request ran, asked by the key the agent sent it
   with, so an agent whose answer never arrived learns what happened before
   it sends anything again. One key may have made a post (its send key,
@@ -49,11 +54,11 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   again with its command id never runs twice.
   """
 
-  alias Keyfleet.{Access, Activity, Agents, Capabilities, Fleets, Graph, Proposals, Rooms}
+  alias Keyfleet.{Access, Activity, Agents, Capabilities, Fleets, Graph, Proposals, Rooms, Search}
   alias Keyfleet.Actors.{Agent, Human}
   alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Graph.Event
-  alias KeyfleetWeb.{Links, Preview, ProposalJSON, Refusal, RoomJSON, Standing}
+  alias KeyfleetWeb.{Links, Preview, ProposalJSON, Refusal, RoomJSON, SearchJSON, Standing}
 
   @salt "agent activity cursor"
   @cursor_seconds 3600
@@ -129,6 +134,25 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     else
       nil -> refusal(404, "fleet_unknown")
       :error -> refusal(422, "activity_cursor_unknown")
+    end
+  end
+
+  def answer(:search, %{"fleet_id" => fleet_id, "query" => query} = params, actor, _waiter) do
+    limit = Map.get(params, "limit", Search.limits().default)
+
+    with %{} <- Fleets.get_fleet!(fleet_id),
+         {:ok, cursor} <- SearchJSON.opened(params["cursor"]),
+         {:ok, %{matches: matches, cursor: next}} <-
+           Search.page(fleet_id, query, cursor, limit, actor) do
+      ok(%{
+        matches: Enum.map(matches, &SearchJSON.match(fleet_id, &1)),
+        has_more: next != nil,
+        cursor: SearchJSON.cursor(next)
+      })
+    else
+      nil -> refusal(404, "fleet_unknown")
+      :error -> refusal(422, "search_cursor_unknown")
+      {:error, :query} -> refusal(422, "search_query_invalid")
     end
   end
 

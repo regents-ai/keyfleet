@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
   @moduledoc """
   What an agent reads about itself in a fleet, and the fleet's own news: its
   standing (`doctor`), its checkpoint (`checkpoint`, `save_checkpoint`), the
-  fleet's activity (`activity`), one proposal with its votes (`proposal`),
+  fleet's activity (`activity`), a search of it (`search`), one proposal with its votes (`proposal`),
   whether a request it sent ran (`receipts`), what a pasted address names
   (`link`) and what a write would do before it is sent (`preview`). Each
   takes what its signed request takes, checked as that request's body is,
@@ -46,6 +46,15 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :cursor, :string, constraints: [trim?: false]
       run {Run, tool: "fleets_activity"}
+    end
+
+    action :search, :map do
+      description "Finds the fleet's posts, direct messages and workspace items whose words match."
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+      argument :query, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
+      argument :cursor, :string, constraints: [max_length: 512, trim?: false]
+      argument :limit, :integer, constraints: [min: 1, max: 50]
+      run {Run, tool: "fleets_search"}
     end
 
     action :receipts, :map do

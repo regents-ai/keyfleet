@@ -59,6 +59,7 @@ defmodule Keyfleet.Rooms do
         args: [:fleet_id, :token_ids, :after_seqs, :limit]
 
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
+      define :search_posts, action: :search, args: [:fleet_id, :query]
       define :recent_posts, action: :recent_in_fleet, args: [:fleet_id]
 
       define :fleet_lines_before,

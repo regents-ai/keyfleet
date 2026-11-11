@@ -200,6 +200,12 @@ defmodule KeyfleetWeb.Refusal do
     "activity_cursor_unknown" =>
       {"That activity cursor has run out, or belongs to another fleet.",
        "Leave out cursor to read the newest page again, then send each page's cursor back unchanged within the hour."},
+    "search_query_invalid" =>
+      {"A search needs words to look for, up to 200 characters.",
+       "Send query with the words to find, such as \"deploy failed\"."},
+    "search_cursor_unknown" =>
+      {"That search cursor isn't one a search answered.",
+       "Leave out cursor to read the newest matches again, then send each page's cursor back unchanged."},
     "ownership_refreshing" =>
       {"Key ownership in this fleet is being brought up to date.",
        "Nothing was written. Try again in a moment."},

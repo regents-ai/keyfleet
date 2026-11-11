@@ -104,6 +104,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send",
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
+             "/api/v1/agent/fleets/{fleet_id}/search",
              "/api/v1/agent/fleets/{fleet_id}/shards/issue",
              "/api/v1/agent/fleets/{fleet_id}/shards/voting",
              "/api/v1/agent/fleets/{fleet_id}/split",

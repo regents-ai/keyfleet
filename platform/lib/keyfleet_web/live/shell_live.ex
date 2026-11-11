@@ -43,6 +43,7 @@ defmodule KeyfleetWeb.ShellLive do
     ProposalsLive,
     Read,
     RoomsLive,
+    SearchLive,
     SharedFigures,
     TreasuryLive,
     WorkspaceLive
@@ -59,6 +60,7 @@ defmodule KeyfleetWeb.ShellLive do
   @key_profile_events ~w(post_to_key confirm_remove_from_wall cancel_remove_from_wall remove_from_wall close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll confirm_end_poll cancel_end_poll end_poll cast_vote)
+  @search_events ~w(search search_more)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over confirm_project_delete cancel_project_delete project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
@@ -141,6 +143,7 @@ defmodule KeyfleetWeb.ShellLive do
        poll_form: nil,
        polls_notice: nil,
        poll_confirm_end: false,
+       search: nil,
        shared: %{},
        buy_key: nil,
        pass_note: nil,
@@ -203,6 +206,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_room(route_spec, params)
        |> load_workspace(route_spec, params)
        |> load_proposals(route_spec, params)
+       |> load_search(route_spec, params)
        |> PollsLive.read_polls(route_spec.route_id, params)}
     end
   end
@@ -242,7 +246,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
 
   # A coming-soon fleet has only its own page: its workspace, proposals,
-  # treasury and polls open with the fleet, and its hall opens no room.
+  # treasury, polls and search open with the fleet, and its hall opens no room.
   defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
               :workspace,
@@ -255,7 +259,8 @@ defmodule KeyfleetWeb.ShellLive do
               :proposal,
               :treasury,
               :polls,
-              :poll
+              :poll,
+              :search
             ],
        do: Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id))
 
@@ -408,6 +413,9 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp press(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
+
+  defp press(event, params, socket) when event in @search_events,
+    do: SearchLive.handle_event(event, params, socket)
 
   # The Treasury's refresh, once every 30 seconds for each person: by
   # account when signed in, by visit when not.
@@ -824,6 +832,7 @@ defmodule KeyfleetWeb.ShellLive do
             reread={@treasury_reread}
             resting?={@treasury_resting != nil}
           />
+          <SearchLive.results :if={@route_spec.route_id == :search} search={@search} />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
             page={@proposals}
@@ -874,9 +883,10 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The fleet's places drawn inside its page, under its bar: the page's own
-  # views, its Treasury and its Workspace.
+  # views, its Treasury, its Workspace and its search.
   defp fleet_place(:fleet), do: :fleet
   defp fleet_place(:treasury), do: :treasury
+  defp fleet_place(:search), do: :search
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
 
   defp fleet_place(route_id)
@@ -931,7 +941,8 @@ defmodule KeyfleetWeb.ShellLive do
               :code_history,
               :code_files,
               :proposals,
-              :proposal
+              :proposal,
+              :search
             ] do
     shown = socket.assigns.fleet
 
@@ -1371,6 +1382,12 @@ defmodule KeyfleetWeb.ShellLive do
     |> SharedFigures.follow(:proposals, [])
     |> assign(proposals: nil, proposals_params: nil)
   end
+
+  # The search page reads its first page of matches as it opens.
+  defp load_search(socket, %{route_id: :search}, params),
+    do: SearchLive.read(socket, params, actor(socket.assigns.access_context))
+
+  defp load_search(socket, _route_spec, _params), do: assign(socket, :search, nil)
 
   defp follow_proposals(socket, fleet_id) do
     topic = fleet_id && Proposals.topic(fleet_id)

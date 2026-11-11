@@ -72,6 +72,14 @@ defmodule Keyfleet.Rooms.Message do
         where: "NOT in_key_thread"
       )
 
+      # The words of the posts, as a search matches them (`:search`).
+      index(["to_tsvector('english', body)"],
+        name: "messages_search_index",
+        using: "gin",
+        where: "kind = 'post'",
+        concurrently: true
+      )
+
       # Each room's naming lines, counted to tell its posts from its lines.
       index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
 
@@ -509,6 +517,38 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(sort: [inserted_at: :asc, id: :asc], limit: 1)
       get? true
     end
+
+    # The fleet's posts whose words match a search, in its rooms and on its
+    # Keys' walls, a page at a time (`Keyfleet.Search`). A post its Key's
+    # holder took off the wall is left out, and so are posts written as a Key
+    # in `muted`. Words are matched as English, through the posts' search
+    # index (`messages_search_index`).
+    read :search do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :query, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
+      argument :muted, {:array, :integer}, allow_nil?: false, default: []
+      argument :before_at, :utc_datetime_usec
+      argument :before_kind, :string
+      argument :before_id, :string
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and kind == :post and
+                 not exists(wall_removal, true) and
+                 (is_nil(as_key) or as_key not in ^arg(:muted)) and
+                 fragment(
+                   "to_tsvector('english', ?) @@ websearch_to_tsquery('english', ?)",
+                   body,
+                   ^arg(:query)
+                 )
+             )
+
+      prepare build(
+                load: [:room, :agent_profile, :via_agent_profile, match: [query: arg(:query)]]
+              )
+
+      prepare {Keyfleet.Preparations.SearchPage, kind: "post", at: :inserted_at, id: :id}
+    end
   end
 
   # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`.
@@ -708,6 +748,13 @@ defmodule Keyfleet.Rooms.Message do
       authorize_if Keyfleet.Rooms.Checks.InRoomsAnyoneReads
     end
 
+    # A search reads, of the posts anyone else may read, only those in the
+    # rooms anyone reads and on the Keys' walls.
+    policy action(:search) do
+      authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
+      authorize_if {Keyfleet.Rooms.Checks.InRoomsAnyoneReads, walls: true}
+    end
+
     policy action(:send_message) do
       authorize_if Keyfleet.Rooms.Checks.PeopleRoomWriter
       forbid_unless actor_attribute_equals(:role, :agent)
@@ -865,6 +912,19 @@ defmodule Keyfleet.Rooms.Message do
 
     # Whether the holder of the Key whose wall the post is on has taken it off.
     calculate :removed_from_wall, :boolean, expr(exists(wall_removal, true))
+
+    # The words around what a search matched in the post, at most 24 of them.
+    calculate :match,
+              :string,
+              expr(
+                fragment(
+                  ~S|ts_headline('english', ?, websearch_to_tsquery('english', ?), 'StartSel="", StopSel="", MaxWords=24, MinWords=8')|,
+                  body,
+                  ^arg(:query)
+                )
+              ) do
+      argument :query, :string, allow_nil?: false, constraints: [trim?: false]
+    end
 
     # The place of the post this one answers, which is always in the same room.
     calculate :reply_to_seq,

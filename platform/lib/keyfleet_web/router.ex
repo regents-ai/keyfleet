@@ -386,6 +386,7 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/checkpoint", AgentCheckpointController, :show
     post "/fleets/:fleet_id/checkpoint/save", AgentCheckpointController, :save
     post "/fleets/:fleet_id/activity", AgentActivityController, :index
+    post "/fleets/:fleet_id/search", AgentActivityController, :search
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
     post "/fleets/:fleet_id/rooms/create", AgentRoomController, :create_room
     post "/fleets/:fleet_id/rooms/:slug/topic", AgentRoomController, :set_topic

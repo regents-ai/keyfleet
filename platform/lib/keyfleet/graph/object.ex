@@ -45,6 +45,16 @@ defmodule Keyfleet.Graph.Object do
         name: "graph_objects_project_changed_index",
         concurrently: true
       )
+
+      # The words of the objects' fields, as a search matches them (`:search`),
+      # for objects up to 250,000 bytes: Postgres holds at most 1MB of words for
+      # one object, so a larger one is left out rather than refused.
+      index(["jsonb_to_tsvector('english', data, '[\"string\"]')"],
+        name: "graph_objects_search_index",
+        using: "gin",
+        where: "octet_length(data::text) <= 250000",
+        concurrently: true
+      )
     end
 
     references do
@@ -507,6 +517,38 @@ defmodule Keyfleet.Graph.Object do
       prepare build(select: [:fleet_id, :id, :type, :sys], load: [:title])
     end
 
+    # The fleet's objects whose words match a search, in any of their text
+    # fields, a page at a time (`Keyfleet.Search`), each at the time it last
+    # changed. Words are matched as English, through the objects' search
+    # index (`graph_objects_search_index`), which holds objects up to
+    # 250,000 bytes.
+    read :search do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :query, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
+      argument :before_at, :utc_datetime_usec
+      argument :before_kind, :string
+      argument :before_id, :string
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   ~S|octet_length(?::text) <= 250000 AND jsonb_to_tsvector('english', ?, '["string"]') @@ websearch_to_tsquery('english', ?)|,
+                   data,
+                   data,
+                   ^arg(:query)
+                 )
+             )
+
+      prepare build(
+                select: [:fleet_id, :id, :type, :project, :sys, :changed_at],
+                load: [:title, :changed, match: [query: arg(:query)]]
+              )
+
+      prepare {Keyfleet.Preparations.SearchPage,
+               kind: "item", at: :changed, id: :id_in_byte_order}
+    end
+
     read :with_ids do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -552,7 +594,8 @@ defmodule Keyfleet.Graph.Object do
              :review_asked_of,
              :joined_by,
              :citing,
-             :citing_any
+             :citing_any,
+             :search
            ]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
@@ -584,6 +627,26 @@ defmodule Keyfleet.Graph.Object do
   end
 
   calculations do
+    # When the object last changed, as a time (`changed_at` is the log's own text).
+    calculate :changed, :utc_datetime_usec, expr(fragment("(?::timestamptz)", changed_at))
+
+    # The id in byte order, as a search orders objects that changed at once.
+    calculate :id_in_byte_order, :string, expr(fragment("(? COLLATE \"C\")", id))
+
+    # The words around what a search matched in the object's text fields, at
+    # most 24 of them.
+    calculate :match,
+              :string,
+              expr(
+                fragment(
+                  ~S|ts_headline('english', (SELECT string_agg(field #>> '{}', ' ') FROM jsonb_path_query(?, 'strict $.**') AS field WHERE jsonb_typeof(field) = 'string'), websearch_to_tsquery('english', ?), 'StartSel="", StopSel="", MaxWords=24, MinWords=8')|,
+                  data,
+                  ^arg(:query)
+                )
+              ) do
+      argument :query, :string, allow_nil?: false, constraints: [trim?: false]
+    end
+
     # A review has no title of its own; it is named by its decision and, when
     # the reviewer tried, whether the work reproduced.
     calculate :title,

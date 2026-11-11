@@ -31,6 +31,8 @@ defmodule KeyfleetWeb.FleetLive do
   address) and
   "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
   page, under the same bar, in place of the other views.
+  The search box beside the fleet's name opens the fleet's search
+  (`KeyfleetWeb.SearchLive`, at `/search`) the same way.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Buy Key", no "Send
@@ -80,6 +82,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.Errors.NoPairedAgentError
   alias Keyfleet.Rooms.Errors.QuoteLimitError
   alias Keyfleet.Rooms.QuoteRequest
+  alias Keyfleet.Search
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.BuyKey
@@ -101,6 +104,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.SearchLive
   alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
@@ -217,7 +221,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :place, :atom,
     default: :fleet,
     doc:
-      "`:fleet` for the page's own views, or `:treasury` or `:workspace`, drawn by the inner block"
+      "`:fleet` for the page's own views, or `:treasury`, `:workspace` or `:search`, drawn by the inner block"
 
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
@@ -237,7 +241,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :posts, :any, default: nil, doc: "the open room's posts"
   attr :room_notice, :map, default: nil
 
-  slot :inner_block, doc: "the Treasury or Workspace page, for those places"
+  slot :inner_block, doc: "the Treasury, Workspace or search page, for those places"
 
   attr :now, :map,
     required: true,
@@ -288,12 +292,32 @@ defmodule KeyfleetWeb.FleetLive do
             </p>
           </div>
 
+          <form
+            id="fleet-search"
+            class="fleet-search"
+            role="search"
+            action={SearchLive.search_path(@fleet.fleet_id)}
+            method="get"
+            phx-submit="search"
+          >
+            <label for="fleet-search-q" class="visually-hidden">Search this fleet</label>
+            <input
+              id="fleet-search-q"
+              name="q"
+              type="search"
+              value={if @view == :search, do: @params["q"]}
+              placeholder="Search"
+              maxlength={Search.max_query()}
+              autocomplete="off"
+            />
+          </form>
+
           <div :if={@account} class="fleet-bar__actions">
             <Shell.pair_button id="fleet-pair" />
           </div>
 
           <.entry
-            :if={@view not in [:workspace, :proposals, :treasury]}
+            :if={@view not in [:workspace, :proposals, :treasury, :search]}
             fleet={@fleet}
             actor={@actor}
             params={@params}

@@ -5,6 +5,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   import Plug.Conn
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents.CheckInStatus
+  alias Keyfleet.Search
   alias RegentAgents.HumanBacking
 
   @join_path "/api/v1/agent/join/status"
@@ -47,6 +48,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The Keys a wallet holds in a fleet, as the Key map's search finds them.
   @keys_held_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/held\z"
   @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
+  # A search of the fleet's posts, direct messages and workspace.
+  @search_path ~r"\A/api/v1/agent/fleets/#{@fleet}/search\z"
   # The Key the agent's person writes as.
   @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"
   # What the agent's posts and workspace writes made under one send key or
@@ -154,6 +157,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_remove_path, {~w(message_id), []}},
     {@keys_held_path, {~w(wallet), []}},
     {@activity_path, {[], ~w(cursor)}},
+    {@search_path, {~w(query), ~w(cursor limit)}},
     {@code_history_path, {[], ~w(from page)}},
     {@posting_key_path, {~w(token_id), []}},
     {@receipts_path, {~w(idempotency_key), []}},
@@ -723,6 +727,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_remove_path,
         @keys_held_path,
         @activity_path,
+        @search_path,
         @posting_key_path,
         @receipts_path,
         @sync_path,
@@ -873,14 +878,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_room_body(nil, _params), do: :invalid
 
   # Taking a post off a Key's wall, finding the Keys a wallet holds, reading
-  # the fleet's activity and choosing the Key a person posts as each name
-  # fields of their own.
+  # the fleet's activity, searching it and choosing the Key a person posts as
+  # each name fields of their own.
   defp key_op(path) do
     Enum.find_value(
       [
         key_remove: @key_remove_path,
         keys_held: @keys_held_path,
         activity: @activity_path,
+        search: @search_path,
         posting_key: @posting_key_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
@@ -890,6 +896,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_key_body(:key_remove, params), do: admit(valid_remove_body?(params))
   defp check_key_body(:keys_held, params), do: admit(valid_held_body?(params))
   defp check_key_body(:activity, params), do: admit(valid_activity_body?(params))
+  defp check_key_body(:search, params), do: check_search_body(params)
   defp check_key_body(:posting_key, params), do: check_posting_key_body(params)
 
   # Catching up, reading a proposal, starting a notebook run, making a
@@ -1295,6 +1302,23 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: Enum.all?(params, fn {key, value} -> key == "cursor" and is_binary(value) end)
 
   defp valid_activity_body?(_params), do: false
+
+  # A search names its words, and may name the cursor its last page answered
+  # and how many matches a page holds.
+  defp check_search_body(%{"query" => query} = params) when is_binary(query) do
+    cond do
+      not Enum.all?(params, &search_field?/1) -> :invalid
+      Map.has_key?(params, "limit") -> in_range(params["limit"] in 1..Search.limits().max)
+      true -> :ok
+    end
+  end
+
+  defp check_search_body(_params), do: :invalid
+
+  defp search_field?({"query", _query}), do: true
+  defp search_field?({"cursor", cursor}), do: is_binary(cursor)
+  defp search_field?({"limit", limit}), do: is_integer(limit)
+  defp search_field?(_field), do: false
 
   # Choosing the Key the agent's person writes as names that Key.
   defp check_posting_key_body(%{"token_id" => token_id} = params)

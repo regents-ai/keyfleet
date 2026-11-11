@@ -71,6 +71,13 @@ defmodule Keyfleet.Dms.Message do
       # What one Key sent in the last hour, for its hourly limit.
       index([:fleet_id, :from_token_id, :inserted_at])
       index([:fleet_id, :to_token_id, :seq])
+
+      # The words of the messages, as a search matches them (`:search`).
+      index(["to_tsvector('english', body)"],
+        name: "dm_messages_search_index",
+        using: "gin",
+        concurrently: true
+      )
     end
   end
 
@@ -232,6 +239,41 @@ defmodule Keyfleet.Dms.Message do
       metadata :more_after, :boolean, allow_nil?: false
     end
 
+    # The messages to or from any of the Keys whose words match a search, a
+    # page at a time (`Keyfleet.Search`), as each Key's holder sees them in
+    # `:changes`: in the Key's current ownership epoch, kept on its side, and
+    # without those sent to it by a Key it has blocked. Words are matched as
+    # English, through the messages' search index (`dm_messages_search_index`).
+    read :search do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :token_ids, {:array, :integer},
+        allow_nil?: false,
+        constraints: [items: [min: 1, max: @bigint]]
+
+      argument :query, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
+      argument :before_at, :utc_datetime_usec
+      argument :before_kind, :string
+      argument :before_id, :string
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 ((from_token_id in ^arg(:token_ids) and sent_in_current_epoch and
+                     kept_by_sender) or
+                    (to_token_id in ^arg(:token_ids) and received_in_current_epoch and
+                       kept_by_recipient and not sender_blocked)) and
+                 fragment(
+                   "to_tsvector('english', ?) @@ websearch_to_tsquery('english', ?)",
+                   body,
+                   ^arg(:query)
+                 )
+             )
+
+      prepare build(load: [:via_agent, match: [query: arg(:query)]])
+      prepare {Keyfleet.Preparations.SearchPage, kind: "dm", at: :inserted_at, id: :id}
+    end
+
     # What one Key sent in the last hour, newest first, by the database's
     # clock, for its hourly limit (`Keyfleet.Dms.Changes.LimitSends`).
     read :sent_last_hour do
@@ -306,7 +348,7 @@ defmodule Keyfleet.Dms.Message do
       authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:token_id]}
     end
 
-    policy action(:changes) do
+    policy action([:changes, :search]) do
       authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:token_ids]}
     end
 
@@ -418,6 +460,19 @@ defmodule Keyfleet.Dms.Message do
   end
 
   calculations do
+    # The words around what a search matched in the message, at most 24 of them.
+    calculate :match,
+              :string,
+              expr(
+                fragment(
+                  ~S|ts_headline('english', ?, websearch_to_tsquery('english', ?), 'StartSel="", StopSel="", MaxWords=24, MinWords=8')|,
+                  body,
+                  ^arg(:query)
+                )
+              ) do
+      argument :query, :string, allow_nil?: false, constraints: [trim?: false]
+    end
+
     # Whether Key `token_id`'s holder now may see the message: it is one side
     # of it, the message was sent or received in that Key's current ownership
     # epoch, and that Key's side still keeps it.

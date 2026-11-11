@@ -9,6 +9,9 @@ defmodule Keyfleet.Rooms.Checks.InRoomsAnyoneReads do
   keeps to its index on the fleet's room and time
   (`messages_fleet_room_lines_index`) rather than joining every line to its
   room.
+
+  With `walls: true`, lines written on the fleet's Keys' walls count too, for
+  whoever may read the walls (`:key_walls`), as a fleet's search reads them.
   """
   use Ash.Policy.FilterCheck
 
@@ -20,14 +23,21 @@ defmodule Keyfleet.Rooms.Checks.InRoomsAnyoneReads do
   def describe(_opts), do: "it is one of the fleet's rooms anyone reads, or a line in one"
 
   @impl true
-  def filter(actor, %{query: %Ash.Query{} = query}, _opts) do
+  def filter(actor, %{query: %Ash.Query{} = query}, opts) do
     fleet_id = Ash.Query.get_argument(query, :fleet_id)
 
-    with true <- is_binary(fleet_id),
-         [_ | _] = slugs <- readable(actor, fleet_id) do
-      rooms(query.resource, fleet_id, slugs)
+    if is_binary(fleet_id) do
+      rooms =
+        case readable(actor, fleet_id) do
+          [] -> expr(false)
+          slugs -> rooms(query.resource, fleet_id, slugs)
+        end
+
+      if opts[:walls] && Access.allowed?(actor, :read, :key_walls, fleet_id),
+        do: expr(^rooms or in_key_thread),
+        else: rooms
     else
-      _none -> expr(false)
+      expr(false)
     end
   end
 

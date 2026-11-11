@@ -7334,3 +7334,53 @@ a Payment open.
   11 November 2026. Owner's answer: decision 6a, 11 November.
 - No migration; no production data. The agent contract, tool manifest and
   command list are unchanged.
+
+## 2026-11-11 — Search a fleet: posts, messages and workspace items
+
+Chosen over adopting another chat app: search with links to sources, in
+Keyfleet itself.
+
+- `Keyfleet.Search.page/5` searches one fleet's posts in its rooms and on its
+  Keys' walls, the direct messages of the Keys the reader holds, and its
+  workspace's items, newest first, a page at a time. Each source is its own
+  record's `:search` read, so each record's policies decide what the reader
+  finds: anyone finds the rooms anyone reads and the walls; a member every
+  room and the workspace; direct messages follow
+  `Keyfleet.Dms.Checks.KeyHolder.held/2`, as the inbox does. Posts written as
+  a Key the reader muted, and posts taken off a wall, are left out. Words
+  match as English (`websearch_to_tsquery`); each match carries up to 24 of
+  its words around what matched (`ts_headline`).
+- Paging orders every kind against one place, `{at, kind, id}`
+  (`Keyfleet.Preparations.SearchPage`), so a cursor neither repeats nor drops
+  a match across kinds at one time.
+- Website: a search box beside the fleet's name opens `/search?q=` under the
+  fleet's address (`KeyfleetWeb.SearchLive`), drawn under the fleet's bar,
+  each line opening its room, wall, conversation or item; Show more adds the
+  next page.
+- Agents: `POST /api/v1/agent/fleets/FLEET_ID/search` (`fleets_search` in the
+  connector at /mcp and in WebMCP, `regents keyfleet fleets search` in
+  `cli/commands.json`), refusing `search_query_invalid`,
+  `search_cursor_unknown` and a `limit` outside 1..50. API contract 28.1.0
+  (additive: the path and the Search schemas).
+- Migration `20261111193309_search_indexes`: three GIN expression indexes
+  (`messages_search_index` on posts, `dm_messages_search_index`,
+  `graph_objects_search_index`), each built concurrently, outside a
+  transaction, with `lock_timeout` 5s, each `create_if_not_exists`.
+  Additive; no table or row changes. The items' index holds items up to
+  250,000 bytes (Postgres keeps at most 1MB of words for one row), so a
+  larger item is left out of search rather than refused when written. A
+  build that stops part-way leaves its index invalid; drop it before the
+  migration runs again.
+- A search that loses access to the workspace or a Key's messages between
+  its check and its read leaves those out instead of failing.
+- Wall posts in a search are allowed by `InRoomsAnyoneReads` with
+  `walls: true`, so the compile-connected count stays at main's 128.
+
+Check: `platform/test/keyfleet/search_test.exs`,
+`platform/test/keyfleet_web/agent_search_test.exs`,
+`platform/test/keyfleet_web/live/search_page_test.exs`, the route catalog,
+route handoff and gate coverage tests, credo --strict, `ash.codegen --check`;
+the full suite passes but for the tests that need the graph host or IPv6,
+which fail the same way on main in this container. Browser walk `fleet_search.spec.ts` (chain config) is new and not run yet.
+Overlap: the agent-keys branch changes which Keys an agent holds; direct
+messages in a search follow that rule through `KeyHolder.held/2` unchanged.

@@ -105,6 +105,27 @@
   color: var(--color-fg-muted);
 }
 
+/* The search box, beside the fleet's name. */
+.fleet-search {
+  display: flex;
+  flex: 0 1 16rem;
+  min-inline-size: 0;
+}
+
+.fleet-search input {
+  inline-size: 100%;
+  min-block-size: 2.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font: inherit;
+}
+
+.fleet-search input::placeholder {
+  color: var(--color-fg-muted);
+}
+
 /* Pair New Agent, at the bar’s end. */
 .fleet-bar__actions {
   display: grid;
@@ -795,10 +816,11 @@
   line-height: 1.1;
 }
 
-/* The list of Keys, the Treasury, Proposals and the Workspace run as long as
-   they are, with the page. */
+/* The list of Keys, the Treasury, Proposals, the Workspace and search run as
+   long as they are, with the page. */
 .fleet-view[data-view="members"] .fleet-stage,
 .fleet-view[data-view="treasury"] .fleet-stage,
+.fleet-view[data-view="search"] .fleet-stage,
 .fleet-view[data-view="proposals"] .fleet-stage,
 .fleet-view[data-view="workspace"] .fleet-stage {
   overflow: visible;
@@ -806,6 +828,7 @@
 
 /* Their panels sit in the stage with the page's own margin round them. */
 .fleet-view[data-view="treasury"] .fleet-stage,
+.fleet-view[data-view="search"] .fleet-stage,
 .fleet-view[data-view="proposals"] .fleet-stage,
 .fleet-view[data-view="workspace"] .fleet-stage {
   padding: var(--rg-panel-padding);
@@ -890,6 +913,11 @@
   /* Pair New Agent starts under the fleet’s name. */
   .fleet-bar__actions {
     display: contents;
+  }
+
+  /* The search box takes the bar's whole width. */
+  .fleet-search {
+    flex-basis: 100%;
   }
 
   /* The tabs and a holder's cards scroll from one edge of the view to the

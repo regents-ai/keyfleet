@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   # The pages every fleet has, each under the fleet's own address
   # (`Keyfleet.Fleets.path/1`): the fleet's page itself, whose hall also opens
   # its rooms (`?room=`), then its workspace and its code, each project's page,
-  # proposals, treasury and polls, and each of its Keys' pages and messages.
+  # proposals, treasury and polls, its search, and each of its Keys' pages and messages.
   @fleet_pages [
     {"", :fleet, %{}},
     {"/workspace", :workspace, %{}},
@@ -112,6 +112,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/treasury", :treasury, %{}},
     {"/polls", :polls, %{}},
     {"/polls/:poll_id", :poll, %{poll_id: :poll_id}},
+    {"/search", :search, %{}},
     {"/keys/:token_id", :keys, %{token_id: :token_id}},
     {"/keys/:token_id/dms", :dms, %{token_id: :token_id}},
     {"/keys/:token_id/dms/:other_token_id", :dm,
@@ -168,7 +169,8 @@ defmodule KeyfleetWeb.RouteCatalog do
     treasury:
       {:treasury, :product, "Keyfleet", "Treasury", "/", [:profile_actions], :product, %{}},
     polls: {:polls, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
-    poll: {:poll, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}}
+    poll: {:poll, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
+    search: {:search, :product, "Keyfleet", "Search", "/", [:profile_actions], :product, %{}}
   }
 
   # The account's views, each its own page under one tab bar.

@@ -82,6 +82,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read fleets, one fleet and its activity | `/`, fleet page, "Show earlier" | `fleets_list`, `fleets_show`, `fleets_activity` | the same three | the same three | `fleets list`, `fleets get`, `fleets activity` | no | K13 |
+| Search a fleet's posts, messages and workspace | fleet bar's search box, `/search` | `fleets_search` | `fleets_search` | `fleets_search` | `fleets search` | no | — |
 | Read a Key | `/keys/:n` | `keys_show` | `keys_show` | `keys_show` | `keys show` | no | K13 |
 | Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show`, `keys_held` | `keys_show`, `keys_held` | `keys_show`, `keys_held` | `keys show`, `keys held` | no | K13 |
 | Buy a Key | Buy Key window (approve, buy) | `chain_buy` | — | — | `keys buy` (not released) | money, wallet | — |

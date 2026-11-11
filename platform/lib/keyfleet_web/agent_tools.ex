@@ -94,6 +94,7 @@ defmodule KeyfleetWeb.AgentTools do
     checkpoint_read: {@fleets, :checkpoint, "Checkpoint", :read},
     checkpoint_save: {@fleets, :save_checkpoint, "Save checkpoint", :once},
     fleets_activity: {@fleets, :activity, "Activity", :read},
+    fleets_search: {@fleets, :search, "Search", :read},
     receipts_read: {@fleets, :receipts, "Receipts", :read},
     proposals_show: {@fleets, :proposal, "Proposal", :read},
     links_resolve: {@fleets, :link, "Link", :read},

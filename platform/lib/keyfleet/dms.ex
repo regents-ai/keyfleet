@@ -82,6 +82,7 @@ defmodule Keyfleet.Dms do
         args: [:fleet_id, :token_id, :other_token_id]
 
       define :read_changes, action: :changes, args: [:fleet_id, :token_ids, :after_seqs]
+      define :search_messages, action: :search, args: [:fleet_id, :token_ids, :query]
     end
 
     resource Keyfleet.Dms.ReadMark do
