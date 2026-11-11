@@ -29,7 +29,6 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.Components.AgentSetup
-  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.DmsLive
@@ -176,11 +175,9 @@ defmodule KeyfleetWeb.KeysLive do
           <h2 id="key-issue-shard-title">
             New shard
             <Regent.Primitives.tip id="key-issue-tip" label="About issuing a shard">
-              Check the agent’s wallet address. Issuing again to a wallet with a shard renews it from now.
+              Issuing again to a wallet with a shard renews it from now.
             </Regent.Primitives.tip>
           </h2>
-
-          <FleetRisks.disclosure id="key-issue-shard-risks" shard?={true} />
 
           <.live_component
             module={WalletPanel}

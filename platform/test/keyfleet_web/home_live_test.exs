@@ -202,7 +202,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert text(view, "#buy-key-title") == "Buy Key"
     assert has_element?(view, "dialog#buy-key #buy-key-cards.key-cards")
-    assert text(view, "#buy-key-traits") == "Your Key’s traits are randomized"
 
     assert ["Sold", "Key", "Price" <> _tip] =
              view

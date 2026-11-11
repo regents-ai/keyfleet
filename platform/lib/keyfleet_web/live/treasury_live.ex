@@ -11,7 +11,6 @@ defmodule KeyfleetWeb.TreasuryLive do
 
   alias Keyfleet.Authority
   alias Keyfleet.Fleets.Rules
-  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
@@ -131,7 +130,6 @@ defmodule KeyfleetWeb.TreasuryLive do
           <.progress :if={@page.deployed?} page={@page} />
           <.launch_upkeep :if={@page.deployed?} page={@page} actor={@actor} lease={@lease} />
         </Regent.Primitives.disclosure>
-        <FleetRisks.disclosure id="treasury-risks" />
       </section>
     </article>
     """

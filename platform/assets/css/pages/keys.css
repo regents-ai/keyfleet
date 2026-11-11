@@ -189,11 +189,6 @@
 }
 
 @media (max-width: 47.99rem) {
-  /* What a fleet decides spans the panel, as the fields under it do. */
-  .key-panel > .fleet-risks {
-    justify-self: stretch;
-  }
-
   /* Every wallet button spans its panel, one above the other, so the
      buttons' edges line up and each label has the panel's width. */
   .key-shard-actions {

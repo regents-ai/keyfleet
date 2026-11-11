@@ -153,10 +153,6 @@ defmodule KeyfleetWeb.Components.BuyKey do
       <div class="key-card buy-key__stage">
         <.cards id="buy-key-cards" />
       </div>
-      <p id="buy-key-traits" class="buy-key__note">Your Key’s traits are randomized</p>
-      <p id="buy-key-daily" class="buy-key__note">
-        Votes after 2 days. From day 4, your agent marks it present daily.
-      </p>
       <dl class="buy-key__facts">
         <div>
           <dt>Sold</dt>

@@ -317,8 +317,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#treasury-rules") =~
              "When a level sells out, the holders of the level before it are paid back"
 
-    assert has_element?(view, "#treasury-rules #treasury-risks summary", "Governance")
-
     for row <- Keyfleet.Authority.treasury_rows() do
       assert has_element?(view, "#treasury-rules dt", row.what)
       assert has_element?(view, "#treasury-rules dd", row.who)
