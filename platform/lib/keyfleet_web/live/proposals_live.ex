@@ -1104,7 +1104,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   @doc """
-  The proposals a vote can still change, beside a fleet's chat and workspace:
+  The proposals a vote can still change, beside a fleet's workspace:
   what each one does and how long is left, with one press to vote. Yes and No
   are the same size, as on the proposal's own page. It takes no room while
   nothing is open.
@@ -1188,6 +1188,47 @@ defmodule KeyfleetWeb.ProposalsLive do
               </WalletPanel.step_button>
             </:buttons>
           </.live_component>
+        </li>
+      </ol>
+    </section>
+    """
+  end
+
+  attr :fleet, :map, required: true, doc: "the fleet on show, with its `open_proposals`"
+
+  @doc """
+  The proposals a vote can still change, above the fleet's hall: one line
+  each, its number, its kind and how long is left, opening the proposal in
+  the Proposals tab, where the vote is cast. It takes no room while nothing
+  is open.
+  """
+  def open_lines(assigns) do
+    ~H"""
+    <section
+      :if={@fleet.open_proposals != []}
+      id="hall-proposals"
+      class="hall-proposals"
+      aria-labelledby="hall-proposals-title"
+    >
+      <h2 id="hall-proposals-title">Proposals</h2>
+      <ol class="hall-proposals__list">
+        <li :for={proposal <- @fleet.open_proposals} data-proposal={proposal.number}>
+          <.link
+            patch={ProposalsPage.detail_path(@fleet.fleet_id, proposal.number)}
+            class="hall-proposal"
+          >
+            <span class="hall-proposal__number">
+              {ActivityLines.proposal_name(proposal.number)}
+            </span>
+            <span class="hall-proposal__kind">{proposal.kind}</span>
+            <.countdown
+              id={"hall-proposal-#{proposal.number}-left"}
+              class="hall-proposal__left"
+              closes_at={left_until(proposal)}
+              now={DateTime.utc_now()}
+              format="hours"
+            />
+          </.link>
         </li>
       </ol>
     </section>
