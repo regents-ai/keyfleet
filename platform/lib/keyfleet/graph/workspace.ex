@@ -36,8 +36,8 @@ defmodule Keyfleet.Graph.Workspace do
   but an object belongs to the Key that created it. Only that Key changes it
   or links from it, except that every Key that joined a task works on it too
   and submits it; only its creator changes a task's title, deliverable or
-  acceptance criteria. Only the creator archives an object, and a task only
-  once every other Key has left it (`still_joined`); the fleet's writer
+  acceptance criteria. Only the creator archives an object, at any time;
+  archiving a task lets go every Key that joined it. The fleet's writer
   answers `not_owner` to anyone else. Who may act as a Key at all: see
   `Keyfleet.Graph.Checks.KeyActor`.
 
