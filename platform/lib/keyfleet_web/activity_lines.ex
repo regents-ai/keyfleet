@@ -312,13 +312,18 @@ defmodule KeyfleetWeb.ActivityLines do
 
   # Three Keys or more numbered one after another read as a range: "Keys
   # 4–9"; any others as "Keys 4, 5, 8 and 2 others".
-  defp moved([first | _] = token_ids) do
+  defp moved([first, _, _ | _] = token_ids) do
     last = List.last(token_ids)
 
-    if length(token_ids) >= 3 and token_ids == Enum.to_list(first..last),
+    if token_ids == Enum.to_list(first..last),
       do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}"],
-      else: keys(Enum.take(token_ids, @listed), max(length(token_ids) - @listed, 0))
+      else: listed(token_ids)
   end
+
+  defp moved(token_ids), do: listed(token_ids)
+
+  defp listed(token_ids),
+    do: keys(Enum.take(token_ids, @listed), max(length(token_ids) - @listed, 0))
 
   defp tasks(1), do: "a task"
   defp tasks(count), do: "#{Rules.grouped(count)} tasks"
