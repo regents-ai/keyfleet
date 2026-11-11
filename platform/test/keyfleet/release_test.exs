@@ -60,8 +60,7 @@ defmodule Keyfleet.ReleaseTest do
                ]
              ],
              url: @direct,
-             socket_options: [:inet6],
-             pool_size: 5
+             socket_options: [:inet6]
            ]
   end
 

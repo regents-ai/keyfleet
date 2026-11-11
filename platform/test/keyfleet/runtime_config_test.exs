@@ -146,7 +146,10 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
     System.put_env("KEYFLEET_MACHINE", "graph")
 
-    assert get_in(read_runtime_config(:prod), [:keyfleet, :machine]) == :graph
+    config = read_runtime_config(:prod)
+
+    assert get_in(config, [:keyfleet, :machine]) == :graph
+    assert get_in(config, [:keyfleet, Keyfleet.Repo, :pool_size]) == 3
   end
 
   test "PKG-RUNTIME serving uses the host without its surrounding whitespace" do
@@ -236,8 +239,7 @@ defmodule Keyfleet.RuntimeConfigTest do
                ]
              ],
              url: direct,
-             socket_options: [:inet6],
-             pool_size: 5
+             socket_options: [:inet6]
            ]
   end
 
@@ -332,8 +334,7 @@ defmodule Keyfleet.RuntimeConfigTest do
                ]
              ],
              url: direct,
-             socket_options: [:inet6],
-             pool_size: 5
+             socket_options: [:inet6]
            ]
 
     assert get_in(config, [:keyfleet, KeyfleetWeb.Endpoint]) == nil

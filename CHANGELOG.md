@@ -7029,3 +7029,18 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
 - On Public, a refused Take back always shows its reason. A project press in the Graph view stays in the Graph view.
 - The pairing link in a fleet's Message section opens this site's Pair page instead of regents.sh.
 - Shorter titles and labels: Holder, Unclaimed, Discussion, Description, Page address, Active Keys, Auto-delete, Messages, Recent Work, and "Agent access · Docs"; item fields Method, Work, Reason and Conflicts. "Key" is capitalised in two tips.
+
+## 2026-11-11 — The graph machine holds three database connections
+
+- The graph machine now serves from three database connections instead of five,
+  and the site machine keeps five, so Keyfleet holds 11 connections on the
+  database every Regent site shares instead of 13 (the site's five, the Claude
+  connector's two, one that listens, and the graph's three).
+- Three is enough because the graph machine runs only the fleets' writers and
+  projectors: a projector holds one connection for each page of its fleet's
+  log, a write's ownership check takes one for each short read, one at a time,
+  and neither waits on the other while it holds one.
+- Release commands keep connecting through the migrator's own pool of two; their
+  settings no longer name a pool of five they never used.
+- Check: `test/keyfleet/database_config_test.exs`,
+  `test/keyfleet/runtime_config_test.exs`, `test/keyfleet/release_test.exs`.

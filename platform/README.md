@@ -304,8 +304,10 @@ post in a room of a fleet anyone reads reaches every open page of it whole, on
 are read on each member's page.
 `/healthz` checks the database through the site's own pool, as the template
 does (`Keyfleet.Health`), so a pool that stays full fails the machine's health
-check. The site machine keeps at most five database connections and the graph
-machine five, on the database every Regent site shares. After a deploy, open pages reconnect
+check. On the database every Regent site shares, the site machine serves from
+five connections, with two more for the Claude connector's sign-in while it is
+on and one that listens for shared changes; the graph machine serves from three
+(`Keyfleet.DatabaseConfig`). After a deploy, open pages reconnect
 spread over a moment rather than all at once (`assets/js/app.ts`).
 
 Each page reports its Core Web Vitals once as it is left, to `POST /vitals`,

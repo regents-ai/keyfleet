@@ -20,12 +20,25 @@ defmodule Keyfleet.DatabaseConfig do
   @deployment_role_error ~s(KEYFLEET_DEPLOYMENT_ROLE must be set to "production" or "staging")
   @remote_target_error "remote database access requires cluster dzx6qo6xqzvojpv5 named regents-platform-prod"
   @lab_remote_error "the anvil lab runs on its local database only"
+  @machine_error ~s(KEYFLEET_MACHINE must be "site" or "graph")
+
+  # Every Regent site shares one production database, so each machine's pool is
+  # as small as its work allows. The site machine serves pages and jobs from
+  # five. The graph machine runs only the fleets' writers and projectors: a
+  # projector holds one connection for each page of its fleet's log, about ten
+  # statements, and a writer's ownership check takes one for each single-row
+  # read, one read at a time. Neither holds a connection while it waits on the
+  # other, so three serve all five fleets. A check that cannot get a connection
+  # within its budget (the graph's :check_timeout) sends nothing.
+  @site_pool_size 5
+  @graph_pool_size 3
 
   def runtime_config!(environment, getenv \\ &System.get_env/1)
 
   def runtime_config!(:prod, getenv) do
     role = deployment_role!(getenv)
-    getenv |> database_url!("DATABASE_POOLED_URL", role) |> serving()
+    pool_size = serving_pool_size!(getenv)
+    getenv |> database_url!("DATABASE_POOLED_URL", role) |> serving(pool_size)
   end
 
   # Each anvil lab (docs/anvil-lab.md) keeps its own local database, named by
@@ -42,8 +55,12 @@ defmodule Keyfleet.DatabaseConfig do
           pool_size: 2
         ]
 
+      # A developer's site against the production database takes the site
+      # machine's pool.
       {:remote, lab} when lab in [nil, ""] ->
-        database_url!(getenv, "DATABASE_POOLED_URL", :remote)
+        getenv
+        |> database_url!("DATABASE_POOLED_URL", :remote)
+        |> Keyword.merge(pool_size: @site_pool_size)
 
       {:remote, _lab} ->
         raise @lab_remote_error
@@ -83,9 +100,10 @@ defmodule Keyfleet.DatabaseConfig do
   # itself in pg_stat_activity, keeps connection details out of its errors, and gives
   # up on a statement, a lock wait or an idle open transaction before it can stall
   # anyone else. Release commands connect with their own login and none of these
-  # limits. Every login holds five connections (connection_options/2).
-  defp serving(options) do
+  # limits, through the migrator's own pool of two (`Ecto.Migrator.with_repo/3`).
+  defp serving(options, pool_size) do
     Keyword.merge(options,
+      pool_size: pool_size,
       show_sensitive_data_on_connection_error: false,
       parameters: [
         application_name: "keyfleet-web",
@@ -103,6 +121,15 @@ defmodule Keyfleet.DatabaseConfig do
       "production" -> :production
       "staging" -> :staging
       _unset_or_unknown -> raise @deployment_role_error
+    end
+  end
+
+  # bin/site and bin/graph name the machine, as config/runtime.exs reads it.
+  defp serving_pool_size!(getenv) do
+    case getenv.("KEYFLEET_MACHINE") do
+      "site" -> @site_pool_size
+      "graph" -> @graph_pool_size
+      _unset_or_unknown -> raise @machine_error
     end
   end
 
@@ -157,7 +184,7 @@ defmodule Keyfleet.DatabaseConfig do
   end
 
   defp connection_options(url, host) do
-    options = [url: url, socket_options: [:inet6], pool_size: 5]
+    options = [url: url, socket_options: [:inet6]]
     if fly_mpg_host?(host), do: fly_mpg_options(host) ++ options, else: options
   end
 

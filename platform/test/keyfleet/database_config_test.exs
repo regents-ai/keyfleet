@@ -8,11 +8,14 @@ defmodule Keyfleet.DatabaseConfigTest do
   @mpg_pooled "postgresql://pooled_user:pooled-secret@pgbouncer.dzx6qo6xqzvojpv5.flympg.net:5432/keyfleet"
   @mpg_direct "postgresql://direct_user:direct-secret@direct.dzx6qo6xqzvojpv5.flympg.net:5432/keyfleet"
   @socket_options [:inet6]
-  @pool_size 5
+  @site_pool_size 5
+  @graph_pool_size 3
   @role "KEYFLEET_DEPLOYMENT_ROLE"
+  @machine "KEYFLEET_MACHINE"
   @staging_flycast "postgresql://staging_user:staging-secret@regents-staging-db.flycast:5432/keyfleet"
   @staging_internal "postgresql://staging_user:staging-secret@regents-staging-db.internal:5432/keyfleet"
   @role_error ~s(KEYFLEET_DEPLOYMENT_ROLE must be set to "production" or "staging")
+  @machine_error ~s(KEYFLEET_MACHINE must be "site" or "graph")
 
   test "test always keeps the fixed local database" do
     config =
@@ -167,7 +170,7 @@ defmodule Keyfleet.DatabaseConfigTest do
                "DATABASE_POOLED_URL" => @pooled,
                "DATABASE_DIRECT_URL" => @direct
              })
-           ) == [url: @pooled, socket_options: @socket_options, pool_size: @pool_size]
+           ) == [url: @pooled, socket_options: @socket_options, pool_size: @site_pool_size]
   end
 
   test "development rejects incomplete, wrong, production, and deployed-app targets" do
@@ -242,7 +245,7 @@ defmodule Keyfleet.DatabaseConfigTest do
   test "development non-MPG remote and local configurations remain unchanged" do
     remote = env(production_env(%{"DATABASE_POOLED_URL" => @pooled}))
     config = DatabaseConfig.runtime_config!(:dev, remote)
-    assert config == [url: @pooled, socket_options: @socket_options, pool_size: @pool_size]
+    assert config == [url: @pooled, socket_options: @socket_options, pool_size: @site_pool_size]
     refute Keyword.has_key?(config, :ssl)
 
     local = DatabaseConfig.runtime_config!(:dev, env(%{"USER" => "local-user"}))
@@ -327,24 +330,31 @@ defmodule Keyfleet.DatabaseConfigTest do
     end
   end
 
-  test "every deployed venue connects with the same small pool" do
-    configs = [
-      DatabaseConfig.runtime_config!(:prod, env(%{"DATABASE_POOLED_URL" => @mpg_direct})),
-      DatabaseConfig.release_config!(
-        env(production_env(%{"DATABASE_DIRECT_URL" => @mpg_direct}))
-      ),
-      DatabaseConfig.runtime_config!(
-        :prod,
-        staging_env(%{"DATABASE_POOLED_URL" => @staging_flycast})
-      ),
-      DatabaseConfig.release_config!(staging_env(%{"DATABASE_DIRECT_URL" => @staging_internal})),
-      DatabaseConfig.runtime_config!(
-        :dev,
-        env(production_env(%{"DATABASE_POOLED_URL" => @mpg_pooled}))
-      )
-    ]
+  test "each machine serves from its own small pool: the site five, the graph three" do
+    for {machine, pool_size} <- [{"site", @site_pool_size}, {"graph", @graph_pool_size}],
+        config <- [
+          DatabaseConfig.runtime_config!(
+            :prod,
+            env(%{"DATABASE_POOLED_URL" => @mpg_direct, @machine => machine})
+          ),
+          DatabaseConfig.runtime_config!(
+            :prod,
+            staging_env(%{"DATABASE_POOLED_URL" => @staging_flycast, @machine => machine})
+          )
+        ] do
+      assert effective_repo_config(config)[:pool_size] == pool_size
+    end
+  end
 
-    for config <- configs, do: assert(effective_repo_config(config)[:pool_size] == @pool_size)
+  test "production serves only on a machine that says which it is" do
+    for machine <- [nil, "", "Site", "web"] do
+      assert_raise RuntimeError, @machine_error, fn ->
+        DatabaseConfig.runtime_config!(
+          :prod,
+          env(%{"DATABASE_POOLED_URL" => @mpg_direct, @machine => machine})
+        )
+      end
+    end
   end
 
   test "Fly MPG direct and PgBouncer URLs reject non-PostgreSQL ports without credentials" do
@@ -421,7 +431,7 @@ defmodule Keyfleet.DatabaseConfigTest do
       assert DatabaseConfig.runtime_config!(
                :dev,
                env(production_env(%{"DATABASE_POOLED_URL" => url}))
-             ) == [url: url, socket_options: @socket_options, pool_size: @pool_size]
+             ) == [url: url, socket_options: @socket_options, pool_size: @site_pool_size]
     end
   end
 
@@ -511,7 +521,7 @@ defmodule Keyfleet.DatabaseConfigTest do
                [
                  url: url,
                  socket_options: @socket_options,
-                 pool_size: @pool_size,
+                 pool_size: @site_pool_size,
                  show_sensitive_data_on_connection_error: false,
                  parameters: [
                    application_name: "keyfleet-web",
@@ -521,7 +531,7 @@ defmodule Keyfleet.DatabaseConfigTest do
                  ]
                ]
 
-      assert release == [url: url, socket_options: @socket_options, pool_size: @pool_size]
+      assert release == [url: url, socket_options: @socket_options]
     end
   end
 
@@ -672,10 +682,14 @@ defmodule Keyfleet.DatabaseConfigTest do
            ]
   end
 
-  # Every deployed path names its venue. These cases exercise the production
-  # role unless they say otherwise; the role's own admission is proven by the
+  # Every deployed path names its venue, and every serving machine names which
+  # it is. These cases exercise the production role on the site machine unless
+  # they say otherwise; the role's own admission is proven by the
   # deployment-role cases above.
-  defp env(values), do: &Map.get(Map.put_new(values, @role, "production"), &1)
+  defp env(values) do
+    values = values |> Map.put_new(@role, "production") |> Map.put_new(@machine, "site")
+    &Map.get(values, &1)
+  end
 
   defp staging_env(values), do: env(Map.put(values, @role, "staging"))
 
