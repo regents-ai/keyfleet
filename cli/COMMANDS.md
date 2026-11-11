@@ -1220,7 +1220,8 @@ answer the choice
   null. `agents` are the agents paired with the person now, oldest pairing first. `yours`
   is the Key the person put the signing agent on, or null. An agent on a Key writes in the
   fleet as that Key while the person's wallets hold it, unless its own wallet holds a Key
-  there.
+  there. A Key that changes hands, even between the person's own wallets, loses its agent;
+  the agent stays paired.
 - **Refusals:** 403 `person_not_here`; and those every signed command shares.
 
 Server:
@@ -1252,8 +1253,8 @@ answer keys (with an agent first, then by number), agents and yours
   the agents paired with the person now.
 - **Answer:** as `keys agents` answers, with the change made.
 - **Refusals:** 403 `person_not_here`; 403 `person_only`: the agent named is on another Key,
-  even one the person no longer holds, the Key has another agent, or `--agent` was left
-  out, and only the person makes that change; 409 `key_not_held`: the person's wallets don't hold this Key
+  the Key has another agent, or `--agent` was left out, and only the person makes that
+  change; 409 `key_not_held`: the person's wallets don't hold this Key
   now; 409 `agent_unknown`: no agent paired with the person now has that wallet; 409
   `agent_keys_changed`: another change to this Key's agent was saved first, so read
   `keys agents` again and send it again if it still applies; and those every writing
@@ -1271,9 +1272,11 @@ Keys.assign_agent(fleet, key, agent_wallet) as the agent, for its paired person
       the signing agent is no longer paired -> 403 agent_not_paired
       no pairing of the person's now has agent_wallet -> 409 agent_unknown
     lock the person's rows for this Key and the named agent's Key, lowest first
+      a row whose Key changed hands since it was saved puts no agent there;
+        one on another Key is cleared
       the Key has another agent paired now -> 403 person_only
-      the named agent is on another Key, held or not -> 403 person_only
-    put the agent on this Key
+      the named agent is on another Key -> 403 person_only
+    put the agent on this Key, kept with the Key's ownership record now
       a Key with no row was given an agent by another write meanwhile
         -> 409 agent_keys_changed
 answer as keys agents

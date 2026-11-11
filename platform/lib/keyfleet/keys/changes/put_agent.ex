@@ -14,11 +14,16 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
   is kept. Then the person's rows the write changes in the fleet, the Key's
   and the named agent's, lowest Key first.
 
+  The row is saved with the Key's ownership record as it is now. A locked row
+  whose Key has changed hands since it was saved, or that the person no
+  longer holds, puts no agent anywhere (`Keyfleet.Keys.placed_on?/3`): the
+  Key's own is overwritten, and one on another Key is cleared, whoever writes.
+
   An agent writing changes no agent's place: once they are locked, it is
   refused (`PersonOnlyError`) if the Key has another agent paired now, or the
-  named agent has a row on another Key, even one the person no longer holds,
-  so only the person's write takes an agent off a Key (`:release`). Naming no
-  agent is the person's alone, by the policy.
+  named agent stands on another Key, so only the person's write takes an
+  agent off a Key (`:release`). Naming no agent is the person's alone, by the
+  policy.
 
   A Key with no row when they are locked is written only if no other write
   has given it an agent since; one that has loses the race and answers
@@ -31,9 +36,10 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
   require Ash.Query
 
   alias Keyfleet.Actors.Agent
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Keys
   alias Keyfleet.Keys.AgentKey
-  alias Keyfleet.Keys.Errors.{AgentUnknownError, NotPairedError, PersonOnlyError}
+  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError, NotPairedError, PersonOnlyError}
   alias RegentAgents.Authority
 
   @impl true
@@ -47,14 +53,18 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
         wallet -> String.downcase(wallet)
       end
 
+    fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
     token_id = Ash.Changeset.get_attribute(changeset, :token_id)
 
     with {:ok, pairing_id} <- lock_pairings(actor, wallet),
          {:ok, rows} <- lock_rows(changeset, actor, pairing_id),
-         :ok <- moves_no_agent(actor, rows, token_id, pairing_id),
-         :ok <- release(rows, token_id, pairing_id, actor) do
+         {:ok, standing, key} <- standing(rows, fleet_id, token_id, actor),
+         :ok <- moves_no_agent(actor, standing, token_id, pairing_id),
+         :ok <- clear(rows -- standing, token_id),
+         :ok <- release(standing, token_id, pairing_id, actor) do
       changeset
       |> Ash.Changeset.force_change_attribute(:paired_agent_id, pairing_id)
+      |> Ash.Changeset.force_change_attribute(:ownership_epoch, key.ownership_epoch)
       |> unless_taken(rows, token_id)
     else
       {:error, error} -> Ash.Changeset.add_error(changeset, error)
@@ -129,9 +139,50 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
     |> Ash.read(actor: actor)
   end
 
+  # The locked rows that still put an agent on their Key, and the Key's own
+  # ownership record now, whose epoch the write keeps. The person holds the
+  # Key (`Keyfleet.Keys.Validations.HeldByPerson`); one the record no longer
+  # shows is not held.
+  defp standing(rows, fleet_id, token_id, actor) do
+    wallets = person_wallets(actor)
+    token_ids = Enum.uniq([token_id | Enum.map(rows, & &1.token_id)])
+
+    query = Ash.Query.filter(Keyfleet.Keys.KeyAttachment, token_id in ^token_ids)
+
+    with {:ok, keys} <- Keys.keys_held_in_fleet(fleet_id, wallets, actor: actor, query: query) do
+      keys = Map.new(keys, &{&1.token_id, &1})
+
+      case keys[token_id] do
+        nil ->
+          {:error, KeyNotHeldError.exception(fleet_id: fleet_id, token_id: token_id)}
+
+        key ->
+          {:ok, Enum.filter(rows, &Keys.placed_on?(&1, keys[&1.token_id], wallets)), key}
+      end
+    end
+  end
+
+  defp person_wallets(%Agent{pairing: %Human{wallet_addresses: wallets}}), do: wallets
+  defp person_wallets(%Human{wallet_addresses: wallets}), do: wallets
+
+  # Rows on another Key that no longer stand there hold the named agent's
+  # place for nothing, so the write clears them, whoever it is by: taking an
+  # agent off a Key it no longer stands on changes no agent's place.
+  defp clear(rows, token_id) do
+    rows
+    |> Enum.reject(&(&1.token_id == token_id))
+    |> Enum.reduce_while(:ok, fn row, :ok ->
+      case Ash.destroy(row, action: :release, authorize?: false) do
+        :ok -> {:cont, :ok}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
   # An agent puts an agent that is on no Key onto a Key with none: the named
-  # agent has no row on another Key, and the Key's row, if any, has no agent
-  # or one no longer paired. So an agent's write never takes one off.
+  # agent stands on no other Key, and the Key's row, if any, has no agent, one
+  # no longer paired, or one from before the Key changed hands. So an agent's
+  # write never takes one off.
   defp moves_no_agent(%Agent{}, rows, token_id, pairing_id) do
     places_changed = &(moved?(&1, token_id, pairing_id) or replaced?(&1, token_id, pairing_id))
 
@@ -151,7 +202,7 @@ defmodule Keyfleet.Keys.Changes.PutAgent do
 
   defp replaced?(_row, _token_id, _pairing_id), do: false
 
-  # The named agent comes off the other Key it was on in this fleet, which
+  # The named agent comes off the other Key it stands on in this fleet, which
   # only the person's write does.
   defp release(rows, token_id, pairing_id, actor) do
     case Enum.find(rows, &moved?(&1, token_id, pairing_id)) do

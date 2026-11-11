@@ -225,8 +225,8 @@ defmodule Keyfleet.Keys do
   wallets hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key
   their wallets hold, and `wallet` is the one holding it. An agent is the
   highest-ranked key its wallet holds, with its own wallet; else the key its
-  person put it on (`Keyfleet.Keys.AgentKey`), while their wallets hold it and
-  this pairing lasts, with `for_person: true` and the person's wallet holding
+  person put it on (`Keyfleet.Keys.AgentKey`), while it stands there
+  (`placed_on?/3`) and this pairing lasts, with `for_person: true` and the person's wallet holding
   it; else the highest-ranked key it holds an active shard of, with its own
   wallet. Everything either writes in the fleet is written as that key.
 
@@ -280,7 +280,7 @@ defmodule Keyfleet.Keys do
   @doc """
   The Key each agent with one of `wallets` (lowercase) is on in the fleet:
   the Key its person put it on (`Keyfleet.Keys.AgentKey`), by the wallet's
-  current pairing, while one of that person's wallets holds it, as the Key's
+  current pairing, while it stands there (`placed_on?/3`), as the Key's
   current ownership record. `{:ok, %{wallet => key}}`, an agent on no Key
   left out, or `{:error, error}`. However many agents, it is three reads, and
   one more for each hundred people beyond the first.
@@ -316,9 +316,9 @@ defmodule Keyfleet.Keys do
       held = Map.new(held, &{&1.token_id, &1})
 
       on_keys =
-        for %{agent_wallet: wallet, token_id: token_id, human_account_id: account} <- placed,
-            %{owner_wallet: owner} = key <- List.wrap(held[token_id]),
-            owner in Map.get(wallets_of, account, []),
+        for %{agent_wallet: wallet, human_account_id: account} = row <- placed,
+            key = held[row.token_id],
+            placed_on?(row, key, Map.get(wallets_of, account, [])),
             into: %{},
             do: {wallet, key}
 
@@ -340,6 +340,23 @@ defmodule Keyfleet.Keys do
       end
     end)
   end
+
+  @doc """
+  Whether the agent `row` (`Keyfleet.Keys.AgentKey`) puts on its Key still
+  stands, given `key`, that Key's current ownership record (or nil), and the
+  person's `wallets`: one of them holds the Key, and it has not changed hands
+  since the row was saved. A Key that changes hands, even between the
+  person's own wallets or back to them, has no agent on it. This is the one
+  rule; every reader of who is on which Key asks it.
+  """
+  def placed_on?(
+        %{token_id: token_id, ownership_epoch: epoch},
+        %{token_id: token_id, ownership_epoch: epoch, owner_wallet: owner},
+        wallets
+      ),
+      do: owner in wallets
+
+  def placed_on?(_row, _key, _wallets), do: false
 
   @doc """
   The Key `agent`'s person put it on in the fleet, by `assigned_keys/2`:
@@ -395,8 +412,8 @@ defmodule Keyfleet.Keys do
   `person_agents/1` gives them) is on each of the Keys their wallets hold now
   (`Keyfleet.Keys.AgentKey`), as `%{{fleet_id, token_id} => agent}`, read in
   one go for every fleet, for the person or an agent paired with them. A Key
-  that has left their wallets, or whose agent has since been unpaired, is
-  left out.
+  whose agent no longer stands on it (`placed_on?/3`), or whose agent has
+  since been unpaired, is left out.
   """
   def agents_on_keys(actor, agents) do
     case {person_wallets(actor), agents} do
@@ -408,11 +425,13 @@ defmodule Keyfleet.Keys do
 
   defp agents_on_held_keys(actor, wallets, agents) do
     by_id = Map.new(agents, &{&1.id, &1})
-    held = MapSet.new(keys_held_everywhere!(wallets, actor: actor), &{&1.fleet_id, &1.token_id})
+
+    held =
+      Map.new(keys_held_everywhere!(wallets, actor: actor), &{{&1.fleet_id, &1.token_id}, &1})
 
     for assigned <- agent_keys_of_person!(actor: actor),
         key = {assigned.fleet_id, assigned.token_id},
-        MapSet.member?(held, key),
+        placed_on?(assigned, held[key], wallets),
         agent = by_id[assigned.paired_agent_id],
         into: %{},
         do: {key, agent}
@@ -449,7 +468,7 @@ defmodule Keyfleet.Keys do
   as `identity/2`: a person is every key their wallets hold, with the wallet
   holding it; an agent is every key its wallet holds and every key it holds an
   active shard of, with its own wallet, and the key its person put it on
-  while their wallets hold it, `for_person: true` with the wallet holding it;
+  while it stands there (`placed_on?/3`), `for_person: true` with the wallet holding it;
   an agent with none of these, paired with a person here, is that person's
   keys, `for_person: true`. So an agent on a key acts as that key alone, and
   agents on different keys stay apart.

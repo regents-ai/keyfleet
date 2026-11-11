@@ -1,7 +1,8 @@
 defmodule Keyfleet.Repo.Migrations.AgentKeys do
   @moduledoc """
-  Which of a person's paired agents is on which of their Keys in a fleet
-  (`Keyfleet.Keys.AgentKey`). A new, empty table; nothing that exists changes.
+  Which of a person's paired agents is on which of their Keys in a fleet, and
+  the Key's ownership record when it was put there (`Keyfleet.Keys.AgentKey`).
+  A new, empty table; nothing that exists changes.
   """
 
   use Ecto.Migration
@@ -14,6 +15,7 @@ defmodule Keyfleet.Repo.Migrations.AgentKeys do
       add(:human_account_id, :bigint, null: false)
       add(:token_id, :bigint, null: false)
       add(:paired_agent_id, :uuid)
+      add(:ownership_epoch, :bigint, null: false)
 
       add(:updated_at, :utc_datetime_usec,
         null: false,
@@ -41,6 +43,12 @@ defmodule Keyfleet.Repo.Migrations.AgentKeys do
     create constraint(:agent_keys, :agent_keys_positive_token,
              check: """
                token_id > 0
+             """
+           )
+
+    create constraint(:agent_keys, :agent_keys_positive_epoch,
+             check: """
+               ownership_epoch >= 1
              """
            )
   end

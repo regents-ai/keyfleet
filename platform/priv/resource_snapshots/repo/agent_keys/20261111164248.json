@@ -50,6 +50,18 @@
     },
     {
       "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "ownership_epoch",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
       "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
       "generated?": false,
       "precision": null,
@@ -103,13 +115,21 @@
       "base_filter": null,
       "check": "token_id > 0",
       "name": "agent_keys_positive_token"
+    },
+    {
+      "attribute": [
+        "ownership_epoch"
+      ],
+      "base_filter": null,
+      "check": "ownership_epoch >= 1",
+      "name": "agent_keys_positive_epoch"
     }
   ],
   "create_table_options": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "635B17789B9AD9A7D447694311DF810818219E3EF315E5E964227F15AF0ADC16",
+  "hash": "7EDA08E3887D9C27A63077EA12FED5AD17352F6AF9D8A7D7EFA7652F94865B06",
   "identities": [
     {
       "all_tenants?": false,
