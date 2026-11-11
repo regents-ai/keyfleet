@@ -29,6 +29,7 @@ import {installPublicTools} from "./public_tools"
 import {arriveAt, hashTarget, installAccountMenu} from "./account_menu"
 import {installVitals} from "./vitals"
 import {installLaunchSteps} from "./launch_steps"
+import {spreadReconnect} from "./reconnect"
 import {AccountWallets} from "./hooks/account_wallets"
 import {Countdown} from "./hooks/countdown"
 import {FleetTabs} from "./hooks/fleet_tabs"
@@ -337,16 +338,6 @@ const hooks = {
   WorkspaceGraph,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
-
-// Phoenix's own waits between reconnect attempts, each spread from half to
-// one and a half times its length. A deploy drops every open page at once;
-// without the spread they all come back in the same instant and each reads
-// its page again, more than the site's few database connections can answer.
-const reconnectWaits = [10, 50, 100, 150, 200, 250, 500, 1000, 2000]
-const spreadReconnect = (tries: number) => {
-  const wait = reconnectWaits[tries - 1] ?? 5000
-  return Math.round(wait / 2 + Math.random() * wait)
-}
 
 // Sign in and refresh renew the session and rotate its CSRF state, so every
 // connection and reconnection reads the token the browser holds now.

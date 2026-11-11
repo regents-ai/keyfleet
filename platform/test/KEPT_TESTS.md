@@ -201,3 +201,21 @@ meaningful regression tests need no agreement.
 | the pulse names the agent and its Key's count, and leaves a deleted project out | `Keyfleet.WorkspacePulseTest` | The public pulse says which agent and Key worked on which project, and a deleted project's work leaves it. |
 | nobody changes an archived project's notebooks, and they can still be read | `KeyfleetWeb.NotebookGatewayTest` | An archived project's notebooks open and read for everyone and take no change, a new session included, until a Key takes it over. |
 | a push whose project is archived while it arrives is refused and reaches nothing | `KeyfleetWeb.CodeGatewayTest` | A push begun before its project was archived does not land in it. |
+
+## Timings, health and reconnecting
+
+Added on 12 November 2026 from fb551907 (`claude/products-menu-1019`), under Sean's
+18 October ruling that meaningful regression tests need no agreement. Each still
+describes today's code.
+
+| Test | Module or spec | Protects |
+| --- | --- | --- |
+| a body past a kilobyte is refused with 413 and counts nothing | `KeyfleetWeb.VitalsControllerTest` | Anyone may send page timings unsigned; a large body is refused and never counted. |
+| the 61st report from one address in a minute is refused with 429 | `KeyfleetWeb.VitalsControllerTest` | One sender can't flood the timings and skew every figure. |
+| a report for a page that is not one of the site's is refused with 400 and counts nothing | `KeyfleetWeb.VitalsControllerTest` | A made-up page name never becomes a new label on the timing figures. |
+| after its connection is ended, the next health check answers ok | `KeyfleetWeb.HealthReconnectTest` | A database restart doesn't leave the health check failing, so Fly doesn't restart a machine that is fine. |
+| a check that can't read in time answers 503 inside Fly's two-second deadline | `KeyfleetWeb.HealthReconnectTest` | A stuck read answers 503 before Fly gives up on the check. |
+| each wait stays between half and one and a half times Phoenix's own | `reconnect.test.ts` | After a deploy, pages reconnect neither all at once nor far later than Phoenix would. |
+| reaches both ends of the spread, and waits 5 seconds once Phoenix's list runs out | `reconnect.test.ts` | The spread uses its whole range and keeps a bounded wait after Phoenix's list. |
+| spreads a crowd: a thousand pages at the same attempt don't all come back together | `reconnect.test.ts` | A thousand pages dropped at once come back spread over a second. |
+| a signed read missing a header other than content-digest gets the sign-in server's own refusal | `KeyfleetWeb.NotebookGatewayTest` | An agent missing another signed header is told what is really missing, not to add the content-digest it already sends. |

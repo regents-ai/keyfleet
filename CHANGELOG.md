@@ -7952,3 +7952,33 @@ Words, order and what each item does are unchanged.
 Check: `fleet_layout.spec.ts` "at 390/320 wide the tabs and channels rest with
 no item cut and the chosen one whole" (fails on the old code), with
 `fleet_motion.spec.ts`, the accessibility and devices walks.
+
+## 2026-11-12 — Checks for the timings, the health check and reconnecting
+
+The tests from fb551907 (on `claude/products-menu-1019`) that still describe
+today's code, brought up to it. No behaviour changes.
+
+- Page timings (`POST /vitals`): a report past a kilobyte is refused with 413,
+  the 61st from one address in a minute with 429 and one for a page that is
+  not the site's with 400, and none of them is counted
+  (`vitals_controller_test.exs`).
+- Health check: after the connection it reads through is ended, the next
+  check answers ok; a check that can't read in time answers 503 well inside
+  Fly's two-second deadline (`health_reconnect_test.exs`). The check reads
+  through the site's own pool since b0dae0ac, so the old test's held-table
+  half, which relied on a connection of its own, is now the second case.
+- Reconnecting: the spread of Phoenix's reconnect waits moves to
+  `assets/js/reconnect.ts`, unchanged, so `assets/test/reconnect.test.ts` can
+  hold that each wait stays between half and one and a half times Phoenix's
+  own and that a crowd comes back spread out.
+- Notebooks: a request signed over its body but missing another signed header
+  gets the sign-in server's own refusal, not the content-digest advice
+  (`notebook_gateway_test.exs`).
+- Left out: the staging loader's test, since `seed-load-staging` is gone.
+- The nine are listed in `platform/test/KEPT_TESTS.md`, "Timings, health and
+  reconnecting", under Sean's 18 October ruling.
+- No migration; no production data.
+
+Check: `vitals_controller_test.exs`, `health_reconnect_test.exs`,
+`health_controller_test.exs`, `notebook_gateway_test.exs` (34 tests),
+`assets/test/reconnect.test.ts` (3) and `npm run typecheck`.
