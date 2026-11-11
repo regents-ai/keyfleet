@@ -8,7 +8,7 @@ app = "kf-nb-fleet-tech-accelerant"
 primary_region = "iad"
 
 [build]
-  image = "registry.fly.io/kf-nb-fleet-tech-accelerant:626ec14-110a2e7"
+  image = "registry.fly.io/kf-nb-fleet-tech-accelerant:626ec14-24dafab"
 
 [env]
   MARIMOHUB_RUN_MAINTENANCE = "true"

@@ -32,11 +32,27 @@ them to the hub. That part is built separately, in `platform/`.
 - **`hub/`**: the hub image (marimohub built from source at the pinned version,
   with `compute-fly` added), the two Fly app templates, and
   `hub.env.example`, which lists every hub setting with a one-line meaning.
-- **`marimohub/`**: the exact marimohub version used (`pin.env`), the
-  lockfile change (`pnpm-lock.patch`, made by pnpm) that adds `compute-fly` to
-  marimohub's workspace, `catalog-commit.patch`, our fix to marimohub's
-  catalog, and `storage-errors.patch`, which puts the store's answer in error
-  lines (both below).
+- **`marimohub/`**: the exact marimohub version used (`pin.env`) and the
+  patches the hub image applies to it, in this order:
+  - `pnpm-lock.patch`, the lockfile change (made by pnpm) that adds
+    `compute-fly` to marimohub's workspace and declares `@smithy/core`;
+  - `catalog-commit.patch`, our fix to marimohub's catalog (below);
+  - `storage-errors.patch`, which puts the store's answer in error lines
+    (below);
+  - `sweep-concurrency.patch`, which cleans up deleted notebooks 16 at a time;
+  - `storage-read-retry.patch`, which tries again a read the store cancels
+    with 408;
+  - `app-pool-sweep.patch`, which sweeps app pools 16 at a time and passes over
+    a deleted notebook's empty pool;
+  - `storage-calls.patch`, which names each failed store call and its object in
+    its log line, and gives the storage client five tries, 1, 2, 4 and 8
+    seconds apart;
+  - `maintenance-lock-landed.patch`, which keeps a lease whose write landed
+    before the store refused the client's retry of it, and logs who holds a
+    lease whenever a loop is refused it;
+  - `notebook-prune-hourly.patch`, which moves each notebook's upload and
+    thumbnail cleanup to its own hourly loop, and skips reading a notebook's
+    thumbnail record when no image is over a day old.
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -61,7 +77,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-110a2e7`, about 440 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-24dafab`, about 440 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -159,7 +175,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-110a2e7` as `registry.fly.io/kf-nb-<fleet>:626ec14-110a2e7`
+   - tag `keyfleet/notebook-hub:626ec14-24dafab` as `registry.fly.io/kf-nb-<fleet>:626ec14-24dafab`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:

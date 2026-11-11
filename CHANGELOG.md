@@ -7044,3 +7044,27 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
   settings no longer name a pool of five they never used.
 - Check: `test/keyfleet/database_config_test.exs`,
   `test/keyfleet/runtime_config_test.exs`, `test/keyfleet/release_test.exs`.
+
+## 2026-11-11 — Notebook hubs no longer lock themselves out of cleanup
+
+- Each hub's regular cleanup takes a short lease in its file store, so only one copy
+  runs at a time. When the store was slow, the storage client sent the lease write
+  again after the first try had already landed; the store refused the second try, and
+  the hub took that refusal to mean another copy held the lease. It then skipped its
+  own cleanup for up to 15 minutes, with nothing in its log (Accelerant and the Regents
+  Club, 20:22–20:37Z on 10 Nov).
+- After a refusal the hub now reads the lease back, and keeps it when the lease holds
+  exactly what this attempt wrote. Whenever the maintenance, session or job loop is
+  refused its lease, the log now says who holds it and until when.
+- Each notebook's upload and thumbnail cleanup now runs once an hour, in its own loop
+  with its own lease, instead of in every five-minute cycle; nothing it removes is
+  under a day old. It no longer reads a notebook's thumbnail record when no picture
+  is over a day old. A hub now makes a twelfth of those reads, or fewer.
+- Correction to the 2 Nov entry: "Writes are still never retried" was wrong. Writes
+  are not retried after a cancelled read's 408, but the storage client does retry
+  them after server errors and timeouts. The lease change above covers that case.
+- Two Keyfleet patches on marimohub
+  (`notebook-hub/marimohub/maintenance-lock-landed.patch` and
+  `notebook-hub/marimohub/notebook-prune-hourly.patch`), tested in the hub image
+  build. The hub image is now `626ec14-24dafab`; each hub moves to it at its next
+  deploy.

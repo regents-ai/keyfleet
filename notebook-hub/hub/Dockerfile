@@ -33,7 +33,8 @@ RUN git apply /tmp/storage-errors.patch
 COPY marimohub/sweep-concurrency.patch /tmp/sweep-concurrency.patch
 RUN git apply /tmp/sweep-concurrency.patch
 # A read the store cancels with 408 (Tigris RequestCanceled) is retried like any
-# other brief store failure; writes are not, so a landed write is never retried.
+# other brief store failure. Writes are not retried after a 408, though the storage
+# client still retries them after server errors and timeouts.
 COPY marimohub/storage-read-retry.patch /tmp/storage-read-retry.patch
 RUN git apply /tmp/storage-read-retry.patch
 # The app pool sweep works on 16 pools at a time and passes over a deleted
@@ -45,15 +46,31 @@ RUN git apply /tmp/app-pool-sweep.patch
 # storage client's own retries wait 1, 2, 4 and 8 seconds between five tries.
 COPY marimohub/storage-calls.patch /tmp/storage-calls.patch
 RUN git apply /tmp/storage-calls.patch
+# A lease write that landed but was retried by the storage client and refused still
+# wins (the lease is read back for this attempt's own holder and expiry), and a loop
+# refused its lease logs who holds it and until when, so a lockout is never silent.
+COPY marimohub/maintenance-lock-landed.patch /tmp/maintenance-lock-landed.patch
+RUN git apply /tmp/maintenance-lock-landed.patch
+# Each notebook's upload and thumbnail cleanup runs hourly under its own lease
+# instead of in every five-minute maintenance cycle, and reads thumbnail.json only
+# when an image is over a day old.
+COPY marimohub/notebook-prune-hourly.patch /tmp/notebook-prune-hourly.patch
+RUN git apply /tmp/notebook-prune-hourly.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
-# marimohub's catalog tests, with the three catalog-commit.patch adds.
+# marimohub's catalog tests, with the three catalog-commit.patch adds and the
+# maintenance-lock-landed.patch lease tests.
 RUN cd packages/core && pnpm exec vp test run src/services/catalog/
-# The notebook service's tests, with the sweep-concurrency.patch add, and the
-# storage client's tests, with the storage-read-retry.patch adds.
-RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts
+# The notebook and thumbnail tests, with the sweep-concurrency.patch add and the
+# notebook-prune-hourly.patch adds, and the storage client's tests, with the
+# storage-read-retry.patch adds.
+RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts src/services/content/ThumbnailService.test.ts
 RUN cd packages/storage-s3 && pnpm exec vp test run
+# The server's loop and startup tests, with the lease and hourly prune adds, and the
+# Cloudflare example's tests for its lease calls.
+RUN cd apps/server && pnpm exec vp test run src/backgroundLoops.test.ts src/cron.test.ts src/cron.tracing.test.ts src/bootstrap.test.ts
+RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
 # The app pool tests, with the app-pool-sweep.patch add.
 RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts
 RUN cd packages/compute-fly && pnpm exec vp pack
