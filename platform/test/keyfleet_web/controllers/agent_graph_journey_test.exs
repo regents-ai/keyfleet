@@ -638,7 +638,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   # commit outside the sandbox would count as sold, so this runs on Cascade.
   # Costly failure: a task one Key could hold alone, or archive from under the
   # Keys working on it, would shut the rest of the fleet out of its work.
-  test "any key joins any task and works on it beside the others, and its creator archives it once they leave",
+  test "any key joins any task and works on it beside the others, and its creator archives it at any time, letting them go",
        c do
     sell_cascade(1..3)
     start_graph(c, fleets: [@fleet, @cascade])
@@ -702,25 +702,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert ContractSchema.errors(refused.body, "WorkspaceError") == []
     assert patch.(ann, 1, 4, %{title: "Draft the short brief"}).status == 200
 
-    # The creator cannot archive the task from under the Keys still joined;
-    # once they leave, it can.
-    archive = fn version ->
-      graph(
-        c,
-        ann,
-        "archive",
-        %{as_key: 1, command_id: "x-#{version}", id: task["id"], expected_version: version},
-        @cascade
-      )
-    end
-
-    refused = archive.(5)
-
-    assert {refused.status, refused.body["error"]["code"],
-            refused.body["error"]["details"]["joined_keys"]} == {409, "still_joined", [2, 3]}
-
-    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
-
     for {{agent, key}, version} <- Enum.with_index([{bea, 2}, {cal, 3}], 6) do
       left =
         graph(c, agent, "leave", %{as_key: key, command_id: "l-#{key}", id: task["id"]}, @cascade)
@@ -770,8 +751,28 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert ContractSchema.errors(refused.body, "WorkspaceError") == []
     assert review.(bea, 2).status == 200
 
-    assert archive.(8).status == 200
-    assert graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["sys"]["archived"]
+    # The creator archives the task whoever has joined it, and lets them go.
+    for {{agent, key}, version} <- Enum.with_index([{bea, 2}, {cal, 3}], 9) do
+      rejoined =
+        graph(c, agent, "join", %{as_key: key, command_id: "j2-#{key}", id: task["id"]}, @cascade)
+
+      assert rejoined.body["result"] == %{"id" => task["id"], "version" => version}
+    end
+
+    archived =
+      graph(
+        c,
+        ann,
+        "archive",
+        %{as_key: 1, command_id: "x-1", id: task["id"], expected_version: 10},
+        @cascade
+      )
+
+    assert archived.status == 200
+    assert ContractSchema.errors(archived.body, "WorkspaceWrite") == []
+
+    sys = graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["sys"]
+    assert {sys["archived"], sys["joined"]} == {true, []}
 
     # A fork is a Key's own copy to take another way; nobody has joined it.
     other = write!(c, ann, "create", %{draft | command_id: "t-2"}, @cascade)

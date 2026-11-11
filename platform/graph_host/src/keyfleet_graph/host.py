@@ -265,7 +265,8 @@ class Host:
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
         _check_archiver(obj, command)
-        archived = {**obj.data["sys"], "archived": True}
+        # Archiving a task lets go every Key that joined it, as each leaving would.
+        archived = {**obj.data["sys"], "archived": True, **({"joined": []} if obj.type == "task" else {})}
 
         def apply(reactions: Reactions) -> dict:
             self.graph.patch_object(obj.id, {"sys": archived}, actor=command.principal, rationale=body.reason)
@@ -852,7 +853,7 @@ def _check_owner(obj, command: Command, fields=frozenset()) -> None:
 
 
 # Archiving takes an item away from everyone, so only the Key that created it
-# archives it, and a task only once every other Key that joined it has left.
+# archives it, at any time.
 def _check_archiver(obj, command: Command) -> None:
     key = command.auth.key.token_id
     creator = _creator(obj)
@@ -861,14 +862,6 @@ def _check_archiver(obj, command: Command) -> None:
             "not_owner",
             "only the Key that created this archives it",
             {"id": obj.id, "owner_key": creator},
-        )
-    others = [joined for joined in _joined_keys(obj) if joined != key] if obj.type == "task" else []
-    if others:
-        keys = ", ".join(f"#{joined}" for joined in others)
-        raise Refusal(
-            "still_joined",
-            f"other Keys are still working on this task ({keys}): it is archived once each has left it, which each does with leave",
-            {"id": obj.id, "joined_keys": others},
         )
 
 

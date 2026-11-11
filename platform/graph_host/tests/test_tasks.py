@@ -109,24 +109,16 @@ def test_a_keys_join_from_an_earlier_ownership_does_not_let_its_new_owner_work_o
     assert reply["error"]["code"] == "not_owner"
 
 
-def test_the_creator_archives_a_task_once_every_other_key_has_left_it(host):
-    _ok(host, "join", {"id": "task#2"}, command("j0"))
+def test_the_creator_archives_a_task_at_any_time_and_every_key_that_joined_it_is_let_go(host):
     _ok(host, "join", {"id": "task#2"}, command("j1", **OTHER))
     _ok(host, "join", {"id": "task#2"}, command("j2", **THIRD))
 
-    by_other = _call(host, "archive", {"id": "task#2", "expected_version": 4}, command("a1", **OTHER))
-    still = _call(host, "archive", {"id": "task#2", "expected_version": 4}, command("a2"))
+    by_other = _call(host, "archive", {"id": "task#2", "expected_version": 3}, command("a1", **OTHER))
+    _ok(host, "archive", {"id": "task#2", "expected_version": 3}, command("a2"))
 
     assert by_other["error"]["code"] == "not_owner"
-    assert still["error"]["code"] == "still_joined"
-    assert still["error"]["details"] == {"id": "task#2", "joined_keys": [18, 19]}
-    assert "#18, #19" in still["error"]["message"]
-
-    _ok(host, "leave", {"id": "task#2"}, command("l1", **OTHER))
-    _ok(host, "leave", {"id": "task#2"}, command("l2", **THIRD))
-    _ok(host, "archive", {"id": "task#2", "expected_version": 6}, command("a3"))
-
-    assert host.graph.get_object("task#2").data["sys"]["archived"]
+    sys = host.graph.get_object("task#2").data["sys"]
+    assert (sys["archived"], sys["joined"]) == (True, [])
 
 
 def test_links_from_a_task_are_for_its_creator_and_the_keys_that_joined_it(host):

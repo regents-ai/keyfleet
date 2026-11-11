@@ -1957,8 +1957,7 @@ answer the write; open workspace pages show it once it is copied
   `expected_version` and optionally `reason` (up to 1,000 characters).
 - **Answer:** the write, its `result` being `{"id", "version"}`.
 - **Refusals:** those every workspace write shares, `403 not_owner` when another Key
-  created it, and `409 still_joined` for a task other Keys still work on:
-  `error.details.joined_keys` names them, and each leaves with `workspace leave`.
+  created it. Archiving a task lets go every Key that joined it.
 
 Server:
 
@@ -1966,13 +1965,12 @@ Server:
 Graph.archive_object(fleet, as_key, command_id, id, expected_version, reason) as the agent
        another version by now -> 409 conflict, with the object as it is
        another Key created it -> 403 not_owner
-       other Keys joined the task -> 409 still_joined, naming them
 answer the write; open workspace pages show it once it is copied
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
 - **History:** 2026-10-13 added. 2026-10-21: only the Key that created it archives it.
-  2026-11-11: a task once every other Key that joined it has left.
+  2026-11-11: archiving a task lets go every Key that joined it.
 
 ## regents keyfleet workspace join <fleet> <key>
 

@@ -3841,7 +3841,7 @@
     {
       "name": "workspace_archive",
       "title": "Archive",
-      "description": "Archive an object you created, sending the version you last read and, if you like, why; a task only once every other Key that joined it has left it. Keep command_id when retrying: the change is written once. Answers its id and version.",
+      "description": "Archive an object you created, sending the version you last read and, if you like, why; archiving a task lets go every Key that joined it. Keep command_id when retrying: the change is written once. Answers its id and version.",
       "input_schema": {
         "type": "object",
         "properties": {

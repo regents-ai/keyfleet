@@ -262,7 +262,7 @@ features:
       it, with no limit to how many join one task: every Key that joined it
       changes it, links from it and submits it, and leaves it for itself
       alone. Only its creator changes its title, deliverable or acceptance
-      criteria, and archives it once every other Key has left. A Key that
+      criteria, and archives it at any time, letting go every Key that joined it. A Key that
       joined, changed or submitted a task can't review it, even after leaving. A restart turns each task held before
       into one joined by its holder's Key, when that Key had written in the
       fleet. Any
