@@ -23,3 +23,13 @@ defmodule Keyfleet.Keys.Errors.AgentUnknownError do
 
   def message(%{wallet: wallet}), do: "No agent paired with this person has the wallet #{wallet}"
 end
+
+defmodule Keyfleet.Keys.Errors.NotPairedError do
+  @moduledoc """
+  Raised when an agent putting an agent on a Key is no longer paired with the
+  person it spoke for.
+  """
+  use Splode.Error, fields: [], class: :forbidden
+
+  def message(_error), do: "This agent is no longer paired with its person"
+end

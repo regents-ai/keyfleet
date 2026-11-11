@@ -56,12 +56,21 @@ defmodule KeyfleetWeb.KeyAgentChoice do
         send(self(), {__MODULE__, :changed})
         {:status, saved(wallet, socket.assigns.agents, token_id)}
       else
-        _refused ->
-          {:alert, "That couldn’t be saved. Reload to see your Keys and agents."}
+        refused -> {:alert, refused(refused)}
       end
 
     {:noreply, assign(socket, notice: notice)}
   end
+
+  # A choice another one saved for the same Key first changes nothing, and
+  # may be made again at once.
+  defp refused({:error, %Ash.Error.Invalid{errors: errors}}) do
+    if Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1)),
+      do: "Another change to this Key was saved first. Try again.",
+      else: refused(nil)
+  end
+
+  defp refused(_refused), do: "That couldn’t be saved. Reload to see your Keys and agents."
 
   defp saved(nil, _agents, token_id), do: "Key #{Rules.grouped(token_id)} has no agent now."
 

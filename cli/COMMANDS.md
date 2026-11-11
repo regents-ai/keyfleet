@@ -1294,7 +1294,9 @@ answer keys (with an agent first, then by number), agents and yours
 - **Answer:** as `keys agents` answers, with the change made.
 - **Refusals:** 403 `person_not_here`; 409 `key_not_held`: the person's wallets don't hold
   this Key now; 409 `agent_unknown`: no agent paired with the person now has that wallet;
-  and those every writing command shares. A refused request changes nothing.
+  409 `agent_keys_changed`: another change to this Key's agent was saved first, so read
+  `keys agents` again and send it again if it still applies; and those every writing
+  command shares. A refused request changes nothing.
 
 Server:
 
@@ -1302,9 +1304,15 @@ Server:
 Keys.assign_agent(fleet, key, agent_wallet) as the agent, for its paired person
   the person hasn't signed in here -> 403 person_not_here
   the person's wallets don't hold the Key now -> 409 key_not_held
-  no pairing of the person's now has agent_wallet -> 409 agent_unknown
-  in one transaction: lock the pairing, take the agent off its other Key in the
-  fleet, and put it on this one (or none) in place of the Key's agent
+  in one transaction, locking in one order so two writes at once run in turn:
+    lock the signing agent's pairing and the named agent's, in wallet order
+      the signing agent is no longer paired -> 403 agent_not_paired
+      no pairing of the person's now has agent_wallet -> 409 agent_unknown
+    lock the person's rows for this Key and the named agent's Key, lowest first
+    take the agent off its other Key in the fleet, and put it on this one (or
+    none) in place of the Key's agent
+      a Key with no row was given an agent by another write meanwhile
+        -> 409 agent_keys_changed
 answer as keys agents
 ```
 

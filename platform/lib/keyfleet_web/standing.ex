@@ -46,7 +46,7 @@ defmodule KeyfleetWeb.Standing do
   end
 
   defp assigned?(actor, fleet_id, token_id),
-    do: match?({:ok, %{token_id: ^token_id}}, Keys.assigned_key(actor, fleet_id, actor: actor))
+    do: match?({:ok, %{token_id: ^token_id}}, Keys.assigned_key(actor, fleet_id))
 
   # Each thing between the agent and the fleet's work, in the order to fix
   # them, as the refusal an operation would answer.

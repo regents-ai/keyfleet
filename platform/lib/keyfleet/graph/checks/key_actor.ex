@@ -221,7 +221,7 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     read = [actor: actor] ++ opts
 
     with {:ok, nil} <- Keys.held_identity_key(key.fleet_id, [wallet], read),
-         {:ok, assigned} <- Keys.assigned_key(actor, key.fleet_id, read),
+         {:ok, assigned} <- Keys.assigned_key(actor, key.fleet_id),
          {:ok, shard} <- Keys.active_shard(key.fleet_id, key.token_id, wallet, read) do
       acting_for(actor, key, assigned, shard, read)
     else

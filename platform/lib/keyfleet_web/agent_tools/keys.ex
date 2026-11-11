@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.AgentTools.Keys do
     end
 
     action :assign_agent, :map do
-      description "Puts one of your person's agents on one of their Keys in a fleet, or takes it off."
+      description "Puts one of your person's agents on one of their Keys in a fleet, or takes it off. If another change to the Key's agent was saved first, nothing changes: read keys_agents again and send it again."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
 
       argument :token_id, :integer,
