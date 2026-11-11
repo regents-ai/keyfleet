@@ -58,8 +58,9 @@ defmodule Keyfleet.Search do
   @doc """
   One page of `actor`'s matches for `query` in the fleet, after `cursor` (nil
   for the newest), at most `limit` of them: `{:ok, %{matches: matches,
-  cursor: cursor}}`. A query with no words in it, or one longer than
-  `max_query/0`, answers `{:error, :query}`.
+  cursor: cursor}}`. A query with no words in it, only words it leaves
+  out, a NUL byte, or more than `max_query/0` characters answers
+  `{:error, :query}`.
   """
   @spec page(String.t(), String.t(), cursor() | nil, pos_integer(), term()) ::
           {:ok, %{matches: [map()], cursor: cursor() | nil}} | {:error, :query}
@@ -67,7 +68,8 @@ defmodule Keyfleet.Search do
       when is_integer(limit) and limit in 1..@max_limit do
     query = String.trim(query)
 
-    if query == "" or String.length(query) > @max_query do
+    if String.length(query) > @max_query or String.contains?(query, <<0>>) or
+         not wants_a_word?(query) do
       {:error, :query}
     else
       args = place(cursor) |> Map.put(:limit, limit)
@@ -84,6 +86,16 @@ defmodule Keyfleet.Search do
       {page, rest} = Enum.split(matches, limit)
       {:ok, %{matches: page, cursor: next(page, rest)}}
     end
+  end
+
+  # A query must ask for at least one word: one that only leaves words out
+  # matches nearly every row, and no index can find those.
+  defp wants_a_word?(query) do
+    ~r/-?"[^"]*"?|\S+/u
+    |> Regex.scan(query)
+    |> Enum.any?(fn [token] ->
+      not String.starts_with?(token, "-") and String.downcase(token) != "or"
+    end)
   end
 
   defp place(nil), do: %{}

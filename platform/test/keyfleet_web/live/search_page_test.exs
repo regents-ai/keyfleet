@@ -66,6 +66,16 @@ defmodule KeyfleetWeb.Live.SearchPageTest do
     assert has_element?(view, "#search-none")
   end
 
+  test "a q that is not words reads as no search, and the box does nothing off a fleet",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path <> "?q[]=hull")
+    assert has_element?(view, "#search-idle")
+
+    {:ok, view, _html} = live(build_conn(), "/about")
+    render_hook(view, "search", %{"q" => "hull"})
+    assert Process.alive?(view.pid)
+  end
+
   defp count_lines(html),
     do: html |> LazyHTML.from_fragment() |> LazyHTML.query("li") |> Enum.count()
 

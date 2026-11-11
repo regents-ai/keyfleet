@@ -87,12 +87,15 @@ defmodule Keyfleet.SearchTest do
   end
 
   test "a query with no words in it, or too long, is refused" do
-    assert Search.page(@fleet, "   ", nil, human("a")) == {:error, :query}
+    for query <- ["   ", "hull\0", "-zz", "-a -b", ~s(-"a b"), "or -a"] do
+      assert Search.page(@fleet, query, nil, human("a")) == {:error, :query}, inspect(query)
+    end
 
     assert Search.page(@fleet, String.duplicate("a", Search.max_query() + 1), nil, human("a")) ==
              {:error, :query}
 
     assert {:ok, %{matches: [], cursor: nil}} = Search.page(@fleet, "the", nil, human("a"))
+    assert {:ok, %{matches: []}} = Search.page(@fleet, "hull -zz", nil, human("a"))
   end
 
   defp found(actor, query) do

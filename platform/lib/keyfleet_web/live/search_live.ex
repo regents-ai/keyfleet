@@ -26,9 +26,11 @@ defmodule KeyfleetWeb.SearchLive do
 
   @doc "Reads the first page of matches for the address's `q`, as `actor`."
   def read(socket, %{"fleet_id" => fleet_id} = params, actor) do
-    query = String.trim(params["q"] || "")
-    assign(socket, :search, first(fleet_id, query, actor))
+    assign(socket, :search, first(fleet_id, words(params["q"]), actor))
   end
+
+  defp words(query) when is_binary(query), do: String.trim(query)
+  defp words(_none), do: ""
 
   defp first(fleet_id, "", _actor), do: %{fleet_id: fleet_id, query: "", state: :idle}
 
@@ -50,8 +52,11 @@ defmodule KeyfleetWeb.SearchLive do
         "search",
         %{"q" => query},
         %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket
-      ),
+      )
+      when is_binary(query),
       do: {:noreply, push_patch(socket, to: search_path(fleet_id, query))}
+
+  def handle_event("search", _params, socket), do: {:noreply, socket}
 
   def handle_event(
         "search_more",

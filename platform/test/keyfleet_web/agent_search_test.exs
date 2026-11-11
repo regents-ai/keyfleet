@@ -71,8 +71,11 @@ defmodule KeyfleetWeb.AgentSearchTest do
   end
 
   test "a query with no words, an unknown cursor or a limit out of range is refused", c do
-    assert json_response(post!(c, %{"query" => "  "}), 422)["error"]["code"] ==
-             "search_query_invalid"
+    for query <- ["  ", "deploy\0", "-deploy"] do
+      assert json_response(post!(c, %{"query" => query}), 422)["error"]["code"] ==
+               "search_query_invalid",
+             inspect(query)
+    end
 
     assert json_response(post!(c, %{"query" => "deploy", "cursor" => "nope"}), 422)["error"][
              "code"

@@ -48,4 +48,12 @@ defmodule Keyfleet.Repo.Migrations.SearchIndexes do
       )
     )
   end
+
+  def down do
+    execute("SET lock_timeout = '5s'")
+
+    drop_if_exists(index(:graph_objects, [], name: "graph_objects_search_index", concurrently: true))
+    drop_if_exists(index(:dm_messages, [], name: "dm_messages_search_index", concurrently: true))
+    drop_if_exists(index(:messages, [], name: "messages_search_index", concurrently: true))
+  end
 end
