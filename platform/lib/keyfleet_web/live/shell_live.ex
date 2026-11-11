@@ -466,11 +466,12 @@ defmodule KeyfleetWeb.ShellLive do
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired. The account menu and the pairing window follow on
   # every page, the Agents page's list on that page, the setup list on a
-  # fleet's page and the agents' states on the person's own Key's page.
+  # fleet's page, and the agents' states and shard presses on the person's own
+  # Key's page.
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
-    socket = socket |> setup_changed() |> agent_setup_changed()
+    socket = socket |> setup_changed() |> agent_setup_changed() |> KeysLive.agents_changed()
 
     case socket.assigns.route_spec.route_id do
       :account_agents ->
@@ -1222,14 +1223,8 @@ defmodule KeyfleetWeb.ShellLive do
       |> assign(:key_profile, nil)
       |> stream(:key_thread, [], reset: true)
 
-  defp load_key(
-         socket,
-         %{route_id: :keys},
-         %{"fleet_id" => fleet_id, "token_id" => token_id} = params
-       ) do
-    key = KeysLive.key_view(socket, fleet_id, String.to_integer(token_id), params["shard_to"])
-    assign(socket, :key, key)
-  end
+  defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}),
+    do: assign(socket, :key, KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)))
 
   defp load_key(socket, _route_spec, _params), do: assign(socket, :key, nil)
 

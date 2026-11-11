@@ -20,11 +20,11 @@ defmodule KeyfleetWeb.KeyLinks do
   def page_path(fleet_id, token_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/keys/#{token_id}"
 
   @doc """
-  Key `token_id`'s New shard form, with the agent's `wallet` filled in
-  (`KeyfleetWeb.KeysLive.key_view/4`).
+  Key `token_id`'s page at the shard press for the person's paired agent with
+  `wallet`, which the holder sees for each agent with no shard of the Key yet.
   """
   def give_shard_path(fleet_id, token_id, wallet),
-    do: "#{page_path(fleet_id, token_id)}?#{URI.encode_query(shard_to: wallet)}#key-issue-shard"
+    do: "#{page_path(fleet_id, token_id)}#key-issue-#{wallet}"
 
   @doc "The messages written to and from key `token_id`."
   def dms_path(fleet_id, token_id), do: "#{page_path(fleet_id, token_id)}/dms"

@@ -7,10 +7,9 @@ defmodule KeyfleetWeb.PairingBox do
   (`RegentAgents.Harness.hosted/0`, read at runtime), then the message to paste with
   its code in a short box with icons to copy it and make a new code. Each agent keeps its own code until it expires, so choosing another
   agent and coming back shows the same message. Once the agent uses the code, the
-  box names it, and Give It a Shard under the box leads to the New shard form of
-  one of the person's Keys with the agent's wallet filled in
-  (`KeyfleetWeb.AgentKeys`); that line keeps its space before, so the page below
-  never moves.
+  box names it, and Give It a Shard under the box leads to the agent's shard
+  press on the page of one of the person's Keys (`KeyfleetWeb.AgentKeys`); that
+  line keeps its space before, so the page below never moves.
 
   The parent passes `account` (the signed-in account), its `session_lease` as
   `lease` and `id`, and sends `agents_changed: true` when an agent pairs, checks

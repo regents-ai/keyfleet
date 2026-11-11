@@ -3,9 +3,9 @@ defmodule KeyfleetWeb.AgentKeys do
   The Keys a person's agents act for, as the Agents page shows them beside
   each agent (`KeyfleetWeb.AgentsPanel`) and once an agent pairs
   (`KeyfleetWeb.PairingBox`): each Key an agent's wallet holds an active shard
-  of, linked to its page, or, for an agent with none, where to give it one, the
-  New shard form on the page of a Key the person holds with the agent's wallet
-  filled in (`KeyfleetWeb.KeyLinks.give_shard_path/3`). An agent with no shard
+  of, linked to its page, or, for an agent with none, where to give it one: the
+  agent's shard press on the page of a Key the person holds
+  (`KeyfleetWeb.KeyLinks.give_shard_path/3`). An agent with no shard
   whose person holds no Key has neither.
 
   Shards and holders are public, as the chain records them. A failed read

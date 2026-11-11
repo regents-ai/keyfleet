@@ -6,8 +6,10 @@ defmodule KeyfleetWeb.KeysLive do
 
   Everything here is read from what the chain recorded, so a visitor sees the
   same standing the owner does; only the owner is offered the wallet buttons
-  that issue, renew and end shards and turn agent voting on or off. Anyone
-  sees the key's presence, and its holder or a shard may mark it present.
+  that issue, renew and end shards and turn agent voting on or off. A shard
+  for each of the owner's paired agents is one press; any other wallet is
+  typed under Other wallet. Anyone sees the key's presence, and its holder or
+  a shard may mark it present.
 
   Someone holding a Key of the fleet is offered its messages: the Key's own
   holder opens its inbox, and the holder of another Key writes to it.
@@ -19,6 +21,7 @@ defmodule KeyfleetWeb.KeysLive do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Agents
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
@@ -175,52 +178,94 @@ defmodule KeyfleetWeb.KeysLive do
           <h2 id="key-issue-shard-title">
             New shard
             <Regent.Primitives.tip id="key-issue-tip" label="About issuing a shard">
-              Issuing again to a wallet with a shard renews it from now.
+              Each press gives a shard for 30 days, signed in your wallet.
             </Regent.Primitives.tip>
           </h2>
 
-          <.live_component
-            module={WalletPanel}
-            names_sender={false}
-            id="key-issue-shard-action"
-            class="key-issue-shard"
-            flow={:issue_shard}
-            fleet={@key.fleet}
-            actor={@actor}
-            lease={@lease}
-            inputs={
-              %{
-                "keys" => "#{@key.token_id}",
-                "wallet" => if(@key.shard_to, do: @key.shard_to.wallet, else: ""),
-                "days" => "30"
-              }
-            }
-          >
-            <:fields :let={panel}>
-              <div class="key-shard-form">
-                <.field id="key-shard-keys" name="keys" label="Keys" value={panel.inputs["keys"]} />
-                <.field
-                  id="key-shard-wallet"
-                  name="wallet"
-                  label="Agent’s wallet"
-                  value={panel.inputs["wallet"]}
-                  hint={@key.shard_to && "Filled in for #{@key.shard_to.name}"}
-                />
-                <.field
-                  id="key-shard-days"
-                  name="days"
-                  label="Days"
-                  inputmode="numeric"
-                  value={panel.inputs["days"]}
-                />
+          <ul :if={@key.agents != []} id="key-issue-agents" class="key-shard-list">
+            <li :for={agent <- @key.agents} id={"key-issue-#{agent.wallet}"}>
+              <div>
+                <p class="key-name">{agent.name}</p>
+                <span>{agent.runtime}</span>
               </div>
-            </:fields>
-            <:buttons :let={panel}>
-              <WalletPanel.step_button panel={panel} step="issue" id="key-issue-shard-button">
-                Issue shard
-              </WalletPanel.step_button>
-            </:buttons>
-          </.live_component>
+              <.live_component
+                module={WalletPanel}
+                names_sender={false}
+                id={"key-issue-#{agent.wallet}-action"}
+                class="key-issue-shard"
+                flow={:issue_shard}
+                fleet={@key.fleet}
+                actor={@actor}
+                lease={@lease}
+                inputs={%{"keys" => "#{@key.token_id}", "wallet" => agent.wallet, "days" => "30"}}
+              >
+                <:buttons :let={panel}>
+                  <WalletPanel.step_button
+                    panel={panel}
+                    step="issue"
+                    id={"key-issue-#{agent.wallet}-button"}
+                  >
+                    Issue shard
+                  </WalletPanel.step_button>
+                </:buttons>
+              </.live_component>
+            </li>
+          </ul>
+
+          <Regent.Primitives.button
+            :if={@key.agents == []}
+            id="key-issue-pair"
+            type="button"
+            variant="secondary"
+            arrow={false}
+            aria-haspopup="dialog"
+            aria-controls="shell-pairing"
+            data-pair-open
+          >
+            Pair New Agent
+          </Regent.Primitives.button>
+
+          <Regent.Primitives.disclosure
+            id="key-other-wallet"
+            summary="Other wallet"
+            class="key-other-wallet"
+            phx-mounted={JS.ignore_attributes(["open"])}
+          >
+            <.live_component
+              module={WalletPanel}
+              names_sender={false}
+              id="key-issue-shard-action"
+              class="key-issue-shard"
+              flow={:issue_shard}
+              fleet={@key.fleet}
+              actor={@actor}
+              lease={@lease}
+              inputs={%{"keys" => "#{@key.token_id}", "wallet" => "", "days" => "30"}}
+            >
+              <:fields :let={panel}>
+                <div class="key-shard-form">
+                  <.field
+                    id="key-shard-wallet"
+                    name="wallet"
+                    label="Agent’s wallet"
+                    value={panel.inputs["wallet"]}
+                  />
+                  <.field
+                    id="key-shard-days"
+                    name="days"
+                    label="Days"
+                    inputmode="numeric"
+                    value={panel.inputs["days"]}
+                  />
+                </div>
+              </:fields>
+              <:buttons :let={panel}>
+                <WalletPanel.step_button panel={panel} step="issue" id="key-issue-shard-button">
+                  Issue shard
+                </WalletPanel.step_button>
+              </:buttons>
+            </.live_component>
+          </Regent.Primitives.disclosure>
         </section>
 
         <section
@@ -287,13 +332,11 @@ defmodule KeyfleetWeb.KeysLive do
   attr :label, :string, required: true
   attr :value, :string, required: true
   attr :inputmode, :string, default: nil
-  attr :hint, :string, default: nil
 
   # A field the wallet buttons' steps are built from.
   defp field(assigns) do
     ~H"""
     <Regent.Primitives.field :let={field} id={@id} label={@label}>
-      <:hint :if={@hint}>{@hint}</:hint>
       <input
         id={field.id}
         name={@name}
@@ -366,16 +409,16 @@ defmodule KeyfleetWeb.KeysLive do
   def refreshing, do: @refreshing
 
   @doc """
-  What the key's page shows of the key, as the visitor may see it, and the
-  agent its New shard form starts with: `shard_to` from the address
-  (`KeyfleetWeb.KeyLinks.give_shard_path/3`) when it is the wallet of one of
-  the signed-in person's own paired agents, named beside the field, so a link
-  never fills in a wallet the person doesn't know as their agent's.
+  What the key's page shows of the key, as the visitor may see it, and for its
+  holder the paired agents with no shard of it yet, each given one in a press
+  (`agents`). An agent that holds a shard renews it in the Shards list.
   """
-  def key_view(socket, fleet_id, token_id, shard_to) do
+  def key_view(socket, fleet_id, token_id) do
     actor = ShellLive.human_actor(socket)
     key = Keys.current_key!(fleet_id, token_id, actor: actor, load: [:fleet])
     {holder_name, holder_ens} = PublicIdentity.holder(holder(key))
+    owner? = owns_key?(actor, key)
+    shards = if(key, do: Profile.shards(fleet_id, token_id), else: [])
 
     %{
       fleet_id: fleet_id,
@@ -387,46 +430,46 @@ defmodule KeyfleetWeb.KeysLive do
       holder_name: holder_name,
       holder_ens: holder_ens,
       image: if(key, do: Metadata.image(key.fleet, token_id), else: Metadata.pass()),
-      owner?: owns_key?(actor, key),
+      owner?: owner?,
       refreshing?: not Chain.fresh?(fleet_id),
       edits_restricted?:
         match?([%{restricted: true}], Keys.latest_edits_restrictions!(fleet_id, [token_id])),
-      shards: if(key, do: Profile.shards(fleet_id, token_id), else: []),
+      shards: shards,
       messages: DmsLive.message_link(actor, key && key.owner_wallet, fleet_id, token_id),
-      shard_to: own_agent(socket, shard_to)
+      agents: if(owner?, do: unsharded(actor, shards), else: [])
     }
   end
 
-  defp own_agent(%{assigns: %{access_context: %{principal: {:human, account}}}}, wallet)
-       when is_binary(wallet) do
-    wallet = String.downcase(wallet)
+  defp unsharded(actor, shards) do
+    sharded = MapSet.new(shards, & &1.wallet)
 
-    case RegentAgents.list_my_agents(
-           actor: %RegentAgents.Person{privy_user_id: account.privy_user_id}
-         ) do
-      {:ok, agents} ->
-        Enum.find_value(agents, &(&1.wallet == wallet && %{wallet: &1.wallet, name: &1.name}))
-
-      {:error, _failure} ->
-        nil
-    end
+    for agent <- Agents.my_agents(actor),
+        agent.wallet not in sharded,
+        do: %{
+          wallet: agent.wallet,
+          name: agent.name,
+          runtime: RegentAgents.Harness.label(agent.harness)
+        }
   end
-
-  defp own_agent(_socket, _wallet), do: nil
 
   @doc "The key on show read again when it is among the fleet's changed keys."
   def refresh_key(
-        %{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id, shard_to: shard_to}}} =
-          socket,
+        %{assigns: %{key: %{fleet_id: fleet_id, token_id: token_id}}} = socket,
         fleet_id,
         token_ids
       ) do
     if token_id in token_ids,
-      do: assign(socket, :key, %{key_view(socket, fleet_id, token_id, nil) | shard_to: shard_to}),
+      do: assign(socket, :key, key_view(socket, fleet_id, token_id)),
       else: socket
   end
 
   def refresh_key(socket, _fleet_id, _token_ids), do: socket
+
+  @doc "The holder's own Key on show read again when their paired agents change."
+  def agents_changed(%{assigns: %{key: %{owner?: true} = key}} = socket),
+    do: assign(socket, :key, key_view(socket, key.fleet_id, key.token_id))
+
+  def agents_changed(socket), do: socket
 
   # The account linking the key's wallet, named as the Member List names it.
   defp holder(nil), do: nil

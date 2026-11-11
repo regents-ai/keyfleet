@@ -860,6 +860,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     @fleet "fleet_tech_classic"
     @person "0x6767676767676767676767676767676767676767"
     @agent "0x7878787878787878787878787878787878787878"
+    @second "0x8989898989898989898989898989898989898989"
 
     setup do
       Fleets.bootstrap_catalog!()
@@ -882,7 +883,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
       assert has_element?(
                view,
-               ~s(#account-agents li a[href="/classic/1/keys/1?shard_to=#{@agent}#key-issue-shard"]),
+               ~s(#account-agents li a[href="/classic/1/keys/1#key-issue-#{@agent}"]),
                "Give it a shard"
              )
 
@@ -906,17 +907,42 @@ defmodule KeyfleetWeb.ShellLiveTest do
       assert has_element?(view, "#account-agents li", "Couldn’t read Keys")
     end
 
-    test "the New shard form fills in the person's own agent, by name, and no other wallet", c do
-      view = open_key(c.conn, c.account, "/classic/1/keys/1?shard_to=#{@agent}")
+    test "the Key's page gives each paired agent with no shard of it a press of its own", c do
+      view = open_key(c.conn, c.account, "/classic/1/keys/1")
 
-      assert has_element?(view, ~s(input#key-shard-wallet[value="#{@agent}"]))
-      assert has_element?(view, "#key-shard-wallet-hint", "Filled in for Astra")
+      assert has_element?(view, "#key-issue-#{@agent}", "Astra")
+      assert has_element?(view, "#key-issue-#{@agent}-button", "Issue shard")
+      refute has_element?(view, "#key-issue-pair")
 
-      stranger = "0x8989898989898989898989898989898989898989"
-      view = open_key(c.conn, c.account, "/classic/1/keys/1?shard_to=#{stranger}")
+      assert has_element?(
+               view,
+               ~s{details#key-other-wallet:not([open]) input#key-shard-wallet[value=""]}
+             )
 
-      assert has_element?(view, ~s(input#key-shard-wallet[value=""]))
-      refute has_element?(view, "#key-shard-wallet-hint")
+      # A second agent paired anywhere while the page is open gets its press.
+      %{code: code} =
+        RegentAgents.issue_pairing_code!(
+          actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
+        )
+
+      RegentAgents.pair_agent!(code, "Vega", :codex, actor: %RegentAgents.Agent{wallet: @second})
+
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        RegentAgents.topic("did:privy:agent-keys"),
+        :agents_changed
+      )
+
+      assert has_element?(view, "#key-issue-#{@second}", "Vega")
+
+      # An agent given its shard leaves for the Shards list, where it renews.
+      ChainHelpers.issue_shard!(@fleet, 1, @agent)
+      ChainHelpers.issue_shard!(@fleet, 1, @second)
+      Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
+
+      refute has_element?(view, "#key-issue-#{@agent}")
+      assert has_element?(view, "#key-shard-renew-#{@agent}")
+      assert has_element?(view, "#key-issue-pair[data-pair-open]", "Pair New Agent")
     end
   end
 

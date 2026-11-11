@@ -83,9 +83,9 @@ test("on a 320 px phone, each account tab is a whole thumb wide, the open one is
 })
 
 // Once an agent pairs, the person is offered a shard of their own Key for it:
-// the link opens that Key's New shard form with the agent's wallet filled in,
-// and the press reaches the wallet. With the shard on the chain, the agent's
-// row names the Key.
+// the link opens that Key's page at the agent's own shard press, and the press
+// reaches the wallet. With the shard on the chain, the agent's row names the
+// Key.
 test("an agent that pairs is offered a shard of the person's Key, and its row then names the Key", async ({page}) => {
   const fleet = "fleet_tech_classic"
   const me = "0x1111111111111111111111111111111111111111"
@@ -115,11 +115,13 @@ test("an agent that pairs is offered a shard of the person's Key, and its row th
 
   await give.click()
   await expect(page.locator("#shell-pairing")).toBeHidden()
-  await expect(page.locator("#key-shard-wallet")).toHaveValue(agent)
+  const press = page.locator(`#key-issue-${agent}-button`)
+  await expect(page.locator(`#key-issue-${agent}`)).toContainText(name)
+  await expect(press).toBeInViewport()
   const key = Number(new URL(page.url()).pathname.split("/").pop())
   expect(new URL(page.url()).pathname).toBe(`/classic/1/keys/${key}`)
   await useStandInWallet(page, me)
-  await page.locator("#key-issue-shard-button").click()
+  await press.click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
   const [{transaction}] = await sentByStandIn(page)
   expect(transaction.data.toLowerCase()).toContain(agent.slice(2))
