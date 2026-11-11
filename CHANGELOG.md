@@ -7324,3 +7324,13 @@ Check: `make check-change`, `mix credo --strict`,
 `shell_links.spec.ts`; headless Chromium at 1280×720 and 390×844 on /account,
 /account/agents, the feed with a moved line and the hall with a Decision and
 a Payment open.
+
+## 2026-11-11 — Privacy policy names only what the site counts
+
+- `platform/priv/public/privacy.md`: the running-totals sentence names
+  homepage visits, presses of "Watch" and page speed, the counts the launch
+  counters keep since the step 4 homepage. It no longer names "Connect my
+  agent" presses or copied setup lines. The effective date moves to
+  11 November 2026. Owner's answer: decision 6a, 11 November.
+- No migration; no production data. The agent contract, tool manifest and
+  command list are unchanged.
