@@ -2,9 +2,9 @@ defmodule Keyfleet.Graph.Workspace do
   @moduledoc """
   A fleet's shared workspace: the goals, tasks, findings, evidence, services,
   notes and dead ends its members keep, the links between them, and the
-  reviews of submitted tasks. A member joins a goal to follow it: the goal
-  records each Key and wallet that joined, and a member's sync lists the
-  goals it joined.
+  reviews of submitted tasks. A member joins a goal to follow it, and joins
+  a task to work on it: each records every Key and wallet that joined, with
+  no limit, and a member's sync lists the goals and tasks it joined.
 
   A task is marked done only by submitting it (`submit`), with its result and
   the evidence it rests on. A submission claims the work is done; whether it
@@ -22,9 +22,9 @@ defmodule Keyfleet.Graph.Workspace do
   fleet, whatever its project. The graph refuses the rest, naming the
   fleet's active projects (`project_archived`, `project_unknown`).
 
-  A member takes an untaken task by assigning it to their own Key. Only the
-  Key holding a task gives it to another Key or drops it; any other member
-  forks it instead (`fork`), which copies it as their own task in progress.
+  Any member joins any task (`join`) and leaves it (`leave`), each for the
+  Key and wallet acting only; a member may also fork a task (`fork`), which
+  copies it as their own task in progress.
 
   Each write is one operation on the fleet's graph, answered by its writer,
   and first spends the acting agent wallet's allowance of writes in the fleet
@@ -33,9 +33,11 @@ defmodule Keyfleet.Graph.Workspace do
   choosing; the same command id with the same body answers the original
   result instead of writing twice. Every member reads every object and
   builds on it,
-  but an object belongs to one Key: the Key holding it, for a held task, and
-  otherwise the Key that created it. Only that Key changes it or links from
-  it, and only the Key that created it archives it; the fleet's writer
+  but an object belongs to the Key that created it. Only that Key changes it
+  or links from it, except that every Key that joined a task works on it too
+  and submits it; only its creator changes a task's title, deliverable or
+  acceptance criteria. Only the creator archives an object, and a task only
+  once every other Key has left it (`still_joined`); the fleet's writer
   answers `not_owner` to anyone else. Who may act as a Key at all: see
   `Keyfleet.Graph.Checks.KeyActor`.
 
@@ -226,7 +228,7 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :join, :map do
-      description "Joins a goal as the acting Key and wallet; joining again changes nothing."
+      description "Joins a goal or task as the acting Key and wallet; joining again changes nothing."
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :command_id, :string, allow_nil?: false, constraints: @text
@@ -238,7 +240,7 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :leave, :map do
-      description "Leaves a goal the acting Key and wallet joined; leaving again changes nothing."
+      description "Leaves a goal or task the acting Key and wallet joined; leaving again changes nothing."
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :command_id, :string, allow_nil?: false, constraints: @text

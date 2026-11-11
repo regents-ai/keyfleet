@@ -33,14 +33,14 @@ defmodule Keyfleet.Graph.Event do
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
 
   # The changes worth telling people who watch a fleet: every new object; a
-  # patch that moves a status, progress or who has taken a task, archives an
-  # object, or changes a goal or service; and a link saying that
+  # patch that moves a status or progress, archives an object, changes a goal
+  # or service, or is a member joining or leaving a task; and a link saying that
   # one object supports, contradicts or produces another. Edits to other
   # objects' words, unlinks, attention notices and command records are left
   # out. The same words make the partial index and the reads that use it, so
   # the index answers exactly the events that match.
   @notable """
-  type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress', 'assignee_key']) OR (payload #> '{diff,sys,new,archived}') = 'true'::jsonb OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service')))\
+  type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress']) OR ((payload #> '{diff,sys,new,archived}') = 'true'::jsonb AND (payload #> '{diff,sys,old,archived}') IS DISTINCT FROM 'true'::jsonb) OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service') OR (actor LIKE 'member:%' AND split_part(payload ->> 'target', '#', 1) = 'task' AND (payload #> '{diff,sys,new,joined}') IS DISTINCT FROM (payload #> '{diff,sys,old,joined}'))))\
   """
 
   postgres do
@@ -66,7 +66,11 @@ defmodule Keyfleet.Graph.Event do
       )
 
       # The fleet's notable changes, newest first, for its activity.
-      index(["fleet_id", "seq DESC"], name: "graph_events_notable_index", where: @notable)
+      index(["fleet_id", "seq DESC"],
+        name: "graph_events_activity_index",
+        where: @notable,
+        concurrently: true
+      )
 
       # The record each write left of itself, by its command id.
       index(["fleet_id", "(payload ->> 'command_id')"],
@@ -418,8 +422,9 @@ defmodule Keyfleet.Graph.Event do
     # page of lines never loads the text the event carries:
     #   object.created   object, object_type, and for a review its
     #                    decision and the task it reviews
-    #   patch.applied    object, fields (the names changed), archived, joins
-    #                    (members who joined the goal, less those who left),
+    #   patch.applied    object, fields (the names changed), archived (the
+    #                    patch archived it), joins (how many members joined
+    #                    it, or less than 0 for how many left),
     #                    submitted (the patch submitted a task for review),
     #                    and values: {old, new} of the few short fields shown
     #   relation.created relation_type, source, target, and for a review's
@@ -439,14 +444,15 @@ defmodule Keyfleet.Graph.Event do
                     'fields', CASE WHEN jsonb_typeof(? -> 'diff') = 'object'
                       THEN (SELECT COALESCE(jsonb_agg(k.key ORDER BY k.key), '[]'::jsonb) FROM jsonb_object_keys(? -> 'diff') AS k(key))
                       ELSE '[]'::jsonb END,
-                    'archived', COALESCE((? #> '{diff,sys,new,archived}') = 'true'::jsonb, false),
-                    'joins', jsonb_array_length(COALESCE(? #> '{diff,sys,new,joined}', '[]'::jsonb)) - jsonb_array_length(COALESCE(? #> '{diff,sys,old,joined}', '[]'::jsonb)),
+                    'archived', COALESCE((? #> '{diff,sys,new,archived}') = 'true'::jsonb AND (? #> '{diff,sys,old,archived}') IS DISTINCT FROM 'true'::jsonb, false),
+                    'joins', (SELECT CASE WHEN j.added > 0 THEN j.added ELSE -j.removed END FROM (SELECT
+                      (SELECT count(*) FROM jsonb_array_elements(COALESCE(? #> '{diff,sys,new,joined}', '[]'::jsonb)) AS e(m) WHERE NOT COALESCE(? #> '{diff,sys,old,joined}', '[]'::jsonb) @> jsonb_build_array(e.m)) AS added,
+                      (SELECT count(*) FROM jsonb_array_elements(COALESCE(? #> '{diff,sys,old,joined}', '[]'::jsonb)) AS e(m) WHERE NOT COALESCE(? #> '{diff,sys,new,joined}', '[]'::jsonb) @> jsonb_build_array(e.m)) AS removed) AS j),
                     'submitted', (? #> '{diff,sys,new,submitted,version}') IS NOT NULL AND (? #> '{diff,sys,new,submitted,version}') IS DISTINCT FROM (? #> '{diff,sys,old,submitted,version}'),
                     'values', jsonb_strip_nulls(jsonb_build_object(
                       'status', ? #> '{diff,status}',
                       'progress', ? #> '{diff,progress}',
-                      'confidence', ? #> '{diff,confidence}',
-                      'assignee_key', ? #> '{diff,assignee_key}')))
+                      'confidence', ? #> '{diff,confidence}')))
                   WHEN 'relation.created' THEN jsonb_strip_nulls(jsonb_build_object('relation_type', ? #>> '{relation,type}', 'source', (? ->> 'source'), 'target', (? ->> 'target'),
                     'decision', CASE WHEN (? #>> '{relation,type}') = 'reviews' THEN
                       (SELECT o.payload #>> '{object,data,decision}' FROM keyfleet_app.graph_events AS o
@@ -462,6 +468,8 @@ defmodule Keyfleet.Graph.Event do
                   END
                   """,
                   type,
+                  payload,
+                  payload,
                   payload,
                   payload,
                   payload,

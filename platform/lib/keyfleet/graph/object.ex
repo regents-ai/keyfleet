@@ -143,7 +143,7 @@ defmodule Keyfleet.Graph.Object do
     # it to everyone (`Keyfleet.Projects.Project`): one part of it, the most
     # recently changed first, not archived. `goals` are its open goals,
     # `work` everything but goals and reviews, `outputs` its findings and its
-    # accepted or reproduced tasks, `open` the tasks nobody has taken and the blocked ones,
+    # accepted or reproduced tasks, `open` the tasks nobody has joined and the blocked ones,
     # which need someone's help. Each comes with its title, type, standing and
     # who made it alone. Callers bound it with a limit.
     read :shown do
@@ -171,7 +171,7 @@ defmodule Keyfleet.Graph.Object do
                     (^arg(:part) == :open and type == "task" and
                        (fragment("(? ->> 'progress') = 'blocked'", data) or
                           (fragment("(? ->> 'progress') = 'todo'", data) and
-                             fragment("(? ->> 'assignee_key') IS NULL", data)))))
+                             fragment("jsonb_array_length(? -> 'joined') = 0", sys)))))
              )
 
       prepare build(
@@ -405,21 +405,24 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
-    # The unfinished tasks taken by these keys of the fleet, newest change
-    # first, each with what its card shows.
-    read :assigned_to_keys do
+    # The unfinished tasks one agent joined as one key of the fleet, newest
+    # change first, each with what its card shows. A join made by the agent
+    # of an earlier owner of the key is that agent's, not this one's.
+    read :tasks_joined_by do
       argument :fleet_id, :string, allow_nil?: false
-
-      argument :token_ids, {:array, :integer},
-        allow_nil?: false,
-        constraints: [max_length: 100, items: [min: 1]]
-
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1]
+      argument :wallet, :string, allow_nil?: false, constraints: @text
       argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "task" and
                  (is_nil(^arg(:project)) or project == ^arg(:project)) and
-                 fragment("(? ->> 'assignee_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
+                 fragment(
+                   "(? -> 'joined') @> jsonb_build_array(jsonb_build_object('key', jsonb_build_object('token_id', ?::bigint), 'wallet', ?::text))",
+                   sys,
+                   ^arg(:token_id),
+                   ^arg(:wallet)
+                 ) and
                  fragment("(? ->> 'progress') <> 'done'", data) and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
              )
@@ -590,7 +593,7 @@ defmodule Keyfleet.Graph.Object do
              :graph,
              :tallied,
              :around_goal,
-             :assigned_to_keys,
+             :tasks_joined_by,
              :review_asked_of,
              :joined_by,
              :citing,
@@ -698,24 +701,11 @@ defmodule Keyfleet.Graph.Object do
               ),
               public?: true
 
-    # The Key an object belongs to: the Key holding it, for a held task, and
-    # otherwise the Key that created it; none for a starting goal.
+    # The Key an object belongs to: the Key that created it; none for a
+    # starting goal. The Keys that joined a task work on it too (`sys.joined`).
     calculate :owner_key,
               :integer,
-              expr(
-                fragment(
-                  """
-                  CASE WHEN ? = 'task' AND jsonb_typeof(? -> 'assignee_key') = 'number'
-                    THEN (? ->> 'assignee_key')::bigint
-                    ELSE (? #>> '{created_by,key,token_id}')::bigint
-                  END
-                  """,
-                  type,
-                  data,
-                  data,
-                  sys
-                )
-              ),
+              expr(fragment("(? #>> '{created_by,key,token_id}')::bigint", sys)),
               public?: true
 
     # A task's next step as its author wrote it; nothing for any other object.
@@ -746,7 +736,6 @@ defmodule Keyfleet.Graph.Object do
                   jsonb_strip_nulls(jsonb_build_object(
                     'status', left(? ->> 'status', 32),
                     'progress', left(? ->> 'progress', 32),
-                    'assignee_key', ? -> 'assignee_key',
                     'confidence', left(? ->> 'confidence', 32),
                     'customer', left(? ->> 'customer', 200),
                     'payment_asset', left(? ->> 'payment_asset', 32),
@@ -766,7 +755,6 @@ defmodule Keyfleet.Graph.Object do
                       WHEN 'review' THEN ? ->> 'rationale'
                     END, 240)))
                   """,
-                  data,
                   data,
                   data,
                   data,

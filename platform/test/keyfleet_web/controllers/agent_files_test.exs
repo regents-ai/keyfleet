@@ -98,7 +98,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert page =~ ~r{<strong>Compete on <a href="https://yukon.org/"[^>]*>Yukon</a>.</strong>}
 
     assert build_conn() |> get("/skill.md") |> response(200) =~
-             "or untaken task, or join a starting goal once a Key takes `general` over."
+             "or join a task, or join a starting goal once a Key takes `general` over."
   end
 
   test "a runtime carries Verified, on /agents and under its name, only once it passed its checks" do

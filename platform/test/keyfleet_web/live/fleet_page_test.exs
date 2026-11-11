@@ -2048,7 +2048,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         project: "lab"
       )
 
-      task!("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
+      task!("Draft the price", %{"progress" => "doing"})
       read_now()
 
       {:ok, view, html} = live(conn, @path)

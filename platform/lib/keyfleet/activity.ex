@@ -38,26 +38,20 @@ defmodule Keyfleet.Activity do
     * Workspace changes carry `by` (a key, or nil when the workspace itself
       made the change) and `item`:
       * `:created`: a new item of any type;
-      * `:claimed`: the task was given to `to` (a key; `to` equal to `by`
-        means the key took it on itself);
-      * `:unclaimed`: the task is nobody's again;
       * `:submitted`: the task was submitted for review;
       * `:progress`: the task's `progress` is now "todo", "doing", "blocked"
         or "done";
       * `:status`: the goal's `status` is now "open", "achieved" or "dropped";
       * `:revised`: a goal or service was edited;
-      * `:joined` and `:left`: `by` joined the goal, or left it;
+      * `:joined` and `:left`: `by` joined the goal or task, or left it;
       * `:archived`.
     * `:reviewed`: `by`, `item` (the task reviewed) and `decision`
       ("accept" or "dispute").
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
-    * `:tasks`: a run of tasks one key added, took on, or gave to other
-      keys, by the same rules as `:posts`: `by`, `added` (how many it added),
-      `taken` (how many it took on), `given` (how many it gave), `to` (up to
-      three of the keys given tasks, lowest first) and `others` (how many
-      more keys were given tasks).
+    * `:tasks`: a run of tasks one key added, by the same rules as `:posts`:
+      `by` and `added` (how many it added).
     * `:changes`: a run of one change (`change`: `:archived`, `:submitted`
       or `:revised`) one key made to items of one type, by the same rules as
       `:posts`: `by`, `change`, `type` and `count`.
@@ -556,15 +550,14 @@ defmodule Keyfleet.Activity do
     %{count: length(token_ids), token_ids: Enum.take(token_ids, @listed_keys)}
   end
 
-  # Workspace changes: a run of tasks one key added, or gave to other keys,
-  # is one item, and so is a run of one change one key made to items of one
-  # type.
+  # Workspace changes: a run of tasks one key added is one item, and so is a
+  # run of one change one key made to items of one type.
   defp group_work([]), do: []
 
   defp group_work([first | rest]) do
     cond do
-      handing_out?(first, first.facts.by) ->
-        {run, rest} = take_run(rest, first, &handing_out?(&1, first.facts.by), & &1.at)
+      adding_task?(first, first.facts.by) ->
+        {run, rest} = take_run(rest, first, &adding_task?(&1, first.facts.by), & &1.at)
         [tasks_entry(run) | group_work(rest)]
 
       first.kind in @repeated ->
@@ -594,32 +587,18 @@ defmodule Keyfleet.Activity do
     })
   end
 
-  # A task `by` added, or gave to a key other than its own.
-  defp handing_out?(%{kind: :created, facts: %{by: by, item: {:item, "task#" <> _}}}, by),
+  # A task `by` added.
+  defp adding_task?(%{kind: :created, facts: %{by: by, item: {:item, "task#" <> _}}}, by),
     do: by != nil
 
-  defp handing_out?(%{kind: :claimed, facts: %{by: by}}, by), do: by != nil
-
-  defp handing_out?(_entry, _by), do: false
-
-  defp token_id({:actor, token_id, _wallet}), do: token_id
-  defp token_id(%{token_id: token_id}), do: token_id
+  defp adding_task?(_entry, _by), do: false
 
   defp tasks_entry([only]), do: only
 
   defp tasks_entry([newest | _] = run) do
-    by = token_id(newest.facts.by)
-    claimed = for %{kind: :claimed, facts: %{to: to}} <- run, do: to.token_id
-    {taken, given} = Enum.split_with(claimed, &(&1 == by))
-    keys = given |> Enum.uniq() |> Enum.sort()
-
     entry("tasks:#{newest.position}", newest.at, :tasks, List.last(run).position, %{
       by: newest.facts.by,
-      added: Enum.count(run, &(&1.kind == :created)),
-      taken: length(taken),
-      given: length(given),
-      to: Enum.take(keys, @listed_keys),
-      others: max(length(keys) - @listed_keys, 0)
+      added: length(run)
     })
   end
 
@@ -666,9 +645,6 @@ defmodule Keyfleet.Activity do
       brief["joins"] < 0 ->
         {:left, item}
 
-      "assignee_key" in brief["fields"] ->
-        assignment(values["assignee_key"], item)
-
       match?(%{"progress" => %{"new" => _}}, values) ->
         {:progress, Map.put(item, :progress, values["progress"]["new"])}
 
@@ -679,11 +655,6 @@ defmodule Keyfleet.Activity do
         {:revised, item}
     end
   end
-
-  defp assignment(%{"new" => token_id}, item) when is_integer(token_id),
-    do: {:claimed, Map.put(item, :to, %{token_id: token_id, agent: nil})}
-
-  defp assignment(_unset, item), do: {:unclaimed, item}
 
   # A member writes as its key; the workspace's own actors write as
   # `keyfleet:<part>`. Any other actor is not one the workspace records.

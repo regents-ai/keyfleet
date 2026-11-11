@@ -282,6 +282,7 @@ defmodule KeyfleetWeb.WorkspaceGraph do
       standing: Map.get(@standing_names, node.standing),
       owner_key: node.owner_key,
       owner: node.owner_key && ActivityLines.key_name(node.owner_key, nil),
+      joined_keys: node.joined_keys,
       project: labels[node.project],
       archived?: node.archived,
       path: WorkspacePage.item_path(fleet_id, node.id)

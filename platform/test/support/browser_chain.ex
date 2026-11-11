@@ -378,7 +378,7 @@ defmodule Keyfleet.BrowserChain do
   Gives a deployed fleet something on each of its pages to link to the
   others: the agent of `owner`, sold a key, says something for them in the
   Public room, the workspace holds its starting goals, a goal that discusses
-  that message and a task assigned to the Key the message speaks as, and the
+  that message and a task the Key the message speaks as has joined, and the
   fleet has proposal 1.
   Returns that Key's number: an owner who already holds a lower Key speaks as
   that one.
@@ -400,10 +400,8 @@ defmodule Keyfleet.BrowserChain do
       "discussion" => [%{"room" => "general", "seq" => message.seq}]
     })
 
-    WorkspaceFixtures.create(fleet_id, "task", %{
-      "title" => "Draft the brief",
-      "assignee_key" => message.as_key
-    })
+    task = WorkspaceFixtures.create(fleet_id, "task", %{"title" => "Draft the brief"})
+    WorkspaceFixtures.join(fleet_id, task, by: message.as_key)
 
     ProposalHelpers.proposal!(fleet_id, 1)
     reread()

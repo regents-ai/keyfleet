@@ -35,16 +35,19 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
     "conflict" =>
       {409,
        "details.object is the item as it is now. Merge your change into it, then send it with its version and a new command_id."},
+    "still_joined" =>
+      {409,
+       "Each Key in details.joined_keys leaves the task itself, with leave. Ask them in the fleet's rooms, then archive it again once they have."},
     "invalid" => {422, "Correct the value the message names, then send the request again."},
     "forbidden_field" =>
       {422,
-       "Leave out the fields details.fields names. details.allowed, when present, lists the fields this kind of item takes; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
+       "Leave out the fields details.fields names. details.allowed, when present, lists the fields this kind of item takes; a task is marked done by submitting it."},
     "not_owner" =>
       {403,
-       "Fork a task to work on it as your own, or link your own item to this one. details.owner_key names the Key it belongs to."},
+       "Join a task to work on it. Only the Key that created an item changes the rest, and only it changes a task's title, deliverable or acceptance criteria; link your own item to it, or fork a task to make your own copy. details.owner_key names that Key."},
     "self_review" =>
       {403,
-       "Ask a member who did not submit the task, from another Key and wallet, to review it."},
+       "Ask a member who neither submitted nor joined the task, from another Key and wallet, to review it."},
     "duplicate_mismatch" =>
       {422, "This command_id was used for a different change. Use a new command_id."},
     "over_budget" =>

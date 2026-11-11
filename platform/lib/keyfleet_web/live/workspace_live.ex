@@ -881,7 +881,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
       <section class="workspace-instrument" aria-labelledby="workspace-instrument-keys-title">
         <h3 id="workspace-instrument-keys-title">Active Keys</h3>
-        <p :if={@at_work == []} class="workspace-detail">No Key holds a task here yet.</p>
+        <p :if={@at_work == []} class="workspace-detail">No Key has joined a task here yet.</p>
         <ol :if={@at_work != []} id="workspace-instrument-keys">
           <li :for={key <- @at_work} data-key={key.key}>
             <span>{key.name}</span>
@@ -929,26 +929,27 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
-  # Each Key holding tasks in the picture, lowest first, with how many of
-  # them are in progress, awaiting review and done, and its share of the
-  # bar, against the Key holding the most.
+  # Each Key that joined tasks in the picture, lowest first, with how many
+  # of them are in progress, awaiting review and done, and its share of the
+  # bar, against the Key that joined the most.
   defp at_work(nodes) do
-    held =
-      nodes
-      |> Enum.filter(
-        &(&1.type == "task" and &1.owner_key != nil and &1.tone in [:doing, :waiting, :done])
-      )
-      |> Enum.group_by(& &1.owner_key)
+    joined =
+      for %{type: "task", tone: tone} = node <- nodes,
+          tone in [:doing, :waiting, :done],
+          key <- node.joined_keys do
+        {key, node}
+      end
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
       |> Enum.sort()
 
-    most = held |> Enum.map(fn {_key, tasks} -> length(tasks) end) |> Enum.max(fn -> 1 end)
+    most = joined |> Enum.map(fn {_key, tasks} -> length(tasks) end) |> Enum.max(fn -> 1 end)
 
-    for {key, [first | _] = tasks} <- held do
+    for {key, tasks} <- joined do
       tones = Enum.frequencies_by(tasks, & &1.tone)
 
       %{
         key: key,
-        name: first.owner,
+        name: ActivityLines.key_name(key, nil),
         doing: Map.get(tones, :doing, 0),
         waiting: Map.get(tones, :waiting, 0),
         done: Map.get(tones, :done, 0),

@@ -82,7 +82,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     ],
     "task" => [
       {"progress", "Progress"},
-      {"assignee_key", "Taken by"},
       {"reviewer_key", "Reviewer"},
       {"deliverable", "Deliverable"},
       {"acceptance_criteria", "Done when"},
@@ -740,8 +739,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp public_value(_field, nil), do: nil
   defp public_value(_field, []), do: nil
 
-  defp public_value(field, token_id) when field in ["assignee_key", "reviewer_key"],
-    do: key_or(token_id, nil)
+  defp public_value("reviewer_key", token_id), do: {:key, token_id, nil}
 
   defp public_value(field, value) when is_map_key(@choices, field), do: choice(field, value)
   defp public_value(_field, value), do: value(value)
@@ -1772,8 +1770,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp facts("task", card, _fleet_id) do
     present([
       {"Progress", choice("progress", card["progress"])},
-      {"Review", card["review"] && choice("review", card["review"])},
-      {"Taken by", key_or(card["assignee_key"], "No one yet")}
+      {"Review", card["review"] && choice("review", card["review"])}
     ])
   end
 
@@ -1862,8 +1859,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp field_value(_field, nil, _fleet_id), do: nil
   defp field_value(_field, [], _fleet_id), do: nil
 
-  defp field_value(field, token_id, _fleet_id) when field in ["assignee_key", "reviewer_key"],
-    do: key_or(token_id, nil)
+  defp field_value("reviewer_key", token_id, _fleet_id), do: {:key, token_id, nil}
 
   defp field_value(field, uri, fleet_id)
        when field in ["source_uri", "result_ref", "commit_ref", "notebook_ref"],
@@ -1957,9 +1953,6 @@ defmodule KeyfleetWeb.WorkspacePage do
   @doc ~S|What a page calls one of a field's choices: `choice("progress", "doing")` is "In progress".|
   def choice(field, value), do: @choices |> Map.fetch!(field) |> Map.fetch!(value)
 
-  defp key_or(token_id, _none) when is_integer(token_id), do: {:key, token_id, nil}
-  defp key_or(nil, none), do: none
-
   defp discussion(links, fleet_id, opts) when is_list(links) and links != [] do
     rooms = fleet_id |> Rooms.list_rooms!(opts) |> Map.new(&{&1.slug, RoomsLive.room_label(&1)})
 
@@ -2045,7 +2038,16 @@ defmodule KeyfleetWeb.WorkspacePage do
        when is_binary(id),
        do: [who(event.actor), " archived ", item_part(id, titles), "."]
 
-  defp parts(%{type: "patch.applied", brief: %{"object" => id, "joins" => joins}} = event, titles)
+  # A member joining or leaving; the workspace's own rewrites of who joined
+  # are told as updates.
+  defp parts(
+         %{
+           type: "patch.applied",
+           actor: "member:" <> _,
+           brief: %{"object" => id, "joins" => joins}
+         } = event,
+         titles
+       )
        when is_binary(id) and joins != 0,
        do: [
          who(event.actor),
@@ -2132,13 +2134,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     |> List.flatten()
   end
 
-  defp change("assignee_key", _label, %{"new" => token_id}) when is_integer(token_id),
-    do: ["now taken by ", {:key, token_id, nil}]
-
-  # A field set to nothing has no new value.
-  defp change("assignee_key", _label, %{} = value) when not is_map_key(value, "new"),
-    do: ["now taken by no one"]
-
   defp change(field, label, %{"new" => new}) when is_binary(new),
     do: [String.downcase(label) <> " is now " <> String.downcase(choice(field, new))]
 
@@ -2184,8 +2179,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   def creator_wallet(%{"created_by" => nil}), do: nil
   def creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
 
-  # Who joined a goal, in the order they joined, each told as the key it
-  # joined as with the name of its agent.
+  # Who joined a goal or task, in the order they joined, each told as the
+  # key it joined as with the name of its agent.
   defp joined(sys), do: Map.get(sys, "joined", [])
 
   defp joined_wallets(sys), do: Enum.map(joined(sys), &agent_wallet(&1["kind"], &1["wallet"]))

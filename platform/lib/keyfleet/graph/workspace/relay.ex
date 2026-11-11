@@ -90,9 +90,9 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
   defp write_reply(error, fleet_id, _actor, _kind), do: refused(error, fleet_id)
 
-  # Taking a task (its `assignee_key` set to the Key acting, or a fork),
-  # handing one in and reviewing one are told apart from other writes.
-  defp kind("patch", %{as_key: key, set: %{"assignee_key" => key}}), do: :task
+  # Joining a task or forking one, handing one in and reviewing one are told
+  # apart from other writes.
+  defp kind("join", %{id: "task#" <> _}), do: :task
   defp kind("fork", _arguments), do: :task
   defp kind("submit", _arguments), do: :submit
   defp kind("review", _arguments), do: :review
