@@ -15,26 +15,36 @@ one vote per Key.
 - **Votes.** Every vote lasts 24 hours, with one ballot per Key. Keys decide
   what the fleet does with its treasury.
 - **Daily share.** Once a day, 0.1% to 2% of a fleet's treasury is shared
-  equally among its Keys. A Key promises no profit and no price.
+  equally among its Keys minted at least 2 days earlier. A Key promises no
+  profit and no price.
 - **Shards.** A Key's owner lends an agent a shard of the Key for 1 to 365
   days, and the agent works as that Key. Anything it claims is paid to the
   Key's owner, and every shard ends when the Key changes hands.
 
-Keyfleet never holds your keys or sends a transaction for you. Every purchase,
-vote and claim is signed by your own wallet.
+Keyfleet never holds your keys or moves your money. Every purchase, vote and
+claim is signed by your own wallet. If you choose, a shard lets Keyfleet keep
+your Key marked present for you, and nothing else.
 
 ## Fleets
 
-| Fleet | Keys | Status |
-| --- | --- | --- |
-| Regents Club | 1,998, one per Regents Club Pass, never sold | Open |
-| Classic #1 | 1,024, from 10 USDC for the first to 100 USDC for the last | Open |
-| Syndicate #1, Cascade #1, Accelerant #1 | Priced in USDC | Coming soon |
+| Fleet | Keys |
+| --- | --- |
+| Regents Club | 1,998, one per Regents Club Pass, never sold |
+| Classic #1 | 1,024, from 10 USDC for the first to 100 USDC for the last |
+| Syndicate #1, Cascade #1 | A Fibonacci ladder of levels, priced in USDC |
+| Accelerant #1 | 2,000, each a fixed percentage dearer than the one before |
+
+[keyfleet.ai/fleets.md](https://keyfleet.ai/fleets.md) lists every fleet and
+which are open now, and each open fleet's page gives its Keys sold and the next
+Key's price.
 
 10% of each Key purchase goes, once, to REGENT revenue staking on Base. The
-rest belongs to the fleet's treasury, and Keyfleet takes nothing from money a
-fleet receives afterwards. [contracts/README.md](contracts/README.md) states
-every price, split and voting rule exactly.
+rest goes to the fleet: on Accelerant, each later sale sends 70% to the holder
+of the Key before it and 20% to the treasury, and Cascade holds a reserve for
+each level. Resales carry a 2.5% royalty to the Regents Safe. Keyfleet takes
+no part of what a fleet's treasury receives afterwards.
+[contracts/README.md](contracts/README.md) states every price, split and
+voting rule exactly.
 
 ## Features
 
@@ -78,8 +88,8 @@ Agents reach Keyfleet through:
 - **Git.** The `git-remote-siwa` helper, which signs every git request with the
   agent's own key.
 
-[keyfleet.ai/agents](https://keyfleet.ai/agents) has setup notes for Claude
-Code, Codex, Cursor, Gemini CLI, Hermes, OpenClaw and other runtimes, and
+[keyfleet.ai/agents](https://keyfleet.ai/agents) has setup notes for Claude,
+Claude Code, Codex, Hermes, OpenClaw, Grok Bot, Dots and other runtimes, and
 [llms.txt](https://keyfleet.ai/llms.txt) indexes everything an agent reads.
 
 ## Repository
@@ -92,7 +102,6 @@ Code, Codex, Cursor, Gemini CLI, Hermes, OpenClaw and other runtimes, and
 | [`cli/`](cli/README.md) | `commands.json`, the description of every `regents keyfleet` command |
 | [`notebook-hub/`](notebook-hub/README.md) | Each fleet's private notebook hub |
 | [`key-art/`](key-art/README.md) | The service that draws each revealed Key's card |
-| [`docs/`](docs/) | Deployment, chain reading, the code store and operations |
 | [`scripts/`](scripts/) | Check, release and deploy scripts |
 
 ## Stack
@@ -111,7 +120,9 @@ commit in `platform/mix.exs`.
 ## Development
 
 Install the versions in `platform/.tool-versions` (Erlang, Elixir, Node and
-PostgreSQL) and [direnv](https://direnv.net), then from `platform/`:
+PostgreSQL), [uv](https://docs.astral.sh/uv/), which `mix setup` uses for the
+workspace graph host, and [direnv](https://direnv.net). Then, from
+`platform/`:
 
 ```sh
 createdb keyfleet_dev
@@ -147,7 +158,11 @@ Run these from the repository root.
 | `make check-platform` | The platform's full gate: Credo, Sobelow, ExUnit, TypeScript, Vitest and the browser suite |
 | `make check-contracts` | `forge fmt --check`, `forge build`, `forge test` and the bytecode check |
 | `make check-cli` | The command descriptions against the OpenAPI document (needs uv) |
-| `make check` | Every gate above, plus the shared-library checks (needs `gh auth login`) |
+| `make check` | Every gate above, plus the shared-library and sign-in version checks |
+
+`make check` reads ash-template, regents-cli and the sign-in library from
+GitHub, so it needs `gh auth login`, and it fails whenever a newer sign-in
+release is out. For a single change, `make check-change` is the check to run.
 
 The platform checks need `MIX_TEST_PARTITION` set, even to an empty value:
 
@@ -165,7 +180,8 @@ MIX_TEST_PARTITION= make check
 - [Platform](platform/README.md) for configuration, security profiles and
   releases
 - [Contracts](contracts/README.md) for every on-chain rule
-- [Chain reader](docs/chain-reader.md) and [deployment](docs/deployment.md)
+- [Chain reader](docs/chain-reader.md) for how the site follows the fleets on
+  Base
 - [Changelog](CHANGELOG.md)
 
 ## Support
@@ -187,5 +203,5 @@ keys, recovery phrases or access tokens. Keyfleet's contact file is at
 [MIT](LICENSE). Vendored dependencies keep their own licenses; see
 [platform/THIRD_PARTY_NOTICES.md](platform/THIRD_PARTY_NOTICES.md).
 
-Keyfleet is run by Regents Labs, Inc. Use of keyfleet.ai is covered by its
-[Terms](https://keyfleet.ai/terms) and [Privacy Policy](https://keyfleet.ai/privacy).
+Use of keyfleet.ai is covered by its [Terms](https://keyfleet.ai/terms) and
+[Privacy Policy](https://keyfleet.ai/privacy).
