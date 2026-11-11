@@ -11,8 +11,8 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - an item read without its title is named by its type, never linked
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
-  # - a wallet with no Key or agent to name it is a part of its own, so a
-  #   page can show it as every address is shown
+  # - a wallet with no Key or agent to name it, or one Keys moved to, is a
+  #   part of its own, so a page can show it as every address is shown
 
   @post %{
     id: "post:1",
@@ -72,6 +72,27 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     assert [{:address, ^wallet} | _] = ActivityLines.parts(proposed)
     assert ActivityLines.text(proposed) == "0x1234..5678 put Proposal 1 to a vote."
     assert ActivityLines.markdown(proposed) == "0x1234..5678 put Proposal 1 to a vote."
+  end
+
+  test "Keys moved to one wallet are one sentence, the wallet a part of its own" do
+    wallet = "0x1234567890abcdef1234567890abcdef12345678"
+
+    moved =
+      &%{
+        id: "transfer:1",
+        at: ~U[2026-09-25 12:00:00Z],
+        kind: :moved,
+        facts: %{token_ids: &1, to: wallet}
+      }
+
+    assert {:address, wallet} in ActivityLines.parts(moved.([4]))
+    assert ActivityLines.channel(moved.([4])) == :keys
+    assert ActivityLines.text(moved.([4])) == "Key 4 moved to 0x1234..5678."
+    assert ActivityLines.text(moved.([3, 4, 7])) == "Keys 3, 4 and 7 moved to 0x1234..5678."
+    assert ActivityLines.text(moved.([4, 5, 6, 7])) == "Keys 4–7 moved to 0x1234..5678."
+
+    assert ActivityLines.text(moved.([3, 4, 8, 12, 1_200])) ==
+             "Keys 3, 4, 8 and 2 others moved to 0x1234..5678."
   end
 
   test "a dead end added to the workspace is told as one recorded" do

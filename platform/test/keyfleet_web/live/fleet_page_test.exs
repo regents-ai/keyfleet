@@ -1751,6 +1751,120 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#{proposed} .activity-line__text") =~ "put Proposal 1 to a vote."
     end
 
+    # Each proposal a vote can still change is one line above the hall,
+    # opening it in the Proposals tab, where the vote is cast; with none
+    # open, the hall gives them no room.
+    test "each open proposal is one line opening it in the Proposals tab, and none shows nothing",
+         %{conn: conn} do
+      FleetProposals.read(@fleet)
+      {:ok, view, _html} = live(conn, @path)
+      refute has_element?(view, "#hall-proposals")
+
+      ProposalHelpers.proposal!(@fleet, 1)
+      ProposalHelpers.proposal!(@fleet, 2)
+      FleetProposals.read(@fleet)
+
+      assert text(view, "#hall-proposals h2") == "Proposals"
+
+      for number <- [1, 2] do
+        link =
+          ~s(#hall-proposals li[data-proposal="#{number}"] a[href="#{@path}/proposals/#{number}"])
+
+        assert text(view, "#{link} .hall-proposal__number") == "Proposal #{number}"
+        assert text(view, "#{link} .hall-proposal__kind") == "Decision"
+        assert text(view, "#{link} .hall-proposal__left") == "23 hours left"
+      end
+
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("#hall-proposals li")
+             |> LazyHTML.attribute("data-proposal") == ["1", "2"]
+
+      refute has_element?(view, "#hall-proposals button")
+
+      view |> element(~s(#hall-proposals li[data-proposal="2"] a)) |> render_click()
+      assert_patch(view, "#{@path}/proposals/2")
+    end
+
+    # Keys moved one after another to one wallet read as one line, the
+    # wallet shown as every address is; a later move to it joins that line
+    # where it stands.
+    test "transfers to one wallet close together are one line, and the next joins it in place",
+         %{conn: conn} do
+      heir = ProposalHelpers.wallet("3")
+      for key <- [7, 3, 4], do: move!(key, heir)
+      {:ok, view, _html} = live(conn, @path)
+      before = now_items(view)
+
+      assert [line] = moved_lines(view)
+
+      assert text(view, "##{line} .activity-line__text") =~
+               "Keys 3, 4 and 7 moved to 0x3333..3333"
+
+      assert has_element?(view, ~s(##{line} .rg-address [data-copy-text="#{heir}"]))
+
+      move!(9, heir)
+      send(view.pid, {:refresh_activity, @fleet})
+
+      assert now_items(view) == before
+      assert moved_lines(view) == [line]
+
+      assert text(view, "##{line} .activity-line__text") =~
+               "Keys 3, 4, 7 and 1 other moved to 0x3333..3333"
+    end
+
+    test "a transfer to another wallet, or one long after the last, is a line of its own",
+         %{conn: conn} do
+      [heir, other] = [ProposalHelpers.wallet("3"), ProposalHelpers.wallet("4")]
+      move!(5, other)
+      for key <- [3, 4], do: move!(key, heir)
+      moved_at!(6, heir, DateTime.add(DateTime.utc_now(), 660))
+      {:ok, view, _html} = live(conn, @path)
+
+      assert [late, run, to_other] = moved_lines(view)
+      assert text(view, "##{late} .activity-line__text") =~ "Key 6 moved to 0x3333..3333"
+      assert text(view, "##{run} .activity-line__text") =~ "Keys 3 and 4 moved to 0x3333..3333"
+      assert text(view, "##{to_other} .activity-line__text") =~ "Key 5 moved to 0x4444..4444"
+      assert has_element?(view, ~s(##{to_other} .rg-address [data-copy-text="#{other}"]))
+    end
+
+    # A run longer than a page reads as one line once Show earlier brings
+    # the rest of it.
+    test "a run of transfers a page cuts joins up again under Show earlier", %{conn: conn} do
+      heir = ProposalHelpers.wallet("3")
+      for key <- 1..35, do: move!(key, heir)
+      {:ok, view, _html} = live(conn, @path)
+
+      assert [line] = moved_lines(view)
+      assert text(view, "##{line} .activity-line__text") =~ "Keys 6–35 moved to"
+
+      view |> element("#fleet-feed-earlier") |> render_click()
+
+      assert [joined] = moved_lines(view)
+      assert text(view, "##{joined} .activity-line__text") =~ "Keys 1–35 moved to"
+      assert [^joined | _sales] = now_items(view)
+    end
+
+    # Anyone but a member draws the fleet's shared reading, which names the
+    # wallet each transfer went to.
+    test "a visitor's hall shows transfers to one wallet as one line, joined in place by the next" do
+      heir = ProposalHelpers.wallet("3")
+      for key <- [7, 3, 4], do: move!(key, heir)
+      read_now()
+      {:ok, view, _html} = live(build_conn(), @path)
+      before = now_items(view)
+      assert [line] = moved_lines(view)
+
+      move!(9, heir)
+      read_now()
+
+      assert now_items(view) == before
+
+      assert text(view, "##{line} .activity-line__text") =~
+               "Keys 3, 4, 7 and 1 other moved to 0x3333..3333"
+    end
+
     test "the workspace's changes show in the feed to Key holders only", %{conn: holder} do
       Workspace.open_log(@fleet)
       goal = goal!("Survey the hull")
@@ -2034,6 +2148,31 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         log_index: 0
       },
       actor: %Actors.System{}
+    )
+  end
+
+  # Key `token_id` of Cascade changes hands to `owner`, recorded at `at`: the
+  # record the chain reader makes, read at a time the test chooses.
+  defp moved_at!(token_id, owner, at) do
+    Keyfleet.Repo.insert_all(
+      "key_attachments",
+      [
+        %{
+          id: Ecto.UUID.dump!(Ash.UUID.generate()),
+          fleet_id: @fleet,
+          token_id: token_id,
+          ownership_epoch: 2,
+          owner_wallet: owner,
+          block_number: 500 + token_id,
+          block_hash: "0x" <> String.duplicate("b", 64),
+          transaction_hash:
+            "0x" <> Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/2"), case: :lower),
+          log_index: 0,
+          observed_at: DateTime.to_naive(at),
+          record_seq: Keyfleet.Chain.take_ownership_seq!(@fleet)
+        }
+      ],
+      prefix: "keyfleet_app"
     )
   end
 
@@ -2347,6 +2486,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#fleet-feed-list > li")
+    |> LazyHTML.attribute("id")
+  end
+
+  # The feed's lines of Keys moved to a wallet, by id, top first.
+  defp moved_lines(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(#fleet-feed-list > li[data-kind="moved"]))
     |> LazyHTML.attribute("id")
   end
 
