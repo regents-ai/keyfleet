@@ -4,7 +4,8 @@ defmodule Keyfleet.AgentKeyTest do
   The agent then writes as that Key, and holds it alone, while the person's
   wallets hold it and that pairing lasts; their other agents and the person
   keep the person's Key. Only the person, or an agent of theirs, does it, only
-  on a Key their wallets hold and only with an agent paired with them now; a
+  on a Key their wallets hold and only with an agent paired with them now; an
+  agent of theirs only puts an agent that is on no Key onto a Key with none. A
   refused write changes nothing.
   """
   use ExUnit.Case, async: false
@@ -16,7 +17,7 @@ defmodule Keyfleet.AgentKeyTest do
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Keys
-  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError}
+  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError, PersonOnlyError}
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
 
@@ -188,12 +189,14 @@ defmodule Keyfleet.AgentKeyTest do
       assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
                Keys.assign_agent(@fleet, 41, wallet("3"), actor: actor)
 
-      assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
-               Keys.assign_agent(@fleet, 41, nil, actor: actor)
-
       assert {:error, %Ash.Error.Invalid{errors: [%AgentUnknownError{}]}} =
                Keys.assign_agent(@fleet, 7, wallet("1"), actor: actor)
     end
+
+    assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
+             Keys.assign_agent(@fleet, 41, nil, actor: c.other)
+
+    assert {:error, %Ash.Error.Forbidden{}} = Keys.assign_agent(@fleet, 41, nil, actor: c.cato)
 
     # Nobody who speaks for a person.
     assert {:error, %Ash.Error.Forbidden{}} =
@@ -204,6 +207,79 @@ defmodule Keyfleet.AgentKeyTest do
     assert Keys.identity(c.bolt, @fleet).token_id == 25
     assert Keys.identity(c.cato, @fleet).token_id == 7
     assert on_keys(c.other) == %{}
+  end
+
+  test "an agent puts an agent on no Key onto a Key with none; only the person moves or takes one off",
+       c do
+    cass = pair!("did:privy:agent-keys", "Cass", wallet("4"))
+
+    # Itself, and another of the person's agents, each onto a Key with none.
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.astra)
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.astra)
+    assert on_keys(c.person) == %{41 => "Astra", 60 => "Bolt"}
+
+    # Taking an agent off, itself or another, is the person's alone.
+    for token_id <- [41, 60] do
+      assert {:error, %Ash.Error.Forbidden{errors: [%Ash.Error.Forbidden.Policy{}]}} =
+               Keys.assign_agent(@fleet, token_id, nil, actor: c.astra)
+    end
+
+    # So is moving an agent on a Key, itself or another, or replacing one.
+    for {token_id, agent_wallet, actor} <- [
+          {25, wallet("1"), c.astra},
+          {25, wallet("2"), c.astra},
+          {60, wallet("1"), c.astra},
+          {41, wallet("4"), c.bolt},
+          {41, wallet("4"), cass}
+        ] do
+      assert {:error, %Ash.Error.Forbidden{errors: [%PersonOnlyError{}]}} =
+               Keys.assign_agent(@fleet, token_id, agent_wallet, actor: actor)
+    end
+
+    assert on_keys(c.person) == %{41 => "Astra", 60 => "Bolt"}
+
+    # An agent on a Key still puts one on no Key onto a Key with none, and
+    # naming the agent a Key already has changes nothing.
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("4"), actor: c.bolt)
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.astra)
+    assert on_keys(c.person) == %{25 => "Cass", 41 => "Astra", 60 => "Bolt"}
+
+    # The person moves and replaces agents, and takes them off.
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, nil, actor: c.person)
+    assert on_keys(c.person) == %{25 => "Astra"}
+  end
+
+  test "a Key whose agent was unpaired has none; an agent put on a Key since sold stays the person's to move",
+       c do
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.person)
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.person)
+
+    # Bolt unpairs, so Key 60 has no agent and Astra puts another there.
+    person = %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
+    {:ok, agents} = RegentAgents.list_my_agents(actor: person)
+    :ok = RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == wallet("2"))), actor: person)
+    cass = pair!("did:privy:agent-keys", "Cass", wallet("4"))
+
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("4"), actor: c.astra)
+    assert on_keys(c.person) == %{41 => "Astra", 60 => "Cass"}
+
+    # Key 41 leaves the person's wallets. Astra acts as their Key again, but
+    # only the person moves it, and its place comes back with the Key.
+    epoch!(41, wallet("c"), ownership_epoch: 2, log_index: 1)
+    assert Keys.identity(c.astra, @fleet).token_id == 25
+
+    assert {:error, %Ash.Error.Forbidden{errors: [%PersonOnlyError{}]}} =
+             Keys.assign_agent(@fleet, 25, wallet("1"), actor: cass)
+
+    epoch!(41, wallet("b"), ownership_epoch: 3, log_index: 2)
+    assert on_keys(c.person) == %{41 => "Astra", 60 => "Cass"}
+
+    # Only the person's write takes an agent off a Key.
+    [row] = Enum.filter(Keys.agent_keys_of_person!(actor: c.astra), &(&1.token_id == 41))
+    assert {:error, %Ash.Error.Forbidden{}} = Ash.destroy(row, action: :release, actor: c.astra)
+    assert :ok = Ash.destroy(row, action: :release, actor: c.person)
+    assert on_keys(c.person) == %{60 => "Cass"}
   end
 
   test "each person reads only their own agents' Keys", c do

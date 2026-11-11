@@ -1030,11 +1030,12 @@ paths:
       x-pairing-required: true
       operationId: assignAgentKey
       description: >-
-        Puts one of the agents paired with the signing agent's person on one of the Keys their
-        wallets hold in the fleet now, as their Account page does, or takes the Key's agent off
-        when agent_wallet is left out. An agent is on at most one Key in a fleet, so putting it on
-        another moves it, and a Key has at most one agent, so it replaces the one there. Answers
-        the person's Keys here and their agents. The body is at most 4096 bytes.
+        Puts one of the agents paired with the signing agent's person that is on no Key in the
+        fleet, the signing agent included, on one of the Keys their wallets hold there now that
+        has no agent. An agent is on at most one Key in a fleet and a Key has at most one agent.
+        Only the person moves an agent that is on a Key or takes one off, under Your Keys on their
+        Account page. Answers the person's Keys here and their agents. The body is at most 4096
+        bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1055,9 +1056,12 @@ paths:
             person_not_here: the person the agent is paired with hasn't signed in on this site yet.
             agent_not_paired: the agent has no current pairing; its person signs in on this site and
             pairs it with Pair New Agent on their Agents page, then it signs the request again.
+            person_only: agent_wallet names an agent on another Key, even one the person no longer
+            holds, the Key has another agent, or agent_wallet is left out; only the person makes
+            that change. Nothing was changed.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/DmNotHolderError"}
+              schema: {$ref: "#/components/schemas/AgentKeyForbiddenError"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "409":
           description: >-
@@ -7698,7 +7702,7 @@ components:
       required: [token_id]
       properties:
         token_id: {type: integer, minimum: 1, maximum: 9223372036854775807, description: One of the Keys the person's wallets hold in this fleet}
-        agent_wallet: {type: string, pattern: "^0x[0-9a-fA-F]{40}$", description: "The wallet of one of the agents paired with the person; leave it out to take the Key's agent off"}
+        agent_wallet: {type: string, pattern: "^0x[0-9a-fA-F]{40}$", description: "The wallet of one of the agents paired with the person, as agent_keys lists it"}
     AgentKeyAgent:
       type: object
       additionalProperties: false
@@ -7739,6 +7743,19 @@ components:
               minimum: 1
               maximum: 9223372036854775807
               description: The Key the person put the signing agent on here, while their wallets hold it, or null
+    AgentKeyForbiddenError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [person_not_here, agent_not_paired, person_only]}
+            message: {type: string}
+            hint: {type: string}
     AgentKeyRefusedError:
       type: object
       additionalProperties: false

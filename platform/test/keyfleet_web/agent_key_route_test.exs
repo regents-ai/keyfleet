@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentKeyRouteTest do
   # A paired agent reads which of its person's agents is on which of their
-  # Keys, and puts one on a Key or takes it off, through its own signed
-  # requests and its tools, as the person's Account page does.
+  # Keys, and puts one that is on no Key onto a Key with none, through its own
+  # signed requests and its tools; only the person moves one or takes one off.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
@@ -84,11 +84,27 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
     # The fleet check names the Key it acts as, put there by its person.
     doctor = c |> get!("/api/v1/agent/fleets/#{@fleet}/doctor") |> json_response(200)
     assert %{"token_id" => 9, "for_person" => true, "assigned" => true} = doctor["key"]
+  end
 
-    # No agent named takes the Key's agent off.
-    off = c |> post!(@assign, %{"token_id" => 9}) |> json_response(200)
-    assert off["agent_keys"]["yours"] == nil
-    assert hd(off["agent_keys"]["keys"])["token_id"] == 3
+  test "taking an agent off a Key, or moving or replacing one, is answered person_only", c do
+    assert post!(c, @assign, %{"token_id" => 9, "agent_wallet" => c.wallet}).status == 200
+
+    for body <- [
+          %{"token_id" => 9},
+          %{"token_id" => 3, "agent_wallet" => c.wallet},
+          %{"token_id" => 9, "agent_wallet" => @second}
+        ] do
+      refused = c |> post!(@assign, body) |> json_response(403)
+      assert refused["error"]["code"] == "person_only", inspect(body)
+      assert ContractSchema.response_errors(refused, "POST", path("/assign"), 403) == []
+    end
+
+    read = c |> get!(@read) |> json_response(200)
+
+    assert read["agent_keys"]["keys"] == [
+             %{"token_id" => 9, "agent" => %{"name" => "Test agent", "wallet" => c.wallet}},
+             %{"token_id" => 3, "agent" => nil}
+           ]
   end
 
   test "a Key the person doesn't hold, or a wallet no agent of theirs has, is refused", c do
@@ -131,12 +147,15 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
     assert %{token_id: 3, for_person: true} = Keys.identity(agent, @fleet)
 
     assert {:error, %Ash.Error.Invalid{errors: [%Refused{status: 409} = refused]}} =
-             tool(:assign_agent, %{fleet_id: @fleet, token_id: 4}, agent)
+             tool(:assign_agent, %{fleet_id: @fleet, token_id: 4, agent_wallet: c.wallet}, agent)
 
     assert refused.body.error.code == "key_not_held"
 
-    assert {:ok, %{agent_keys: %{yours: nil}}} =
+    assert {:error, %Ash.Error.Invalid{errors: [%Refused{status: 403} = refused]}} =
              tool(:assign_agent, %{fleet_id: @fleet, token_id: 3}, agent)
+
+    assert refused.body.error.code == "person_only"
+    assert %{token_id: 3} = Keys.identity(agent, @fleet)
   end
 
   # The tools take a body the signed route has not checked, so each shape it
@@ -149,7 +168,8 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
           {%{"token_id" => 9, "agent_wallet" => "0xab"}, 422, "invalid_request"},
           {%{"token_id" => 0, "agent_wallet" => c.wallet}, 422, "invalid_request"},
           {%{"token_id" => 4, "agent_wallet" => c.wallet}, 409, "key_not_held"},
-          {%{"token_id" => 9, "agent_wallet" => @other}, 409, "agent_unknown"}
+          {%{"token_id" => 9, "agent_wallet" => @other}, 409, "agent_unknown"},
+          {%{"token_id" => 9}, 403, "person_only"}
         ] do
       assert {^status, %{error: %{code: ^code}}, nil} = answer.(params), inspect(params)
     end

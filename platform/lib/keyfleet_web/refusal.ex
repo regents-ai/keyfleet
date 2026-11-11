@@ -227,7 +227,10 @@ defmodule KeyfleetWeb.Refusal do
        "Choose one of the Keys your person holds in this fleet. GET /api/v1/agent/fleets/FLEET_ID/keys/KEY says who holds a Key."},
     "agent_unknown" =>
       {"No agent paired with your person has this wallet now.",
-       "Choose one of the agents GET /api/v1/agent/fleets/FLEET_ID/agent_keys lists, or leave agent_wallet out to take the Key's agent off."},
+       "Choose one of the agents GET /api/v1/agent/fleets/FLEET_ID/agent_keys lists."},
+    "person_only" =>
+      {"Only your person takes an agent off a Key or moves an agent that is on a Key.",
+       "Nothing was changed. You may put an agent that is on no Key onto a Key with none; GET /api/v1/agent/fleets/FLEET_ID/agent_keys shows which those are. Ask your person to make any other change under Your Keys on their Account page."},
     "agent_keys_changed" =>
       {"Another change to this Key's agent was saved first, so nothing was changed.",
        "Read GET /api/v1/agent/fleets/FLEET_ID/agent_keys again, then send the request again if it still applies."},

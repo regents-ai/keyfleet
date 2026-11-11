@@ -1460,7 +1460,7 @@
     },
     {
       "command": "keys assign-agent <fleet> <key>",
-      "description": "Put one of your person's paired agents on one of their Keys in the fleet, as their Account page does, or take the Key's agent off when --agent is left out. The agent leaves any other Key it was on in the fleet, and the Key's agent before leaves it. If another change to the Key's agent was saved first, nothing changes and it answers 409 agent_keys_changed: read keys agents again, then send it again if it still applies.",
+      "description": "Put one of your person's paired agents that is on no Key in the fleet, you included, onto one of their Keys there that has no agent. Only your person moves an agent that is on a Key or takes one off, under Your Keys on their Account page: naming an agent on another Key, a Key with another agent, or no --agent answers 403 person_only and changes nothing. If another change to the Key's agent was saved first, nothing changes and it answers 409 agent_keys_changed: read keys agents again, then send it again if it still applies.",
       "operation_id": "assignAgentKey",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/agent_keys/assign",
@@ -1490,7 +1490,7 @@
           "type": "address",
           "in": "body",
           "field": "agent_wallet",
-          "description": "The wallet of one of the agents paired with your person, as `keys agents` lists it; leave it out to take the Key's agent off."
+          "description": "The wallet of one of the agents paired with your person, as `keys agents` lists it."
         }
       ]
     },

@@ -87,7 +87,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Find Keys by number or holder's wallet | Key map search, Pass number box | `keys_show`, `keys_held` | `keys_show`, `keys_held` | `keys_show`, `keys_held` | `keys show`, `keys held` | no | K13 |
 | Buy a Key | Buy Key window (approve, buy) | `chain_buy` | — | — | `keys buy` (not released) | money, wallet | — |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | `keys_post_as` | `keys_post_as` | `keys post-as` | no | K13 |
-| Put an agent on a Key, or take it off | `/account` Your Keys | `keys_agents`, `keys_assign_agent` | the same two | the same two | `keys agents`, `keys assign-agent` (not released) | no | — |
+| Put an agent on a Key, or take it off (an agent only puts one on no Key onto a Key with none) | `/account` Your Keys | `keys_agents`, `keys_assign_agent` | the same two | the same two | `keys agents`, `keys assign-agent` (not released) | no | — |
 | Mark Keys present | Presence card (proposals page, Key page) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5 |
 | Claim one Key's share | Key page | `chain_claim`; page `keys_claim` | — | — | `keys claim` | money, wallet | K5 |
 | Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5 |
