@@ -7137,3 +7137,29 @@ Keyfleet's part in the shared Credits removal (`control/rollouts/2026-11-06-cred
 - Removed tests: the Credits proofs in the outside-dependency probes and `Keyfleet.SandboxRace`, which only they used; the signed-body tests ask the profile update instead of the Credits history; the agent-window tests stop looking for the spending line.
 
 Check: `platform/test/keyfleet_web/controllers/agent_join_journey_test.exs`, `platform/test/keyfleet_web/shell_live_test.exs`, `platform/test/browser/account_agents.spec.ts` and `platform/test/browser/agent_tools.spec.ts`.
+
+## 2026-11-11 — Setup list ticks Daily run and Present without a reload
+
+- On a fleet's page, the setup list now ticks Daily run as soon as the person's
+  agent checks in for its daily run, and Present as soon as the chain reader
+  records their Keys marked present, with no reload. On a person's own Key's
+  page, Your agent's dots follow the same way: Schedule and Repeated on the
+  check-in, Marked on the mark.
+- A daily run's check-in that is written tells only its person's open pages,
+  on the topic that already tells them their agents paired or unpaired
+  (`RegentAgents.topic/1`), once it commits. A repeat too soon to be written,
+  and a conversation's check-in, tell nobody.
+- The chain reader names every Key marked present in a pass in one notice of
+  its own on the fleet's Keys topic, `{:keys_present, fleet_id, token_ids}`,
+  however many marks or Keys there were; a pass with none sends none. Only
+  the setup list (when one of the Keys is the person's) and Your agent read
+  again; the rest of the fleet's page, the shared readings, notebooks and
+  code access are left as they were. Your agent asks the chain about gas
+  again only when an agent or the number of Keys it acts for has changed.
+- No migration; no production data.
+
+Check: `platform/test/browser/setup_list.spec.ts` walks the setup list from
+Pair to Present with no reload. `platform/test/keyfleet/check_ins_test.exs`
+proves another person's page hears nothing of a check-in, and
+`platform/test/keyfleet/proposals_chain_test.exs` that one pass of marks sends
+one notice.

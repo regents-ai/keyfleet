@@ -48,7 +48,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorkspaceLive
   }
 
-  alias KeyfleetWeb.Components.{BuyKey, Reading, SetupList}
+  alias KeyfleetWeb.Components.{AgentSetup, BuyKey, Reading, SetupList}
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
@@ -465,11 +465,12 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired. The account menu and the pairing window follow on
-  # every page, the Agents page's list on that page.
+  # every page, the Agents page's list on that page, the setup list on a
+  # fleet's page and the agents' states on the person's own Key's page.
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
-    socket = setup_changed(socket)
+    socket = socket |> setup_changed() |> agent_setup_changed()
 
     case socket.assigns.route_spec.route_id do
       :account_agents ->
@@ -540,6 +541,24 @@ defmodule KeyfleetWeb.ShellLive do
     case PageRead.run("app", fn -> keys_changed(socket, fleet_id, token_ids) end) do
       {:ok, answer} -> answer
       {:error, _failure} -> {:noreply, socket}
+    end
+  end
+
+  # Keys in a fleet were marked present: one notice for each pass of the chain
+  # reader that recorded any. Only what shows presence reads again: the fleet's
+  # setup list, when one of the Keys is the person's, and on the person's own
+  # Key's page their agents' states.
+  defp notice({:keys_present, fleet_id, token_ids}, socket) do
+    case socket.assigns do
+      %{fleet: %{fleet_id: ^fleet_id}} ->
+        send_update(SetupList, id: "fleet-setup", present: token_ids)
+        {:noreply, socket}
+
+      %{key: %{fleet_id: ^fleet_id}} ->
+        {:noreply, agent_setup_changed(socket)}
+
+      _other ->
+        {:noreply, socket}
     end
   end
 
@@ -975,6 +994,15 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp setup_changed(socket), do: socket
+
+  # The person's own Key's page holds their agents' states (`AgentSetup`),
+  # which read again when an agent checks in or Keys are marked present.
+  defp agent_setup_changed(%{assigns: %{key: %{owner?: true}}} = socket) do
+    send_update(AgentSetup, id: "key-agent-setup", changed: true)
+    socket
+  end
+
+  defp agent_setup_changed(socket), do: socket
 
   # Keys changed in an open fleet while the Agents page is on show: its
   # agents' Keys are read afresh, so a shard just issued names its Key.

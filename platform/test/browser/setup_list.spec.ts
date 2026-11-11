@@ -121,16 +121,10 @@ test("a new owner is sent from the purchase to the setup list, which is gone onc
   issueShard(fleet, key, agent, 30)
   await expect(openStep(page)).toHaveAttribute("id", "fleet-setup-run")
 
-  // A check-in tells no open page, and neither does a Key marked present, so
-  // each step after the shard is read again with the page.
   checkInDaily(agent, fleet)
-  await page.reload()
-  await connected(page)
   await expect(openStep(page)).toHaveAttribute("id", "fleet-setup-present")
 
   markPresent(fleet, owner)
-  await page.reload()
-  await connected(page)
   await expect(list(page)).toBeHidden()
   await expect(list(page).locator("li")).toHaveCount(0)
   expect(errors).toEqual([])

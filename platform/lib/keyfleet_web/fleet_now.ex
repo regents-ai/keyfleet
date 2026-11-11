@@ -111,6 +111,9 @@ defmodule KeyfleetWeb.FleetNow do
   def handle_info({:keys_changed, fleet_id, _token_ids}, state),
     do: {:noreply, due(state, fleet_id)}
 
+  # Presence isn't in the reading.
+  def handle_info({:keys_present, _fleet_id, _token_ids}, state), do: {:noreply, state}
+
   def handle_info({:proposals_changed, fleet_id}, state), do: {:noreply, due(state, fleet_id)}
 
   # Balances aren't in the reading.

@@ -12,8 +12,11 @@ defmodule KeyfleetWeb.Components.SetupList do
 
   It shows only to a signed-in person who holds a Key in the fleet, and only
   until all four are done, so a run that stops and lets the Keys lapse brings
-  it back. The page sends `changed: true` when the person's agents, the
-  fleet's Keys or a step sent from here change, and the list reads again.
+  it back. The page sends `changed: true` when the person's agents (a pairing,
+  a shard, a daily run's check-in), the fleet's Keys or a step sent from here
+  change, and the list reads again. It sends `present: token_ids` when Keys
+  of the fleet are marked present, and the list reads again only when one of
+  them is the person's.
   """
   use KeyfleetWeb, :live_component
 
@@ -28,6 +31,11 @@ defmodule KeyfleetWeb.Components.SetupList do
 
   @impl true
   def update(%{changed: true}, socket), do: {:ok, read(socket)}
+
+  def update(%{present: token_ids}, %{assigns: %{setup: %{keys: keys}}} = socket),
+    do: {:ok, if(Enum.any?(keys, &(&1.token_id in token_ids)), do: read(socket), else: socket)}
+
+  def update(%{present: _token_ids}, socket), do: {:ok, socket}
 
   def update(assigns, socket) do
     socket = assign(socket, assigns)

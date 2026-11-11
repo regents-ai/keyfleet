@@ -30,7 +30,7 @@ defmodule Keyfleet.Agents.Here do
   once a second however many arrive. It holds nothing but which fleets are due a
   read, and it never writes the database.
 
-  A status ages with the clock, and a check-in sends no notice, so each minute
+  A status ages with the clock, and a check-in tells only its person's pages, so each minute
   `Keyfleet.SharedReading.Heal` asks for every fleet to be read again. The words
   ("Seen 3 minutes ago") are written here with one moment for the
   whole pass, never on the page, so a page wakes only when what it shows has
@@ -81,6 +81,9 @@ defmodule Keyfleet.Agents.Here do
 
   @impl true
   def handle_info({:keys_changed, fleet_id, _token_ids}, due), do: {:noreply, due(due, fleet_id)}
+
+  # Keys marked present change no agent's line here.
+  def handle_info({:keys_present, _fleet_id, _token_ids}, due), do: {:noreply, due}
 
   def handle_info({:shared_reading_heal, _kind}, due),
     do: {:noreply, Enum.reduce(Fleets.catalog_ids(), due, &due(&2, &1))}

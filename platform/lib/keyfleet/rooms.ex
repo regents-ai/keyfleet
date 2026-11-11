@@ -510,6 +510,7 @@ defmodule Keyfleet.Rooms do
       {:graph_notable, ^fleet_id} -> flush_news(fleet_id)
       {:proposals_changed, ^fleet_id} -> flush_news(fleet_id)
       {:keys_changed, ^fleet_id, _token_ids} -> flush_news(fleet_id)
+      {:keys_present, ^fleet_id, _token_ids} -> flush_news(fleet_id)
       %Phoenix.Socket.Broadcast{} -> flush_news(fleet_id)
     after
       0 -> :ok

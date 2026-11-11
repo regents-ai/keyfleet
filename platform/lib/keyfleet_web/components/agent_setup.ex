@@ -6,7 +6,10 @@ defmodule KeyfleetWeb.Components.AgentSetup do
   is and, when it is not done, how to put it right. The states come from the
   chain reader's records and check-ins (`Keyfleet.Agents.Upkeep`); only gas asks
   the chain, so the row is drawn at once and that dot fills in when the answer
-  comes.
+  comes. The page sends `changed: true` when the person's agents change (a
+  pairing, a check-in) or Keys are marked present, and the agents are read
+  again; gas is asked again only when an agent or the number of Keys it acts
+  for has changed, since nothing else moves it.
   """
   use KeyfleetWeb, :live_component
 
@@ -17,6 +20,15 @@ defmodule KeyfleetWeb.Components.AgentSetup do
   def mount(socket), do: {:ok, assign(socket, class: nil, gas: AsyncResult.loading())}
 
   @impl true
+  def update(
+        %{changed: true},
+        %{assigns: %{actor: actor, fleet_id: fleet_id, agents: shown}} = socket
+      ) do
+    agents = Upkeep.person_agents(actor, fleet_id)
+    socket = assign(socket, agents: agents)
+    {:ok, if(gas_asked(agents) == gas_asked(shown), do: socket, else: ask_gas(socket))}
+  end
+
   def update(assigns, socket) do
     socket = assign(socket, assigns)
     {:ok, if(changed?(socket, :fleet_id), do: read(socket), else: socket)}
@@ -55,15 +67,17 @@ defmodule KeyfleetWeb.Components.AgentSetup do
     """
   end
 
-  defp read(%{assigns: %{actor: actor, fleet_id: fleet_id}} = socket) do
-    agents = Upkeep.person_agents(actor, fleet_id)
+  defp read(%{assigns: %{actor: actor, fleet_id: fleet_id}} = socket),
+    do: socket |> assign(agents: Upkeep.person_agents(actor, fleet_id)) |> ask_gas()
 
-    socket
-    |> assign(agents: agents)
-    |> assign_async(:gas, fn ->
+  defp ask_gas(%{assigns: %{agents: agents}} = socket) do
+    assign_async(socket, :gas, fn ->
       {:ok, %{gas: Map.new(agents, &{&1.wallet, Upkeep.pays?(&1.wallet, &1.key_count)})}}
     end)
   end
+
+  # What gas is asked for: each agent's wallet and how many Keys it marks.
+  defp gas_asked(agents), do: Enum.map(agents, &{&1.wallet, &1.key_count})
 
   # Each state with the words its dot opens: what it is, and how to put it
   # right when it is not done.

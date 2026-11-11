@@ -70,6 +70,26 @@ defmodule Keyfleet.CheckInsTest do
              Agents.check_in(actor, @fleet, %{"kind" => "scheduled", "every_minutes" => 10})
   end
 
+  # A daily run's check-in ticks its person's setup list on every page they
+  # have open, and is heard on no one else's. A repeat too soon to be written,
+  # and a conversation's check-in, tell nobody.
+  test "a scheduled check-in tells its own person's pages and no one else's", %{actor: actor} do
+    {other, _profile} = agent("c", "Able")
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, RegentAgents.topic(actor.privy_user_id))
+    other_page = open_page(other.privy_user_id)
+    scheduled = %{"kind" => "scheduled", "every_minutes" => 1440}
+
+    assert {:ok, _check_in} = Agents.check_in(actor, @fleet, scheduled)
+    assert_received :agents_changed
+
+    assert {:ok, _check_in} = Agents.check_in(actor, @fleet, scheduled)
+    assert {:ok, _check_in} = Agents.check_in(actor, @fleet, %{"kind" => "session"})
+    refute_received :agents_changed
+
+    send(other_page, {:heard, self()})
+    assert_receive {:heard, []}
+  end
+
   # The account menu and the Agents page show each agent's best light across
   # its fleets; an agent that never came to Keyfleet has none.
   test "each agent's check-in light is its best across fleets", %{actor: actor, profile: profile} do
@@ -104,6 +124,29 @@ defmodule Keyfleet.CheckInsTest do
       "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - make_interval(mins => $1), counted_scheduled_at = counted_scheduled_at - make_interval(mins => $1)",
       [minutes]
     )
+  end
+
+  # A page of `person`'s open in a process of its own, which says what it
+  # heard when asked. It answers after anything it heard before the asking.
+  defp open_page(person) do
+    test = self()
+
+    page =
+      spawn_link(fn ->
+        Phoenix.PubSub.subscribe(Keyfleet.PubSub, RegentAgents.topic(person))
+        send(test, :page_open)
+        hear([])
+      end)
+
+    assert_receive :page_open
+    page
+  end
+
+  defp hear(heard) do
+    receive do
+      {:heard, test} -> send(test, {:heard, Enum.reverse(heard)})
+      message -> hear([message | heard])
+    end
   end
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)

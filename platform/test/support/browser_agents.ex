@@ -122,7 +122,7 @@ defmodule Keyfleet.BrowserAgents do
   @doc """
   `agent`'s daily run checks in with the fleet, as a sync from its scheduled
   run does, with a profile of its own made the first time. Like a real
-  check-in, it tells no open page.
+  check-in, it tells the open pages of the agent's person.
   """
   def check_in!(agent, fleet_id) do
     {:ok, actor} = Agents.with_pairing(agent_actor(agent))

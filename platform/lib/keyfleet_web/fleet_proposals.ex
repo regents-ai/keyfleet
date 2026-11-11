@@ -134,6 +134,9 @@ defmodule KeyfleetWeb.FleetProposals do
   # A Key sold or moved changes the Keys sold the Treasury page shows.
   def handle_info({:keys_changed, fleet_id, _token_ids}, due), do: {:noreply, due(due, fleet_id)}
 
+  # Keys marked present change none of the pages it holds.
+  def handle_info({:keys_present, _fleet_id, _token_ids}, due), do: {:noreply, due}
+
   # The four kinds' heals arrive together each minute and join one pass.
   def handle_info({:shared_reading_heal, _kind}, due),
     do: {:noreply, Enum.reduce(Fleets.catalog_ids(), due, &due(&2, &1))}

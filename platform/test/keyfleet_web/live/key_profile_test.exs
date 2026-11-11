@@ -863,6 +863,36 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
                "Marked. A Key it acts for isn’t present. Ask your agent to mark it, or mark it yourself."
     end
 
+    # The agent's check-in reaches the open page itself; the chain reader's
+    # notice of the Key marked present is sent here by hand. Neither asks the
+    # chain about gas again: its wallet empties here, and Gas stays as read.
+    test "Schedule ticks as the agent checks in, and Marked as the Key is marked present", %{
+      conn: conn,
+      agent: agent
+    } do
+      ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)
+      agent_chain!(balances: %{agent.wallet_address => 10 ** 18})
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+      assert [_paired, {"yes", _gas}, {"no", _schedule}, {"no", _marked}, _repeated] = dots(view)
+
+      agent_chain!(balances: %{agent.wallet_address => 0})
+      run = %{"kind" => "scheduled", "every_minutes" => 1440}
+      {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+      render(view)
+      render_async(view, 3_000)
+      assert [_paired, {"yes", _gas}, {"yes", _schedule}, {"no", _marked}, _repeated] = dots(view)
+
+      presence!(@fleet, 20, DateTime.utc_now(:second))
+      send(view.pid, {:keys_present, @fleet, [20]})
+      render(view)
+      render_async(view, 3_000)
+
+      assert [_paired, {"yes", _gas}, {"yes", _schedule}, {"yes", _marked}, _repeated] =
+               dots(view)
+    end
+
     test "Gas is not known when the chain doesn't answer, and says to look again", %{
       conn: conn,
       agent: agent

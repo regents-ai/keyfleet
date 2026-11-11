@@ -969,7 +969,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     # The list reads again on each notice, opens the next step not done, and
     # leaves once all four are. The page passes each notice on to the list,
-    # which draws after the render that follows.
+    # which draws after the render that follows. The agent's check-in tells
+    # the page itself; the chain reader's notices are sent here by hand.
     test "each step closes as its records arrive, and the list goes once all four are done" do
       agent = PairingHelpers.agent_for!(owner())
       conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
@@ -987,7 +988,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, _check_in} =
         Keyfleet.Agents.check_in(agent, @fleet, %{"kind" => "scheduled", "every_minutes" => 1440})
 
-      send(view.pid, :agents_changed)
       render(view)
       assert open_step(view) == "fleet-setup-present"
 
@@ -997,7 +997,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ProposalHelpers.presence!(@fleet, 1, now)
       ProposalHelpers.scheduled!(@fleet, 2, DateTime.add(now, 3_600))
       for token_id <- 3..@issued, do: ProposalHelpers.presence!(@fleet, token_id, now)
-      send(view.pid, {:keys_changed, @fleet, [1]})
+
+      # Keys the person doesn't hold leave the list as it was.
+      send(view.pid, {:keys_present, @fleet, [@issued + 1]})
+      render(view)
+      assert open_step(view) == "fleet-setup-present"
+
+      send(view.pid, {:keys_present, @fleet, [1 | Enum.to_list(3..@issued)]})
       render(view)
 
       assert has_element?(view, "#fleet-setup[hidden]")

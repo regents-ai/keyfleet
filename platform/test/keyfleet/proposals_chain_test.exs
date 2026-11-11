@@ -490,6 +490,40 @@ defmodule Keyfleet.ProposalsChainTest do
       refute_received {:proposals_changed, _fleet}
     end
 
+    # A Present press can mark every Key a wallet holds in one transaction, and
+    # a daily run or the presence timer marks more. However many marks a pass
+    # records, the fleet's pages hear one notice naming each Key once, and only
+    # Keys marked in the blocks the pass read for the first time: the second
+    # reading of those blocks names none of them again.
+    test "a pass that records Keys marked present names them all in one notice", %{
+      fleet: fleet
+    } do
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
+
+      marks = [
+        present(1, @deployed + 1, 0),
+        present(2, @deployed + 1, 1),
+        present(3, @deployed + 1, 2),
+        present(1, @deployed + 3, 0)
+      ]
+
+      StubClient.put_chain(head(@deployed + 10), marks)
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_present, @fleet, token_ids}
+      assert Enum.sort(token_ids) == [1, 2, 3]
+      refute_received {:keys_present, _fleet, _token_ids}
+      refute_received {:keys_changed, _fleet, _token_ids}
+
+      StubClient.put_chain(head(@deployed + 12), marks)
+      assert Scanner.step(fleet, StubClient) == :ok
+      refute_received {:keys_present, _fleet, _token_ids}
+
+      StubClient.put_chain(head(@deployed + 14), marks ++ [present(2, @deployed + 13, 0)])
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert_received {:keys_present, @fleet, [2]}
+      refute_received {:keys_present, _fleet, _token_ids}
+    end
+
     # A piece recorded before the pass stopped the fleet stays recorded, so the
     # hint still goes out for it.
     test "a pass that records something and then stops the fleet still says so", %{

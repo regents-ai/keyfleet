@@ -129,7 +129,7 @@ export const pairPerson = (agent: string, person: string, name: string) =>
 export const useCode = (agent: string, code: string, name: string) =>
   void call("use_code!", [agent, code, name], agents)
 
-/** `agent`'s daily run checks in with the fleet, as its scheduled sync does; no open page is told. */
+/** `agent`'s daily run checks in with the fleet, as its scheduled sync does, which tells its person's open pages. */
 export const checkInDaily = (agent: string, fleet: string) => void call("check_in!", [agent, fleet], agents)
 
 // The proof headers `agent`'s signer makes for the request a page built.

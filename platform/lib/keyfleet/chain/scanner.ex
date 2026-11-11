@@ -60,9 +60,12 @@ defmodule Keyfleet.Chain.Scanner do
   `Keyfleet.Proposals.topic/1`. One that recorded keys revealed, sold,
   changing hands, issuing or ending shards, turning their agent voting on or
   off, or having their edits restricted or allowed names them all in one
-  notice on `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Each is said
-  even if the pass then failed or stopped the fleet, and each is only a hint
-  to read again.
+  notice on `Keyfleet.Keys.topic/1`, wherever in the pass it recorded them. Keys
+  marked present in the blocks it read for the first time are named in one
+  notice of their own there, `{:keys_present, fleet_id, token_ids}`, however
+  many marks they came in, so a page reads again only what shows presence.
+  Each is said even if the pass then failed or stopped the fleet, and each is
+  only a hint to read again.
   """
 
   require Logger
@@ -336,9 +339,23 @@ defmodule Keyfleet.Chain.Scanner do
   # The cursor as the pass found it; the records it made moved its numbers on.
   # Every key revealed or whose draw's wait was ended, sold, changing hands,
   # issuing or ending a shard, turning its agent voting on or off, or having
-  # its edits restricted or allowed in the pass is named once.
+  # its edits restricted or allowed in the pass is named once, and so is every
+  # key marked present in the blocks the pass moved the cursor past.
   defp announce(%{fleet_id: fleet_id} = before) do
     now = Chain.get_cursor!(fleet_id)
+
+    present =
+      if now.next_block > before.next_block,
+        do:
+          for(
+            %{kind: :present, token_id: token_id} <-
+              Keys.presences_in_blocks!(fleet_id, before.next_block, now.next_block - 1,
+                actor: @system
+              ),
+            uniq: true,
+            do: token_id
+          ),
+        else: []
 
     revealed =
       if now.reveal_seq > before.reveal_seq,
@@ -387,6 +404,14 @@ defmodule Keyfleet.Chain.Scanner do
           Keys.topic(fleet_id),
           {:keys_changed, fleet_id, Enum.map(records, & &1.token_id)}
         )
+    end
+
+    if present != [] do
+      Phoenix.PubSub.broadcast(
+        Keyfleet.PubSub,
+        Keys.topic(fleet_id),
+        {:keys_present, fleet_id, present}
+      )
     end
   end
 

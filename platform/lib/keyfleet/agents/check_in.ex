@@ -15,11 +15,17 @@ defmodule Keyfleet.Agents.CheckIn do
   Every time is the database's, and each kind of write happens at most once a
   minute (a contribution of a new kind at once), in one statement that inserts the row or updates it. Anyone may
   read; only the agent itself writes its own rows.
+
+  A scheduled check-in that is written tells the open pages of the agent's
+  person, and only theirs, once it commits: `:agents_changed` on
+  `RegentAgents.topic/1`, where the person's pages already hear their agents
+  pair and unpair. One skipped as too soon after the last tells nobody.
   """
   use Ash.Resource,
     domain: Keyfleet.Agents,
     data_layer: AshPostgres.DataLayer,
-    authorizers: [Ash.Policy.Authorizer]
+    authorizers: [Ash.Policy.Authorizer],
+    notifiers: [Ash.Notifier.PubSub]
 
   alias Keyfleet.Agents.CheckInStatus
 
@@ -198,6 +204,16 @@ defmodule Keyfleet.Agents.CheckIn do
                expr(fragment("(statement_timestamp() AT TIME ZONE 'utc')"))
              )
     end
+  end
+
+  pub_sub do
+    module Phoenix.PubSub
+    name Keyfleet.PubSub
+    prefix "regent_agents"
+    filter &(!Ash.Resource.get_metadata(&1.data, :upsert_skipped))
+
+    publish :check_in_scheduled, [:beneficiary_privy_user_id],
+      transform: fn _notification -> :agents_changed end
   end
 
   policies do
