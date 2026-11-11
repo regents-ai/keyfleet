@@ -1000,7 +1000,8 @@ paths:
         on it or null, those with an agent first and then by number; the agents paired with the
         person now; and yours, the Key the person put the signing agent on here, or null. An agent
         on a Key writes in the fleet as that Key while the person's wallets hold it, unless its own
-        wallet holds a Key here. Nothing is written.
+        wallet holds a Key here. A Key that changes hands, even between the person's own wallets,
+        loses its agent; the agent stays paired. Nothing is written.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1056,9 +1057,8 @@ paths:
             person_not_here: the person the agent is paired with hasn't signed in on this site yet.
             agent_not_paired: the agent has no current pairing; its person signs in on this site and
             pairs it with Pair New Agent on their Agents page, then it signs the request again.
-            person_only: agent_wallet names an agent on another Key, even one the person no longer
-            holds, the Key has another agent, or agent_wallet is left out; only the person makes
-            that change. Nothing was changed.
+            person_only: agent_wallet names an agent on another Key, the Key has another agent, or
+            agent_wallet is left out; only the person makes that change. Nothing was changed.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AgentKeyForbiddenError"}
@@ -7752,7 +7752,7 @@ components:
               type: [integer, "null"]
               minimum: 1
               maximum: 9223372036854775807
-              description: The Key the person put the signing agent on here, while their wallets hold it, or null
+              description: The Key the person put the signing agent on here, while their wallets hold it and it hasn't changed hands since, or null
     AgentKeyForbiddenError:
       type: object
       additionalProperties: false
