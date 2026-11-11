@@ -95,7 +95,8 @@ defmodule Keyfleet.Agents.Upkeep do
   last recorded it counting in votes, an automatic start included, or nil for
   both. `agents` are `person_agents/2`. `done` holds the four steps, each true
   once the records show it: an agent paired, an agent acting for a Key, an
-  agent's daily run scheduled, and every Key marked present and counting.
+  agent's daily run scheduled, and every Key needing no mark, the same reading
+  as an agent's `marked` state: present, or waiting for its automatic start.
   Nothing here reads the chain.
   """
   def person_setup(%Human{} = person, fleet_id) do
@@ -108,31 +109,27 @@ defmodule Keyfleet.Agents.Upkeep do
         token_ids = Enum.map(held, & &1.token_id)
         last = Keys.last_presence(fleet_id, token_ids)
         agents = person_agents(person, fleet_id)
+        keys = Enum.map(token_ids, &counting(&1, Map.get(last, &1)))
 
         %{
-          keys: Enum.map(token_ids, &counting(&1, Map.get(last, &1))),
+          keys: keys,
           agents: agents,
           done: %{
             pair: agents != [],
             shard: Enum.any?(agents, &(&1.key_count > 0)),
             run: Enum.any?(agents, & &1.schedule),
-            present: Enum.all?(token_ids, &marked?(Map.get(last, &1), now))
+            present: Enum.all?(keys, &needs_no_mark?(&1.until, now))
           }
         }
     end
   end
 
-  defp counting(token_id, %{kind: kind, at: at}) when kind in [:present, :scheduled],
-    do: %{token_id: token_id, from: at, until: DateTime.add(at, @window_seconds)}
-
-  defp counting(token_id, _cleared_or_none), do: %{token_id: token_id, from: nil, until: nil}
-
-  # Marked by its holder or an agent, not only started on its own, and still
-  # counting.
-  defp marked?(%{kind: :present, at: at}, now),
-    do: DateTime.after?(DateTime.add(at, @window_seconds), now)
-
-  defp marked?(_scheduled_cleared_or_none, _now), do: false
+  defp counting(token_id, record) do
+    case present_until(record) do
+      nil -> %{token_id: token_id, from: nil, until: nil}
+      until -> %{token_id: token_id, from: record.at, until: until}
+    end
+  end
 
   @doc """
   Whether `wallet` can pay to mark `key_count` Keys at the latest block: nil with
@@ -144,7 +141,7 @@ defmodule Keyfleet.Agents.Upkeep do
   defp states(check_in, keys, now) do
     %{
       schedule: check_in != nil and check_in.schedule_minutes != nil,
-      marked: keys != [] and Enum.all?(keys, &needs_no_mark?(&1, now)),
+      marked: keys != [] and Enum.all?(keys, &needs_no_mark?(&1.present_until, now)),
       repeated: CheckInStatus.repeating?(check_in, now)
     }
   end
@@ -189,9 +186,10 @@ defmodule Keyfleet.Agents.Upkeep do
   # automatic start, which comes by itself and before which the contract
   # refuses a mark (`maturesAt`): both end at `present_until`. Only the first
   # is present now, as the contract counts it (`KeyfleetPresence.isActive`,
-  # the `present` calculation of `Keyfleet.Keys.KeyAttachment`).
-  defp needs_no_mark?(%{present_until: nil}, _now), do: false
-  defp needs_no_mark?(%{present_until: until}, now), do: DateTime.after?(until, now)
+  # the `present` calculation of `Keyfleet.Keys.KeyAttachment`). An agent's
+  # `marked` state and a person's Present step both read it.
+  defp needs_no_mark?(nil, _now), do: false
+  defp needs_no_mark?(present_until, now), do: DateTime.after?(present_until, now)
 
   defp presence(fleet_id, token_ids, now) do
     last = Keys.last_presence(fleet_id, token_ids)

@@ -2,12 +2,13 @@ defmodule KeyfleetWeb.Components.SetupList do
   @moduledoc """
   A new owner's four setup steps at the top of a fleet's page, ticked off from
   the records alone (`Keyfleet.Agents.Upkeep.person_setup/2`): pair an agent,
-  give it a shard, its daily run, and the Keys marked present. Only the first
-  step not yet done is open: pairing holds the pairing box
-  (`KeyfleetWeb.PairingBox`), whose message sends the agent to this fleet once
-  paired; the shard step is one press, a shard of every Key the person holds
-  here for the agent paired last, built on the server. A line above says
-  whether the Keys count in votes, and until when.
+  give it a shard, its daily run, and every Key present or waiting for its
+  automatic start, as an agent's Marked dot reads it. Only the first step not
+  yet done is open: pairing holds the pairing box (`KeyfleetWeb.PairingBox`),
+  whose message sends the agent to this fleet once paired; the shard step is
+  one press, a shard of every Key the person holds here for the agent paired
+  last, built on the server. A line above says whether the Keys count in
+  votes, and until when.
 
   It shows only to a signed-in person who holds a Key in the fleet, and only
   until all four are done, so a run that stops and lets the Keys lapse brings
