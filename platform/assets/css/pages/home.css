@@ -242,29 +242,29 @@
   @media (prefers-reduced-motion: reduce) {
     .rl-sea__stage canvas { transition: none; }
   }
-  /* The name and line at the top, the cards and buttons at the foot. Wide,
-     the column is as tall as the city: the name lines up with its top edge
-     and the buttons with its bottom edge, and the city grows to match when
-     the words need more room. */
+  /* The name at the top; under it the cards with the line beside them, then
+     the buttons. Wide, the column is as tall as the city: the name lines up
+     with its top edge and the buttons with its bottom edge, and the cards
+     grow with the column so the two fill that height. */
   .rl-fleet__copy {
-    display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-3);
+    container-type: inline-size;
+    display: flex; flex-direction: column; justify-content: space-between; gap: var(--space-4);
     min-width: 0;
   }
-  .rl-fleet__head, .rl-fleet__offer { display: grid; justify-items: start; gap: var(--space-2); }
-  .rl-fleet__head > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-fleet__line { max-inline-size: 42ch; color: var(--rl-muted); text-wrap: pretty; }
-  /* Each card on the sheet has clear room around it for the art that rises
-     out of some of them: 37 of its 320 wide on the left, 30 above, 26 below.
-     The margins take that room back, so the card's edge lines up with the
-     words and sits a button's gap above the buttons. */
-  .rl-fleet .key-cards {
-    --cards: 9rem;
-    inline-size: var(--cards);
-    margin: calc(var(--cards) * -30 / 320) 0 calc(var(--space-1) - var(--cards) * 26 / 320)
-      calc(var(--cards) * -37 / 320);
+  .rl-fleet__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-fleet__offer {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "cards line" "actions actions";
+    align-items: start; gap: var(--space-3) var(--space-4);
   }
-  .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-  .rl-fleet__why { margin: 0; color: var(--rl-muted); font-size: .875rem; }
+  .rl-fleet__line { grid-area: line; max-inline-size: 36ch; color: var(--rl-muted); font-size: clamp(1rem, .95rem + .25vw, 1.125rem); line-height: 1.5; text-wrap: pretty; }
+  .rl-fleet__actions { grid-area: actions; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  /* On the narrowest phones the line goes above the cards rather than
+     squeezing beside them. */
+  @container (max-width: 18rem) {
+    .rl-fleet__offer { grid-template-columns: minmax(0, 1fr); grid-template-areas: "line" "cards" "actions"; }
+  }
+  .rl-fleet__why { grid-column: 1 / -1; margin: 0; color: var(--rl-muted); font-size: .875rem; }
 
   @media (min-width: 64rem) {
     .rl-fleet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
@@ -366,3 +366,28 @@
    left. */
 .rl-root #shell-header .shell-brand { height: auto; }
 .rl-root #shell-header .account-control > .rg-button { margin-inline-end: var(--space-1); }
+
+/* Classic's cards and buttons, outside the layer because the cards' size and
+   the buttons' height are set by unlayered rules. Each card on the sheet has
+   clear room around it for the art that rises out of some of them: 37 of its
+   320 wide on the left, 30 above, 26 below. The margins take that room back,
+   so the card's edge lines up with the name and sits a row's gap above the
+   buttons. Wide, the cards take the height the city leaves under the name
+   and above the buttons. */
+.rl-fleet .key-cards {
+  --cards: clamp(9rem, 30cqi, 15rem);
+  grid-area: cards; inline-size: var(--cards);
+  margin: calc(var(--cards) * -30 / 320) calc(var(--cards) * -40 / 320) calc(var(--cards) * -26 / 320) calc(var(--cards) * -37 / 320);
+}
+@container (max-width: 18rem) {
+  .rl-fleet .key-cards { --cards: 11rem; }
+}
+@media (min-width: 64rem) {
+  .rl-fleet .key-cards { --cards: clamp(9rem, 58cqi - 9rem, 18rem); }
+}
+/* Larger than a standard button. On a phone the two share the row, or each
+   takes the full width when they no longer fit side by side. */
+.rl-fleet .rl-fleet__actions > .rg-button { min-block-size: 3rem; padding-inline: var(--space-3); font-size: 1.0625rem; }
+@media (max-width: 47.99rem) {
+  .rl-fleet .rl-fleet__actions > .rg-button { flex: 1 1 auto; padding-inline: var(--space-2); }
+}

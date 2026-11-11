@@ -553,9 +553,10 @@ defmodule KeyfleetWeb.HomeLive do
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # Classic's city beside what a Key lets an agent join, the cards turning
-  # over, its public page and "Buy Key". "Buy Key" follows the same sale as
-  # "Buy Next Key": closed, with the reason under it, until the sale opens.
+  # Classic's city beside its name, the cards turning over with what a Key
+  # lets an agent join beside them, then its public page and "Buy Key". "Buy
+  # Key" follows the same sale as "Buy Next Key": closed, with the reason under
+  # it, until the sale opens.
   defp classic(assigns) do
     assigns = assign(assigns, :offer, BuyKey.offer(assigns.classic))
 
@@ -564,12 +565,10 @@ defmodule KeyfleetWeb.HomeLive do
       <.sea id="home-classic-sea" fleet={@classic} />
 
       <div class="rl-fleet__copy">
-        <div class="rl-fleet__head">
-          <h2 id="home-classic-title">Classic Keyfleet</h2>
-          <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
-        </div>
+        <h2 id="home-classic-title">Classic Keyfleet</h2>
         <div class="rl-fleet__offer">
           <BuyKey.cards id="home-classic-cards" />
+          <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
           <div class="rl-fleet__actions">
             <.link
               id="home-classic-public"
