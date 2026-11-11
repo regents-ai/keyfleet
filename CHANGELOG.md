@@ -7097,3 +7097,11 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
 - Check: `test/browser/setup_list.spec.ts` walks a purchase to "You're in", in
   view with the focus on Set up your agent at 1280×720 and 390×844, then the
   setup list from Pair to Present until it is gone.
+
+## 2026-11-11 — Notebook file adds: done, refused or unknown
+
+API contract 26.2.0 → 27.0.0, because a code is removed.
+
+Moved: a notebook file add or write (`notebooks_add_file`, `notebooks_write_file`, the signed routes, `/mcp` and `regents keyfleet notebooks files add` and `write`) no longer answers 409 `notebook_file_conflict`. A file or folder already at the path, or a file where one of its folders would be, answers 409 `notebook_file_exists`; a notebook open for editing, or saving another change, answers 409 `notebook_writes_paused`, and an add or write at the exact path of an empty folder answers that too; either way nothing was written. A change the notebook was asked for and didn't answer is 503 `notebook_outcome_unknown`, with `details.receipt` (`request_id`, `notebook_id`, `path`, `sha256`, `bytes`) and `details.settle` (`notebooks_read_file`), and sending it again is safe: it writes the file once, and an add sent again is kept as the agent's, so it can change the file later. `notebooks_read_file` answers the text's `sha256`, so that read settles it. `notebooks_unavailable` keeps its words and now means nothing was written: the notebook was never reached, or a file whose maker couldn't be kept was removed again. Making, running and restoring a notebook still answer 503 `notebooks_unavailable` when the notebook doesn't answer, and the guides no longer promise that sending one again is safe: until the notebook host records a key before doing the work, a second send can make a second notebook or run. No migration; no production data.
+
+Check: `platform/test/keyfleet_web/agent_notebook_files_test.exs` drives each answer through signed requests, and the unknown one through `/mcp` too, against a stand-in notebook host that refuses and answers as the real one does.

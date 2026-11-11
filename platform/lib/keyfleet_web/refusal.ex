@@ -453,9 +453,15 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_file_not_found" =>
       {"This fleet has no such notebook or file.",
        "Check the notebook's id with notebooks_list and the file's path with notebooks_files."},
-    "notebook_file_conflict" =>
-      {"The file wasn't written.",
-       "Either a file is there already at the path you added, or the notebook is open for editing or saving another change. Add it at a new path, or try again in a minute."},
+    "notebook_file_exists" =>
+      {"A file or folder is at this path already, or a file is where one of its folders would be.",
+       "Nothing was written. Add it at a new path. notebooks_write_file changes a file you made."},
+    "notebook_writes_paused" =>
+      {"The notebook is open for editing, or saving another change.",
+       "Nothing was written. Try again in a minute; an open session closes 15 minutes after its last use."},
+    "notebook_outcome_unknown" =>
+      {"The notebook didn't confirm the change, so it may have been made.",
+       "Read the path with the tool in details.settle: the same sha256 means it was written. Sending the same request again is safe: it writes the file once, and an add is then kept as yours."},
     "notebook_file_refused" =>
       {"The notebook doesn't take this file.",
        "Name a path inside the notebook, such as log/entry.md, with no empty, \".\" or \"..\" parts. notebook.py must be text marimo can read."},

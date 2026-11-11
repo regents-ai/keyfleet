@@ -83,8 +83,10 @@ defmodule Keyfleet.Notebooks.HubClient do
 
   @doc """
   Makes a notebook in the project as the provisioner, titled `title` and
-  tagged with `tags`, with `code`, answering its `meta`. The same
-  `idempotency_key` makes one notebook however often it is sent.
+  tagged with `tags`, with `code`, answering its `meta`. Once the hub has
+  answered, the same `idempotency_key` answers that notebook again; the hub
+  records the key only after making the notebook, so one sent while the first
+  is still being made can make a second.
   """
   def create_notebook(
         fleet_id,

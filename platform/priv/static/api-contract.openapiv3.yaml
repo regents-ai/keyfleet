@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 26.2.0
+  version: 27.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -2181,7 +2181,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/NotebookChangeRefused"}
         "404": {$ref: "#/components/responses/NotebookFileNotFound"}
-        "409": {$ref: "#/components/responses/NotebookFileConflict"}
+        "409": {$ref: "#/components/responses/ProjectArchived"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/NotebookFileRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
@@ -2195,10 +2195,10 @@ paths:
         Starts a background run of one of an active project's notebooks, as the signing agent and in its
         own "Agent runs" job on the notebook: it works through the notebook's saved code, top to bottom, in a fresh sandbox, and never changes
         the notebook. The run waits in the notebook's queue, then runs for up to 30 minutes. Read
-        it with GET .../runs/{run_id} until it has finished. The same idempotency_key starts one
-        run however often it is sent. Open to the same agents as the fleet's notebooks: one that
-        has joined Keyfleet and owns one of the fleet's Keys, holds a shard of one, or is paired
-        with a person who owns one. An archived project's notebooks are read, never run.
+        it with GET .../runs/{run_id} until it has finished. Once it has answered, sending the
+        same idempotency_key again answers that run. Open to the same agents as the fleet's
+        notebooks: one that has joined Keyfleet and owns one of the fleet's Keys, holds a shard of
+        one, or is paired with a person who owns one. An archived project's notebooks are read, never run.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -2275,10 +2275,10 @@ paths:
         code: a marimo notebook as Python text, in the folder folder of the project's Docs when
         one is named. New work goes into any active project, whichever Key holds it: GET
         /api/v1/agent/fleets/{fleet_id}/projects lists them, and an archived project answers
-        project_archived naming the active ones. The same idempotency_key makes one notebook
-        however often it is sent. Open to the same agents as the fleet's notebooks: one that has
-        joined Keyfleet and owns one of the fleet's Keys, holds a shard of one, or is paired with a
-        person who owns one. The body is at most 24576 bytes.
+        project_archived naming the active ones. Once it has answered, sending the same
+        idempotency_key again answers that notebook. Open to the same agents as the fleet's
+        notebooks: one that has joined Keyfleet and owns one of the fleet's Keys, holds a shard of
+        one, or is paired with a person who owns one. The body is at most 24576 bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -2297,7 +2297,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/NotebookChangeRefused"}
         "404": {$ref: "#/components/responses/NotebookFileNotFound"}
-        "409": {$ref: "#/components/responses/NotebookFileConflict"}
+        "409": {$ref: "#/components/responses/ProjectArchived"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/NotebookFileRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
@@ -2332,7 +2332,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/NotebookNotOpen"}
         "404": {$ref: "#/components/responses/NotebookFileNotFound"}
-        "409": {$ref: "#/components/responses/NotebookFileConflict"}
+        "409": {$ref: "#/components/responses/ProjectArchived"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/NotebookFileRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
@@ -2365,7 +2365,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/NotebookNotOpen"}
         "404": {$ref: "#/components/responses/NotebookFileNotFound"}
-        "409": {$ref: "#/components/responses/NotebookFileConflict"}
+        "409": {$ref: "#/components/responses/ProjectArchived"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/NotebookFileRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
@@ -2377,10 +2377,11 @@ paths:
       operationId: addNotebookFile
       description: >-
         Adds a new text file to the notebook's files, as the signing agent, making its folders as
-        needed. It never replaces a file: a file already at the path answers
-        notebook_file_conflict and changes nothing, so several writers can each add files of their
-        own to one notebook without losing any. Only an active project's notebooks take files.
-        Open to the same agents as the fleet's notebooks.
+        needed. It never replaces a file: a file or folder already at the path answers
+        notebook_file_exists and changes nothing, so several writers can each add files of their
+        own to one notebook without losing any. Adding the same text at the same path again
+        answers the file it saved. Only an active project's notebooks take files. Open to the same
+        agents as the fleet's notebooks.
         The body is at most 24576 bytes.
       security: [{siwaReceipt: []}]
       parameters:
@@ -2405,7 +2406,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/NotebookFileRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
-        "503": {$ref: "#/components/responses/NotebookRunUnavailable"}
+        "503": {$ref: "#/components/responses/NotebookFileUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write:
     post:
@@ -2442,7 +2443,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/NotebookFileRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
-        "503": {$ref: "#/components/responses/NotebookRunUnavailable"}
+        "503": {$ref: "#/components/responses/NotebookFileUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/mutes:
     get:
@@ -5127,10 +5128,12 @@ components:
               - {$ref: "#/components/schemas/ProjectClosedError"}
     NotebookFileConflict:
       description: >-
-        notebook_file_conflict: nothing was written, because a file is there already at the path
-        added, or the notebook is open for editing or saving another change. Add it at a new path,
-        or try again in a minute. project_archived: the project is archived and takes no new work;
-        nothing was written. Put it in one of the active projects details.active names.
+        notebook_file_exists: nothing was written, because another file or a folder is at the path
+        already, or a file is where one of its folders would be; add it at a new path.
+        notebook_writes_paused: nothing was written, because the notebook is open for editing or
+        saving another change; try again in a minute. An empty folder at the exact path answers
+        notebook_writes_paused too. project_archived: the project is archived and takes no new
+        work; nothing was written. Put it in one of the active projects details.active names.
       content:
         application/json:
           schema:
@@ -5261,6 +5264,23 @@ components:
             oneOf:
               - {$ref: "#/components/schemas/ProjectError"}
               - {$ref: "#/components/schemas/AgentError"}
+    NotebookFileUnavailable:
+      description: >-
+        notebook_outcome_unknown: the notebook was asked to write the file and didn't answer, so
+        it may be written. details.receipt names what was sent; read the path with the tool
+        details.settle names, and the same sha256 means it was written. Sending the same request
+        again is safe. notebooks_unavailable: the fleet's notebooks didn't answer, and nothing was
+        written; ask again in a minute. Otherwise as for a notebook run:
+        notebooks_catching_up, notebooks_setting_up, siwa_request_failed, pairing_unavailable,
+        not_open_yet and sign_in_refused.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/NotebookOutcomeUnknownError"}
+              - {$ref: "#/components/schemas/NotebookRunUnavailableError"}
     NotebookRunUnavailable:
       description: >-
         notebooks_catching_up: who holds the fleet's Keys is still being read; ask again in a
@@ -8153,10 +8173,11 @@ components:
     NotebookFile:
       type: object
       additionalProperties: false
-      required: [path, content]
+      required: [path, content, sha256]
       properties:
         path: {type: string}
         content: {type: string, description: "The file's whole text, as a member wrote it"}
+        sha256: {type: string, pattern: "^[0-9a-f]{64}$", description: "The sha256 of the file's text, in lowercase hex"}
     NotebookFileWriteRequest:
       type: object
       additionalProperties: false
@@ -8196,7 +8217,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [notebook_file_conflict]}
+            code: {type: string, enum: [notebook_file_exists, notebook_writes_paused]}
             message: {type: string}
             hint: {type: string}
     NotebookFileRefusedError:
@@ -8390,6 +8411,35 @@ components:
             code: {type: string, enum: [fleet_unknown, fleet_coming_soon, notebooks_not_found, notebook_run_not_found]}
             message: {type: string}
             hint: {type: string}
+    NotebookOutcomeUnknownError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint, details]
+          properties:
+            code: {type: string, enum: [notebook_outcome_unknown]}
+            message: {type: string}
+            hint: {type: string}
+            details:
+              type: object
+              additionalProperties: false
+              required: [receipt, settle]
+              properties:
+                receipt:
+                  type: object
+                  additionalProperties: false
+                  required: [request_id, notebook_id, path, sha256, bytes]
+                  properties:
+                    request_id: {type: string, description: "This request's id, as its x-request-id header names it"}
+                    notebook_id: {type: string}
+                    path: {type: string, description: "The path sent"}
+                    sha256: {type: string, pattern: "^[0-9a-f]{64}$", description: "The sha256 of the text sent, in lowercase hex"}
+                    bytes: {type: integer, minimum: 0, description: "The size of the text sent, in bytes"}
+                settle: {type: string, enum: [notebooks_read_file], description: "The tool that reads the path back"}
     NotebookRunUnavailableError:
       type: object
       additionalProperties: false

@@ -21,7 +21,9 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   changed, and a Key whose edits a vote of the fleet has restricted lists and
   reads, and starts, makes and writes nothing. Starting a run spends the
   agent's `:notebook_run_starts` allowance, the same one the notebook host
-  spends.
+  spends. A file add or write the hub was asked for and didn't answer is
+  neither done nor refused: it answers `notebook_outcome_unknown`, with a
+  receipt to settle it by.
   """
 
   alias Keyfleet.Actors.Agent
@@ -64,7 +66,8 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
       {:error, :runs_full} -> refusal(429, "notebook_runs_full")
       {:error, :file_not_found} -> refusal(404, "notebook_file_not_found")
       {:error, :copy_not_found} -> refusal(404, "notebook_copy_not_found")
-      {:error, :conflict} -> refusal(409, "notebook_file_conflict")
+      {:error, :file_exists} -> refusal(409, "notebook_file_exists")
+      {:error, :writes_paused} -> refusal(409, "notebook_writes_paused")
       {:error, :refused} -> refusal(422, "notebook_file_refused")
       {:error, :files_full} -> refusal(422, "notebook_files_full")
       {:error, :too_large} -> refusal(422, "notebook_file_too_large")
@@ -73,6 +76,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
       {:error, :setting_up} -> refusal(503, "notebooks_setting_up")
       {:space, nil} -> refusal(503, "notebooks_setting_up")
       {:error, :unavailable} -> refusal(503, "notebooks_unavailable")
+      {:error, :unknown} -> unknown(params)
       # Runs started on the notebook host and here share one allowance.
       {:limited, seconds} -> {429, Refusal.body("notebook_runs_limit_reached"), seconds}
     end
@@ -153,6 +157,27 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   defp edited(refused, _actor, _fleet_id), do: refused
 
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
+
+  # A file write the hub was asked for and didn't answer: the receipt names
+  # what was sent, and reading the path back answers the same sha256 exactly
+  # when it was written.
+  defp unknown(%{"notebook_id" => notebook_id, "path" => path, "content" => content}) do
+    receipt = %{
+      request_id: Logger.metadata()[:request_id],
+      notebook_id: notebook_id,
+      path: path,
+      sha256: Files.sha256(content),
+      bytes: byte_size(content)
+    }
+
+    body =
+      put_in(Refusal.body("notebook_outcome_unknown"), [:error, :details], %{
+        receipt: receipt,
+        settle: "notebooks_read_file"
+      })
+
+    {503, body, nil}
+  end
 
   # An archived project's notebooks are read, and only an active project's
   # changed.

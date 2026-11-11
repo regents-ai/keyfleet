@@ -14,13 +14,15 @@ defmodule Keyfleet.Notebooks.Files do
   file's maker writes over it.
 
   Each answer is `{:ok, answer}` or `{:error, reason}`: `:file_not_found` for a
-  notebook or file the hub doesn't have; `:conflict` when a file added is
-  there already, or the notebook is open for editing or saving another change;
-  `:not_maker` for writing over another member's file; `:refused` for a path
-  or file the hub doesn't take;
-  `:files_full` when the notebook holds as much as it takes; `:too_large` or
-  `:not_text` for a file this site doesn't read out; or `:unavailable` when
-  the hub didn't answer.
+  notebook or file the hub doesn't have; `:file_exists` when another file, or a
+  folder, is at the path written, or a file is where one of its folders would
+  be; `:writes_paused` when the notebook is open for editing or saving another
+  change; `:not_maker` for writing over another member's file; `:refused` for a
+  path or file the hub doesn't take; `:files_full` when the notebook holds as
+  much as it takes; `:too_large` or `:not_text` for a file this site doesn't
+  read out; `:unknown` when the hub was asked to write a file and its answer
+  can't be read, so the file may be written; or `:unavailable` when the hub
+  didn't answer and nothing was written.
   """
 
   import Keyfleet.Notebooks.MemberRequest
@@ -32,11 +34,14 @@ defmodule Keyfleet.Notebooks.Files do
   @read_max_bytes 1024 * 1024
   # A listing names at most this many entries a page.
   @page 200
+  # Connecting to the hub failed in these ways, so it was never asked.
+  @unreached [:econnrefused, :nxdomain, :ehostunreach, :enetunreach]
 
   @doc """
   Makes a notebook titled `title` with `code` as `subject`, answering its id,
-  title and address (`Keyfleet.Notebooks.notebook_url/3`). The same
-  `idempotency_key` makes one notebook however often it is sent.
+  title and address (`Keyfleet.Notebooks.notebook_url/3`). Once the hub has
+  answered, the same `idempotency_key` answers that notebook again; one sent
+  while the first is still being made can make a second.
   """
   def create(fleet_id, subject, project_id, notebook, idempotency_key) do
     fleet_id
@@ -81,7 +86,10 @@ defmodule Keyfleet.Notebooks.Files do
     end
   end
 
-  @doc "The text of the file at `path` in `notebook_id`, as `subject`."
+  @doc """
+  The text of the file at `path` in `notebook_id`, as `subject`, with its
+  `sha256` (`sha256/1`).
+  """
   def read(fleet_id, subject, project_id, notebook_id, path) do
     case request(
            fleet_id,
@@ -97,7 +105,7 @@ defmodule Keyfleet.Notebooks.Files do
 
       {:ok, %Req.Response{status: 200, body: content}} when is_binary(content) ->
         if String.valid?(content),
-          do: {:ok, %{path: path, content: content}},
+          do: {:ok, %{path: path, content: content, sha256: sha256(content)}},
           else: {:error, :not_text}
 
       response ->
@@ -105,14 +113,24 @@ defmodule Keyfleet.Notebooks.Files do
     end
   end
 
+  @doc "The sha256 of `content`, in lowercase hex, as a file read answers it."
+  def sha256(content), do: :sha256 |> :crypto.hash(content) |> Base.encode16(case: :lower)
+
   @doc """
   Writes `content` to the file at `path` in `notebook_id`, as `subject`,
   making its folders as needed: `:add` makes a new file, kept as
-  `subject`'s, and leaves one already there as it is, answering `:conflict`;
-  `:write` replaces a file `subject` made, or any file of a notebook open to
-  `actor` for editing (`Keyfleet.Notebooks.Makers.open_to?/4`), answering
-  `:not_maker` for anyone else's. A file added whose maker can't be kept is
-  removed again, so it never stays as the notebook maker's.
+  `subject`'s, and leaves one already there as it is, answering
+  `:file_exists`; `:write` replaces a file `subject` made, or any file of a
+  notebook open to `actor` for editing
+  (`Keyfleet.Notebooks.Makers.open_to?/4`), answering `:not_maker` for anyone
+  else's. A file added whose maker can't be kept is removed again, so it
+  never stays as the notebook maker's.
+
+  The hub refuses either with one conflict for every reason, so the path is
+  read to tell them apart: an add's own file saved before is that add's
+  answer; another file there, a folder with something in it, or a file where
+  one of its folders would be, is `:file_exists`; with none of those, writes
+  are paused (`:writes_paused`), as an empty folder at the path reads too.
   """
   def write(fleet_id, _actor, subject, project_id, notebook_id, path, content, :add) do
     with {:ok, key} <- file_key(path),
@@ -124,32 +142,84 @@ defmodule Keyfleet.Notebooks.Files do
   def write(fleet_id, actor, subject, project_id, notebook_id, path, content, :write) do
     with {:ok, key} <- file_key(path) do
       case overwrite(fleet_id, actor, subject, project_id, notebook_id, key) do
-        :ok -> put(fleet_id, subject, project_id, notebook_id, path, content, false)
+        :ok -> replace(fleet_id, subject, project_id, notebook_id, path, key, content)
         {:error, :not_found} -> {:error, :file_not_found}
         {:error, reason} -> {:error, reason}
       end
     end
   end
 
-  # The hub's store retries a save whose answer it lost, and its retry then
-  # finds the file the first try saved and answers conflict. A conflict on a
-  # file that holds exactly what was sent, and that no one else made, is this
-  # add's own file, saved.
   defp add(fleet_id, subject, project_id, notebook_id, path, key, content) do
     case put(fleet_id, subject, project_id, notebook_id, path, content, true) do
-      {:error, :conflict} -> saved(fleet_id, subject, project_id, notebook_id, path, key, content)
+      {:error, :conflict} -> taken(fleet_id, subject, project_id, notebook_id, path, key, content)
       answer -> answer
     end
   end
 
-  defp saved(fleet_id, subject, project_id, notebook_id, path, key, content) do
-    with {:ok, %{content: ^content}} <- read(fleet_id, subject, project_id, notebook_id, path),
-         {:ok, true} <- Makers.unclaimed?(fleet_id, notebook_id, key, subject) do
-      {:ok, %{path: "/" <> key, kind: "file", size: byte_size(content), modified_at: nil}}
-    else
-      {:error, :unavailable} -> {:error, :unavailable}
-      _other -> {:error, :conflict}
+  # The hub's store retries a save whose answer it lost, and its retry then
+  # finds the file the first try saved and answers conflict. A conflict on a
+  # file that holds exactly what was sent, and that no one else made, is this
+  # add's own file, saved; while that can't be read, the add may be saved.
+  defp taken(fleet_id, subject, project_id, notebook_id, path, key, content) do
+    case read(fleet_id, subject, project_id, notebook_id, path) do
+      {:ok, %{content: ^content}} -> own(fleet_id, subject, notebook_id, key, content)
+      {:ok, _another} -> {:error, :file_exists}
+      {:error, reason} when reason in [:too_large, :not_text] -> {:error, :file_exists}
+      {:error, :file_not_found} -> paused(fleet_id, subject, project_id, notebook_id, key)
+      {:error, _unread} -> {:error, :unknown}
     end
+  end
+
+  defp own(fleet_id, subject, notebook_id, key, content) do
+    case Makers.unclaimed?(fleet_id, notebook_id, key, subject) do
+      {:ok, true} ->
+        {:ok, %{path: "/" <> key, kind: "file", size: byte_size(content), modified_at: nil}}
+
+      {:ok, false} ->
+        {:error, :file_exists}
+
+      {:error, :unavailable} ->
+        {:error, :unknown}
+    end
+  end
+
+  defp replace(fleet_id, subject, project_id, notebook_id, path, key, content) do
+    with {:error, :conflict} <-
+           put(fleet_id, subject, project_id, notebook_id, path, content, false),
+         do: paused(fleet_id, subject, project_id, notebook_id, key)
+  end
+
+  # A conflict with no file at the path: a folder with something in it is
+  # there, or a file where one of its folders would be, or else the notebook
+  # is open for editing or saving another change.
+  defp paused(fleet_id, subject, project_id, notebook_id, key) do
+    fleet_id
+    |> request(subject, :get, notebook_path(project_id, notebook_id) <> "/workspace/entries",
+      params: [path: key, limit: 1]
+    )
+    |> answer(200)
+    |> case do
+      {:ok, %{"items" => []}} -> folders(fleet_id, subject, project_id, notebook_id, key)
+      {:ok, %{"items" => _items}} -> {:error, :file_exists}
+      error -> error
+    end
+  end
+
+  # Each folder the path names, read as a file: one that is a file takes the
+  # path; with none, writes are paused.
+  defp folders(fleet_id, subject, project_id, notebook_id, key) do
+    parts = String.split(key, "/")
+
+    1..(length(parts) - 1)//1
+    |> Enum.map(&(parts |> Enum.take(&1) |> Enum.join("/")))
+    |> Enum.reduce_while({:error, :writes_paused}, fn folder, paused ->
+      case read(fleet_id, subject, project_id, notebook_id, folder) do
+        {:error, :file_not_found} -> {:cont, paused}
+        {:ok, _file} -> {:halt, {:error, :file_exists}}
+        {:error, reason} when reason in [:too_large, :not_text] -> {:halt, {:error, :file_exists}}
+        {:error, _unread} -> {:halt, {:error, :unavailable}}
+      end
+    end)
   end
 
   defp overwrite(fleet_id, actor, subject, project_id, notebook_id, key) do
@@ -165,16 +235,28 @@ defmodule Keyfleet.Notebooks.Files do
   end
 
   defp put(fleet_id, subject, project_id, notebook_id, path, content, create) do
-    with {:ok, item} <-
-           fleet_id
-           |> request(subject, :put, notebook_path(project_id, notebook_id) <> "/workspace/files",
-             params: [path: path, create: create],
-             headers: [{"content-type", "application/octet-stream"}],
-             body: content
-           )
-           |> answer(200),
-         do: {:ok, entry(item)}
+    fleet_id
+    |> request(subject, :put, notebook_path(project_id, notebook_id) <> "/workspace/files",
+      params: [path: path, create: create],
+      headers: [{"content-type", "application/octet-stream"}],
+      body: content
+    )
+    |> case do
+      {:ok, %Req.Response{status: 409}} ->
+        {:error, :conflict}
+
+      {:error, %Req.TransportError{reason: reason}} when reason in @unreached ->
+        {:error, :unavailable}
+
+      response ->
+        response |> answer(200) |> written()
+    end
   end
+
+  defp written({:ok, item}), do: {:ok, entry(item)}
+  # Asked, with no answer read: the file may be written.
+  defp written({:error, :unavailable}), do: {:error, :unknown}
+  defp written(refused), do: refused
 
   defp entry(item) do
     %{
@@ -195,7 +277,6 @@ defmodule Keyfleet.Notebooks.Files do
     do: {:ok, data}
 
   defp answer({:ok, %Req.Response{status: 404}}, _status), do: {:error, :file_not_found}
-  defp answer({:ok, %Req.Response{status: 409}}, _status), do: {:error, :conflict}
 
   defp answer({:ok, %Req.Response{status: status}}, _status) when status in [400, 403, 422],
     do: {:error, :refused}

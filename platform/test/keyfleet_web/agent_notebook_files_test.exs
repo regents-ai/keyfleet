@@ -1,8 +1,12 @@
 defmodule KeyfleetWeb.AgentNotebookFilesTest do
   # Agents make a fleet's notebooks and write their files through their own
   # signed requests here. The hub is a local server that keeps files as the
-  # real one does: adding a file at a path already taken is refused. Like
-  # Fly's private addresses, it answers only on IPv6, by name.
+  # real one does: adding a file at a path already taken, or writing one where
+  # a folder is or under a file, is refused with the one conflict the real hub
+  # answers for every reason, and each path it answers starts with `/`. A test
+  # can set how it answers the next request to a path by a method, once
+  # (`answer_next/4`). Like Fly's private addresses, it answers only on IPv6,
+  # by name.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
@@ -10,6 +14,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, Notebooks, PairingHelpers, Projects}
+  alias Keyfleet.Notebooks.Files
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -18,6 +23,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   @api "/api/v1/agent/fleets/#{@fleet}/projects/general/notebooks"
   @workspace "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/workspace/"
   @jobs "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/jobs"
+  @add "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/add"
 
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -37,7 +43,11 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         [pass] = get_req_header(conn, "x-keyfleet-assertion")
         subject = JOSE.JWT.peek_payload(pass).fields["sub"]
         send(test, {:hub, conn.method, conn.request_path, subject, conn.query_params, body})
-        hub_answer(conn, files, body)
+
+        case Agent.get_and_update(files, &Map.pop(&1, {:next, conn.method, conn.request_path})) do
+          nil -> hub_answer(conn, files, body)
+          next -> hub_next(next, conn, files, body)
+        end
       end)
 
     notebooks = Application.fetch_env!(:keyfleet, :notebooks)
@@ -87,20 +97,20 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     files = "#{@api}/#{@notebook}/files/"
     entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
-    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "log/a.md"
+    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "/log/a.md"
     assert_receive {:hub, "PUT", @workspace <> "files", ^first, %{"create" => "true"}, _body}
 
     taken = post!(c, c.second, files <> "add", %{entry | "content" => "Second, over the first."})
-    assert json_response(taken, 409)["error"]["code"] == "notebook_file_conflict"
+    assert json_response(taken, 409)["error"]["code"] == "notebook_file_exists"
 
     assert last_did(c.second) == nil
 
     own = %{"path" => "log/b.md", "content" => "Second, from the second agent."}
-    assert json_response(post!(c, c.second, files <> "add", own), 200)["path"] == "log/b.md"
+    assert json_response(post!(c, c.second, files <> "add", own), 200)["path"] == "/log/b.md"
     assert last_did(c.second) == :notebook
 
     listed = json_response(post!(c, c.first, files <> "list", %{"path" => "log"}), 200)
-    assert Enum.map(listed["entries"], & &1["path"]) == ["log/a.md", "log/b.md"]
+    assert Enum.map(listed["entries"], & &1["path"]) == ["/log/a.md", "/log/b.md"]
     assert listed["cursor"] == nil
 
     read = &json_response(post!(c, c.second, files <> "read", %{"path" => &1}), &2)
@@ -141,6 +151,171 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     entries = @workspace <> "entries"
     assert_receive {:hub, "DELETE", ^entries, ^first, %{"path" => "log/a.md"}, _body}
     assert Agent.get(c.files, & &1) == %{}
+  end
+
+  # Costly failure: an agent whose add the notebook kept but never answered
+  # can't tell whether it landed, so it either loses its entry or adds it twice.
+  test "an add the notebook kept without answering is unknown, with a receipt its read settles",
+       c do
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :hub_timeout_ms, 200)
+    )
+
+    answer_next(c, "PUT", "files", :keeps_then_hangs)
+    files = "#{@api}/#{@notebook}/files/"
+    entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
+    added = post!(c, c.first, files <> "add", entry)
+
+    body = json_response(added, 503)
+    assert ContractSchema.response_errors(body, "POST", @add, 503) == []
+    [request_id] = get_resp_header(added, "x-request-id")
+    sha256 = Files.sha256(entry["content"])
+
+    assert body["error"]["code"] == "notebook_outcome_unknown"
+
+    assert body["error"]["details"] == %{
+             "receipt" => %{
+               "request_id" => request_id,
+               "notebook_id" => @notebook,
+               "path" => "log/a.md",
+               "sha256" => sha256,
+               "bytes" => byte_size(entry["content"])
+             },
+             "settle" => "notebooks_read_file"
+           }
+
+    assert last_did(c.first) == nil
+
+    read = json_response(post!(c, c.first, files <> "read", %{"path" => "log/a.md"}), 200)
+    assert read["sha256"] == sha256
+
+    # Sent again, it answers the file it saved, and saves it once.
+    first = c.first.subject
+    assert_receive {:hub, "PUT", @workspace <> "files", ^first, %{"create" => "true"}, _body}
+    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "/log/a.md"
+    assert_receive {:hub, "PUT", @workspace <> "files", ^first, %{"create" => "true"}, _body}
+    refute_received {:hub, "PUT", _path, _subject, _query, _body}
+    assert Agent.get(c.files, & &1) == %{"log/a.md" => entry["content"]}
+    assert last_did(c.first) == :notebook
+
+    # Kept as the first agent's own: it writes over it, and no one else does.
+    over = post!(c, c.second, files <> "write", %{entry | "content" => "Second, over the first."})
+    assert json_response(over, 403)["error"]["code"] == "notebooks_maker_only"
+    own = post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    assert json_response(own, 200)["path"] == "/log/a.md"
+  end
+
+  test "an add the notebook failed without keeping is unknown, and lands when sent again", c do
+    answer_next(c, "PUT", "files", :fails)
+    files = "#{@api}/#{@notebook}/files/"
+    entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
+
+    failed = post!(c, c.first, files <> "add", entry)
+    assert json_response(failed, 503)["error"]["code"] == "notebook_outcome_unknown"
+
+    unread = post!(c, c.first, files <> "read", %{"path" => "log/a.md"})
+    assert json_response(unread, 404)["error"]["code"] == "notebook_file_not_found"
+
+    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "/log/a.md"
+    assert Agent.get(c.files, & &1) == %{"log/a.md" => entry["content"]}
+  end
+
+  test "a file whose maker can't be kept and whose removal goes unconfirmed is unknown", c do
+    prefix = Keyfleet.Repo.default_prefix()
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.notebook_file_makers RENAME TO makers_away")
+    answer_next(c, "DELETE", "entries", :fails)
+
+    entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
+    added = post!(c, c.first, "#{@api}/#{@notebook}/files/add", entry)
+
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.makers_away RENAME TO notebook_file_makers")
+
+    body = json_response(added, 503)
+    assert body["error"]["code"] == "notebook_outcome_unknown"
+    assert body["error"]["details"]["receipt"]["sha256"] == Files.sha256(entry["content"])
+    first = c.first.subject
+    entries = @workspace <> "entries"
+    assert_receive {:hub, "DELETE", ^entries, ^first, %{"path" => "log/a.md"}, _body}
+    assert Agent.get(c.files, & &1) == %{"log/a.md" => entry["content"]}
+  end
+
+  # Costly failure: an agent told to wait for a path that a folder or a file
+  # holds waits for ever.
+  test "adding a file where a folder is, or under a file, answers that the path is taken", c do
+    Agent.update(c.files, &Map.put(&1, "log/a.md", "First."))
+
+    for path <- ["log", "log/a.md/b.md"] do
+      taken =
+        post!(c, c.first, "#{@api}/#{@notebook}/files/add", %{"path" => path, "content" => "x"})
+
+      assert json_response(taken, 409)["error"]["code"] == "notebook_file_exists"
+    end
+
+    assert Agent.get(c.files, & &1) == %{"log/a.md" => "First."}
+  end
+
+  # Costly failure: an agent told a paused path is taken adds its entry
+  # somewhere else, and the log loses its order.
+  test "an add or write while the notebook can't change files is refused, and nothing is written",
+       c do
+    files = "#{@api}/#{@notebook}/files/"
+    entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
+
+    answer_next(c, "PUT", "files", :paused)
+    paused = post!(c, c.first, files <> "add", entry)
+    assert json_response(paused, 409)["error"]["code"] == "notebook_writes_paused"
+    assert Agent.get(c.files, & &1) == %{}
+    assert last_did(c.first) == nil
+
+    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "/log/a.md"
+
+    answer_next(c, "PUT", "files", :paused)
+    paused = post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    assert json_response(paused, 409)["error"]["code"] == "notebook_writes_paused"
+    assert Agent.get(c.files, & &1) == %{"log/a.md" => entry["content"]}
+  end
+
+  test "an add the notebook never heard is unavailable, as nothing was written", c do
+    {:ok, socket} = :gen_tcp.listen(0, [:inet6, ip: {0, 0, 0, 0, 0, 0, 0, 1}])
+    {:ok, port} = :inet.port(socket)
+    :ok = :gen_tcp.close(socket)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => "http://localhost:#{port}"})
+    )
+
+    added =
+      Files.write(@fleet, nil, c.first.subject, "proj-fleet", @notebook, "log/a.md", "x", :add)
+
+    assert added == {:error, :unavailable}
+  end
+
+  test "an unknown add answers through /mcp exactly as its signed request does", c do
+    oauth = Application.fetch_env!(:keyfleet, Keyfleet.OAuth)
+    on_exit(fn -> Application.put_env(:keyfleet, Keyfleet.OAuth, oauth) end)
+    Application.put_env(:keyfleet, Keyfleet.OAuth, Keyword.put(oauth, :enabled?, true))
+
+    entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
+    answer_next(c, "PUT", "files", :fails)
+    http = json_response(post!(c, c.first, "#{@api}/#{@notebook}/files/add", entry), 503)
+
+    answer_next(c, "PUT", "files", :fails)
+    where = %{"fleet_id" => @fleet, "project" => "general", "notebook_id" => @notebook}
+    called = mcp!(c, c.first, "notebooks_add_file", Map.merge(entry, where))
+
+    assert called.status == 200
+    result = Jason.decode!(called.resp_body)["result"]
+    assert %{"isError" => true, "content" => [%{"text" => text}]} = result
+    over_mcp = Jason.decode!(text)
+
+    assert [over_mcp["error"]["details"]["receipt"]["request_id"]] ==
+             get_resp_header(called, "x-request-id")
+
+    assert without_request_id(over_mcp["error"]) == without_request_id(http["error"])
   end
 
   test "a notebook made for a goal carries the goal's tag, which lists it on the goal's page",
@@ -233,6 +408,33 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     end)
     |> dispatch(@endpoint, :post, path, raw)
   end
+
+  # The same request as a tool call to /mcp, signed by the agent's own key,
+  # with no token.
+  defp mcp!(c, agent, name, input) do
+    raw =
+      Jason.encode!(%{
+        "jsonrpc" => "2.0",
+        "id" => 1,
+        "method" => "tools/call",
+        "params" => %{"name" => name, "arguments" => %{"input" => input}}
+      })
+
+    request =
+      SignedAgentHelpers.sign(agent.signer, c.secret, "www.example.com", "POST", "/mcp", raw)
+
+    request.headers
+    |> Map.drop(["cookie", "authorization"])
+    |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 150}}, fn {name, value}, conn ->
+      put_req_header(conn, name, value)
+    end)
+    |> put_req_header("accept", "application/json, text/event-stream")
+    |> dispatch(@endpoint, :post, "/mcp", raw)
+  end
+
+  # Each request has its own id, so two refusals are compared without it.
+  defp without_request_id(error),
+    do: update_in(error, ["details", "receipt"], &Map.delete(&1, "request_id"))
 
   # An agent with a profile, paired with the person who owns Key `token_id`.
   # What the agent did last in the fleet, as its check-in records it.
@@ -396,7 +598,15 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     added =
       Agent.get_and_update(files, fn kept ->
-        if create == "true" and Map.has_key?(kept, path),
+        # A folder at the path, or a file where one of its folders would be.
+        in_the_way? =
+          Enum.any?(kept, fn {kept_path, content} ->
+            is_binary(content) and
+              (String.starts_with?(kept_path, path <> "/") or
+                 String.starts_with?(path, kept_path <> "/"))
+          end)
+
+        if in_the_way? or (create == "true" and Map.has_key?(kept, path)),
           do: {false, kept},
           else: {true, Map.put(kept, path, body)}
       end)
@@ -427,12 +637,41 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
   defp hub_answer(conn, _files, _body), do: json(conn, 200, %{success: true, data: %{}})
 
+  # The hub keeps the file, then answers after Keyfleet has stopped waiting.
+  defp hub_next(:keeps_then_hangs, conn, files, body) do
+    path = conn.query_params["path"]
+    Agent.update(files, &Map.put(&1, path, body))
+    Process.sleep(600)
+    json(conn, 200, %{success: true, data: item(path, body)})
+  end
+
+  # The hub fails before changing anything.
+  defp hub_next(:fails, conn, _files, _body),
+    do: json(conn, 502, %{success: false, error: %{code: "BAD_GATEWAY", message: "Upstream"}})
+
+  # A member's live session can still save, so the hub changes no file.
+  defp hub_next(:paused, conn, _files, _body),
+    do:
+      json(conn, 409, %{
+        success: false,
+        error: %{
+          code: "CONFLICT",
+          message:
+            "Workspace files cannot be changed while a persistent edit session can still save"
+        }
+      })
+
+  # How the hub answers the next request by `method` to `path` in the
+  # notebook's workspace, once.
+  defp answer_next(c, method, path, answer),
+    do: Agent.update(c.files, &Map.put(&1, {:next, method, @workspace <> path}, answer))
+
   defp with_run(%{"id" => job_id} = job, job_id, run), do: %{job | "runs" => [run | job["runs"]]}
   defp with_run(job, _job_id, _run), do: job
 
   defp item(path, content),
     do: %{
-      path: path,
+      path: "/" <> path,
       name: Path.basename(path),
       kind: "file",
       size: byte_size(content),

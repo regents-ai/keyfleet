@@ -211,22 +211,28 @@ defmodule Keyfleet.Notebooks.Makers do
   @doc """
   Keeps `subject` as the maker of the file they just added new at `key`;
   when that can't be kept, removes it from the hub again, so it never stays
-  as the notebook maker's. A folder is never removed this way: the hub may
-  answer for one that was there already, with other members' files in it.
+  as the notebook maker's, answering `{:error, :unavailable}` once it is gone,
+  or `{:error, :unknown}` when the hub doesn't say so and it may still be
+  there. A folder is never removed this way: the hub may answer for one that
+  was there already, with other members' files in it.
   """
   def record_added(fleet_id, subject, project_id, notebook_id, key) do
-    with {:error, reason} <- record(fleet_id, notebook_id, key, subject) do
-      request(
-        fleet_id,
+    with {:error, :unavailable} <- record(fleet_id, notebook_id, key, subject) do
+      fleet_id
+      |> request(
         subject,
         :delete,
         notebook_path(project_id, notebook_id) <> "/workspace/entries",
         params: [path: key]
       )
-
-      {:error, reason}
+      |> removed()
     end
   end
+
+  defp removed({:ok, %Req.Response{status: status}}) when status in 200..299 or status == 404,
+    do: {:error, :unavailable}
+
+  defp removed(_answer), do: {:error, :unknown}
 
   @doc "Forgets the makers of `key` and everything under it, once they are removed."
   def forget(fleet_id, notebook_id, key) do

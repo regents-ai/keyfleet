@@ -937,6 +937,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp maker_refusal(conn, :not_maker), do: Refusal.json(conn, 403, "notebooks_maker_only")
   defp maker_refusal(conn, :invalid), do: Refusal.json(conn, 400, "invalid_request")
   defp maker_refusal(conn, :unavailable), do: refuse(conn, :unavailable)
+  # The hub didn't confirm removing a file whose maker couldn't be kept: the
+  # page is told the notebooks didn't answer, as when the hub doesn't.
+  defp maker_refusal(conn, :unknown), do: refuse(conn, :unavailable)
 
   # An agent's body was read to check its signature.
   defp request_body(%Plug.Conn{assigns: %{raw_body: raw}} = conn), do: {raw, conn}

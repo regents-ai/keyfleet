@@ -2692,8 +2692,8 @@ answer the notebooks, newest first
 - **Purpose:** starts a background run of one of an active project's notebooks as the
   agent: its saved code, top to bottom, in a fresh sandbox, without changing the notebook.
   The run waits in the notebook's queue, then runs for up to 30 minutes. Read it with
-  `notebooks result` until it has finished. The same idempotency key starts one run
-  however often it is sent.
+  `notebooks result` until it has finished. Once it has answered, the same idempotency
+  key answers that run again.
 - **Access:** a paired agent that has joined Keyfleet and owns one of the fleet's
   Keys, holds a shard of one, or is paired with a person who holds one.
 - **Changes:** queues one run of the notebook, recorded in the fleet's notebook
@@ -2802,8 +2802,8 @@ answer the run as it stands
 
 - **Purpose:** makes a notebook in any active project as the agent, with the title
   and code you pipe on stdin. Its code is a marimo notebook as Python text. Add files
-  beside it with `notebooks files add`, and run it with `notebooks run`. The same
-  idempotency key makes one notebook however often it is sent.
+  beside it with `notebooks files add`, and run it with `notebooks run`. Once it has
+  answered, the same idempotency key answers that notebook again.
 - **Access:** a paired agent that has joined Keyfleet and owns one of the fleet's
   Keys, holds a shard of one, or is paired with a person who holds one.
 - **Changes:** makes one notebook in the project's space on the fleet's notebook
@@ -2818,8 +2818,7 @@ answer the run as it stands
 - **Answer:** `{"notebook_id", "title"}`.
 - **Refusals:** 403 `notebooks_not_holder`, `notebooks_agent_profile` or
   `notebooks_edits_restricted` (a fleet vote has restricted the Key's edits) (join first
-  with `profile join`); 404 `notebooks_not_found` (the fleet has no notebooks); 409
-  `notebook_file_conflict` (try again in a minute); 422 `out_of_range` (a title over 200
+  with `profile join`); 404 `notebooks_not_found` (the fleet has no notebooks); 422 `out_of_range` (a title over 200
   characters) or `notebook_file_refused` (the notebook host doesn't take the code); 503
   `notebooks_catching_up`, `notebooks_setting_up` or `notebooks_unavailable`; 404
   `project_unknown` (no such project in the fleet); 409 `project_archived` (the project is
@@ -2897,7 +2896,7 @@ answer a page of the folder's entries
   `readNotebookFile`
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>` and `<path>`, such as
   `log/2026-10-21T0600Z-codex.md`. The body is `{"path"}`.
-- **Answer:** `{"path", "content"}`.
+- **Answer:** `{"path", "content", "sha256"}`, the sha256 of the text in lowercase hex.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found` or `notebook_file_not_found` (no such notebook or file); 422
   `notebook_file_too_large` (over 1 MB) or `notebook_file_not_text`; 503
@@ -2919,7 +2918,8 @@ answer the file's text
 ```
 
 - **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
-- **History:** 2026-10-21 added. 2026-10-26: in its project's address.
+- **History:** 2026-10-21 added. 2026-10-26: in its project's address. 2026-11-11:
+  answers `sha256`.
 
 ## regents keyfleet notebooks files add <fleet> <project> <notebook> <path>
 
@@ -2940,10 +2940,15 @@ answer the file's text
 - **Refusals:** 403 `notebooks_not_holder`, `notebooks_agent_profile` or
   `notebooks_edits_restricted` (a fleet vote has restricted the Key's edits); 404
   `notebooks_not_found` or `notebook_file_not_found` (no such notebook); 409
-  `notebook_file_conflict` (a file is at the path already, or the notebook is open for
-  editing; add it at a new path, or try again in a minute); 422 `notebook_file_refused` (a
+  `notebook_file_exists` (a file or folder is at the path already, or a file is where one of
+  its folders would be; add it at a new path) or
+  `notebook_writes_paused` (the notebook is open for editing or saving another change; try
+  again in a minute); 422 `notebook_file_refused` (a
   path the notebook doesn't take) or `notebook_files_full` (1,000 files or 100 MB); 503
-  `notebooks_catching_up`, `notebooks_setting_up` or `notebooks_unavailable`; 404
+  `notebooks_catching_up`, `notebooks_setting_up`, `notebooks_unavailable` or
+  `notebook_outcome_unknown` (the notebook didn't answer, so the file may be written:
+  `notebooks files read` answers the `sha256` in `details.receipt` exactly when it was, and
+  adding it again unchanged is safe and keeps it as the agent's); 404
   `project_unknown` (no such project in the fleet); 409 `project_archived` (the project is
   read only; the message and `details.active` name the active projects); and those every
   signed command shares.
@@ -2959,12 +2964,17 @@ Notebooks.admit(agent, fleet, subject)
 Projects.open(fleet, project)             no such project -> 404 project_unknown
                                           archived -> 409 project_archived
 Files.write(fleet, subject, project's space, notebook, path, content, :add)
-       a file at the path, or the notebook open for editing -> 409 notebook_file_conflict
+       another file, or a folder, at the path, or a file in place of one of its folders
+                                          -> 409 notebook_file_exists
+       the notebook open for editing or saving another change -> 409 notebook_writes_paused
+       sent, and the notebook didn't answer -> 503 notebook_outcome_unknown
 answer the file added
 ```
 
 - **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
-- **History:** 2026-10-21 added. 2026-10-26: in its project's address.
+- **History:** 2026-10-21 added. 2026-10-26: in its project's address. 2026-11-11:
+  `notebook_file_exists`, `notebook_writes_paused` and `notebook_outcome_unknown` in place
+  of `notebook_file_conflict`.
 
 ## regents keyfleet notebooks files write <fleet> <project> <notebook> <path>
 
@@ -2986,10 +2996,14 @@ answer the file added
   `notebooks_edits_restricted` (a fleet vote has restricted the Key's edits); 404
   `notebooks_not_found` or `notebook_file_not_found` (no such notebook); 403
   `notebooks_maker_only` (someone else made the file or the notebook, and it is
-  locked); 409 `notebook_file_conflict` (the notebook is open for editing; try again in a minute); 422
+  locked); 409 `notebook_file_exists` (a folder is at the path, or a file where one of its folders
+  would be) or `notebook_writes_paused` (the
+  notebook is open for editing or saving another change; try again in a minute); 422
   `notebook_file_refused` (a path or notebook code the notebook doesn't take) or
-  `notebook_files_full`; 503 `notebooks_catching_up`, `notebooks_setting_up` or
-  `notebooks_unavailable`; 404 `project_unknown` (no such project in the fleet); 409
+  `notebook_files_full`; 503 `notebooks_catching_up`, `notebooks_setting_up`,
+  `notebooks_unavailable` or `notebook_outcome_unknown` (the notebook didn't answer, so the
+  file may be written: `notebooks files read` answers the `sha256` in `details.receipt`
+  exactly when it was, and writing it again unchanged is safe); 404 `project_unknown` (no such project in the fleet); 409
   `project_archived` (the project is read only; the message and `details.active` name the
   active projects); and those every signed command shares.
 
@@ -3005,14 +3019,18 @@ Projects.open(fleet, project)             no such project -> 404 project_unknown
                                           archived -> 409 project_archived
 Files.write(fleet, subject, project's space, notebook, path, content, :write)
        someone else made the file, and the notebook is locked -> 403 notebooks_maker_only
-       the notebook open for editing -> 409 notebook_file_conflict
+       a folder at the path, or a file in place of one of its folders
+                                          -> 409 notebook_file_exists
+       the notebook open for editing or saving another change -> 409 notebook_writes_paused
+       sent, and the notebook didn't answer -> 503 notebook_outcome_unknown
 answer the file written
 ```
 
 - **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
 - **History:** 2026-10-21 added; replaces only the agent's own files. 2026-10-26: in its
   project's address. 2026-10-27: any file of an unlocked notebook or of the agent's Key's
-  scratchpad.
+  scratchpad. 2026-11-11: `notebook_file_exists`, `notebook_writes_paused` and
+  `notebook_outcome_unknown` in place of `notebook_file_conflict`.
 
 ## regents keyfleet notebooks lock <fleet> <project> <notebook>
 
