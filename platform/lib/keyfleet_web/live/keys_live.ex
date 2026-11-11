@@ -21,8 +21,8 @@ defmodule KeyfleetWeb.KeysLive do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.Human
-  alias Keyfleet.Agents
   alias Keyfleet.Actors.System
+  alias Keyfleet.Agents
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules

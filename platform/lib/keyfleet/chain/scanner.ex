@@ -345,42 +345,38 @@ defmodule Keyfleet.Chain.Scanner do
     now = Chain.get_cursor!(fleet_id)
 
     present =
-      if now.next_block > before.next_block,
-        do:
-          for(
-            %{kind: :present, token_id: token_id} <-
-              Keys.presences_in_blocks!(fleet_id, before.next_block, now.next_block - 1,
-                actor: @system
-              ),
-            uniq: true,
-            do: token_id
-          ),
-        else: []
+      since(now.next_block, before.next_block, fn ->
+        for(
+          %{kind: :present, token_id: token_id} <-
+            Keys.presences_in_blocks!(fleet_id, before.next_block, now.next_block - 1,
+              actor: @system
+            ),
+          uniq: true,
+          do: token_id
+        )
+      end)
 
     revealed =
-      if now.reveal_seq > before.reveal_seq,
-        do:
-          Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system) ++
-            Keys.reveal_expiries_recorded_since!(fleet_id, before.reveal_seq, actor: @system),
-        else: []
+      since(now.reveal_seq, before.reveal_seq, fn ->
+        Keys.reveals_recorded_since!(fleet_id, before.reveal_seq, actor: @system) ++
+          Keys.reveal_expiries_recorded_since!(fleet_id, before.reveal_seq, actor: @system)
+      end)
 
     owned =
-      if now.ownership_seq > before.ownership_seq,
-        do: Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system),
-        else: []
+      since(now.ownership_seq, before.ownership_seq, fn ->
+        Keys.epochs_recorded_since!(fleet_id, before.ownership_seq, actor: @system)
+      end)
 
     sharded =
-      if now.shard_seq > before.shard_seq,
-        do:
-          Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system) ++
-            Keys.agent_voting_recorded_since!(fleet_id, before.shard_seq, actor: @system),
-        else: []
+      since(now.shard_seq, before.shard_seq, fn ->
+        Keys.shard_events_recorded_since!(fleet_id, before.shard_seq, actor: @system) ++
+          Keys.agent_voting_recorded_since!(fleet_id, before.shard_seq, actor: @system)
+      end)
 
     restricted =
-      if now.proposal_seq > before.proposal_seq,
-        do:
-          Keys.edits_restrictions_recorded_since!(fleet_id, before.proposal_seq, actor: @system),
-        else: []
+      since(now.proposal_seq, before.proposal_seq, fn ->
+        Keys.edits_restrictions_recorded_since!(fleet_id, before.proposal_seq, actor: @system)
+      end)
 
     if now.proposal_seq > before.proposal_seq do
       Phoenix.PubSub.broadcast(
@@ -414,6 +410,11 @@ defmodule Keyfleet.Chain.Scanner do
       )
     end
   end
+
+  # The rows a pass recorded under one of the cursor's numbers, read only when
+  # the pass moved that number on.
+  defp since(now, before, read) when now > before, do: read.()
+  defp since(_now, _before, _read), do: []
 
   # Someone else moved the cursor or stopped the fleet during the pass: an
   # operator's correction, or another pass. The pass leaves the cursor as it
