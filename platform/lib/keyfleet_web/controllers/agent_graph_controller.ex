@@ -73,9 +73,9 @@ defmodule KeyfleetWeb.AgentGraphController do
   def archive(conn, params),
     do: write(conn, &Graph.archive_object/3, params, ~w(id expected_version reason))
 
-  def join(conn, params), do: write(conn, &Graph.join_goal/3, params, ~w(id))
+  def join(conn, params), do: write(conn, &Graph.join/3, params, ~w(id))
 
-  def leave(conn, params), do: write(conn, &Graph.leave_goal/3, params, ~w(id))
+  def leave(conn, params), do: write(conn, &Graph.leave/3, params, ~w(id))
 
   def fork(conn, params), do: write(conn, &Graph.fork_task/3, params, ~w(id))
 

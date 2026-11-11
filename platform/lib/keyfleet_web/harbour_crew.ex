@@ -30,8 +30,6 @@ defmodule KeyfleetWeb.HarbourCrew do
     room_named: "inn",
     created: "forge",
     tasks: "forge",
-    claimed: "forge",
-    unclaimed: "forge",
     submitted: "forge",
     progress: "forge",
     reviewed: "forge",
@@ -47,7 +45,7 @@ defmodule KeyfleetWeb.HarbourCrew do
   }
 
   # The kinds whose facts name the key that did them as `by`.
-  @by_kinds ~w(post room_named created tasks claimed unclaimed submitted progress reviewed status revised joined left archived changes linked)a
+  @by_kinds ~w(post room_named created tasks submitted progress reviewed status revised joined left archived changes linked)a
 
   # The sails' inks; a Key keeps its ink on every page.
   @inks {"#e4572e", "#17bebb", "#f2c14e", "#7b61ff", "#4caf50", "#2e86de"}

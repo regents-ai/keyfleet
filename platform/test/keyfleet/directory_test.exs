@@ -34,7 +34,7 @@ defmodule Keyfleet.DirectoryTest do
     Workspace.create(@fleet, "goal", %{"title" => "Map the first paid service"})
     Workspace.create(@fleet, "goal", %{"title" => "Done", "status" => "achieved"})
     Workspace.create(@fleet, "goal", %{"title" => "Try the new model"}, project: "lab")
-    Workspace.create(@fleet, "task", %{"title" => "Draft the price", "assignee_key" => 12})
+    Workspace.create(@fleet, "task", %{"title" => "Draft the price"})
 
     {:ok, fleet} = Directory.fleet(@fleet)
 

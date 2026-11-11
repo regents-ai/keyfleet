@@ -28,7 +28,7 @@ defmodule Keyfleet.Projects.Project do
 
   The Key holding a project chooses whether its page shows anyone its work
   (`show`, `shown_to_everyone`): its goals, its latest work, what it produced
-  and the tasks open to take or blocked, each by title. It starts shown to
+  and the tasks nobody has joined yet or blocked, each by title. It starts shown to
   members only. The Key also gives it a one-line `description` (`describe`),
   which its page shows under the title and shares as its description.
 

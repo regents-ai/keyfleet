@@ -58,9 +58,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         create(@fleet, "task", %{
           "title" => "Draft the brief",
           "progress" => "doing",
-          "assignee_key" => 42,
           "next_step" => "Write the summary."
         })
+
+      join(@fleet, task, by: 42)
 
       finding =
         create(@fleet, "finding", %{
@@ -112,13 +113,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert {"Status", "Open"} in facts(view, goal)
       assert card_text(view, goal) =~ "One paying customer."
       assert {"Progress", "In progress"} in facts(view, task)
-      assert {"Taken by", "Key 42"} in facts(view, task)
-
-      assert has_element?(
-               view,
-               ~s(#{card(task)} a[href="#{Keyfleet.Fleets.path(@fleet)}?key=42"]),
-               "Key 42"
-             )
+      assert {"Joined", "1"} in facts(view, task)
 
       assert card_text(view, task) =~ "Write the summary."
       assert facts(view, finding) == [{"Confidence", "High"}]
@@ -142,7 +137,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert card_text(view, note) =~ "Added by Key 17"
-      assert card_text(view, note) =~ "Last changed 22 September 2026 at 12:11 UTC"
+      assert card_text(view, note) =~ "Last changed 22 September 2026 at 12:13 UTC"
 
       assert has_element?(
                view,
@@ -167,8 +162,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert facts(view, first) == [
                {"Progress", "Submitted"},
-               {"Review", "Awaiting review"},
-               {"Taken by", "Key 9"}
+               {"Review", "Awaiting review"}
              ]
 
       assert card_text(view, first) =~ "Last changed 22 September 2026 at 12:05 UTC"
@@ -426,7 +420,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       delivers = link(@fleet, task, goal, "implements")
       supports = link(@fleet, finding, task, "supports")
-      edit(@fleet, task, %{"progress" => "doing", "assignee_key" => 42}, by: 9)
+      edit(@fleet, task, %{"progress" => "doing"}, by: 9)
+      join(@fleet, task, by: 42)
 
       {:ok, view, html} = live(conn, item_path(task))
 
@@ -445,7 +440,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         |> LazyHTML.query("#workspace-fields dt")
         |> Enum.map(&LazyHTML.text/1)
 
-      assert fields == ["Progress", "Taken by", "Deliverable", "Result", "Extra notes"]
+      assert fields == ["Progress", "Deliverable", "Result", "Extra notes", "Joined"]
       assert has_element?(view, "#workspace-fields", "In progress")
 
       assert has_element?(
@@ -486,7 +481,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert history(view) == [
-               "Key 9 updated “Draft the brief”: progress is now in progress, now taken by Key 42.",
+               "Key 42 joined “Draft the brief”.",
+               "Key 9 updated “Draft the brief”: progress is now in progress.",
                "Key 17 linked “Funds read briefs” to “Draft the brief”, which it supports.",
                "Key 17 linked “Draft the brief” to “Revenue”, which it delivers on.",
                "Key 17 added the task “Draft the brief”."
@@ -1542,7 +1538,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
       relation = link(@fleet, task, goal, "implements", by: 3)
       submit(@fleet, task, "https://example.com/draft", by: 4)
-      edit(@fleet, task, %{"assignee_key" => nil})
+      join(@fleet, task, by: 6)
       edit(@fleet, goal, %{"title" => "More revenue"})
       unlink(@fleet, relation)
       archive(@fleet, goal, by: 5)
@@ -1565,7 +1561,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Key 5 archived “More revenue”.",
                "Key 17 unlinked “Draft” from “More revenue”, which it no longer delivers on.",
                "Key 17 updated “More revenue”: title.",
-               "Key 17 updated “Draft”: now taken by no one.",
+               "Key 6 joined “Draft”.",
                "Key 4 submitted “Draft” for review.",
                "Key 3 linked “Draft” to “More revenue”, which it delivers on.",
                "Key 17 added the goal “More revenue”.",
@@ -1607,6 +1603,51 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert has_element?(view, "#workspace-activity .workspace-detail time", "22 Sep")
+    end
+
+    # Costly failure: the workspace rewriting who joined an archived task, or a
+    # Key's new owner taking the place of its old owner's join, would read as
+    # an archive nobody made or as an edit nobody made.
+    test "an archive is told once, and a Key's new owner joining is told as joining",
+         %{conn: conn} do
+      archived = create(@fleet, "task", %{"title" => "Old"})
+      archive(@fleet, archived)
+      [%{sys: sys}] = Graph.read_objects!(@fleet, [archived], actor: %Actors.System{})
+
+      event(
+        @fleet,
+        "patch.applied",
+        %{
+          "target" => archived,
+          "diff" => %{"sys" => %{"old" => sys, "new" => Map.put(sys, "joined", [])}}
+        },
+        "keyfleet:joins"
+      )
+
+      sold = create(@fleet, "task", %{"title" => "Sold"})
+      join(@fleet, sold, by: 18)
+
+      [%{sys: %{"joined" => [before]} = sys}] =
+        Graph.read_objects!(@fleet, [sold], actor: %Actors.System{})
+
+      now = Map.put(before, "ownership_epoch", 4)
+
+      event(
+        @fleet,
+        "patch.applied",
+        %{
+          "target" => sold,
+          "diff" => %{"sys" => %{"old" => sys, "new" => Map.put(sys, "joined", [now])}}
+        },
+        "member:8453:#{before["key"]["contract"]}:18@4/agent:#{before["wallet"]}"
+      )
+
+      {:ok, view, _html} = live(conn, @board)
+      lines = activity(view)
+
+      assert Enum.take(lines, 2) == ["Key 18 joined “Sold”.", "Key 18 joined “Sold”."]
+      assert Enum.count(lines, &(&1 == "Key 17 archived “Old”.")) == 1
+      refute Enum.any?(lines, &String.starts_with?(&1, "Keyfleet archived"))
     end
 
     test "a change made by Keyfleet itself names no key", %{conn: conn} do
@@ -1890,10 +1931,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       starting_goal(@fleet, 1, %{"title" => "Nobody joined"})
       join(@fleet, starting_goal(@fleet, 2, %{"title" => "Someone joined"}))
 
-      create(@fleet, "task", %{"title" => "Untaken"})
-      create(@fleet, "task", %{"title" => "Taken", "assignee_key" => 4})
-      create(@fleet, "task", %{"title" => "Doing", "progress" => "doing", "assignee_key" => 4})
-      create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked", "assignee_key" => 5})
+      create(@fleet, "task", %{"title" => "Nobody joined"})
+      join(@fleet, create(@fleet, "task", %{"title" => "Joined"}), by: 4)
+      join(@fleet, create(@fleet, "task", %{"title" => "Doing", "progress" => "doing"}), by: 4)
+      join(@fleet, create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked"}), by: 5)
       submit(@fleet, create(@fleet, "task", %{"title" => "Waiting"}), "https://example.com/r1")
 
       accepted = create(@fleet, "task", %{"title" => "Accepted"})
@@ -2042,7 +2083,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "stands on the goal's page as cards, each under the item it hangs from",
          %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue"})
-      task = create(@fleet, "task", %{"title" => "Draft the brief", "assignee_key" => 4})
+      task = create(@fleet, "task", %{"title" => "Draft the brief"})
       link(@fleet, task, goal, "implements")
       finding = create(@fleet, "finding", %{"title" => "Funds read briefs", "statement" => "S"})
       link(@fleet, task, finding, "produces")
@@ -2080,7 +2121,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, ~s([data-item="#{finding}"][data-via="produces"]))
 
       card = ~s([data-item="#{task}"] > .workspace-map-card)
-      assert has_element?(view, card, "Key 4")
+      assert has_element?(view, card, "Key 17")
       assert has_element?(view, card <> " .workspace-map-standing", "To do")
       assert has_element?(view, ~s([data-item="#{fork}"] > .workspace-map-card), "Key 7")
     end
@@ -2123,10 +2164,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "has small panels under the stage: workstream, Active Keys, Docs and Code",
          %{conn: conn} do
-      doing =
-        create(@fleet, "task", %{"title" => "Draft", "progress" => "doing", "assignee_key" => 4})
-
-      waiting = create(@fleet, "task", %{"title" => "Price", "assignee_key" => 4})
+      doing = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"})
+      join(@fleet, doing, by: 4)
+      waiting = create(@fleet, "task", %{"title" => "Price"})
+      join(@fleet, waiting, by: 4)
       submit(@fleet, waiting, "https://example.com/price", by: 4)
       create(@fleet, "task", %{"title" => "Nobody's yet"})
       assert doing

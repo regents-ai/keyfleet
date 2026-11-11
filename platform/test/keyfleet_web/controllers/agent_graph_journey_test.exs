@@ -368,7 +368,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         data: %{title: "Draft"}
       })
 
-    assert graph(c, ann, "join", %{as_key: 1, command_id: "j-3", id: task["id"]}).status == 422
+    joined_task = graph(c, ann, "join", %{as_key: 1, command_id: "j-3", id: task["id"]})
+    assert joined_task.body["result"] == %{"id" => task["id"], "version" => 2}
+    assert [%{"id" => task_id}] = sync(c, ann)["yours"]["tasks"]
+    assert task_id == task["id"]
+    assert sync(c, ann)["yours"]["goals"] == []
 
     left = graph(c, bea, "leave", %{as_key: 2, command_id: "l-1", id: goal["id"]})
     assert left.body["result"] == %{"id" => goal["id"], "version" => 3}
@@ -632,11 +636,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   # Levels decide nothing about the workspace: every Key of a Fibonacci fleet
   # adds to all of it, as in every other fleet. Syndicate keys other suites
   # commit outside the sandbox would count as sold, so this runs on Cascade.
-  test "every key adds to the whole fleet, and a task another key holds is forked rather than taken, changed or archived",
+  # Costly failure: a task one Key could hold alone, or archive from under the
+  # Keys working on it, would shut the rest of the fleet out of its work.
+  test "any key joins any task and works on it beside the others, and its creator archives it once they leave",
        c do
     sell_cascade(1..3)
     start_graph(c, fleets: [@fleet, @cascade])
-    [ann, cal] = shard_cascade(c, [{"Ann", 1}, {"Cal", 3}])
+    [ann, bea, cal] = shard_cascade(c, [{"Ann", 1}, {"Bea", 2}, {"Cal", 3}])
 
     draft = %{
       as_key: 1,
@@ -647,76 +653,95 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     }
 
     task = write!(c, ann, "create", draft, @cascade)
+    assert last_did(ann, @cascade) == :workspace
 
-    assign = fn agent, key, version, assignee ->
+    patch = fn agent, key, version, set ->
       body = %{
         as_key: key,
-        command_id: "a-#{key}-#{version}-#{inspect(assignee)}",
+        command_id: "p-#{key}-#{version}",
         id: task["id"],
         expected_version: version,
-        set: %{assignee_key: assignee}
+        set: set
       }
 
       graph(c, agent, "patch", body, @cascade)
     end
 
-    assert last_did(ann, @cascade) == :workspace
-    assert assign.(ann, 1, 1, 1).status == 200
-    assert last_did(ann, @cascade) == :task
+    # A Key that has not joined is told to join first.
+    refused = patch.(bea, 2, 1, %{progress: "doing"})
 
-    for assignee <- [3, nil] do
-      refused = assign.(cal, 3, 2, assignee)
+    assert {refused.status, refused.body["error"]["code"], refused.body["error"]["details"]} ==
+             {403, "not_owner", %{"id" => task["id"], "owner_key" => 1, "joined_keys" => []}}
 
-      assert {refused.status, refused.body["error"]["code"],
-              refused.body["error"]["details"]["assignee_key"]} == {422, "forbidden_field", 1}
+    assert refused.body["error"]["hint"] =~ "Join"
+    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
 
-      assert ContractSchema.errors(refused.body, "WorkspaceError") == []
+    # Each Key joins as itself, and none is turned away for the others.
+    for {{agent, key}, version} <- Enum.with_index([{bea, 2}, {cal, 3}], 2) do
+      joined =
+        graph(c, agent, "join", %{as_key: key, command_id: "j-#{key}", id: task["id"]}, @cascade)
+
+      assert joined.body["result"] == %{"id" => task["id"], "version" => version}
+      assert ContractSchema.errors(joined.body, "WorkspaceWrite") == []
+      assert last_did(agent, @cascade) == :task
     end
 
-    edit = %{as_key: 3, command_id: "e-1", id: task["id"], expected_version: 2}
-    archive = %{as_key: 3, command_id: "x-1", id: task["id"], expected_version: 2}
+    around = graph(c, bea, "view", %{}, @cascade).body
+    assert ContractSchema.errors(around, "WorkspaceGraph") == []
+    assert [%{"joined_keys" => [2, 3]}] = Enum.filter(around["nodes"], &(&1["id"] == task["id"]))
 
-    for refused <- [
-          graph(c, cal, "patch", Map.put(edit, :set, %{progress: "blocked"}), @cascade),
-          graph(c, cal, "archive", archive, @cascade)
-        ] do
-      assert {refused.status, refused.body["error"]["code"],
-              refused.body["error"]["details"]["owner_key"]} == {403, "not_owner", 1}
+    # A Key that joined changes the work, but what the task is stays its
+    # creator's.
+    assert patch.(cal, 3, 3, %{progress: "doing"}).status == 200
 
-      assert refused.body["error"]["hint"] =~ "Fork"
-      assert ContractSchema.errors(refused.body, "WorkspaceError") == []
-    end
+    refused = patch.(cal, 3, 4, %{title: "Draft it shorter"})
 
-    forked = graph(c, cal, "fork", %{as_key: 3, command_id: "f-1", id: task["id"]}, @cascade)
-    assert forked.status == 200
-    assert last_did(cal, @cascade) == :task
-    assert ContractSchema.errors(forked.body, "WorkspaceWrite") == []
+    assert {refused.status, refused.body["error"]["code"], refused.body["error"]["details"]} ==
+             {403, "not_owner", %{"id" => task["id"], "owner_key" => 1, "fields" => ["title"]}}
 
-    fork = graph(c, cal, "get", %{id: forked.body["result"]["id"]}, @cascade).body
+    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
+    assert patch.(ann, 1, 4, %{title: "Draft the short brief"}).status == 200
 
-    assert {fork["object"]["data"]["assignee_key"], fork["object"]["data"]["progress"]} ==
-             {3, "doing"}
-
-    assert Enum.map(fork["relations"], &{&1["type"], &1["target"]}) == [{"forks", task["id"]}]
-    assert ContractSchema.errors(fork, "WorkspaceObjectView") == []
-
-    # The holder gives the task away, the Key it went to drops it, and the
-    # Key that created it archives it.
-    assert assign.(ann, 1, 2, 3).status == 200
-    assert last_did(ann, @cascade) == :workspace
-    assert assign.(cal, 3, 3, nil).status == 200
-
-    archived =
+    # The creator cannot archive the task from under the Keys still joined;
+    # once they leave, it can.
+    archive = fn version ->
       graph(
         c,
         ann,
         "archive",
-        %{archive | as_key: 1, command_id: "x-2", expected_version: 4},
+        %{as_key: 1, command_id: "x-#{version}", id: task["id"], expected_version: version},
         @cascade
       )
+    end
 
-    assert archived.status == 200
+    refused = archive.(5)
+
+    assert {refused.status, refused.body["error"]["code"],
+            refused.body["error"]["details"]["joined_keys"]} == {409, "still_joined", [2, 3]}
+
+    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
+
+    for {{agent, key}, version} <- Enum.with_index([{bea, 2}, {cal, 3}], 6) do
+      left =
+        graph(c, agent, "leave", %{as_key: key, command_id: "l-#{key}", id: task["id"]}, @cascade)
+
+      assert left.body["result"] == %{"id" => task["id"], "version" => version}
+    end
+
+    assert archive.(7).status == 200
     assert graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["sys"]["archived"]
+
+    # A fork is a Key's own copy to take another way; nobody has joined it.
+    other = write!(c, ann, "create", %{draft | command_id: "t-2"}, @cascade)
+    forked = graph(c, cal, "fork", %{as_key: 3, command_id: "f-1", id: other["id"]}, @cascade)
+    assert forked.status == 200
+    assert ContractSchema.errors(forked.body, "WorkspaceWrite") == []
+
+    fork = graph(c, cal, "get", %{id: forked.body["result"]["id"]}, @cascade).body
+    assert fork["object"]["sys"]["joined"] == []
+    assert fork["object"]["sys"]["created_by"]["key"]["token_id"] == 3
+    assert Enum.map(fork["relations"], &{&1["type"], &1["target"]}) == [{"forks", other["id"]}]
+    assert ContractSchema.errors(fork, "WorkspaceObjectView") == []
   end
 
   test "a wallet that neither owns nor holds a shard of the key it names is refused and nothing is written",

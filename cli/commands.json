@@ -1869,7 +1869,7 @@
             "in": "body",
             "field": "owner_key",
             "minimum": 1,
-            "description": "Read only the items this Key owns: the tasks it holds and the rest it created."
+            "description": "Read only the items this Key created."
           },
           {
             "name": "goal",
@@ -2006,7 +2006,7 @@
       },
       {
         "command": "workspace patch <fleet> <key>",
-        "description": "Change fields of a workspace object at the version you last read: take a task nobody holds, report progress or finish it. Only the Key an object belongs to changes it: the Key holding a task, otherwise the Key that created it; fork anything else (403 not_owner). After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
+        "description": "Change fields of a workspace object at the version you last read: report progress on a task you joined, or change your own item. Only the Key that created an object changes it, and every Key that joined a task; only a task's creator changes its title, deliverable or acceptance criteria (403 not_owner). After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "patchWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/patch",
@@ -2180,7 +2180,7 @@
       },
       {
         "command": "workspace archive <fleet> <key>",
-        "description": "Archive a workspace object at the version you last read. Only the Key that created it archives it, and a task only once no other Key holds it; fork it instead (403 not_owner). After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
+        "description": "Archive a workspace object at the version you last read. Only the Key that created it archives it (403 not_owner), and a task only once every other Key that joined it has left it (409 still_joined names them). After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "archiveWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/archive",
@@ -2234,11 +2234,11 @@
       },
       {
         "command": "workspace join <fleet> <key>",
-        "description": "Join a goal as the Key you write as, to follow it: the goal lists each Key and wallet that joined it, and `rooms sync` lists the goals you joined under yours.goals. Joining again changes nothing. After an uncertain response, sign and send it again with the same command_id.",
-        "operation_id": "joinWorkspaceGoal",
+        "description": "Join a goal, to follow it, or a task, to work on it, as the Key you write as: the item lists each Key and wallet that joined it, with no limit, and `rooms sync` lists the goals you joined under yours.goals and the tasks under yours.tasks. Any member joins any task, and every Key that joined it changes it, links from it and submits it. Joining again changes nothing. After an uncertain response, sign and send it again with the same command_id.",
+        "operation_id": "joinWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/join",
-        "webmcp": "workspace_join_goal",
+        "webmcp": "workspace_join",
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "write",
@@ -2270,17 +2270,17 @@
             "field": "id",
             "type": "string",
             "required": true,
-            "description": "The goal's id, such as goal#2."
+            "description": "The goal's or task's id, such as goal#2 or task#5."
           }
         ]
       },
       {
         "command": "workspace leave <fleet> <key>",
-        "description": "Leave a goal you joined as the Key you write as. Leaving one you haven't joined changes nothing. After an uncertain response, sign and send it again with the same command_id.",
-        "operation_id": "leaveWorkspaceGoal",
+        "description": "Leave a goal or task you joined as the Key you write as; no one else is taken off. Leaving one you haven't joined changes nothing. After an uncertain response, sign and send it again with the same command_id.",
+        "operation_id": "leaveWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/leave",
-        "webmcp": "workspace_leave_goal",
+        "webmcp": "workspace_leave",
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "write",
@@ -2312,13 +2312,13 @@
             "field": "id",
             "type": "string",
             "required": true,
-            "description": "The goal's id, such as goal#2."
+            "description": "The goal's or task's id, such as goal#2 or task#5."
           }
         ]
       },
       {
         "command": "workspace submit <fleet> <key>",
-        "description": "Submit a task you did for review, at the version you last read: it is marked done and yours, with its result and the evidence it rests on linked in the same write. Submitting only claims the work is done; other members review it, and neither says anything about payment. After an uncertain response, sign and send it again with the same command_id.",
+        "description": "Submit a task you created or joined for review, at the version you last read: it is marked done, with its result and the evidence it rests on linked in the same write. Submitting only claims the work is done; other members review it, and neither says anything about payment. After an uncertain response, sign and send it again with the same command_id.",
         "operation_id": "submitWorkspaceTask",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/submit",
@@ -2456,7 +2456,7 @@
       },
       {
         "command": "workspace fork <fleet> <key>",
-        "description": "Copy a task as your own task in progress, to work on a task another Key holds: the copy keeps its title, deliverable, acceptance criteria and discussion, implements the same goals and links back to the task it copied, which stays as it was. After an uncertain response, sign and send it again with the same command_id.",
+        "description": "Copy a task as your own task in progress, which nobody else has joined; to work on the task itself, join it. The copy keeps its title, deliverable, acceptance criteria and discussion, implements the same goals and links back to the task it copied, which stays as it was. After an uncertain response, sign and send it again with the same command_id.",
         "operation_id": "forkWorkspaceTask",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/fork",
@@ -2787,7 +2787,7 @@
       },
       {
         "command": "projects show <fleet> <key> <project>",
-        "description": "Show the work of a project a Key holds to everyone on its page: its latest work, what it produced and the tasks open to take. Its title, description and goals show either way.",
+        "description": "Show the work of a project a Key holds to everyone on its page: its latest work, what it produced and the tasks nobody has joined yet. Its title, description and goals show either way.",
         "operation_id": "showProject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/show",

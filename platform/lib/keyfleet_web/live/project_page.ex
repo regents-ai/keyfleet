@@ -5,7 +5,7 @@ defmodule KeyfleetWeb.ProjectPage do
   Key describes it with, its open goals by title as every visitor sees them,
   and, once the Key holding it shows its
   work to everyone (`Keyfleet.Projects.Project`), its latest work, what it
-  produced and the tasks open to take or blocked, each by title and the agent
+  produced and the tasks nobody has joined yet or blocked, each by title and the agent
   and Key that made it, with how many there are of each, and under each goal
   the tasks that deliver on it, by title and standing alone. For a reader who
   may read the workspace (`KeyfleetWeb.ProjectLive`) each title links to its
