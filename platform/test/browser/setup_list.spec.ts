@@ -33,6 +33,30 @@ async function sendsOne(page: Page, press: () => Promise<void>) {
   return (await sentByStandIn(page))[before]
 }
 
+// Buys the next Key in the Buy Key window from the stand-in wallet and lands
+// the purchase.
+async function buy(page: Page) {
+  await page.locator("#shell-get-key").click()
+  await expect(page.locator("dialog#buy-key #buy-key-title")).toBeVisible()
+  await useStandInWallet(page, owner)
+  const bought = await sendsOne(page, () => page.locator("#buy-key-button").click())
+  expect(bought.transaction.to.toLowerCase()).toBe(fleetContract)
+  expect(bought.transaction.data.startsWith(purchaseSelector)).toBe(true)
+  landStep(bought.hash, bought.transaction, true)
+}
+
+// Once the purchase lands, "You're in" is wholly on screen with focus on
+// "Set up your agent", which the words above it describe.
+async function toldYoureIn(page: Page) {
+  const youreIn = page.locator("#buy-key-in")
+  await expect(youreIn).toContainText("You’re in")
+  const setUp = youreIn.getByRole("button", {name: "Set up your agent"})
+  await expect(setUp).toBeFocused()
+  await expect(setUp).toHaveAccessibleDescription("You’re in Your Key is in your wallet. Next, set up your agent.")
+  await expect(youreIn).toBeInViewport({ratio: 1})
+  return setUp
+}
+
 // The code in the setup list's pairing box once an agent is chosen; the box
 // opens on its list of agents, which a choice closes.
 async function pairingCode(page: Page, agent: string) {
@@ -56,22 +80,16 @@ test.beforeAll(() => {
 test("a new owner is sent from the purchase to the setup list, which is gone once every step is done", async ({page}) => {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
+  await page.setViewportSize({width: 1280, height: 720})
   await (await installAuthenticatedPrivy(page, "other-account")).establishLocalSession()
   await page.goto("/classic/1")
   await connected(page)
 
-  await page.locator("#shell-get-key").click()
-  await expect(page.locator("dialog#buy-key #buy-key-title")).toBeVisible()
-  await useStandInWallet(page, owner)
-  const bought = await sendsOne(page, () => page.locator("#buy-key-button").click())
-  expect(bought.transaction.to.toLowerCase()).toBe(fleetContract)
-  expect(bought.transaction.data.startsWith(purchaseSelector)).toBe(true)
-  landStep(bought.hash, bought.transaction, true)
-  const youreIn = page.locator("#buy-key-in")
-  await expect(youreIn).toContainText("You’re in")
+  await buy(page)
+  const setUp = await toldYoureIn(page)
   const key = sellKey(fleet, owner)
 
-  await youreIn.getByRole("button", {name: "Set up your agent"}).click()
+  await setUp.click()
   await expect(page.locator("dialog#buy-key")).toBeHidden()
   await expect(page).toHaveURL(/\/classic\/1$/)
   await connected(page)
@@ -116,4 +134,16 @@ test("a new owner is sent from the purchase to the setup list, which is gone onc
   await expect(list(page)).toBeHidden()
   await expect(list(page).locator("li")).toHaveCount(0)
   expect(errors).toEqual([])
+})
+
+// On a phone the window scrolls to "You're in" too. The owner already holds
+// a Key from the walk above, so this purchase is their second.
+test("on a phone, the purchase lands with You're in and Set up your agent on screen", async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844})
+  await (await installAuthenticatedPrivy(page, "other-account")).establishLocalSession()
+  await page.goto("/classic/1")
+  await connected(page)
+
+  await buy(page)
+  await toldYoureIn(page)
 })

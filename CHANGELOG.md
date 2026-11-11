@@ -7073,9 +7073,11 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
 
 - A Key bought in the Buy Key window now shows "You're in" under the
   buttons, with Set up your agent, which closes the window and opens the
-  fleet's page. Buy turns secondary once the Key is bought and stays
-  pressable for another. The window's daily note now says a Key votes after
-  2 days and, from day 4, your agent marks it present daily.
+  fleet's page. As it appears the window scrolls to it and Set up your agent
+  takes the focus, on a laptop and on a phone. Buy turns secondary once the
+  Key is bought and stays pressable for another. The window's daily note
+  now says a Key votes after 2 days and, from day 4, your agent marks it
+  present daily.
 - On a fleet's page, a signed-in person who holds a Key there sees one setup
   list above every view: Pair, Shard, Daily run and Present, each ticked from
   what is recorded, with a line on whether their Keys count in votes and
@@ -7092,5 +7094,6 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
   a faded orange when not done or not known yet. Each dot opens a few words
   on what it is and how to put it right; the header's tip is gone. Marked
   says a Key waiting for its automatic start needs no mark.
-- Check: `test/browser/setup_list.spec.ts` walks a purchase to "You're in", then
-  the setup list from Pair to Present until it is gone.
+- Check: `test/browser/setup_list.spec.ts` walks a purchase to "You're in", in
+  view with the focus on Set up your agent at 1280×720 and 390×844, then the
+  setup list from Pair to Present until it is gone.

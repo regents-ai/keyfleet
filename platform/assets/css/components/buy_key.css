@@ -63,4 +63,7 @@
 /* Once a Key bought here lands: what happened, and the one next step. */
 .buy-key__in { display: grid; flex: 1 1 100%; justify-items: start; gap: var(--space-1); }
 .buy-key__in strong { font-size: 1.125rem; }
-.buy-key__in span { color: var(--color-fg-muted); font-size: .875rem; }
+.buy-key__in > span { color: var(--color-fg-muted); font-size: .875rem; }
+/* Focus scrolls the window to "Set up your agent" as the box appears; the
+   window's own padding stays below it, so the whole box is in view. */
+.buy-key__in .rg-button { scroll-margin-block-end: var(--buy-key-pad); }

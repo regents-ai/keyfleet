@@ -289,13 +289,17 @@ defmodule KeyfleetWeb.Components.BuyKey do
         <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
           {WalletWords.blocked(buy_blocked(panel))}
         </span>
-        <%!-- Under the buttons, so nothing a person is about to press moves. --%>
+        <%!-- Under the buttons, so nothing a person is about to press moves.
+        Focus moves to its button as it appears, which scrolls the window to
+        it, and the button is described by the words above it. --%>
         <div :if={bought?(panel)} id={"#{@id}-in"} class="buy-key__in" role="status">
-          <strong>You’re in</strong>
-          <span>Your Key is in your wallet. Next, set up your agent.</span>
+          <strong id={"#{@id}-in-title"}>You’re in</strong>
+          <span id={"#{@id}-in-note"}>Your Key is in your wallet. Next, set up your agent.</span>
           <Regent.Primitives.button
             id={"#{@id}-setup"}
             type="button"
+            aria-describedby={"#{@id}-in-title #{@id}-in-note"}
+            phx-mounted={JS.focus()}
             phx-click={JS.push("close_buy_key") |> JS.navigate(Fleets.path(@fleet.fleet_id))}
           >
             Set up your agent
