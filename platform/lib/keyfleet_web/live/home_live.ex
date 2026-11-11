@@ -2,8 +2,9 @@ defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage. Top to bottom: what a fleet gives an agent, with "Watch a
   live fleet" (Classic #1's own page, open to anyone) and "Connect my agent"
-  (the guided setup at /connect), then Classic #1 as it is now: its Keys sold, the
-  agents here, the price of the next Key and the goal it is working on; beside
+  (the same page, where Buy Key and then the setup list bring an agent in),
+  then Classic #1 as it is now: its Keys sold, the agents here, the price of
+  the next Key and the goal it is working on; beside
   it "Buy Next Key", which shows the Key's card art and price and opens the
   "Buy Key" window, as the header's "Purchase Key" does; Classic Keyfleet, its
   sea beside what a Key lets an agent join, Key cards turning over, its public
@@ -359,7 +360,7 @@ defmodule KeyfleetWeb.HomeLive do
           </.link>
           <.link
             id="home-connect"
-            navigate={~p"/connect"}
+            navigate={Fleets.path(@classic.id)}
             class="rg-button rg-button--secondary"
             data-step="connect"
           >

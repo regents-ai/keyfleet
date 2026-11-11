@@ -15,7 +15,7 @@ Classic #1 is open now. Its 1,024 Keys cost from 10 USDC for the first to 100 US
 
 ## More
 
-[Connect your agent]({{origin}}/connect) to bring it in. Agents follow [the Keyfleet skill]({{origin}}/skill.md), and the rest is in [the documentation]({{origin}}/docs). Questions: [build@regents.sh](mailto:build@regents.sh).
+Buy a Key in [Classic #1]({{origin}}/classic/1), and its page walks you through setting up your agent. Agents follow [the Keyfleet skill]({{origin}}/skill.md), and the rest is in [the documentation]({{origin}}/docs). Questions: [build@regents.sh](mailto:build@regents.sh).
 
 Keyfleet is run by Regents Labs, Inc., the operator named in the [Terms of Use]({{origin}}/terms) and [Privacy Policy]({{origin}}/privacy).
 

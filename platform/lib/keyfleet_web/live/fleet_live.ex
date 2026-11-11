@@ -10,7 +10,9 @@ defmodule KeyfleetWeb.FleetLive do
   price to someone holding none of its Keys; it opens the "Buy Key" window
   (`KeyfleetWeb.Components.BuyKey`), as "Purchase Key" in the header does.
   Regents Club sells no Keys, so everyone there is offered its Keys on
-  OpenSea.
+  OpenSea. Under the tabs, a signed-in person who holds a Key here and hasn't
+  finished setting up their agent sees the setup list
+  (`KeyfleetWeb.Components.SetupList`) above the view.
 
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
@@ -78,11 +80,11 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
-  alias KeyfleetWeb.Components.AgentSetup
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.Components.SendAgent
+  alias KeyfleetWeb.Components.SetupList
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.FleetProposals
@@ -204,6 +206,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :any, required: true, doc: "the fleet as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :account, :map, default: nil, doc: "the signed-in account, or nil"
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
   attr :params, :map, required: true, doc: "the page's address"
 
@@ -367,18 +370,20 @@ defmodule KeyfleetWeb.FleetLive do
         </header>
 
         <div class="fleet-stage">
+          <.live_component
+            :if={match?(%Human{}, @actor) and @account != nil}
+            module={SetupList}
+            id="fleet-setup"
+            fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+            actor={@actor}
+            account={@account}
+            lease={@lease}
+          />
           <ProposalsLive.open_list
             :if={@view == :workspace}
             fleet={@fleet}
             actor={@actor}
             lease={@lease}
-          />
-          <.live_component
-            :if={@view == :workspace and match?(%Human{}, @actor)}
-            module={AgentSetup}
-            id="fleet-agent-setup"
-            fleet_id={@fleet.fleet_id}
-            actor={@actor}
           />
           {render_slot(@inner_block)}
           <.hall

@@ -2,7 +2,7 @@ import {expect, test, type Page} from "@playwright/test"
 
 // Each step a visitor takes into Keyfleet is reported once as it happens
 // (assets/js/launch_steps.ts): the homepage opened, each way in pressed, and a
-// setup line copied, with the agent it is for. A browser a program drives
+// homepage's setup line copied. A browser a program drives
 // reports nothing, so these pages are told they are a visitor's.
 
 test.use({permissions: ["clipboard-read", "clipboard-write"]})
@@ -54,14 +54,14 @@ test("the homepage and each way in are counted once", async ({page}) => {
   await expect(page).toHaveURL(/\/$/)
   await connected(page)
   await page.locator("#home-connect").click()
-  await expect(page).toHaveURL(/\/connect$/)
+  await expect(page).toHaveURL(/\/classic\/1$/)
   await expect
     .poll(() => sent)
     .toEqual([{step: "home"}, {step: "watch"}, {step: "home"}, {step: "connect"}])
   await expect.poll(() => answers).toEqual([204, 204, 204, 204])
 })
 
-test("a copied setup line is counted with the agent it is for", async ({page}) => {
+test("the homepage's copied setup line is counted", async ({page}) => {
   const {sent, answers} = reports(page)
 
   await page.goto("/")
@@ -69,15 +69,8 @@ test("a copied setup line is counted with the agent it is for", async ({page}) =
   await page.locator("#home-instruction-copy").click()
   await expect(page.locator("#home-instruction-copy")).toHaveAttribute("data-copy-state", "copied")
 
-  await page.goto("/connect?agent=hermes")
-  await connected(page)
-  await page.locator("#connect-copy").click()
-  await expect(page.locator("#connect-copy")).toHaveAttribute("data-copy-state", "copied")
-
-  await expect
-    .poll(() => sent)
-    .toEqual([{step: "home"}, {step: "copy", agent: "any"}, {step: "copy", agent: "hermes"}])
-  await expect.poll(() => answers).toEqual([204, 204, 204])
+  await expect.poll(() => sent).toEqual([{step: "home"}, {step: "copy", agent: "any"}])
+  await expect.poll(() => answers).toEqual([204, 204])
 })
 
 test("a browser a program drives reports nothing", async ({browser}) => {

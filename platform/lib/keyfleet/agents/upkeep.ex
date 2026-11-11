@@ -7,7 +7,8 @@ defmodule Keyfleet.Agents.Upkeep do
 
   `setup/4` reads the same figures as the five states an agent's setup ends in,
   and `person_agents/2` the same states for the agents a signed-in person has
-  paired, with `pays?/2` the chain's answer on gas.
+  paired, with `pays?/2` the chain's answer on gas. `person_setup/2` reads a
+  new owner's four setup steps in a fleet from the same records.
   """
 
   alias Keyfleet.Actors.Human
@@ -86,6 +87,52 @@ defmodule Keyfleet.Agents.Upkeep do
       })
     end
   end
+
+  @doc """
+  A new owner's setup in the fleet: nil when `person` holds none of its Keys,
+  otherwise `%{keys, agents, done}`. `keys` are the person's Keys, lowest
+  first, each as `%{token_id, from, until}`: the 48 hours the chain reader
+  last recorded it counting in votes, an automatic start included, or nil for
+  both. `agents` are `person_agents/2`. `done` holds the four steps, each true
+  once the records show it: an agent paired, an agent acting for a Key, an
+  agent's daily run scheduled, and every Key marked present and counting.
+  Nothing here reads the chain.
+  """
+  def person_setup(%Human{} = person, fleet_id) do
+    case Keys.held_keys(person, fleet_id) do
+      [] ->
+        nil
+
+      held ->
+        now = DateTime.utc_now()
+        token_ids = Enum.map(held, & &1.token_id)
+        last = Keys.last_presence(fleet_id, token_ids)
+        agents = person_agents(person, fleet_id)
+
+        %{
+          keys: Enum.map(token_ids, &counting(&1, Map.get(last, &1))),
+          agents: agents,
+          done: %{
+            pair: agents != [],
+            shard: Enum.any?(agents, &(&1.key_count > 0)),
+            run: Enum.any?(agents, & &1.schedule),
+            present: Enum.all?(token_ids, &marked?(Map.get(last, &1), now))
+          }
+        }
+    end
+  end
+
+  defp counting(token_id, %{kind: kind, at: at}) when kind in [:present, :scheduled],
+    do: %{token_id: token_id, from: at, until: DateTime.add(at, @window_seconds)}
+
+  defp counting(token_id, _cleared_or_none), do: %{token_id: token_id, from: nil, until: nil}
+
+  # Marked by its holder or an agent, not only started on its own, and still
+  # counting.
+  defp marked?(%{kind: :present, at: at}, now),
+    do: DateTime.after?(DateTime.add(at, @window_seconds), now)
+
+  defp marked?(_scheduled_cleared_or_none, _now), do: false
 
   @doc """
   Whether `wallet` can pay to mark `key_count` Keys at the latest block: nil with

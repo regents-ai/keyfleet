@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.AgentGuides do
   reads the database.
 
   Claude joins only through the Claude connector, so its page, its skill and
-  its place on `/agents`, the sitemap and `/connect` exist only while the
+  its place on `/agents` and the sitemap exist only while the
   connector is switched on (`Keyfleet.OAuth.enabled?/0`), read on each call;
   switched off, `/agents/claude` is not found like any other unknown runtime.
   """

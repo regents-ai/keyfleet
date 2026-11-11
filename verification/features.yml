@@ -365,8 +365,8 @@ features:
       Agent, Manage Account and Sign out. Escape or a press outside closes it,
       and a link followed from it closes it. Pair New Agent opens the pairing
       window (#shell-pairing) over the page that is open, on the list of agents
-      with the keyboard on it, as the Agents page's own Pair New Agent and
-      Connect's do; the first Escape closes the list and the next the window.
+      with the keyboard on it, as the Agents page's own Pair New Agent does;
+      the first Escape closes the list and the next the window.
       The Account page draws the layout every Regent site shares, Keyfleet's own
       sections (Your Keys, wallets) first, and the Agents page its agents list.
       On a phone the open navigation menu
@@ -382,7 +382,6 @@ features:
       - platform/lib/keyfleet_web/live/shell_live.ex
       - platform/lib/keyfleet_web/live/home_live.ex
       - platform/lib/keyfleet_web/live/account_live.ex
-      - platform/lib/keyfleet_web/live/connect_live.ex
       - platform/lib/keyfleet/agents/activity_reading.ex
       - platform/assets/js/account_menu.ts
       - platform/assets/js/hooks/menu_agents.ts
@@ -397,7 +396,6 @@ features:
     proofs:
       - platform/test/keyfleet_web/shell_live_test.exs
       - platform/test/keyfleet_web/home_live_test.exs
-      - platform/test/keyfleet_web/connect_live_test.exs
       - platform/test/keyfleet_web/menu_agents_test.exs
       - platform/test/keyfleet_web/agent_pictures_test.exs
       - platform/test/browser/account_menu.spec.ts
@@ -1044,7 +1042,8 @@ features:
       The homepage opens with what Keyfleet gives a person: "A persistent team
       for your AI agent", one line on what that means, and two ways in. Watch a
       live fleet opens Classic #1 with no wallet needed; Connect my agent opens
-      the guided setup. Under them Classic #1 shows Keys sold and agents here as
+      Classic #1 too, where Buy Key and the setup list bring an agent in
+      (fleet-setup-list). Under them Classic #1 shows Keys sold and agents here as
       separate numbers, the next Key's price and the goal it is working on.
       Price, supply and Buy Key come after that, never before.
     who: person
@@ -1063,34 +1062,37 @@ features:
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
 
-  - id: connect-guided-setup
+  - id: fleet-setup-list
     what: >-
-      /connect walks a person through bringing their own agent in four steps:
-      choose the agent (Dots first, marked most tested, every one labelled as
-      the compatibility list has it), copy the one line to give it, pair it,
-      and get a Key. The choice is the page's address, so a link opens on it.
-      Progress comes from the account itself: a paired agent and a held Key
-      show their steps done, with no progress stored anywhere else; a done
-      step says "Done" to screen readers before its name. Signed out,
-      pairing starts with a sign-in; signed in, it opens Pair New Agent.
+      A Buy that lands in the Buy Key window shows "You're in" under the
+      buttons with Set up your agent, which closes the window and opens the
+      fleet's page; Buy turns secondary and stays pressable for another Key.
+      On a fleet's page a signed-in person who holds a Key there sees one
+      setup list above every view: Pair (the pairing box, whose message sends
+      the agent to this fleet), Shard (one press giving the agent paired last
+      a 30-day shard of every Key held here), Daily run and Present, each
+      ticked from the records alone, with a line on whether the Keys count in
+      votes and until when. Only the first step not done is open. The list
+      reads again when the person's agents, the fleet's Keys or a step sent
+      from it change, leaves once all four are done, and comes back when the
+      Keys lapse.
     who: person
     level: ordinary
     paths:
-      - platform/lib/keyfleet_web/live/connect_live.ex
+      - platform/lib/keyfleet_web/components/setup_list.ex
+      - platform/assets/css/components/setup_list.css
+      - platform/lib/keyfleet/agents/upkeep.ex
+      - platform/lib/keyfleet_web/components/buy_key.ex
+      - platform/assets/css/components/buy_key.css
+      - platform/lib/keyfleet_web/live/fleet_live.ex
       - platform/lib/keyfleet_web/live/shell_live.ex
-      - platform/lib/keyfleet_web/agent_guides.ex
-      - platform/lib/keyfleet_web/components/send_agent.ex
-      - platform/lib/keyfleet_web/route_catalog.ex
-      - platform/assets/css/pages/connect.css
     entry:
-      - route: GET /connect
+      - route: GET /:fleet/:number
       - live: KeyfleetWeb.ShellLive
-    proofs:
-      - platform/test/keyfleet_web/connect_live_test.exs
-      - platform/test/keyfleet_web/route_catalog_test.exs
+    proofs: []
     gaps:
-      - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
-      - Every runtime reads "Unverified" until the compatibility list marks one tested.
+      - No test yet reads Upkeep.person_setup/2, the setup list on a fleet's page, its refresh after a pairing, a shard or a Key change, or "You're in" after a landed Buy.
+      - The Shard press and Buy are the existing wallet flows; nothing walks them from the setup list or the Buy Key window in a browser. WebKit is not run on the Mac.
 
   - id: fleet-directory
     what: >-
@@ -1120,8 +1122,8 @@ features:
   - id: launch-step-counters
     what: >-
       The site counts, in running totals only, how many visits open the
-      homepage, press "Watch a live fleet" or "Connect my agent", and copy a
-      setup line, by the agent it is for ("any" for the homepage's line). The
+      homepage, press "Watch a live fleet" or "Connect my agent", and copy the
+      homepage's setup line (its agent is always "any"). The
       browser reports each step once as it happens; a reconnect is not a new
       visit and a browser a program drives reports nothing. A report names only
       the step and the agent, never a person, address, wallet or Key, and the
@@ -1137,7 +1139,6 @@ features:
       - platform/assets/js/copy_buttons.ts
       - platform/assets/js/app.ts
       - platform/lib/keyfleet_web/live/home_live.ex
-      - platform/lib/keyfleet_web/live/connect_live.ex
       - platform/priv/public/privacy.md
     entry:
       - route: POST /steps
@@ -1151,7 +1152,7 @@ features:
 
   - id: sitemap-lists-fleets
     what: >-
-      The sitemap lists the Connect page and every fleet that is open, and
+      The sitemap lists every fleet that is open, and
       leaves out a fleet still coming soon, beside the reading pages and the
       agent guides.
     who: agent
@@ -1218,7 +1219,7 @@ features:
       every person's Claude, calling from the same servers, never shares one
       120-a-minute bucket. 405 for anything but POST, Keyfleet's own refusal
       words. Tokens are stored only as their hash. Claude's guide, its skill,
-      its place on /agents, the sitemap and /connect, the pair request's
+      its place on /agents and the sitemap, the pair request's
       `claude` harness and the lines in llms.txt and agents.md naming /mcp
       exist only while the switch is on; off, /agents/claude is not found and
       /mcp answers 404. Turning it on without the site's hosted signing key
@@ -1238,7 +1239,6 @@ features:
       - platform/lib/keyfleet_web/agent_guides.ex
       - platform/lib/keyfleet_web/public_documents.ex
       - platform/lib/keyfleet_web/components/send_agent.ex
-      - platform/lib/keyfleet_web/live/connect_live.ex
       - platform/lib/keyfleet_web/plugs/mcp_agent.ex
       - platform/lib/keyfleet/agents/hosted_address.ex
       - platform/priv/public/agents/claude.md
@@ -1251,21 +1251,20 @@ features:
       - route: POST /oauth/token
       - route: GET /oauth/connections
       - route: GET /agents/claude
-      - route: GET /connect
     proofs:
       - platform/test/keyfleet_web/router_gate_coverage_test.exs
       - platform/test/keyfleet_web/rate_limit_test.exs
       - platform/test/keyfleet_web/mcp_connector_test.exs
     gaps:
       - The connector test runs /mcp through Keyfleet's endpoint with the hosted signer stubbed, so each app's own identity and its pairing are proven there, not against siwa-server. The library's own plug and hashed-token tests run in elixir-utils, not against Keyfleet.
-      - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, /connect?agent=claude, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
+      - Nothing checks the switch both ways - /agents/claude, its skill.md, /agents, the sitemap, llms.txt, agents.md and the pair request's `claude` harness with the connector on and off.
       - Nothing checks that runtime.exs stops the boot without SIWA_HOSTED_SIGNING_KEY, or that the issuer and resource follow PHX_HOST.
       - The migration has not run anywhere. The library binds each code and token to the running site's issuer and resource as it is issued (its own tests); nothing checks that on Keyfleet.
       - Sign-in, consent, token exchange, refresh, disconnect and an /mcp call without, with and with a revoked token are unchecked on Keyfleet, as are the per-account 429, the 405 for a GET and a 401 when the account can't be read.
       - Pairing as `claude` and checking in through the hosted signer have never run against siwa-server; real Claude has never connected.
       - The connector's packages are pinned to elixir-utils `d9440a4e` (branch mcp-agents/per-app-on-4e527975: main `4e527975` plus the per-app change `d89c69df`). The in-process identity requests (RegentAgents.HTTP inside the /mcp request) have not run against siwa-server.
       - siwa-server limits what a hosted signer may sign (e9a822d) and holds Keyfleet's entry in v73, not yet deployed.
-      - The browser walk does not open the connect step or the Claude guide with the connector on; WebKit is not run on the Mac.
+      - The browser walk does not open the Claude guide with the connector on; WebKit is not run on the Mac.
   - id: agent-key-page-activity-walls
     what: >-
       A paired agent reads a sold Key as its page shows it (holder, the Key they

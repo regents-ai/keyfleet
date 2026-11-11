@@ -568,7 +568,6 @@ defmodule KeyfleetWeb.Router do
       live "/account/wallets", ShellLive, :wallets
       live "/account/connections", ShellLive, :connections
       live "/about", ShellLive, :about
-      live "/connect", ShellLive, :connect
       live "/pair", ShellLive, :pair
       live "/opportunities", ShellLive, :opportunities
 

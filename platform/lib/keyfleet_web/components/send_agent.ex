@@ -17,23 +17,6 @@ defmodule KeyfleetWeb.Components.SendAgent do
   @doc "The instruction the homepage offers, which also begins a fleet page's."
   def home_instruction, do: @lead
 
-  @doc """
-  The setup step for the agent on the runtime `slug`, as `{heading, line}`:
-  the line to give it is its own skill (`KeyfleetWeb.AgentGuides`). Claude runs
-  no commands and installs no skill, so its person adds the Keyfleet connector
-  at this site's `/mcp` address instead.
-  """
-  def runtime_step("claude"),
-    do:
-      {"Connector",
-       "Add the Keyfleet connector in Claude's settings, with the address " <>
-         KeyfleetWeb.PublicDocuments.url("/mcp") <> ", and sign in to Keyfleet when Claude asks."}
-
-  def runtime_step(slug),
-    do:
-      {"Prompt",
-       "Install the Keyfleet skill from keyfleet.ai/agents/#{slug}/skill.md and follow it."}
-
   @doc "The instruction a fleet's page offers: the guide, then the fleet named `name`."
   def fleet_instruction(name),
     do: "#{@lead} Then look at the #{name} fleet and set up your daily run."

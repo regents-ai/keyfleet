@@ -27,13 +27,9 @@ defmodule KeyfleetWeb.LaunchStepsControllerTest do
     end
   end
 
-  test "counts a copied setup line by the agent it is for", %{conn: conn, ref: ref} do
-    [{agent, _name} | _] = KeyfleetWeb.AgentGuides.runtimes()
-
-    for agent <- ["any", agent] do
-      assert report(conn, ~s({"step":"copy","agent":"#{agent}"})).status == 204
-      assert_received {[:keyfleet, :launch, :setup_copied], ^ref, %{count: 1}, %{agent: ^agent}}
-    end
+  test "counts the homepage's copied setup line", %{conn: conn, ref: ref} do
+    assert report(conn, ~s({"step":"copy","agent":"any"})).status == 204
+    assert_received {[:keyfleet, :launch, :setup_copied], ^ref, %{count: 1}, %{agent: "any"}}
   end
 
   test "refuses anything but a step it knows, and counts nothing for it", %{

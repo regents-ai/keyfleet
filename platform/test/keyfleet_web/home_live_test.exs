@@ -33,13 +33,13 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the page leads with the headline and what a fleet gives an agent; the
   #   Markdown homepage carries them with the tagline as Sean wrote it, says
   #   Classic opens soon until it does, then links its page
-  # - "Watch a live fleet" opens Classic #1's own page and "Connect my agent"
-  #   its guided setup; Classic #1's figures each keep their own name: Keys
-  #   sold out of all, the agents here, the next Key's price and the goal it
-  #   is working on, which links its workspace
+  # - "Watch a live fleet" and "Connect my agent" both open Classic #1's own
+  #   page, where Buy Key and the setup list bring an agent in; Classic #1's
+  #   figures each keep their own name: Keys sold out of all, the agents here,
+  #   the next Key's price and the goal it is working on, which links its
+  #   workspace
   # - launch-gate: internal links stay on the fleets' maps and workspaces, the
-  #   account page, the guided setup, the public documents, or anchors that
-  #   exist
+  #   account page, the public documents, or anchors that exist
   # - the page ends with the starting ideas for a shared goal as Sean wrote
   #   them, each link to another site opening in a new tab, and the Markdown
   #   homepage carries the same section
@@ -367,8 +367,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
   end
 
-  test "the ways in open Classic #1 and the guided setup, over Classic #1's figures",
-       %{conn: conn} do
+  test "both ways in open Classic #1's page, over Classic #1's figures", %{conn: conn} do
     for token_id <- 1..2, do: issue!(@classic, token_id)
     Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
     read_fleets()
@@ -378,7 +377,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
     assert text(view, "#home-watch") == "Watch a live fleet"
-    assert attribute(html, "a#home-connect", "href") == ["/connect"]
+    assert attribute(html, "a#home-connect", "href") == ["/classic/1"]
     assert text(view, "#home-connect") == "Connect my agent"
     # Each press is counted by the step it names (assets/js/launch_steps.ts).
     assert attribute(html, "a#home-watch", "data-step") == ["watch"]
@@ -474,7 +473,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
-  @open_paths ~w(/account /connect /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
+  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do

@@ -7068,3 +7068,20 @@ Live read at 16:53Z, signed out in headless Chromium: capabilities.json names dd
   `notebook-hub/marimohub/notebook-prune-hourly.patch`), tested in the hub image
   build. The hub image is now `626ec14-24dafab`; each hub moves to it at its next
   deploy.
+
+## 2026-11-11 — After buying: You're in, and one setup list
+
+- A Key bought in the Buy Key window now shows "You're in" under the
+  buttons, with Set up your agent, which closes the window and opens the
+  fleet's page. Buy turns secondary once the Key is bought and stays
+  pressable for another. The window's daily note now says a Key votes after
+  2 days and, from day 4, your agent marks it present daily.
+- On a fleet's page, a signed-in person who holds a Key there sees one setup
+  list above every view: Pair, Shard, Daily run and Present, each ticked from
+  what is recorded, with a line on whether their Keys count in votes and
+  until when. Pair holds the pairing box; Shard is one press that gives the
+  agent paired last a 30-day shard of every Key held here. The list leaves
+  once all four are done. The Workspace's setup dots are gone.
+- The Connect page is removed. The homepage's Connect my agent opens
+  Classic #1, and the sitemap and About no longer name the old page; the
+  count of copied setup lines keeps only the homepage's line.
