@@ -69,7 +69,7 @@ test("the homepage's copied setup line is counted", async ({page}) => {
   await page.locator("#home-instruction-copy").click()
   await expect(page.locator("#home-instruction-copy")).toHaveAttribute("data-copy-state", "copied")
 
-  await expect.poll(() => sent).toEqual([{step: "home"}, {step: "copy", agent: "any"}])
+  await expect.poll(() => sent).toEqual([{step: "home"}, {step: "copy"}])
   await expect.poll(() => answers).toEqual([204, 204])
 })
 

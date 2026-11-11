@@ -410,7 +410,7 @@ defmodule KeyfleetWeb.HomeLive do
           <Regent.Primitives.copy_button
             id="home-instruction-copy"
             text={SendAgent.home_instruction()}
-            data-step-agent="any"
+            data-step="copy"
             aria-label="Copy the instruction"
           >
             Copy

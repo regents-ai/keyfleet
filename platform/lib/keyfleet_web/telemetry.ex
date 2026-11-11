@@ -338,17 +338,12 @@ defmodule KeyfleetWeb.Telemetry do
         tags: [:reason],
         description: "Page timing reports refused: rate_limited, too_large or invalid"
       ),
-      # Steps visitors take into Keyfleet (KeyfleetWeb.LaunchSteps). Labels are
-      # only the step's name and, for a copied setup line, the agent's.
+      # Steps visitors take into Keyfleet (KeyfleetWeb.LaunchSteps). The only
+      # label is the step's name.
       counter("keyfleet.launch.steps.total",
         event_name: [:keyfleet, :launch, :step],
         tags: [:step],
-        description: "Steps into Keyfleet: home opened, watch or connect pressed"
-      ),
-      counter("keyfleet.launch.setup_copied.total",
-        event_name: [:keyfleet, :launch, :setup_copied],
-        tags: [:agent],
-        description: "Setup lines copied, by the agent they are for"
+        description: "Steps in: home opened, watch or connect pressed, setup line copied"
       ),
       counter("keyfleet.launch.refused.total",
         event_name: [:keyfleet, :launch, :refused],

@@ -1,11 +1,7 @@
 defmodule KeyfleetWeb.LaunchStepsControllerTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  @events [
-    [:keyfleet, :launch, :step],
-    [:keyfleet, :launch, :setup_copied],
-    [:keyfleet, :launch, :refused]
-  ]
+  @events [[:keyfleet, :launch, :step], [:keyfleet, :launch, :refused]]
 
   setup %{conn: conn} do
     ref = :telemetry_test.attach_event_handlers(self(), @events)
@@ -21,15 +17,10 @@ defmodule KeyfleetWeb.LaunchStepsControllerTest do
   end
 
   test "counts each way in by its name", %{conn: conn, ref: ref} do
-    for step <- ~w(home watch connect) do
+    for step <- ~w(home watch connect copy) do
       assert report(conn, ~s({"step":"#{step}"})).status == 204
       assert_received {[:keyfleet, :launch, :step], ^ref, %{count: 1}, %{step: ^step}}
     end
-  end
-
-  test "counts the homepage's copied setup line", %{conn: conn, ref: ref} do
-    assert report(conn, ~s({"step":"copy","agent":"any"})).status == 204
-    assert_received {[:keyfleet, :launch, :setup_copied], ^ref, %{count: 1}, %{agent: "any"}}
   end
 
   test "refuses anything but a step it knows, and counts nothing for it", %{
@@ -39,8 +30,6 @@ defmodule KeyfleetWeb.LaunchStepsControllerTest do
     for body <- [
           ~s({"step":"buy"}),
           ~s({"step":"home","who":"0xabc"}),
-          ~s({"step":"copy","agent":"not-an-agent"}),
-          ~s({"step":"copy"}),
           ~s(["home"]),
           "home"
         ] do
@@ -49,7 +38,6 @@ defmodule KeyfleetWeb.LaunchStepsControllerTest do
     end
 
     refute_received {[:keyfleet, :launch, :step], ^ref, _, _}
-    refute_received {[:keyfleet, :launch, :setup_copied], ^ref, _, _}
   end
 
   test "refuses a body larger than a report", %{conn: conn, ref: ref} do

@@ -47,11 +47,9 @@ defmodule KeyfleetWeb.MetricsTest do
 
   test "exposes the steps into Keyfleet under their names only", %{url: url} do
     :telemetry.execute([:keyfleet, :launch, :step], %{count: 1}, %{step: "watch"})
-    :telemetry.execute([:keyfleet, :launch, :setup_copied], %{count: 1}, %{agent: "any"})
 
     body = Req.get!(url <> "/metrics", retry: false).body
 
     assert body =~ ~s(keyfleet_launch_steps_total{step="watch"})
-    assert body =~ ~s(keyfleet_launch_setup_copied_total{agent="any"})
   end
 end

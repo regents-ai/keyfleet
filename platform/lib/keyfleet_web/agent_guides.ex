@@ -95,9 +95,6 @@ defmodule KeyfleetWeb.AgentGuides do
     {guide.name, guide.summary}
   end
 
-  @doc "Every runtime's slug and name, in the order `/agents` lists them."
-  def runtimes, do: Enum.map(guides(), fn {slug, guide} -> {slug, guide.name} end)
-
   @doc "The runtime's name."
   def name(slug) do
     %{} = guide = guide(slug)

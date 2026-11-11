@@ -18,7 +18,7 @@ const timers = new WeakMap<HTMLElement, number>()
  * themselves and the button says "Selected". The button tells LiveView to leave
  * `data-copy-state` alone, so a redraw meanwhile keeps the answer on screen.
  * A copy that worked sends a bubbling `copy-button:copied` event from the
- * button, which `launch_steps.ts` counts for setup lines.
+ * button, which `launch_steps.ts` counts for the homepage's setup line.
  */
 export function installCopyButtons() {
   document.addEventListener("click", event => {
