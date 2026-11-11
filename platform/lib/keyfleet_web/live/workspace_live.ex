@@ -551,9 +551,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
               </Regent.Primitives.tip>
             </h3>
             <ul class="workspace-info-rules">
-              <li>Each task belongs to the Key that took it.</li>
-              <li>Its holder gives it to another Key, or stops it.</li>
-              <li>Anyone else forks it. The fork links back to the task.</li>
+              <li>Any Key joins a task and works on it.</li>
+              <li>Only its creator changes what it asks for, or archives it.</li>
+              <li>A Key that worked on a task never reviews it.</li>
+              <li>Any Key forks its own copy, linked back to the task.</li>
             </ul>
             <.agent_guide />
           </div>

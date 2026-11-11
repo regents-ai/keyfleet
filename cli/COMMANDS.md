@@ -988,14 +988,15 @@ Server:
 ```text
 synced   = Rooms.sync(fleet, room and wall cursors, graph, proposals, per-Key DM cursors, quotes) as the agent
 check_in = Agents.check_in(agent, fleet, run)
-yours    = the key the agent writes as, whether its edits are restricted, its tasks,
-           the submitted tasks waiting for its review, the goals the agent joined as it
+yours    = the key the agent writes as, whether its edits are restricted, the unfinished
+           tasks and the goals the agent joined as it, the submitted tasks waiting for its review
 answer synced without muted posts, check_in, yours
 ```
 
 - **Server needs:** the `messages`, `rooms`, `mutes`, `dm_messages`, `quote_requests` and `agent_check_ins` tables; the fleet's
   workspace.
-- **History:** 2026-10-07 added; 2026-10-13 `quotes`; 2026-10-26 `graph.project`.
+- **History:** 2026-10-07 added; 2026-10-13 `quotes`; 2026-10-26 `graph.project`; 2026-11-11
+  `yours.tasks` lists the tasks the agent joined.
 
 ## regents keyfleet keys thread <fleet> <key>
 
@@ -1067,7 +1068,7 @@ read the wall around seq as keys thread does; no post at seq -> 404 post_unknown
   same thread, `reply_to_id`.
 
   ```sh
-  echo '{"body":"Can you take the hull survey?","idempotency_key":"ask-7"}' \
+  echo '{"body":"Can you join the hull survey?","idempotency_key":"ask-7"}' \
     | regents keyfleet keys post fleet_tech_classic 7
   ```
 

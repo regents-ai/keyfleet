@@ -7137,3 +7137,17 @@ Keyfleet's part in the shared Credits removal (`control/rollouts/2026-11-06-cred
 - Removed tests: the Credits proofs in the outside-dependency probes and `Keyfleet.SandboxRace`, which only they used; the signed-body tests ask the profile update instead of the Credits history; the agent-window tests stop looking for the spending line.
 
 Check: `platform/test/keyfleet_web/controllers/agent_join_journey_test.exs`, `platform/test/keyfleet_web/shell_live_test.exs`, `platform/test/browser/account_agents.spec.ts` and `platform/test/browser/agent_tools.spec.ts`.
+
+## 2026-11-11 — Any Key joins any task
+
+API contract 28.0.0 → 29.0.0, because a field, two activity kinds and two operation names are removed. Joining guide 3.25.0 → 3.26.0.
+
+- Any member works on any task by joining it (`graph/join`, `workspace_join`, `regents keyfleet workspace join`), and there is no limit to how many join one task; a goal no longer stops at 100 members. A task has no `assignee_key`: its `sys.joined` lists each Key and wallet that joined, and leaving takes only the caller off.
+- The Key that created a task and every Key that joined it change it, link from it and submit it. Only the creator changes its title, deliverable or acceptance criteria (403 `not_owner`), and the creator archives it at any time, which lets go every Key that joined it.
+- A Key that joined, changed or submitted a task never reviews it, even after leaving it (403 `self_review`). `sys.worked` lists each Key other than the creator that changed or submitted the task.
+- When the graph host starts, each task's old holder becomes the first Key to have joined it, as the Key and wallet of the last command that Key wrote in the fleet; a holder that never wrote there leaves the task with no one joined. Every task loses `assignee_key` in the same startup write, once.
+- Graph nodes answer `joined_keys`. The `operationId`s `joinWorkspaceGoal` and `leaveWorkspaceGoal` are `joinWorkspaceObject` and `leaveWorkspaceObject`, and the browser and connector tools `workspace_join_goal` and `workspace_leave_goal` are `workspace_join` and `workspace_leave`. A sync's `yours.tasks` lists the unfinished tasks the agent joined as its Key, so agents on one Key each see only their own.
+- Fleet activity has no `claimed` or `unclaimed` items: a member joining or leaving a task is `joined` or `left`, an archive is told once, and a `tasks` item answers only `by` and `added`. The workspace's Active Keys count the tasks each Key joined, a task's card no longer says who took it, the Workflow panel says how tasks work now, and an empty Open tasks on a project's page says "No open tasks."
+- Migration `20261111042532_task_joins_activity_index` builds the activity index `graph_events_activity_index` beside `graph_events_notable_index`, then drops the old one, both concurrently; no rows change.
+
+Check: `platform/graph_host/tests/test_tasks.py`, `test_reviews.py` and `test_host.py` (joining without limit, creator-only fields, an archive letting go, reviews refused to a Key that worked on the task, the startup rewrite); `AgentGraphJourneyTest` "any key joins any task and works on it beside the others, and its creator archives it at any time, letting them go"; `Keyfleet.ActivityTest`, `KeyfleetWeb.ActivityLinesTest` and `WorkspacePageTest` for activity, the page and its lines; `platform/test/browser/group_flow.spec.ts` joins a task before working on it.
