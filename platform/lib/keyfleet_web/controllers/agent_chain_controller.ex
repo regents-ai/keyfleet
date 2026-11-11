@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.AgentChainController do
   def buy(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :buy, %{})
 
   # Shards of the Keys named, for the wallet and days named, as the Key
-  # page's New shard form types them.
+  # page's New shard sends them.
   def issue_shard(conn, %{"fleet_id" => fleet_id}),
     do:
       answer(conn, fleet_id, :issue_shard, %{
