@@ -164,7 +164,7 @@ defmodule Keyfleet.AgentKeyTest do
     again = pair!("did:privy:agent-keys", "Bolt", wallet("2"))
 
     assert Keys.identity(again, @fleet) == %{token_id: 25, wallet: wallet("a"), for_person: true}
-    assert {:ok, nil} = Keys.assigned_key(again, @fleet, actor: again)
+    assert {:ok, nil} = Keys.assigned_key(again, @fleet)
   end
 
   test "a Key the person doesn't hold, or an agent not paired with them now, is refused and changes nothing",
@@ -212,10 +212,16 @@ defmodule Keyfleet.AgentKeyTest do
 
     assert Enum.map(Keys.agent_keys_of_person!(actor: c.person), & &1.token_id) == [41]
     assert Enum.map(Keys.agent_keys_of_person!(actor: c.cato), & &1.token_id) == [7]
-    assert {:ok, nil} = Keys.assigned_agent_key(@fleet, actor: c.bolt)
-    assert {:ok, %{token_id: 7}} = Keys.assigned_agent_key(@fleet, actor: c.cato)
+    assert {:ok, nil} = Keys.assigned_key(c.bolt, @fleet)
+    assert {:ok, %{token_id: 7}} = Keys.assigned_key(c.cato, @fleet)
 
     assert {:error, %Ash.Error.Forbidden{}} = Keys.agent_keys_of_person(actor: @system)
+
+    # Which Key any agent is on is read by trusted code alone.
+    for actor <- [c.person, c.astra] do
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keys.agent_keys_of_agents(@fleet, [wallet("1")], actor: actor)
+    end
   end
 
   defp on_keys(actor) do

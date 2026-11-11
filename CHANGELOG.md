@@ -7485,3 +7485,35 @@ Check: `platform/test/keyfleet/agent_key_test.exs`,
 tests in `platform/test/keyfleet_web/shell_live_test.exs`, Your agent in
 `platform/test/keyfleet_web/live/key_profile_test.exs`, and the browser walk
 `account_agents.spec.ts` (not run here).
+
+## 2026-11-12 — Agents on Keys: changes in turn, a reason for each refusal
+
+Fixes from review of the agents-on-Keys change.
+
+- One rule for the Key a person put an agent on: `Keys.assigned_keys/2` reads
+  it for any number of agents at once (one read of their rows, one of their
+  people, one of the Keys those people hold), and `Keys.assigned_key/2`,
+  `Keys.identity/2`, the workspace check (`KeyActor`), the standing check and
+  the fleet's agent list (`AgentProfile` `:key`, now
+  `Keyfleet.Agents.Calculations.Key`) all call it. The agent list's own SQL
+  copy of the rule is gone, and so is `assigned_agent_key`; the read behind
+  it, `AgentKey` `:of_agents`, answers the system actor only.
+- Two changes to one person's agents on Keys at once run one after the
+  other. `Keyfleet.Keys.Changes.PutAgent` locks the pairings first, in wallet
+  order (the writing agent's own, `RegentAgents.Authority.lock/4`, and the
+  named agent's), then the person's rows it changes, lowest Key first, so a
+  swap no longer deadlocks. A put onto a Key that another change gave an
+  agent since answers 409 `agent_keys_changed` (read again, send again), and
+  Your Keys says another change was saved first.
+- Each refused assign says why: 403 `agent_not_paired` for an agent unpaired
+  after it signed, 409 `key_not_held`, 409 `agent_unknown`, 422
+  `invalid_request` for a bad Key or wallet, 404 `fleet_unknown`. None
+  answers a fault any more.
+- `cli/COMMANDS.md`, `cli/commands.json`, the tool manifest, the tool
+  description, docs and the contract (28.1.0, `AgentKeyRefusedError` gains
+  `agent_keys_changed`) say so.
+
+Check: `platform/test/keyfleet/agent_key_race_test.exs` (new: a held swap, ten
+swaps sent at once, two puts onto one empty Key, the agent's 409), the
+refusal test in `platform/test/keyfleet_web/agent_key_route_test.exs`, and
+`platform/test/keyfleet/agent_key_test.exs`.

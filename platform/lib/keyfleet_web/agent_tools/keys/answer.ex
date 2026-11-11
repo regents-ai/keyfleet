@@ -29,6 +29,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   steps down. With no shards, `hint` says how to get one; otherwise it is null.
   """
 
+  alias Ash.Error.Changes.{InvalidArgument, InvalidAttribute, StaleRecord}
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
@@ -37,7 +38,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys
-  alias Keyfleet.Keys.Errors.AgentUnknownError
+  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError, NotPairedError}
   alias Keyfleet.Keys.Profile
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.KeyUnknownError
@@ -132,8 +133,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
       agent_keys(fleet_id, actor)
     else
       nil -> refusal(404, "fleet_unknown")
-      {:error, %Ash.Error.Forbidden{}} -> refusal(403, "person_not_here")
-      {:error, %Ash.Error.Invalid{errors: errors}} -> refuse_assign(errors)
+      {:error, error} -> refuse_assign(error)
     end
   end
 
@@ -188,16 +188,33 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
 
   defp token_id(_value), do: {:error, :invalid_token_id}
 
-  defp refuse_assign(errors) do
-    if Enum.any?(errors, &match?(%AgentUnknownError{}, &1)),
-      do: refusal(409, "agent_unknown"),
-      else: refusal(409, "key_not_held")
+  # Each refusal putting an agent on a Key has, by its own reason. A write
+  # that crossed another for the same Key changes nothing and is sent again;
+  # anything else is a fault, raised as one.
+  defp refuse_assign(%Ash.Error.Forbidden{errors: errors}) do
+    if Enum.any?(errors, &match?(%NotPairedError{}, &1)),
+      do: refusal(403, "agent_not_paired"),
+      else: refusal(403, "person_not_here")
   end
+
+  defp refuse_assign(%Ash.Error.Invalid{errors: errors} = error) do
+    cond do
+      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) -> refusal(404, "fleet_unknown")
+      Enum.any?(errors, &match?(%KeyNotHeldError{}, &1)) -> refusal(409, "key_not_held")
+      Enum.any?(errors, &match?(%AgentUnknownError{}, &1)) -> refusal(409, "agent_unknown")
+      Enum.any?(errors, &match?(%StaleRecord{}, &1)) -> refusal(409, "agent_keys_changed")
+      Enum.any?(errors, &match?(%InvalidArgument{}, &1)) -> refusal(422, "invalid_request")
+      Enum.any?(errors, &match?(%InvalidAttribute{}, &1)) -> refusal(422, "invalid_request")
+      true -> raise error
+    end
+  end
+
+  defp refuse_assign(error), do: raise(Ash.Error.to_error_class(error))
 
   defp agent_keys(fleet_id, %Agent{pairing: %Human{wallet_addresses: wallets}} = actor) do
     agents = Keys.person_agents(actor)
     on_keys = Keys.agents_on_keys(actor, agents)
-    {:ok, yours} = Keys.assigned_key(actor, fleet_id, actor: actor)
+    yours = Keys.assigned_key!(actor, fleet_id)
 
     keys =
       for key <- Keys.keys_held_in_fleet!(fleet_id, wallets, actor: actor),
