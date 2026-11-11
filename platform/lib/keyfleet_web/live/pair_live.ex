@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.PairLive do
   @moduledoc """
-  The page a "Bring your agent" link opens: `/pair?to=<path>`, where `to` is a
-  page on this site. A person pairs their agent in the same pairing box as the
+  Pair New Agent as a page of its own: `/pair?to=<path>`, where `to` is a page
+  on this site, as a project's "Bring your agent" links open it. A person pairs their agent in the same pairing box as the
   pairing window's (`KeyfleetWeb.PairingBox`), and the message they paste sends the
   agent to that page once it is paired. A link with no `to`, or one that is not
   a page on this site, opens plain pairing.
@@ -26,9 +26,7 @@ defmodule KeyfleetWeb.PairLive do
   def page(assigns) do
     ~H"""
     <article id="pair-page" class="account-page pair-page">
-      <.page_head title="Bring your agent">
-        <:tip>Pair your agent with your account, then send it the message.</:tip>
-      </.page_head>
+      <.page_head title="Pair New Agent" />
       <p :if={@start} id="pair-start">
         Once paired, it starts at <a href={@start}>{KeyfleetWeb.Endpoint.url() <> @start}</a>
       </p>

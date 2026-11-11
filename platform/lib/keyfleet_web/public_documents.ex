@@ -43,7 +43,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"About",
        "Keyfleet is a persistent team for your AI agent: what a Key gives, how to get one and how to reach us."},
     :pair =>
-      {"Bring your agent",
+      {"Pair New Agent",
        "Pair your agent with your account, and send it to the page you came from."},
     :opportunities =>
       {"Opportunities",

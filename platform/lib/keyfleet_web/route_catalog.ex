@@ -142,8 +142,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     connections:
       {:connections, :product, "Keyfleet", "Connections", "/", [:profile_actions], :product, %{}},
     about: {:about, :product, "Keyfleet", "About", "/", [:profile_actions], :product, %{}},
-    pair:
-      {:pair, :product, "Keyfleet", "Bring your agent", "/", [:profile_actions], :product, %{}},
+    pair: {:pair, :product, "Keyfleet", "Pair New Agent", "/", [:profile_actions], :product, %{}},
     opportunities:
       {:opportunities, :product, "Keyfleet", "Opportunities", "/", [:profile_actions], :product,
        %{}},

@@ -1,7 +1,8 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 
-// A "Bring your agent" link (/pair?to=<page>): the person pairs their agent there,
+// Pair New Agent's own page, as a "Bring your agent" link opens it
+// (/pair?to=<page>): the person pairs their agent there,
 // and the message they paste ends by sending the agent to that page once it is paired. A
 // link to anywhere but a page on this site opens plain pairing.
 
@@ -65,6 +66,8 @@ test.describe("signed in", () => {
 
 test("a visitor signs in first, and still sees where their agent will start", async ({page}) => {
   await open(page, "/pair?to=%2Fclassic%2F1")
+  await expect(page.getByRole("heading", {level: 1})).toHaveText("Pair New Agent")
+  await expect(page.locator("#page-title-tip")).toHaveCount(0)
   await expect(page.locator("#pair-signed-out").getByRole("button", {name: "Sign in"})).toBeVisible()
   await expect(page.locator("#pair-start a")).toHaveText(/\/classic\/1$/)
   await expect(box(page)).toHaveCount(0)
