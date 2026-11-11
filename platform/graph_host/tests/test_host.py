@@ -101,7 +101,6 @@ REFUSALS = [
         for field in FORBIDDEN_FIELDS
     ],
     ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "unset": ["sys"]}, command("c"))),
-    ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "set": {"assignee_key": 99}}, command("c"))),
     ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "set": {"progress": "done"}}, command("c"))),
     ("forbidden_field", request("patch", {"id": "task#2", "expected_version": 1, "set": {"result_ref": "ipfs://cid"}}, command("c"))),
     ("forbidden_field", request("create", {"project": "general", "type": "task", "data": {"title": "t", "progress": "done"}}, command("c"))),
@@ -123,9 +122,7 @@ REFUSALS = [
     ("not_found", request("link", {"source": "finding#3", "target": "goal#404", "type": "supports"}, command("c"))),
     ("not_found", request("unlink", {"relation_id": "rel_404"}, command("c"))),
     ("not_found", request("join", {"id": "goal#404"}, command("c"))),
-    ("invalid", request("join", {"id": "task#2"}, command("c"))),
     ("invalid", request("join", {"id": "note#4"}, command("c"))),
-    ("invalid", request("leave", {"id": "task#2"}, command("c"))),
     ("bad_request", request("join", {"id": "goal#1", "expected_version": 2}, command("c"))),
     ("duplicate_mismatch", request("create", {"project": "general", "type": "task", "data": {"title": "Other"}}, command("s2"))),
     ("duplicate_mismatch", request("archive", {"id": "task#2", "expected_version": 1}, command("s2"))),
@@ -307,13 +304,11 @@ def test_a_patch_that_changes_nothing_is_refused_on_a_goal_from_an_older_pack(se
     assert same["error"]["code"] == "invalid"
 
 
-def test_a_goal_records_at_most_its_limit_of_members(seeded):
-    for token_id in range(1, 101):
+def test_a_goal_records_every_member_that_joins_it(seeded):
+    for token_id in range(1, 151):
         assert _call(seeded, request("join", {"id": "goal#1"}, command(f"j{token_id}", token_id=token_id)))["ok"]
 
-    full = _call(seeded, request("join", {"id": "goal#1"}, command("j101", token_id=101)))
-    assert full["error"]["code"] == "invalid"
-    assert _ok(seeded, "join", {"id": "goal#1"}, "again") == {"id": "goal#1", "version": 102}
+    assert len(seeded.graph.get_object("goal#1").data["sys"]["joined"]) == 150
 
 
 def _all_changes(host, limit):

@@ -155,7 +155,7 @@ defmodule Keyfleet.ActivityTest do
     link = Workspace.link(@fleet, finding, goal, "relates_to")
     Workspace.unlink(@fleet, link)
     Workspace.attention(@fleet, "stale", task)
-    Workspace.edit(@fleet, task, %{"assignee_key" => 17})
+    Workspace.join(@fleet, task)
     Workspace.submit(@fleet, task, "https://example.com/plates")
     Workspace.link(@fleet, finding, goal, "contradicts")
 
@@ -175,11 +175,7 @@ defmodule Keyfleet.ActivityTest do
                  target: %{id: goal, type: "goal", title: "Survey the hull"}
                },
                %{by: by, item: %{id: task, type: "task", title: "Map every plate"}},
-               %{
-                 by: by,
-                 item: %{id: task, type: "task", title: "Map every plate"},
-                 to: %{token_id: 17, agent: nil}
-               },
+               %{by: by, item: %{id: task, type: "task", title: "Map every plate"}},
                %{by: by, item: %{id: goal, type: "goal", title: "Survey the hull"}},
                %{by: by, item: %{id: finding, type: "finding", title: "Rust", confidence: "low"}},
                %{by: by, item: %{id: task, type: "task", title: "Map every plate"}},
@@ -290,31 +286,32 @@ defmodule Keyfleet.ActivityTest do
              ]
   end
 
-  test "tasks one Key adds, takes on and gives to other Keys are one line" do
+  test "tasks one Key adds in a row are one line, and each Key that joins one is its own" do
     Workspace.create(@fleet, "note", %{"title" => "Plates"})
-
-    for key <- [4, 8] do
-      task = Workspace.create(@fleet, "task", %{"title" => "Map plate #{key}"})
-      Workspace.edit(@fleet, task, %{"assignee_key" => key})
-    end
-
+    for n <- 1..3, do: Workspace.create(@fleet, "task", %{"title" => "Map plate #{n}"})
     Workspace.create(@fleet, "task", %{"title" => "Paint the hull"}, by: 5)
     own = Workspace.create(@fleet, "task", %{"title" => "Check the rivets"})
-    Workspace.edit(@fleet, own, %{"assignee_key" => 17})
+    Workspace.join(@fleet, own, by: 8)
+    Workspace.join(@fleet, own, by: 4)
 
     %{items: items} = page(nil)
 
     assert for(
              %{kind: kind} = item <- items,
-             kind in [:created, :claimed, :tasks],
+             kind in [:created, :joined, :tasks],
              do: {kind, item.facts.by.token_id}
            ) ==
-             [{:tasks, 17}, {:created, 5}, {:tasks, 17}, {:created, 17}]
+             [
+               {:joined, 4},
+               {:joined, 8},
+               {:created, 17},
+               {:created, 5},
+               {:tasks, 17},
+               {:created, 17}
+             ]
 
-    assert [
-             %{added: 1, taken: 1, given: 0, to: [], others: 0},
-             %{added: 2, taken: 0, given: 2, to: [4, 8], others: 0}
-           ] = for(%{kind: :tasks} = item <- items, do: item.facts)
+    assert [%{by: %{token_id: 17}, added: 3}] =
+             for(%{kind: :tasks} = item <- items, do: item.facts)
   end
 
   test "one change a Key makes to items of one type in a row is one line" do

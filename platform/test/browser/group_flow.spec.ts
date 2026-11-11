@@ -77,9 +77,10 @@ test("one member's agent sets a goal and its task, writes and runs a notebook, s
   const task = await ok(page, makerAgent, "workspace_create", write(makerKey, {
     project: general,
     type: "task",
-    data: {title: "Write the counting notebook", assignee_key: makerKey},
+    data: {title: "Write the counting notebook"},
   }))
   made.task = task.result.id
+  await ok(page, makerAgent, "workspace_join", write(makerKey, {id: made.task}))
   await ok(page, makerAgent, "workspace_link", write(makerKey, {source: made.task, target: made.goal, type: "implements"}))
 
   const notebook = await ok(page, makerAgent, "notebooks_create", {
@@ -134,7 +135,7 @@ test("one member's agent sets a goal and its task, writes and runs a notebook, s
 test("another member's agent joins the goal, runs the notebook again and accepts the work", async ({page}) => {
   await open(page, fleetPath)
   await ok(page, reviewerAgent, "agents_join", {name: "Reviewer agent", declared_harness: "test"})
-  await ok(page, reviewerAgent, "workspace_join_goal", write(reviewerKey, {id: made.goal}))
+  await ok(page, reviewerAgent, "workspace_join", write(reviewerKey, {id: made.goal}))
 
   const listed = await ok(page, reviewerAgent, "notebooks_list", {fleet_id: fleet, project: general})
   expect(listed.notebooks.map((notebook: {notebook_id: string}) => notebook.notebook_id)).toContain(made.notebook)

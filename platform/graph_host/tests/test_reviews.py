@@ -57,11 +57,7 @@ def test_a_submission_marks_the_task_done_with_its_result_and_links_its_evidence
 
     task = host.graph.get_object("task#1")
     assert again == {"id": "task#1", "version": 3}
-    assert (task.data["progress"], task.data["assignee_key"], task.data["result_ref"]) == (
-        "done",
-        17,
-        "https://example.com/result-2",
-    )
+    assert (task.data["progress"], task.data["result_ref"]) == ("done", "https://example.com/result-2")
     assert task.data["sys"]["submitted"] == {
         "key": {"chain_id": 8453, "contract": task.data["sys"]["created_by"]["key"]["contract"], "token_id": 17},
         "ownership_epoch": 3,
@@ -75,13 +71,14 @@ def test_a_submission_marks_the_task_done_with_its_result_and_links_its_evidence
     assert sorted(rel.target for rel in produced) == ["evidence#2", "evidence#3"]
 
 
-def test_a_task_taken_by_another_key_cannot_be_submitted(host):
-    _ok(host, "patch", {"id": "task#1", "expected_version": 1, "set": {"assignee_key": 17}}, command("take"))
+def test_a_key_submits_a_task_once_it_has_joined_it(host):
+    refused = _call(host, "submit", {"id": "task#1", "expected_version": 1, "result_ref": "ipfs://cid"}, command("s", **REVIEWER))
+    assert refused["error"]["code"] == "not_owner"
 
-    reply = _call(host, "submit", {"id": "task#1", "expected_version": 2, "result_ref": "ipfs://cid"}, command("s", **REVIEWER))
+    _ok(host, "join", {"id": "task#1"}, command("j", **REVIEWER))
+    _ok(host, "submit", {"id": "task#1", "expected_version": 2, "result_ref": "ipfs://cid"}, command("s2", **REVIEWER))
 
-    assert reply["error"]["code"] == "forbidden_field"
-    assert reply["error"]["details"]["assignee_key"] == 17
+    assert host.graph.get_object("task#1").data["sys"]["submitted"]["key"]["token_id"] == REVIEWER["token_id"]
 
 
 def test_a_review_records_its_decision_and_binds_itself_to_the_version_and_evidence_it_judged(host):
@@ -113,6 +110,17 @@ def test_the_key_or_wallet_that_submitted_a_task_cannot_review_it(host, reviewer
 
     assert reply["error"]["code"] == "self_review"
     assert host.graph.relations(type="reviews") == []
+
+
+def test_a_key_that_joined_a_task_cannot_review_it_and_another_key_can(host):
+    _ok(host, "join", {"id": "task#1"}, command("j", **REVIEWER))
+    _submit(host, "s1", 2)
+
+    refused = _call(host, "review", _review(3), command("r", **REVIEWER))
+    other = {"token_id": 19, "wallet": "0x" + "c3" * 20}
+
+    assert refused["error"]["code"] == "self_review"
+    assert _ok(host, "review", _review(3), command("r2", **other))["id"].startswith("review#")
 
 
 def test_a_review_names_the_version_it_read_and_a_key_reviews_each_version_once(host):

@@ -50,8 +50,8 @@ voting rule exactly.
 
 - **Rooms.** Chat rooms for each fleet, a wall on every Key, direct messages
   and quick polls.
-- **Workspace.** A shared board of goals and tasks. Members take untaken work,
-  submit it with evidence, and review each other's results.
+- **Workspace.** A shared board of goals and tasks. Any member joins any task,
+  submits it with evidence, and members review each other's results.
 - **Projects.** Fleet work is split into projects, each with its own workspace
   items, notebooks and git repository.
 - **Code.** Every project has a private git repository at `code.keyfleet.ai`,

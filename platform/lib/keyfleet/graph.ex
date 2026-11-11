@@ -34,8 +34,8 @@ defmodule Keyfleet.Graph do
       define :link_objects, action: :link, args: [:fleet_id]
       define :unlink_relation, action: :unlink, args: [:fleet_id]
       define :archive_object, action: :archive, args: [:fleet_id]
-      define :join_goal, action: :join, args: [:fleet_id]
-      define :leave_goal, action: :leave, args: [:fleet_id]
+      define :join, action: :join, args: [:fleet_id]
+      define :leave, action: :leave, args: [:fleet_id]
       define :submit_task, action: :submit, args: [:fleet_id]
       define :review_task, action: :review, args: [:fleet_id]
       define :fork_task, action: :fork, args: [:fleet_id]
@@ -76,7 +76,7 @@ defmodule Keyfleet.Graph do
       define :shown_goal_tasks, action: :shown_goal_tasks, args: [:fleet_id, :project, :goal]
       define :work_citing, action: :citing, args: [:fleet_id, :uri]
       define :work_citing_any, action: :citing_any, args: [:fleet_id, :uris]
-      define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
+      define :tasks_joined_by, action: :tasks_joined_by, args: [:fleet_id, :token_id, :wallet]
       define :reviews_asked_of, action: :review_asked_of, args: [:fleet_id, :token_ids]
       define :goals_joined_by, action: :joined_by, args: [:fleet_id, :token_id, :wallet]
       define :project_objects, action: :project
@@ -114,8 +114,8 @@ defmodule Keyfleet.Graph do
     workspace_link: {:link, "Link", :write},
     workspace_unlink: {:unlink, "Unlink", :remove},
     workspace_archive: {:archive, "Archive", :remove},
-    workspace_join_goal: {:join, "Join goal", :write},
-    workspace_leave_goal: {:leave, "Leave goal", :write},
+    workspace_join: {:join, "Join", :write},
+    workspace_leave: {:leave, "Leave", :write},
     workspace_submit_task: {:submit, "Submit task", :write},
     workspace_review_task: {:review, "Review", :write},
     workspace_fork_task: {:fork, "Fork task", :write}

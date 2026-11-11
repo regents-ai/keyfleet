@@ -30,7 +30,6 @@ defmodule Keyfleet.WorkspaceFixtures do
     "task" => %{
       "deliverable" => nil,
       "acceptance_criteria" => [],
-      "assignee_key" => nil,
       "reviewer_key" => nil,
       "progress" => "todo",
       "next_step" => nil,
@@ -80,11 +79,12 @@ defmodule Keyfleet.WorkspaceFixtures do
   it) and `:project` (`general`).
   """
   def create(fleet_id, type, data, opts \\ []) do
-    sys = %{
-      "project" => Keyword.get(opts, :project, "general"),
-      "created_by" => member(opts),
-      "archived" => false
-    }
+    sys =
+      Map.merge(joinable(type), %{
+        "project" => Keyword.get(opts, :project, "general"),
+        "created_by" => member(opts),
+        "archived" => false
+      })
 
     add(fleet_id, type, data, sys, principal(opts), opts)
   end
@@ -98,7 +98,8 @@ defmodule Keyfleet.WorkspaceFixtures do
       "project" => "general",
       "created_by" => nil,
       "starting" => number,
-      "archived" => false
+      "archived" => false,
+      "joined" => []
     }
 
     add(fleet_id, "goal", data, sys, "keyfleet:starting_goals", opts)
@@ -155,7 +156,7 @@ defmodule Keyfleet.WorkspaceFixtures do
     end)
   end
 
-  @doc "Joins a goal as a member does: the key `:by` with the fixtures' agent wallet."
+  @doc "Joins a goal or task as a member does: the key `:by` with the fixtures' agent wallet."
   def join(fleet_id, id, opts \\ []) do
     append(fleet_id, fn seq ->
       [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
@@ -167,8 +168,8 @@ defmodule Keyfleet.WorkspaceFixtures do
   end
 
   @doc """
-  Submits a task for review as a member's submit does: the task is done and
-  the key `:by`'s, with `result_ref` as its result.
+  Submits a task for review as a member's submit does: the task is done,
+  with `result_ref` as its result, submitted by the key `:by`.
   """
   def submit(fleet_id, id, result_ref, opts \\ []) do
     append(fleet_id, fn seq ->
@@ -176,7 +177,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       submitted = Map.merge(member(opts), %{"version" => object.version + 1, "evidence" => []})
 
       set =
-        %{"progress" => "done", "assignee_key" => by(opts), "result_ref" => result_ref}
+        %{"progress" => "done", "result_ref" => result_ref}
         |> Enum.reject(fn {field, value} -> object.data[field] == value end)
         |> Map.new()
 
@@ -434,6 +435,10 @@ defmodule Keyfleet.WorkspaceFixtures do
   end
 
   defp by(opts), do: Keyword.get(opts, :by, 17)
+
+  # A goal or task records who joined it from the start, as the graph stores one.
+  defp joinable(type) when type in ["goal", "task"], do: %{"joined" => []}
+  defp joinable(_type), do: %{}
 
   defp member(opts) do
     %{

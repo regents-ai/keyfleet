@@ -310,7 +310,7 @@ Everything else is refused as `bad_request`. That includes raw emit, `load_pack`
 4. Scope: every touched object's `sys.scope` is in `writable_scopes`. For `link` and `unlink` this means both endpoints; for `create` it means the requested scope. `sys.scope` is set at creation and no member write can change it.
 
 `writable_scopes` is resolved in Elixir by `Keyfleet.Graph.Checks.KeyActor`, at the write's turn and only while the fleet's key ownership is fresh (otherwise `ownership_refreshing`, 503). Every key writes `fleet`. A key of a Fibonacci fleet whose token is in level K also writes `level:K`, and `level:L` for L > K once every key of level L is sold; never L < K. Level L is complete once the fleet's sold keys reach the last token id of that level (2, 5, 10, 18, …). The number sold is the highest key number the chain projection has recorded: the contract numbers keys from 1 in the order it sells them and has no way to burn one (`contracts/src/Keyfleet.sol`, `purchase` and `_update`), and a transfer adds no key. Every read the check makes gets what is left of its time budget, and none starts once it is spent; a check that runs out answers the write as unavailable (503). Classic and Accelerant keys write `fleet` only. The host checks the scope strings against `^(fleet|level:([1-9]|1[0-9]|20))$` and refuses any other as `bad_request`.
-5. Field rules: the forbidden set, and the `assignee_key` rule.
+5. Field rules: the forbidden set, and the creator's fields of a task (`title`, `deliverable`, `acceptance_criteria`).
 6. Schema on the merged data.
 7. `BEGIN IMMEDIATE` … `COMMIT` as in §3.
 
@@ -320,7 +320,7 @@ Everything else is refused as `bad_request`. That includes raw emit, `load_pack`
 |---|---|---|
 | `conflict` | 409 | `{current_version, object}`: the whole current object, so the client can merge without a second read |
 | `invalid` | 422 | `{errors: [{path, message}]}` covering schema, bounds, unknown type or relation, endpoint types, a self-link on `depends_on`, and a patch on an archived object |
-| `forbidden_field` | 422 | `{fields: [...]}`, for any write to `sys`, to server-owned fields, or of `assignee_key` to another key |
+| `forbidden_field` | 422 | `{fields: [...]}`, for any write to `sys` or to server-owned fields |
 | `forbidden_scope` | 403 | `{scope}` |
 | `not_found` | 404 | `{id}` |
 | `duplicate_mismatch` | 422 | `{command_id}`. The command id was already used with a different body. |
@@ -342,7 +342,7 @@ Every model uses `ConfigDict(extra="forbid")`. Strings are trimmed and length-bo
 | Type | Member fields (**required in bold**) |
 |---|---|
 | `goal` | **title**, **outcome** (≤2000), `success_criteria` [str ≤500], `open_questions` [str ≤500], `status` ∈ open/achieved/dropped (default open) |
-| `task` | **title**, `deliverable` (≤2000), `assignee_key` (token_id or null; may be set only to the caller's own `as_key` or cleared), `progress` ∈ todo/doing/blocked/done (default todo), `next_step` (≤1000), `result_ref` (URI) |
+| `task` | **title**, `deliverable` (≤2000), `progress` ∈ todo/doing/blocked/done (default todo), `next_step` (≤1000), `result_ref` (URI) |
 | `finding` | **title**, **statement** (≤4000), `confidence` ∈ low/medium/high (default low), `uncertainty` (≤2000) |
 | `evidence` | **title**, **source_uri**, `digest` (`sha256:<64 hex>`), `excerpt` (≤4000), `provenance` (≤1000; how it was obtained) |
 | `service` | **title**, **customer** (≤500), **problem** (≤2000), **deliverable** (≤2000), `payment_asset` ∈ USDC/REGENT/FLEET_TOKEN, `price_proposal` (decimal string), `implementation_refs` [URI] |

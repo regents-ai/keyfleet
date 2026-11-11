@@ -35,7 +35,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
   `get` and `changes` name, in `agents`, the agents behind what they
   answer, by wallet: the agent that created the object, or that made each
   change, with the name it gave itself, as the fleet's pages show it beside
-  the Key. A goal's agents include each agent that joined it.
+  the Key. A goal's or task's agents include each agent that joined it.
   """
   use Ash.Resource.Actions.Implementation
 
@@ -140,9 +140,19 @@ defmodule Keyfleet.Graph.Workspace.Read do
       project: object.project,
       standing: object.standing,
       owner_key: object.owner_key,
+      joined_keys: joined_keys(object.sys),
       archived: object.sys["archived"] == true,
       changed_at: object.changed_at
     }
+  end
+
+  # The Keys that joined a goal or task, each once, lowest first.
+  defp joined_keys(sys) do
+    sys
+    |> Map.get("joined", [])
+    |> Enum.map(& &1["key"]["token_id"])
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   # Each Key that owns any of the items, lowest first, with how many it owns.
