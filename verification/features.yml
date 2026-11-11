@@ -221,7 +221,7 @@ features:
       changes it, links from it and submits it, and leaves it for itself
       alone. Only its creator changes its title, deliverable or acceptance
       criteria, and archives it once every other Key has left. A Key that
-      joined a task can't review it. A restart turns each task held before
+      joined, changed or submitted a task can't review it, even after leaving. A restart turns each task held before
       into one joined by its holder's Key, when that Key had written in the
       fleet. Any
       member may also fork a task: the copy is the forker's task in progress,

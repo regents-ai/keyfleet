@@ -238,13 +238,18 @@ class Host:
         for field in body.unset:
             merged.pop(field, None)
         record = _validate(RECORD_MODELS[obj.type], merged)
-        # A member's patch never changes sys; a record from an older pack may
-        # validate with sys fields it never stored.
+        # A member's patch changes sys only to note a Key that worked on a
+        # task; a record from an older pack may validate with sys fields it
+        # never stored.
         updates = {
             field: value for field, value in record.items() if field != "sys" and obj.data.get(field) != value
         }
         if not updates:
             raise _invalid("set", "the patch changes nothing")
+        worked = _worked(obj, command) if obj.type == "task" else None
+        if worked is not None:
+            sys = {**obj.data["sys"], "worked": worked}
+            updates["sys"] = _validate(RECORD_MODELS["task"], {**record, "sys": sys})["sys"]
 
         def apply(reactions: Reactions) -> dict:
             self.graph.patch_object(
@@ -373,7 +378,7 @@ class Host:
             **task.data,
             "progress": "done",
             "result_ref": body.result_ref,
-            "sys": {**task.data["sys"], "submitted": submitted},
+            "sys": {**task.data["sys"], "submitted": submitted, "worked": _worked(task, command) or _worked_keys(task)},
         }
         record = _validate(RECORD_MODELS["task"], merged)
         updates = {field: value for field, value in record.items() if task.data.get(field) != value}
@@ -398,7 +403,7 @@ class Host:
         A review binds itself to that version, to who submitted it, to each
         piece of its evidence as it then stood and to the commit the task then
         named; it may say whether the reviewer reproduced the work from it. The Key or wallet that submitted
-        the task cannot review it, nor can a Key that joined it, as it worked on it; a Key reviews each
+        the task cannot review it, nor can a Key that joined, changed or submitted it, even after leaving it; a Key reviews each
         version once. Whether
         two different Keys belong to different people is not something the
         graph knows, so a review never claims it.
@@ -417,10 +422,10 @@ class Host:
                 "the Key or wallet that submitted a task cannot review it",
                 {"submitted_by": submitted_by},
             )
-        if _has_joined(task, command):
+        if _has_joined(task, command) or any(entry["key"] == reviewer["key"] for entry in _worked_keys(task)):
             raise Refusal(
                 "self_review",
-                "a Key that joined a task worked on it, so it cannot review it",
+                "a Key that joined, changed or submitted a task worked on it, so it cannot review it",
                 {"submitted_by": submitted_by},
             )
         for rel in self.graph.relations(target=task.id, type="reviews"):
@@ -799,6 +804,21 @@ def _has_joined(obj, command: Command) -> bool:
         entry["key"] == member["key"] and entry["ownership_epoch"] == member["ownership_epoch"]
         for entry in obj.data["sys"].get("joined", [])
     )
+
+
+# The Keys other than a task's creator that changed or submitted it.
+def _worked_keys(obj) -> list[dict[str, Any]]:
+    return obj.data["sys"].get("worked", [])
+
+
+# The task's workers with the acting Key added, or None when it is the
+# creator or already one of them.
+def _worked(obj, command: Command) -> Optional[list[dict[str, Any]]]:
+    worked = _worked_keys(obj)
+    member = _member(command)
+    if _creator(obj) == member["key"]["token_id"] or any(entry["key"] == member["key"] for entry in worked):
+        return None
+    return [*worked, member]
 
 
 # An item belongs to the Key that created it, and a task also to every Key

@@ -3703,7 +3703,7 @@ paths:
         the task. The review is a new object linked to the task by reviews; its sys.review records
         the task version, who submitted it, each piece of its evidence at the version it then had,
         and the commit the task then named. The Key or wallet that submitted the task can't review
-        it, nor can a Key that joined it, and a Key reviews each version once. Different Keys or wallets may still belong to one
+        it, nor can a Key that joined, changed or submitted it, even after leaving it, and a Key reviews each version once. Different Keys or wallets may still belong to one
         person; a review never says whether they do. A review is never changed, archived or
         linked by hand.
       security: [{siwaReceipt: []}]
@@ -5197,7 +5197,7 @@ components:
           schema: {$ref: "#/components/schemas/WorkspaceWrite"}
     WorkspaceRefused:
       description: >-
-        The workspace refused the request. 400 bad_request: the body does not fit the operation. 403 not_a_key_holder: the signing wallet neither owns the named Key nor holds a shard of it today, nor is paired with the person who owns it. An agent paired with a person, with no Key or shard of its own in the fleet, writes as its person's Key, recorded with the agent's wallet. 403 edits_restricted: a vote of the fleet has restricted the Key's workspace edits; details are empty. 403 not_owner: the item belongs to the Key that created it, and only that Key changes it, links from it or archives it; every Key that joined a task also changes it, links from it and submits it, but only its creator changes its title, deliverable or acceptance criteria. details.owner_key names the creator, details.joined_keys the Keys that joined a task, and details.fields the creator's fields a write named. 403 self_review: the Key or wallet that submitted the task, or a Key that joined it, asked to review it; details.submitted_by names who submitted it. agent_not_paired: the agent has no current pairing; its person signs in on this site and pairs it with Pair New Agent on their Agents page, then it signs the request again.
+        The workspace refused the request. 400 bad_request: the body does not fit the operation. 403 not_a_key_holder: the signing wallet neither owns the named Key nor holds a shard of it today, nor is paired with the person who owns it. An agent paired with a person, with no Key or shard of its own in the fleet, writes as its person's Key, recorded with the agent's wallet. 403 edits_restricted: a vote of the fleet has restricted the Key's workspace edits; details are empty. 403 not_owner: the item belongs to the Key that created it, and only that Key changes it, links from it or archives it; every Key that joined a task also changes it, links from it and submits it, but only its creator changes its title, deliverable or acceptance criteria. details.owner_key names the creator, details.joined_keys the Keys that joined a task, and details.fields the creator's fields a write named. 403 self_review: the Key or wallet that submitted the task, or a Key that joined, changed or submitted it, asked to review it; details.submitted_by names who submitted it. agent_not_paired: the agent has no current pairing; its person signs in on this site and pairs it with Pair New Agent on their Agents page, then it signs the request again.
       content:
         application/json:
           schema:
@@ -6350,10 +6350,15 @@ components:
                 goal can be joined and linked to, never changed or archived. Only a goal has it.
             joined:
               type: array
-              maxItems: 100
               description: >-
-                A goal's members who joined it, in the order they joined, one entry for each Key and
-                wallet. Only a goal has it; one no one has joined may leave it out.
+                A goal's or task's members who joined it, in the order they joined, one entry for each
+                Key and wallet, with no limit on how many join. Only a goal or task has it.
+              items: {$ref: "#/components/schemas/WorkspaceMember"}
+            worked:
+              type: array
+              description: >-
+                Each Key other than a task's creator that changed or submitted it, once, whether or not
+                it is still joined; none of them reviews the task. Only a task has it.
               items: {$ref: "#/components/schemas/WorkspaceMember"}
             submitted:
               type: object

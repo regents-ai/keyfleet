@@ -123,6 +123,23 @@ def test_a_key_that_joined_a_task_cannot_review_it_and_another_key_can(host):
     assert _ok(host, "review", _review(3), command("r2", **other))["id"].startswith("review#")
 
 
+def test_a_key_that_changed_a_task_cannot_review_it_after_leaving_and_one_that_only_joined_can(host):
+    worker = {"token_id": 19, "wallet": "0x" + "c3" * 20}
+    _ok(host, "join", {"id": "task#1"}, command("j1", **worker))
+    _ok(host, "patch", {"id": "task#1", "expected_version": 2, "set": {"progress": "doing"}}, command("p1", **worker))
+    _ok(host, "patch", {"id": "task#1", "expected_version": 3, "set": {"progress": "blocked"}}, command("p2", **worker))
+    _ok(host, "leave", {"id": "task#1"}, command("l1", **worker))
+    _ok(host, "join", {"id": "task#1"}, command("j2", **REVIEWER))
+    _ok(host, "leave", {"id": "task#1"}, command("l2", **REVIEWER))
+    _submit(host, "s1", 7)
+
+    refused = _call(host, "review", _review(8), command("r1", **worker))
+
+    assert refused["error"]["code"] == "self_review"
+    assert [entry["key"]["token_id"] for entry in host.graph.get_object("task#1").data["sys"]["worked"]] == [19]
+    assert _ok(host, "review", _review(8), command("r2", **REVIEWER))["id"].startswith("review#")
+
+
 def test_a_review_names_the_version_it_read_and_a_key_reviews_each_version_once(host):
     _submit(host, "s1", 1)
 
