@@ -188,6 +188,24 @@ defmodule Keyfleet.Activity do
     %{items: name(taken, fleet_id, read_as[:actor]), cursor: next_cursor(streams)}
   end
 
+  @doc """
+  The wallet each `:transfer` among `items` moved its key to, by the item's
+  id. The items name no wallet; a page that shows a run of transfers to one
+  wallet as one line reads them here.
+  """
+  @spec receivers(String.t(), [item()]) :: %{String.t() => String.t()}
+  def receivers(fleet_id, items) do
+    case for %{kind: :transfer, id: "transfer:" <> seq} <- items, do: String.to_integer(seq) do
+      [] ->
+        %{}
+
+      seqs ->
+        fleet_id
+        |> Keys.epochs_by_record_seq!(seqs)
+        |> Map.new(&{"transfer:#{&1.record_seq}", &1.owner_wallet})
+    end
+  end
+
   # The workspace's changes are read only by whoever reads the workspace.
   defp sources(fleet_id, read_as) do
     class =
