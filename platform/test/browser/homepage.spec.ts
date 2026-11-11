@@ -53,20 +53,6 @@ test("the starting ideas lay out by width, and each link names its site", async 
   await expect(ideas.getByRole("link", {name: "OpenEnv Arena"})).toHaveAttribute("target", "_blank")
 })
 
-test("Copy puts the instruction shown on the clipboard", async ({browser}) => {
-  const context = await browser.newContext({permissions: ["clipboard-read", "clipboard-write"]})
-  const page = await context.newPage()
-  await page.goto("/")
-  await waitForHomepage(page)
-
-  const shown = await page.locator("#home-instruction").evaluate(element => element.textContent!.replace(/\s+/g, " ").trim())
-  await page.getByRole("button", {name: "Copy the instruction"}).click()
-
-  await expect(page.locator("#home-instruction-copy-status")).toHaveText("Copied")
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shown)
-  await context.close()
-})
-
 // The homepage follows the visitor's saved theme like every other page, and offers the switch.
 test("the homepage shows the saved theme and offers the switch", async ({browser}) => {
   for (const saved of ["light", "dark"] as const) {
@@ -82,16 +68,14 @@ test("the homepage shows the saved theme and offers the switch", async ({browser
   }
 })
 
-// On a phone the page fits the screen, and the hero's "Buy Key" comes before the instruction.
-test("on a phone nothing scrolls sideways and Buy Key comes first", async ({page}) => {
+// On a phone the page fits the screen, with the hero's "Buy Key" on it.
+test("on a phone nothing scrolls sideways and Buy Key is there", async ({page}) => {
   for (const width of [320, 375]) {
     await page.setViewportSize({width, height: 812})
     await page.goto("/")
     await waitForHomepage(page)
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    const buy = await page.locator("#home-buy-key").boundingBox()
-    const give = await page.locator("#home-instruction").boundingBox()
-    expect(buy!.y).toBeLessThan(give!.y)
+    await expect(page.locator("#home-buy-key")).toBeVisible()
   }
 })

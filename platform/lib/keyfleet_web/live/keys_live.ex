@@ -34,6 +34,7 @@ defmodule KeyfleetWeb.KeysLive do
   alias KeyfleetWeb.Components.AgentSetup
   alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.PresenceCard
+  alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
@@ -212,18 +213,7 @@ defmodule KeyfleetWeb.KeysLive do
             </li>
           </ul>
 
-          <Regent.Primitives.button
-            :if={@key.agents == []}
-            id="key-issue-pair"
-            type="button"
-            variant="secondary"
-            arrow={false}
-            aria-haspopup="dialog"
-            aria-controls="shell-pairing"
-            data-pair-open
-          >
-            Pair New Agent
-          </Regent.Primitives.button>
+          <Shell.pair_button :if={@key.agents == []} id="key-issue-pair" />
 
           <Regent.Primitives.disclosure
             id="key-other-wallet"

@@ -54,7 +54,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Phoenix.Socket.Broadcast
 
   # The events each area's page sends, which that area's module answers.
-  @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready keymap_pictures find_keys select_key validate_quote send_quote)
+  @fleet_events ~w(activity_earlier open_pass_key keymap_ready keymap_pictures find_keys select_key validate_quote send_quote)
   @room_events ~w(mute_key unmute_key post_to_room)
   @key_profile_events ~w(post_to_key confirm_remove_from_wall cancel_remove_from_wall remove_from_wall close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
@@ -143,7 +143,6 @@ defmodule KeyfleetWeb.ShellLive do
        poll_confirm_end: false,
        shared: %{},
        buy_key: nil,
-       send_agent_open: false,
        pass_note: nil,
        quotes: nil
      )
@@ -172,7 +171,7 @@ defmodule KeyfleetWeb.ShellLive do
       {:error, _failure} ->
         {:noreply,
          socket
-         |> assign(route_spec: route_spec, load_failed?: true, send_agent_open: false)
+         |> assign(route_spec: route_spec, load_failed?: true)
          |> assign(PublicDocuments.page(route_spec, params))}
     end
   end
@@ -181,13 +180,13 @@ defmodule KeyfleetWeb.ShellLive do
     if coming_soon_inside?(route_spec, params) do
       {:noreply, push_patch(socket, to: Fleets.path(route_spec.fleet_id), replace: true)}
     else
-      # Going anywhere, back and forward included, closes "Send your agent",
-      # and leaves the room or conversation on show read as far as it was shown.
+      # Going anywhere, back and forward included, leaves the room or
+      # conversation on show read as far as it was shown.
       {:noreply,
        socket
        |> RoomsLive.leave()
        |> DmsLive.leave()
-       |> assign(route_spec: route_spec, send_agent_open: false)
+       |> assign(route_spec: route_spec)
        |> assign(:pair_start, PairLive.start(params))
        |> assign(PublicDocuments.page(route_spec, params))
        |> load_project(route_spec, params)
@@ -778,7 +777,6 @@ defmodule KeyfleetWeb.ShellLive do
           activity={@streams.activity}
           who={@streams.fleet_who}
           now={FleetLive.now_shown(@activity)}
-          send_agent_open={@send_agent_open}
           pass_note={@pass_note}
           quotes={@quotes}
           room={@room}

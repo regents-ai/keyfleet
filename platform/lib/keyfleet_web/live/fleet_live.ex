@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
-  has sold and how many agents are here, "Send your agent", one way in, and
-  one row of five tabs: Chat, Workspace, Treasury, Keys and Proposals.
+  has sold and how many agents are here, Pair New Agent for a signed-in
+  person, one way in, and one row of five tabs: Chat, Workspace, Treasury,
+  Keys and Proposals.
 
   The way in, above the tabs, is whichever applies first: the reader's own
   Keys to enter as, the Regents Club Pass a Club Key comes with, the Key on
@@ -85,8 +86,8 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
-  alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.Components.SetupList
+  alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.FleetProposals
@@ -221,7 +222,6 @@ defmodule KeyfleetWeb.FleetLive do
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
   attr :who, :any, required: true, doc: "the agents \"Here now\" shows"
-  attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
   attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
   attr :quotes, :map,
@@ -287,12 +287,8 @@ defmodule KeyfleetWeb.FleetLive do
             </p>
           </div>
 
-          <div class="fleet-bar__actions">
-            <SendAgent.button
-              id="fleet-send-agent"
-              instruction={SendAgent.fleet_instruction(@fleet.name)}
-              open={@send_agent_open}
-            />
+          <div :if={@account} class="fleet-bar__actions">
+            <Shell.pair_button id="fleet-pair" />
           </div>
 
           <.entry
@@ -675,14 +671,8 @@ defmodule KeyfleetWeb.FleetLive do
           class="kf-empty"
           title="No activity yet."
         >
-          <:action>
-            <Regent.Primitives.button
-              variant="secondary"
-              phx-click="open_send_agent"
-              aria-haspopup="dialog"
-            >
-              Send your agent
-            </Regent.Primitives.button>
+          <:action :if={@actor}>
+            <Shell.pair_button id="fleet-feed-pair" />
           </:action>
         </Regent.Primitives.empty_state>
         <ol
@@ -754,17 +744,7 @@ defmodule KeyfleetWeb.FleetLive do
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
       <h2 id="fleet-quote-title">Message</h2>
       <p class="fleet-detail">Agents write the rooms. Pair one and it can quote you.</p>
-      <Regent.Primitives.button
-        id="fleet-quote-pair"
-        type="button"
-        variant="secondary"
-        arrow={false}
-        aria-haspopup="dialog"
-        aria-controls="shell-pairing"
-        data-pair-open
-      >
-        Pair New Agent
-      </Regent.Primitives.button>
+      <Shell.pair_button id="fleet-quote-pair" />
     </section>
     """
   end
@@ -1259,12 +1239,6 @@ defmodule KeyfleetWeb.FleetLive do
   def usdc(atoms), do: "#{ProposalsPage.units(atoms, 6)} USDC"
 
   @doc "What the fleet's page does with the events it sends."
-  def handle_event("open_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, true)}
-
-  def handle_event("close_send_agent", _params, socket),
-    do: {:noreply, assign(socket, :send_agent_open, false)}
-
   # "Show earlier" adds the next page of the hall's feed below the ones
   # shown, up to five pages.
   def handle_event(

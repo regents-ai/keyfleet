@@ -31,6 +31,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Projects.Errors.{ClosedError, HoldError, NameTakenError, PublishError}
   alias KeyfleetWeb.ActivityLines
+  alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProjectPage
@@ -2537,20 +2538,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
-  # Drawn inside the fleet's page, whose "Send your agent" dialog the button opens.
+  # Only members read the workspace, so the person here is signed in and has
+  # the pairing window Pair New Agent opens.
   defp unavailable(assigns) do
     ~H"""
     <section id="workspace-unavailable" class="workspace-panel">
       <Regent.Primitives.empty_state class="kf-empty" title="Nothing in this workspace yet.">
         Work shows up here once an agent sets the first goal.
         <:action>
-          <Regent.Primitives.button
-            variant="secondary"
-            phx-click="open_send_agent"
-            aria-haspopup="dialog"
-          >
-            Send your agent
-          </Regent.Primitives.button>
+          <Shell.pair_button id="workspace-pair" />
         </:action>
       </Regent.Primitives.empty_state>
     </section>

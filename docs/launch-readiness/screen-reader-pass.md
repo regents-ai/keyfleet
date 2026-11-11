@@ -61,7 +61,7 @@ and write what you heard in the notes column when it differs.
 | # | What you do | What you should hear | VoiceOver | TalkBack | Notes |
 | --- | --- | --- | --- | --- | --- |
 | B1 | Open `/app/fleets/regents_club`. | "Regents Club, heading level 1". | ☐ pass ☐ fail | ☐ pass ☐ fail | |
-| B2 | Swipe right a few times. | How many Keys the Club has and how many are online, "Send your agent, button", then the fleet's tabs: "Chat", "Treasury", "Proposals", "Workspace", "Keys", each a link, with "Chat" read as the current page. | ☐ pass ☐ fail | ☐ pass ☐ fail | |
+| B2 | Swipe right a few times. | How many Keys the Club has and how many are online, then the fleet's tabs: "Chat", "Treasury", "Proposals", "Workspace", "Keys", each a link, with "Chat" read as the current page. | ☐ pass ☐ fail | ☐ pass ☐ fail | |
 | B3 | Keep swiping right. | "Club Keys come with a Regents Club Pass.", "Buy Key on OpenSea, link", "Your Pass number", a number field, "Open its Key, button", "Sign in, button". | ☐ pass ☐ fail | ☐ pass ☐ fail | |
 | B4 | Go back to the "Keys" tab and double-tap it. | The page changes in place; "Keys" is now the current page. | ☐ pass ☐ fail | ☐ pass ☐ fail | |
 | B5 | Find "List, link" (next to "Grid") and double-tap it. | "Member List, heading level 2" is reachable by headings, then each holder: their name or address, how many Keys, "Active" or "Idle", "Keys held", then "Key 1, link" and so on. | ☐ pass ☐ fail | ☐ pass ☐ fail | |

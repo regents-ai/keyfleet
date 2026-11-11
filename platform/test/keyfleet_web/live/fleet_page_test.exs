@@ -263,6 +263,27 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, ~s(#fleet-channels a[href*="room="]))
   end
 
+  # Pairing is the one thing a person pastes to an agent, so the bar sends a
+  # signed-in person to the pairing window; nobody signed out has one.
+  test "the bar's Pair New Agent opens the pairing window, for a signed-in person only", %{
+    conn: conn
+  } do
+    deploy!()
+    read_now()
+    {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(
+             view,
+             ~s(.fleet-bar button#fleet-pair[data-pair-open][aria-controls="shell-pairing"]),
+             "Pair New Agent"
+           )
+
+    assert has_element?(view, "dialog#shell-pairing form#shell-pairing-box")
+
+    {:ok, signed_out, _html} = live(build_conn(), @path)
+    refute has_element?(signed_out, "#fleet-pair")
+  end
+
   test "the bar's one row of tabs leads to the hall, the Keys and the treasury", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
@@ -407,7 +428,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute text(view, "#fleet-soon-facts") =~ "Keys"
 
       for id <-
-            ~w(fleet-get-key fleet-send-agent fleet-channels fleet-members fleet-tab-workspace
+            ~w(fleet-get-key fleet-pair fleet-channels fleet-members fleet-tab-workspace
                    fleet-tab-proposals fleet-tab-treasury fleet-tab-keys fleet-feed-list fleet-entry) do
         refute has_element?(view, "##{id}")
       end
@@ -1196,31 +1217,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         refute has_element?(view, "#key-map-fibonacci_cascade[data-selected]")
       end
     end
-  end
-
-  # The fleet's own "Send your agent" asks the agent to look at this fleet.
-  test "Send your agent gives an instruction naming this fleet", %{
-    conn: conn
-  } do
-    deploy!()
-    read_now()
-    {:ok, view, _html} = live(conn, @path)
-    refute has_element?(view, "#fleet-send-agent-dialog")
-
-    view |> element(".fleet-bar #fleet-send-agent") |> render_click()
-
-    instruction = text(view, "#fleet-send-agent-instruction")
-
-    assert instruction ==
-             "Install the Keyfleet skill from keyfleet.ai/skill.md and follow it. Then look at the Cascade #1 fleet and set up your daily run."
-
-    assert has_element?(
-             view,
-             ~s(#fleet-send-agent-copy[data-copy-text="#{instruction}"])
-           )
-
-    render_hook(view, "close_send_agent", %{})
-    refute has_element?(view, "#fleet-send-agent-dialog")
   end
 
   # The button's only job is to reach the wallet, whatever the page shows.

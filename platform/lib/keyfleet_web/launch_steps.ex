@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.LaunchSteps do
   @moduledoc """
   How many visits take each step into Keyfleet, counted on this site with
   nothing saved: the homepage opened (`home`), "Watch a live fleet" pressed
-  (`watch`), "Connect my agent" pressed (`connect`), and the homepage's setup
-  line copied (`copy`). Browsers report each step as it happens
+  (`watch`) and "Connect my agent" pressed (`connect`). Browsers report each
+  step as it happens
   (`assets/js/launch_steps.ts`, taken in by `KeyfleetWeb.LaunchStepsController`)
   and each report adds one to a Prometheus counter `KeyfleetWeb.Telemetry`
   exports. A report names only the step: never a person, an address, a wallet
@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.LaunchSteps do
   `keyfleet_launch_refused_total` counts the reports refused, by reason.
   """
 
-  @steps ~w(home watch connect copy)
+  @steps ~w(home watch connect)
 
   @doc """
   Counts one decoded report, or refuses it with `:error`: anything but a step

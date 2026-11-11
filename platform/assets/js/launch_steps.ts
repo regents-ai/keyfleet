@@ -1,10 +1,9 @@
 // The steps a visitor takes into Keyfleet, each sent to this site once as it
 // happens and counted there with nothing saved (KeyfleetWeb.LaunchSteps): the
-// homepage opened, "Watch a live fleet" or "Connect my agent" pressed, and the
-// homepage's setup line copied. A report names only the step: no person,
-// address, wallet or Key.
+// homepage opened, and "Watch a live fleet" or "Connect my agent" pressed. A
+// report names only the step: no person, address, wallet or Key.
 
-type Report = {step: "home" | "watch" | "connect" | "copy"}
+type Report = {step: "home" | "watch" | "connect"}
 
 export function installLaunchSteps(): void {
   // A browser a program drives, such as a test or a crawler,
@@ -32,10 +31,4 @@ export function installLaunchSteps(): void {
     },
     true,
   )
-
-  // Only a copy that worked, as the copy buttons report it.
-  document.addEventListener("copy-button:copied", event => {
-    const button = event.target instanceof HTMLElement ? event.target : null
-    if (button?.dataset.step === "copy") send({step: "copy"})
-  })
 }

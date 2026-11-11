@@ -61,18 +61,6 @@ test("the homepage and each way in are counted once", async ({page}) => {
   await expect.poll(() => answers).toEqual([204, 204, 204, 204])
 })
 
-test("the homepage's copied setup line is counted", async ({page}) => {
-  const {sent, answers} = reports(page)
-
-  await page.goto("/")
-  await connected(page)
-  await page.locator("#home-instruction-copy").click()
-  await expect(page.locator("#home-instruction-copy")).toHaveAttribute("data-copy-state", "copied")
-
-  await expect.poll(() => sent).toEqual([{step: "home"}, {step: "copy"}])
-  await expect.poll(() => answers).toEqual([204, 204])
-})
-
 test("a browser a program drives reports nothing", async ({browser}) => {
   const page = await browser.newPage()
   const {sent} = reports(page)

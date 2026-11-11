@@ -64,7 +64,7 @@ defmodule KeyfleetWeb.HomeLive do
     ShellLive
   }
 
-  alias KeyfleetWeb.Components.{BuyKey, SendAgent, Shell}
+  alias KeyfleetWeb.Components.{BuyKey, Shell}
 
   @classic "fleet_tech_classic"
 
@@ -403,21 +403,6 @@ defmodule KeyfleetWeb.HomeLive do
       </div>
 
       <.buy_key classic={@classic} />
-
-      <div class="rl-give">
-        <p class="rl-give__label">Give this to your agent</p>
-        <div class="rl-give__command">
-          <p id="home-instruction" class="rl-give__text">{SendAgent.home_instruction()}</p>
-          <Regent.Primitives.copy_button
-            id="home-instruction-copy"
-            text={SendAgent.home_instruction()}
-            data-step="copy"
-            aria-label="Copy the instruction"
-          >
-            Copy
-          </Regent.Primitives.copy_button>
-        </div>
-      </div>
     </section>
     """
   end

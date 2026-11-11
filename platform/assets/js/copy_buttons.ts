@@ -17,8 +17,6 @@ const timers = new WeakMap<HTMLElement, number>()
  * and there is a target, the target's text is selected for the person to copy
  * themselves and the button says "Selected". The button tells LiveView to leave
  * `data-copy-state` alone, so a redraw meanwhile keeps the answer on screen.
- * A copy that worked sends a bubbling `copy-button:copied` event from the
- * button, which `launch_steps.ts` counts for the homepage's setup line.
  */
 export function installCopyButtons() {
   document.addEventListener("click", event => {
@@ -41,7 +39,6 @@ async function copy(button: HTMLButtonElement) {
   if (!button.isConnected) return
 
   answer(button, outcome)
-  if (outcome === "copied") button.dispatchEvent(new CustomEvent("copy-button:copied", {bubbles: true}))
   if (outcome === "failed") deny(button)
   window.clearTimeout(timers.get(button))
   timers.set(button, window.setTimeout(() => answer(button, undefined), SHOWN_MS))

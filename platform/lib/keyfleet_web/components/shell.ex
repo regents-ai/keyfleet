@@ -165,6 +165,29 @@ defmodule KeyfleetWeb.Components.Shell do
     """
   end
 
+  attr :id, :string, required: true
+
+  @doc """
+  Pair New Agent, opening the pairing window (`pairing_window/1`) over the
+  page. Only a signed-in person has the window, so a page shows it only to
+  them.
+  """
+  def pair_button(assigns) do
+    ~H"""
+    <Regent.Primitives.button
+      id={@id}
+      type="button"
+      variant="secondary"
+      arrow={false}
+      aria-haspopup="dialog"
+      aria-controls="shell-pairing"
+      data-pair-open
+    >
+      Pair New Agent
+    </Regent.Primitives.button>
+    """
+  end
+
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
 
   attr :get_key, :boolean,

@@ -61,10 +61,6 @@ test("a pointer press squishes its control and rises a dialog, all ending clean"
   await page.keyboard.press("Escape")
   await expect(page.locator("dialog#buy-key")).toHaveCount(0)
 
-  await page.locator("#fleet-send-agent").click()
-  await expect(page.locator("dialog.send-agent")).toBeVisible()
-  await expect.poll(() => moved(page, "dialog.send-agent")).toBe(true)
-
   await expect.poll(() => leftovers(page)).toEqual([])
 })
 
@@ -78,10 +74,6 @@ test("a keyboard press picks a channel and opens panels and dialogs at once, wit
   await page.keyboard.press("Enter")
   await expect(page.locator("dialog#buy-key")).toBeVisible()
   await page.keyboard.press("Escape")
-  await expect(page.locator("dialog#buy-key")).toHaveCount(0)
-  await page.locator("#fleet-send-agent").focus()
-  await page.keyboard.press("Enter")
-  await expect(page.locator("dialog.send-agent")).toBeVisible()
   await page.waitForTimeout(600)
 
   expect(await anythingMoved(page)).toBe(false)
@@ -217,9 +209,6 @@ test("a reader who asked for less motion sees presses, panels and a sale without
   await expect(page.locator("dialog#buy-key")).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(page.locator("dialog#buy-key")).toHaveCount(0)
-  await page.locator("#fleet-send-agent").click()
-  await expect(page.locator("dialog.send-agent")).toBeVisible()
-  await page.keyboard.press("Escape")
   sellKey(fleet, buyer)
   await expect.poll(() => plainNumber(page, "fleet-sales-keys")).toBe(String(sold + 1))
   await page.waitForTimeout(4_000)

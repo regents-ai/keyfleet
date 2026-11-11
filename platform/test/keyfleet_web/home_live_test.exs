@@ -5,7 +5,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, ProposalHelpers, SharedReading}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
-  alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.{FleetNow, KeyLinks}
   alias Phoenix.Socket.Broadcast
 
@@ -248,18 +247,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
       assert text(view, "#home-classic-sold") == "—"
       assert text(view, "#home-buy-why") == "Couldn’t read sales just now"
     end)
-  end
-
-  test "the command box shows the homepage instruction and copies what it shows",
-       %{conn: conn} do
-    {:ok, view, html} = live(conn, "/")
-
-    assert attribute(html, "#home-instruction-copy", "data-copy-text") ==
-             [SendAgent.home_instruction()]
-
-    assert text(view, "#home-instruction") == SendAgent.home_instruction()
-    # A copy of the homepage's line counts as a step in.
-    assert attribute(html, "#home-instruction-copy", "data-step") == ["copy"]
   end
 
   test "a burst of notices is answered by one read of each fleet, for every open homepage",

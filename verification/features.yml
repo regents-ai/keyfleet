@@ -1151,9 +1151,8 @@ features:
   - id: launch-step-counters
     what: >-
       The site counts, in running totals only, how many visits open the
-      homepage, press "Watch a live fleet" or "Connect my agent", and copy the
-      homepage's setup line. The browser reports each step once as it
-      happens; a reconnect is not a new visit and a browser a program drives
+      homepage and press "Watch a live fleet" or "Connect my agent". The
+      browser reports each step once as it happens; a reconnect is not a new visit and a browser a program drives
       reports nothing. A report names only the step, never a person, address,
       wallet or Key, and the totals are read in Fly's metrics dashboard.
     who: person
@@ -1266,7 +1265,6 @@ features:
       - platform/lib/keyfleet_web/router.ex
       - platform/lib/keyfleet_web/agent_guides.ex
       - platform/lib/keyfleet_web/public_documents.ex
-      - platform/lib/keyfleet_web/components/send_agent.ex
       - platform/lib/keyfleet_web/plugs/mcp_agent.ex
       - platform/lib/keyfleet/agents/hosted_address.ex
       - platform/priv/public/agents/claude.md

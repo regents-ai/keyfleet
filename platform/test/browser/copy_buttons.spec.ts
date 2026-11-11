@@ -39,17 +39,17 @@ async function copies(page: Page, id: string, value: string) {
   await expect(page.locator(`#${id}-status`)).toHaveText("")
 }
 
-test("a fleet's Send your agent copies its instruction", async ({page}) => {
+test("a fleet's Pair New Agent opens the pairing window, which copies its message", async ({page}) => {
   const errors = await signIn(page)
   await open(page, `/classic/1`)
-  await page.locator("#fleet-send-agent").click()
-  await expect(page.locator("#fleet-send-agent-dialog")).toBeVisible()
+  await page.locator("#fleet-pair").click()
+  await expect(page.locator("#shell-pairing")).toBeVisible()
+  const box = page.locator("#shell-pairing-box")
+  await box.getByRole("radio", {name: "Hermes", exact: true}).locator("xpath=ancestor::label").click()
+  const message = box.locator("pre")
+  await expect(message).toContainText(/Pairing code:\s*\S{12,}/)
 
-  await copies(
-    page,
-    "fleet-send-agent-copy",
-    "Install the Keyfleet skill from keyfleet.ai/skill.md and follow it. Then look at the Classic #1 fleet and set up your daily run.",
-  )
+  await copies(page, "shell-pairing-box-copy", (await message.locator("code").textContent())!)
   expect(errors).toEqual([])
 })
 

@@ -30,13 +30,13 @@
   }
 
 
-  /* The hero. Wide: the headline, the ways in, Classic #1's figures and the
-     instruction in the left half, "Buy Key" centred in the right half.
-     Narrow: the headline down to the figures, then the button, then the
-     instruction. The hex field sits behind all of it. */
+  /* The hero. Wide: the headline, the ways in and Classic #1's figures in
+     the left half, "Buy Key" centred in the right half. Narrow: the headline
+     down to the figures, then the button. The hex field sits behind all of
+     it. */
   .rl-hero {
     position: relative; isolation: isolate; overflow: hidden;
-    display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "buy" "give";
+    display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "buy";
     gap: var(--space-5) var(--space-6);
     padding: clamp(2rem, 6svh, 4.5rem) var(--rg-panel-padding);
   }
@@ -139,15 +139,6 @@
     cursor: default;
   }
 
-  .rl-give { grid-area: give; display: grid; align-content: start; gap: var(--space-1); min-width: 0; max-inline-size: 38rem; }
-  .rl-give__label { color: var(--rl-muted); font-size: .875rem; }
-  .rl-give__command {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2);
-    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-    border: 1px solid var(--rl-line); background: var(--rl-panel);
-  }
-  .rl-give__text { font-family: var(--font-family-mono); font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
-
   /* The hex field: the stylesheet's still drawing of the tiles, and the GPU's
      over it once its first frame has landed. The field fades out toward its
      edges, and in the hero away from the headline, so the words always sit on
@@ -174,7 +165,7 @@
   @media (prefers-reduced-motion: no-preference) {
     .rl-field__still, .rl-field__canvas { transition: opacity 240ms ease; }
   }
-  /* Narrow: a band across the middle, between the headline and the instruction. */
+  /* Narrow: a band across the middle, between the headline and the Key. */
   .rl-hero__field {
     --rl-fade-x: .5; --rl-fade-y: .58; --rl-fade-width: 10; --rl-fade-height: .28;
     --rl-fade-from: .43; --rl-fade-to: 1;
@@ -182,10 +173,9 @@
 
   @media (min-width: 64rem) {
     .rl-hero {
-      grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto 1fr;
-      grid-template-areas: "head buy" "give buy"; align-items: start;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-areas: "head buy"; align-items: start;
     }
-    .rl-give { align-self: end; }
     .rl-hero__field {
       --rl-fade-x: .75; --rl-fade-y: .5; --rl-fade-width: .6; --rl-fade-height: .95;
       --rl-fade-from: .25; --rl-fade-to: .8;
@@ -193,8 +183,7 @@
   }
 
   /* The hero settles in once as the page first paints: the field, the
-     headline, the ways in, the figures, the Key and the instruction, one
-     after another.
+     headline, the ways in, the figures and the Key, one after another.
      It plays from the stylesheet, so it runs before the page connects and
      never replays when the page updates. Less motion, and it is simply there.
      The Key only rises, never starting unseen, so a slow phone counts it as
@@ -203,14 +192,13 @@
   @keyframes rl-card-settle { from { transform: translateY(1rem) scale(.98); } }
   @keyframes rl-fade { from { opacity: 0; } }
   @media (prefers-reduced-motion: no-preference) {
-    .rl-hero :is(.rl-hero__head > *, .rl-give) { animation: rl-settle 320ms var(--rl-ease) backwards; }
+    .rl-hero .rl-hero__head > * { animation: rl-settle 320ms var(--rl-ease) backwards; }
     .rl-hero .rl-buy { animation: rl-card-settle 420ms var(--rl-ease) 180ms backwards; }
     .rl-hero .rl-hero__field { animation: rl-fade 600ms ease-out backwards; }
     .rl-hero .rl-hero__title { animation-delay: 60ms; }
     .rl-hero .rl-hero__lead { animation-delay: 90ms; }
     .rl-hero .rl-hero__ways { animation-delay: 120ms; }
     .rl-hero .rl-now { animation-delay: 150ms; }
-    .rl-hero .rl-give { animation-delay: 240ms; }
   }
 
   /* Classic Keyfleet: its city beside what it is, the cards turning over and
@@ -328,8 +316,6 @@
     .rl-facts > div { padding-inline-end: var(--space-2); }
     .rl-facts > div + div { padding-inline-start: var(--space-2); }
     .rl-facts dd { font-size: 1rem; }
-    .rl-give__command { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: var(--space-2); }
-    .rl-give__text { font-size: .8125rem; }
   }
 
   /* On a phone the three figures become rows, label left and figure right,
