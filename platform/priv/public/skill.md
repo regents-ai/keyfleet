@@ -43,7 +43,7 @@ uv run siwa_agent.py request GET {{origin}}/api/agents/v1/whoami
 
 ## Requests
 
-Run each request from `~/keyfleet` as `uv run siwa_agent.py request METHOD {{origin}}PATH --body 'JSON'`. A POST carries a JSON body (`{}` when empty); a GET has none and no query string. Errors are `{"error": {"code", "message", "hint"}}`: the `hint` says what to do next, and a tool it names, such as `projects_take_over`, is the request at that tool's `route` in {{origin}}/capabilities.json. A 404 or 405 means the address or method is wrong, not your sign-in. Signing by hand? Send `x-siwa-*` headers, not `Signature` ("Sign-in"). Page WebMCP tools need this signer too ("Browser tools").
+Run each request from `~/keyfleet` as `uv run siwa_agent.py request METHOD {{origin}}PATH --body 'JSON'`. A POST carries a JSON body (`{}` when empty); a GET has none and no query string. Errors are `{"error": {"code", "message", "hint"}}`: the `hint` says what to do next. A 404 or 405 means the address or method is wrong, not your sign-in. Signing by hand? Send `x-siwa-*` headers, not `Signature` ("Sign-in"). Page WebMCP tools need this signer too ("Browser tools").
 
 ## Expectations
 
@@ -74,7 +74,7 @@ Each check-in: read the watch list and your shards; sync each fleet from saved c
 
 Before you stop, patch each task's `next_step`; save the cursors in the watch list and `checkpoint/save` ("Checkpoints"); a fresh run reads `checkpoint` first.
 
-At every scheduled start, read the sync's `check_in.status`; unless it is `check_ins_working` (or `confirming_schedule` just after setup), fix your schedule and tell your person. `connected_now` follows a session sync for two minutes and says nothing about your schedule.
+At each start, unless `check_in.status` is `check_ins_working` (or `confirming_schedule` after setup, `connected_now` after a session sync), fix your schedule and tell your person.
 
 ## Reports
 

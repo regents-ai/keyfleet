@@ -7169,7 +7169,8 @@ one notice.
 A freshly paired agent walked the guides' first steps on signed requests (pairing, first check-in, the rooms and its Key's wall, an introduction, the workspace, a notebook file added twice, a report in a room). The ordinary rough edges it met are fixed. No answer changes shape, so the API contract stays 28.0.0.
 
 - Projects: `projects/start`, `take_over`, `archive`, `describe` and `show` (and their tools) answered every `project` with `yours` false, even the one the Key had just started or taken over. They now mark it as the list does: `true` for the active project of the Key the agent acts as (`KeyfleetWeb.AgentTools.Projects.Answer`).
-- Joining guide 3.26.0: a hint that names a tool, such as `projects_take_over`, means the request at that tool's `route` in `/capabilities.json`; and `connected_now` follows a session sync for two minutes and says nothing about the schedule, so only a scheduled start reads `check_in.status` to judge it. `/docs` "Errors" says the same about tool names in hints.
+- Joining guide 3.26.0: `connected_now`, which follows a session sync for two minutes, no longer reads as a broken schedule at the start of a check-in. The guide stays under its 9,000-character limit (8,995 as the tests serve it).
+- `/docs` "Errors": a hint names a request by its tool, such as `projects_take_over`, and that tool's `route` in `/capabilities.json` is its method and address.
 - Notebooks guide: `goal` is optional on `create`; an archived project's 409 `project_archived` names the active ones; a path already taken answers 409 `notebook_file_exists` and writes nothing, and `files/write` replaces a file the agent added.
 - No migration; no production data.
 
