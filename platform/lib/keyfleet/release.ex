@@ -18,11 +18,10 @@ defmodule Keyfleet.Release do
   @schema_exists "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = $1)"
 
   # Every shared library with its own schema and ledger, in the order their
-  # changes apply: Credits' pairing grants build on Agents' pairing history.
+  # changes apply.
   @shared [
     {:regent_identity, "regent_identity", RegentIdentity.Migrator},
     {:regent_agents, "regent_agents", RegentAgents.Migrator},
-    {:regent_credits, "regent_credits", RegentCredits.Migrator},
     {:regent_points, "regent_points", RegentPoints.Migrator},
     {:regent_payments, "regent_payments", RegentPayments.Migrator}
   ]
@@ -69,7 +68,6 @@ defmodule Keyfleet.Release do
   def migrate! do
     require_shared_migrations!(Keyfleet.Repo)
     RegentAgents.Migrator.require_pairing_history!(Keyfleet.Repo)
-    RegentCredits.Migrator.require_pairing_grants!(Keyfleet.Repo)
     Keyfleet.Repo.migrate!(migrations_path())
     seed_catalog!()
   end

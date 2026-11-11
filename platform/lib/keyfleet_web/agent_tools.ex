@@ -112,8 +112,6 @@ defmodule KeyfleetWeb.AgentTools do
     agents_avatar_start: {@account, :avatar_start, "Picture", :once},
     agents_avatar_upload: {@account, :avatar_upload, "Picture upload", :once},
     agents_avatar_remove: {@account, :avatar_remove, "Picture removal", :remove},
-    account_balances: {@account, :balances, "Credits", :read},
-    account_credits_history: {@account, :credits_history, "Credits history", :read},
     account_points: {@account, :points, "Points", :read},
     fleets_list: {@public, :fleets, "Fleets", :read},
     fleets_show: {@public, :fleet, "Fleet", :read},

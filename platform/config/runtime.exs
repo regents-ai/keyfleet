@@ -62,11 +62,11 @@ config :regent_mcp_agents, :config,
 # it only while the connector is on; ChatGPT is never offered here.
 config :regent_agents, hosted_pairing: if(claude_connector?, do: [:claude], else: [])
 
-# The Privy accounts that may give Credits, handle refunds and read the saved
-# errors at /admin/errors, comma separated.
+# The Privy accounts that run this site, comma separated (config/config.exs).
 if admins = System.get_env("REGENT_CREDITS_ADMINS") do
-  config :regent_credits,
-    admins: admins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  admins = admins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+  config :keyfleet, :admins, admins
+  config :regent_agents, admins: admins
 end
 
 # Without its Privy settings a local server answers every page while nobody can

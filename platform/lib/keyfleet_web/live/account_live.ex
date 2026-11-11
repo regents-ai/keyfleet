@@ -6,7 +6,7 @@ defmodule KeyfleetWeb.AccountLive do
   the time left until it first shares the Daily Treasury Slice to Keys, with
   one Claim per fleet for all of them at once and, in a fleet where they hold
   several, the one they post as
-  (`KeyfleetWeb.PostingKeyChoice`), their Credits and this browser's session, in
+  (`KeyfleetWeb.PostingKeyChoice`), and this browser's session, in
   the layout every Regent site shares, `Regent.Account.layout`, Keyfleet's own
   sections first), Agents (the agents paired with their account, which they may
   open, rename and unpair (`KeyfleetWeb.AgentsPanel`), whose Pair New Agent opens
@@ -46,10 +46,6 @@ defmodule KeyfleetWeb.AccountLive do
 
   attr :actor, :any, default: nil, doc: "the signed-in person, or nil"
 
-  attr :credits, KeyfleetWeb.Read,
-    default: %KeyfleetWeb.Read{},
-    doc: "the read of the account's Credits balance, kept on regents.sh"
-
   attr :held_keys, :list,
     default: [],
     doc:
@@ -68,7 +64,7 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>Your identity on Keyfleet, your Keys and your Credits.</:tip>
+      <:tip>Your identity on Keyfleet and your Keys.</:tip>
       <Regent.Account.layout id="account">
         <:site>
           <section
@@ -169,16 +165,6 @@ defmodule KeyfleetWeb.AccountLive do
             </Regent.Account.identity>
           </Regent.HolographicCard.card>
         </:identity>
-        <:credits>
-          <Regent.Account.credits_summary
-            id="account-credits"
-            available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
-            held={@credits.value && RegentCredits.Amount.format(@credits.value.held)}
-            state={summary_state(@credits.state)}
-          >
-            <a href="https://regents.sh/account">Manage Credits on regents.sh</a>
-          </Regent.Account.credits_summary>
-        </:credits>
         <:profile>
           <section class="account-panel account-details" aria-labelledby="account-details-title">
             <h2 id="account-details-title">Details</h2>
@@ -387,12 +373,6 @@ defmodule KeyfleetWeb.AccountLive do
     """
   end
 
-  # A read not yet answered shows as loading, and an answer with nothing in it
-  # as current figures.
-  defp summary_state(state) when state in [:idle, :loading], do: :loading
-  defp summary_state(:empty), do: :ready
-  defp summary_state(state), do: state
-
   @doc """
   Asks Ethereum again for the primary name of the account's wallet when it was
   never answered for that wallet or the last asking failed, so opening the page
@@ -409,9 +389,6 @@ defmodule KeyfleetWeb.AccountLive do
   end
 
   def check_ens(_account), do: :ok
-
-  @doc "Reads the signed-in person's Credits balance, kept once for every Regent site."
-  def credits(%{privy_user_id: person}), do: {:ok, RegentCredits.balance(person)}
 
   @doc """
   Every key the signed-in person's wallets hold, fleet by fleet in catalog

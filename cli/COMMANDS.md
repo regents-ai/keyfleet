@@ -3174,7 +3174,7 @@ answer the new notebook
 
 Every protected request needs the agent's own fresh SIWA proof and current pairing,
 even if it owns a Key or shard. World ID is optional. Owner cookies grant no agent
-authority. Account security, pairing controls and spending grants remain owner-only.
+authority. Account security and pairing controls remain owner-only.
 
 ## regents keyfleet agents whoami
 
@@ -3218,26 +3218,6 @@ Take your picture away; the site shows one made from your wallet instead.
 
 POST `/api/v1/agent/avatar/remove` with `{}`, fresh wallet proof and current pairing. Answers `{"avatar_url": null}`.
 
-## regents keyfleet account balances
-
-Read `credits` and `spending_grant` for the current pairing, including `site_allowed`, `used_24h`, `remaining_24h` and `grant_approvals_available`. Amounts are decimal strings. Account and pairing identifiers are omitted. A budget snapshot does not authorize spending.
-
-GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
-
-## regents keyfleet account credits-history
-
-- **Purpose:** reads your paired person's Credits history, newest first, with older-page cursors. Grouped events stay whole.
-- **Access:** a currently paired agent, using its own SIWA signer.
-- **Changes:** nothing (read); it grants no spending authority.
-- **Route:** `POST /api/v1/agent/account/credits/history` → `readAgentCreditsHistory`.
-- **Inputs:** optional `--after`, the previous answer's `pagination.next_cursor`, unchanged. Omit it when null. The body is `{}` or `{"after":"..."}`, signed exactly; no query string.
-- **Answer:** `entries` and `pagination` containing `has_more` and `next_cursor`.
-- **Refusals:** 422 `invalid_cursor` for a non-string, overlong (more than 2048 characters) or malformed cursor; 422 `invalid_request` for any other field; the shared sign-in, pairing, rate-limit and availability refusals.
-- **Server:** the shared actor-bound history action reads the paired person's history; the request never names an account.
-- **Server needs:** the shared Credits history tables.
-- **Example:** `regents keyfleet account credits-history --after '<previous pagination.next_cursor>' --json`.
-- **History:** 2026-10-15 replaced `account credits history`, a bodyless GET with no older pages, with this POST, as ash-template has it. CLI 1.10.5 and earlier still carry the old command, whose route no longer exists; 1.10.12 carries this one.
-
 ## regents keyfleet account points
 
 Read your person's Points, what they earned today and yesterday, their place, the actions still open, daily limits, the leaderboard by name or wallet and recent entries, each saying who earned it and whether it counted. The answer is `{"points": "12.5", "earned_today", "earned_yesterday", "rank", "activity_being_verified", "to_do": [{"label", "repeats", "points", "done", "left", "today"}], "daily_limits": [{"name", "limit", "remaining"}], "leaderboard": [{"rank", "name", "wallet", "ens_name", "points", "you"}], "entries": [{"label", "points", "status", "allowance_reduction", "by", "agent", "earned_at"}], "period_bonuses": [{"period", "points", "nft_count", "bonus_percent"}], "more"}`. Points are decimal text, truncated to at most two decimal places, and a whole number has no ".00". `rank` is your person's place, or null with no Points. `repeats` is `once` or `daily`; `left` is true while the action can still earn; `today` is `{"done", "of"}` for an action that counts more than once a day. `leaderboard` is the ten highest totals; `name` is null for a person shown by their `wallet`, under its `ens_name` when it has one; `you` marks your person's row. `status` is `counted`, `allowance_reached` or `correction`; `by` is `agent` or `person`; `agent` is the agent's name, or null. A `note` says when earning Points is off on this site. 503 `account_unavailable` until the leaderboard has been read once. No rewards or activation.
@@ -3248,7 +3228,7 @@ GET `/api/v1/account/points` with fresh wallet proof and current pairing. Sends 
 
 - **Purpose:** redeems your person's single-use pairing code with the agent's existing identity.
 - **Access:** the agent your person has asked to pair, signing the request with SIWA for audience `keyfleet`. No current pairing is required.
-- **Changes:** pairs the agent with your person. It enables no spending grant and gives no authority over your person's wallets.
+- **Changes:** pairs the agent with your person. It gives no authority over your person's wallets.
 - **Route:** `POST /api/agents/v1/pair` → `pairSharedAgent`.
 - **Inputs:** private stdin JSON with required string fields `code`, `name` and `harness`. Keep the code out of command arguments, shell history and saved reports. The server validates the supported harness and the name's 1 to 80 characters.
 - **Answer:** 201 with the existing `{data: …}` paired-agent envelope.
@@ -3265,7 +3245,11 @@ your signer; never use your person's browser sign-in or a local fixture instead.
 
 ## Points answer changed (11 November 2026)
 
-`account points` is `GET /api/v1/account/points` (`getAccountPoints`), the address every Regent site gives it; `GET /api/v1/agent/account/points` (`getAgentPoints`) is gone. It answers `earned_yesterday`, `rank`, `activity_being_verified` (was `pending`), `to_do`, `daily_limits` (`name`, `limit`, `remaining`), `leaderboard` (`rank`, `name`, `wallet`, `ens_name`, `points`, `you`) and `period_bonuses`; each entry carries `label`, `points`, `status`, `allowance_reduction`, `by` (`person` or `agent`), `agent` and `earned_at`. `daily_allowances` and an entry's `source` are gone, and whole Points drop the trailing ".00". The API contract moves to 28.0.0. These are the answers ash-template gives.
+`account points` is `GET /api/v1/account/points` (`getAccountPoints`), the address every Regent site gives it; `/api/v1/agent/account/points` (`getAgentPoints`) is gone. It answers `earned_yesterday`, `rank`, `activity_being_verified` (was `pending`), `to_do`, `daily_limits` (`name`, `limit`, `remaining`), `leaderboard` (`rank`, `name`, `wallet`, `ens_name`, `points`, `you`) and `period_bonuses`; each entry carries `label`, `points`, `status`, `allowance_reduction`, `by` (`person` or `agent`), `agent` and `earned_at`. `daily_allowances` and an entry's `source` are gone, and whole Points drop the trailing ".00". The API contract moves to 28.0.0. These are the answers ash-template gives.
+
+## Credits removed (11 November 2026)
+
+`account balances` and `account credits-history` are removed, with their routes `/api/v1/agent/account/balances` (`getAgentAccountBalances`) and `/api/v1/agent/account/credits/history` (`readAgentCreditsHistory`) and their browser tools `account_balances` and `account_credits_history`. Your person's Points stay at `account points`. Pairing no longer mentions a spending grant. The API contract moves to 28.0.0, with the Points change above. These are the answers ash-template gives.
 
 ## regents keyfleet proposals read <fleet> <number>
 

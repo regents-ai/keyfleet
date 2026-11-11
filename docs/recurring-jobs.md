@@ -3,7 +3,7 @@
 Every recurring job is Oban work in the site's own schema (`keyfleet_app`),
 started by the Oban cron in `platform/config/config.exs`. There is no job
 dashboard. An operator works with three tools: the saved errors at
-`/admin/errors` (Credits admins), which Fly Sentinel reads every minute and
+`/admin/errors` (the site's admins), which Fly Sentinel reads every minute and
 emails; SQL on `keyfleet_app.oban_jobs`; and the running app's `rpc`.
 
 The site sends no transaction of its own. The treasury's daily split, the

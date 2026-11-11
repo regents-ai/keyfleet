@@ -26,15 +26,11 @@ transaction itself.
 ## Shared dependencies
 
 The shared Regent libraries are pinned by git in `mix.exs`: elixir-utils holds
-sign-in, identity, agents, Credits, Points and supporting libraries;
-design-system holds `regent_ui`. elixir-utils is pinned at two commits for now:
-the Claude connector's packages (`oauth`, `mcp_agents` and `agent_access`) at
-`@elixir_utils_ref`, `ash_components/agents` at `@elixir_utils_agents_ref` (the
-held release with Claude added as a connected app, so no other agent's pairing
-changes), and every other package at `@elixir_utils_held_ref`, until each moves
-with its own shared rollout. `mix.lock` records the
-exact commits used to build the release. A new shared commit must be published
-before a site release can fetch it.
+sign-in, identity, agents, Points and supporting libraries;
+design-system holds `regent_ui`. Each is pinned at one commit,
+`@elixir_utils_ref` and `@design_system_ref`, the commits ash-template pins.
+`mix.lock` records the exact commits used to build the release. A new shared
+commit must be published before a site release can fetch it.
 
 Common Mix and direct npm packages match ash-template's tested dependency
 baseline. Compare the candidate checkouts with the template's
@@ -42,10 +38,10 @@ baseline. Compare the candidate checkouts with the template's
 schema-prefix hold and Bandit's fixed Git source until the template verifies
 their replacements.
 
-The release checks the separate Agents, Credits and Points migration ledgers
-before applying site migrations. Missing shared migrations require separate
-approval; the check never applies them. This includes the Agents picture
-migration `20261014150000` and Credits hold-cause migration `20261013202732`.
+The release checks the separate Agents and Points migration ledgers before
+applying site migrations. Missing shared migrations require separate approval;
+the check never applies them. This includes the Agents picture migration
+`20261014150000`.
 Updating dependencies does not open Points earning: `starts_at` stays unset,
 with no approved rules or adapters.
 
@@ -103,7 +99,7 @@ production.
 | `KEYFLEET_CLAUDE_CONNECTOR_ENABLED` | No | `true` switches the Claude connector on, all of it at once: the sign-in routes under `/oauth` and `/.well-known/oauth-*`, the MCP address at `/mcp`, pairing as a connected app, and the Claude guide at `/agents/claude` with its `skill.md`, which `/agents`, the sitemap, `/connect`, `/llms.txt` and `/agents.md` then name. Anything else leaves it all off: the guide is not found, `/mcp` answers 404 and `/llms.txt` says there is no hosted MCP endpoint. Switch it on only after the migration `20261028180000_add_oauth_provider` has run. It needs `SIWA_HOSTED_SIGNING_KEY`. Before the first release that switches it on, confirm the staged key matches that shape without printing it (check its length and characters only), or the boot stops. Each token is bound to the site's address (`PHX_HOST`) as it is issued, so each environment's tokens work only there, and moving the site to a new address disconnects every app. |
 | `SIWA_HOSTED_SIGNING_KEY` | With the connector | This site's own key at the sign-in server, which signs for the connector's hosted identities: 32 or more letters, digits, `-` or `_`. With the connector on and no such key, the boot stops with a message naming this setting. Never shown to a client. |
 | `SIWA_HOSTED_URL` | No | The sign-in server that holds the connector's hosted identities. Defaults to `https://siwa.regents.sh`. |
-| `REGENT_CREDITS_ADMINS` | No | The Privy accounts, comma separated, that may give Credits, handle refunds and read the saved errors at `/admin/errors`. Unset, nobody can, and `/admin/errors` answers not found. |
+| `REGENT_CREDITS_ADMINS` | No | The Privy accounts, comma separated, that run this site: they read the saved errors at `/admin/errors` and may remove an agent's picture. Unset, nobody can, and `/admin/errors` answers not found. |
 | `KEYFLEET_DEPLOYMENT_ROLE` | Yes in production | `production` or `staging`. There is no default; each role admits only its own database hosts. |
 | `DATABASE_POOLED_URL` | Yes in production | Pooled PostgreSQL connection string for an approved host. |
 | `DATABASE_DIRECT_URL` | Only when migrating | Direct PostgreSQL connection string used by the migration release command. |
@@ -402,7 +398,7 @@ or `off` and `PHX_HOST` and a 64-byte `SECRET_KEY_BASE` are set.
 image disagree about, without applying anything; a shared change the release
 carries that the database lacks is listed under `shared-pending:`, and the
 deploy is refused until it is applied. `/app/bin/migrate-shared` applies those
-shared changes (Identity, Agents, Credits and Points), the same command every
+shared changes (Identity, Agents and Points), the same command every
 Regent site carries; it is run from the new image only with the founder's go,
 never by a deploy.
 

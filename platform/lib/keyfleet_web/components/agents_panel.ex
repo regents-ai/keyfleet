@@ -6,10 +6,9 @@ defmodule KeyfleetWeb.AgentsPanel do
   New Agent opening the pairing window (`KeyfleetWeb.PairingBox`),
   and a larger view of one agent with where it has been active across the Regent
   sites, a line for each site and day (`Keyfleet.Agents.ActivityReading`), its
-  name, which the person may change, what it has spent of their Credits, and
-  Unpair, which asks first in a window of its own. Beside each agent are the
-  Keys it holds a shard of, or Give It a Shard from one of the person's own
-  (`KeyfleetWeb.AgentKeys`).
+  name, which the person may change, and Unpair, which asks first in a window
+  of its own. Beside each agent are the Keys it holds a shard of, or Give It a
+  Shard from one of the person's own (`KeyfleetWeb.AgentKeys`).
 
   Pairing immediately lets an agent do what `Keyfleet.Capabilities.may/0`
   lists, which the list's tip and the agent's view show the person. Pairing is
@@ -26,7 +25,6 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   alias Keyfleet.Agents.ActivityReading
   alias Keyfleet.Capabilities
-  alias Keyfleet.Credits
   alias KeyfleetWeb.Live.Session
   alias Regent.Primitives, as: P
   alias RegentAgents.{Harness, HumanBacking, PairedAgent, Person}
@@ -62,8 +60,7 @@ defmodule KeyfleetWeb.AgentsPanel do
     do:
       assign(socket,
         account: account,
-        person: %Person{privy_user_id: account.privy_user_id},
-        credits: Credits.person(account)
+        person: %Person{privy_user_id: account.privy_user_id}
       )
 
   @impl true
@@ -156,20 +153,6 @@ defmodule KeyfleetWeb.AgentsPanel do
     end
   end
 
-  # What the open agent has spent, landing only while that agent is still open.
-  def handle_async({:agent_spent, id}, result, socket) do
-    case socket.assigns.detail do
-      %{agent: %{id: ^id}} = detail ->
-        {:noreply, assign(socket, detail: %{detail | spent: spent(result)})}
-
-      _moved_on ->
-        {:noreply, socket}
-    end
-  end
-
-  defp spent({:ok, {:ok, amount}}), do: RegentCredits.Amount.format(amount)
-  defp spent(_failed), do: :unavailable
-
   defp activity_read(detail, {:ok, {:ok, reading}}),
     do: %{detail | activity: reading.days, listing: reading.listing}
 
@@ -230,7 +213,6 @@ defmodule KeyfleetWeb.AgentsPanel do
             same_person_count={HumanBacking.describe(@detail.agent).same_person_agent_count}
             same_person={same_person(@agents, @detail.agent)}
             may={Capabilities.may()}
-            spent={@detail.spent}
             activity={activity(@detail.activity)}
             notice={@notice}
             target={@myself}
@@ -430,9 +412,8 @@ defmodule KeyfleetWeb.AgentsPanel do
   end
 
   # Where the agent has been active and its registry listing come from its
-  # shared reading in the background, and what it has spent from the person's
-  # Credits. What is already on screen for this agent stays until the new
-  # reading lands.
+  # shared reading in the background. What is already on screen for this agent
+  # stays until the new reading lands.
   defp show_agent(socket, id) do
     with {:ok, id} <- Ecto.UUID.cast(id),
          {:ok, %PairedAgent{} = agent} <-
@@ -443,7 +424,7 @@ defmodule KeyfleetWeb.AgentsPanel do
 
         _other ->
           socket
-          |> assign(detail: %{agent: agent, activity: :loading, listing: nil, spent: :loading})
+          |> assign(detail: %{agent: agent, activity: :loading, listing: nil})
           |> read_detail(agent)
       end
     else
@@ -452,11 +433,7 @@ defmodule KeyfleetWeb.AgentsPanel do
   end
 
   defp read_detail(socket, agent) do
-    credits = socket.assigns.credits
-
-    socket
-    |> start_async({:agent_activity, agent.id}, fn -> ActivityReading.read(agent) end)
-    |> start_async({:agent_spent, agent.id}, fn -> Credits.spent_by(credits, agent.wallet) end)
+    start_async(socket, {:agent_activity, agent.id}, fn -> ActivityReading.read(agent) end)
   end
 
   # When the day's first and last request came, or the one time when they share

@@ -20,7 +20,7 @@ defmodule Keyfleet.Access do
   A rule narrower than a class stands beside the class check, never in its
   place: only agents write in the members' rooms, only the Key that started a poll ends it,
   a direct message is read by the Key it names. What belongs to one person,
-  their mutes, quote requests, Credits, agents and settings, is theirs alone
+  their mutes, quote requests, agents and settings, is theirs alone
   and is not in the table. What the server writes for itself is not here
   either.
 

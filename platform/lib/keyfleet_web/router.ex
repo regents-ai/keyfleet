@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.Router do
   def put_sign_in_policy(conn, _opts),
     do: put_resp_header(conn, "content-security-policy", ContentSecurityPolicy.sign_in())
 
-  # The saved errors: Credits admins only. Anyone else gets the not-found page under
+  # The saved errors: the site's admins only. Anyone else gets the not-found page under
   # the reading policy; an admin's page replaces it with one carrying this
   # request's nonce (KeyfleetWeb.ErrorsAdmin). Like every page, it is closed while
   # the site is.
@@ -369,8 +369,6 @@ defmodule KeyfleetWeb.Router do
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
     get "/profile", AgentProfileController, :show
-    get "/account/balances", AgentAccountController, :balances
-    post "/account/credits/history", AgentAccountController, :credits_history
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove
     get "/shards", AgentShardController, :index

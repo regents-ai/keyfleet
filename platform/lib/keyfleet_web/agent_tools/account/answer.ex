@@ -4,10 +4,9 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   requests and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Account`):
   reading, making and setting the status of its profile (`:profile`, `:join`,
   `:edit_profile`), setting and removing its picture (`:avatar_start`,
-  `:avatar_upload`, `:avatar_remove`), and its person's Credits, Credits
-  history and Points (`:balances`, `:credits_history`, `:points`). Each answer
-  is `{status, body, retry_after}`, `retry_after` in seconds past a limit and
-  otherwise nil; `params` is the signed request's JSON body.
+  `:avatar_upload`, `:avatar_remove`), and its person's Points (`:points`).
+  Each answer is `{status, body, retry_after}`, `retry_after` in seconds past a
+  limit and otherwise nil; `params` is the signed request's JSON body.
 
   A picture is set in two steps because it is larger than a signed request
   can carry. `:avatar_start` names it: its SHA-256, its length and its type.
@@ -36,7 +35,6 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   alias RegentPoints.Rules
 
   @points_off "Earning Points is off on this site."
-  @spending_off "Approving agent spending is off on this site."
 
   @salt "agent avatar upload"
   @ticket_seconds 10 * 60
@@ -79,46 +77,6 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     else
       {:ok, nil} -> refusal(404, "profile_not_found")
       {:error, _error} -> refusal(422, "invalid_profile")
-    end
-  end
-
-  def answer(:balances, _params, actor, _waiter) do
-    credit_actor = credit_actor(actor)
-
-    case RegentCredits.agent_budget(actor: credit_actor) do
-      {:ok, budget} ->
-        %{credits: RegentCredits.balance(credit_actor.privy_user_id), spending_grant: budget}
-        |> with_note(not RegentCredits.agent_grants_enabled?(), @spending_off)
-        |> ok()
-
-      {:error, _error} ->
-        refusal(503, "account_unavailable")
-    end
-  end
-
-  # Newest first; `after` is the previous page's pagination.next_cursor.
-  def answer(:credits_history, %{"after" => cursor}, _actor, _waiter)
-      when not is_binary(cursor),
-      do: refusal(422, "invalid_cursor")
-
-  def answer(:credits_history, params, actor, _waiter) do
-    args =
-      case params do
-        %{"after" => cursor} -> %{after: cursor}
-        _newest -> %{}
-      end
-
-    case RegentCredits.history(args, actor: credit_actor(actor)) do
-      {:ok, history} ->
-        ok(%{
-          entries: history.entries,
-          pagination: %{has_more: history.more?, next_cursor: history.next}
-        })
-
-      {:error, error} ->
-        if cursor_error?(error),
-          do: refusal(422, "invalid_cursor"),
-          else: refusal(503, "account_unavailable")
     end
   end
 
@@ -294,23 +252,6 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     |> ok()
   end
 
-  defp cursor_error?(%Ash.Error.Action.InvalidArgument{field: :after}), do: true
-  defp cursor_error?(%Ash.Error.Page.InvalidKeyset{}), do: true
-
-  defp cursor_error?(%Ash.Error.Invalid{errors: [_ | _] = errors}),
-    do: Enum.all?(errors, &cursor_error?/1)
-
-  defp cursor_error?(_error), do: false
-
   defp with_note(answer, true, note), do: Map.put(answer, :note, note)
   defp with_note(answer, false, _note), do: answer
-
-  defp credit_actor(actor),
-    do:
-      RegentCredits.Actor.agent(
-        actor.privy_user_id,
-        actor.wallet_address,
-        "keyfleet",
-        actor.pairing_id
-      )
 end

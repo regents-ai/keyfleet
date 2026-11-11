@@ -7122,3 +7122,18 @@ Keyfleet's part in the shared Points page rollout (`control/rollouts/2026-11-06-
 - Moved: a paired agent reads its person's Points at `GET /api/v1/account/points` (`getAccountPoints`, signed), the address every Regent site gives it; `GET /api/v1/agent/account/points` (`getAgentPoints`) is gone. The answer adds `earned_yesterday`, `rank`, `activity_being_verified`, `to_do`, `daily_limits` and `leaderboard` (`rank`, `name`, `wallet`, `ens_name`, `points`, `you`); `daily_allowances` is gone and whole Points drop ".00". Both contract copies, `/docs`, `cli/COMMANDS.md`, `cli/commands.json` and the tool manifest say so. No migration; no production data.
 
 Check: `platform/test/keyfleet_web/points_page_test.exs` earns for two people under a test-only start time and rule, then reads the first render, the wallet row and its copy icon, the signed agent answer against the page, a signed-out visitor, and the 503 before the board is read.
+
+## 2026-11-11 — Credits are gone
+
+API contract 28.0.0, the same bump as the Points entry above, because two operations are removed.
+
+Keyfleet's part in the shared Credits removal (`control/rollouts/2026-11-06-credits-removal.md`, ash-template `8374a5af`), rebuilt from `kf/credits-out-1106` `49d2b777` on the Points entry above. No table or column is dropped and no production data is touched.
+
+- Removed from the site: the Credits summary on `/account`, the Spending section of an agent's window, `Keyfleet.Credits`, the `regent_credits` dependency with its migrator, listener, `regent_credits` queue and Ash domain on the site's Oban, and `Keyfleet.ChainClient`'s Credits reads (`block_number/1`, `logs/2`). `mix deps.unlock --unused` drops the packages only Credits needed (`ash_double_entry`, `ash_money`, `ex_money`, `ex_money_sql`, `expo`, `gettext`, `localize`, `localize_sql`).
+- Removed operations: `/api/v1/agent/account/balances` (`getAgentAccountBalances`, `account_balances`, `account balances`) and `/api/v1/agent/account/credits/history` (`readAgentCreditsHistory`, `account_credits_history`, `account credits-history`). Both contract copies, the tool manifest, `cli/commands.json`, `cli/COMMANDS.md`, the agent guides (joining guide 3.25.0), `/docs`, `/agents.md` and the public changelog say so. Pairing no longer mentions a spending grant.
+- The site's admins are `config :keyfleet, :admins` and `config :regent_agents, :admins`, both set from `REGENT_CREDITS_ADMINS`; they open `/admin/errors` and may remove an agent's picture. The variable keeps its name until its secret is renamed.
+- Chain node 1 is gone: only Credits read Ethereum through it. ENS keeps `ETHEREUM_READ_RPC_URL`, and Points reads NFTs on Base.
+- design-system moves to `d3845c6d`, which drops the shared Credits components and the account layout's column classes; the account page's own rules now reach the shared sections through `.rg-account-layout > *`.
+- Removed tests: the Credits proofs in the outside-dependency probes and `Keyfleet.SandboxRace`, which only they used; the signed-body tests ask the profile update instead of the Credits history; the agent-window tests stop looking for the spending line.
+
+Check: `platform/test/keyfleet_web/controllers/agent_join_journey_test.exs`, `platform/test/keyfleet_web/shell_live_test.exs`, `platform/test/browser/account_agents.spec.ts` and `platform/test/browser/agent_tools.spec.ts`.

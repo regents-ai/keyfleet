@@ -102,8 +102,6 @@ defmodule KeyfleetWeb.ShellLive do
        pair_start: nil,
        project_page: nil,
        agents_topic: nil,
-       credits: %Read{},
-       credits_topic: nil,
        points: %Read{},
        points_bonus: %Read{},
        points_board: %Read{},
@@ -149,7 +147,6 @@ defmodule KeyfleetWeb.ShellLive do
        pass_note: nil,
        quotes: nil
      )
-     |> follow_credits(current_account(socket.assigns.access_context))
      |> follow_agents(current_account(socket.assigns.access_context))}
   end
 
@@ -427,13 +424,6 @@ defmodule KeyfleetWeb.ShellLive do
 
   # A press no page sends changes nothing.
   defp press(_event, _params, socket), do: {:noreply, socket}
-
-  # The person's Credits balance changed on any Regent site: a purchase, a
-  # gift, a hold or its close. The Account page's balance follows.
-  defp notice(:credits_changed, %{assigns: %{route_spec: %{route_id: :account}}} = socket),
-    do: {:noreply, read_credits(socket, current_account(socket.assigns.access_context))}
-
-  defp notice(:credits_changed, socket), do: {:noreply, socket}
 
   # The Treasury's refresh may be pressed again, whatever the page shows now.
   defp notice({:treasury_refresh_ready, rest}, socket),
@@ -722,7 +712,6 @@ defmodule KeyfleetWeb.ShellLive do
           slices={@slices}
           lease={@session_lease}
           actor={actor(@access_context)}
-          credits={@credits}
         />
 
         <AccountLive.agents
@@ -1421,17 +1410,14 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp load_account_page(socket, %{route_id: :account}) do
-    account = current_account(socket.assigns.access_context)
-
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
     |> read_slices()
-    |> check_ens(account)
-    |> read_credits(account)
+    |> check_ens(current_account(socket.assigns.access_context))
   end
 
   defp load_account_page(socket, _route_spec),
-    do: socket |> assign(:held_keys, []) |> Read.clear(:slices) |> Read.clear(:credits)
+    do: socket |> assign(:held_keys, []) |> Read.clear(:slices)
 
   defp read_slices(%{assigns: %{held_keys: []}} = socket), do: Read.clear(socket, :slices)
 
@@ -1457,26 +1443,6 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp follow_agents(socket, _account), do: socket
-
-  # Credits and Points are read beside the page too, each with its own loading
-  # and could-not-be-read state.
-  defp read_credits(socket, %{privy_user_id: person} = account),
-    do: Read.start(socket, :credits, person, fn -> AccountLive.credits(account) end)
-
-  defp read_credits(socket, nil), do: Read.clear(socket, :credits)
-
-  # Hears when the person's Credits balance changes, once per page.
-  defp follow_credits(%{assigns: %{credits_topic: nil}} = socket, %{privy_user_id: person}) do
-    if connected?(socket) do
-      topic = RegentCredits.topic(person)
-      :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
-      assign(socket, :credits_topic, topic)
-    else
-      socket
-    end
-  end
-
-  defp follow_credits(socket, _account), do: socket
 
   # The page hears the shared Points board while the Points page is open, and
   # not elsewhere.

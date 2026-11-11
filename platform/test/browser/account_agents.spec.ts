@@ -35,7 +35,6 @@ for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) 
     await row.getByRole("button", {name: `See what ${name} has done`}).click()
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole("heading", {name})).toBeVisible()
-    await expect(dialog).toContainText("spent for you on Regent sites.")
     const box = (await dialog.boundingBox())!
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)

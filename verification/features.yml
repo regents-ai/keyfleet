@@ -403,7 +403,6 @@ features:
     gaps:
       - Checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
       - A newly paired agent reaches an open menu through the database's change notice, which the tests send by hand.
-      - Keyfleet's header shows no Credits balance, so the menu's balance row for the narrowest phones stays empty.
 
   - id: sign-in-choices
     what: >-

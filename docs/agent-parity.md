@@ -146,13 +146,11 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Return an advance | treasury, Advances out | `chain_return_advance` | — | — | `treasury return` (not released) | money, wallet | — |
 | Token launch upkeep (settle, add to the slice, release, collect fees) | `/treasury` Token launch | `chain_launch_upkeep` | — | — | `treasury launch` (not released) | money, wallet | — |
 
-## Credits
+## Points
 
 | Action | Page | WebMCP | MCP | Connector | CLI | Protected | Gap |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read Points | `/account/points` | `account_points` | `account_points` | `account_points` | `account points` | no | — |
-| Read Credits balance and history | `/account` Credits | `account_balances`, `account_credits_history` | the same two | the same two | `account balances`, `account credits-history` | no | — |
-| Buy or manage Credits | link to regents.sh | — | — | — | — | money | regents.sh's table |
 
 ## Other
 
@@ -160,7 +158,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Read site guides (about, docs, joining guide) | `/about`, `/docs`, `/skill.md` | `about`, `docs` | — | — | — (plain fetch) | no | — |
 | Early access sign-up (while closed) | `/early` form | — | — | — | — | personal data (email) | K16 |
-| Saved errors (Credits admins) | `/admin/errors` | — | — | — | — | production data | K15 |
+| Saved errors (the site's admins) | `/admin/errors` | — | — | — | — | production data | K15 |
 
 ## Page check
 
@@ -253,7 +251,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   wallet holds in the fleet now, from the same `Keys.keys_held_in_fleet` read the Key map's
   search makes, as the `keys_held` tool, the connector's `keys_held` and the
   `keys held` command. The command reaches regents-cli with K13.
-- **K15. Saved errors are page-only.** `/admin/errors` is for Credits admins in a
+- **K15. Saved errors are page-only.** `/admin/errors` is for the site's admins in a
   browser. An admin agent needs the same read. Protected (production data); after K1.
 - **K16. Early access silently drops programs.** The `/early` form has no tool, and its
   hidden trap field turns any program that fills it into a silent no. It lives only

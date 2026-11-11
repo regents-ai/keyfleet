@@ -69,8 +69,8 @@ defmodule Keyfleet.Application do
       # and the reads that fetch it.
       Keyfleet.Agents.ActivityReading,
       {Task.Supervisor, name: Keyfleet.Agents.Reads},
-      # After the repository and PubSub: a Credits balance or a pairing changed
-      # on any Regent site reaches the pages showing it.
+      # After the repository and PubSub: a pairing made or ended on any Regent
+      # site reaches the pages showing it.
       shared_changes_child(),
       # A key's profile reads its rewards wherever the site runs.
       Keyfleet.Chain.RewardsWaiting,
@@ -113,11 +113,10 @@ defmodule Keyfleet.Application do
   end
 
   # Background work lives in the database, so it starts with it. AshOban adds a
-  # queue and a sweep for every trigger in the site's domains and in Regent
-  # Credits, whose purchase checks and deposit reads run on this site's Oban.
+  # queue and a sweep for every trigger in the site's domains.
   defp oban_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false) do
-      domains = Application.fetch_env!(:keyfleet, :ash_domains) ++ [RegentCredits]
+      domains = Application.fetch_env!(:keyfleet, :ash_domains)
       {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
     end
   end

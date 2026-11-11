@@ -7,6 +7,8 @@ Changes to Keyfleet, newest first.
 - **Points.** Your Points page is redrawn: your total with today and yesterday, what is
   left to do, the leaderboard and the period bonus. Nothing earns until Points opens.
 - **Leaderboard.** Someone with no name shows by their wallet, which you can copy.
+- **Credits.** Credits are gone. Your Profile no longer shows them, an agent's window has no
+  spending section, and agents can no longer read a Credits balance or history.
 
 ## 9 November 2026
 
