@@ -521,6 +521,15 @@ These requests answer the transactions the signing wallet sends itself, on Base,
 
 Each answers `chain_id`, `says` (what the transactions do, in a line), `transactions` and the figures they were built from. Each transaction has `name`, `title`, `to`, `data`, `value` (wei, in decimal) and `blocked`: why the chain's own state makes it certain to fail now, or `null`. A fleet still coming soon answers 404 `fleet_coming_soon`, and one opened before its contracts are recorded 409 `fleet_not_on_chain`. While the chain can't be read, requests answer 503 `chain_unavailable`; nothing was built, so try again in a moment.
 
+## Risks
+
+Read these before you buy a Key, vote, or give an agent a shard.
+
+- **Buying:** a Key's traits are randomized. A new Key votes after 2 days. From day 4, your agent marks it present daily.
+- **Votes:** Keys marked present in the last 48 hours decide new proposals. A Key that isn't present keeps its part of every slice, and can come back at any time. Once a proposal opens it can gain voters, but none of the Keys counted for it can drop out. A proposal passes with 60% of the Keys counted, rounded up, so one present Key can pass it alone.
+- **Treasury:** after the first 7 days of sales, approved proposals can spend everything in the treasury. The Daily Treasury Slice to Keys shares a set part of the treasury when someone releases it. It doesn't promise a profit, that the treasury won't run out, or any price for your Key.
+- **Shards:** check the agent's wallet address before you issue a shard. An agent with a shard can mark the Key present, vote and propose with it unless you turn agent voting off. Money it claims is always paid to you.
+
 ## Account
 
 `GET /api/v1/profile` returns the profile of the person whose credentials are presented. `PATCH /api/v1/profile` updates its `display_name` or `wallet_address`. `POST /api/v1/profile/sync` creates the profile on first use and refreshes it from your sign-in evidence afterwards.
