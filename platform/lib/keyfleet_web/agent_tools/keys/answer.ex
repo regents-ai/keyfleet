@@ -18,8 +18,9 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
   The person's Keys in a fleet are read as their Account page lists them:
   each Key their wallets hold now with the agent on it, those with an agent
   first, then by number, beside the agents paired with them now, and the Key
-  the calling agent is on as `yours` (`Keyfleet.Keys.AgentKey`). Putting an
-  agent on a Key, or taking it off, answers them as they stand after it.
+  the calling agent is on as `yours` (`Keyfleet.Keys.AgentKey`). An agent
+  puts an agent that is on no Key onto a Key with none; only the person moves
+  or takes off an agent on a Key. A change answers them as they stand after it.
 
   A mute changes nothing for anyone else, and each mute request answers the
   agent's mutes in the fleet as they stand after it. A shard list has one
@@ -124,8 +125,8 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
     end
   end
 
-  # One of the person's agents goes on one of their Keys, or the Key's agent
-  # comes off when none is named, as their Account page does it.
+  # One of the person's agents that is on no Key goes on one of their Keys
+  # that has none; moving an agent or taking one off is the person's alone.
   def answer(:assign_agent, %{"fleet_id" => fleet_id, "token_id" => token_id} = params, actor, _) do
     with %{} <- Fleets.get_fleet!(fleet_id),
          {:ok, _assigned} <-
@@ -133,7 +134,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
       agent_keys(fleet_id, actor)
     else
       nil -> refusal(404, "fleet_unknown")
-      {:error, error} -> refuse_assign(error)
+      {:error, error} -> refuse_assign(error, actor)
     end
   end
 
@@ -188,16 +189,19 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
 
   defp token_id(_value), do: {:error, :invalid_token_id}
 
-  # Each refusal putting an agent on a Key has, by its own reason. A write
-  # that crossed another for the same Key changes nothing and is sent again;
-  # anything else is a fault, raised as one.
-  defp refuse_assign(%Ash.Error.Forbidden{errors: errors}) do
-    if Enum.any?(errors, &match?(%NotPairedError{}, &1)),
-      do: refusal(403, "agent_not_paired"),
-      else: refusal(403, "person_not_here")
+  # Each refusal putting an agent on a Key has, by its own reason. An agent
+  # whose person is here is refused only a change that is theirs alone. A
+  # write that crossed another for the same Key changes nothing and is sent
+  # again; anything else is a fault, raised as one.
+  defp refuse_assign(%Ash.Error.Forbidden{errors: errors}, actor) do
+    cond do
+      Enum.any?(errors, &match?(%NotPairedError{}, &1)) -> refusal(403, "agent_not_paired")
+      match?(%Agent{pairing: %Human{}}, actor) -> refusal(403, "person_only")
+      true -> refusal(403, "person_not_here")
+    end
   end
 
-  defp refuse_assign(%Ash.Error.Invalid{errors: errors} = error) do
+  defp refuse_assign(%Ash.Error.Invalid{errors: errors} = error, _actor) do
     cond do
       Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) -> refusal(404, "fleet_unknown")
       Enum.any?(errors, &match?(%KeyNotHeldError{}, &1)) -> refusal(409, "key_not_held")
@@ -209,7 +213,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
     end
   end
 
-  defp refuse_assign(error), do: raise(Ash.Error.to_error_class(error))
+  defp refuse_assign(error, _actor), do: raise(Ash.Error.to_error_class(error))
 
   defp agent_keys(fleet_id, %Agent{pairing: %Human{wallet_addresses: wallets}} = actor) do
     agents = Keys.person_agents(actor)

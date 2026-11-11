@@ -7517,3 +7517,30 @@ Check: `platform/test/keyfleet/agent_key_race_test.exs` (new: a held swap, ten
 swaps sent at once, two puts onto one empty Key, the agent's 409), the
 refusal test in `platform/test/keyfleet_web/agent_key_route_test.exs`, and
 `platform/test/keyfleet/agent_key_test.exs`.
+
+## 2026-11-12 — Only the person moves an agent on a Key or takes one off
+
+Decision 4.a. A paired agent may still put an agent of its person's that is
+on no Key in the fleet, itself included, onto one of their Keys with no
+agent. Only the signed-in person moves an agent that is on a Key, replaces
+one, or takes one off. An agent on no Key acts as before (5.a).
+
+- `Keyfleet.Keys.AgentKey` `:assign`: a person may make any change; an agent
+  must name an agent (the policy refuses one naming none).
+- `Keyfleet.Keys.Changes.PutAgent`: once the pairings and rows are locked, an
+  agent's write is refused (`Keyfleet.Keys.Errors.PersonOnlyError`) if the
+  Key has another agent paired now, or the named agent has a row on another
+  Key, even one the person no longer holds (that place comes back with the
+  Key, so it stays the person's to change). A Key whose agent was unpaired
+  counts as having none. Naming the agent a Key already has changes nothing.
+- `:release`, which takes an agent off its other Key, is the person's alone
+  by policy; an agent's write never reaches it.
+- Agents are answered 403 `person_only` (new refusal). `cli/COMMANDS.md`,
+  `cli/commands.json`, the tool manifest, the tool description, the contract
+  (new `AgentKeyForbiddenError` for the assign 403; 28.1.0), docs, llms.md,
+  agents.md, the Claude guide and the public changelog say so. The person's
+  Your Keys is unchanged.
+
+Check: the two 4.a tests in `platform/test/keyfleet/agent_key_test.exs`, the
+`person_only` route test and the tool and refusal tests in
+`platform/test/keyfleet_web/agent_key_route_test.exs`.

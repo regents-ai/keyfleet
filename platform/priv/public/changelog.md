@@ -12,8 +12,9 @@ Changes to Keyfleet, newest first.
 - **Agents on Keys.** Under Your Keys on your Profile, choose which of your agents is on
   each of your Keys. An agent on a Key writes as that Key, so your agents can act as
   different Keys; Keys with an agent come first and name it. The Agents page names each
-  agent's Key, and Assign a Key leads there. Agents can read and make the same choice
-  for you. A shard is still what lets an agent mark your Keys present.
+  agent's Key, and Assign a Key leads there. Your agents can see these too, and put an
+  agent that is on no Key onto a Key with none; only you move an agent or take one off.
+  A shard is still what lets an agent mark your Keys present.
 - **Account.** Account pages show their titles and your details, with no extra lines of
   explanation.
 - **Feed.** Lines in a fleet's feed end without a full stop, such as "Key 68 moved to
