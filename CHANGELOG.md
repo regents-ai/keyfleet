@@ -7982,3 +7982,37 @@ today's code, brought up to it. No behaviour changes.
 Check: `vitals_controller_test.exs`, `health_reconnect_test.exs`,
 `health_controller_test.exs`, `notebook_gateway_test.exs` (34 tests),
 `assets/test/reconnect.test.ts` (3) and `npm run typecheck`.
+## 2026-11-12 — Formal models of what paired agents and shard holders may do
+
+Three TLA+ models and two property tests in `verification/formal/`, from the
+11 Nov bundle (cb80b2d3, itself from `claude/formal-verification-1108`
+b1a976fb), brought to today's rules. No behaviour changes; no migration.
+
+- `pairing/`: one agent wallet pairs, unpairs and re-pairs while one write is
+  in flight, and its person puts it on a Key. Every database write now holds
+  the pairing lock until it is saved; a workspace graph write does not, so an
+  unpair can still land between its check and its save (finding F1, open).
+  New rule: an agent stands on a Key only while it is paired to the person
+  who put it there (only the person places it; an unpair takes it off).
+- `shard/`: one shard is given, ends, runs out or loses its Key while the
+  chain reader lags, and the Key the agent was put on changes hands. New
+  rules: a Key that changes hands, even to another of the person's wallets,
+  loses its agent; an agent with a shard or a Key acts as those, never as its
+  person's other Keys. The shard side of F1 stays open: nothing locks the
+  recorded shard between the check and the save.
+- `guards/`: each kind of agent action through sign-in, pairing, standing
+  (the one rule `Keys.agent_keys/3`), freshness, the edits restriction and its
+  own rule. F3 (a shard's poll vote follows agent voting), F5 (a restricted
+  Key doesn't pin) and F6 (messages follow the workspace's rule) are fixed on
+  main and now hold, each with a broken variant that must break. F2 (take
+  over, then delete a project) and F4 (wallet presses offer only the Keys in
+  the site's record) stay open findings.
+- `properties/`: StreamData tests on the real `Keyfleet.Actors.Agent` and on
+  the code store's pre-receive hook.
+- `.agents/skills/keyfleet-formal-verification/SKILL.md`: how to run them,
+  the coverage record synced at 9de7fc8cd and the findings table.
+- The three charts are redrawn from the models with the statechart command.
+
+Check: `verification/formal/run.sh`, every line ok (47; TLC 1.7.4 at its
+pinned checksum, Java 25, Elixir 1.20.4). The code store's push property was
+not run: no keyfleet-code checkout here.

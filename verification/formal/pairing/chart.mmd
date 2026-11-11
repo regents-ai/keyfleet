@@ -1,0 +1,70 @@
+---
+title: "An agent's pairing and one write"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: Not paired yet
+    lg1: Paired
+    lg2: Write on its way
+    lg3: Saved
+    lg4: Refused
+    lg5: Breaks NoWriteAfterUnpair
+    lg6: Path to the NoWriteAfterUnpair bug
+  }
+  class lg0 blue
+  class lg1 teal
+  class lg2 yellow
+  class lg3 tan
+  class lg4 pink
+  class lg5 breaks
+  class lg6 bugPath
+  s0: Not paired
+  s1: Code waiting
+  s2: Refused
+  s3: Paired
+  s4: Paired, signed out
+  s5: Being checked
+  s6: Unpaired while checked
+  s7: Cleared to save
+  s8: Cleared, then unpaired
+  s9: Saved
+  s10: Saved after unpair
+  [*] --> s0
+  s0 --> s1: the person makes a pairing code
+  s0 --> s2: the agent sends a write [not paired]
+  s1 --> s0: the code runs out
+  s1 --> s2: the agent sends a write [not paired]
+  s1 --> s3: the agent pairs with the code
+  s3 --> s0: the person unpairs the agent
+  s3 --> s4: the agent's sign-in runs out
+  s3 --> s5: the agent sends a write
+  s3 --> s2: the agent sends a write [smart wallet on Ethereum]
+  s4 --> s3: the agent signs in again
+  s4 --> s0: the person unpairs the agent
+  s4 --> s2: the agent sends a write [signed out]
+  s5 --> s6: the person unpairs the agent
+  s5 --> s7: the second check finds the same pairing
+  s6 --> s2: the second check finds no pairing
+  s7 --> s8: the person unpairs the agent
+  s7 --> s9: the write is saved
+  s8 --> s10: the write is saved
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 blue
+  class s0 bugPath
+  class s1 blue
+  class s1 bugPath
+  class s2 pink
+  class s3 teal
+  class s3 bugPath
+  class s4 teal
+  class s5 yellow
+  class s5 bugPath
+  class s6 yellow
+  class s7 yellow
+  class s7 bugPath
+  class s8 yellow
+  class s8 bugPath
+  class s9 tan
+  class s10 tan
+  class s10 breaks
+  class s10 bugPath
