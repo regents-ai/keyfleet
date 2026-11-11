@@ -17,7 +17,6 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
   attr :notice, :map, default: nil
   attr :authenticated, :boolean, default: true
   attr :title, :string, default: "Verified connections"
-  attr :description, :string, default: "Connect accounts that help people recognize your work."
   attr :class, :string, default: nil
 
   def verified_connections(assigns) do
@@ -32,7 +31,6 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
     >
       <div>
         <h2 id={"#{@id}-title"}>{@title}</h2>
-        <p>{@description}</p>
         <p
           :if={@notice}
           id={"#{@id}-notice"}

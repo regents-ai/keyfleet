@@ -429,6 +429,39 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
+  # The account pages carry their headings and data, with no helper sentence
+  # under a title or behind a tip beside it.
+  test "each account page shows its title with no tagline", %{conn: conn} do
+    wallet = "0x6767676767676767676767676767676767676767"
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-taglines", wallet, [wallet],
+               actor: %System{}
+             )
+
+    for path <-
+          ~w(/account /account/agents /account/wallets /account/connections /account/points) do
+      {view, _html} = open_account(conn, account, path)
+
+      assert has_element?(view, ".page-head h1")
+      refute has_element?(view, "#page-title-tip"), path
+    end
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, ".account-session h2", "Session")
+    refute has_element?(view, ".account-session p")
+
+    {view, _html} = open_account(conn, account, "/account/agents")
+    refute has_element?(view, "#account-agents-about", "Once paired")
+
+    {view, _html} = open_account(conn, account, "/account/connections")
+    refute has_element?(view, "#account-verified-connections > div > p:not([role])")
+
+    {view, _html} = open_account(conn, account, "/account/points")
+    refute has_element?(view, ".rg-points-total__about")
+    refute has_element?(view, "#points-bonus-about")
+  end
+
   test "Account says which wallet is the Regents wallet and which is active",
        %{conn: conn} do
     own = "0x8888888888888888888888888888888888888888"

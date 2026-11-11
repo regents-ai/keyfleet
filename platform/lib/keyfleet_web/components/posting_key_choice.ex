@@ -70,7 +70,6 @@ defmodule KeyfleetWeb.PostingKeyChoice do
             Key {token_id}
           </option>
         </select>
-        <:hint>Your agents post here as this Key.</:hint>
       </Regent.Primitives.field>
       <p
         id={"#{@id}-notice"}

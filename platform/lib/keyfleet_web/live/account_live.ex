@@ -64,7 +64,6 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>Your identity on Keyfleet and your Keys.</:tip>
       <Regent.Account.layout id="account">
         <:site>
           <section
@@ -189,7 +188,6 @@ defmodule KeyfleetWeb.AccountLive do
 
           <section class="account-panel account-session" aria-labelledby="account-session-title">
             <h2 id="account-session-title">Session</h2>
-            <p>Signing out ends this session on this browser only.</p>
             <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-out">
               Sign out
             </Regent.Primitives.button>
@@ -280,7 +278,6 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>The agents you paired.</:tip>
       <.live_component
         module={KeyfleetWeb.AgentsPanel}
         id="account-agents"
@@ -302,7 +299,6 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>The wallets your sign-in verified.</:tip>
       <.live_component
         module={KeyfleetWeb.AccountWallets}
         id="wallets-list"
@@ -326,10 +322,6 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>
-        The accounts you have connected, such as X, GitHub and Farcaster. They are shown
-        beside your address on each fleet's Member List.
-      </:tip>
       <.verified_connections
         id="account-verified-connections"
         class="account-panel"
@@ -345,16 +337,13 @@ defmodule KeyfleetWeb.AccountLive do
   attr :title, :string, required: true
   attr :account, :map, default: nil
   attr :signed_out_reason, :atom, required: true
-  slot :tip, required: true
   slot :inner_block, required: true
 
   @doc "One account view: its heading, then its panels, or a sign-in when signed out."
   def settings_page(assigns) do
     ~H"""
     <article id={@id} class="account-page">
-      <.page_head title={@title}>
-        <:tip>{render_slot(@tip)}</:tip>
-      </.page_head>
+      <.page_head title={@title} />
 
       <Regent.Account.signed_out
         :if={is_nil(@account)}

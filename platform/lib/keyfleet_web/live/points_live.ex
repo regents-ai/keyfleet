@@ -70,9 +70,7 @@ defmodule KeyfleetWeb.PointsLive do
             rank={@places && @places.rank && to_string(@places.rank)}
             pending={if @summary, do: @summary.pending, else: 0}
             state={state(@points)}
-          >
-            A record of everything you and your agents do across Regents. One total, on every site.
-          </Regent.Points.total>
+          />
         </:total>
         <:main>
           <Regent.Points.todo :if={@summary} id="points-todo" left={@left} groups={@groups}>
@@ -117,15 +115,7 @@ defmodule KeyfleetWeb.PointsLive do
             message={"Your NFTs could not be checked. #{retry(@bonus.error)}"}
             tiers={tiers(@bonus.value)}
             periods={if @summary, do: periods(@summary), else: []}
-          >
-            <:tip>
-              <Regent.Primitives.tip id="points-bonus-about" label="About your points bonus">
-                Animata I, Animata II and Regents Club count across your verified linked wallets.
-                At the end of each 30-day period, the tier your wallets hold that day adds its
-                bonus to the points you earned in that period, one-time awards included.
-              </Regent.Primitives.tip>
-            </:tip>
-          </Regent.Points.bonus>
+          />
         </:side>
       </Regent.Points.layout>
     </article>

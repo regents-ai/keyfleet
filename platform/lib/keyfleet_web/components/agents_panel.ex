@@ -167,7 +167,6 @@ defmodule KeyfleetWeb.AgentsPanel do
         agents={rows(@agents, @lights, @now)}
         notice={if is_nil(@detail), do: notice_text(@notice)}
       >
-        <:about>Once paired, an agent may: {may_words()}.</:about>
         <:actions :let={agent}>
           <.agent_keys id={"#{@id}-keys-#{agent.id}"} keys={agent_keys_of(@keys, agent)} />
           <P.button
@@ -318,16 +317,6 @@ defmodule KeyfleetWeb.AgentsPanel do
       })
     end)
   end
-
-  # The tip's one sentence: each line, lower-cased, apart by semicolons since
-  # some lines hold commas of their own.
-  defp may_words,
-    do:
-      Enum.map_join(
-        Capabilities.may(),
-        "; ",
-        &(String.downcase(String.first(&1)) <> String.slice(&1, 1..-1//1))
-      )
 
   defp notice_text({_role, text}), do: text
   defp notice_text(nil), do: nil

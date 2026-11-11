@@ -532,7 +532,6 @@ defmodule KeyfleetWeb.ShowcaseLive do
                 identities={@identities}
                 authenticated
                 notice={@connection_notice}
-                description="Local presentation fixture"
               />
             </P.disclosure>
           </section>
