@@ -7409,3 +7409,23 @@ API contract 28.1.0 → 29.0.0, because a field, two activity kinds and two oper
 - Migration `20261111042532_task_joins_activity_index` builds the activity index `graph_events_activity_index` beside `graph_events_notable_index`, then drops the old one, both concurrently; no rows change.
 
 Check: `platform/graph_host/tests/test_tasks.py`, `test_reviews.py` and `test_host.py` (joining without limit, creator-only fields, an archive letting go, reviews refused to a Key that worked on the task, the startup rewrite); `AgentGraphJourneyTest` "any key joins any task and works on it beside the others, and its creator archives it at any time, letting them go"; `Keyfleet.ActivityTest`, `KeyfleetWeb.ActivityLinesTest` and `WorkspacePageTest` for activity, the page and its lines; `platform/test/browser/group_flow.spec.ts` joins a task before working on it.
+
+## 2026-11-12 — Keyfleet's deploys no longer wait on other sites
+
+- `scripts/deploy.sh` runs itself under `/tmp/regent-release-<app>.lock`
+  (`keyfleet` or `keyfleet-staging`) in place of the one lock every site
+  shared, so only two deploys of one app take turns. The image is built and
+  pushed first (`--build-only --push`, labelled with the short commit) holding
+  no shared lock; the graph machine and then the site machine (bluegreen)
+  switch to it by `--image`, each in whichever of the two places on the shared
+  database is free, `/tmp/regent-shared-db-release.lock` or `-2.lock`. The
+  refusals (uncommitted change, commit not on `origin/main`, a live image the
+  commit does not contain) are unchanged. `platform/README.md`, Deployment,
+  says the same.
+- No migration; no production data.
+
+Check: `bash -n scripts/deploy.sh`; a dry run in a scratch repository with a
+stand-in `fly` and the lock files moved into it: the build ran with both
+places free, each switch held one, a switch took the second place while the
+first was held, two production runs took turns, and a production and a staging
+run went at once.

@@ -415,18 +415,30 @@ Deploy from the monorepo root with `scripts/deploy.sh production` (or
 any commit not on `origin/main` and any commit that does not contain the one
 live (the running image's tag), so two releases that cross cannot take live
 work out. It assembles the context folder for amd64
-from that commit, builds it with Fly's remote builder, labelling the image
-with the short commit, and releases it to the graph machine and then the site
-machine:
+from that commit, builds and pushes the image with Fly's remote builder,
+labelling it with the short commit, and then switches the graph machine and
+then the site machine to it:
 
 ```sh
 fly deploy <folder> --config <folder>/platform/fly.toml \
   --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
-  --remote-only --ha=false --image-label <short commit> --process-groups graph
+  --build-only --push --remote-only --image-label <short commit> \
+  --build-arg SOURCE_COMMIT=<commit>
+fly deploy --config <folder>/platform/fly.toml \
+  --image registry.fly.io/keyfleet:<short commit> --ha=false --process-groups graph
 fly deploy --config <folder>/platform/fly.toml \
   --image registry.fly.io/keyfleet:<short commit> --ha=false \
   --process-groups site --strategy bluegreen
 ```
+
+Two deploys of one app take turns: the script runs itself under
+`lockf -k /tmp/regent-release-<app>.lock` (`keyfleet` or `keyfleet-staging`)
+for the whole run, a lock no other site takes. The build waits on nothing
+else. Each switch runs the migrations and briefly adds a machine's connections
+to the production database every Regent site shares, which fits two switches
+at once, so each takes `/tmp/regent-shared-db-release.lock` when it is free
+and otherwise waits for `/tmp/regent-shared-db-release-2.lock`. Never wrap the
+script in `lockf` yourself: it would wait on its own lock.
 
 The graph machine stops and starts again, and for those seconds a workspace
 write answers "try again". The site machine is released bluegreen: a new one

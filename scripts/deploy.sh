@@ -13,17 +13,22 @@
 # builder builds the image from it, labelled with the short commit. Every deploy
 # runs /app/bin/migrate as its release command (platform/README.md, Deployment).
 #
-# The app has two machines (platform/fly.toml). The graph machine, which holds
-# the volume, takes the image first: it stops and starts again, and for those
-# seconds a workspace write answers "try again". The site machine then takes
-# the same image bluegreen, so a page is answered throughout.
+# The app has two machines (platform/fly.toml). Fly's remote builder first
+# builds and pushes the image, labelled with the short commit, holding no
+# place on the shared database. The graph machine, which holds the volume, then
+# takes the image: it stops and starts again, and for those seconds a workspace
+# write answers "try again". The site machine then takes the same image
+# bluegreen, so a page is answered throughout.
 #
-# Releases from this Mac take turns, from any checkout: two of this app at once
-# can leave the two machines on different commits (21 October 2026), and every
-# site shares one production database, where a release briefly doubles a site's
-# connections. The script runs itself again under lockf(1) on the lock every
-# site's deploy takes, waits for any release holding it, and the system lets go
-# of it when the script ends, however it ends.
+# Two deploys of this app take turns, from any checkout, or the two machines can
+# end up on different commits (21 October 2026): the script runs itself again
+# under lockf(1) on /tmp/regent-release-<app>.lock, which other sites never
+# take, and the system lets go of it when the script ends, however it ends.
+# Every site shares one production database, and a switch to a new image runs
+# the migrations and briefly adds a machine's connections to it, which fits two
+# switches at once across all sites. Each switch takes whichever of the two
+# places is free, /tmp/regent-shared-db-release.lock or
+# /tmp/regent-shared-db-release-2.lock, or waits for the second.
 set -euo pipefail
 
 case "${1:-}" in
@@ -35,9 +40,9 @@ case "${1:-}" in
     ;;
 esac
 
-lock=/tmp/regent-shared-db-release.lock
+lock="/tmp/regent-release-$app.lock"
 if [[ "${DEPLOY_LOCK:-}" != "$lock" ]]; then
-  echo "==> Deploying to $app (waits for any other release holding $lock)"
+  echo "==> Deploying to $app (waits for any other deploy of $app holding $lock)"
   DEPLOY_LOCK="$lock" exec lockf -k "$lock" bash "$0" "$@"
 fi
 
@@ -79,21 +84,29 @@ trap cleanup EXIT
 echo "==> Assembling the build context from commit ${commit:0:7}"
 platform/scripts/build-release-context.sh "$context" amd64
 
-echo "==> Deploying ${commit:0:7} to the graph machine with $config"
+echo "==> Building ${commit:0:7} with $config"
 fly deploy "$context" \
   --config "$context/$config" \
   --dockerfile "$context/Dockerfile" \
   --ignorefile "$context/Dockerfile.dockerignore" \
+  --build-only \
+  --push \
   --remote-only \
-  --ha=false \
-  --build-arg SOURCE_COMMIT="$commit" \
   --image-label "${commit:0:7}" \
-  --process-groups graph
+  --build-arg SOURCE_COMMIT="$commit"
 
-echo "==> Deploying ${commit:0:7} to the site machine, bluegreen"
-fly deploy \
-  --config "$context/$config" \
-  --image "registry.fly.io/$app:${commit:0:7}" \
-  --ha=false \
-  --process-groups site \
-  --strategy bluegreen
+# Switches the machines of one process group to the new image, in whichever
+# place on the shared database is free, or waiting for the second.
+switch() {
+  local place=/tmp/regent-shared-db-release.lock
+  lockf -k -s -t 0 "$place" true || place=/tmp/regent-shared-db-release-2.lock
+  echo "==> Deploying ${commit:0:7} to the $1 machine (waits for $place if it is taken)"
+  lockf -k "$place" fly deploy \
+    --config "$context/$config" \
+    --image "registry.fly.io/$app:${commit:0:7}" \
+    --ha=false \
+    --process-groups "$@"
+}
+
+switch graph
+switch site --strategy bluegreen
