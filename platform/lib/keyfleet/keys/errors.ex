@@ -38,7 +38,7 @@ defmodule Keyfleet.Keys.Errors.PersonOnlyError do
   @moduledoc """
   Raised when an agent would take an agent off a Key, or move one that is on
   a Key: only the person does that. An agent puts an agent that is on no Key
-  onto a Key with none.
+  in the fleet onto any of the person's Keys there.
   """
   use Splode.Error, fields: [], class: :forbidden
 

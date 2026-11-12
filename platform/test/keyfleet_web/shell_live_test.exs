@@ -923,7 +923,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       refute has_element?(view, "#account-agents li", "Assign a Key")
     end
 
-    test "the Account page puts an agent on a Key, lists it first, and the Agents page names it",
+    test "the Account page puts several agents on a Key, lists it first, and takes one off",
          c do
       issue!(@fleet, 2, @person)
       pair_agent!("did:privy:agent-keys", "Bolt", @second)
@@ -932,44 +932,59 @@ defmodule KeyfleetWeb.ShellLiveTest do
       list = "#account-key-agents-#{@fleet}"
 
       assert keys_listed(html) == ["/classic/1?key=1", "/classic/1?key=2"]
-      assert has_element?(view, "#{list}-2 select option[selected]", "None")
+      refute has_element?(view, "#{list}-2-agents")
 
-      view
-      |> element("#{list}-2-form")
-      |> render_change(%{"token_id" => "2", "agent" => @second})
+      for {wallet, name} <- [{@second, "Bolt"}, {@agent, "Astra"}] do
+        view
+        |> element("#{list}-2-add")
+        |> render_change(%{"token_id" => "2", "agent" => wallet})
 
-      assert has_element?(view, "#{list}-notice[role=status]", "Bolt is on Key 2 now.")
+        assert has_element?(view, "#{list}-notice[role=status]", "#{name} is on Key 2.")
+      end
+
       assert keys_listed(render(view)) == ["/classic/1?key=2", "/classic/1?key=1"]
-      assert has_element?(view, "#{list}-2.account-keys__key--agent option[selected]", "Bolt")
-      assert has_element?(view, "#{list}-1 select option[selected]", "None")
+      assert has_element?(view, "#{list}-2.key-gallery__key--agents")
+      assert agents_on(view, list, 2) == ["Astra", "Bolt"]
+      refute has_element?(view, "#{list}-2-add")
+      assert has_element?(view, "#{list}-1-add option", "Astra · Key 2")
 
       bolt = agent!(@second)
+      astra = agent!(@agent)
       assert %{token_id: 2, for_person: true} = Keys.identity(bolt, @fleet)
-      assert %{token_id: 1, for_person: true} = Keys.identity(agent!(@agent), @fleet)
+      assert %{token_id: 2, for_person: true} = Keys.identity(astra, @fleet)
 
       # A wallet no agent of theirs has changes nothing and says so.
       view
-      |> element("#{list}-1-form")
+      |> element("#{list}-1-add")
       |> render_change(%{"token_id" => "1", "agent" => "0x" <> String.duplicate("9", 40)})
 
       assert has_element?(view, "#{list}-notice[role=alert]", "Reload")
-      assert has_element?(view, "#{list}-1 select option[selected]", "None")
-      assert %{token_id: 2} = Keys.identity(bolt, @fleet)
+      refute has_element?(view, "#{list}-1-agents")
 
       {view, _html} = open_account(c.conn, c.account, "/account/agents")
-      bolt_row = element(view, "#account-agents li", "Bolt")
-      assert render(bolt_row) =~ ~s(href="/classic/1/keys/2")
-      assert has_element?(view, "#account-agents li", "Assign a Key")
+
+      for name <- ["Astra", "Bolt"] do
+        assert render(element(view, "#account-agents li", name)) =~ ~s(href="/classic/1/keys/2")
+      end
+
+      refute has_element?(view, "#account-agents li", "Assign a Key")
 
       {view, _html} = open_account(c.conn, c.account)
 
       view
-      |> element("#{list}-2-form")
-      |> render_change(%{"token_id" => "2", "agent" => ""})
+      |> element("#{list}-2-agent-#{bolt.pairing_id} button")
+      |> render_click()
 
-      assert has_element?(view, "#{list}-notice", "Key 2 has no agent now.")
-      assert keys_listed(render(view)) == ["/classic/1?key=1", "/classic/1?key=2"]
+      assert has_element?(view, "#{list}-notice", "Bolt is off Key 2.")
+      assert agents_on(view, list, 2) == ["Astra"]
       assert %{token_id: 1} = Keys.identity(bolt, @fleet)
+
+      view
+      |> element("#{list}-2-agent-#{astra.pairing_id} button")
+      |> render_click()
+
+      assert keys_listed(render(view)) == ["/classic/1?key=1", "/classic/1?key=2"]
+      assert %{token_id: 1} = Keys.identity(astra, @fleet)
     end
 
     test "once an agent pairs, the pairing window leads to putting it on a Key", c do
@@ -1082,8 +1097,17 @@ defmodule KeyfleetWeb.ShellLiveTest do
     do:
       html
       |> LazyHTML.from_document()
-      |> LazyHTML.query("#account-keys li a")
+      |> LazyHTML.query("#account-keys .key-gallery__card")
       |> LazyHTML.attribute("href")
+
+  # The names of the agents under a Key in the gallery, in their order.
+  defp agents_on(view, list, token_id) do
+    view
+    |> render()
+    |> LazyHTML.from_document()
+    |> LazyHTML.query("#{list}-#{token_id}-agents .key-gallery__agent-name")
+    |> Enum.map(&LazyHTML.text/1)
+  end
 
   defp issue!(fleet_id, token_id, owner) do
     Keys.record_epoch!(

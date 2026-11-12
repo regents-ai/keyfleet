@@ -40,7 +40,10 @@ defmodule KeyfleetWeb.AgentKeys do
       actor = Human.for_account(account)
 
       on_keys =
-        actor |> Keys.agents_on_keys(agents) |> Enum.group_by(&elem(&1, 1).id, &elem(&1, 0))
+        for {key, on_key} <- Keys.agents_on_keys(actor, agents),
+            agent <- on_key,
+            reduce: %{},
+            do: (on_keys -> Map.update(on_keys, agent.id, [key], &[key | &1]))
 
       holds_key? = holds_key?(actor)
 
