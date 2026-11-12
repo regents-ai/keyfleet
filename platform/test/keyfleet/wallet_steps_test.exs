@@ -321,6 +321,24 @@ defmodule Keyfleet.WalletStepsTest do
                %{"reveal" => :deck_not_set, "expire_reveal" => :no_draw_waiting}
     end
 
+    # Costly failure: a press whose call needs nothing from the chain sending
+    # nothing while the chain doesn't answer.
+    test "a chain that can't be read still builds both, holding neither back" do
+      Keyfleet.Chain.StubClient.put_chain(ChainViews.head(), [],
+        calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end
+      )
+
+      built = build!(:reveal, token_id: 4)
+      assert built.problem == :unread
+      assert built.figures.blocked == %{}
+
+      assert steps(built)["reveal"].data ==
+               BuilderCode.append(Call.encode("requestReveal(uint256)", [id(4)]))
+
+      assert steps(built)["expire_reveal"].data ==
+               BuilderCode.append(Call.encode("expireReveal(uint256)", [id(4)]))
+    end
+
     test "a key dealt its card by number never draws", %{fleet: fleet} do
       assert fleet.deck_size >= 1
       ChainViews.put!([])

@@ -8,6 +8,8 @@ Changes to Keyfleet, newest first.
   line.
 - **New Keys.** A Key that reaches your wallet counts at once for Mark present, Vote and
   Claim all. When your wallet has no Key left, the button says so until one arrives.
+- **Traits.** Ask again and End the wait reach your wallet even while the network can't
+  be read, and the page says it is trying again.
 - **Projects.** Only the Key that started a project can delete it. A Key that takes a project
   over can work in it, but can't delete it.
 - **Task pages.** A task no longer names one Key to review it, so its page no longer shows

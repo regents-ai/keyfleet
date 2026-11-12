@@ -8352,3 +8352,19 @@ elixir-utils main is dd2d3c6e, and the site pinned d89c69df, its parent.
 Check: forced compiles with warnings as errors, format, credo, xref and
 codegen pass; the 22 ExUnit files that sign agent requests pass (262);
 `make check-siwa-latest` passes.
+
+## 2026-11-12 — Ask again reaches the wallet while the chain can't be read
+
+When the chain didn't answer, a Key's Traits buttons built no steps, so a
+press of Ask again or End the wait sent nothing and the panel said it
+couldn't be sent. Their calls, `requestReveal` and `expireReveal`, need
+nothing from the chain; the reads only say which press is certain to fail.
+
+- `KeySteps` builds both steps when the chain doesn't answer, holds neither
+  back, and the build's problem is `:unread`, as Vote, Mark present and
+  Claim all do: the panel says "Can’t reach the network right now. Trying
+  again." and builds again in 10 seconds, and a press reaches the wallet.
+  An agent still gets 503 `chain_unavailable`.
+
+Check: a wallet steps test and a Key profile test, both failing before the
+change; `wallet_steps_test.exs` and `key_profile_test.exs` pass (95).

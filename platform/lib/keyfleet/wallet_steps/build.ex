@@ -8,10 +8,12 @@ defmodule Keyfleet.WalletSteps.Build do
   `figures` are what the steps were built from, for the page to show beside
   the buttons. When what was typed can't be put into a call, or the chain
   can't be read, the review has no steps and `problem` names why; otherwise
-  `problem` is nil. Vote, Mark present and Claim all are the exception: when
+  `problem` is nil. Vote, Mark present and Claim all are an exception: when
   the chain doesn't answer whether Keys reached the signer since the reader's
   last block (`own_keys/3`), their steps are still built, with the Keys known,
-  and `problem` is `:unread`.
+  and `problem` is `:unread`. Asking again for a Key's draw and ending its
+  wait are another: their calls need nothing from the chain, so when it
+  doesn't answer they are still built, and `problem` is `:unread`.
 
   `figures.blocked` names each step the chain's own state, read at the latest
   block, makes certain to fail, with why: `%{"claim-0x…" => :nothing_to_claim}`.

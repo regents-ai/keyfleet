@@ -613,7 +613,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   # Whether the chain has a seed for the key, a request waiting, or a wait
   # that was ended, and whether its fleet's deck is set on the chain yet, as
-  # the contract checks.
+  # the contract checks. The two calls need nothing from the chain, so when it
+  # doesn't answer they are still built, neither held back, and the build says
+  # the chain couldn't be read.
   defp reveal(fleet, onchain, steps, figures) do
     with {:ok, reads} <- Reads.at_head(),
          {:ok, [_manager, _preset, _type, _size, deck_hash]} <-
@@ -656,7 +658,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
       {:ok, steps, Map.put(figures, :blocked, blocked)}
     else
-      _unread -> {:problem, :unread, figures}
+      _unread -> {:ok, steps, figures, :unread}
     end
   end
 

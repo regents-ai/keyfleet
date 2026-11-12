@@ -372,6 +372,34 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       })
     end
 
+    # Costly failure: a network that doesn't answer turning Ask again into a
+    # press that sends nothing.
+    test "while the chain can't be read, Ask again still reaches the wallet and the page says so",
+         %{conn: conn} do
+      signer = wallet("f")
+      rewards_answer(fn _to, _data, _hash -> {:error, :chain_unavailable} end)
+
+      {:ok, view, _html} = conn |> signed_in_as(signer) |> live(@path <> "?key=12")
+      panel = with_target(view, "#key-profile-reveal-action")
+      render_hook(panel, "onchain_active_wallet", %{"address" => signer})
+      render_async(view)
+
+      refute has_element?(view, "#key-profile-reveal-again[disabled]")
+
+      assert has_element?(
+               view,
+               "#key-profile-reveal-action",
+               "Can’t reach the network right now. Trying again."
+             )
+
+      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "reveal"})
+
+      assert_reply(view, %{
+        send: "reveal",
+        review: %{signer: ^signer, steps: [%{step: "reveal"}, %{step: "expire_reveal"}]}
+      })
+    end
+
     test "a request that was accepted says the draw is on its way", %{conn: conn} do
       draw_answer(1_800_000_000)
 
