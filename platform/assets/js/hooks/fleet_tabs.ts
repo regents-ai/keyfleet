@@ -1,7 +1,7 @@
 import type {Scope} from "animejs"
 import {composeHooks, type Hook} from "../hook_composition"
-import {CurrentTab} from "./current_tab"
 import {MotionTabs} from "./motion/reveals"
+import {ScrollRow} from "./scroll_row"
 
 type FleetTabsHook = {el: HTMLElement; scope?: Scope}
 
@@ -20,7 +20,7 @@ const markPlaced: Hook = {
 }
 
 /**
- * A fleet's tabs: the open one stays in view on a phone, and the mark under
- * it glides to the next tab picked with a mouse or finger.
+ * A fleet's tabs: on a phone the row scrolls with the open tab in view, and
+ * the mark under it glides to the next tab picked with a mouse or finger.
  */
-export const FleetTabs = composeHooks(CurrentTab, MotionTabs, markPlaced)
+export const FleetTabs = composeHooks(ScrollRow, MotionTabs, markPlaced)

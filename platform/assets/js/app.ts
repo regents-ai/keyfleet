@@ -35,6 +35,7 @@ import {FleetTabs} from "./hooks/fleet_tabs"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HarbourSea} from "./hooks/harbour_sea"
 import {PlacesChart} from "./hooks/places_chart"
+import {ScrollRow} from "./hooks/scroll_row"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
 import {KeyCards} from "./hooks/key_cards"
@@ -328,6 +329,7 @@ const hooks = {
   NextKeyCard,
   OnchainSteps,
   PlacesChart,
+  ScrollRow,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   ThemeSwitch,
   TokenMenu,

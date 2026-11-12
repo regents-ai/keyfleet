@@ -186,6 +186,80 @@ test("the way in sits above the tabs and opens the Buy Key window, as the header
   }
 })
 
+// On a phone the fleet's tabs and the feed's channels each scroll sideways in
+// their own row. At rest no item is cut part way: each stands whole in the
+// row's clear box (the row less the fade at an edge with more past it) or lies
+// wholly past it, under the fade or out of the row. The selected item stands
+// whole, every item is a finger tall, and the page never scrolls sideways.
+// The rows are read with the channels' rooms in, on a fleet of their own.
+const rowsAtRest = (page: Page) =>
+  page.evaluate(() =>
+    ["#fleet-tabs", "#fleet-channels"].flatMap(id => {
+      const row = document.querySelector<HTMLElement>(id)
+      if (!row) return []
+      const box = row.getBoundingClientRect()
+      const style = getComputedStyle(row)
+      const start = box.left + parseFloat(style.getPropertyValue("--fleet-fade-start"))
+      const end = box.right - parseFloat(style.getPropertyValue("--fleet-fade-end"))
+      return [[...row.querySelectorAll<HTMLElement>("a, button")].map(item => {
+        const {left, right, height} = item.getBoundingClientRect()
+        const whole = left >= start - 0.5 && right <= end + 0.5
+        const past = right <= start + 0.5 || left >= end - 0.5
+        const chosen = item.getAttribute("aria-current") === "page" ? 2 : item.getAttribute("aria-pressed") === "true" ? 1 : 0
+        return {item: `${id} ${item.id}`, rests: whole || past, chosen, whole, height}
+      })]
+    }),
+  )
+
+// The open tab or room is a row's chosen item, else its pressed channel.
+const chosenWhole = async (page: Page) =>
+  (await rowsAtRest(page)).map(row => [...row].sort((a, b) => b.chosen - a.chosen)[0].whole)
+
+async function expectRowsAtRest(page: Page, width: number) {
+  await expect
+    .poll(async () => (await rowsAtRest(page)).flat().filter(item => !item.rests).map(item => item.item))
+    .toEqual([])
+  for (const item of (await rowsAtRest(page)).flat()) expect(item.height, item.item).toBeGreaterThanOrEqual(44)
+  const sideways = await page.evaluate(() => {
+    const scroller = document.querySelector("#app-shell-scroller")!
+    return [document.documentElement.scrollWidth, scroller.scrollWidth - scroller.clientWidth]
+  })
+  expect(sideways).toEqual([width, 0])
+}
+
+for (const width of [390, 320]) {
+  test(`at ${width} wide the tabs and channels rest with no item cut and the chosen one whole`, async ({page}) => {
+    prepareFleet("fibonacci_cascade")
+    sayInPublic("fibonacci_cascade", "0x1111111111111111111111111111111111111111", "Hello.")
+    await page.setViewportSize({width, height: 844})
+    await page.goto(`/cascade/1`)
+    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+    await expect(page.locator("#fleet-hall")).toBeVisible()
+
+    const rows = ["#fleet-tabs", "#fleet-channels"].map(id => page.locator(id))
+    for (const row of rows) expect(await row.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true)
+    await expectRowsAtRest(page, width)
+    expect(await chosenWhole(page)).toEqual([true, true])
+
+    // A swipe part way comes to rest on a whole item; so does the row's end.
+    for (const row of rows) await row.evaluate(el => el.scrollBy({left: 70, behavior: "instant"}))
+    await expectRowsAtRest(page, width)
+    for (const row of rows) await row.evaluate(el => el.scrollTo({left: el.scrollWidth, behavior: "instant"}))
+    await expectRowsAtRest(page, width)
+
+    // The last room, picked, and the last tab, opened, stand whole.
+    for (const row of rows) await row.evaluate(el => el.scrollTo({left: 0, behavior: "instant"}))
+    await page.locator("#fleet-channels a").last().click()
+    await expect(page.locator("#fleet-channels a").last()).toHaveAttribute("aria-current", "page")
+    await expectRowsAtRest(page, width)
+    expect(await chosenWhole(page)).toEqual([true, true])
+    await page.goto(`/cascade/1/proposals`)
+    await expect(page.locator("#fleet-tab-proposals")).toHaveAttribute("aria-current", "page")
+    await expectRowsAtRest(page, width)
+    expect(await chosenWhole(page)).toEqual([true])
+  })
+}
+
 // A holder's Keys show as cards twice the old size (Sean, 20 October 2026). A
 // card names its Key under the pointer once its picture is drawn; until then it
 // names its Key in its middle at all times. Test fleets have no deck, so their

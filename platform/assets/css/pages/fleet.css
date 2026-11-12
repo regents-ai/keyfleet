@@ -1052,10 +1052,56 @@
   }
 }
 
+/* Where the tabs and the feed's channels scroll sideways, the row shows no
+   scrollbar and always comes to rest with a whole item 1rem in from its
+   leading edge; a swipe past either end stays in the row. The row's hook
+   fades an edge with more past it over whole items only (`ScrollRow`), so no
+   word is cut part way. The tabs keep 4px above and below so a focused tab's
+   ring is not cut off. */
+@media (max-width: 64rem) {
+  .fleet-channels {
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .fleet-channels::-webkit-scrollbar {
+    display: none;
+  }
+
+  .fleet-channel {
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .fleet-bar__nav {
+    margin-block: -4px;
+    padding-block: 4px;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .fleet-bar__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .fleet-bar__nav .rg-button {
+    scroll-snap-align: start;
+  }
+
+  .fleet-bar__ink {
+    bottom: 4px;
+  }
+}
+
 /* Where a row scrolls sideways (the tabs, the feed's channels, a holder's
    cards, a phone's rooms), it fades out at an edge while more of the row
    waits past it, and runs crisp to an edge it has reached. A row that fits
-   has no fade. */
+   has no fade. The fade shows the page behind the row, in either theme. */
 @property --fleet-fade-start {
   syntax: "<length>";
   inherits: false;
@@ -1068,6 +1114,18 @@
   initial-value: 0px;
 }
 
+.fleet-bar__nav,
+.fleet-channels {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--fleet-fade-start),
+    #000 calc(100% - var(--fleet-fade-end)),
+    transparent
+  );
+}
+
+/* A holder's cards fade by their own scroll. */
 @keyframes fleet-row-fade {
   0% { --fleet-fade-start: 0px; --fleet-fade-end: 2rem; }
   20%, 80% { --fleet-fade-start: 2rem; --fleet-fade-end: 2rem; }
@@ -1106,8 +1164,6 @@
     }
   }
 
-  .fleet-bar__nav,
-  .fleet-channels,
   .fleet-entry__cards {
     mask-image: linear-gradient(
       to right,

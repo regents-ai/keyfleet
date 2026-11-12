@@ -330,7 +330,7 @@ defmodule KeyfleetWeb.FleetLive do
             class="fleet-bar__nav"
             aria-label="This fleet"
             phx-hook="FleetTabs"
-            phx-mounted={JS.ignore_attributes(["data-ink-ready"])}
+            phx-mounted={JS.ignore_attributes(["data-ink-ready", "style"])}
             data-active={tab(@view)}
             data-variant={Motion.standard("tabs")}
           >
@@ -856,7 +856,13 @@ defmodule KeyfleetWeb.FleetLive do
       )
 
     ~H"""
-    <nav id="fleet-channels" class="fleet-channels" aria-label="Channels">
+    <nav
+      id="fleet-channels"
+      class="fleet-channels"
+      aria-label="Channels"
+      phx-hook="ScrollRow"
+      phx-mounted={JS.ignore_attributes(["style"])}
+    >
       <ul class="fleet-channels__group" aria-label="Feed">
         <li :for={{channel, label} <- @shown}>
           <button
