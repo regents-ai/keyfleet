@@ -8400,3 +8400,52 @@ Check: forced compile with warnings as errors, format, credo strict, xref
 tests; 19 excluded); typecheck passes; vitest passes (394 in 30 files);
 `npm run test:browser` 120 passed, `npm run test:devices` 62 passed, the chain
 walks on Chromium 103 passed, none failed.
+
+## 2026-11-12 — Overview on the homepage, from the template's value cards
+
+Sean, through the Keyfleet chief: the cards on regents.sh/app look good, and
+each site takes the template's card row for its own homepage.
+
+- Taken byte for byte from ash-template `37abed0c` (main; unchanged through
+  `446a7c46`): the row's styles (`assets/css/components/value_cards.css`), its
+  hook (`assets/js/hooks/value_card.ts`), the panel type, renderer, shared
+  device and stills script (`assets/js/value_cards/`), the unit test
+  (`assets/test/value_cards.test.ts`), and the Rooms, Workspace, Agents and
+  Votes panels (`rooms`, `board`, `link`, `ballot`) with their stills. The
+  component (`lib/keyfleet_web/components/value_cards.ex`) is the template's
+  with only its module name and verified routes made Keyfleet's. The styles
+  carry the template's phone fix (no size containment, template v216).
+- From regents `2b183b9b`: the Fleets panel (`panels/fleet.ts`) and its still,
+  as regents.sh/app shows Keyfleet.
+- Keyfleet's own: the Treasury panel (`panels/ledger.ts`, a statement's lines
+  rising, the newest brightest), the panel list (`value_cards/index.ts`), and
+  the six cards. The stills are drawn with `npm run stills:value-cards` on the
+  Mac's GPU; the template's four and regents' one come out identical to theirs.
+- The homepage shows Overview under the hero, before the footer: Fleets,
+  Rooms, Workspace, Agents, Votes and Treasury, each opening Classic #1's page,
+  its general room, workspace, proposals or treasury, or Pair New Agent. One
+  card a row on a phone, two at 768, three at 1280. It sits below the hero, so
+  Buy Key stays where it was at every width. Each tint is 6.3:1 to 11:1 on the
+  card's #0b0b0c.
+- Nothing more loads for a visitor who never reaches the row: the main script
+  carries only the hook, the drawing code (5.8 KB compressed) is fetched once a
+  card is on screen with motion allowed and WebGPU present, and the stills load
+  lazily.
+- The content security policy is unchanged: the stills and drawing code come
+  from the site itself, and each card's tint is a style attribute, which the
+  policy already allows.
+- `homepage_cards.spec.ts` joins the chain walks, which deploy Classic so each
+  card's page answers 200 at once, as it does on keyfleet.ai: the six links
+  answer 200, each card keeps its still with less motion and without WebGPU,
+  nothing scrolls sideways at 320 and 390, and Tab reaches each card in order.
+  `home_live_test.exs` now expects the hero then Overview, and links to /pair
+  and the fleets' proposals and treasuries.
+
+Check: forced compile with warnings as errors, format, credo strict, sobelow,
+xref (130 of 130), codegen, usage rules and route handoff pass; `mix test`
+passes (1369: 18 properties, 1351 tests; 19 excluded); typecheck passes;
+vitest passes (407 in 31 files); budgets pass (3); `npm run test:browser` 120
+passed, `npm run test:devices` 62 passed, the chain walks on Chromium 109
+passed (103 before and the 6 new), none failed; `make check-required-fixes`
+(ash-template `446a7c46`), `check-cli`, `check-siwa-latest` and
+`check-contracts` (547 passed, 6 skipped) pass.

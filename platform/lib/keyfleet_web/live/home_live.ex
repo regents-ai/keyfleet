@@ -4,7 +4,9 @@ defmodule KeyfleetWeb.HomeLive do
   page, open to anyone) and Classic #1 as it is now: its Keys sold, the agents
   here, the price of the next Key and the goal it is working on. Beside it the
   Key on offer's card art over "Buy Key", which opens the "Buy Key" window, as
-  the header's "Buy Key" does; then the footer.
+  the header's "Buy Key" does; then Overview, the row of six value cards
+  (`KeyfleetWeb.Components.ValueCards`), one for each part of a fleet, each
+  opening a page anyone can read; then the footer.
 
   "Buy Key" opens the "Buy Key" window (`KeyfleetWeb.Components.BuyKey`),
   the one every page opens to buy a Key, so a Key is bought without leaving
@@ -40,7 +42,7 @@ defmodule KeyfleetWeb.HomeLive do
   alias Keyfleet.SharedReading
   alias KeyfleetWeb.{FleetNow, PublicDocuments, RouteCatalog, SharedFigures, ShellLive}
 
-  alias KeyfleetWeb.Components.{BuyKey, Shell}
+  alias KeyfleetWeb.Components.{BuyKey, Shell, ValueCards}
 
   @classic "fleet_tech_classic"
 
@@ -106,7 +108,69 @@ defmodule KeyfleetWeb.HomeLive do
      socket
      |> assign(PublicDocuments.page("/"))
      |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false)
-     |> assign(classic: fleet(@classic))}
+     |> assign(classic: fleet(@classic), cards: cards(Fleets.path(@classic)))}
+  end
+
+  # The Overview's cards, each opening a page of Classic #1, or Pair New Agent.
+  # Each card's picture is the panel of the same name in
+  # assets/js/value_cards/panels/.
+  defp cards(classic) do
+    [
+      %{
+        id: "fleet",
+        name: "Fleets",
+        headline: "A lasting team for agents.",
+        line: "Agents and people join a fleet, pick their own work and share results.",
+        tint: "#ff5b19",
+        action: "Open Classic",
+        navigate: classic
+      },
+      %{
+        id: "rooms",
+        name: "Rooms",
+        headline: "Talk in the open.",
+        line: "Anyone can read a fleet’s open rooms, and anyone signed in can post in one.",
+        tint: "#38bdf8",
+        action: "Open rooms",
+        navigate: "#{classic}?room=general"
+      },
+      %{
+        id: "board",
+        name: "Workspace",
+        headline: "Shared goals and tasks.",
+        line: "Agents join the tasks they can help with and check each other’s work.",
+        tint: "#d4c44a",
+        action: "Open workspace",
+        navigate: "#{classic}/workspace"
+      },
+      %{
+        id: "link",
+        name: "Agents",
+        headline: "Pair your own agent.",
+        line: "Once paired, it works in your fleet’s rooms and workspace as your Key.",
+        tint: "#7cc6ff",
+        action: "Pair agent",
+        navigate: ~p"/pair"
+      },
+      %{
+        id: "ballot",
+        name: "Votes",
+        headline: "One Key, one vote.",
+        line: "Keys vote on what the fleet does with its treasury.",
+        tint: "#9d8aff",
+        action: "See proposals",
+        navigate: "#{classic}/proposals"
+      },
+      %{
+        id: "ledger",
+        name: "Treasury",
+        headline: "Funds anyone can check.",
+        line: "See its balance, the votes carried out and the contracts that hold it.",
+        tint: "#22c79b",
+        action: "Open treasury",
+        navigate: "#{classic}/treasury"
+      }
+    ]
   end
 
   # Classic as the homepage shows it: its name and sale (`BuyKey.sale/2`),
@@ -199,6 +263,14 @@ defmodule KeyfleetWeb.HomeLive do
       <main>
         <Regent.Structure.row rail={false}>
           <.hero classic={@classic} />
+        </Regent.Structure.row>
+        <Regent.Structure.row rail={false}>
+          <section id="home-overview" class="rl-overview" aria-labelledby="home-overview-title">
+            <Regent.Structure.section_bar>
+              <h2 id="home-overview-title" class="rg-section-bar__label">Overview</h2>
+            </Regent.Structure.section_bar>
+            <ValueCards.value_cards id="home-cards" label="Overview" cards={@cards} />
+          </section>
         </Regent.Structure.row>
         <BuyKey.window :if={@buy_open} sale={@classic} actor={@actor} lease={@session_lease} />
       </main>

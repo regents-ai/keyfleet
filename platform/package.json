@@ -10,7 +10,8 @@
     "test:budgets": "vitest run --config vitest.budgets.config.ts",
     "test:chain": "npm run assets:build && playwright test --config playwright.chain.config.ts",
     "test:devices": "npm run assets:build && playwright test --config playwright.devices.config.ts",
-    "test:showcase": "playwright test --config playwright.showcase.config.ts"
+    "test:showcase": "playwright test --config playwright.showcase.config.ts",
+    "stills:value-cards": "node assets/js/value_cards/stills.mjs"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",

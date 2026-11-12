@@ -37,6 +37,7 @@ export default defineConfig({
     "sea_lift.spec.ts",
     "setup_list.spec.ts",
     "fleet_search.spec.ts",
+    "homepage_cards.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

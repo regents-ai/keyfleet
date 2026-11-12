@@ -198,6 +198,10 @@
     .rl-hero .rl-now { animation-delay: 150ms; }
   }
 
+  /* Overview, under the hero: its section bar, then the value cards
+     (components/value_cards.css), at the hero's inline padding. */
+  .rl-overview { display: grid; gap: var(--space-4); padding: var(--space-5) var(--rg-panel-padding) var(--space-6); }
+
   /* On a phone the card stays small enough that its button shows with it. */
   @media (max-width: 39.99rem) {
     .rl-buy { inline-size: min(100%, 17rem); }

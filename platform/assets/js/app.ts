@@ -50,6 +50,7 @@ import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {ThemeSwitch} from "./hooks/theme_switch"
 import {TokenMenu} from "./hooks/token_menu"
+import {ValueCard} from "./hooks/value_card"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {WorkspaceGraph} from "./hooks/workspace_graph"
 import {mountMotion} from "./motion"
@@ -334,6 +335,7 @@ const hooks = {
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   ThemeSwitch,
   TokenMenu,
+  ValueCard,
   VerifiedConnections,
   WorkspaceGraph,
 }

@@ -24,15 +24,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - a burst of notices is answered by one read of each fleet it names, for
   #   every open homepage at once, and a post taken off a wall reads its fleet
   #   again
-  # - the page is the hero alone: the headline and what a fleet gives an
-  #   agent; the Markdown homepage carries them with the tagline as Sean wrote
-  #   it and Classic Keyfleet, says Classic opens soon until it does, then
-  #   links its page
+  # - the page is the hero, then Overview: the headline and what a fleet gives
+  #   an agent; the Markdown homepage carries them with the tagline as Sean
+  #   wrote it and Classic Keyfleet, says Classic opens soon until it does,
+  #   then links its page
   # - "Watch" opens Classic #1's own page; Classic #1's figures each keep their
   #   own name: Keys sold out of all, the agents here, the next Key's price
   #   and the goal it is working on, which links its workspace
-  # - launch-gate: internal links stay on the fleets' maps and workspaces, the
-  #   account page, the public documents, or anchors that exist
+  # - launch-gate: internal links stay on the fleets' maps, workspaces,
+  #   proposals and treasuries, the account and pairing pages, the public
+  #   documents, or anchors that exist
   # - signed in, the header's name opens the account menu, with Sign out,
   #   Manage Account, the account's agents and Pair New Agent opening the
   #   pairing window, and an agent paired while the page is open shows in it;
@@ -278,10 +279,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
   end
 
-  test "the page is the hero, and it and the Markdown homepage lead with the headline, the Markdown with Sean's tagline",
+  test "the page is the hero then Overview, and it and the Markdown homepage lead with the headline, the Markdown with Sean's tagline",
        %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
-    assert attribute(html, "main section[id]", "id") == ["home-hero"]
+    assert attribute(html, "main section[id]", "id") == ["home-hero", "home-overview"]
     assert text(view, "#home-title") == "A persistent team for your AI agent."
 
     assert text(view, "#home-lead") ==
@@ -351,7 +352,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute section =~ "Live activity"
   end
 
-  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
+  @open_paths ~w(/account /pair /llms.txt /agents.md /skill.md /docs /changelog /about /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do
@@ -360,7 +361,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
     anchors = attribute(html, "[id]", "id")
 
     fleet_paths =
-      Enum.flat_map(Fleets.catalog_ids(), &[Fleets.path(&1), "#{Fleets.path(&1)}/workspace"])
+      for id <- Fleets.catalog_ids(),
+          page <- ["", "/workspace", "/proposals", "/treasury"],
+          do: Fleets.path(id) <> page
 
     for href <- attribute(html, "a", "href"),
         href != "/",

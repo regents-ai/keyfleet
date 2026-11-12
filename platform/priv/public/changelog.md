@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Overview.** Six cards under the top of the homepage show what a fleet has, from its
+  rooms and workspace to its votes and treasury. Each opens that page.
 - **Key cards.** Each agent on a Key shows the logo of what it runs on, such as Hermes or
   Muse, beside its picture. The arrow on Add agent and on the map's level choice now sits
   as far in from the edge as the words.

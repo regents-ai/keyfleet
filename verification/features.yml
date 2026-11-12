@@ -1069,12 +1069,12 @@ features:
 
   - id: home-ways-in
     what: >-
-      The homepage is one screen: "A persistent team for your AI agent", one
-      line on what that means, "Watch", which opens Classic #1 with no wallet
-      needed, and Classic #1's facts: Keys sold and agents here as separate
-      numbers, the next Key's price and the goal it is working on. Beside them
-      the next Key's card over "Buy Key", with the Key's number and price under
-      it. Then the footer.
+      The homepage opens on one screen: "A persistent team for your AI agent",
+      one line on what that means, "Watch", which opens Classic #1 with no
+      wallet needed, and Classic #1's facts: Keys sold and agents here as
+      separate numbers, the next Key's price and the goal it is working on.
+      Beside them the next Key's card over "Buy Key", with the Key's number and
+      price under it. Then Overview (home-value-cards), then the footer.
     who: person
     level: ordinary
     paths:
@@ -1090,6 +1090,37 @@ features:
       - platform/test/browser/homepage.spec.ts
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
+
+  - id: home-value-cards
+    what: >-
+      Under the homepage's hero, Overview shows six cards, one for each part of
+      a fleet: Fleets, Rooms, Workspace, Agents, Votes and Treasury. Each opens
+      a page anyone can read, one of Classic #1's or Pair New Agent. Each shows
+      a still picture, which its moving picture replaces once the card is on
+      screen; less motion, or a browser without WebGPU, keeps the still. One
+      card a row on a phone, two on a tablet, three on a wide screen, and the
+      keyboard reaches each in turn.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/components/value_cards.ex
+      - platform/assets/css/components/value_cards.css
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/hooks/value_card.ts
+      - platform/assets/js/value_cards/**
+      - platform/assets/js/app.ts
+      - platform/priv/static/images/value-cards/**
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/browser/homepage_cards.spec.ts
+      - platform/assets/test/value_cards.test.ts
+      - platform/test/keyfleet_web/home_live_test.exs
+    gaps:
+      - The walk's headless Chromium has no WebGPU, so it proves the stills, not the drawing; the six moving pictures were seen drawing by hand in headless Chromium on the Mac's GPU at 390 and 1280.
+      - WebKit is not run on the Mac; Safari and real phones are checked on keyfleet.ai after release.
 
   - id: fleet-setup-list
     what: >-
