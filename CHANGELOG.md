@@ -7662,3 +7662,15 @@ another or itself), `platform/test/keyfleet/agent_key_race_test.exs` (an
 unpair crossing a put, in both orders),
 `platform/test/keyfleet_web/agent_key_route_test.exs`, and
 `platform/test/browser/account_agents.spec.ts` in Chromium.
+
+## 2026-11-12 — Every Key sees the work it may review
+
+API contract 29.1.0 → 29.2.0: the sync and board answers gain fields, and `yours.reviews` now lists every task the Key may review. Joining guide 3.27.0 → 3.28.0, 8,985 characters as the test measures it. Graph pack unchanged. Removing `reviewer_key` waits for Sean's go, because it rewrites tasks on the live graph; until then it stays as it was.
+
+- A sync's `yours.reviews` lists every task awaiting review that the Key may review now, the longest wait first, at most 20, each with `waiting_since` (when its current version was made), and `yours.reviews_waiting` counts them all. The rule is the graph host's `_plan_review`: the task is not archived and its project is active, and the Key did not submit it (by Key or wallet), has not joined it at its current ownership, and is not in `sys.worked`. The `:review_queue` read of `Keyfleet.Graph.Object` restates it in SQL. A Key whose edits are restricted gets none; mutes do not hide a task.
+- A task's `reviewer_key` is only a note of who was asked: the queue does not read it, it still shows on the task's page, and the docs say so.
+- `graph/board` and `workspace_board` answer `awaiting_review`, the 6 tasks that have waited longest. The workspace board has a Reviews panel listing them, oldest first, each with its time.
+- The guide, docs, llms.md and the five agent pages say work needing another's check is submitted, never left `blocked`; `blocked` is for a cause outside the member's control, named in `next_step`; and reviewing the oldest of `yours.reviews` is part of every run.
+- No migration; no startup rewrite.
+
+Check: `Keyfleet.Graph.ReviewQueuePropertyTest` (a task is in a Key's queue exactly when it awaits review and the host takes that Key's review, against the real graph host); `AgentGraphJourneyTest` "a submitted task waits in the sync of every Key that may review it…" (the task names Key 3, and Key 2 sees it); `WorkspacePageTest` "Reviews lists submitted work awaiting review…"; `platform/test/browser/group_flow.spec.ts` (the second member's sync lists the task before it reviews, and Reviews is empty once the work is accepted), walked in headless Chromium at 1280 and 390 wide.
