@@ -8333,3 +8333,22 @@ Check: the search walk, then the room mutes walks, pass (4 passed).
 - The public changelog says the guides ask for 1.10.25.
 
 Check: `make check-cli` passes with 1.10.25's checker.
+
+## 2026-11-12 — elixir-utils at the SIWA lifetime cap
+
+`make check-siwa-latest` failed: the newest change to the SIWA library on
+elixir-utils main is dd2d3c6e, and the site pinned d89c69df, its parent.
+
+- `@elixir_utils_ref` is dd2d3c6e, and the 13 libraries pinned to it moved
+  in `mix.lock`; nothing else in the lock changed. Its one commit: a signed
+  request that lasts longer than the signature tolerance (300 seconds) is
+  refused as `request_lifetime_too_long` (401 `http_signature_invalid`), and
+  a request's single-use record is kept until it expires. Keyfleet's
+  signers set 120 seconds, as `/docs` says.
+- The merge that carries it onto main (e4494c03) also brings agent-owned
+  accounts and RegentOAuth on the site's repository; pinning the commit
+  itself leaves both, and the published-identity sign-in after it, out.
+
+Check: forced compiles with warnings as errors, format, credo, xref and
+codegen pass; the 22 ExUnit files that sign agent requests pass (262);
+`make check-siwa-latest` passes.
