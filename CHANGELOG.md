@@ -8368,3 +8368,35 @@ nothing from the chain; the reads only say which press is certain to fail.
 
 Check: a wallet steps test and a Key profile test, both failing before the
 change; `wallet_steps_test.exs` and `key_profile_test.exs` pass (95).
+
+## 2026-11-12 — Harness logos on Key cards, and Add agent's arrow
+
+Sean, on a Key card under Your Keys: Add agent's arrow sat almost on the
+card's right border, and each agent should show what it runs on (Muse,
+Hermes and so on) by its logo beside its picture.
+
+- Add agent's arrow was the browser's own. Keyfleet gave the select a border
+  and padding but kept the native arrow, which Chromium draws 2 px from the
+  right border whatever the padding, while the words sat 9 px in. Add agent
+  now draws Lucide's `chevron-down` (`Regent.Icons.icon`) in its place, as far
+  in from the right border as the words are from the left, centred, in both
+  themes. The fleet map's level choice had the same fault and has the same
+  fix. The selects inside shared fields (Post as, Auto-delete, Open for, the
+  proposal choices) draw the shared field's own chevron and are unchanged, as
+  are the workspace's two plain selects (a notebook's copy, the public posts'
+  room), which keep the browser's look.
+- Each agent on a Key card shows the logo of the harness it paired on
+  between its picture and its name: the shared picture the Agents page shows
+  (`Regent.Account.agent_mark`), 18 px on its white tile in both themes,
+  named for screen readers and under a pointer ("Hermes"). An agent paired as
+  any other agent (`other`) shows none: its shared picture is a generic mark,
+  not a logo. The row keeps its height and its remove button its place.
+- The harness is read with the page's other agent reads, once for every
+  hundred agents, from `Keyfleet.Agents.Pairing`, which now carries it.
+- `BrowserAgents.pair_person!/4` takes the harness the agent pairs on.
+
+Check: forced compile with warnings as errors, format, credo strict, xref
+(130 of 130) and codegen pass; `mix test` passes (1369: 18 properties, 1351
+tests; 19 excluded); typecheck passes; vitest passes (394 in 30 files);
+`npm run test:browser` 120 passed, `npm run test:devices` 62 passed, the chain
+walks on Chromium 103 passed, none failed.

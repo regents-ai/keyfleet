@@ -708,6 +708,31 @@
   font: inherit;
 }
 
+/* The level choice draws Lucide's chevron in place of the browser's own
+   arrow, which keeps to the right border whatever the padding. The chevron
+   stands in from the right border as far as the words stand in from the left
+   one; Lucide draws it across the middle half of its square, so the square
+   reaches a quarter of its width past the padding. */
+.fleet-map-level__choice {
+  position: relative;
+  display: flex;
+}
+
+.fleet-map-level select {
+  padding-inline-end: 2rem;
+  cursor: pointer;
+  appearance: none;
+}
+
+.fleet-map-level__choice .rg-icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: calc(1px + 0.75rem - 0.25em);
+  font-size: 1rem;
+  translate: 0 -50%;
+  pointer-events: none;
+}
+
 /* The search takes what room the controls have, and its field gives way
    before its button does. */
 .fleet-map-find {

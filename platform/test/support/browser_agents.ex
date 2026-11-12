@@ -93,12 +93,15 @@ defmodule Keyfleet.BrowserAgents do
     code
   end
 
-  @doc "Pairs `agent`, called `name`, with the person signed in to Privy as `person`."
-  def pair_person!(agent, person, name) do
+  @doc """
+  Pairs `agent`, called `name`, on `harness` (a `RegentAgents.Harness` value),
+  with the person signed in to Privy as `person`.
+  """
+  def pair_person!(agent, person, name, harness) do
     %{code: code} =
       RegentAgents.issue_pairing_code!(actor: %RegentAgents.Person{privy_user_id: person})
 
-    RegentAgents.pair_agent!(code, name, :hermes, actor: %RegentAgents.Agent{wallet: agent})
+    RegentAgents.pair_agent!(code, name, harness, actor: %RegentAgents.Agent{wallet: agent})
     :ok
   end
 

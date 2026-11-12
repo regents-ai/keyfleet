@@ -177,7 +177,7 @@ test("a Key holds several agents in the gallery, which moves and removes them", 
     await expect(notice).toHaveText(`${name} is on Key ${second}.`)
   }
   await expect(onKey(second)).toHaveCount(2)
-  await expect(onKey(second).locator("img")).toHaveCount(2)
+  await expect(onKey(second).locator("img.agent-picture")).toHaveCount(2)
   // Earlier walks may have left agents on other Keys of the person's.
   const order = () => gallery.locator(".key-gallery__key").evaluateAll(keys => keys.map(key => key.id))
   const before = (a: number, b: number) => async () => {
@@ -202,5 +202,67 @@ test("a Key holds several agents in the gallery, which moves and removes them", 
   await expect(notice).toHaveText(`${nameB} is off Key ${second}.`)
   await expect(page.locator(`#${id}-${second}-agents`)).toHaveCount(0)
   await expect(before(first, second)).toPass()
+  expect(errors).toEqual([])
+})
+
+// Each agent on a Key shows the logo of the harness it paired on beside its
+// picture, named for a screen reader; one paired as any other agent shows
+// none. The logo leaves the row's height and its remove button where they
+// were. Add agent's chevron stands in from the right border as far as its
+// words stand in from the left, on a wide screen and on a phone.
+test("each agent on a Key shows its harness's logo, and Add agent's chevron stands in as far as its words", async ({page}) => {
+  const fleet = "fleet_tech_classic"
+  const me = "0x1111111111111111111111111111111111111111"
+  prepareFleet(fleet)
+  const key = sellKey(fleet, me)
+  const [muse, plain, spare] = [newAgent(), newAgent(), newAgent()]
+  const [museName, plainName] = [`Muse ${muse.slice(2, 8)}`, `Plain ${plain.slice(2, 8)}`]
+  pairPerson(muse, person, museName, "muse")
+  pairPerson(plain, person, plainName, "other")
+  // An agent left off the Key keeps Add agent on its card.
+  pairPerson(spare, person, `Spare ${spare.slice(2, 8)}`, "codex")
+  const errors = await signIn(page)
+  await page.goto("/account")
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+
+  const id = `account-key-agents-${fleet}`
+  const gallery = page.locator(`#${id}`)
+  const add = gallery.getByRole("combobox", {name: `Add an agent to Key ${key}`, exact: true})
+  for (const name of [museName, plainName]) {
+    await add.selectOption({label: name})
+    await expect(page.locator(`#${id}-notice`)).toHaveText(`${name} is on Key ${key}.`)
+  }
+
+  const row = (name: string) => page.locator(`#${id}-${key}-agents li`, {hasText: name})
+  await expect(row(museName).getByRole("img", {name: "Muse", exact: true})).toBeVisible()
+  await expect(row(plainName).getByRole("img")).toHaveCount(0)
+
+  // The words start at the select's border and padding; the chevron drawn in
+  // the browser's arrow's place ends as far in from the other side.
+  const insets = () =>
+    add.evaluate((select: HTMLSelectElement) => {
+      const box = select.getBoundingClientRect()
+      const style = getComputedStyle(select)
+      const chevron = select.form!.querySelector("svg path")!.getBoundingClientRect()
+      return {
+        words: parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+        chevron: box.right - chevron.right,
+        offCentre: Math.abs((chevron.top + chevron.bottom) / 2 - (box.top + box.bottom) / 2),
+      }
+    })
+
+  for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) {
+    await page.setViewportSize(viewport)
+    const {words, chevron, offCentre} = await insets()
+    expect(Math.abs(chevron - words), `at ${viewport.width} px`).toBeLessThanOrEqual(2)
+    expect(offCentre, `at ${viewport.width} px`).toBeLessThanOrEqual(1)
+
+    const [withLogo, without] = [(await row(museName).boundingBox())!, (await row(plainName).boundingBox())!]
+    expect(withLogo.height).toBe(without.height)
+    const remove = (name: string) => gallery.getByRole("button", {name: `Take ${name} off Key ${key}`}).boundingBox()
+    const [museRemove, plainRemove] = [(await remove(museName))!, (await remove(plainName))!]
+    expect(museRemove.x).toBe(plainRemove.x)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+  }
   expect(errors).toEqual([])
 })

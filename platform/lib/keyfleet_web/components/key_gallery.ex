@@ -2,14 +2,15 @@ defmodule KeyfleetWeb.KeyGallery do
   @moduledoc """
   On the Account page, the Keys a person's wallets hold in one fleet as a
   gallery of cards, those with any of their agents on them first, then by
-  number, each with the pictures and names of its agents under it
-  (`Keyfleet.Keys.AgentKey`). A Key holds any number of the person's agents
-  and an agent is on one Key in a fleet. Add puts one of the agents paired
-  with them now on the Key, moving it off the Key it was on; each agent's
-  remove button takes it off. Each change says what it did in the line under
-  the gallery, read again once it is saved, and asks the page to read the
-  gallery again (`{KeyfleetWeb.KeyGallery, :changed}`), so the Key moves to
-  its place. A person with no paired agent sees their Keys alone.
+  number, each with its agents under it (`Keyfleet.Keys.AgentKey`): each
+  agent's picture, the logo of the harness it paired on and its name. A Key
+  holds any number of the person's agents and an agent is on one Key in a
+  fleet. Add puts one of the agents paired with them now on the Key, moving
+  it off the Key it was on; each agent's remove button takes it off. Each
+  change says what it did in the line under the gallery, read again once it
+  is saved, and asks the page to read the gallery again
+  (`{KeyfleetWeb.KeyGallery, :changed}`), so the Key moves to its place. A
+  person with no paired agent sees their Keys alone.
 
   The host passes `account` (the signed-in account), its `session_lease` as
   `lease`, the fleet as `fleet_id`, the Keys held there as `token_ids`, their
@@ -27,6 +28,7 @@ defmodule KeyfleetWeb.KeyGallery do
   alias Keyfleet.Keys
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Live.Session
+  alias RegentAgents.Harness
 
   @impl true
   def mount(socket) do
@@ -140,6 +142,7 @@ defmodule KeyfleetWeb.KeyGallery do
           >
             <li :for={agent <- @on_keys[token_id]} id={"#{@id}-#{token_id}-agent-#{agent.id}"}>
               <.agent_picture src={agent.picture} />
+              <.harness_logo harness={agent.harness} />
               <span class="key-gallery__agent-name" title={agent.name}>{agent.name}</span>
               <button
                 type="button"
@@ -169,6 +172,7 @@ defmodule KeyfleetWeb.KeyGallery do
                 {agent.name}{elsewhere(@on_keys, agent)}
               </option>
             </select>
+            <Regent.Icons.icon name="chevron-down" />
           </form>
         </li>
       </ul>
@@ -182,6 +186,29 @@ defmodule KeyfleetWeb.KeyGallery do
         {notice_text(@notice)}
       </p>
     </div>
+    """
+  end
+
+  attr :harness, :atom,
+    required: true,
+    doc: "the harness the agent paired on (`RegentAgents.Harness`), or nil"
+
+  # The logo of the harness an agent paired on, the shared picture the Agents
+  # page shows (`Regent.Account.agent_mark/1`), named for a screen reader and
+  # under a pointer. Any other agent has none: its shared picture is no logo.
+  # Nor has one unpaired since the page read it.
+  defp harness_logo(%{harness: harness} = assigns) when harness in [nil, :other], do: ~H""
+
+  defp harness_logo(assigns) do
+    ~H"""
+    <span
+      class="key-gallery__harness"
+      role="img"
+      aria-label={Harness.label(@harness)}
+      title={Harness.label(@harness)}
+    >
+      <Regent.Account.agent_mark kind={Atom.to_string(@harness)} />
+    </span>
     """
   end
 

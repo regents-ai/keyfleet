@@ -1196,9 +1196,12 @@ defmodule KeyfleetWeb.FleetLive do
           phx-submit={JS.dispatch("keymap:level", to: @map)}
         >
           <label for="key-map-level-choice" class="visually-hidden">Go to level</label>
-          <select id="key-map-level-choice" name="level">
-            <option :for={level <- @fleet.levels} value={level}>Level {level}</option>
-          </select>
+          <span class="fleet-map-level__choice">
+            <select id="key-map-level-choice" name="level">
+              <option :for={level <- @fleet.levels} value={level}>Level {level}</option>
+            </select>
+            <Regent.Icons.icon name="chevron-down" />
+          </span>
           <Regent.Primitives.button type="submit" variant="secondary">Go</Regent.Primitives.button>
         </form>
         <form

@@ -121,9 +121,9 @@ export const pairAgent = (agent: string, person: string) => void call("pair!", [
 /** A pairing code from the person whose wallet is `person`, as Pair New Agent shows one. */
 export const pairingCode = (person: string) => call("pairing_code!", [person], agents)
 
-/** Pairs `agent`, called `name`, with the person signed in to Privy as `person`. */
-export const pairPerson = (agent: string, person: string, name: string) =>
-  void call("pair_person!", [agent, person, name], agents)
+/** Pairs `agent`, called `name`, on `harness`, with the person signed in to Privy as `person`. */
+export const pairPerson = (agent: string, person: string, name: string, harness = "hermes") =>
+  void call("pair_person!", [agent, person, name, harness], agents)
 
 /** Pairs `agent`, called `name`, with the `code` a pairing box shows. */
 export const useCode = (agent: string, code: string, name: string) =>

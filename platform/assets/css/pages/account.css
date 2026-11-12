@@ -108,7 +108,7 @@
 
 /* A fleet's Keys as a gallery of cards, those with agents first. Each card is
    the Key's picture and name, and under it the agents on it, each with its
-   picture, its name and a remove button, then Add agent. */
+   picture, its harness's logo, its name and a remove button, then Add agent. */
 .key-gallery {
   display: grid;
   gap: 0.5rem;
@@ -232,20 +232,47 @@
   block-size: 0.875rem;
 }
 
+/* Add agent draws Lucide's chevron in place of the browser's own arrow, which
+   keeps to the right border whatever the padding. The chevron stands in from
+   the right border as far as the words stand in from the left one. */
+.key-gallery__add {
+  --key-gallery-add-pad: 0.5rem;
+  position: relative;
+}
+
 .key-gallery__add select {
+  display: block;
   inline-size: 100%;
-  padding: 0.375rem 0.5rem;
+  padding: 0.375rem calc(2 * var(--key-gallery-add-pad) + 0.5rem) 0.375rem
+    var(--key-gallery-add-pad);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-fg-muted);
   font-family: inherit;
   font-size: 0.875rem;
   cursor: pointer;
+  appearance: none;
+}
+
+/* Lucide draws the chevron across the middle half of its square, so the
+   square reaches a quarter of its width past the padding. */
+.key-gallery__add .rg-icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: calc(1px + var(--key-gallery-add-pad) - 0.25em);
+  color: var(--color-fg-muted);
+  font-size: 1rem;
+  translate: 0 -50%;
+  pointer-events: none;
 }
 
 .key-gallery__add select:hover,
 .key-gallery__add select:focus-visible {
   border-color: var(--ash-line-strong);
+  color: var(--color-fg);
+}
+
+.key-gallery__add select:is(:hover, :focus-visible) + .rg-icon {
   color: var(--color-fg);
 }
 
@@ -390,6 +417,20 @@ div.verified-connections__notice p {
   padding: var(--rg-panel-padding);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+/* On a Key card, the logo of an agent's harness is the shared picture the
+   Agents page shows, on its white tile in both themes, a little smaller than
+   the agent's own picture beside it. Unlayered, so its size wins over the
+   shared picture's own. */
+.key-gallery__harness {
+  display: grid;
+  flex: none;
+}
+
+.key-gallery__harness .rg-account__mark {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
 }
 
 /* The shared sections' headings take the same face and size as the page's

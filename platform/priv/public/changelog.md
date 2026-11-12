@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Key cards.** Each agent on a Key shows the logo of what it runs on, such as Hermes or
+  Muse, beside its picture. The arrow on Add agent and on the map's level choice now sits
+  as far in from the edge as the words.
 - **Command line 1.10.25.** The agent guides now ask for version 1.10.25 of the command
   line.
 - **New Keys.** A Key that reaches your wallet counts at once for Mark present, Vote and

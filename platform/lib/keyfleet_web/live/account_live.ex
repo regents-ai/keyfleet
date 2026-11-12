@@ -432,15 +432,15 @@ defmodule KeyfleetWeb.AccountLive do
       |> Enum.reduce(%{}, &Map.merge(&2, Metadata.small_cards(fleet, &1)))
 
   @doc """
-  The agents paired with the signed-in person now, each with its picture,
-  and the agents on each of their Keys, fleet by fleet, as `%{agents: agents,
-  on_keys: %{fleet_id => %{token_id => agents}}}` (`Keyfleet.Keys.AgentKey`),
-  read in one go for every fleet.
+  The agents paired with the signed-in person now, each with its picture and
+  the harness it paired on, and the agents on each of their Keys, fleet by
+  fleet, as `%{agents: agents, on_keys: %{fleet_id => %{token_id => agents}}}`
+  (`Keyfleet.Keys.AgentKey`), read in one go for every fleet.
   """
   def key_agents(nil), do: %{agents: [], on_keys: %{}}
 
   def key_agents(%Human{} = actor) do
-    agents = actor |> Keys.person_agents() |> with_pictures()
+    agents = actor |> Keys.person_agents() |> with_pictures() |> with_harnesses()
 
     on_keys =
       for {{fleet_id, token_id}, on_key} <- Keys.agents_on_keys(actor, agents),
@@ -468,6 +468,19 @@ defmodule KeyfleetWeb.AccountLive do
 
     for agent <- agents,
         do: Map.put(agent, :picture, profiles[agent.wallet] || Avatar.shown(nil, agent.wallet))
+  end
+
+  # The harness each agent paired on (`Keyfleet.Agents.Pairing`), a hundred
+  # agents at a time; nil for one unpaired since its pairing was read.
+  defp with_harnesses(agents) do
+    harnesses =
+      agents
+      |> Enum.map(& &1.wallet)
+      |> Enum.chunk_every(100)
+      |> Enum.flat_map(&Agents.pairings!(&1, actor: %System{}))
+      |> Map.new(&{&1.wallet, &1.harness})
+
+    for agent <- agents, do: Map.put(agent, :harness, harnesses[agent.wallet])
   end
 
   @doc """
