@@ -360,7 +360,7 @@ type HarbourSeaHook = {
     js(): {
       exec(el: HTMLElement, encodedJS: string): void
       navigate(href: string): void
-      removeClass(el: HTMLElement, names: string): void
+      removeAttribute(el: HTMLElement, attr: string): void
     }
   }
 }
