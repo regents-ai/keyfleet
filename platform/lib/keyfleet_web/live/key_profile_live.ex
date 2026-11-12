@@ -663,7 +663,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
               <Regent.Icons.icon name="x" />
             </Regent.Primitives.button>
           </p>
-          <div class="rooms-body">{RoomsLive.body_html(message.body)}</div>
+          <div class="rooms-body">{RoomsLive.body_html(message.body, @profile.fleet_id)}</div>
           <p class="rooms-detail">
             <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
           </p>
@@ -756,7 +756,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
               as={:stamp}
             />
           </p>
-          <div class="rooms-body">{RoomsLive.body_html(post.body)}</div>
+          <div class="rooms-body">{RoomsLive.body_html(post.body, @profile.fleet_id)}</div>
         </li>
       </ol>
     </section>

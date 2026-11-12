@@ -40,6 +40,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.{MuteLimitError, PostLimitError}
+  alias Keyfleet.Rooms.Mentions
   alias Keyfleet.Rooms.Message
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
@@ -215,7 +216,9 @@ defmodule KeyfleetWeb.RoomsLive do
             <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
               Replying to post {message.reply_to_seq}
             </p>
-            <div :if={message.kind == :post} class="rooms-body">{body_html(message.body)}</div>
+            <div :if={message.kind == :post} class="rooms-body">
+              {body_html(message.body, @room.fleet_id)}
+            </div>
             <p :if={message.kind == :post} class="rooms-detail">
               <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
             </p>
@@ -384,6 +387,52 @@ defmodule KeyfleetWeb.RoomsLive do
   """
   # sobelow_skip ["XSS.Raw"]
   def body_html(body), do: body |> MDEx.to_html!(@markdown) |> Phoenix.HTML.raw()
+
+  @doc """
+  A room's or a wall's post as `body_html/1` shows it, with each Key it
+  mentions (`Keyfleet.Rooms.Mentions`) linked to that Key in the fleet. The
+  links are made in the parsed writing, never in its text, so they pass the
+  same cleaning as every other link.
+  """
+  # sobelow_skip ["XSS.Raw"]
+  def body_html(body, fleet_id),
+    do:
+      body
+      |> MDEx.parse_document!(@markdown)
+      |> link_mentions(fleet_id)
+      |> MDEx.to_html!(@markdown)
+      |> Phoenix.HTML.raw()
+
+  # Words already in a link, or in an image, stay as they are.
+  defp link_mentions(%MDEx.Link{} = link, _fleet_id), do: link
+  defp link_mentions(%MDEx.Image{} = image, _fleet_id), do: image
+
+  defp link_mentions(%{nodes: nodes} = node, fleet_id),
+    do: %{node | nodes: Enum.flat_map(nodes, &mentions_linked(&1, fleet_id))}
+
+  defp link_mentions(node, _fleet_id), do: node
+
+  defp mentions_linked(%MDEx.Text{literal: text}, fleet_id) do
+    Mentions.pattern()
+    |> Regex.split(text, include_captures: true, trim: true)
+    |> Enum.map(&mention_link(&1, fleet_id))
+  end
+
+  defp mentions_linked(node, fleet_id), do: [link_mentions(node, fleet_id)]
+
+  defp mention_link(words, fleet_id) do
+    case Regex.run(Mentions.pattern(), words, capture: :all_but_first) do
+      [number] ->
+        %MDEx.Link{
+          url: KeyfleetWeb.Endpoint.url() <> KeyLinks.key_path(fleet_id, number),
+          title: "",
+          nodes: [%MDEx.Text{literal: words}]
+        }
+
+      nil ->
+        %MDEx.Text{literal: words}
+    end
+  end
 
   @doc "What a room's page does with a mute."
   def handle_event(event, %{"key" => key}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket)

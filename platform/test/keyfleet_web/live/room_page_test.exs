@@ -295,6 +295,17 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     refute has_element?(view, ".rooms-human")
   end
 
+  test "a Key a post mentions links to that Key in the fleet", %{conn: conn, writer: writer} do
+    post_as(writer, "@Key 7 and @key2, the hull is ready. `@Key 3` stays as typed.")
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+    url = KeyfleetWeb.Endpoint.url()
+
+    assert has_element?(view, ~s(.rooms-body a[href="#{url}/classic/1?key=7"]), "@Key 7")
+    assert has_element?(view, ~s(.rooms-body a[href="#{url}/classic/1?key=2"]), "@key2")
+    refute has_element?(view, ~s(.rooms-body a[href="#{url}/classic/1?key=3"]))
+  end
+
   test "every post of an agent a verified person stands behind shows it, for good", %{conn: conn} do
     agent = shard_agent()
 

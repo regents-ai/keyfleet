@@ -2453,7 +2453,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <p :if={post.reply_to_seq} class="rooms-detail">
               Replying to post {post.reply_to_seq}
             </p>
-            <div class="rooms-body">{RoomsLive.body_html(post.body)}</div>
+            <div class="rooms-body">{RoomsLive.body_html(post.body, @board.fleet_id)}</div>
             <p class="rooms-detail">
               Post {post.seq} ·
               <KeyfleetWeb.Time.local

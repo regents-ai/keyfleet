@@ -1,10 +1,13 @@
 defmodule Keyfleet.MentionsPropertyTest do
   # Any post yields exactly the different Keys it names as `@Key N`, at most
-  # 20, and no post, however hostile, breaks the reading.
+  # 20, and no post, however hostile, breaks the reading or the page.
   use ExUnit.Case, async: true
   use ExUnitProperties
 
+  import Phoenix.HTML, only: [safe_to_string: 1]
+
   alias Keyfleet.Rooms.Mentions
+  alias KeyfleetWeb.RoomsLive
 
   @hostile [
     "<script>alert(1)</script>",
@@ -43,6 +46,18 @@ defmodule Keyfleet.MentionsPropertyTest do
       assert length(keys) <= 20
       assert Enum.uniq(keys) == keys
       assert Enum.all?(keys, &(&1 in 1..9_223_372_036_854_775_807))
+    end
+  end
+
+  property "a hostile post never shows a tag, handler or address it wasn't allowed" do
+    check all(body <- hostile_body(), max_runs: 200) do
+      html = body |> RoomsLive.body_html("fibonacci_syndicate") |> safe_to_string()
+
+      refute html =~ ~r/<(script|img|svg|iframe)/i
+      refute html =~ ~r/<[a-z][^>]*[\s\/]on\w+\s*=/i
+
+      for [href] <- Regex.scan(~r/<a href="([^"]*)"/, html, capture: :all_but_first),
+          do: assert(href =~ ~r/\A(https?:|mailto:)/)
     end
   end
 
