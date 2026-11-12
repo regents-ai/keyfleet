@@ -464,10 +464,10 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert ContractSchema.errors(receipt, "WorkspaceObjectView") == []
   end
 
-  # Costly failure: a reviewer that never hears it was asked, or a review
+  # Costly failure: a Key that may review never hears the work waits, or a review
   # that says the work reproduced from a commit other than the one it judged,
   # leaves the pilot's patches unchecked while they read as checked.
-  test "a task names its reviewer, commit and notebook; the reviewer's sync lists it until it says whether the work reproduced",
+  test "a submitted task waits in the sync of every Key that may review it until one says whether the work reproduced",
        c do
     start_graph(c)
     [ann, bea] = shard_agents(c)
@@ -488,7 +488,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         data: %{
           title: "Fewer notices",
           acceptance_criteria: ["Each agent gets at most one notice a minute"],
-          reviewer_key: 2,
+          # Only a note of who was asked: Key 2 may review it all the same.
+          reviewer_key: 3,
           commit_ref: commit,
           notebook_ref: notebook
         }
@@ -508,10 +509,12 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     synced = sync(c, bea)
 
-    assert [%{"id" => id, "title" => "Fewer notices", "version" => 2}] =
+    assert [%{"id" => id, "title" => "Fewer notices", "version" => 2, "waiting_since" => since}] =
              synced["yours"]["reviews"]
 
     assert id == task["id"]
+    assert {:ok, _at, 0} = DateTime.from_iso8601(since)
+    assert synced["yours"]["reviews_waiting"] == 1
     assert ContractSchema.errors(synced, "FleetSync") == []
     assert sync(c, ann)["yours"]["reviews"] == []
 

@@ -451,15 +451,15 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   # the key the agent writes as here (its own lowest key, or its shard's),
   # whether a vote of the fleet has stopped that key changing the workspace,
   # the unfinished tasks and the goals the agent joined as it, the submitted
-  # tasks waiting for its review, and the rooms where others
-  # have posted since the Key last did. An agent with neither a key nor a
-  # shard here writes as none.
+  # tasks it may review, oldest wait first, with how many wait in all, and
+  # the rooms where others have posted since the Key last did. An agent with
+  # neither a key nor a shard here writes as none.
   defp yours(fleet_id, actor, within) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
          {:ok, tasks} <-
            Graph.tasks_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor),
-         {:ok, reviews} <- Graph.reviews_asked_of(fleet_id, [token_id], within, actor: actor),
+         {:ok, reviews} <- reviews(fleet_id, token_id, restricted, actor, within),
          {:ok, goals} <-
            Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor) do
       {:ok,
@@ -467,7 +467,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
          as_key: token_id,
          edits_restricted: restricted,
          tasks: tasks,
-         reviews: reviews,
+         reviews: reviews.results,
+         reviews_waiting: reviews.count,
          goals: goals,
          posted_after_you: Rooms.posted_after_key(fleet_id, token_id)
        }}
@@ -479,9 +480,29 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
            edits_restricted: false,
            tasks: [],
            reviews: [],
+           reviews_waiting: 0,
            goals: [],
            posted_after_you: []
          }}
+
+      error ->
+        error
+    end
+  end
+
+  # The tasks the agent may review as its Key, at the Key's current ownership
+  # and from the agent's own wallet, as a review it sent would be stamped
+  # (`Keyfleet.Graph.Checks.KeyActor`). None while a vote restricts the Key's
+  # edits, since its review would be refused.
+  defp reviews(_fleet_id, _token_id, true, _actor, _within), do: {:ok, %{results: [], count: 0}}
+
+  defp reviews(fleet_id, token_id, false, actor, within) do
+    case Keys.current_key(fleet_id, token_id, actor: actor) do
+      {:ok, %{ownership_epoch: epoch}} ->
+        Graph.review_queue(fleet_id, token_id, epoch, actor.wallet_address, within, actor: actor)
+
+      {:ok, nil} ->
+        {:ok, %{results: [], count: 0}}
 
       error ->
         error
@@ -510,7 +531,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   end
 
   defp review_ask_json(task) do
-    %{id: task.id, title: task.title, version: task.version}
+    %{id: task.id, title: task.title, version: task.version, waiting_since: task.changed_at}
   end
 
   defp task_json(task) do

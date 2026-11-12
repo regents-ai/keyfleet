@@ -21,6 +21,8 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
 
   # As many goals as the workspace reads in one page.
   @board_goals 24
+  # As many of the tasks waiting longest for review as the Project lists.
+  @board_reviews 6
 
   @parts ~w(owner_key relations linked url discussion commit rerun_check agents)a
 
@@ -74,9 +76,9 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
       )
 
   # What the workspace's pages keep at hand, the whole fleet's or one
-  # project's: how many goals and tasks stand where and its newest goals, as
-  # its Project shows them, and what its members pinned in its Docs and its
-  # Code.
+  # project's: how many goals and tasks stand where, its newest goals and the
+  # tasks that have waited longest for review, as its Project shows them, and
+  # what its members pinned in its Docs and its Code.
   defp read(:board, %{fleet_id: fleet_id} = args, opts) do
     project = args[:project]
 
@@ -90,6 +92,12 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
              Keyword.put(opts, :page, limit: @board_goals)
            ),
          {:ok, counts} <- Graph.tally(fleet_id, project, opts),
+         {:ok, awaiting} <-
+           Graph.awaiting_review(
+             fleet_id,
+             %{project: project},
+             [query: [limit: @board_reviews]] ++ opts
+           ),
          {:ok, notebooks} <- Graph.pins(fleet_id, :docs, project, opts),
          {:ok, code} <- Graph.pins(fleet_id, :code, project, opts) do
       {:ok,
@@ -97,6 +105,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
          counts: counts,
          goals: Enum.map(goals.results, &goal(&1, fleet_id)),
          more_goals: goals.more?,
+         awaiting_review: Enum.map(awaiting, &awaiting(&1, fleet_id)),
          pinned_notebooks:
            for pin <- notebooks do
              space = if Notebooks.hub?(fleet_id), do: shown[pin.project].hub_project_id
@@ -242,6 +251,17 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
       joined: length(Map.get(object.sys, "joined", [])),
       changed_at: object.changed_at,
       url: Endpoint.url() <> WorkspacePage.item_path(fleet_id, object.id)
+    }
+  end
+
+  defp awaiting(task, fleet_id) do
+    %{
+      id: task.id,
+      project: task.project,
+      title: task.title,
+      version: task.version,
+      waiting_since: task.changed_at,
+      url: Endpoint.url() <> WorkspacePage.item_path(fleet_id, task.id)
     }
   end
 

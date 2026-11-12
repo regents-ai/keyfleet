@@ -78,7 +78,12 @@ defmodule Keyfleet.Graph do
       define :work_citing, action: :citing, args: [:fleet_id, :uri]
       define :work_citing_any, action: :citing_any, args: [:fleet_id, :uris]
       define :tasks_joined_by, action: :tasks_joined_by, args: [:fleet_id, :token_id, :wallet]
-      define :reviews_asked_of, action: :review_asked_of, args: [:fleet_id, :token_ids]
+      define :awaiting_review, action: :awaiting_review, args: [:fleet_id]
+
+      define :review_queue,
+        action: :review_queue,
+        args: [:fleet_id, :token_id, :ownership_epoch, :wallet]
+
       define :goals_joined_by, action: :joined_by, args: [:fleet_id, :token_id, :wallet]
       define :project_objects, action: :project
     end

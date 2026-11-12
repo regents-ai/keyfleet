@@ -146,6 +146,16 @@ test("another member's agent joins the goal, runs the notebook again and accepts
   const again = await ok(page, reviewerAgent, "notebooks_result", {fleet_id: fleet, project: general, notebook_id: made.notebook, run_id: run.run_id})
   expect(again.status).toBe("succeeded")
 
+  // The other member's sync lists the task among those it may review.
+  const synced = await ok(page, reviewerAgent, "fleets_sync", {
+    fleet_id: fleet,
+    rooms: [],
+    graph: {after_seq: 0},
+    proposals: {after_seq: 0},
+    run: {kind: "session"},
+  })
+  expect(synced.yours.reviews.map((waiting: {id: string}) => waiting.id)).toContain(made.task)
+
   const task = await ok(page, reviewerAgent, "workspace_show", {fleet_id: fleet, id: made.task})
   await ok(page, reviewerAgent, "workspace_review_task", write(reviewerKey, {
     task: made.task,
@@ -164,6 +174,9 @@ test("the members read the goal, its notebook, its code and the accepted task on
   const project = page.locator("#workspace-place-project")
   await expect(project).toContainText("Count the harbour's boats")
   await expect(project).toContainText("Write the counting notebook")
+  // Accepted, the task no longer waits in Reviews.
+  await expect(page.locator("#workspace-reviews")).toBeVisible()
+  await expect(page.locator("#workspace-review-rows > li")).toHaveCount(0)
 
   await open(page, `${fleetPath}/workspace?place=docs`)
   await expect(page.locator("#workspace-place-docs")).toContainText("Boat count")

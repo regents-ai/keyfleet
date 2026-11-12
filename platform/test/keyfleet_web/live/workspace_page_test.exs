@@ -1985,6 +1985,33 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert %{open_goals: "1", open_tasks: "2"} = counts(view)
     end
 
+    # Costly failure: work that has waited longest sits below newer work, or
+    # reviewed and archived work still asks for a review, so members check
+    # the wrong task first.
+    test "Reviews lists submitted work awaiting review, the longest wait first, each with its time",
+         %{conn: conn} do
+      first = create(@fleet, "task", %{"title" => "Waited longest"})
+      second = create(@fleet, "task", %{"title" => "Waited less"})
+      reviewed = create(@fleet, "task", %{"title" => "Reviewed"})
+      archived = create(@fleet, "task", %{"title" => "Archived"})
+      create(@fleet, "task", %{"title" => "Not submitted"})
+
+      submit(@fleet, first, "https://example.com/r1")
+      submit(@fleet, reviewed, "https://example.com/r2")
+      submit(@fleet, archived, "https://example.com/r3")
+      submit(@fleet, second, "https://example.com/r4")
+      review(@fleet, reviewed, "accept", by: 6)
+      archive(@fleet, archived)
+
+      {:ok, view, _html} = live(conn, @board)
+
+      assert lines(view, "#workspace-review-rows > li > p:first-child") ==
+               ["Waited longest", "Waited less"]
+
+      times = view |> element("#workspace-review-rows") |> render() |> LazyHTML.from_fragment()
+      assert times |> LazyHTML.query("time[datetime]") |> Enum.count() == 2
+    end
+
     test "a visitor sees no counts", %{visitor: visitor} do
       create(@fleet, "task", %{"title" => "Untaken"})
 

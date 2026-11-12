@@ -451,6 +451,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </section>
 
         <section
+          id="workspace-reviews"
+          class="workspace-panel workspace-activity"
+          aria-labelledby="workspace-reviews-title"
+        >
+          <h2 id="workspace-reviews-title">Reviews</h2>
+          <p :if={@board.reviews == []} class="workspace-detail">Nothing awaits review.</p>
+          <p :if={@board.reviews != []} class="workspace-detail">
+            Submitted work awaiting review, the longest wait first.
+          </p>
+          <.feed :let={task} id="workspace-review-rows" rows={@board.reviews} key={:id}>
+            <p><.link patch={task.path}>{task.title}</.link></p>
+          </.feed>
+        </section>
+
+        <section
           class="workspace-panel workspace-activity"
           aria-labelledby="workspace-activity-title"
         >
@@ -2679,7 +2694,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :key, :atom, required: true, doc: "the field that names a row"
   slot :inner_block, required: true
 
-  # A feed of rows, newest first, each with its time in a column of its own.
+  # A feed of rows in the order given, each with its time in a column of its own.
   # A row that arrives glides in and the rows below it make room.
   defp feed(assigns) do
     ~H"""

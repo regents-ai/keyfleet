@@ -435,46 +435,86 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
-    # The submitted tasks that name one of these keys of the fleet as their
-    # reviewer and that key has not yet reviewed at their current version,
-    # newest change first.
-    read :review_asked_of do
+    # The tasks awaiting review at their current version that one Key, acting
+    # at its current ownership from one wallet, may review now: the oldest
+    # wait first, a page of at most 20 with how many wait in all. A task's
+    # wait began when its current version was made (`changed_at`). "May
+    # review" is the graph host's rule for a review (`_plan_review` in
+    # graph_host/src/keyfleet_graph/host.py), and a property test holds the
+    # two together: a task not archived, in a project that is active, that
+    # neither the Key nor the wallet submitted, that the Key has not joined
+    # at its current ownership, and that the Key did not change or submit
+    # (`sys.worked`, which never lists the task's creator). A task awaiting
+    # review has no review of its current version, so the Key has not
+    # reviewed it either. A task never submitted has no `submitted` to
+    # compare, so it is left out.
+    read :review_queue do
       argument :fleet_id, :string, allow_nil?: false
-
-      argument :token_ids, {:array, :integer},
-        allow_nil?: false,
-        constraints: [max_length: 100, items: [min: 1]]
-
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1]
+      argument :ownership_epoch, :integer, allow_nil?: false, constraints: [min: 1]
+      argument :wallet, :string, allow_nil?: false, constraints: @text
       argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "task" and
                  (is_nil(^arg(:project)) or project == ^arg(:project)) and
-                 fragment("(? ->> 'reviewer_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
-                 fragment("(? ->> 'progress') = 'done'", data) and
+                 review == "awaiting_review" and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
                  fragment(
-                   """
-                   NOT EXISTS (
-                     SELECT 1 FROM keyfleet_app.graph_relations AS link
-                     JOIN keyfleet_app.graph_objects AS review
-                       ON review.fleet_id = link.fleet_id AND review.id = link.source
-                     WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'reviews'
-                       AND (review.sys #>> '{review,task_version}')::bigint = ?
-                       AND (review.sys #>> '{created_by,key,token_id}') = (? ->> 'reviewer_key')
-                   )
-                   """,
+                   "EXISTS (SELECT 1 FROM keyfleet_app.projects AS open WHERE open.fleet_id = ? AND open.name = ? AND open.state = 'active')",
                    fleet_id,
-                   id,
-                   version,
-                   data
+                   project
+                 ) and
+                 fragment(
+                   "(? #>> '{submitted,key,token_id}')::bigint <> ?",
+                   sys,
+                   ^arg(:token_id)
+                 ) and
+                 fragment("(? #>> '{submitted,wallet}') <> ?", sys, ^arg(:wallet)) and
+                 fragment(
+                   "NOT COALESCE(? -> 'joined', '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('key', jsonb_build_object('token_id', ?::bigint), 'ownership_epoch', ?::bigint))",
+                   sys,
+                   ^arg(:token_id),
+                   ^arg(:ownership_epoch)
+                 ) and
+                 fragment(
+                   "NOT COALESCE(? -> 'worked', '[]'::jsonb) @> jsonb_build_array(jsonb_build_object('key', jsonb_build_object('token_id', ?::bigint)))",
+                   sys,
+                   ^arg(:token_id)
                  )
              )
 
       prepare build(
-                sort: [changed_seq: :desc],
-                limit: 20,
-                select: [:fleet_id, :id, :type, :version],
+                sort: [changed_seq: :asc, id: :asc],
+                select: [:fleet_id, :id, :type, :version, :changed_seq, :changed_at],
+                load: [:title]
+              )
+
+      pagination offset?: true,
+                 countable: :by_default,
+                 required?: true,
+                 default_limit: 20,
+                 max_page_size: 20
+    end
+
+    # The tasks awaiting review at their current version, the project's or the
+    # whole fleet's, archived ones left out, the longest wait first: a task's
+    # wait began when its current version was made (`changed_at`). Callers
+    # bound it with a limit.
+    read :awaiting_review do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == "task" and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
+                 review == "awaiting_review" and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(
+                sort: [changed_seq: :asc, id: :asc],
+                select: [:fleet_id, :id, :type, :project, :version, :changed_seq, :changed_at],
                 load: [:title]
               )
     end
@@ -594,7 +634,8 @@ defmodule Keyfleet.Graph.Object do
              :tallied,
              :around_goal,
              :tasks_joined_by,
-             :review_asked_of,
+             :review_queue,
+             :awaiting_review,
              :joined_by,
              :citing,
              :citing_any,

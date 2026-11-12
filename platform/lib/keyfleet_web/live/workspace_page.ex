@@ -370,6 +370,19 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
+  # The tasks awaiting review, the project's or the whole fleet's, the
+  # longest wait first, a few of them, each with when its wait began.
+  defp awaiting_review(fleet_id, within, opts) do
+    for task <-
+          Graph.awaiting_review!(fleet_id, within, [query: [limit: @instrument_rows]] ++ opts),
+        do: %{
+          id: task.id,
+          title: task.title,
+          at: time(task.changed_at),
+          path: item_path(fleet_id, task.id)
+        }
+  end
+
   # The newest pins of the projects listed, a few of them.
   defp shown_pins(pins, projects),
     do: pins |> Enum.filter(&Map.has_key?(projects, &1.project)) |> Enum.take(@instrument_rows)
@@ -484,7 +497,8 @@ defmodule KeyfleetWeb.WorkspacePage do
           first_page?: not paged?(params),
           first_page: board_path(fleet.id, filter),
           pages: page_links(page, params, &board_path(fleet.id, filter, &1)),
-          activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
+          activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq])),
+          reviews: awaiting_review(fleet.id, within, opts)
         }
 
       {:missing, _name} ->
