@@ -7937,8 +7937,10 @@ scrolling sideways, now plainly:
 - `hooks/scroll_row.ts` (`ScrollRow`, replacing `CurrentTab`) fades an edge
   with part of an item past it over whole items only, so every item either
   stands clear or lies wholly under the fade; keeps the open tab or room (else
-  the pressed channel) in view on open, on change and on press; and never
-  scrolls smoothly under reduced motion. The fade is a mask, so it shows the
+  the pressed channel) in view on open, on change and on press; brings an
+  item reached from the keyboard whole into view at once (Chromium scrolls a
+  focused, partly shown item only part way); and never scrolls smoothly under
+  reduced motion. The fade is a mask, so it shows the
   page's own background in either theme. The channels row takes the hook
   too; both rows keep the inline style it writes across page updates.
 - The tabs row keeps 4px above and below so a focused tab's ring shows whole;

@@ -6,6 +6,7 @@ type ScrollRowHook = {
   frame?: number
   watch?: ResizeObserver
   onClick?: (event: Event) => void
+  onFocus?: (event: Event) => void
   onScroll?: () => void
 }
 
@@ -56,10 +57,17 @@ function reveal(row: HTMLElement, item: HTMLElement | null, smooth: boolean) {
   row.scrollTo({left: row.scrollLeft + from - start, behavior: smooth && !still ? "smooth" : "instant"})
 }
 
+/** The row's item an event happened on, if any. */
+const itemOf = (row: HTMLElement, event: Event) => {
+  const item = event.target instanceof Element ? event.target.closest<HTMLElement>("a, button") : null
+  return item && row.contains(item) ? item : null
+}
+
 /**
  * A row of tabs or channels that scrolls sideways on a narrow screen: it
  * keeps the selected item in view when the page opens, when the selection
- * changes and when an item is pressed, and fades at an edge with more past it.
+ * changes and when an item is pressed, brings an item reached from the
+ * keyboard whole into view at once, and fades at an edge with more past it.
  */
 export const ScrollRow: Hook = {
   mounted(this: ScrollRowHook) {
@@ -77,14 +85,16 @@ export const ScrollRow: Hook = {
     fade(row)
 
     this.onScroll = refade
-    this.onClick = event => {
-      const item = event.target instanceof Element ? event.target.closest<HTMLElement>("a, button") : null
-      if (item && row.contains(item)) reveal(row, item, true)
+    this.onClick = event => reveal(row, itemOf(row, event), true)
+    this.onFocus = event => {
+      const item = itemOf(row, event)
+      if (item?.matches(":focus-visible")) reveal(row, item, false)
     }
     this.watch = new ResizeObserver(refade)
     this.watch.observe(row)
     row.addEventListener("scroll", this.onScroll, {passive: true})
     row.addEventListener("click", this.onClick)
+    row.addEventListener("focusin", this.onFocus)
     void document.fonts.ready.then(refade)
   },
 
@@ -102,5 +112,6 @@ export const ScrollRow: Hook = {
     this.watch?.disconnect()
     if (this.onScroll) this.el.removeEventListener("scroll", this.onScroll)
     if (this.onClick) this.el.removeEventListener("click", this.onClick)
+    if (this.onFocus) this.el.removeEventListener("focusin", this.onFocus)
   },
 }

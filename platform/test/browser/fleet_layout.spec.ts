@@ -190,7 +190,8 @@ test("the way in sits above the tabs and opens the Buy Key window, as the header
 // their own row. At rest no item is cut part way: each stands whole in the
 // row's clear box (the row less the fade at an edge with more past it) or lies
 // wholly past it, under the fade or out of the row. The selected item stands
-// whole, every item is a finger tall, and the page never scrolls sideways.
+// whole, so does an item reached from the keyboard, every item is a finger
+// tall, and the page never scrolls sideways.
 // The rows are read with the channels' rooms in, on a fleet of their own.
 const rowsAtRest = (page: Page) =>
   page.evaluate(() =>
@@ -206,7 +207,8 @@ const rowsAtRest = (page: Page) =>
         const whole = left >= start - 0.5 && right <= end + 0.5
         const past = right <= start + 0.5 || left >= end - 0.5
         const chosen = item.getAttribute("aria-current") === "page" ? 2 : item.getAttribute("aria-pressed") === "true" ? 1 : 0
-        return {item: `${id} ${item.id}`, rests: whole || past, chosen, whole, height}
+        const focused = item === document.activeElement
+        return {item: `${id} ${item.id}`, rests: whole || past, chosen, focused, whole, height}
       })]
     }),
   )
@@ -246,6 +248,14 @@ for (const width of [390, 320]) {
     await expectRowsAtRest(page, width)
     for (const row of rows) await row.evaluate(el => el.scrollTo({left: el.scrollWidth, behavior: "instant"}))
     await expectRowsAtRest(page, width)
+
+    // The last room, reached from the keyboard, stands whole at once.
+    for (const row of rows) await row.evaluate(el => el.scrollTo({left: 0, behavior: "instant"}))
+    await page.locator("#fleet-channels a").nth(-2).focus()
+    await page.keyboard.press("Tab")
+    await expect(page.locator("#fleet-channels a").last()).toBeFocused()
+    await expectRowsAtRest(page, width)
+    expect((await rowsAtRest(page)).flat().filter(item => item.focused).map(item => item.whole)).toEqual([true])
 
     // The last room, picked, and the last tab, opened, stand whole.
     for (const row of rows) await row.evaluate(el => el.scrollTo({left: 0, behavior: "instant"}))
