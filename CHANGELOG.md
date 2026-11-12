@@ -8254,3 +8254,22 @@ reaches the wallet unrecorded, sends it on two quick presses, and is
 disabled again once that Key leaves; Vote and Claim all each send the
 unrecorded Key on two quick presses. The walk fails without the read.
 `verification/formal/run.sh`: every check ran as expected.
+
+## 2026-11-12 — The turned-down draw walk answers the draw-ended read
+
+`wallet_buttons.spec.ts` "a key whose draw was turned down can be asked
+again" pressed Ask again twice and saw nothing reach the wallet. Since
+7a255b63e (8 Nov) a Key's draw buttons also read `revealExpired`, which the
+browser tests' stand-in chain didn't answer, so the build said the chain
+couldn't be read and had no step to send. The page was right for a chain it
+can't read; on Base the read is answered and both presses reach the wallet.
+
+- `Keyfleet.BrowserChain` answers `revealExpired` with false: no Key's wait
+  for its draw has been ended.
+- The walk opens the Key's page until the page has read the sale it was just
+  made, as the Key's-page sign-in walk does: a wallet holding none of the
+  fleet's Keys is shown the fleet as every visitor reads it, a second behind
+  a sale, so run on its own the walk opened the page before Key 2 existed.
+
+Check: the walk passes on its own and with the rest of `wallet_buttons.spec.ts`
+(12 passed).

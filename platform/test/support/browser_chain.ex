@@ -20,8 +20,9 @@ defmodule Keyfleet.BrowserChain do
   site's record has the move only once the fleet's next pass reads it. The
   keys are paid in USDC alone, and no wallet has a credit of its own; a key
   offered rewards (`offer_rewards!/3`) has them waiting, and for any other key
-  the node fails. No key has its seed yet: a key's request for its random draw
-  was accepted until `refuse_draw!/3` says it was turned down. A wallet has
+  the node fails. No key has its seed yet, and no key's wait for one has been
+  ended: a key's request for its random draw was accepted until
+  `refuse_draw!/3` says it was turned down. A wallet has
   allowed a fleet the USDC `allow!/2` names, and none until then. A step a
   page's wallet sent is on the chain once `land!/3` puts it on the server's
   `Keyfleet.TestChainNode`. On the vote contract every key has been able to
@@ -63,6 +64,7 @@ defmodule Keyfleet.BrowserChain do
   @allowance Call.selector("allowance(address,address)")
   @reveal_seed Call.selector("revealSeed(uint256)")
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
+  @reveal_expired Call.selector("revealExpired(uint256)")
   @fleet_record Call.selector("fleet(uint256)")
   @owner_of Call.selector("ownerOf(uint256)")
   @sales_open_at Call.selector("salesOpenAt(uint256)")
@@ -239,6 +241,7 @@ defmodule Keyfleet.BrowserChain do
   defp answer(_votes, @status <> _proposal, _block_hash), do: {:ok, <<0::256>>}
 
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
+  defp answer(_keys, @reveal_expired <> _token_id, _block_hash), do: {:ok, <<0::256>>}
 
   # Every fleet's deck is set on the chain.
   defp answer(_keys, @fleet_record <> _fleet_id, _block_hash),

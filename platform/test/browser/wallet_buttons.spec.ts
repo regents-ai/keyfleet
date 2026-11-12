@@ -433,12 +433,19 @@ test("a key whose draw was turned down can be asked again: every press reaches t
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
-  await page.goto(`/classic/1?key=${key}`)
-  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  // The page reads the sale it was just made: a wallet holding no Key of the
+  // fleet is shown the fleet as every visitor reads it, a second behind a sale.
+  const again = page.locator("#key-profile-reveal-again")
+  await expect
+    .poll(async () => {
+      await page.goto(`/classic/1?key=${key}`)
+      await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+      return again.count()
+    })
+    .toBe(1)
   await useStandInWallet(page, me)
 
   // Anyone may ask again, not only the key's holder: pressed twice, both reach the wallet.
-  const again = page.locator("#key-profile-reveal-again")
   await expect(again).toHaveText("Ask again")
   await again.click()
   await again.click()
