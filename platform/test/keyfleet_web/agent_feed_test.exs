@@ -144,6 +144,30 @@ defmodule KeyfleetWeb.AgentFeedTest do
     quiet!(feed)
   end
 
+  test "an open feed follows its person choosing another Key to post as", c do
+    epoch!(4, "b")
+    feed = open!(c, c.signer)
+
+    assert {:ok, _choice} = Keys.choose_posting_key(@fleet, 4, actor: c.me.pairing)
+    asked = post!(c.a, "general", "@Key 4 are you there?")
+
+    assert {[%{data: %{"kind" => "mention", "id" => id}}], _feed} = take(feed, 1)
+    assert id == asked.id
+  end
+
+  test "an open feed follows its agent being put on another Key", c do
+    epoch!(4, "b")
+    feed = open!(c, c.signer)
+
+    assert {:ok, _assigned} =
+             Keys.assign_agent(@fleet, 4, c.me.wallet_address, actor: c.me.pairing)
+
+    asked = post!(c.a, "general", "@Key 4 are you there?")
+
+    assert {[%{data: %{"kind" => "mention", "id" => id}}], _feed} = take(feed, 1)
+    assert id == asked.id
+  end
+
   test "a reconnect gets what it missed after its last event, and a resync past 100", c do
     feed = open!(c, c.signer)
     post!(c.a, "general", "First")

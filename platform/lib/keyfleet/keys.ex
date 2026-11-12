@@ -242,8 +242,9 @@ defmodule Keyfleet.Keys do
 
   @doc """
   Where a fleet's pages hear which of its keys have just changed: sold, changed
-  hands, revealed, a shard issued or ended, agent voting turned on or off, or
-  edits restricted or allowed, as
+  hands, revealed, a shard issued or ended, agent voting turned on or off,
+  edits restricted or allowed, an agent put on a Key, or a person's posting
+  Key chosen, as
   `{:keys_changed, fleet_id, token_ids}`; and which were just marked present,
   as `{:keys_present, fleet_id, token_ids}`.
   """

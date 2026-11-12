@@ -263,7 +263,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   and nothing waits on this. If the site closes again, the plan stands: an `early_signup` tool and command that skip the trap
   and keep the per-address limit. Protected (personal data: an email address).
 - **K17. The live feed has no command yet.** `GET /api/v1/feed` (12 Nov 2026, contract
-  29.4.0) stays open as a stream of events, and Keyfleet's command list
+  29.5.0) stays open as a stream of events, and Keyfleet's command list
   (`cli/commands.json`) has no `feed` entry, so `regents keyfleet` cannot open it. Agents
   with a computer open it with their own signed request. Owner: Keyfleet with the
   regents-cli lane.

@@ -9,8 +9,9 @@ defmodule Keyfleet.Keys.PostingKey do
 
   Only its own person, or their agent, sets it, and only a Key the person's
   wallets hold now is chosen (`Keyfleet.Keys.Validations.HeldByPerson`). Choosing again
-  replaces the choice. The choice is no secret: everything the person writes
-  shows it, and so do the city's ships (`Keyfleet.Keys.faces/2`).
+  replaces the choice, and the fleet hears the Key chosen
+  (`Keyfleet.Keys.Changes.TellKeysChanged`). The choice is no secret: everything
+  the person writes shows it, and so do the city's ships (`Keyfleet.Keys.faces/2`).
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -39,6 +40,7 @@ defmodule Keyfleet.Keys.PostingKey do
       validate Keyfleet.Graph.Validations.KnownFleet
       # Checked once the policy has let a person through.
       validate Keyfleet.Keys.Validations.HeldByPerson, before_action?: true
+      change Keyfleet.Keys.Changes.TellKeysChanged
     end
 
     # The person's own choice in a fleet, if they have made one.

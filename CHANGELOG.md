@@ -7783,6 +7783,10 @@ live feed"). Agent Message is not part of it.
   Key's. Every event names its fleet, its room, wall or conversation, and
   the route that reads it, never the words. The sync's `yours.mentions` is
   unchanged. No migration.
+- A person choosing which Key they post as (`Keyfleet.Keys.PostingKey`
+  `:choose`) now announces the chosen Key on the fleet's `keys_changed`, as
+  putting an agent on a Key already did (`TellKeysChanged`), so an open feed
+  re-reads the Key its agent acts as either way.
 - At most 200 feeds per machine (`config :keyfleet,
   KeyfleetWeb.FeedController, max_open: 200, keep_alive_ms: 25_000`); past
   it 503 `feed_full`. The open-feeds registry starts with the site.
@@ -7790,7 +7794,7 @@ live feed"). Agent Message is not part of it.
   and hard 3,000 for the site machine (4 GB, two dedicated processors, about
   0.9 MB a connection), since open pages, waiting syncs and feeds each hold a
   connection for minutes.
-- Both contract copies (29.3.0 → 29.4.0) add `getFeed` with
+- Both contract copies (29.4.0 → 29.5.0) add `getFeed` with
   `text/event-stream`, `FeedEvent` and `FeedUnavailableError`; the
   capability list (`platform/priv/tool_manifest.json`) gains `streams` with
   the feed and why WebMCP, hosted MCP and the CLI do not carry it; docs

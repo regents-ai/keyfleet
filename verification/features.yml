@@ -1468,7 +1468,6 @@ features:
     proofs:
       - platform/test/keyfleet_web/agent_feed_test.exs
     gaps:
-      - Choosing which Key a person posts as announces nothing, so an open feed keeps the Key it read until that fleet's Keys next change; reconnecting reads it again.
       - A reconnect replays by posting time; a post whose transaction commits after a later post's could in principle be passed over, as with the sync's mentions cursor. Not seen in tests, not proven against.
       - regents-cli has no feed command for Keyfleet (cli/commands.json has no entry); hosted MCP, the connector and WebMCP do not carry a feed by design.
       - Not yet run by a real agent.

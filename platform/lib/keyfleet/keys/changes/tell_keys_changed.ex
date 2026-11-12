@@ -1,10 +1,11 @@
 defmodule Keyfleet.Keys.Changes.TellKeysChanged do
   @moduledoc """
-  Once a change to which Key an agent is on is saved, the fleet's pages and
-  readings hear which Keys it changed, as the chain's changes are heard
+  Once a change to which Key an agent is on, or which Key a person writes as,
+  is saved, the fleet's pages, readings and agents' live feeds hear which Keys
+  it changed, as the chain's changes are heard
   (`Keyfleet.Keys.topic/1`'s `{:keys_changed, fleet_id, token_ids}`): the Key
-  the agent is on or came off, and the Key it left when it moved
-  (`:left_token_id` in the change's context, from
+  the agent is on or came off, or the Key the person chose, and the Key the
+  agent left when it moved (`:left_token_id` in the change's context, from
   `Keyfleet.Keys.Changes.PutAgent`). A change that wasn't saved tells nobody.
   """
   use Ash.Resource.Change
