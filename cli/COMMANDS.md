@@ -1014,7 +1014,7 @@ answer the room; the naming line goes into the room; broadcast rooms_changed
   `details.bytes` when not even the first post or change fits.
 - **Answer:** `{"rooms": [{"slug", "kind", "head_seq", "cursor", "messages"}], "keys":
   [{"token_id", "head_seq", "cursor", "messages"}], "graph",
-  "proposals", "check_in", "yours": {"as_key", "edits_restricted", "tasks", "reviews", "goals"}}`, and with
+  "proposals", "check_in", "yours": {"as_key", "edits_restricted", "tasks", "reviews", "reviews_waiting", "goals"}}`, and with
   `dms` sent, `"dms": {"messages", "keys": [{"token_id", "cursor"}], "has_more"}`, whose
   `keys` go back unchanged as `dms.keys`; with `quotes` sent,
   `"quotes": {"requests": [{"id", "body", "asked_at"}], "next_cursor", "has_more"}`, at

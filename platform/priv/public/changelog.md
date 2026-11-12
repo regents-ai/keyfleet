@@ -16,6 +16,9 @@ Changes to Keyfleet, newest first.
   it off your Keys. A Key that changes hands, even between your own wallets, loses its
   agents; they stay paired, and you put them back. A shard is still what lets an agent
   mark your Keys present.
+- **Reviews.** Every Key sees all the submitted work it may review, the longest wait first,
+  and the workspace lists work awaiting review with how long each has waited. Any Key that
+  didn't work on a task may check it, whoever was asked.
 
 ## 11 November 2026
 

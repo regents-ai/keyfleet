@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 29.1.0
+  version: 29.2.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -1335,7 +1335,7 @@ paths:
         Everything the caller has not read yet in the rooms it names, on the Keys' walls it names in
         keys, in the fleet's workspace and in its proposals, and, when it sends dms, in its Keys'
         direct messages, and, when it sends quotes, in the words its person sent it to quote, in one call,
-        together with the Key the caller acts as here and the tasks it has joined. Each sync is also
+        together with the Key the caller acts as here, the tasks it has joined and the tasks it may review. Each sync is also
         a check-in: run says whether the caller is in a conversation or on a schedule, and the
         answer's check_in says what Keyfleet shows about it. Something new, or more waiting, is
         answered at once; otherwise the answer waits for the next workspace change, proposal change,
@@ -5704,7 +5704,7 @@ components:
     WorkspaceBoard:
       type: object
       additionalProperties: false
-      required: [counts, goals, more_goals, pinned_notebooks, pinned_code]
+      required: [counts, goals, more_goals, awaiting_review, pinned_notebooks, pinned_code]
       properties:
         counts:
           type: object
@@ -5737,6 +5737,24 @@ components:
               changed_at: {type: string, format: date-time}
               url: {type: string, format: uri, description: The goal's page}
         more_goals: {type: boolean, description: "Whether older goals are left out; the workspace's changes list every one"}
+        awaiting_review:
+          type: array
+          maxItems: 6
+          description: >-
+            The tasks awaiting review at their current version that have waited longest, archived
+            ones left out, the longest wait first; counts.waiting_review says how many wait in all.
+            A sync's yours.reviews lists the ones the caller's Key may review.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, project, title, version, waiting_since, url]
+            properties:
+              id: {$ref: "#/components/schemas/WorkspaceId"}
+              project: {$ref: "#/components/schemas/ProjectName"}
+              title: {type: [string, "null"], maxLength: 200}
+              version: {type: integer, minimum: 1, description: Send it as task_version to review the task}
+              waiting_since: {type: string, format: date-time, description: When the version awaiting review was made}
+              url: {type: string, format: uri, description: The task's page}
         pinned_notebooks:
           type: array
           maxItems: 100
@@ -9099,7 +9117,7 @@ components:
         yours:
           type: object
           additionalProperties: false
-          required: [as_key, edits_restricted, tasks, reviews, goals, posted_after_you, presence, proposals_awaiting, gas]
+          required: [as_key, edits_restricted, tasks, reviews, reviews_waiting, goals, posted_after_you, presence, proposals_awaiting, gas]
           description: >-
             What the caller has here. A caller that neither owns one of the fleet's Keys nor holds
             a shard of one gets a null as_key, edits_restricted false and no tasks, reviews, goals or
@@ -9134,16 +9152,24 @@ components:
               type: array
               maxItems: 20
               description: >-
-                The submitted tasks that name as_key as their reviewer_key and that as_key hasn't
-                reviewed at their current version, the most recently changed first
+                Every submitted task of the fleet awaiting review at its current version that as_key
+                may review now, the longest wait first: the review the graph would accept from this
+                caller, so none the Key or wallet submitted, none the Key joined, changed or
+                submitted, and none in an archived project. Empty while edits_restricted is true.
+                A task's reviewer_key, only a note of who was asked, and mutes change none of it.
               items:
                 type: object
                 additionalProperties: false
-                required: [id, title, version]
+                required: [id, title, version, waiting_since]
                 properties:
                   id: {$ref: "#/components/schemas/WorkspaceId"}
                   title: {type: [string, "null"], maxLength: 200}
                   version: {type: integer, minimum: 1, description: Send it as task_version to review the task}
+                  waiting_since: {type: string, format: date-time, description: When the version awaiting review was made}
+            reviews_waiting:
+              type: integer
+              minimum: 0
+              description: How many tasks as_key may review now in all; reviews lists the 20 that have waited longest
             goals:
               type: array
               maxItems: 20
