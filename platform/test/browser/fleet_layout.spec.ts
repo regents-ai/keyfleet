@@ -270,6 +270,44 @@ for (const width of [390, 320]) {
   })
 }
 
+// On a 320 px phone, signed out, the header keeps its theme switch beside "Buy
+// Key": the page's one switch, a whole press wide and tall, in one header row
+// whose controls, the crown included, stand whole on screen side by side, and a
+// press turns the theme. Nothing scrolls sideways.
+for (const path of ["/classic/1", "/account"]) {
+  test(`at 320 wide, signed out, ${path} keeps the theme switch beside Buy Key`, async ({page}) => {
+    await page.setViewportSize({width: 320, height: 700})
+    await page.goto(path)
+    await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+    await expect(page.locator("#shell-get-key")).toBeVisible()
+    await expect(page.getByRole("switch", {name: "Light theme", includeHidden: true})).toHaveCount(1)
+    const toggle = page.locator("#shell-header").getByRole("switch", {name: "Light theme"})
+    await expect(toggle).toBeVisible()
+    const press = (await toggle.boundingBox())!
+    expect(Math.min(press.width, press.height)).toBeGreaterThanOrEqual(40)
+
+    const header = await page.locator("#shell-header").evaluate(el => {
+      const box = el.getBoundingClientRect()
+      const controls = [el.querySelector(".shell-brand__mark")!, ...el.querySelectorAll(":scope > :not(.shell-brand)")]
+        .map(control => control.getBoundingClientRect())
+        .filter(control => control.width > 0)
+      return {
+        height: box.height,
+        sideways: el.scrollWidth - el.clientWidth,
+        whole: controls.every(control => control.left >= 0 && control.right <= 320 && control.top >= box.top && control.bottom <= box.bottom),
+        apart: controls.every((control, i) => i === 0 || control.left >= controls[i - 1].right - 0.5),
+      }
+    })
+    expect(header).toEqual({height: 57, sideways: 0, whole: true, apart: true})
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light")
+    await toggle.click()
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
+    await expect(toggle).toHaveAttribute("aria-checked", "false")
+  })
+}
+
 // A holder's Keys show as cards twice the old size (Sean, 20 October 2026). A
 // card names its Key under the pointer once its picture is drawn; until then it
 // names its Key in its middle at all times. Test fleets have no deck, so their

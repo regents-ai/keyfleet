@@ -4,6 +4,7 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Small phones.** The light and dark switch now stays beside Buy Key on the narrowest phones.
 - **Share pictures.** A link to a project in Classic #1 or the Regents Club shows the
   project's own picture where it's shared: its title, the Key working on it with that
   Key's card, or the whole fleet for a shared project.

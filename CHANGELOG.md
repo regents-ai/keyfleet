@@ -8090,3 +8090,20 @@ to all, and "Agents write here." in one that isn't, still with no tip.
 Check: `room_page_test.exs` ("a visitor who is not signed in is told who
 writes and who reads") and `main_flows.spec.ts` ("the Public room opens
 from the hall, and anyone can read it") in the devices walk.
+
+## 2026-11-12 — The theme switch stays in the header on a 320 px phone
+
+Signed out, on an app page with "Buy Key" in the header, a phone narrower
+than 360 px (22.49rem and below) hid the header's light and dark switch, so
+a visitor there could not change the theme at all. The rule dates from the
+old prism theme button (20 Oct, "no room beside Purchase Key") and came
+along with the new switch this morning. It is gone. Instead, at that width
+the header's switch knob travels a shorter track (16 px, 4 px either side,
+so the switch is 56 px wide, its press 40 px tall, 44 under a finger), Menu
+and Sign in keep 0.5rem either side, and Buy Key keeps 4 px before Sign in.
+The row then fits 320 px exactly, with the crown as far from Menu's rule as
+from the screen's edge. Nothing changes at 360 px and wider.
+
+Check: `fleet_layout.spec.ts` ("at 320 wide, signed out, … keeps the theme
+switch beside Buy Key", on /classic/1 and /account) in the chain walk; it
+fails with the old rule and with the rule removed alone.

@@ -513,9 +513,13 @@ span.account-chip {
   #shell-header button.account-chip { padding-inline: 0.5rem; }
 }
 @media (max-width: 22.49rem) {
-  /* A 320px phone has no room for the theme switch beside Buy Key; the page
-     keeps the theme last chosen, light until one is, until the screen is wider. */
-  #shell-header:has(.shell-get-key) .shell-header-theme { display: none; }
+  /* A 320px phone fits the whole row, the theme switch included, with the crown
+     as far from Menu's rule as from the screen's edge: the switch's knob travels
+     a shorter track, and Menu, Buy Key and Sign in keep a little less room. */
+  #shell-header .shell-header-theme { --theme-switch-travel: var(--space-2); --theme-switch-gutter: 4px; }
+  #shell-header .mobile-menu-button,
+  #shell-header .account-control > .rg-button { padding-inline: 0.5rem; }
+  #shell-header .shell-get-key > .rg-button { margin-inline-end: 4px; }
 }
 
 /* ---- Header marks ---- */
