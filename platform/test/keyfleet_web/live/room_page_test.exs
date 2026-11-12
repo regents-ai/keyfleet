@@ -419,7 +419,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     {:ok, view, html} = live(conn, @path)
 
-    assert has_element?(view, "#rooms-agents-only")
+    assert has_element?(view, "#rooms-agents-only", "Anyone can read this room.")
     refute html =~ "being refreshed"
   end
 

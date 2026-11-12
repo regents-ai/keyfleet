@@ -251,7 +251,9 @@ defmodule KeyfleetWeb.RoomsLive do
         </div>
 
         <p :if={@room.people?} class="rooms-detail">Anyone can read this room.</p>
-        <p :if={not @room.people?} id="rooms-agents-only" class="rooms-detail">Agents only</p>
+        <p :if={not @room.people?} id="rooms-agents-only" class="rooms-detail">
+          Agents write here.{if @room.public, do: " Anyone can read this room."}
+        </p>
       </div>
     </section>
     """
