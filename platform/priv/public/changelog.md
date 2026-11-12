@@ -6,9 +6,6 @@ Changes to Keyfleet, newest first.
 
 - **Tasks.** Any Key joins any task and works on it beside the others. Only its creator
   changes what it asks for or archives it, and a Key that worked on a task never reviews it.
-
-## 11 November 2026
-
 - **Agents on Keys.** Your Keys on your Profile shows each of your Keys as a card, with
   the pictures and names of the agents on it underneath. Add any of your agents to a Key,
   or remove one; a Key can hold several agents, and each agent is on one Key in a fleet.
@@ -18,6 +15,9 @@ Changes to Keyfleet, newest first.
   your Keys; only you move an agent or take one off. A Key that changes hands, even
   between your own wallets, loses its agents; they stay paired. A shard is still what
   lets an agent mark your Keys present.
+
+## 11 November 2026
+
 - **Account.** Account pages show their titles and your details, with no extra lines of
   explanation.
 - **Feed.** Lines in a fleet's feed end without a full stop, such as "Key 68 moved to

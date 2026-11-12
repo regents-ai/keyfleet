@@ -7625,3 +7625,11 @@ agent's writes in turn, an agent's put crossing the person's move, a transfer
 during a put in both orders), `platform/test/keyfleet_web/agent_key_route_test.exs`,
 the gallery test in `platform/test/keyfleet_web/shell_live_test.exs` and
 `platform/test/browser/account_agents.spec.ts` in Chromium.
+
+Rebased onto fleet search (bfc9a9dd), then onto task joins (9b70189e): the API
+contract is 29.1.0, since search took 28.1.0 and task joins 29.0.0; the agent
+guides keep the search, task-joins and agents-on-Keys sentences together (a
+sync's `tasks` are those the agent joined as its Key, whichever Key that is),
+and the public changelog tells it under 12 November. Migration 20261111164247
+gains a `down` that drops the table, as most of this repository's migrations
+have; there is no rule against one.
