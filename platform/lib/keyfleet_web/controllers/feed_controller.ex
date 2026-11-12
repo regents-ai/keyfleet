@@ -38,11 +38,7 @@ defmodule KeyfleetWeb.FeedController do
 
     case admit(actor) do
       :ok ->
-        conn
-        |> put_resp_content_type("text/event-stream")
-        |> put_resp_header("cache-control", "no-store")
-        |> send_chunked(200)
-        |> start(actor, Feed.open(actor), last_event_id(conn))
+        start(conn, actor, Feed.open(actor), last_event_id(conn))
 
       :full ->
         Refusal.json(conn, 503, "feed_full")
@@ -63,9 +59,10 @@ defmodule KeyfleetWeb.FeedController do
   end
 
   # Subscribed to its own topic first, then told, so of two feeds opening
-  # together at least the older one hears the newer. The connection's process
-  # may go on to answer another request, so the feed leaves nothing behind in
-  # it.
+  # together at least the older one hears the newer. The answer starts only
+  # once the feed listens, so whatever is posted after it starts is heard. The
+  # connection's process may go on to answer another request, so the feed
+  # leaves nothing behind in it.
   defp start(conn, actor, feed, since) do
     own = "agent_feed:" <> actor.wallet_address
     fixed = [own, RegentAgents.topic(actor.privy_user_id)]
@@ -73,6 +70,12 @@ defmodule KeyfleetWeb.FeedController do
     Phoenix.PubSub.broadcast_from(Keyfleet.PubSub, self(), own, :feed_replaced)
 
     state = listen(%{feed: feed, topics: [], seen: MapSet.new(), timer: keep_alive()})
+
+    conn =
+      conn
+      |> put_resp_content_type("text/event-stream")
+      |> put_resp_header("cache-control", "no-store")
+      |> send_chunked(200)
 
     {conn, state} =
       case catch_up(conn, state, since) do
