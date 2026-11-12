@@ -329,7 +329,9 @@ features:
       and a link followed from it closes it. Pair New Agent opens the pairing
       window (#shell-pairing) over the page that is open, on the list of agents
       with the keyboard on it, as the Agents page's own Pair New Agent does;
-      the first Escape closes the list and the next the window.
+      the first Escape closes the list and the next the window. The chosen
+      agent's picture sits in a low band, and the list drops in and leaves with
+      a short move that never holds back a press, at once with reduced motion.
       The Account page draws the layout every Regent site shares, Keyfleet's own
       sections (Your Keys, wallets) first, and the Agents page its agents list.
       On a phone the open navigation menu
@@ -349,7 +351,10 @@ features:
       - platform/assets/js/account_menu.ts
       - platform/assets/js/hooks/menu_agents.ts
       - platform/assets/js/app.ts
+      - platform/assets/js/motion.ts
+      - platform/assets/js/hooks/motion/slides.ts
       - platform/assets/css/components/shell.css
+      - platform/assets/css/components/motion.css
       - platform/assets/css/pages/account.css
     entry:
       - route: GET /
@@ -362,6 +367,7 @@ features:
       - platform/test/keyfleet_web/menu_agents_test.exs
       - platform/test/keyfleet_web/agent_pictures_test.exs
       - platform/test/browser/account_menu.spec.ts
+      - platform/test/browser/pairing.spec.ts
       - platform/test/browser/app_shell.spec.ts
     gaps:
       - Checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
@@ -1159,26 +1165,27 @@ features:
 
   - id: ask-first-windows
     what: >-
-      Before a press that can't be undone, Keyfleet asks in its own cut-corner
-      window, never the browser's box: Unpair on Account, Delete on the member's
+      Before a press that can't be undone, Keyfleet asks in the shared
+      cut-corner confirm window every Regent site uses, never the browser's box:
+      Unpair on the Agents page and in an agent's window, Delete on the member's
       own archived project, End poll for the poll's starter, and the × that takes
-      a post off the member's own Key's wall. The window opens with focus on its
-      question; Cancel or Escape close it and hand focus back to the button that
-      opened it, and only its own button goes ahead. The server still decides
-      whether the press is allowed.
+      a post off the member's own Key's wall. The window opens with focus on
+      Cancel; Cancel or Escape close it and hand focus back to the button that
+      opened it, and only its going-ahead button presses that button again, once.
+      No on-chain press asks first. The server still decides whether the press
+      is allowed.
     who: person
     level: ordinary
     paths:
-      - platform/lib/keyfleet_web/components/confirm_dialog.ex
+      - platform/lib/keyfleet_web/components/layouts/root.html.heex
+      - platform/assets/js/app.ts
       - platform/lib/keyfleet_web/components/agents_panel.ex
       - platform/lib/keyfleet_web/live/workspace_live.ex
       - platform/lib/keyfleet_web/live/polls_live.ex
       - platform/lib/keyfleet_web/live/key_profile_live.ex
       - platform/lib/keyfleet_web/live/shell_live.ex
-      - platform/assets/js/hooks/modal_dialog.ts
-      - platform/assets/css/components/confirm_dialog.css
     entry:
-      - route: GET /account
+      - route: GET /account/agents
       - route: GET /:fleet/:number/workspace
       - route: GET /:fleet/:number/polls/:poll_id
       - route: GET /:fleet/:number?key=:token_id
@@ -1189,7 +1196,7 @@ features:
       - platform/test/keyfleet_web/live/polls_page_test.exs
       - platform/test/browser/account_agents.spec.ts
     gaps:
-      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three share its component.
+      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three use the same window.
       - WebKit is not run on the Mac.
 
   - id: claude-connector

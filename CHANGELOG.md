@@ -7809,3 +7809,35 @@ Key's, a muted or blocked Key's, its own, or a fleet where it is no Key; a
 members' room left out for a reader that is not a member; reconnect replay,
 resync past 100 and for a foreign id; replaced; pairing ended; the 201st
 feed refused; unsigned 401; every event checked against `FeedEvent`).
+
+## 2026-11-12 — Design system dfd18f87: shared confirm window, pairing motion, health field
+
+- `regent_ui` is pinned at dfd18f87354db8b7d04acbe4057ffc12b5838757, taking the
+  pin-confirm-pairing-health and forms-and-design-system rollouts together.
+  Callers drop the attributes the pin removed: the showcase swatch caption,
+  the notebooks page's and the error page's `context`. A name an agent can't
+  take now shows in the name field's own error line.
+- Every ask-first press uses the shared window: `<Regent.Structure.confirm />`
+  once in the root layout and `confirm.mjs` imported in `app.ts` before the
+  LiveSocket connects. Unpair (in the list and in an agent's window), removing
+  a wall post, ending a poll and deleting a project carry `data-confirm` with
+  `data-confirm-action` and send their event directly. Keyfleet's own
+  server-held window (`ConfirmDialog`, its stylesheet and the
+  confirm/cancel events and assigns in `AgentsPanel`, `KeyProfileLive`,
+  `PollsLive`, `WorkspaceLive` and `ShellLive`) is gone. No wallet button
+  asks first.
+- The page's grid column is `minmax(0, 1fr)`, so no page scrolls sideways at
+  320, 390 or 1280 px.
+- Pair New Agent's list of agents drops in and leaves with the motion kit
+  (`list`, `unlist`, `settle` in `hooks/motion/slides.ts`, `rest` in
+  `hooks/motion/shared.ts`, the toggle handler in `motion.ts`); a press during
+  either move counts, and with reduced motion it opens and closes at once.
+- `GET /api/v1/health` answers `migrations_applied` (true or false, 200 either
+  way, `Keyfleet.Health.migrations_applied?/0`); `/healthz` is unchanged.
+  `openapi.json` 15.3.0 → 15.4.0 and the developer docs say so. The YAML
+  contract does not describe health and is unchanged.
+
+Check: `platform/test/keyfleet/health_test.exs`, `ShellLiveTest`,
+`KeyProfileTest`, `PollsPageTest`, `WorkspacePageTest`, and the browser walks
+`pairing.spec.ts`, `pair_link.spec.ts`, `account_menu.spec.ts`,
+`account_agents.spec.ts` and `wallet_buttons.spec.ts`.

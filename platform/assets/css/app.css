@@ -224,8 +224,9 @@ input:focus-visible,
 
 /* A public page fills the screen with its footer, so the footer sits at the foot of
    the screen however short the page is, across its whole width. The page grows to
-   meet it, frame and all. */
+   meet it, frame and all. Its one column is the screen's width, so a row that
+   scrolls sideways on its own, such as the shared tabs, never widens it. */
 body:has(> .regent-footer) { display: flex; flex-direction: column; height: auto; min-height: 100dvh; }
 body:has(> .regent-footer) > :first-child { flex: 1 0 auto; }
-body:has(> .regent-footer) > [data-phx-main] { display: grid; grid-template-rows: 1fr; }
+body:has(> .regent-footer) > [data-phx-main] { display: grid; grid-template-rows: 1fr; grid-template-columns: minmax(0, 1fr); }
 .rg-panel.rg-support-panel { --color-fg: var(--support-panel-ink); --color-fg-muted: color-mix(in srgb, var(--support-panel-ink) 72%, var(--support-panel-surface)); --color-surface: var(--support-panel-surface); --color-border: color-mix(in srgb, var(--support-panel-ink) 22%, var(--support-panel-surface)); }

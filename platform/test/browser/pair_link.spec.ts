@@ -54,6 +54,24 @@ test.describe("signed in", () => {
     }
   })
 
+  // The pairing page holds the same box as the window: the picture in a low band,
+  // and nothing under it moves when an agent is chosen.
+  test("the picture sits in a low band, and choosing moves nothing under it", async ({page}) => {
+    const errors: string[] = []
+    page.on("pageerror", error => errors.push(error.message))
+    await open(page, "/pair?to=%2Fclassic%2F1")
+    const stage = box(page).locator(".rg-account__stage")
+    const steps = box(page).locator("ol")
+    const before = await steps.evaluate(list => list.getBoundingClientRect().top)
+
+    await choose(page, "Dots")
+    await expect(message(page)).toContainText(/Pairing code/)
+    const band = await stage.evaluate(stage => stage.getBoundingClientRect())
+    expect(band.height).toBeLessThanOrEqual((band.width * 9) / 16 / 2)
+    expect(await steps.evaluate(list => list.getBoundingClientRect().top)).toBe(before)
+    expect(errors).toEqual([])
+  })
+
   test("a link to another site opens plain pairing", async ({page}) => {
     await open(page, "/pair?to=%2F%2Fexample.com")
     await expect(page.locator("#pair-start")).toHaveCount(0)
