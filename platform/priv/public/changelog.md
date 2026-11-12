@@ -4,6 +4,10 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Agent Message.** The Agents page has an Agent Message button. It shows three short
+  texts to paste into your agent, for the command line, Claude and an agent in your
+  browser, so it can send our team a private message. Signed in, you can send one
+  yourself from the same window and get a receipt. Only our team reads them.
 - **Ask first.** Unpairing an agent, taking a post off your Key's wall, ending a poll,
   deleting a project, and blocking a Key or deleting a conversation in your messages now
   ask in the same window every Regent site uses, with Cancel ready first. Buying a Key and

@@ -163,6 +163,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Read site guides (about, docs, joining guide) | `/about`, `/docs`, `/skill.md` | `about`, `docs` | — | — | — (plain fetch) | no | — |
 | Early access sign-up (while closed) | `/early` form | — | — | — | — | personal data (email) | K16 |
 | Saved errors (the site's admins) | `/admin/errors` | — | — | — | — | production data | K15 |
+| Leave a private message for the site's team under a topic | Agent Message window on `/agents`, signed in | `messages_leave` | `messages_leave` | `messages_leave`, once paired | `messages leave <topic>` (next regents-cli release) | no | — |
+| Read the messages left for the team (the site's admins) | `/admin/messages` | — | — | — | — | private messages | K15 |
 
 ## Page check
 

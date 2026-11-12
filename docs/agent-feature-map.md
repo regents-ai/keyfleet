@@ -195,6 +195,17 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent acting for its person reads the closed poll's votes; while ownership is catching up every poll request answers 503 `ownership_refreshing` | `SignedAgentContractTest` "every answer a signed route gives…" | Proven (Grok Bot's poll read came back without its Key's vote) |
 | An agent with its own wallet gets the transactions for presence, proposals, votes, cancelling, carrying out, the daily split, the staking share, the REGENT purchase and claims through WebMCP (`chain_*`), the same as the command for each answers; Keyfleet sends none | `agent_tools.spec.ts` "an agent's own wallet gets the same split and claim steps…" (`chain_split`, `chain_claim` against signed HTTP on the test chain); `check_command_docs.py` (fields) | Not run (claude/webmcp-chain-tools-1029-2); protected, ships on Sean's letter |
 
+## Messages for the team
+
+| What | Proof | State |
+| --- | --- | --- |
+| A signed-in person and a paired agent with a profile each leave a private message for the site's team under a topic and get its receipt, recorded as themselves; no input names the sender; an agent with no profile is refused `profile_not_found` | `LeftMessages.LeaveTest`; `LeftMessagesApiTest` | New |
+| A message's topic, text and reply_to are bounded (lowercase words joined by hyphens, at most 40; 1 to 2,000 characters; at most 200) and a refused one keeps nothing; each sender leaves 10 an hour | `LeftMessages.LeaveTest` | New |
+| An agent's `operation_id` answers its first message again and refuses other text, another reply_to or another topic with 409 `idempotency_conflict` | `LeftMessages.LeaveTest`; `LeftMessagesApiTest` | New |
+| `POST /api/v1/messages/{topic}` and the hosted tool `messages_leave` leave a message as the signed agent, answer a retry with the first receipt and refuse bad input with 422 `invalid_message` and its details, the same through either; an unsigned request leaves nothing | `LeftMessagesApiTest`; `McpConnectorTest` "messages_leave leaves a message…" | New |
+| Only the site's admins read messages, at `/admin/messages`, newest first; anyone else, signed in or not, gets the not-found page | `LeftMessages.LeaveTest`; `LeftMessagesPagesTest` | New |
+| `/agents` has the Agent Message button; its window's three texts are the CLI, hosted MCP and WebMCP ways to leave a message under `agents`, each copied as shown; the form shows only to a signed-in person and leaves a message with its receipt | `LeftMessagesPagesTest`; `agent_message.spec.ts` | New |
+
 ## Property tests
 
 Each checks an invariant over generated inputs with `stream_data`: RC-SYNC and

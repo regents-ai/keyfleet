@@ -187,6 +187,54 @@ defmodule KeyfleetWeb.McpConnectorTest do
       end
     end
 
+    # messages_leave and its signed request (KeyfleetWeb.LeftMessagesApiTest)
+    # leave one message: the request with the tool's operation_id answers the
+    # tool's receipt, and both refuse the same input with the same words.
+    test "messages_leave leaves a message, and answers and refuses as its signed request does",
+         c do
+      pair!(account!(), c.signer.address)
+
+      {:ok, agent} =
+        Keyfleet.Agents.with_pairing(%Actors.Agent{
+          wallet_address: String.downcase(c.signer.address),
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        })
+
+      Keyfleet.Agents.ensure_profile!(%{name: "Scout", declared_harness: "test"}, actor: agent)
+      manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+
+      input = %{
+        "topic" => "agents",
+        "body" => "Hello team",
+        "operation_id" => Ecto.UUID.generate()
+      }
+
+      assert %{"isError" => false, "structuredContent" => left} =
+               result(signed_call(c, "messages_leave", input))
+
+      again = http_twin(c, manifest["messages_leave"], input)
+      assert {again.status, again.body} == {200, left}
+
+      too_long = %{
+        input
+        | "body" => String.duplicate("a", 2001),
+          "operation_id" => Ecto.UUID.generate()
+      }
+
+      http = http_twin(c, manifest["messages_leave"], too_long)
+      assert http.status == 422
+
+      assert %{"isError" => true, "content" => [%{"text" => text}]} =
+               result(signed_call(c, "messages_leave", too_long))
+
+      assert Jason.decode!(text)["error"] == http.body["error"]
+
+      assert %{"code" => "invalid_message", "details" => [%{"field" => "body"}]} =
+               http.body["error"]
+    end
+
     test "unpaired, it is refused as its signed requests are", c do
       refused = signed_mcp(c, rpc("tools/list"))
       twin = signed(c, "GET", "/api/v1/agent/profile", nil)

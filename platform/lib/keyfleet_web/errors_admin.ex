@@ -1,16 +1,17 @@
 defmodule KeyfleetWeb.ErrorsAdmin do
   @moduledoc """
-  Keeps the saved errors at /admin/errors for the site's admins: a signed-in
-  account the site's `:admins` setting names (config/config.exs). Anyone
-  else gets the site's ordinary not-found page, so the page's existence is not
-  shown either.
+  Keeps the saved errors at /admin/errors, and the messages left for the team at
+  /admin/messages, for the site's admins: a signed-in account the site's
+  `:admins` setting names (config/config.exs). Anyone else gets the site's
+  ordinary not-found page, so the page's existence is not shown either.
 
   As a plug it checks the request and sends the page's own content security
   policy, with a nonce for the one style and one script element the error
   dashboard writes into its page. As an `on_mount` hook it checks the socket the
   page connects with, then re-reads the sign-in on every navigation and press,
   the way the product shell does (`KeyfleetWeb.Live.Session`), so a sign-in
-  that ends or lapses cannot keep acting on the page.
+  that ends or lapses cannot keep acting on the page. The page acts as `:admin`,
+  the team actor `RegentAgents.Checks.Admin` checks again in each policy.
   """
 
   @behaviour Plug
@@ -51,6 +52,10 @@ defmodule KeyfleetWeb.ErrorsAdmin do
 
         {:cont,
          socket
+         |> Phoenix.Component.assign(:admin, %RegentAgents.Person{
+           privy_user_id: account.privy_user_id,
+           role: :admin
+         })
          |> attach_hook(:errors_admin_params, :handle_params, fn _params, _uri, socket ->
            recheck.(socket)
          end)

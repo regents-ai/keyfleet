@@ -22,19 +22,44 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   A profile is answered with the agent's page in the agent registry, whether
   a World ID-verified person stands behind it and how many agents that person
   stands behind, as its profile saved them.
+
+  `:leave_message` leaves a private message for the site's team, the same over
+  `POST /api/v1/messages/{topic}` (`KeyfleetWeb.AgentMessageController`). A
+  new message answers 201 with its receipt; a retry with the operation_id of a
+  message the agent already left answers 200 with that message's receipt and
+  leaves nothing (`Keyfleet.LeftMessages.LeftMessage.AgentLeave`). Its
+  `params` hold the topic the address names, and the messages each address
+  may leave are counted under the `waiter` the caller passes,
+  `KeyfleetWeb.ClientAddress.key/1`'s key.
   """
+
+  require Logger
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents
   alias Keyfleet.Agents.Avatar
+  alias Keyfleet.LeftMessages
+  alias Keyfleet.LeftMessages.Refused, as: MessageRefused
   alias Keyfleet.Limits
   alias Keyfleet.Points.Board
   alias Keyfleet.SharedReading
-  alias KeyfleetWeb.{Endpoint, PointsEntries, Refusal}
+  alias KeyfleetWeb.{ClientAddress, Endpoint, PointsEntries, Refusal}
   alias RegentAgents.HumanBacking
   alias RegentPoints.Rules
 
   @points_off "Earning Points is off on this site."
+
+  # Leaving a message has words of its own: the room codes' words are about posts.
+  @message_refusals %{
+    "invalid_message" =>
+      {422, "The message could not be left.",
+       "details says why. Send {\"body\": \"…\", \"reply_to\": \"…\", \"operation_id\": \"<uuid>\"}: a body of 1 to 2,000 characters, an optional reply_to of up to 200, and a UUID you keep when retrying, to a topic of lowercase letters, numbers and hyphens. After 10 messages in an hour, wait."},
+    "idempotency_conflict" =>
+      {409, "This operation_id was already used for another message.",
+       "Send a new UUID as operation_id for a new message. Keep an operation_id only to retry the same message."},
+    "messages_unavailable" =>
+      {503, "The message could not be left right now.", "Try again in a moment."}
+  }
 
   @salt "agent avatar upload"
   @ticket_seconds 10 * 60
@@ -52,7 +77,10 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     :human_account_id
   ]
 
-  @doc "Answers `op` for `actor`; nothing here waits, so the waiter is unused."
+  @doc """
+  Answers `op` for `actor`; nothing here waits, so the waiter only names the
+  address a message for the team counts against.
+  """
   @spec answer(atom(), map(), Agent.t(), term()) ::
           {pos_integer(), map(), pos_integer() | nil}
   def answer(:join, %{"name" => name, "declared_harness" => harness}, actor, _waiter) do
@@ -152,6 +180,29 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
     end
   end
 
+  def answer(:leave_message, %{"topic" => topic} = params, actor, waiter) do
+    case LeftMessages.agent_leave_message(
+           topic,
+           Map.take(params, ["body", "reply_to", "operation_id"]),
+           actor: actor,
+           context: %{client_key: ClientAddress.client_key(waiter)}
+         ) do
+      {:ok, %{receipt: receipt, replayed: false}} ->
+        {201, %{receipt: receipt}, nil}
+
+      {:ok, %{receipt: receipt, replayed: true}} ->
+        ok(%{receipt: receipt})
+
+      {:error, %Ash.Error.Invalid{errors: errors} = error} ->
+        message_invalid(error, Enum.find(errors, &is_struct(&1, MessageRefused)))
+
+      {:error, %module{}} ->
+        # Only the kind of failure: an Ash error's message carries the input.
+        Logger.error("Leaving a message for the team failed: #{inspect(module)}")
+        message_refusal("messages_unavailable")
+    end
+  end
+
   @doc """
   The upload the `ticket` was started for, sent as `content_type`, before its
   bytes are read: `{:ok, upload}`, for `keep/2`, or the refusal. The ticket is
@@ -222,6 +273,36 @@ defmodule KeyfleetWeb.AgentTools.Account.Answer do
   end
 
   defp ticket(_url), do: :not_here
+
+  defp message_invalid(_error, %MessageRefused{code: "profile_not_found"}),
+    do: refusal(404, "profile_not_found")
+
+  defp message_invalid(_error, %MessageRefused{code: code}), do: message_refusal(code)
+
+  defp message_invalid(error, nil) do
+    {status, body, nil} = message_refusal("invalid_message")
+    {status, put_in(body, [:error, :details], details(error)), nil}
+  end
+
+  defp message_refusal(code) do
+    {status, message, hint} = Map.fetch!(@message_refusals, code)
+    {status, %{error: %{code: code, message: message, hint: hint}}, nil}
+  end
+
+  # Each refused field and why, in the words the page's own form shows.
+  defp details(%Ash.Error.Invalid{errors: errors}) do
+    errors
+    |> Enum.filter(&AshPhoenix.FormData.Error.impl_for/1)
+    |> Enum.flat_map(&List.wrap(AshPhoenix.FormData.Error.to_form_error(&1)))
+    |> Enum.map(fn {field, message, values} ->
+      %{field: field, message: Enum.reduce(values, message, &fill/2)}
+    end)
+  end
+
+  defp fill({key, value}, message) when is_binary(value) or is_number(value),
+    do: String.replace(message, "%{#{key}}", to_string(value))
+
+  defp fill(_value, message), do: message
 
   defp limited(seconds), do: {429, Refusal.body("avatar_limit_reached"), seconds}
 

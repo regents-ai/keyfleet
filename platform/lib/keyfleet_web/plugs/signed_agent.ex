@@ -17,6 +17,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
+  # A message left for the site's team (`KeyfleetWeb.AgentMessageController`).
+  @message_path ~r"\A/api/v1/messages/[^/]+\z"
   @preview_path "/api/v1/agent/preview"
   # An agent's picture: a signed start names the upload, whose bytes then go
   # to the address it answers, outside this plug (`AgentAvatarController`).
@@ -130,6 +132,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
   @body_fields [
+    {@message_path, {~w(body operation_id), ~w(reply_to)}},
     {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes mentions max_bytes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@project_start_path, {~w(as_key name title), []}},
@@ -179,6 +182,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # the 2 KiB beside it. Inside the broker's 64 KiB envelope each such pair
   # grows to fourteen bytes, which still fits.
   @send_max_body 4_000 * 12 + 2 * 1024
+  @message_max_body 2_000 * 12 + 2 * 1024
   # A workspace write holds a few thousand characters of text at most, and
   # fits the broker's envelope the same way a post does.
   @graph_write_max_body @send_max_body
@@ -308,15 +312,17 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     if agent_request?(conn), do: authenticate(conn), else: conn
   end
 
-  # A paired agent's Points read sits at /api/v1/account, and its live feed at
-  # /api/v1/feed, the addresses every Regent site gives them; everything else an
-  # agent signs is under /api/v1/agent.
+  # A paired agent's Points read sits at /api/v1/account, its live feed at
+  # /api/v1/feed and the messages it leaves for the site's team at
+  # /api/v1/messages, the addresses every Regent site gives them; everything
+  # else an agent signs is under /api/v1/agent.
   defp agent_request?(conn),
     do:
       Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) in [
         ["api", "v1", "agent"],
         ["api", "v1", "account"],
-        ["api", "v1", "feed"]
+        ["api", "v1", "feed"],
+        ["api", "v1", "messages"]
       ]
 
   # An address no operation has, a method its operation doesn't take and a
@@ -722,6 +728,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("POST", path) do
     Enum.any?(
       [
+        @message_path,
         @mute_path,
         @checkpoint_save_path,
         @create_room_path,
@@ -780,7 +787,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       send?(path) -> @send_max_body
       Regex.match?(@checkpoint_save_path, path) -> @checkpoint_max_body
       catch_up?(path) -> @sync_max_body
-      limit = poll_body_limit(path) -> limit
+      limit = form_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
       fleet_op(path) in [:notebook_create, :file_write] -> @notebook_write_max_body
       graph_op(path) in @graph_writes -> @graph_write_max_body
@@ -797,8 +804,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A sync, and catching up on direct messages alone.
   defp catch_up?(path), do: Regex.match?(@sync_path, path) or dm_op(path) == "changes"
 
-  defp poll_body_limit(path) do
+  # A message for the site's team, and starting or voting in a poll.
+  defp form_body_limit(path) do
     cond do
+      Regex.match?(@message_path, path) -> @message_max_body
       Regex.match?(@poll_start_path, path) -> @poll_start_max_body
       Regex.match?(@poll_vote_path, path) -> @poll_vote_max_body
       true -> nil
@@ -843,6 +852,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   def check_body(path, params) do
+    if Regex.match?(@message_path, path),
+      do: check_message_body(params),
+      else: check_op_body(path, params)
+  end
+
+  defp check_op_body(path, params) do
     cond do
       Enum.any?(@empty_body_paths, &Regex.match?(&1, path)) -> admit(params == %{})
       op = fleet_op(path) -> check_fleet_body(op, params)
@@ -1669,6 +1684,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp admit(true), do: :ok
   defp admit(false), do: :invalid
+
+  # A message's text, the key it is left under once and where to answer it;
+  # the message itself checks their lengths and spelling.
+  defp check_message_body(params) do
+    admit(
+      Map.keys(params) -- ~w(body operation_id reply_to) == [] and
+        is_binary(params["body"]) and is_binary(params["operation_id"]) and
+        (not Map.has_key?(params, "reply_to") or is_binary(params["reply_to"]))
+    )
+  end
 
   defp in_range(true), do: :ok
   defp in_range(false), do: :out_of_range

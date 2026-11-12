@@ -184,6 +184,7 @@ config :keyfleet,
     Keyfleet.Notebooks,
     Keyfleet.Code,
     Keyfleet.Projects,
+    Keyfleet.LeftMessages,
     KeyfleetWeb.AgentTools
   ],
   generators: [timestamp_type: :utc_datetime]
@@ -230,7 +231,10 @@ config :keyfleet, :limits,
   # A person's presses of the Treasury's refresh: one every 30 seconds (Sean, 20 October 2026).
   treasury_refresh: [limit: 1, window_seconds: 30],
   # A person's reads of their wallets on Base, such as the Points page's NFT bonus.
-  wallet_read: [limit: 30, window_seconds: 60]
+  wallet_read: [limit: 30, window_seconds: 60],
+  # Messages left for the site's team, by each sender and by each address.
+  message: [limit: 10, window_seconds: 3600],
+  message_address: [limit: 30, window_seconds: 3600]
 
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false

@@ -60,6 +60,8 @@ defmodule KeyfleetWeb.Router do
   pipeline :public_documents do
     plug :accepts, ["html"]
     plug :fetch_session
+    # Read only, for the message form a page may hold (`AgentMessage`).
+    plug :enforce_session_authority
     plug KeyfleetWeb.Plugs.Theme
     plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
     plug :protect_from_forgery
@@ -116,6 +118,13 @@ defmodule KeyfleetWeb.Router do
     plug KeyfleetWeb.ErrorsAdmin
   end
 
+  # The team's own pages after the admin check above: the site's page frame.
+  pipeline :admin_page do
+    plug :fetch_live_flash
+    plug KeyfleetWeb.Plugs.Theme
+    plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
+  end
+
   scope "/admin" do
     pipe_through :errors_admin
 
@@ -123,6 +132,17 @@ defmodule KeyfleetWeb.Router do
       on_mount: [KeyfleetWeb.Live.LaunchGateHook, KeyfleetWeb.ErrorsAdmin],
       csp_nonce_assign_key: %{script: :csp_nonce, style: :csp_nonce}
     )
+  end
+
+  # The messages people and agents leave for the team, behind the same check.
+  scope "/admin", KeyfleetWeb do
+    pipe_through [:errors_admin, :admin_page]
+
+    live_session :admin,
+      session: {KeyfleetWeb.Live.Session, :render_context, []},
+      on_mount: [KeyfleetWeb.Live.LaunchGateHook, KeyfleetWeb.ErrorsAdmin] do
+      live "/messages", AdminMessagesLive, :index
+    end
   end
 
   if Application.compile_env(:keyfleet, :local_showcase, false) do
@@ -344,6 +364,7 @@ defmodule KeyfleetWeb.Router do
                   "as this site's /agents/claude guide describes. " <>
                   "An agent that signs each request with its own SIWA key, as its signed requests are, " <>
                   "works here as itself once paired, with the same fleet tools and no identity tools. " <>
+                  "Leave a private message for the site's team with messages_leave. " <>
                   "Never ask for a password, a private key or a wallet signature.",
               list_ttl_ms: 0,
               read_ttl_ms: 0,
@@ -375,6 +396,13 @@ defmodule KeyfleetWeb.Router do
   scope "/api/v1", KeyfleetWeb do
     pipe_through :agent_feed
     get "/feed", FeedController, :show
+  end
+
+  # A paired agent's private message for the site's team, at the address every
+  # Regent site gives it. Each request is signed (`KeyfleetWeb.Plugs.SignedAgent`).
+  scope "/api/v1", KeyfleetWeb do
+    pipe_through :api
+    post "/messages/:topic", AgentMessageController, :leave
   end
 
   scope "/api/v1/agent", KeyfleetWeb do

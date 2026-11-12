@@ -22,6 +22,7 @@ import {
   shellDestinationChanged,
   type ShellState,
 } from "./shell_state"
+import {installAgentMessage} from "./agent_message"
 import {installCopyButtons} from "./copy_buttons"
 import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
@@ -397,6 +398,7 @@ liveSocket.connect()
 installAccountAuthLazyLoader()
 installCrossTabCsrf()
 installCopyButtons()
+installAgentMessage()
 installPageProgress()
 installVitals()
 installLaunchSteps()

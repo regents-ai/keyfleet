@@ -1483,3 +1483,51 @@ features:
       - A reconnect replays by posting time; a post whose transaction commits after a later post's could in principle be passed over, as with the sync's mentions cursor. Not seen in tests, not proven against.
       - regents-cli has no feed command for Keyfleet (cli/commands.json has no entry); hosted MCP, the connector and WebMCP do not carry a feed by design.
       - Not yet run by a real agent.
+
+  - id: agent-message
+    what: >-
+      An agent, or a signed-in person, leaves the site's team a private
+      message under a topic a page names, such as agents on the Agents page,
+      whose Agent Message button shows the CLI, hosted MCP and WebMCP ways to
+      send one. The sender is who signed in; an agent's operation_id answers
+      its first message again; 10 an hour a sender. Only the site's admins
+      read them, at /admin/messages.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/left_messages.ex
+      - platform/lib/keyfleet/left_messages/left_message.ex
+      - platform/lib/keyfleet/left_messages/left_message/agent_leave.ex
+      - platform/lib/keyfleet/left_messages/left_message/set_sender.ex
+      - platform/lib/keyfleet/left_messages/left_message/limit_messages.ex
+      - platform/lib/keyfleet/left_messages/refused.ex
+      - platform/lib/keyfleet_web/agent_tools/account.ex
+      - platform/lib/keyfleet_web/agent_tools/account/answer.ex
+      - platform/lib/keyfleet_web/controllers/agent_message_controller.ex
+      - platform/lib/keyfleet_web/components/agent_message.ex
+      - platform/lib/keyfleet_web/components/agent_message/form.ex
+      - platform/lib/keyfleet_web/live/agent_message_live.ex
+      - platform/lib/keyfleet_web/live/admin_messages_live.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/assets/css/components/agent_message.css
+      - platform/assets/js/agent_message.ts
+      - platform/priv/repo/migrations/20261112090918_add_left_messages.exs
+      - platform/priv/tool_manifest.json
+      - platform/contracts/api-contract.openapiv3.yaml
+      - cli/commands.json
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+    entry:
+      - route: GET /agents
+      - route: POST /api/v1/messages/{topic}
+      - live: KeyfleetWeb.AdminMessagesLive
+    proofs:
+      - platform/test/keyfleet/left_messages/leave_test.exs
+      - platform/test/keyfleet_web/left_messages_api_test.exs
+      - platform/test/keyfleet_web/left_messages_pages_test.exs
+      - platform/test/keyfleet_web/mcp_connector_test.exs
+      - platform/test/browser/agent_message.spec.ts
+    gaps:
+      - regents-cli does not carry messages leave until its next release (cli/commands.json marks it pending).
+      - Not yet run by a real agent.

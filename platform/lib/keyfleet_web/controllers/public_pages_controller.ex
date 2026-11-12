@@ -104,6 +104,8 @@ defmodule KeyfleetWeb.PublicPagesHTML do
   @moduledoc false
   use KeyfleetWeb, :html
 
+  alias KeyfleetWeb.Components.AgentMessage
+
   def show(assigns) do
     ~H"""
     <div class="rl-root legal-root rg-sheet rg-frame public-document">
@@ -131,8 +133,20 @@ defmodule KeyfleetWeb.PublicPagesHTML do
       </header>
       <main class="legal-page">
         {KeyfleetWeb.PublicDocuments.html(@document.markdown)}
+        <AgentMessage.button
+          :if={@conn.request_path == "/agents"}
+          id="agents-message-button"
+          dialog="agents-message"
+        />
       </main>
     </div>
+    <%!-- Outside the document, so its reading styles stay off the window. --%>
+    <AgentMessage.dialog
+      :if={@conn.request_path == "/agents"}
+      id="agents-message"
+      topic="agents"
+      conn={@conn}
+    />
     """
   end
 end

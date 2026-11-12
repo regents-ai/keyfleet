@@ -26,6 +26,25 @@ defmodule KeyfleetWeb.ClientAddress do
       else: {normalized(conn.remote_ip), :peer}
   end
 
+  @doc """
+  The key an address's messages for the team count against
+  (`Keyfleet.LeftMessages.LeftMessage.LimitMessages`): the limiter key `key/1`
+  gave, keyed-hashed, so it can travel in a signed page token without naming
+  the address. A page keeps the key of the request that drew it.
+  """
+  @spec client_key({:inet.ip_address(), atom()}) :: String.t()
+  def client_key({address, _source}) do
+    secret =
+      :keyfleet
+      |> Application.fetch_env!(KeyfleetWeb.Endpoint)
+      |> Keyword.fetch!(:secret_key_base)
+
+    :hmac
+    |> :crypto.mac(:sha256, secret, :erlang.term_to_binary(address))
+    |> binary_part(0, 16)
+    |> Base.url_encode64(padding: false)
+  end
+
   defp fly_client(conn) do
     with [value] <- Plug.Conn.get_req_header(conn, "fly-client-ip"),
          {:ok, address} <- value |> :binary.bin_to_list() |> :inet.parse_strict_address() do

@@ -7847,3 +7847,49 @@ Check: `platform/test/keyfleet/health_test.exs`, `ShellLiveTest`,
 `KeyProfileTest`, `PollsPageTest`, `WorkspacePageTest`, `DmsPageTest`, and the browser walks
 `pairing.spec.ts`, `pair_link.spec.ts`, `account_menu.spec.ts`,
 `account_agents.spec.ts` and `wallet_buttons.spec.ts`.
+
+## 2026-11-12 — Agent Message: agents leave the team a private message
+
+Keyfleet's own version of the template's Agent Message (template merge 9dc7dd1c,
+`rollouts/2026-11-12-agent-message-and-feed.md`, "Agent Message").
+
+- An "Agent Message" button on `/agents` opens a window with three paste-ready
+  texts, CLI, hosted MCP and WebMCP, each with its copy button, that let a visitor's
+  agent leave a private message for the site's team under the topic `agents`. A
+  signed-in person leaves one from the same window and sees its receipt. Any page
+  places it with its own topic (`KeyfleetWeb.Components.AgentMessage`: `button/1`,
+  `dialog/1`, `texts/1`; a plain page passes `conn`, a live page `account`, `lease`
+  and `client_key`).
+- `Keyfleet.LeftMessages` (`LeftMessage`: `leave`, `agent_leave`, `newest`). The
+  sender is the actor (`SetSender`): a person by their name or short wallet, an agent
+  by its profile, refused 404 `profile_not_found` with none. Every signed request on
+  Keyfleet needs a pairing, so an agent leaves one once paired. An agent's
+  `operation_id` is a column under the `one_per_operation` identity: a retry answers
+  the first receipt, other text 409 `idempotency_conflict`. Allowances `:message`
+  (10 an hour a sender) and `:message_address` (30 an hour a network). Only the
+  site's admins read them (`RegentAgents.Checks.Admin`).
+- Agents leave one with `messages leave <topic>` (`cli/commands.json`, pending the
+  next regents-cli release), `POST /api/v1/messages/{topic}` (`leaveMessage`; both
+  contract copies 29.5.0 → 29.6.0) or the tool `messages_leave`, on the hosted MCP
+  server (`KeyfleetWeb.AgentTools.Account` `:leave_message`, which takes its input as
+  sent so it refuses exactly as the request does) and in the browser
+  (`platform/priv/tool_manifest.json`).
+- `/admin/messages` (`AdminMessagesLive`), behind the `/admin/errors` gate
+  (`KeyfleetWeb.ErrorsAdmin`, which now assigns the page's `:admin` actor), newest
+  first, 50 a page. The admin page shows no agent wallet: the agent profile's own
+  policy keeps it.
+- Sign-in: the live session skips its page-change recheck for a view drawn inside a
+  plain page (`KeyfleetWeb.Live.Session`), and the `public_documents` pipeline reads
+  the session (`enforce_session_authority`), so the window's form knows who is signed
+  in.
+- One migration, `20261112090918_add_left_messages.exs`, starts with `SET LOCAL
+  lock_timeout = '5s'` and only creates the empty `left_messages` table, its sender
+  check, its indexes and foreign keys; it has a `down`. Nothing existing changes.
+- The compile-connected budget is 130 (was 129): the new domain adds its one edge to
+  its resource.
+
+Check: `platform/test/keyfleet/left_messages/leave_test.exs`,
+`platform/test/keyfleet_web/left_messages_api_test.exs`,
+`platform/test/keyfleet_web/left_messages_pages_test.exs`, a `messages_leave` test in
+`platform/test/keyfleet_web/mcp_connector_test.exs`, and
+`platform/test/browser/agent_message.spec.ts`.

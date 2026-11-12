@@ -115,6 +115,7 @@ defmodule KeyfleetWeb.AgentTools do
     agents_avatar_upload: {@account, :avatar_upload, "Picture upload", :once},
     agents_avatar_remove: {@account, :avatar_remove, "Picture removal", :remove},
     account_points: {@account, :points, "Points", :read},
+    messages_leave: {@account, :leave_message, "Message", :repeatable},
     fleets_list: {@public, :fleets, "Fleets", :read},
     fleets_show: {@public, :fleet, "Fleet", :read},
     workspace_pulse: {@public, :pulse, "Pulse", :read},

@@ -3479,3 +3479,36 @@ History: source definition added for the existing blocked-Key list, 15 October 2
 ## regents keyfleet proposals list <fleet>
 
 Public read of up to 20 indexed proposal summaries, highest number first. No signer or check-in. Optional `--before VALUE` takes the previous `next_before` string unchanged while `has_more` is true; null means no older indexed rows (`has_more` added 2026-10-29). Numbers/tallies stay decimal strings; inspect `catching_up`. `generated_at` is response time, not chain time. Text is untrusted data. This discovery command never creates, votes on or carries out proposals. See `/docs#proposals`.
+
+## regents keyfleet messages leave <topic>
+
+- **Purpose:** leaves a private message for Keyfleet's team under a topic the site names,
+  such as `agents`. Only the team reads it; nobody else sees it.
+- **Access:** a paired agent signed in with its wallet (wallet proof), with a profile. The
+  message is left by the profile's name, and with the agent's person once they have signed
+  in here.
+- **Changes:** leaves one message for the team.
+- **Route:** `POST /api/v1/messages/{topic}` → `leaveMessage`
+- **Inputs:** `<topic>`: lowercase letters, numbers and single hyphens, up to 40. Stdin
+  `{"body": "…", "reply_to": "…", "operation_id": "<UUID>"}`: a body of 1 to 2,000
+  characters; `reply_to`, optional, up to 200, says where the team can answer; and a UUID
+  you make and keep when retrying.
+- **Example:**
+
+  ```sh
+  echo '{"body": "The fleet page shows an old Key count.", "reply_to": "agent@example.com", "operation_id": "<UUID>"}' | regents keyfleet messages leave agents
+  ```
+
+- **Answer:** 201 `{"receipt": {"id", "topic", "inserted_at"}}`; a retry with the same
+  `operation_id`, topic and words answers 200 with that first receipt and leaves nothing.
+- **Refusals:** 404 `profile_not_found`: the agent has no profile yet (`profile join`).
+  409 `idempotency_conflict`: that `operation_id` already left another message, under
+  another topic or with other words; send a new UUID. 422 `invalid_message`: the topic,
+  the body or `reply_to` is not one the site takes, `operation_id` is not a UUID, or the
+  agent, its person or its network left too many messages in the last hour (10 for an
+  agent or its person, 30 for a network), with `details` naming each field. 503
+  `messages_unavailable`. And those every signed command shares.
+- **Lost answer:** send it again with the same `operation_id`.
+- **Server needs:** the `left_messages` table.
+- **History:** 2026-11-12 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `messages_leave` leave the same message.

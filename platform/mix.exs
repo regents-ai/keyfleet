@@ -254,8 +254,11 @@ defmodule Keyfleet.MixProject do
         # with that Run beside its Read. Ended draw waits add one: the
         # KeyRevealExpiry record, with its domain. Agents on their person's Keys
         # add one: the AgentKey record, with its domain; its policies read the
-        # actor in expressions, so they add no check.
-        "xref graph --label compile-connected --fail-above 129",
+        # actor in expressions, so they add no check. Messages for the team add
+        # one: the LeftMessage record, with its domain; its agent tool sits on
+        # the Account record and calls its action from a function, so they add
+        # no more.
+        "xref graph --label compile-connected --fail-above 130",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -97,9 +97,7 @@ defmodule KeyfleetWeb.Live.Session do
     |> assign_principal(account)
     # Opening a fleet's notebooks names the sign-in they hang on.
     |> assign(session_lineage: lineage, session_lease: lease)
-    |> attach_hook(:session_authority_params, :handle_params, fn _params, _uri, socket ->
-      recheck(socket, lease, &redirect(&1, to: @public_root))
-    end)
+    |> recheck_navigation(lease)
     |> attach_hook(:session_authority_event, :handle_event, fn _event, _params, socket ->
       recheck(socket, lease, & &1)
     end)
@@ -125,6 +123,17 @@ defmodule KeyfleetWeb.Live.Session do
     end)
     |> attach_hook(:session_authority_async, :handle_async, fn _name, _result, socket ->
       recheck(socket, lease, & &1)
+    end)
+  end
+
+  # A view drawn inside a plain page (`live_render(@conn, …)`), such as the
+  # message form (`KeyfleetWeb.AgentMessageLive`), is not mounted at the router
+  # and never navigates; its presses are still rechecked.
+  defp recheck_navigation(%{router: nil} = socket, _lease), do: socket
+
+  defp recheck_navigation(socket, lease) do
+    attach_hook(socket, :session_authority_params, :handle_params, fn _params, _uri, socket ->
+      recheck(socket, lease, &redirect(&1, to: @public_root))
     end)
   end
 
