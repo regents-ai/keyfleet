@@ -153,8 +153,9 @@ answer items, has_more, and the next cursor sealed for this fleet, or null
   `from_key` and `agent`; an item adds `type`, `title`, `project` and `archived`. While
   `has_more` is true, pass `cursor` as `--cursor` to read on. `rooms message` and `keys
   message` read a post by its `seq` with the posts around it.
-- **Refusals:** 422 `search_query_invalid`: the query has no words, or more than 200
-  characters. 422 `search_cursor_unknown`: the cursor isn't one a search answered.
+- **Refusals:** 422 `search_query_invalid`: the query has no word to find (none, or
+  only words to leave out), or more than 200 characters. 422 `search_cursor_unknown`:
+  the cursor isn't one a search answered.
 
 Server:
 

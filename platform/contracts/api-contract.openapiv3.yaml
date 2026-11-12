@@ -1278,7 +1278,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
-            search_query_invalid: the query has no words, or more than 200 characters.
+            search_query_invalid: the query has no word to find (none, or only words to leave out), or more than 200 characters.
             search_cursor_unknown: the cursor isn't one a search answered; leave it out to read
             the newest matches. out_of_range: limit is outside 1 to 50. invalid_request: the
             body doesn't fit the operation; the hint names the fields it takes.

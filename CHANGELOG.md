@@ -7384,3 +7384,14 @@ the full suite passes but for the tests that need the graph host or IPv6,
 which fail the same way on main in this container. Browser walk `fleet_search.spec.ts` (chain config) is new and not run yet.
 Overlap: the agent-keys branch changes which Keys an agent holds; direct
 messages in a search follow that rule through `KeyHolder.held/2` unchanged.
+
+## 2026-11-12 — A refused search asks for a word to find
+
+Before: a search made only of words to leave out, such as `-zz`, or with a
+NUL byte, showed "Try fewer words", which is the wrong advice.
+After: the page says "Search for at least one word, up to 200 characters.",
+and the agent guide, the command docs and the API contract describe the
+refusal as a query with no word to find (none, or only words to leave out),
+or more than 200 characters. Nothing else changes.
+
+Check: `make check-change`; read live at 390 and 1280 on `/classic/1/search?q=-zz`.

@@ -96,7 +96,7 @@ defmodule KeyfleetWeb.SearchLive do
           :if={@search.state == :refused}
           id="search-refused"
           class="kf-empty"
-          title={"Try fewer words, up to #{Search.max_query()} characters."}
+          title={"Search for at least one word, up to #{Search.max_query()} characters."}
         />
 
         <Regent.Primitives.empty_state
