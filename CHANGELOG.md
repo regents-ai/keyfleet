@@ -8282,8 +8282,7 @@ focus hasn't moved since its first try. Landing removed the `sea-lifted`
 class, which LiveView applies a frame later, so the first try met a page
 still hidden; the class then hid the bar holding the focused button, the
 browser dropped focus to the page, and the retry never ran. Keyboard and
-screen reader users were left on nothing; with reduced motion, lifting the
-page could lose focus the same way.
+screen reader users were left on nothing, with reduced motion too.
 
 - The lifted state is the body's `data-sea-lifted` attribute, which
   `JS.set_attribute` and `JS.remove_attribute` set at once, so the button
@@ -8292,5 +8291,6 @@ page could lose focus the same way.
   hook (Escape, and landing on navigation) and `pages/harbour.css` use it;
   the class is gone.
 
-Check: `sea_lift.spec.ts` passes, and passes with reduced motion (checked
-once by hand, not kept as a walk).
+Check: `sea_lift.spec.ts` passes, and passes with reduced motion; before
+the change it failed at the same step both ways (reduced motion checked once
+by hand, not kept as a walk).
