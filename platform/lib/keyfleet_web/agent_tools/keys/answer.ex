@@ -98,7 +98,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
       nil -> refusal(404, "fleet_unknown")
       {:error, :invalid_token_id} -> refusal(422, "invalid_request")
       {:error, %Ash.Error.Forbidden{}} -> refuse_holder(fleet_id)
-      {:error, %Ash.Error.Invalid{}} -> refusal(404, "wall_post_unknown")
+      {:error, error} -> invalid(error, 404, "wall_post_unknown")
     end
   end
 
@@ -111,7 +111,7 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
     else
       nil -> refusal(404, "fleet_unknown")
       {:error, %Ash.Error.Forbidden{}} -> refusal(403, "person_not_here")
-      {:error, %Ash.Error.Invalid{}} -> refusal(409, "key_not_held")
+      {:error, error} -> invalid(error, 409, "key_not_held")
     end
   end
 
@@ -155,6 +155,14 @@ defmodule KeyfleetWeb.AgentTools.Keys.Answer do
 
   defp ok(body), do: {200, body, nil}
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
+
+  # An agent unpaired while its write was on its way is told so; any other
+  # invalid write is refused as `code`.
+  defp invalid(%Ash.Error.Invalid{} = error, status, code) do
+    if Keyfleet.Agents.unpaired?(error),
+      do: refusal(403, "agent_not_paired"),
+      else: refusal(status, code)
+  end
 
   # Only whoever acts as the Key now takes a post off its wall, and nobody does
   # while the fleet's Key ownership is being read.

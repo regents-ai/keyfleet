@@ -1663,6 +1663,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, twin, "POST", @poll_vote, at, %{"choice" => "Right door"}, 409).body ==
              refused("vote_conflict")
 
+    # A shard's agent votes only while the Key's owner has agent voting on.
+    sharer = new_signer()
+    ChainHelpers.issue_shard!(@fleet, 3, sharer.address)
+    agent_voting_off!(3)
+
+    assert answer(c, sharer, "POST", @poll_vote, at, vote, 403).body ==
+             refused("agent_voting_off")
+
     answer(c, second, "POST", @poll_vote, at, %{"choice" => "Right door"}, 201)
 
     # Votes stay hidden until the poll closes.
@@ -1689,6 +1697,25 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # and, the poll closed, every vote (Grok Bot, 19 October 2026).
     assert %{"my_vote" => nil, "votes" => [_left, _right]} =
              answer(c, person_signer(5), "GET", @poll, at, nil, 200).body
+  end
+
+  # The Key's owner turns its agents' voting off, in the ownership it is in.
+  defp agent_voting_off!(token_id) do
+    %{ownership_epoch: epoch} = Keys.current_key!(@fleet, token_id)
+
+    Keys.record_agent_voting!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        allowed: false,
+        ownership_epoch: epoch,
+        block_number: 30,
+        block_hash: "0x" <> String.duplicate("b", 64),
+        transaction_hash: "0x" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
   end
 
   # An agent holding Key 4, which took no part.

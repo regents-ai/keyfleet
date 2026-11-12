@@ -7,6 +7,7 @@ defmodule Keyfleet.PollsTest do
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
+  alias Keyfleet.Polls.Errors.AgentVotingOffError
   alias Keyfleet.Repo
 
   @fleet "fibonacci_syndicate"
@@ -120,7 +121,7 @@ defmodule Keyfleet.PollsTest do
     end
 
     agent_voting!(2, false, 1)
-    assert {:error, %Ash.Error.Forbidden{}} = vote.()
+    assert {:error, %Ash.Error.Forbidden{errors: [%AgentVotingOffError{token_id: 2}]}} = vote.()
 
     agent_voting!(2, true, 2)
     assert {:ok, %{token_id: 2, wallet: voted_by}} = vote.()

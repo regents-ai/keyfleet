@@ -77,11 +77,16 @@ defmodule Keyfleet.Agents do
   it read, `expected_revision` (0 when it has none): `{:ok, checkpoint}` at
   the next revision, or `{:stale, current}` with the checkpoint as it is now
   (nil for none) when that wasn't the revision kept, and nothing is saved.
+  An agent unpaired while the save was on its way is refused with that
+  error (`unpaired?/1`).
   """
   def save_checkpoint(actor, fleet_id, 0, state) do
     case start_checkpoint(fleet_id, state, actor: actor) do
-      {:ok, checkpoint} -> {:ok, checkpoint}
-      {:error, _error} = refused -> stale_or(refused, actor, fleet_id)
+      {:ok, checkpoint} ->
+        {:ok, checkpoint}
+
+      {:error, error} = refused ->
+        if unpaired?(error), do: refused, else: stale_or(refused, actor, fleet_id)
     end
   end
 
@@ -221,6 +226,15 @@ defmodule Keyfleet.Agents do
         nil
     end
   end
+
+  @doc """
+  Whether `error` refused an agent's write because its pairing ended while
+  the write was on its way (`RegentAgents.RequirePairing`, which names it in
+  words only).
+  """
+  def unpaired?(%{errors: errors}) when is_list(errors), do: Enum.any?(errors, &unpaired?/1)
+  def unpaired?(%Ash.Error.Changes.InvalidChanges{message: "active pairing required"}), do: true
+  def unpaired?(_error), do: false
 
   @doc "Resolve current delegation from the shared pairing authority."
   def with_pairing(%Keyfleet.Actors.Agent{} = agent) do

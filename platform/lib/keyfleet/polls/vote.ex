@@ -58,6 +58,7 @@ defmodule Keyfleet.Polls.Vote do
     create :cast do
       change Keyfleet.Agents.Changes.RecordAuthority
       change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      validate Keyfleet.Polls.Validations.AgentVoting, before_action?: true
       accept [:choice, :reason]
       transaction? true
 
@@ -107,7 +108,7 @@ defmodule Keyfleet.Polls.Vote do
 
   policies do
     policy action(:cast) do
-      authorize_if {Keyfleet.Polls.Checks.Standing, role: :voter}
+      authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
     end
 
     policy action([:in_poll, :mine]) do

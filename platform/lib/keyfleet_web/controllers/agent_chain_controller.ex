@@ -23,7 +23,7 @@ defmodule KeyfleetWeb.AgentChainController do
   now, or past the wallet's allowance, are left unsaved and the steps are still
   answered, as a person's Propose press goes ahead without them. A wallet that
   may not vote the Key it names can't make the proposal, so its words are not
-  saved.
+  saved. An agent unpaired while its request was on its way is refused.
   """
   use KeyfleetWeb, :controller
 
@@ -51,9 +51,8 @@ defmodule KeyfleetWeb.AgentChainController do
 
     answer(conn, fleet_id, :propose, %{inputs: inputs}, fn built ->
       if built.figures.governs?,
-        do: keep_words(fleet_id, inputs["text"], conn.assigns.agent_actor)
-
-      built
+        do: keep_words(built, fleet_id, inputs["text"], conn.assigns.agent_actor),
+        else: built
     end)
   end
 
@@ -145,7 +144,7 @@ defmodule KeyfleetWeb.AgentChainController do
         )
 
       case built.problem do
-        nil -> json(conn, AgentChainJSON.answer(flow, fleet, shape.(built)))
+        nil -> shaped(conn, flow, fleet, shape.(built))
         problem -> refuse(conn, flow, built, problem, Map.get(params, :inputs, %{}))
       end
     else
@@ -158,20 +157,37 @@ defmodule KeyfleetWeb.AgentChainController do
   defp only(built, name),
     do: update_in(built.review.steps, fn steps -> Enum.filter(steps, &(&1.step == name)) end)
 
+  defp shaped(conn, _flow, _fleet, {:refuse, status, code}), do: Refusal.json(conn, status, code)
+  defp shaped(conn, flow, fleet, built), do: json(conn, AgentChainJSON.answer(flow, fleet, built))
+
   # Words past the wallet's allowance stay unsaved; any other failure is saved
-  # with the site's errors. The steps are answered either way.
-  defp keep_words(fleet_id, text, agent) do
+  # with the site's errors. The steps are answered either way, but to an
+  # agent unpaired while the request was on its way: the words' policy
+  # refuses only an agent no longer paired, and the pairing lock catches one
+  # unpaired after it.
+  defp keep_words(built, fleet_id, text, agent) do
     case Proposals.save_words(fleet_id, text, agent) do
       {:ok, _words} ->
-        :ok
+        built
+
+      {:error, %Ash.Error.Forbidden{}} ->
+        {:refuse, 403, "agent_not_paired"}
 
       {:error, %Ash.Error.Invalid{errors: errors} = error} ->
-        unless Enum.any?(errors, &match?(%WordsLimitError{}, &1)),
-          do: Keyfleet.Alert.report(error)
+        cond do
+          Keyfleet.Agents.unpaired?(error) -> {:refuse, 403, "agent_not_paired"}
+          Enum.any?(errors, &match?(%WordsLimitError{}, &1)) -> built
+          true -> reported(built, error)
+        end
 
       {:error, error} ->
-        if is_exception(error), do: Keyfleet.Alert.report(error)
+        if is_exception(error), do: reported(built, error), else: built
     end
+  end
+
+  defp reported(built, error) do
+    Keyfleet.Alert.report(error)
+    built
   end
 
   defp on_chain(fleet_id) do

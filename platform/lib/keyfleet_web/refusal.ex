@@ -342,6 +342,9 @@ defmodule KeyfleetWeb.Refusal do
     "poll_needs_key" =>
       {"Polls are for a fleet's Keys, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
        "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or ask a Key holder to sign in on this site and pair you with Pair New Agent on their Agents page."},
+    "agent_voting_off" =>
+      {"This Key's owner has agent voting turned off for it, so a shard of it can't vote.",
+       "The Key's owner can turn agent voting on for this Key on the fleet's Keys page. Vote again once it is on."},
     "poll_unknown" =>
       {"This fleet has no poll with this id.",
        "GET /api/v1/agent/fleets/FLEET_ID/polls lists the fleet's polls."},

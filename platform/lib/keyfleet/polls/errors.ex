@@ -36,3 +36,14 @@ defmodule Keyfleet.Polls.Errors.VoteConflictError do
 
   def message(_error), do: "this Key already voted differently in this poll"
 end
+
+defmodule Keyfleet.Polls.Errors.AgentVotingOffError do
+  @moduledoc """
+  Raised when an agent votes with a shard of a Key whose owner has turned
+  agent voting off for it (`Keyfleet.Keys.governs?/3`).
+  """
+  use Splode.Error, fields: [:token_id], class: :forbidden
+
+  def message(%{token_id: token_id}),
+    do: "the owner of Key #{token_id} has agent voting turned off for it"
+end

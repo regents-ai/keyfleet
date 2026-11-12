@@ -238,8 +238,10 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
              checkpoint: view(current)
            }), nil}
 
-        {:error, _error} ->
-          refusal(503, "checkpoint_unavailable")
+        {:error, error} ->
+          if Agents.unpaired?(error),
+            do: refusal(403, "agent_not_paired"),
+            else: refusal(503, "checkpoint_unavailable")
       end
     else
       refusal(404, "fleet_unknown")

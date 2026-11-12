@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.PollRefusal do
     cond do
       not Keyfleet.Chain.fresh?(fleet_id) -> {503, "ownership_refreshing"}
       Enum.any?(errors, &match?(%NoKeyToWriteAsError{}, &1)) -> {403, "poll_needs_key"}
+      Enum.any?(errors, &match?(%Errors.AgentVotingOffError{}, &1)) -> {403, "agent_voting_off"}
       true -> {403, code}
     end
   end
