@@ -90,7 +90,7 @@ defmodule Keyfleet.Projects.Hold do
   defp step(:delete, fleet_id, key, %{name: name}) do
     with {:ok, project} <- named(fleet_id, name),
          :ok <- archived(project, "Archive it before deleting it."),
-         :ok <- holder(project, key, "delete it") do
+         :ok <- creator(project, key) do
       project
       |> Ash.Changeset.for_update(:deleted, %{key: key}, actor: @system)
       |> Ash.update()
@@ -150,7 +150,7 @@ defmodule Keyfleet.Projects.Hold do
         refuse(
           :archive_full,
           nil,
-          "Key #{key} holds five archived projects. Delete one, or another Key can take one over."
+          "Key #{key} holds five archived projects. Delete one it started, or another Key can take one over."
         )
   end
 
@@ -188,6 +188,17 @@ defmodule Keyfleet.Projects.Hold do
         :not_holder,
         project,
         "#{project.title} is held by Key #{project.key}. Only that Key can #{what}."
+      )
+
+  # Taking a project over never makes a Key the one that started it.
+  defp creator(%{created_by_key: key}, key), do: :ok
+
+  defp creator(project, _key),
+    do:
+      refuse(
+        :not_creator,
+        project,
+        "#{project.title} was started by Key #{project.created_by_key}. Only that Key can delete it."
       )
 
   defp held(fleet_id, key, state),

@@ -79,12 +79,15 @@ defmodule KeyfleetWeb.Refusal do
        "projects_list names the project each Key holds."},
     "project_archive_full" =>
       {"This Key already holds five archived projects.",
-       "Delete one with projects_delete, or another Key can take one over with projects_take_over."},
+       "Delete one it started with projects_delete, or another Key can take one over with projects_take_over."},
     "project_not_archived" =>
       {"Only an archived project is taken over or deleted.",
        "projects_list gives each project's state. Archive an active project with projects_archive, as the Key that holds it."},
+    "project_not_creator" =>
+      {"Only the Key that started this project deletes it.",
+       "projects_list names that Key as created_by_key. A Key that takes a project over works in it, but never deletes it."},
     "project_not_holder" =>
-      {"Only the Key that holds an archived project deletes it.",
+      {"Only the Key that holds this project describes it or chooses who sees its work.",
        "Act as the Key projects_list names for it, or take it over first."},
     "project_shared" =>
       {"This project belongs to the whole fleet.",

@@ -150,8 +150,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # The picker: All projects, then the active projects, then the archived
   # ones, each with the Key that holds it. Beside it what the member's Key
   # may do now: start a project when it has none active, archive its active
-  # one, take over the archived project on show, or delete it when it is
-  # the Key's own and not General, which is never deleted. Delete asks first.
+  # one, take over the archived project on show, or delete it when the Key
+  # started it; taking one over never lets a Key delete it. Delete asks first.
   # The Key holding the project on show also chooses who sees its page's work
   # and the line its page describes it with.
   defp projects(assigns) do
@@ -288,10 +288,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
-  # The Key's own archived project, unless it is General.
-  defp deletable?(%{state: :archived, key: key, name: name}, %{key: key}),
-    do: name != Projects.general()
-
+  # An archived project the member's Key started, whichever Key holds it. No
+  # Key started General, so it never shows Delete.
+  defp deletable?(%{state: :archived, created_by_key: key}, %{key: key}), do: true
   defp deletable?(_on_show, _you), do: false
 
   attr :board, :map, required: true

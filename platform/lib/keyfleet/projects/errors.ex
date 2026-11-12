@@ -19,14 +19,17 @@ end
 
 defmodule Keyfleet.Projects.Errors.HoldError do
   @moduledoc """
-  Raised when a Key may not start, archive, take over or delete a project
-  now, with the words that say why (`message`) and a short code for agents:
+  Raised when a Key may not start, archive, take over, delete, describe or
+  show a project now, with the words that say why (`message`) and a short
+  code for agents:
 
     * `active_held`: the Key is working on another project
     * `no_active`: the Key holds no active project to archive
     * `archive_full`: the Key already holds the most archived projects
     * `not_archived`: only an archived project is taken over or deleted
-    * `not_holder`: only the Key that holds an archived project deletes it
+    * `not_creator`: only the Key that started a project deletes it
+    * `not_holder`: only the Key that holds a project describes it or
+      chooses who sees its work
     * `general_kept`: `general` is never deleted
     * `shared`: a project the whole fleet shares is never taken over or deleted
   """

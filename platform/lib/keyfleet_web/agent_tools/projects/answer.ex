@@ -3,10 +3,11 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
   What a fleet's projects (`Keyfleet.Projects`) answer an agent, the same over
   its signed requests (`KeyfleetWeb.AgentProjectController`) and as the
   Claude connector's tools (`KeyfleetWeb.AgentTools.Projects`): listing them,
-  active ones first, with which one the agent's own Key works on; and, as a
-  Key, starting, archiving, taking over and deleting one, and giving one it
-  holds its one-line description and choosing whether its page shows its
-  work to everyone. New work goes into any active project, whoever holds it.
+  active ones first, with which one the agent's own Key works on and which
+  Key started each; and, as a Key, starting, archiving, taking over and
+  deleting one it started, and giving one it holds its one-line description
+  and choosing whether its page shows its work to everyone. New work goes
+  into any active project, whoever holds it.
   Each answer is `{status, body, nil}`; `params` is the signed request's
   JSON, its body with the names in its address (`fleet_id`, `project`).
   """
@@ -101,6 +102,7 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
       title: project.title,
       description: project.description,
       key: project.key,
+      created_by_key: project.created_by_key,
       state: project.state,
       shown_to_everyone: project.shown_to_everyone,
       yours: yours?(project, key),
@@ -121,7 +123,7 @@ defmodule KeyfleetWeb.AgentTools.Projects.Answer do
 
   defp named(%HoldError{code: code, words: words}) do
     code = "project_#{code}"
-    status = if code == "project_not_holder", do: 403, else: 409
+    status = if code in ["project_not_holder", "project_not_creator"], do: 403, else: 409
     {status, put_in(Refusal.body(code), [:error, :message], words)}
   end
 

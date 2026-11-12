@@ -8150,3 +8150,51 @@ and Key 18 reviews the new version; a third start rewrites nothing) and "…off
 any number of tasks" (150 tasks; fails without the settling after each);
 both fail without the step. `AgentGraphJourneyTest` and `WorkspacePageTest`
 no longer send or show the field, and `group_flow.spec.ts` submits without it.
+## 2026-11-12 — Only the Key that started a project deletes it
+
+Sean's decision 2a, finding F2 of the permission review. Any Key with no
+active project could take over another Key's archived project and then
+delete it, its notebooks and repository included. Now only the Key that
+started a project deletes it, once it is archived, whichever Key holds it
+then. Taking a project over still lets a Key unarchive it, work in it and
+archive it again, but never lets it delete it. No fleet vote deletes a
+project, before or after this change, so none was added.
+
+- `Keyfleet.Projects.Hold`: a delete checks the project's `created_by_key`
+  against the acting Key instead of the Key holding it, in the same
+  transaction as the other project rules, and refuses with
+  `HoldError` `not_creator` ("Lab was started by Key 20. Only that Key can
+  delete it."). The `:deleted` update's filter reads `created_by_key` too,
+  so the database keeps the rule if two steps race. General, which no Key
+  started, is still refused first as `project_general_kept`.
+- No data change: `created_by_key` has been set on every project a Key
+  started since projects began (26 Oct 2026), and is empty only for
+  `general` and the shared projects, which no Key deletes.
+- Every agent surface gives one refusal through the shared answer:
+  403 `project_not_creator`, "Only the Key that started this project deletes
+  it.", with a hint naming `created_by_key`. `project_not_holder` now covers
+  only describing a project and choosing who sees its work. Every project
+  answer carries `created_by_key`. The archive-full refusal says to delete
+  one the Key started, or let another Key take one over.
+- The workspace page shows Delete only to a member whose Key started the
+  archived project; a Key that took it over sees Take over but no Delete.
+- API contract 30.0.0 → 30.1.0 in both copies (a new field and a new
+  refusal). The tool manifest, the hosted MCP tool, the CLI commands and
+  their guide, `/docs.md`, `/llms.txt`, the parity table, the agent feature
+  map, `verification/features.yml` (new `project-delete-by-starter`), the
+  kept tests and the public changelog say so. The joining guide never
+  described deleting and is unchanged (3.30.0).
+- Formal models: `OnlyOwnProjectsDeleted` moves from the open findings to
+  the holding rules of `guards/ActionGuards.cfg`, with the broken variant
+  `takeover_deletes` that removes the new check; the guards chart is redrawn
+  and the findings table marks F2 fixed.
+- A Key holding five archived projects it took over can delete none of them;
+  another Key takes one over, or the Key that started one deletes it.
+
+Check: `Keyfleet.Projects.HoldTest` "a Key that took a project over may not
+delete it, and the Key that started it still does" (Key 3 takes Key 20's
+project over and is refused, by the domain and with the 403 every surface
+gives; the project, its goal, notebook space and repository stay; Key 20
+then deletes it) and `WorkspacePageTest` "only the Key that started a
+project is offered Delete, after a take-over too"; both fail with the old
+rule. `verification/formal/run.sh`: every check ran as expected.

@@ -1787,6 +1787,24 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       view |> element(~s(#project-delete[data-confirm-action="Delete"])) |> render_click()
       assert lab() == nil
     end
+
+    # Sean, 12 Nov 2026 (2a): a Key that took the project over may take it on
+    # again, but is offered no Delete; the Key that started it still is.
+    test "only the Key that started a project is offered Delete, after a take-over too",
+         %{conn: conn, visitor: visitor} do
+      hold!(2, @member)
+      taker = %Actors.Human{human_account_id: 2, wallet_addresses: [@member]}
+      Keyfleet.Projects.take_over_project!(@fleet, 2, "lab", actor: taker)
+      Keyfleet.Projects.archive_project!(@fleet, 2, actor: taker)
+
+      {:ok, theirs, _html} = live(signed_in_as(visitor, @member), @board <> "?project=lab")
+      assert has_element?(theirs, "#project-take-over")
+      refute has_element?(theirs, "#project-delete")
+
+      {:ok, view, _html} = live(conn, @board <> "?project=lab")
+      view |> element(~s(#project-delete[data-confirm-action="Delete"])) |> render_click()
+      assert lab() == nil
+    end
   end
 
   describe "a shown project's page" do

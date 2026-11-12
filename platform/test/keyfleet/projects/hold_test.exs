@@ -15,6 +15,7 @@ defmodule Keyfleet.Projects.HoldTest do
   alias Keyfleet.Projects
   alias Keyfleet.Projects.Errors.HoldError
   alias Keyfleet.WorkspaceFixtures, as: Workspace
+  alias KeyfleetWeb.AgentTools.Projects.Answer
 
   @fleet "fleet_tech_classic"
   @system %Actors.System{}
@@ -98,6 +99,38 @@ defmodule Keyfleet.Projects.HoldTest do
              Keyfleet.Projects.Project
              |> Ash.Query.filter(fleet_id == ^@fleet and name == "late")
              |> Ash.read!(actor: @system)
+  end
+
+  # Sean, 12 Nov 2026 (2a): taking a project over lets a Key work in it,
+  # never delete it. Only the Key that started it deletes it, whichever Key
+  # holds it then, and a refused delete leaves all of it in place.
+  test "a Key that took a project over may not delete it, and the Key that started it still does" do
+    Projects.start_project!(@fleet, 20, "lab", "Lab", actor: owner(20))
+    goal = Workspace.create(@fleet, "goal", %{"title" => "Kept"}, project: "lab", by: 20)
+    Projects.archive_project!(@fleet, 20, actor: owner(20))
+    Projects.take_over_project!(@fleet, 3, "lab", actor: owner(3))
+    Projects.archive_project!(@fleet, 3, actor: owner(3))
+
+    assert {:error, %{errors: [%HoldError{code: :not_creator}]}} =
+             Projects.delete_project(@fleet, 3, "lab", actor: owner(3))
+
+    # The agent surfaces answer the same refusal.
+    delete = %{"fleet_id" => @fleet, "project" => "lab", "as_key" => 3}
+
+    assert {403, %{error: %{code: "project_not_creator"}}, nil} =
+             Answer.answer(:delete, delete, owner(3), nil)
+
+    assert %{state: :archived, key: 3, created_by_key: 20} =
+             Projects.project!(@fleet, "lab", actor: @system)
+
+    assert [%{id: ^goal}] = Graph.read_objects!(@fleet, [goal], actor: @system)
+    refute_enqueued(worker: DeleteSpace)
+    refute_enqueued(worker: DeleteRepository)
+
+    assert %{state: :deleted} = Projects.delete_project!(@fleet, 20, "lab", actor: owner(20))
+    assert [] = Graph.read_objects!(@fleet, [goal], actor: @system)
+    assert_enqueued(worker: DeleteSpace, args: %{fleet_id: @fleet, project: "lab"})
+    assert_enqueued(worker: DeleteRepository, args: %{repository: "#{@fleet}-lab"})
   end
 
   # General keeps the fleet's starting goals, first notebooks and first

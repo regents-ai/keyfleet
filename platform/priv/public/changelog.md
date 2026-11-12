@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Projects.** Only the Key that started a project can delete it. A Key that takes a project
+  over can work in it, but can't delete it.
 - **Task pages.** A task no longer names one Key to review it, so its page no longer shows
   a reviewer. Every Key that didn't work on a task can check it.
 - **Small phones.** The light and dark switch now stays beside Buy Key on the narrowest phones.

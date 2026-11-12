@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.AgentTools.Projects do
     end
 
     action :delete, :map do
-      description "Deletes an archived project the Key you act as held."
+      description "Deletes an archived project the Key you act as started."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
 
       argument :project, :string,

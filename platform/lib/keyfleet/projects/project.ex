@@ -1,15 +1,18 @@
 defmodule Keyfleet.Projects.Project do
   @moduledoc """
   One project inside a fleet: its name, which addresses use and which never
-  changes, its title, which pages show, the Key that holds it (`key`, by
-  number) and its state: `active`, `archived` or `deleted`.
+  changes, its title, which pages show, the Key that started it
+  (`created_by_key`) and the Key that holds it now (`key`), both by number,
+  and its state: `active`, `archived` or `deleted`.
 
   A Key holds at most one active project and five archived ones. It starts a
   project when it holds no active one (`start`), archives its active one
-  (`archive`), takes over any archived project when it holds no active one
-  (`take_over`), and deletes one of its own archived projects (`delete`):
-  the row stays, marked deleted, so its name and repository name are never
-  used again, and everything else of it goes (`Keyfleet.Projects.Hold`).
+  (`archive`), and takes over any archived project when it holds no active
+  one (`take_over`). Only the Key that started a project deletes it, once it
+  is archived, whichever Key holds it then (`delete`): taking a project over
+  lets a Key work in it, never delete it (Sean, 12 Nov 2026, 2a). The row
+  stays, marked deleted, so its name and repository name are never used
+  again, and everything else of it goes (`Keyfleet.Projects.Hold`).
   Projects stay with the Key's number when the Key changes hands. Only an
   active project takes new work.
 
@@ -207,8 +210,8 @@ defmodule Keyfleet.Projects.Project do
       run fn input, context -> Hold.run(input, [step: :take_over], context) end
     end
 
-    # One of the acting Key's own archived projects, never `general`, is
-    # deleted for good.
+    # An archived project the acting Key started, never `general`, is
+    # deleted for good, whichever Key holds it.
     action :delete, :struct do
       constraints instance_of: __MODULE__
       argument :fleet_id, :string, allow_nil?: false
@@ -331,7 +334,7 @@ defmodule Keyfleet.Projects.Project do
       accept []
       argument :key, :integer, allow_nil?: false
       require_atomic? false
-      change filter(expr(state == :archived and key == ^arg(:key)))
+      change filter(expr(state == :archived and created_by_key == ^arg(:key)))
       change set_attribute(:state, :deleted)
       change Keyfleet.Projects.Changes.Forget
     end
@@ -409,7 +412,8 @@ defmodule Keyfleet.Projects.Project do
       public?: true,
       constraints: [min_length: 1, max_length: 60, match: ~r/\A[^\x00-\x1f\x7f]*\z/]
 
-    # The Key that started it; none for the projects every fleet starts with.
+    # The Key that started it, the only Key that deletes it; none for the
+    # projects every fleet starts with.
     attribute :created_by_key, :integer, public?: true
     # The Key that holds it; none for a shared project, which the whole fleet holds.
     attribute :key, :integer, public?: true, constraints: [min: 0]

@@ -28,8 +28,8 @@
 (*             poll vote per Key and a vote cast through a shard only      *)
 (*             while the Key's agent voting is on                          *)
 (*             (Polls.Validations.AgentVoting), a poll ended by its        *)
-(*             starter, the code store's pre-receive hook, the project's   *)
-(*             holder.                                                     *)
+(*             starter, the code store's pre-receive hook, a project       *)
+(*             deleted only by the Key that started it (Hold, 12 Nov).     *)
 (*   Wallet    WalletSteps.Build for the agent's own wallet: standing read *)
 (*   steps     at the latest block (wallet_steps/reads.ex); the Keys it    *)
 (*             offers come from the site's record (build.ex). A blocked    *)
@@ -154,6 +154,7 @@ RuleOk(t) ==
     [] action = "poll_vote"      -> t = "first_vote"
     [] action = "poll_end"       -> t = "started_it" \/ Broken = "anyone_ends_polls"
     [] action = "code_push"      -> t = "adds" \/ Broken = "hook_allows_rewrites"
+    [] action = "project_delete" -> t = "made_by_this_key" \/ Broken = "takeover_deletes"
     [] OTHER                     -> TRUE
 
 RuleRefusal ==
@@ -162,6 +163,7 @@ RuleRefusal ==
     [] action = "poll_vote"      -> "vote_conflict"
     [] action = "poll_end"       -> "not_starter"
     [] action = "code_push"      -> "push_refused"
+    [] action = "project_delete" -> "not_creator"
     [] OTHER                     -> "refused"
 
 Init ==
@@ -341,8 +343,8 @@ MessagesFollowWorkspaceRule ==
    withheld). *)
 BlockedOnlyWhenChainSaysNo == phase = "blocked" => ~MayActAtHead(role, voting)
 
-(* Open finding F2. A Key deletes only projects it made (breaks: take over,
-   then delete, is the design in docs/plans/2026-10-26-projects-inside-a-fleet.md). *)
+(* A Key deletes only projects it started, never one it took over (F2, fixed
+   12 Nov 2026, Sean's 2a: Hold's creator check and the :deleted filter). *)
 OnlyOwnProjectsDeleted ==
   (action = "project_delete" /\ phase = "allowed") => target = "made_by_this_key"
 =============================================================================

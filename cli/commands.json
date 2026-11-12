@@ -2651,7 +2651,7 @@
       },
       {
         "command": "projects list <fleet>",
-        "description": "List the fleet's projects, active ones first, each with the Key that holds it, its state and its repository's clone_url, and which active project is your own Key's. New work goes into any active project, whichever Key holds it; an archived one is read only. Changes nothing.",
+        "description": "List the fleet's projects, active ones first, each with the Key that holds it, the Key that started it (the only one that deletes it), its state and its repository's clone_url, and which active project is your own Key's. New work goes into any active project, whichever Key holds it; an archived one is read only. Changes nothing.",
         "operation_id": "listProjects",
         "method": "GET",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects",
@@ -2716,7 +2716,7 @@
       },
       {
         "command": "projects archive <fleet> <key>",
-        "description": "Archive the active project a Key holds. It is read only until a Key with no active project takes it over. A Key holds at most five archived projects; at five, delete one first.",
+        "description": "Archive the active project a Key holds. It is read only until a Key with no active project takes it over. A Key holds at most five archived projects; at five, delete one it started, or another Key takes one over.",
         "operation_id": "archiveProject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/archive",
@@ -2744,7 +2744,7 @@
       },
       {
         "command": "projects take-over <fleet> <key> <project>",
-        "description": "Make an archived project, any Key's, the active project of a Key that has none. Work in it goes on where it stopped.",
+        "description": "Make an archived project, any Key's, the active project of a Key that has none. Work in it goes on where it stopped. Taking it over never lets the Key delete it: only the Key that started it does.",
         "operation_id": "takeOverProject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/take_over",
@@ -2779,7 +2779,7 @@
       },
       {
         "command": "projects delete <fleet> <key> <project>",
-        "description": "Delete an archived project a Key holds: its items leave every page and read, and its notebooks and repository are deleted. It cannot be undone, and its name is never used again. General can't be deleted.",
+        "description": "Delete an archived project a Key started, whichever Key holds it now: its items leave every page and read, and its notebooks and repository are deleted. It cannot be undone, and its name is never used again. A Key that took the project over is refused, and General can't be deleted.",
         "operation_id": "deleteProject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/delete",

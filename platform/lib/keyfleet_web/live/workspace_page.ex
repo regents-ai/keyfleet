@@ -282,7 +282,15 @@ defmodule KeyfleetWeb.WorkspacePage do
         projects:
           Enum.map(
             projects,
-            &Map.take(&1, [:name, :title, :description, :key, :state, :shown_to_everyone])
+            &Map.take(&1, [
+              :name,
+              :title,
+              :description,
+              :key,
+              :created_by_key,
+              :state,
+              :shown_to_everyone
+            ])
           ),
         you: you(projects, actor, fleet_id)
       })

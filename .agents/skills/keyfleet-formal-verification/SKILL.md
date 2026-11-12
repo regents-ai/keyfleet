@@ -131,8 +131,8 @@ ShardOnlyForItsKey, PersonKeysOnlyAsLastResort, AgentVotingOffStopsBallots,
 AgentVotingOffStopsPollVotes, NobodyChangesAnotherKeysItem, AnyoneMayFork,
 RestrictedReadOnlyInNotebooks, RestrictedAddsNothingToWorkspace,
 CodeStoreOnlyAdds, PollEndOnlyByStarter, NothingWhileReaderBehind,
-WalletStepsOnlyForHolder, MessagesFollowWorkspaceRule; the open finding
-rules are in the table below.
+WalletStepsOnlyForHolder, MessagesFollowWorkspaceRule,
+OnlyOwnProjectsDeleted; the open finding rules are in the table below.
 - `platform/lib/keyfleet/graph/checks/key_actor.ex` (`command/5`), `platform/lib/keyfleet/keys.ex` (`identity/2`, `held_keys/2`, `agent_keys/3`), `platform/lib/keyfleet/access/check.ex`
 - `platform/lib/keyfleet/graph/pin.ex`, `platform/lib/keyfleet/graph/validations/unrestricted.ex`, `platform/graph_host/src/keyfleet_graph/host.py` (item owner)
 - `platform/lib/keyfleet/polls/checks/standing.ex`, `platform/lib/keyfleet/polls/validations/agent_voting.ex`, `platform/lib/keyfleet/polls/vote.ex`, `platform/lib/keyfleet/dms/checks/key_holder.ex`
@@ -153,7 +153,7 @@ fixed here; a fix changes who may act and waits for Sean's go.
 |---|---|---|---|
 | F1 | pairing NoWriteAfterUnpair (`PairingLife.cfg`) | Open for workspace graph writes | A workspace graph write is checked, then sent to the graph host with no transaction held across the call (f67913e6), so an unpair that commits in between does not stop it. Every database write holds the pairing lock (0001d1f7). |
 | F1 | shard NothingAfterRecordedEnd | Open | Database writes read a shard's standing again inside their transaction, and graph writes check it once, but nothing locks the recorded shard or Key, so the reader can record the shard's end between that read and the save. |
-| F2 | guards OnlyOwnProjectsDeleted | Open | A Key can take over another Key's archived project and delete it, its notebooks and repository included (the 26 Oct design). |
+| F2 | guards OnlyOwnProjectsDeleted | Fixed on 12 Nov 2026 (Sean's 2a) | Only the Key that started a project deletes it; a Key that took it over is refused (`project_not_creator`), in `Keyfleet.Projects.Hold` and the `:deleted` update's filter. |
 | F3 | guards AgentVotingOffStopsPollVotes | Fixed in 0001d1f7 | A poll vote cast through a shard is refused while the Key's agent voting is off (`agent_voting_off`). |
 | F4 | guards BlockedOnlyWhenChainSaysNo | Open | A wallet step offers only the Keys in Keyfleet's record, so a Key bought or a shard received within the reading's lag shows "No Keys to use" and the press is withheld. |
 | F5 | guards RestrictedAddsNothingToWorkspace | Fixed in 0001d1f7 | A Key whose edits are restricted no longer pins or unpins (`edits_restricted`). |

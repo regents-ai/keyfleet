@@ -962,6 +962,41 @@ features:
       - Proven against a local hub; not yet run against a real notebook host.
       - The daily copy runs at 03:31 UTC; the first real copies appear the morning after release.
 
+  - id: project-delete-by-starter
+    what: >-
+      Only the Key that started a project deletes it, once it is archived,
+      whichever Key holds it then (Sean, 12 Nov 2026, 2a). Any Key with no
+      active project takes an archived one over and works in it, but taking it
+      over never lets that Key delete it: every agent surface refuses it with
+      403 project_not_creator, and the project, its items, notebooks and
+      repository stay as they were. The workspace page shows Delete only to a
+      member whose Key started the project. Every project answer names the Key
+      that started it as created_by_key. No fleet vote deletes a project.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/projects/project.ex
+      - platform/lib/keyfleet/projects/hold.ex
+      - platform/lib/keyfleet/projects/errors.ex
+      - platform/lib/keyfleet_web/agent_tools/projects.ex
+      - platform/lib/keyfleet_web/agent_tools/projects/answer.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/take_over
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/delete
+      - live: KeyfleetWeb.WorkspaceLive
+    proofs:
+      - platform/test/keyfleet/projects/hold_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - The 403 is proven through the answer every agent surface shares, not over HTTP or in a browser.
+      - A Key holding five archived projects it took over deletes none of them; another Key takes one over, or the Key that started one deletes it.
+
   - id: release-without-gap
     what: >-
       A release of keyfleet.ai answers every page throughout. The site machine
@@ -1190,8 +1225,8 @@ features:
     what: >-
       Before a press that can't be undone, Keyfleet asks in the shared
       cut-corner confirm window every Regent site uses, never the browser's box:
-      Unpair on the Agents page and in an agent's window, Delete on the member's
-      own archived project, End poll for the poll's starter, the × that takes
+      Unpair on the Agents page and in an agent's window, Delete on an archived
+      project the member's Key started, End poll for the poll's starter, the × that takes
       a post off the member's own Key's wall, and Block and Delete conversation
       in a direct message. The window opens with focus on
       Cancel; Cancel or Escape close it and hand focus back to the button that

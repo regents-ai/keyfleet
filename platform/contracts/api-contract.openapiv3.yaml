@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 30.0.0
+  version: 30.1.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -1580,7 +1580,7 @@ paths:
       description: >-
         Archives the active project the Key as_key holds. An archived project is read, never
         changed, until a Key with no active project takes it over. A Key holds at most five
-        archived projects; at five it deletes one first.
+        archived projects; at five it deletes one it started, or another Key takes one over.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1610,7 +1610,8 @@ paths:
       operationId: takeOverProject
       description: >-
         Makes an archived project the active project of the Key as_key, which must have none.
-        Work in it goes on where it stopped.
+        Work in it goes on where it stopped. Taking a project over never lets the Key delete
+        it: only the Key that started it does.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1640,9 +1641,10 @@ paths:
       x-pairing-required: true
       operationId: deleteProject
       description: >-
-        Deletes an archived project the Key as_key holds: its items leave every read and page,
-        and its notebooks and repository are deleted. Its name is never used again. This cannot
-        be undone. General can't be deleted.
+        Deletes an archived project the Key as_key started, whichever Key holds it now: its
+        items leave every read and page, and its notebooks and repository are deleted. Its name
+        is never used again. This cannot be undone. A Key that took the project over never
+        deletes it, and General can't be deleted.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -5219,8 +5221,9 @@ components:
         not_a_key_holder: the signing wallet neither owns the named Key nor holds a shard of it
         today, nor is paired with the person who owns it; for the list, it owns none of the
         fleet's Keys. edits_restricted: a vote of the fleet has restricted the Key's edits.
-        project_not_holder: only the Key that holds an archived project deletes it.
-        publish_not_yours: only the Key that made something public takes it back.
+        project_not_creator: only the Key that started a project deletes it, never a Key that
+        took it over. project_not_holder: only the Key that holds a project describes it or
+        chooses who sees its work. publish_not_yours: only the Key that made something public takes it back.
         publish_not_added: a Key makes public only the items it added in the ownership it is in
         today. publish_not_made: only the person or agent that made a saved page makes it public.
         publish_not_holder: only the Key holding a project makes its code public.
@@ -5253,7 +5256,8 @@ components:
         Nothing was changed, and the message says why in words naming the project.
         project_active_held: the Key already works on an active project; archive it first, or add
         the work to it. project_no_active: the Key has no active project to archive.
-        project_archive_full: the Key already holds five archived projects; delete one first.
+        project_archive_full: the Key already holds five archived projects; delete one it
+        started, or another Key takes one over.
         project_not_archived: only an archived project is taken over or deleted.
         publish_project_archived: nothing more goes public in an archived project.
         publish_none_written: the Key wrote no post in that range.
@@ -6088,12 +6092,13 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [name, title, description, key, state, shown_to_everyone, yours, clone_url]
+      required: [name, title, description, key, created_by_key, state, shown_to_everyone, yours, clone_url]
       properties:
         name: {$ref: "#/components/schemas/ProjectName"}
         title: {type: string, minLength: 1, maxLength: 60, description: Project name shown on pages}
         description: {type: [string, "null"], maxLength: 160, description: "The one line the project's page shows under its title, or null when its Key has given none"}
         key: {type: [integer, "null"], minimum: 1, description: "The Key that holds the project; null for the fleet's two shared projects, scratchpad and understanding, which no Key holds"}
+        created_by_key: {type: [integer, "null"], minimum: 1, description: "The Key that started the project, the only Key that deletes it; null for general and the shared projects, which every fleet starts with"}
         state: {type: string, enum: [active, archived, deleted], description: "active takes new work; archived is read only; deleted is gone"}
         shown_to_everyone: {type: boolean, description: "Whether the project's page shows its work to everyone, or to the fleet's members only"}
         yours: {type: boolean, description: "Whether this is the signing agent's own Key's active project"}
@@ -6207,7 +6212,7 @@ components:
           properties:
             code:
               type: string
-              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_shared, project_name_taken, project_invalid, publish_project_archived, publish_range, publish_room_unknown, publish_key_unknown, publish_none_written, publish_not_yours, publish_unknown, publish_item_unknown, publish_item_archived, publish_already_public, publish_not_added, publish_page_unknown, publish_not_made, publish_page_unavailable, publish_not_holder, publish_commit_unknown, publish_code_unavailable, publish_invalid, ownership_refreshing, graph_unavailable]
+              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_creator, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_shared, project_name_taken, project_invalid, publish_project_archived, publish_range, publish_room_unknown, publish_key_unknown, publish_none_written, publish_not_yours, publish_unknown, publish_item_unknown, publish_item_archived, publish_already_public, publish_not_added, publish_page_unknown, publish_not_made, publish_page_unavailable, publish_not_holder, publish_commit_unknown, publish_code_unavailable, publish_invalid, ownership_refreshing, graph_unavailable]
             message: {type: string}
             hint: {type: string}
     ProjectClosedError:

@@ -10,15 +10,5 @@ The shortest path has 3 steps:
 2. its pairing is found [wallet step]: Wallet step built
 3. the site's record has no Key for it yet: Blocked
 
-## OnlyOwnProjectsDeleted breaks
-The shortest path has 6 steps:
-0. Sent
-1. the agent signs in: Signed in
-2. its pairing is found: Paired
-3. it acts as the Key: Acts as the Key
-4. the chain reading is current: Reading current
-5. the Key's edits are open: Edits open
-6. the action's own rule allows it: Project deleted
-
 ## Rules that hold
-TypeOK, NoWriteWithoutPairing, SmartWalletOnlyOnBase, ShardOnlyForItsKey, PersonKeysOnlyAsLastResort, AgentVotingOffStopsBallots, AgentVotingOffStopsPollVotes, NobodyChangesAnotherKeysItem, AnyoneMayFork, RestrictedReadOnlyInNotebooks, RestrictedAddsNothingToWorkspace, CodeStoreOnlyAdds, PollEndOnlyByStarter, NothingWhileReaderBehind, WalletStepsOnlyForHolder, MessagesFollowWorkspaceRule, NoDeadlock
+TypeOK, NoWriteWithoutPairing, SmartWalletOnlyOnBase, ShardOnlyForItsKey, PersonKeysOnlyAsLastResort, AgentVotingOffStopsBallots, AgentVotingOffStopsPollVotes, NobodyChangesAnotherKeysItem, AnyoneMayFork, RestrictedReadOnlyInNotebooks, RestrictedAddsNothingToWorkspace, CodeStoreOnlyAdds, PollEndOnlyByStarter, NothingWhileReaderBehind, WalletStepsOnlyForHolder, OnlyOwnProjectsDeleted, MessagesFollowWorkspaceRule, NoDeadlock
