@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.10.0` work pack.
+"""The pinned `keyfleet_work@0.11.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -19,7 +19,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, ProjectName, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.10.0"
+PACK_VERSION = "0.11.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -103,15 +103,15 @@ class Task(WorkObject):
     """`progress` "done" and `result_ref` are written only by submitting the task.
 
     Who works on a task is who joined it (`sys.joined`), never a field a
-    member writes. `reviewer_key` names the Key asked to review it. `commit_ref` is the exact
-    commit of the work and `notebook_ref` the notebook it was worked in; a
-    review judges the task version that holds both, so changing either asks
-    for review again. `rerun` says how to run the work again from that commit.
+    member writes, and any Key that did not work on it may review it once it
+    is submitted. `commit_ref` is the exact commit of the work and
+    `notebook_ref` the notebook it was worked in; a review judges the task
+    version that holds both, so changing either asks for review again.
+    `rerun` says how to run the work again from that commit.
     """
 
     deliverable: Optional[_text(2000, multiline=True)] = None
     acceptance_criteria: list[_text(500)] = _items()
-    reviewer_key: Optional[Count] = None
     progress: Literal["todo", "doing", "blocked", "done"] = "todo"
     next_step: Optional[_text(1000, multiline=True)] = None
     commit_ref: Optional[Uri] = None

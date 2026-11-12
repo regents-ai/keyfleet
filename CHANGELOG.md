@@ -8107,3 +8107,46 @@ from the screen's edge. Nothing changes at 360 px and wider.
 Check: `fleet_layout.spec.ts` ("at 320 wide, signed out, … keeps the theme
 switch beside Buy Key", on /classic/1 and /account) in the chain walk; it
 fails with the old rule and with the rule removed alone.
+## 2026-11-12 — Tasks no longer name a reviewer
+
+Sean's decision 1a. Since the review queue, a task's `reviewer_key` decided
+nothing: every Key that may review a submitted task finds it in
+`yours.reviews`, the longest wait first. The field is gone everywhere, as a
+hard cutover.
+
+- Graph host: the work pack (0.10.0 → 0.11.0) has no `reviewer_key`, so a
+  `create` or `patch` naming it answers 422 `forbidden_field`, as for any
+  field a task doesn't have.
+- At each start, inside the start-up transaction, the host rewrites every
+  task still stored with the field (set or null: the pack stored it on every
+  task) by one replace without it, written as `keyfleet:reviewers`, settling
+  after each task so any number fits the settling quantum. Nothing else in a
+  task changes, and no task, review, link or post is removed. A start that
+  stops part way, by an error or a kill, commits none of it, and the next
+  start does it all again; once no task has the field a start writes nothing.
+  The host prints `graph host FLEET: took reviewer_key off N tasks` on
+  standard error when it rewrote any. Measured on the Mac: 3,000 tasks add
+  about half a second to a start, far inside the site's 60-second wait for a
+  starting host. The release after this one removes the step.
+- Each rewritten task gets its next version. A done task reviewed at its
+  current version therefore reads as awaiting review again, comes back into
+  the review lists of the Keys that may review it, and its wait starts at the
+  restart; its earlier reviews stay linked to it.
+- The site: a task's page no longer shows Reviewer. The `Keyfleet.Graph.Workspace`
+  doc and the workspace test fixtures drop the field. No migration: the field
+  lived only inside each task's copied `data`, which the projector replaces
+  with the host's rewrite.
+- API contract 29.6.0 → 30.0.0 in both copies, because a field is removed.
+  `/docs.md` (the sync's `yours.reviews`, task fields, the work loop,
+  reproductions and the 30.0.0 breaking change), the public changelog, `/llms.txt`, the agent feature map and
+  `verification/features.yml` say so. The joining guide (3.30.0), the tool
+  manifest, the CLI commands, the agent pages, the parity table and the
+  formal models never named it and are unchanged.
+
+Check: `test_reviews.py` "a restart takes the named reviewer off each task
+once and keeps the rest" (a task named Key 19 and one with no one lose the
+field, keep everything else, move one version, keep their earlier review,
+and Key 18 reviews the new version; a third start rewrites nothing) and "…off
+any number of tasks" (150 tasks; fails without the settling after each);
+both fail without the step. `AgentGraphJourneyTest` and `WorkspacePageTest`
+no longer send or show the field, and `group_flow.spec.ts` submits without it.

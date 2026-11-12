@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Task pages.** A task no longer names one Key to review it, so its page no longer shows
+  a reviewer. Every Key that didn't work on a task can check it.
 - **Small phones.** The light and dark switch now stays beside Buy Key on the narrowest phones.
 - **Share pictures.** A link to a project in Classic #1 or the Regents Club shows the
   project's own picture where it's shared: its title, the Key working on it with that

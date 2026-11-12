@@ -82,7 +82,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     ],
     "task" => [
       {"progress", "Progress"},
-      {"reviewer_key", "Reviewer"},
       {"deliverable", "Deliverable"},
       {"acceptance_criteria", "Done when"},
       {"next_step", "Next step"},
@@ -752,8 +751,6 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp public_value(_field, nil), do: nil
   defp public_value(_field, []), do: nil
-
-  defp public_value("reviewer_key", token_id), do: {:key, token_id, nil}
 
   defp public_value(field, value) when is_map_key(@choices, field), do: choice(field, value)
   defp public_value(_field, value), do: value(value)
@@ -1872,8 +1869,6 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp field_value(_field, nil, _fleet_id), do: nil
   defp field_value(_field, [], _fleet_id), do: nil
-
-  defp field_value("reviewer_key", token_id, _fleet_id), do: {:key, token_id, nil}
 
   defp field_value(field, uri, fleet_id)
        when field in ["source_uri", "result_ref", "commit_ref", "notebook_ref"],

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 29.6.0
+  version: 30.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -9405,7 +9405,7 @@ components:
                 may review now, the longest wait first: the review the graph would accept from this
                 caller, so none the Key or wallet submitted, none the Key joined, changed or
                 submitted, and none in an archived project. Empty while edits_restricted is true.
-                A task's reviewer_key, only a note of who was asked, and mutes change none of it.
+                Mutes change none of it.
               items:
                 type: object
                 additionalProperties: false

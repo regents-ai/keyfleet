@@ -203,3 +203,45 @@ def test_a_review_that_could_not_reproduce_the_work_disputes_it(host):
     review = host.graph.get_object(result["id"])
     assert review.data["reproduction"] == "failed"
     assert "commit_ref" not in review.data["sys"]["review"]
+
+
+def test_a_restart_takes_the_named_reviewer_off_each_task_once_and_keeps_the_rest(db):
+    host = Host("fleet_a", str(db), [])
+    _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Named"}}, command("t1"))
+    _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Unnamed"}}, command("t2"))
+    _ok(host, "submit", {"id": "task#1", "expected_version": 1, "result_ref": "ipfs://cid"}, command("s1"))
+    earlier = _ok(host, "review", _review(2), command("r1", token_id=20, wallet="0x" + "d4" * 20))
+    # Tasks as the pack before stored them: one names Key 19, the other no one.
+    host.graph.patch_object("task#1", {"reviewer_key": 19}, actor="system")
+    host.graph.patch_object("task#2", {"reviewer_key": None}, actor="system")
+    stored = {task.id: (task.data, task.version) for task in host.graph.query("task")}
+    host.graph.store.close()
+
+    again = Host("fleet_a", str(db), [])
+
+    for task in again.graph.query("task"):
+        data, version = stored[task.id]
+        assert (task.data, task.version) == ({field: value for field, value in data.items() if field != "reviewer_key"}, version + 1)
+    assert again.graph.get_object(earlier["id"]) is not None
+    assert [rel.source for rel in again.graph.relations(target="task#1", type="reviews")] == [earlier["id"]]
+    # Key 18, never named, reviews the version the rewrite made.
+    _ok(again, "review", _review(stored["task#1"][1] + 1), command("r2", **REVIEWER))
+    again.graph.store.close()
+
+    # A later start finds nothing left to rewrite.
+    third = Host("fleet_a", str(db), [])
+    assert {task.id: task.version for task in third.graph.query("task")} == {task_id: version + 1 for task_id, (_data, version) in stored.items()}
+    rewrites = [event for event in third._events_after(0) if event["actor"] == "keyfleet:reviewers" and event["type"] == "patch.applied"]
+    assert sorted(event["payload"]["patch"]["target"] for event in rewrites) == ["task#1", "task#2"]
+
+
+def test_a_restart_takes_the_named_reviewer_off_any_number_of_tasks(db):
+    host = Host("fleet_a", str(db), [])
+    for number in range(150):
+        made = _ok(host, "create", {"project": "general", "type": "task", "data": {"title": f"Task {number}"}}, command(f"t{number}"))
+        host.graph.patch_object(made["id"], {"reviewer_key": None}, actor="system")
+    host.graph.store.close()
+
+    again = Host("fleet_a", str(db), [])
+
+    assert [("reviewer_key" in task.data, task.version) for task in again.graph.query("task")] == [(False, 3)] * 150

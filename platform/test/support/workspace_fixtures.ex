@@ -30,7 +30,6 @@ defmodule Keyfleet.WorkspaceFixtures do
     "task" => %{
       "deliverable" => nil,
       "acceptance_criteria" => [],
-      "reviewer_key" => nil,
       "progress" => "todo",
       "next_step" => nil,
       "commit_ref" => nil,

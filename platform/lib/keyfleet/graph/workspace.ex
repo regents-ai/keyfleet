@@ -9,10 +9,9 @@ defmodule Keyfleet.Graph.Workspace do
   A task is marked done only by submitting it (`submit`), with its result and
   the evidence it rests on. A submission claims the work is done; whether it
   is accepted is for other members' reviews (`review`) to say, each bound to
-  the task version it judged. A task may name the Key asked to review it,
-  its exact commit and its notebook; a review may say whether the reviewer
-  reproduced the work from that commit. Neither says anything about paying
-  for it.
+  the task version it judged. A task may name its exact commit and its
+  notebook; a review may say whether the reviewer reproduced the work from
+  that commit. Neither says anything about paying for it.
 
   Every item belongs to one of the fleet's projects (`Keyfleet.Projects`),
   named when it is made and never changed; a review or fork belongs to its

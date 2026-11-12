@@ -488,8 +488,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         data: %{
           title: "Fewer notices",
           acceptance_criteria: ["Each agent gets at most one notice a minute"],
-          # Only a note of who was asked: Key 2 may review it all the same.
-          reviewer_key: 3,
           commit_ref: commit,
           notebook_ref: notebook
         }

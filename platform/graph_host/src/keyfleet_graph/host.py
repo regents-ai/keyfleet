@@ -19,6 +19,7 @@ project the command does not list, one the site deleted, is not found.
 import hashlib
 import json
 import secrets
+import sys
 from contextlib import contextmanager
 from importlib import metadata
 from typing import Annotated, Any, Callable, Iterator, Optional
@@ -55,6 +56,9 @@ PROJECTS_ACTOR = "keyfleet:projects"
 # The name on the writes that turn each task's one holder into the first Key
 # to have joined it. The release after the one that adds task joins removes them.
 JOINS_ACTOR = "keyfleet:joins"
+# The name on the writes that take the named reviewer off each task that still
+# has the field. The release after the one that removes the field removes them.
+REVIEWERS_ACTOR = "keyfleet:reviewers"
 # The fields of a task only the Key that created it changes: what the task is.
 CREATOR_FIELDS = frozenset({"title", "deliverable", "acceptance_criteria"})
 # A `changes` page stops at this many bytes of encoded events, or after the
@@ -117,8 +121,11 @@ class Host:
             self.runtime.load_pack(PACK)
             self._into_general()
             self._into_joined()
+            without_reviewer = self._without_reviewer()
             self._keep_starting_goals(starting_goals)
             self._settle()
+        if without_reviewer:
+            print(f"graph host {fleet}: took reviewer_key off {without_reviewer} tasks", file=sys.stderr, flush=True)
         self._ledger = {
             (event.payload["principal"], event.payload["command_id"]): event.payload
             for event in self.graph.events
@@ -534,6 +541,31 @@ class Host:
             # Each rewrite settles before the next, so any number of tasks
             # fits the settling quantum.
             self._settle()
+
+    def _without_reviewer(self) -> int:
+        """Takes the named reviewer off each task that still has the field, and counts them.
+
+        A task stored before the field was removed carries `reviewer_key`, set
+        or null. Each such task is rewritten whole by one replace without it,
+        which makes its next version, so a done task waits for review again;
+        nothing else in it changes, and no task, review or link is removed. All of it commits in the startup
+        transaction, or none of it, and a start that finds no task with the
+        field writes nothing. The release after the one that removes the field
+        removes this step.
+        """
+        rewritten = 0
+        for obj in self.graph.query("task"):
+            if "reviewer_key" not in obj.data:
+                continue
+            data = {field: value for field, value in obj.data.items() if field != "reviewer_key"}
+            record = _validate(RECORD_MODELS["task"], data)
+            patch = self.graph.propose_patch(obj.id, "replace", record, proposed_by=REVIEWERS_ACTOR)
+            self.graph.apply_patch(patch.id, approved_by=REVIEWERS_ACTOR)
+            # Each rewrite settles before the next, so any number of tasks
+            # fits the settling quantum.
+            self._settle()
+            rewritten += 1
+        return rewritten
 
     # ---------- starting goals ----------
 

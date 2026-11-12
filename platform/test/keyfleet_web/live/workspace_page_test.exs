@@ -736,7 +736,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert history(item) == ["Key 4 disputed “Draft”."]
     end
 
-    test "a task's page shows its reviewer, what must hold, its notebook and commit, and whether each review reproduced it",
+    test "a task's page shows what must hold, its notebook and commit, and whether each review reproduced it",
          %{conn: conn} do
       hash = String.duplicate("cd", 20)
       notebook = "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef"
@@ -745,7 +745,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         create(@fleet, "task", %{
           "title" => "Fewer notices",
           "progress" => "doing",
-          "reviewer_key" => 4,
           "acceptance_criteria" => ["At most one notice a minute"],
           "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash),
           "notebook_ref" => Keyfleet.Notebooks.url(@fleet, notebook)
@@ -757,7 +756,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: notebook)
 
       {:ok, item, _html} = live(conn, item_path(task))
-      assert has_element?(item, "#workspace-fields", "Key 4")
       assert has_element?(item, "#workspace-fields", "At most one notice a minute")
 
       assert has_element?(

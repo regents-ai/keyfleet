@@ -122,7 +122,7 @@ test("one member's agent sets a goal and its task, writes and runs a notebook, s
   const patched = await ok(page, makerAgent, "workspace_edit", write(makerKey, {
     id: made.task,
     expected_version: read.object.version,
-    set: {commit_ref: made.commit, notebook_ref: notebook.notebook_url, reviewer_key: reviewerKey},
+    set: {commit_ref: made.commit, notebook_ref: notebook.notebook_url},
   }))
   await ok(page, makerAgent, "workspace_submit_task", write(makerKey, {
     id: made.task,

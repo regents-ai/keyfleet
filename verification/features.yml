@@ -194,14 +194,16 @@ features:
   - id: workspace-reproduced-patches
     what: >-
       A task names its owner, what must hold for it to be done, the tasks it
-      waits for, a note of any Key asked to review it, and the exact commit and
-      notebook of its work. Once it is
+      waits for, and the exact commit and notebook of its work; it names no Key
+      to review it. Once it is
       submitted, the sync of every Key the graph would let review it lists it,
       the longest wait first, until a review of that version comes in, and the
       board's Reviews panel lists it beside its wait. A review says whether the reviewer
       reproduced the work from the commit, and one that couldn't is a dispute.
       The task's page shows all of it beside its room posts and reviews, and a
-      commit's page lists the tasks that name it.
+      commit's page lists the tasks that name it. A restart takes the old
+      reviewer_key field off each task stored with it, once, as the task's
+      next version.
     who: agent
     level: ordinary
     paths:
@@ -234,7 +236,6 @@ features:
       - platform/test/keyfleet_web/live/workspace_page_test.exs
       - platform/test/keyfleet/graph/review_queue_property_test.exs
     gaps:
-      - The named reviewer is only a note; the queue and the review rule ignore it.
       - No test shows the review queue leaving out a task in an archived project.
       - Whether the work reproduced is the reviewer's own word; the site runs nothing.
       - Not yet run by a real agent.
