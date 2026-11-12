@@ -2,7 +2,7 @@ defmodule Keyfleet.GraphPeer do
   @moduledoc """
   A graph machine for tests that cross the cluster: a peer node running what
   production's graph machine runs for its writers (`Keyfleet.Application`), the
-  repository, the `Keyfleet.Graph.Processes` scope and `Keyfleet.Graph.Supervisor`, while the
+  `Keyfleet.Graph.Processes` scope and `Keyfleet.Graph.Supervisor`, while the
   test's own node plays the site machine.
 
   The test's node joins a cluster for the case, so a case using it is never
@@ -33,9 +33,8 @@ defmodule Keyfleet.GraphPeer do
     # The suite prints only warnings and errors (config/test.exs); the graph
     # machine's warnings are what its tests provoke, so it prints only errors.
     :ok = :erpc.call(node, :logger, :set_primary_config, [:level, :error])
-    {:ok, _apps} = :erpc.call(node, Application, :ensure_all_started, [:ecto_sql])
+    {:ok, _apps} = :erpc.call(node, Application, :ensure_all_started, [:elixir])
     :ok = :erpc.call(node, Application, :put_env, [:keyfleet, :graph, graph_settings()])
-    :ok = :erpc.call(node, Application, :put_env, [:keyfleet, Keyfleet.Repo, repo_settings()])
     {:ok, _graph} = :erpc.call(node, __MODULE__, :run_graph, [opts])
     {peer, node}
   end
@@ -62,7 +61,6 @@ defmodule Keyfleet.GraphPeer do
 
     spawn(fn ->
       children = [
-        Keyfleet.Repo,
         %{id: Keyfleet.Graph.Processes, start: {:pg, :start_link, [Keyfleet.Graph.Processes]}},
         {Keyfleet.Graph.Supervisor, opts}
       ]
@@ -80,14 +78,6 @@ defmodule Keyfleet.GraphPeer do
   end
 
   defp graph_settings, do: Application.fetch_env!(:keyfleet, :graph)
-
-  # Its own connection to the test database, outside this node's sandbox: a
-  # writer holds a transaction from a write's check until its reply.
-  defp repo_settings,
-    do:
-      :keyfleet
-      |> Application.fetch_env!(Keyfleet.Repo)
-      |> Keyword.merge(pool: DBConnection.ConnectionPool, pool_size: 1)
 
   defp unique, do: System.unique_integer([:positive])
 

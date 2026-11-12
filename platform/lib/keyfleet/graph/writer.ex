@@ -22,11 +22,7 @@ defmodule Keyfleet.Graph.Writer do
   A write's authority is decided at its turn, inside the writer: whatever
   changed while it waited behind other requests, such as a key changing hands,
   counts. That check gets `:check_timeout` to read what it needs, and a caller
-  waits for it on top of the reply. The check and the send are one database
-  transaction, so what the check locks stays locked until the host has
-  answered: an agent's pairing, which an unpair then waits for
-  (`Keyfleet.Graph.Checks.KeyActor.held_command/5`). A write holds one of the
-  machine's database connections from its check until its reply.
+  waits for it on top of the reply.
   """
   use GenServer
 
@@ -162,37 +158,7 @@ defmodule Keyfleet.Graph.Writer do
     end
   end
 
-  # The check and the send are one transaction, so what the check locks, an
-  # agent's pairing, stays locked until the host has answered. A write whose
-  # database connection can't be had is not sent, as when its check can't
-  # read; one whose transaction then fails may have been.
   def handle_call({:command, op, body, authorize}, from, %{host: %{ready?: true}} = state) do
-    Keyfleet.Repo.checkout(fn -> held_send(op, body, authorize, from, state) end)
-  rescue
-    error -> {:reply, not_sent(state, "raised: " <> Exception.message(error)), state}
-  catch
-    :exit, reason -> {:reply, not_sent(state, "exited: " <> Exception.format_exit(reason)), state}
-  end
-
-  def handle_call(_request, _from, state), do: {:reply, {:error, :unavailable}, state}
-
-  # The transaction writes nothing, only holds locks, so it ends by rolling
-  # back, which carries the reply out whether or not the database is still
-  # there to answer.
-  defp held_send(op, body, authorize, from, state) do
-    {:error, reply} =
-      Keyfleet.Repo.transaction(fn ->
-        Keyfleet.Repo.rollback(checked_send(op, body, authorize, from, state))
-      end)
-
-    reply
-  rescue
-    error -> unknown(state, Exception.message(error))
-  catch
-    :exit, reason -> unknown(state, Exception.format_exit(reason))
-  end
-
-  defp checked_send(op, body, authorize, from, state) do
     case check(authorize, state) do
       {:ok, command} ->
         message = %{v: 1, op: op, command: command, body: Jason.Fragment.new(body)}
@@ -203,10 +169,7 @@ defmodule Keyfleet.Graph.Writer do
     end
   end
 
-  defp unknown(state, reason) do
-    Logger.warning("graph write for #{state.fleet_id}: its transaction failed: " <> reason)
-    {:reply, {:error, :indeterminate}, state}
-  end
+  def handle_call(_request, _from, state), do: {:reply, {:error, :unavailable}, state}
 
   # A database pool that is down or out of time exits its caller, and a fault
   # in the check raises; either would stop the writer, so a check that exits
@@ -214,14 +177,21 @@ defmodule Keyfleet.Graph.Writer do
   defp check({module, function, args}, state) do
     apply(module, function, args ++ [state.check_timeout])
   rescue
-    error -> not_sent(state, "raised: " <> Exception.message(error))
-  catch
-    :exit, reason -> not_sent(state, "exited: " <> Exception.format_exit(reason))
-  end
+    error ->
+      Logger.warning(
+        "graph write for #{state.fleet_id} not sent: its ownership check raised: " <>
+          Exception.message(error)
+      )
 
-  defp not_sent(state, how) do
-    Logger.warning("graph write for #{state.fleet_id} not sent: its ownership check " <> how)
-    {:error, :unavailable}
+      {:error, :unavailable}
+  catch
+    :exit, reason ->
+      Logger.warning(
+        "graph write for #{state.fleet_id} not sent: its ownership check exited: " <>
+          Exception.format_exit(reason)
+      )
+
+      {:error, :unavailable}
   end
 
   @impl true

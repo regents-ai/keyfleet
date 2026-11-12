@@ -5,8 +5,8 @@ defmodule Keyfleet.Projects.Hold do
   it (`Keyfleet.Projects.Project`). The actor acts as the Key the same way
   a workspace write does (`Keyfleet.Graph.Checks.KeyActor`), read in the
   one transaction in which the step is checked against the projects the Key
-  holds and made, an agent's pairing held until it commits. A refusal says why in words that name the project
-  (`Keyfleet.Projects.Errors.HoldError`).
+  holds and made, an agent's pairing held until it commits. A refusal says
+  why in words that name the project (`Keyfleet.Projects.Errors.HoldError`).
 
   The database keeps each rule even when two steps run at once: one active
   project per Key is a unique index, and each change of state is made only

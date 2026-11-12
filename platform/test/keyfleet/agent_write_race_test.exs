@@ -1,33 +1,46 @@
 defmodule Keyfleet.AgentWriteRaceTest do
   @moduledoc """
-  A workspace write by an agent and the agent's unpairing at the same moment,
-  each on a connection of its own, as two requests are. The write's check
-  holds the agent's pairing until the write ends, so the unpair waits for it;
-  a write checked after the unpair is refused. Everything committed here is
-  removed, and the fleet put back unbound, when the test ends.
+  A project step by an agent and the agent's unpairing at the same moment,
+  each on a connection of its own, as two requests are. The step's check
+  holds the agent's pairing until the step commits, so the unpair waits for
+  it; a step checked after the unpair is refused. Everything committed here
+  is removed, and the fleet put back unbound, when the test ends.
   """
   use ExUnit.Case, async: false
 
   import Ecto.Query
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias Keyfleet.{Accounts, Actors, ChainHelpers, CommittedAccount, CommittedCatalog, Keys, Repo}
+
+  alias Keyfleet.{
+    Accounts,
+    Actors,
+    ChainHelpers,
+    CommittedAccount,
+    CommittedCatalog,
+    Keys,
+    Projects,
+    Repo
+  }
+
   alias Keyfleet.Fleets.Fleet
-  alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.Graph.Errors.NotKeyHolderError
 
   @fleet "fibonacci_syndicate"
+  # The fleet's `general` project is held by Key 3.
+  @token_id 3
 
   setup do
     person_id = "did:privy:agent-write-race-" <> Base.encode16(:crypto.strong_rand_bytes(6))
     person_wallet = random_wallet()
-    token_id = :rand.uniform(1_000_000_000) + 1_000_000_000
+    token_id = @token_id
 
     added_fleets = Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
+    general = Sandbox.unboxed_run(Repo, &ensure_general/0)
 
     on_exit(fn ->
       Sandbox.unboxed_run(Repo, fn ->
         clean_up(person_id, token_id)
+        put_back(general)
         CommittedAccount.remove!(person_id)
 
         # Fleets have no action that unbinds a deployment, since the site never
@@ -53,10 +66,10 @@ defmodule Keyfleet.AgentWriteRaceTest do
     end)
   end
 
-  test "an agent unpaired while its workspace write is checked is unpaired once the write ends",
+  test "an agent unpaired while its project step is checked is unpaired once the step commits",
        c do
-    {held, release} = hold(fn -> write(c) end)
-    assert {:ok, %{auth: %{kind: "agent"}}} = held
+    {held, release} = hold(fn -> show(c, true) end)
+    assert {:ok, %{shown_to_everyone: true}} = held
 
     unpairing = on_own_connection(fn -> unpair(c) end)
     refute Task.yield(unpairing, 300)
@@ -65,15 +78,46 @@ defmodule Keyfleet.AgentWriteRaceTest do
     assert :ok = Task.await(unpairing, 10_000)
 
     # The request read the agent while it was still paired.
-    assert {:error, %NotKeyHolderError{}} = Sandbox.unboxed_run(Repo, fn -> write(c) end)
+    assert {:error, %Ash.Error.Forbidden{}} = Sandbox.unboxed_run(Repo, fn -> show(c, false) end)
   end
 
-  defp write(c) do
-    Repo.transaction(fn ->
-      KeyActor.held_command(c.agent, @fleet, c.token_id, "c-1", 5_000)
-    end)
-    |> then(fn {:ok, checked} -> checked end)
+  # A held step runs inside the test's own open transaction; that is the
+  # hold's doing, not the step's.
+  defp show(c, shown?) do
+    Projects.show_project(@fleet, c.token_id, "general", shown?,
+      actor: c.agent,
+      context: %{warn_on_transaction_hooks?: false}
+    )
   end
+
+  # The fleet's `general`, committed here unless the database holds it
+  # already, as the local database's own setup leaves it: what the test
+  # changes of it, or the project itself if it made it, is put back.
+  defp ensure_general do
+    case general_row() do
+      [shown] ->
+        {:had, shown}
+
+      [] ->
+        Projects.bootstrap_general!([@fleet])
+        :made
+    end
+  end
+
+  defp put_back({:had, shown}) do
+    Repo.update_all(general_query(), set: [shown_to_everyone: shown])
+  end
+
+  defp put_back(:made), do: Repo.delete_all(general_query())
+
+  defp general_row, do: Repo.all(select(general_query(), [project], project.shown_to_everyone))
+
+  defp general_query,
+    do:
+      from(project in "projects",
+        prefix: "keyfleet_app",
+        where: project.fleet_id == ^@fleet and project.name == "general"
+      )
 
   defp unpair(c) do
     person = %RegentAgents.Person{privy_user_id: c.person_id}
