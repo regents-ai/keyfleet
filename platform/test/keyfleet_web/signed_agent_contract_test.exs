@@ -145,6 +145,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "keys" => [%{"token_id" => 1, "after_seq" => 0}],
        "dms" => %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]},
        "quotes" => %{"after_seq" => 0},
+       "mentions" => %{"after" => nil},
        "run" => %{"kind" => "session"},
        "max_bytes" => 16_384
      }},
@@ -155,6 +156,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
     {"POST", @sync, ["dms"], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
     {"POST", @sync, ["quotes"], %{"after_seq" => 0}},
+    {"POST", @sync, ["mentions"], %{"after" => nil}},
     {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
     {"POST", @presence, [], %{}},
     {"POST", @propose, [],
