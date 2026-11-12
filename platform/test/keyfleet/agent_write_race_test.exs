@@ -105,12 +105,20 @@ defmodule Keyfleet.AgentWriteRaceTest do
   end
 
   defp put_back({:had, shown}) do
+    # Directly: a project's actions are a Key's steps, none of them the
+    # teardown's to take.
     Repo.update_all(general_query(), set: [shown_to_everyone: shown])
   end
 
-  defp put_back(:made), do: Repo.delete_all(general_query())
+  defp put_back(:made) do
+    # Directly: no action removes a project's row.
+    Repo.delete_all(general_query())
+  end
 
-  defp general_row, do: Repo.all(select(general_query(), [project], project.shown_to_everyone))
+  defp general_row do
+    # Read as the database holds it, past every policy, for the teardown.
+    Repo.all(select(general_query(), [project], project.shown_to_everyone))
+  end
 
   defp general_query,
     do:
