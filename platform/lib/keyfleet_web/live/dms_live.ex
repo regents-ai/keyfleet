@@ -100,7 +100,6 @@ defmodule KeyfleetWeb.DmsLive do
   attr :messages, :any, required: true, doc: "its latest messages, oldest first"
   attr :form, Phoenix.HTML.Form, default: nil
   attr :notice, :string, default: nil
-  attr :confirm_delete, :boolean, default: false
 
   def conversation(assigns) do
     ~H"""
@@ -143,6 +142,8 @@ defmodule KeyfleetWeb.DmsLive do
             type="button"
             variant="secondary"
             phx-click="dm_block"
+            data-confirm={"Block Key #{Rules.grouped(@dms.other_token_id)}? Its messages still arrive, under Blocked, and it isn’t told."}
+            data-confirm-action="Block"
           >
             Block
           </Regent.Primitives.button>
@@ -156,32 +157,17 @@ defmodule KeyfleetWeb.DmsLive do
             Unblock
           </Regent.Primitives.button>
 
-          <div class="dms-delete">
-            <Regent.Primitives.button
-              :if={not @confirm_delete}
-              id="dms-ask-delete"
-              type="button"
-              variant="quiet"
-              disabled={is_nil(@dms.conversation)}
-              phx-click="dm_ask_delete"
-            >
-              Delete conversation
-            </Regent.Primitives.button>
-            <p :if={@confirm_delete} class="rooms-detail">Delete for you only?</p>
-            <div :if={@confirm_delete} class="dms-delete-choices">
-              <Regent.Primitives.button id="dms-delete" type="button" phx-click="dm_delete">
-                Delete
-              </Regent.Primitives.button>
-              <Regent.Primitives.button
-                id="dms-keep"
-                type="button"
-                variant="quiet"
-                phx-click="dm_keep"
-              >
-                Keep
-              </Regent.Primitives.button>
-            </div>
-          </div>
+          <Regent.Primitives.button
+            id="dms-delete"
+            type="button"
+            variant="quiet"
+            disabled={is_nil(@dms.conversation)}
+            phx-click="dm_delete"
+            data-confirm={"Delete this conversation for you only? Key #{Rules.grouped(@dms.other_token_id)} keeps its copy."}
+            data-confirm-action="Delete"
+          >
+            Delete conversation
+          </Regent.Primitives.button>
         </section>
 
         <section class="rooms-panel rooms-thread" aria-labelledby="dms-thread-title">
@@ -447,7 +433,7 @@ defmodule KeyfleetWeb.DmsLive do
     }
 
     socket
-    |> assign(dm_notice: nil, dm_confirm_delete: false)
+    |> assign(:dm_notice, nil)
     |> show_view(route_id, shown, actor)
   end
 
@@ -616,12 +602,6 @@ defmodule KeyfleetWeb.DmsLive do
     end
   end
 
-  def handle_event("dm_ask_delete", _params, %{assigns: %{dms: %{conversation: %{}}}} = socket),
-    do: {:noreply, assign(socket, :dm_confirm_delete, true)}
-
-  def handle_event("dm_keep", _params, socket),
-    do: {:noreply, assign(socket, :dm_confirm_delete, false)}
-
   def handle_event("dm_delete", _params, %{assigns: %{dms: %{conversation: %{}} = dms}} = socket) do
     case Dms.delete_conversation(dms.conversation, dms.token_id,
            actor: ShellLive.human_actor(socket)
@@ -630,7 +610,7 @@ defmodule KeyfleetWeb.DmsLive do
         {:noreply, push_patch(socket, to: inbox_path(dms))}
 
       {:error, error} ->
-        {:noreply, socket |> assign(:dm_confirm_delete, false) |> failed(error)}
+        {:noreply, failed(socket, error)}
     end
   end
 
@@ -655,7 +635,7 @@ defmodule KeyfleetWeb.DmsLive do
   defp refused(%{assigns: %{dms: dms}} = socket) do
     if Chain.fresh?(dms.fleet_id) do
       socket
-      |> assign(dm_notice: nil, dm_confirm_delete: false)
+      |> assign(:dm_notice, nil)
       |> close(%{
         fleet_id: dms.fleet_id,
         token_id: dms.token_id,
@@ -700,8 +680,7 @@ defmodule KeyfleetWeb.DmsLive do
          socket
          |> assign(
            dms: %{dms | conversation: nil, last_seq: 0},
-           dm_notice: "This conversation was deleted.",
-           dm_confirm_delete: false
+           dm_notice: "This conversation was deleted."
          )
          |> stream(:dm_thread, [], reset: true)}
 

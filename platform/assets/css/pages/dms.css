@@ -20,19 +20,6 @@
   font-size: 1rem;
 }
 
-/* Asking "Delete for you only?" keeps the space the button had. */
-.dms-delete {
-  display: grid;
-  gap: 0.5rem;
-  min-height: 4.5rem;
-  align-content: start;
-}
-
-.dms-delete-choices {
-  display: flex;
-  gap: 0.5rem;
-}
-
 /* The line under the box keeps its space, so nothing moves when it speaks. */
 .dms-notice {
   min-height: 1.5rem;

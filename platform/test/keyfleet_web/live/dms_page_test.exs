@@ -80,6 +80,22 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
     refute has_element?(page, "#dms-thread-list", "Are you there?")
   end
 
+  # The shared confirm window asks in the browser; the press it lets through
+  # sends the event at once.
+  test "Block and Delete conversation ask first, then act", %{conn: conn} do
+    send!(wallet("b"), 2, 1, "Hello, Key 1")
+    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
+
+    assert has_element?(page, ~s(#dms-block[data-confirm-action="Block"][data-confirm]))
+    page |> element("#dms-block") |> render_click()
+    assert has_element?(page, "#dms-blocked-note", "Blocked")
+    assert has_element?(page, "#dms-unblock")
+
+    assert has_element?(page, ~s(#dms-delete[data-confirm-action="Delete"][data-confirm]))
+    page |> element("#dms-delete") |> render_click()
+    assert_patch(page, "/cascade/1/keys/1/dms")
+  end
+
   # Account c signs in with wallets c and a, so it reads and sends as Key 1
   # until a is unlinked from it, with the page still open.
   describe "an open page reads and sends as the sign-in of the moment" do

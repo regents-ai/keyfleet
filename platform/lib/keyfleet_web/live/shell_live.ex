@@ -58,7 +58,7 @@ defmodule KeyfleetWeb.ShellLive do
   @fleet_events ~w(activity_earlier open_pass_key keymap_ready keymap_pictures find_keys select_key validate_quote send_quote)
   @room_events ~w(mute_key unmute_key post_to_room)
   @key_profile_events ~w(post_to_key remove_from_wall close_key)
-  @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
+  @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
   @search_events ~w(search search_more)
   @sign_in_events ~w(open_notebooks get_code_password)
@@ -123,7 +123,6 @@ defmodule KeyfleetWeb.ShellLive do
        dms_topic: nil,
        dm_form: nil,
        dm_notice: nil,
-       dm_confirm_delete: false,
        room: nil,
        room_notice: nil,
        room_topic: nil,
@@ -874,7 +873,6 @@ defmodule KeyfleetWeb.ShellLive do
           messages={@streams.dm_thread}
           form={@dm_form}
           notice={@dm_notice}
-          confirm_delete={@dm_confirm_delete}
         />
 
         <PollsLive.list
@@ -1270,7 +1268,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_dms(socket, _route_spec, _params) do
     socket
     |> follow_dms(nil)
-    |> assign(dms: nil, dm_form: nil, dm_notice: nil, dm_confirm_delete: false)
+    |> assign(dms: nil, dm_form: nil, dm_notice: nil)
     |> stream(:dm_thread, [], reset: true)
   end
 

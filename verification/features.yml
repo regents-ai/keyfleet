@@ -1168,8 +1168,9 @@ features:
       Before a press that can't be undone, Keyfleet asks in the shared
       cut-corner confirm window every Regent site uses, never the browser's box:
       Unpair on the Agents page and in an agent's window, Delete on the member's
-      own archived project, End poll for the poll's starter, and the × that takes
-      a post off the member's own Key's wall. The window opens with focus on
+      own archived project, End poll for the poll's starter, the × that takes
+      a post off the member's own Key's wall, and Block and Delete conversation
+      in a direct message. The window opens with focus on
       Cancel; Cancel or Escape close it and hand focus back to the button that
       opened it, and only its going-ahead button presses that button again, once.
       No on-chain press asks first. The server still decides whether the press
@@ -1183,20 +1184,23 @@ features:
       - platform/lib/keyfleet_web/live/workspace_live.ex
       - platform/lib/keyfleet_web/live/polls_live.ex
       - platform/lib/keyfleet_web/live/key_profile_live.ex
+      - platform/lib/keyfleet_web/live/dms_live.ex
       - platform/lib/keyfleet_web/live/shell_live.ex
     entry:
       - route: GET /account/agents
       - route: GET /:fleet/:number/workspace
       - route: GET /:fleet/:number/polls/:poll_id
       - route: GET /:fleet/:number?key=:token_id
+      - route: GET /:fleet/:number/keys/:token_id/dms/:other_token_id
     proofs:
       - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/keyfleet_web/live/dms_page_test.exs
       - platform/test/keyfleet_web/live/key_profile_test.exs
       - platform/test/keyfleet_web/live/workspace_page_test.exs
       - platform/test/keyfleet_web/live/polls_page_test.exs
       - platform/test/browser/account_agents.spec.ts
     gaps:
-      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three use the same window.
+      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the others use the same window.
       - WebKit is not run on the Mac.
 
   - id: claude-connector
