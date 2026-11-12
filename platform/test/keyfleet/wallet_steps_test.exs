@@ -5,6 +5,7 @@ defmodule Keyfleet.WalletStepsTest do
   use ExUnit.Case, async: false
 
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Chain.{OwnershipLog, ShardsLog}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ChainViews
   alias Keyfleet.Fleets
@@ -69,6 +70,46 @@ defmodule Keyfleet.WalletStepsTest do
 
   defp status(fleet, proposal, status),
     do: {fleet.votes_address, "status(uint256)", [proposal], {"uint8", [status]}}
+
+  # --- blocks the chain reader hasn't read: it has read up to block 1_000 ---
+
+  defp past_reader, do: %{ChainViews.head() | number: 1_010}
+
+  # The log of Key `key` moving to `wallet` in block `block`.
+  defp moved(fleet, key, wallet, block),
+    do:
+      log(
+        fleet.keys_address,
+        [OwnershipLog.topic(), word(id(key)), word(0), address_word(wallet)],
+        word(1),
+        block
+      )
+
+  # The log of `wallet` issued a shard of Key `key` in block `block`.
+  defp shard_issued(fleet, key, wallet, block),
+    do:
+      log(
+        fleet.shards_address,
+        [ShardsLog.issued_topic(), word(id(key)), address_word(wallet)],
+        word(@now + 86_400) <> String.slice(word(1), 2..-1//1),
+        block
+      )
+
+  defp log(address, topics, data, block),
+    do: %{
+      "address" => address,
+      "topics" => topics,
+      "data" => data,
+      "blockNumber" => "0x" <> Integer.to_string(block, 16),
+      "blockHash" => "0x" <> String.duplicate("b", 64),
+      "transactionHash" => word(block),
+      "logIndex" => "0x0"
+    }
+
+  defp word(value),
+    do: "0x" <> String.pad_leading(String.downcase(Integer.to_string(value, 16)), 64, "0")
+
+  defp address_word("0x" <> address), do: "0x" <> String.duplicate("0", 24) <> address
 
   describe "who may build" do
     test "only a signed-in person, for a wallet their account links", %{fleet: fleet} do
@@ -437,6 +478,87 @@ defmodule Keyfleet.WalletStepsTest do
       ChainViews.put!([])
       assert build!(:present).figures.blocked == %{"present" => :no_keys}
     end
+
+    test "Keys that reached the signer after the reader's last block are marked with the others",
+         %{fleet: fleet} do
+      ProposalHelpers.keys_sold!(@fleet, [1], @signer)
+
+      ChainViews.put!(
+        [
+          owner(fleet, 1, @signer),
+          owner(fleet, 4, @signer),
+          owner(fleet, 6, @other),
+          shard(fleet, "isActive", 6, @signer, true),
+          # Key 9 reached the signer and has left it since.
+          owner(fleet, 9, @other),
+          shard(fleet, "isActive", 9, @signer, false)
+        ] ++ presence(fleet, 1, nil) ++ presence(fleet, 4, nil) ++ presence(fleet, 6, nil),
+        head: past_reader(),
+        logs: [
+          moved(fleet, 9, @signer, 1_002),
+          moved(fleet, 4, @signer, 1_004),
+          shard_issued(fleet, 6, @signer, 1_006),
+          moved(fleet, 8, @other, 1_008),
+          moved(fleet, 9, @other, 1_009)
+        ]
+      )
+
+      built = build!(:present)
+      assert built.problem == nil
+      assert built.figures.blocked == %{}
+
+      assert steps(built)["present"].data ==
+               BuilderCode.append(Call.encode("present(uint256[])", [ids([1, 4, 6])]))
+    end
+
+    test "a wallet whose one Key left it after the reader's last block has none to mark",
+         %{fleet: fleet} do
+      ProposalHelpers.keys_sold!(@fleet, [1], @signer)
+
+      ChainViews.put!([owner(fleet, 1, @other), shard(fleet, "isActive", 1, @signer, false)],
+        head: past_reader(),
+        logs: [moved(fleet, 1, @other, 1_005)]
+      )
+
+      assert build!(:present).figures.blocked == %{"present" => :no_keys}
+    end
+  end
+
+  describe "a wallet's Keys the chain doesn't bring up to date" do
+    # The node refuses to answer for the blocks the reader hasn't read. The
+    # record says the signer holds Key 1, which has left it, and some other
+    # Key may have reached it: no press is certain to fail.
+    test "Vote, Mark present and Claim all still send with the Keys known, and say the chain couldn't be read",
+         %{fleet: fleet} do
+      ProposalHelpers.keys_sold!(@fleet, [1], @signer)
+
+      ChainViews.put!(
+        [
+          owner(fleet, 1, @other),
+          shard(fleet, "isActive", 1, @signer, false),
+          shard(fleet, "mayGovern", 1, @signer, false),
+          status(fleet, 4, 0),
+          {fleet.rewards_address, "rewardAssets()", [], {"address[]", [[@usdc]]}},
+          uint(fleet.rewards_address, "credits(address,address)", [@usdc, @signer], 0)
+        ],
+        head: past_reader(),
+        logs: [moved(fleet, 1, @other, 1_005)],
+        max_logs: 0
+      )
+
+      for {flow, arguments, step, call} <- [
+            {:present, [], "present", Call.encode("present(uint256[])", [[]])},
+            {:ballot, [proposal: 4], "yes",
+             Call.encode("castBallot(uint256,uint256[],uint8)", [4, [], 1])},
+            {:claim_all, [], "claim-#{@usdc}",
+             Call.encode("claim(uint256[],address[])", [[], [@usdc]])}
+          ] do
+        built = build!(flow, arguments)
+        assert built.problem == :unread
+        assert built.figures.blocked == %{}
+        assert steps(built)[step].data == BuilderCode.append(call)
+      end
+    end
   end
 
   describe "shards" do
@@ -604,6 +726,22 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["yes"].data ==
                BuilderCode.append(
                  Call.encode("castBallot(uint256,uint256[],uint8)", [4, ids([1, 5]), 1])
+               )
+    end
+
+    test "a Key moved to the signer after the reader's last block votes too", %{fleet: fleet} do
+      ChainViews.put!(
+        ballot_views(fleet, 0, true) ++ [owner(fleet, 3, @signer), matures(fleet, 3, @now - 1)],
+        head: past_reader(),
+        logs: [moved(fleet, 3, @signer, 1_003)]
+      )
+
+      built = build!(:ballot, proposal: 4)
+      assert %{keys: [1, 2, 3, 5], blocked: %{}} = built.figures
+
+      assert steps(built)["yes"].data ==
+               BuilderCode.append(
+                 Call.encode("castBallot(uint256,uint256[],uint8)", [4, ids([1, 2, 3, 5]), 1])
                )
     end
 

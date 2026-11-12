@@ -56,6 +56,16 @@ defmodule Keyfleet.WalletSteps.Reads do
     end
   end
 
+  @doc """
+  The logs `addresses` made with any of `topics` as their topic0, from block
+  `from` to the head block: none when `from` is past the head.
+  """
+  def logs(%__MODULE__{head: %{number: head}}, _addresses, _topics, from) when from > head,
+    do: {:ok, []}
+
+  def logs(%__MODULE__{client: client, head: head}, addresses, topics, from),
+    do: client.get_logs(addresses, topics, from, head.number)
+
   @doc "An account's ETH at the head block, in wei."
   def balance(%__MODULE__{client: client, head: head}, account),
     do: client.get_balance(account, head.hash)

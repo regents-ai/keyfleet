@@ -24,9 +24,10 @@ defmodule Keyfleet.ChainViews do
   Puts the chain answering `views`, each `{to, signature, arguments,
   answer}`: `answer` is `{types, values}`, like `{"uint256", [5]}`, or
   `:revert`. `opts` may name `:head`, `:balances`, the ETH each address
-  holds, and `:codes`, the chain's answer for the code at each address. A
-  later `put!/2` in the same test changes the answers every process reads
-  from then on, including a page that has read the chain already.
+  holds, `:codes`, the chain's answer for the code at each address, and
+  `:logs` and `:max_logs`, as `Keyfleet.Chain.StubClient.put_chain/3` takes
+  them. A later `put!/2` in the same test changes the answers every process
+  reads from then on, including a page that has read the chain already.
   """
   def put!(views, opts \\ []) do
     answers =
@@ -37,9 +38,10 @@ defmodule Keyfleet.ChainViews do
     test = self()
     Process.put(__MODULE__, answers)
 
-    StubClient.put_chain(Keyword.get(opts, :head, @head), [],
+    StubClient.put_chain(Keyword.get(opts, :head, @head), Keyword.get(opts, :logs, []),
       balances: Keyword.get(opts, :balances, %{}),
       codes: Keyword.get(opts, :codes, %{}),
+      max_logs: Keyword.get(opts, :max_logs),
       calls: fn to, data, _block_hash -> answer(test, to, data) end
     )
   end
@@ -51,7 +53,11 @@ defmodule Keyfleet.ChainViews do
   """
   def share! do
     test = self()
-    StubClient.share_chain(@head, calls: fn to, data, _block_hash -> answer(test, to, data) end)
+
+    StubClient.share_chain(@head, [],
+      calls: fn to, data, _block_hash -> answer(test, to, data) end
+    )
+
     ExUnit.Callbacks.on_exit(&StubClient.unshare_chain/0)
   end
 

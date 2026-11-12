@@ -31,8 +31,12 @@
 (*             starter, the code store's pre-receive hook, a project       *)
 (*             deleted only by the Key that started it (Hold, 12 Nov).     *)
 (*   Wallet    WalletSteps.Build for the agent's own wallet: standing read *)
-(*   steps     at the latest block (wallet_steps/reads.ex); the Keys it    *)
-(*             offers come from the site's record (build.ex). A blocked    *)
+(*   steps     at the latest block (wallet_steps/reads.ex). The Keys it    *)
+(*             offers are the site's record and those one chain read finds *)
+(*             reached the wallet since the record's last block            *)
+(*             (Build.own_keys/3, 12 Nov); when that read fails, nothing   *)
+(*             is blocked for want of a Key and the agent is told the      *)
+(*             chain can't be read (AgentChainController, 503). A blocked  *)
 (*             step is still returned to an agent, which may send it; the  *)
 (*             contract decides.                                           *)
 (*                                                                         *)
@@ -86,7 +90,7 @@ Targets(a) ==
     [] a = "poll_end"       -> {"started_it", "other_started_it"}
     [] a = "code_push"      -> {"adds", "force", "deletes", "moves_tag"}
     [] a = "project_delete" -> {"made_by_this_key", "taken_over"}
-    [] a = "chain_ballot"   -> {"record_current", "record_behind"}
+    [] a = "chain_ballot"   -> {"record_current", "record_behind", "read_failed"}
     [] OTHER                -> {"plain"}
 
 KeyNamed == {"workspace_edit", "workspace_fork", "code_push", "project_delete"}
@@ -139,9 +143,19 @@ AuthorizedAtHead(r, v) ==
   \/ MayActAtHead(r, v)
   \/ (Broken = "contract_ignores_voting" /\ action = "chain_ballot" /\ r \in ShardRoles)
 
-(* The Keys the site offers come from its own record; a Key bought or a
-   shard received after the reader's last read is not there yet. *)
-Offered(t) == t /= "record_behind"
+(* For a ballot, K's place in the site's record.
+   record_current  the record has K
+   record_behind   K reached the wallet after the record's last block, and
+                   the chain read since that block finds it
+   read_failed     K reached the wallet after the record's last block, and
+                   the chain doesn't answer that read *)
+Answered(t) == t /= "read_failed"
+
+(* The Keys the site offers: its record and those the chain read finds.
+   "record_only_keys" offers the record's alone, as before 12 Nov. *)
+Offered(t) ==
+  /\ Answered(t)
+  /\ (t = "record_behind" => Broken /= "record_only_keys")
 
 (* A poll vote cast through a shard counts only while agent voting is on. *)
 VotingOk(v) ==
@@ -233,12 +247,15 @@ CheckRule ==
   /\ UNCHANGED <<action, signedIn, wallet, paired, role, fresh, restricted>>
 
 (* Wallet steps: the head read decides whether the step is handed over or
-   blocked with its reason. *)
+   blocked with its reason. When the chain doesn't answer which Keys reached
+   the wallet, an agent is told it can't be read, and asks again. *)
 ReadHead ==
   /\ phase = "built"
   /\ \E r \in Roles, v \in BOOLEAN, t \in Targets(action) :
        /\ role' = r /\ voting' = v /\ target' = t
-       /\ IF (AuthorizedAtHead(r, v) \/ Broken = "steps_ignore_head") /\ Offered(t)
+       /\ IF ~Answered(t)
+            THEN Refuse("chain_unavailable")
+          ELSE IF (AuthorizedAtHead(r, v) \/ Broken = "steps_ignore_head") /\ Offered(t)
             THEN Pass("handed_over")
             ELSE /\ phase' = "blocked"
                  /\ reason' = IF ~Offered(t) THEN "no_keys" ELSE "not_your_key"
@@ -337,10 +354,10 @@ WalletStepsOnlyForHolder ==
 MessagesFollowWorkspaceRule ==
   (action = "dm_send" /\ phase = "allowed") => role /= "shard_owns_other"
 
-(* Open finding F4. Rule 11: a press is withheld only when the chain's own
-   state says it fails (breaks: the offered Keys come from the site's
-   record, so a Key bought or a shard received within the reader's lag is
-   withheld). *)
+(* Rule 11: a press is withheld only when the chain's own state says it
+   fails, so a Key bought or a shard received within the reader's lag is
+   offered (F4, fixed 12 Nov 2026, Sean's 3b: Build.own_keys/3 reads the
+   chain from the record's last block). *)
 BlockedOnlyWhenChainSaysNo == phase = "blocked" => ~MayActAtHead(role, voting)
 
 (* A Key deletes only projects it started, never one it took over (F2, fixed

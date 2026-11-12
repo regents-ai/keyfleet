@@ -4,7 +4,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   carrying a proposal out. `Keyfleet.WalletSteps.Build` describes what every
   builder answers.
 
-  A ballot is cast with every key the signer may vote: those it holds, and
+  A ballot is cast with every key the signer may vote at the head
+  (`Keyfleet.WalletSteps.Build.own_keys/3`): those it holds, and
   those it holds an active shard of while the key's agent voting is on, less
   any sold under two days ago, which the vote contract refuses. While a
   proposal that moves money waits its day after closing, the one ballot the
@@ -38,10 +39,10 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
   @doc false
   def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
-    candidates = Build.own_keys(fleet, signer)
     figures = %{keys: [], status: nil}
 
     with {:ok, reads} <- Reads.at_head(),
+         {candidates, unread} = Build.own_keys(reads, fleet, signer),
          {:ok, status} <- status(reads, fleet, proposal),
          {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "mayGovern"),
          governed = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
@@ -67,8 +68,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          keys: keys,
          undecided: keys -- Proposals.voted_keys(fleet.id, proposal),
          status: status,
-         blocked: ballot_blocked(status, governed, keys)
-       }}
+         blocked: ballot_blocked(status, governed, keys, unread)
+       }, unread}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -211,18 +212,20 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
   # Why each choice of a ballot is certain to fail, if it is. `governed` is
   # the keys the signer may vote and `keys` those of them old enough to.
-  defp ballot_blocked(status, _governed, _keys) when status not in [:open, :waiting],
+  defp ballot_blocked(status, _governed, _keys, _unread) when status not in [:open, :waiting],
     do: every_choice(:voting_closed)
 
-  defp ballot_blocked(_status, [], _keys), do: every_choice(:no_keys)
-  defp ballot_blocked(_status, _governed, []), do: every_choice(:too_new)
+  # Only a list of the signer's Keys brought up to the head says it has none
+  # to vote; one the chain didn't bring up holds no ballot back.
+  defp ballot_blocked(_status, [], _keys, nil), do: every_choice(:no_keys)
+  defp ballot_blocked(_status, _governed, [], nil), do: every_choice(:too_new)
 
   # A money proposal waiting its day takes only No ballots, which cancel it
   # once Yes no longer reaches the bar.
-  defp ballot_blocked(:waiting, _governed, _keys),
+  defp ballot_blocked(:waiting, _governed, _keys, _unread),
     do: Map.delete(every_choice(:only_no), "no")
 
-  defp ballot_blocked(:open, _governed, _keys), do: %{}
+  defp ballot_blocked(:open, _governed, _keys, _unread), do: %{}
 
   defp every_choice(reason), do: Map.new(@choices, fn {name, _choice} -> {name, reason} end)
 

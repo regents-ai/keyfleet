@@ -10,7 +10,7 @@ defmodule Keyfleet.Chain.StubClient do
 
   A process a test starts, such as a page's background read, answers with
   the chain of the test that started it. The browser test server, whose pages
-  no test starts, shares one chain with all of them (`share_chain/2`). Each
+  no test starts, shares one chain with all of them (`share_chain/3`). Each
   process keeps the requests it made itself.
   """
 
@@ -43,9 +43,10 @@ defmodule Keyfleet.Chain.StubClient do
   process that started it put one, as `put_chain/3` does. For the browser
   test server only.
   """
-  def share_chain(head, opts), do: :persistent_term.put(__MODULE__, new_chain(head, [], opts))
+  def share_chain(head, logs, opts),
+    do: :persistent_term.put(__MODULE__, new_chain(head, logs, opts))
 
-  @doc "Takes back the chain `share_chain/2` put."
+  @doc "Takes back the chain `share_chain/3` put."
   def unshare_chain, do: :persistent_term.erase(__MODULE__)
 
   defp new_chain(head, logs, opts) do

@@ -4,7 +4,8 @@ import {defineConfig, devices} from "@playwright/test"
 // The specs here sell and move keys, and issue and end their shards, on the
 // server while a page watches, and land the steps a page's wallet buttons
 // send. A key's profile is checked in Chromium, Firefox and WebKit; the map,
-// the fleet page's motion, the wallet buttons, a key's shards, muting a key
+// the fleet page's motion, the wallet buttons, the Keys Vote, Mark present
+// and Claim all send, a key's shards, muting a key
 // in a room, the copy buttons, the pages' security policy, the links
 // between the in-app pages, the agent tools the pages register and managing
 // paired agents on the Agents page, the Treasury's last reading and its
@@ -38,7 +39,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

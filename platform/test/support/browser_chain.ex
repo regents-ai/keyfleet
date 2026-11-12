@@ -15,15 +15,18 @@ defmodule Keyfleet.BrowserChain do
 
   The pages' own chain reads are answered by one chain the server's pages
   share. A key sold or moved here is held by its new owner there too, and a
-  shard issued here is active there until it is ended here. The keys are
-  paid in USDC alone, and no wallet has a credit of its own; a key offered
-  rewards (`offer_rewards!/3`) has them waiting, and for any other key the
-  node fails. No key has its seed yet: a key's request for its random draw
+  shard issued here is active there until it is ended here. A key moved by
+  `move_unread!/3` is moved there in a block the reader hasn't read: the
+  site's record has the move only once the fleet's next pass reads it. The
+  keys are paid in USDC alone, and no wallet has a credit of its own; a key
+  offered rewards (`offer_rewards!/3`) has them waiting, and for any other key
+  the node fails. No key has its seed yet: a key's request for its random draw
   was accepted until `refuse_draw!/3` says it was turned down. A wallet has
   allowed a fleet the USDC `allow!/2` names, and none until then. A step a
   page's wallet sent is on the chain once `land!/3` puts it on the server's
-  `Keyfleet.TestChainNode`. A Key is marked present once `present!/2` logs
-  it.
+  `Keyfleet.TestChainNode`. On the vote contract every key has been able to
+  take part since 1970, none is present, and every proposal is open; the
+  site's record has a key marked present once `present!/2` logs it.
   """
 
   alias Keyfleet.Actors.Agent
@@ -67,6 +70,10 @@ defmodule Keyfleet.BrowserChain do
   @next_price Call.selector("nextPrice()")
   @credits Call.selector("credits(address,address)")
   @shard_is_active Call.selector("isActive(uint256,address)")
+  @present_now Call.selector("isActive(uint256)")
+  @present_from Call.selector("presentFrom(uint256)")
+  @matures_at Call.selector("maturesAt(uint256)")
+  @status Call.selector("status(uint256)")
   @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
   @shard_ended Event.topic0("ShardEnded(uint256,address,address)")
   @present Event.topic0("Present(uint256,uint64,uint64,uint64)")
@@ -128,16 +135,7 @@ defmodule Keyfleet.BrowserChain do
 
     pass!(fleet_id, [])
     remember(:on_sale, fleet_id)
-
-    StubClient.share_chain(
-      %{
-        number: 1,
-        hash: "0x" <> String.duplicate("f", 64),
-        timestamp: DateTime.utc_now(),
-        base_fee: 0
-      },
-      calls: &answer/3
-    )
+    StubClient.share_chain(head(1), [], calls: &answer/3)
 
     TestChainNode.answer_calls(&answer/3)
 
@@ -235,6 +233,11 @@ defmodule Keyfleet.BrowserChain do
     {:ok, <<if(Map.get(answers(), key, false), do: 1, else: 0)::256>>}
   end
 
+  defp answer(_votes, @present_now <> _token_id, _block_hash), do: {:ok, <<0::256>>}
+  defp answer(_votes, @present_from <> _token_id, _block_hash), do: {:ok, <<0::256>>}
+  defp answer(_votes, @matures_at <> _token_id, _block_hash), do: {:ok, <<1::256>>}
+  defp answer(_votes, @status <> _proposal, _block_hash), do: {:ok, <<0::256>>}
+
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
 
   # Every fleet's deck is set on the chain.
@@ -286,6 +289,36 @@ defmodule Keyfleet.BrowserChain do
     %{ownership_epoch: epoch} = Keys.current_key!(fleet_id, token_id)
     pass!(fleet_id, [{token_id, epoch + 1, owner}])
     :ok
+  end
+
+  @doc """
+  Moves key `token_id` to `owner` in a block of its own after every block the
+  reader has read, and after every move made this way since: the pages'
+  chain has the move at its head, and the site's record has it once the
+  fleet's next pass reads it.
+  """
+  def move_unread!(fleet_id, token_id, owner) do
+    %{keys_address: keys} = fleet = Fleets.get_fleet!(fleet_id)
+    %{ownership_epoch: epoch} = Keys.current_key!(fleet_id, token_id)
+    owner = String.downcase(owner)
+    unread = unread(fleet_id)
+    moved = Enum.count(unread, &(elem(&1, 0) == token_id))
+    unread = unread ++ [{token_id, epoch + moved + 1, owner}]
+
+    remember({:owner, keys, Fleet.onchain_token_id(fleet, token_id)}, owner)
+    remember({:unread, fleet_id}, unread)
+
+    %{next_block: from} = Chain.get_cursor!(fleet_id)
+
+    StubClient.share_chain(head(from + length(unread)), unread_logs(fleet, from),
+      calls: &answer/3
+    )
+  end
+
+  @doc "Records the fleet's proposal 1, open for a day, as the reader records one."
+  def propose!(fleet_id) do
+    ProposalHelpers.proposal!(fleet_id, 1)
+    reread()
   end
 
   @doc """
@@ -523,48 +556,64 @@ defmodule Keyfleet.BrowserChain do
     pass!(fleet_id, fn fleet, block ->
       changes
       |> Enum.with_index()
-      |> Enum.map(fn {{token_id, epoch, owner}, index} ->
-        log(
-          fleet.keys_address,
-          [
-            OwnershipLog.topic(),
-            word(Fleet.onchain_token_id(fleet, token_id)),
-            word(0),
-            address_word(owner)
-          ],
-          word(epoch),
-          fleet.id,
-          block,
-          index
-        )
-      end)
+      |> Enum.map(fn {change, index} -> moved_log(fleet, change, block, index) end)
     end)
   end
 
   # One pass over a chain whose next block holds the logs `logs_at` makes for
-  # the fleet and that block, and whose head is past the 300 blocks the
-  # scanner reads again, so the next pass never reads this block again.
+  # the fleet and that block, after the moves the reader hasn't read yet, and
+  # whose head is past the 300 blocks the scanner reads again, so the next
+  # pass never reads this block again.
   defp pass!(fleet_id, logs_at) do
     fleet = Fleets.get_fleet!(fleet_id)
 
-    block =
+    from =
       case Chain.get_cursor!(fleet_id) do
-        nil -> fleet.deployed_block + 40
-        cursor -> cursor.next_block + 40
+        nil -> fleet.deployed_block
+        cursor -> cursor.next_block
       end
 
-    StubClient.put_chain(
-      %{
-        number: block + 340,
-        hash: "0x" <> String.duplicate("f", 64),
-        timestamp: DateTime.utc_now(),
-        base_fee: 0
-      },
-      logs_at.(fleet, block)
-    )
-
+    block = from + 40
+    StubClient.put_chain(head(block + 340), unread_logs(fleet, from) ++ logs_at.(fleet, block))
     :ok = Scanner.step(fleet, StubClient)
+    remember({:unread, fleet_id}, [])
   end
+
+  # The moves `move_unread!/3` made since the fleet's last pass, in order, as
+  # `{token_id, epoch, owner}`.
+  defp unread(fleet_id), do: Map.get(answers(), {:unread, fleet_id}, [])
+
+  # Each of those moves logged in a block of its own from `from`.
+  defp unread_logs(fleet, from) do
+    fleet.id
+    |> unread()
+    |> Enum.with_index(from)
+    |> Enum.map(fn {change, block} -> moved_log(fleet, change, block, 0) end)
+  end
+
+  defp moved_log(fleet, {token_id, epoch, owner}, block, index),
+    do:
+      log(
+        fleet.keys_address,
+        [
+          OwnershipLog.topic(),
+          word(Fleet.onchain_token_id(fleet, token_id)),
+          word(0),
+          address_word(owner)
+        ],
+        word(epoch),
+        fleet.id,
+        block,
+        index
+      )
+
+  defp head(number),
+    do: %{
+      number: number,
+      hash: "0x" <> String.duplicate("f", 64),
+      timestamp: DateTime.utc_now(),
+      base_fee: 0
+    }
 
   defp log(address, topics, data, fleet_id, block, log_index) do
     %{

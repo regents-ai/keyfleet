@@ -8198,3 +8198,59 @@ gives; the project, its goal, notebook space and repository stay; Key 20
 then deletes it) and `WorkspacePageTest` "only the Key that started a
 project is offered Delete, after a take-over too"; both fail with the old
 rule. `verification/formal/run.sh`: every check ran as expected.
+
+## 2026-11-12 — Vote, Mark present and Claim all find the wallet's Keys at the latest block
+
+Sean's decision 3b, finding F4 of the permission review. Vote, Mark present
+and Claim all listed the wallet's Keys from the site's record alone, so a Key
+bought or sent to the wallet, or a shard issued to it, after the chain
+reader's last block was left out of the press, and a wallet whose only Key
+had just arrived saw "No Keys to use" with its button held back. Now each
+list is the record plus one chain read, and a button is held back for want
+of a Key only when the chain itself shows the wallet has none.
+
+- `Keyfleet.WalletSteps.Build.own_keys/3` reads the chain reader's cursor
+  first, then the recorded Keys and active shards, then asks the chain once
+  for the Key collection's `OwnershipEpoch` moves and the shards'
+  `ShardIssued` logs from the cursor's next block to the head the build reads
+  at (`Reads.logs/4`, `ShardsLog.issued_topic/0`), and adds every Key those
+  logs moved to the signer or issued it a shard of. The head reads that follow
+  (owner, active shard or `mayGovern`, maturity) drop a Key that has left
+  since, so a wallet whose only Key was just sold shows "No Keys to use",
+  and its button comes back when a Key reaches it again.
+- When that read fails, the list is the recorded Keys and the build's
+  `problem` is `:unread`. Only the reasons that need a whole list are left
+  out (`no_keys`, `too_new`, `nothing_to_claim`); `voting_closed`, `only_no`
+  and `not_your_key` still come from the chain. The page keeps the buttons
+  pressable, says it can't reach the network and reads again in ten seconds;
+  an agent is answered 503 `chain_unavailable`, as for any chain it can't
+  read; the presence timer logs a warning and skips that hour.
+- `VoteSteps` (ballot) and `KeySteps` (present, claim_all) use it. A pending
+  or repeated press never held these buttons back, and still doesn't.
+- API contract unchanged: the three routes already promise every Key the
+  signing wallet holds, and their `token_ids` now include the Keys that
+  arrived since the reader's last block. `/docs.md`, the public changelog,
+  the agent feature map and `verification/features.yml` (new
+  `wallet-keys-at-head`) say so.
+- Formal models: `BlockedOnlyWhenChainSaysNo` moves from the open findings
+  to the holding rules of `guards/ActionGuards.cfg`, with the broken variant
+  `record_only_keys`; a ballot's Key can now also be `read_failed`, which an
+  agent is refused as `chain_unavailable`. The guards chart is redrawn and
+  the findings table marks F4 fixed.
+- Tests: `Keyfleet.BrowserChain` gains `move_unread!/3` (a Key moved on the
+  chain past the reader's last block) and `propose!/1`, and its stand-in
+  chain answers maturity, presence and proposal status; `StubClient` shares
+  logs with the server (`share_chain/3`) and can refuse a log read
+  (`max_logs`).
+
+Check: `WalletStepsTest` "Keys that reached the signer after the reader's
+last block are marked with the others", "a Key moved to the signer after the
+reader's last block votes too" and "Vote, Mark present and Claim all still
+send with the Keys known, and say the chain couldn't be read" (all three
+fail without the read), and "a wallet whose one Key left it after the
+reader's last block has none to mark". Chain walk `wallet_keys.spec.ts`:
+Mark present starts disabled with "No Keys to use", is live once a Key
+reaches the wallet unrecorded, sends it on two quick presses, and is
+disabled again once that Key leaves; Vote and Claim all each send the
+unrecorded Key on two quick presses. The walk fails without the read.
+`verification/formal/run.sh`: every check ran as expected.

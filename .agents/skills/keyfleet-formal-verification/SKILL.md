@@ -131,8 +131,8 @@ ShardOnlyForItsKey, PersonKeysOnlyAsLastResort, AgentVotingOffStopsBallots,
 AgentVotingOffStopsPollVotes, NobodyChangesAnotherKeysItem, AnyoneMayFork,
 RestrictedReadOnlyInNotebooks, RestrictedAddsNothingToWorkspace,
 CodeStoreOnlyAdds, PollEndOnlyByStarter, NothingWhileReaderBehind,
-WalletStepsOnlyForHolder, MessagesFollowWorkspaceRule,
-OnlyOwnProjectsDeleted; the open finding rules are in the table below.
+WalletStepsOnlyForHolder, BlockedOnlyWhenChainSaysNo,
+MessagesFollowWorkspaceRule, OnlyOwnProjectsDeleted.
 - `platform/lib/keyfleet/graph/checks/key_actor.ex` (`command/5`), `platform/lib/keyfleet/keys.ex` (`identity/2`, `held_keys/2`, `agent_keys/3`), `platform/lib/keyfleet/access/check.ex`
 - `platform/lib/keyfleet/graph/pin.ex`, `platform/lib/keyfleet/graph/validations/unrestricted.ex`, `platform/graph_host/src/keyfleet_graph/host.py` (item owner)
 - `platform/lib/keyfleet/polls/checks/standing.ex`, `platform/lib/keyfleet/polls/validations/agent_voting.ex`, `platform/lib/keyfleet/polls/vote.ex`, `platform/lib/keyfleet/dms/checks/key_holder.ex`
@@ -155,6 +155,6 @@ fixed here; a fix changes who may act and waits for Sean's go.
 | F1 | shard NothingAfterRecordedEnd | Open | Database writes read a shard's standing again inside their transaction, and graph writes check it once, but nothing locks the recorded shard or Key, so the reader can record the shard's end between that read and the save. |
 | F2 | guards OnlyOwnProjectsDeleted | Fixed on 12 Nov 2026 (Sean's 2a) | Only the Key that started a project deletes it; a Key that took it over is refused (`project_not_creator`), in `Keyfleet.Projects.Hold` and the `:deleted` update's filter. |
 | F3 | guards AgentVotingOffStopsPollVotes | Fixed in 0001d1f7 | A poll vote cast through a shard is refused while the Key's agent voting is off (`agent_voting_off`). |
-| F4 | guards BlockedOnlyWhenChainSaysNo | Open | A wallet step offers only the Keys in Keyfleet's record, so a Key bought or a shard received within the reading's lag shows "No Keys to use" and the press is withheld. |
+| F4 | guards BlockedOnlyWhenChainSaysNo | Fixed on 12 Nov 2026 (Sean's 3b) | A wallet step offers the Keys in Keyfleet's record and those one chain read finds reached the wallet since the record's last block (`Keyfleet.WalletSteps.Build.own_keys/3`), so a Key bought or a shard received within the reading's lag is offered. When that read fails, a page's press still goes with the recorded Keys, and an agent is answered 503 `chain_unavailable`. |
 | F5 | guards RestrictedAddsNothingToWorkspace | Fixed in 0001d1f7 | A Key whose edits are restricted no longer pins or unpins (`edits_restricted`). |
 | F6 | guards MessagesFollowWorkspaceRule | Fixed in 0001d1f7 | Messages and the workspace ask one rule, `Keys.agent_keys/3`, so an agent that owns a Key never messages as a Key it holds a shard of. |

@@ -8,7 +8,10 @@ defmodule Keyfleet.WalletSteps.Build do
   `figures` are what the steps were built from, for the page to show beside
   the buttons. When what was typed can't be put into a call, or the chain
   can't be read, the review has no steps and `problem` names why; otherwise
-  `problem` is nil.
+  `problem` is nil. Vote, Mark present and Claim all are the exception: when
+  the chain doesn't answer whether Keys reached the signer since the reader's
+  last block (`own_keys/3`), their steps are still built, with the Keys known,
+  and `problem` is `:unread`.
 
   `figures.blocked` names each step the chain's own state, read at the latest
   block, makes certain to fail, with why: `%{"claim-0x…" => :nothing_to_claim}`.
@@ -31,6 +34,8 @@ defmodule Keyfleet.WalletSteps.Build do
   """
   use Ash.Resource.Actions.Implementation
 
+  alias Keyfleet.Chain
+  alias Keyfleet.Chain.{Logs, OwnershipLog, ShardsLog}
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.WalletSteps
@@ -157,11 +162,22 @@ defmodule Keyfleet.WalletSteps.Build do
   def field(inputs, name), do: Map.get(inputs, name, "")
 
   @doc """
-  Every key the signer holds in the fleet, and every key it holds an active
-  shard of, as the chain reader recorded them; the chain is then asked which
-  of them the signer may act for.
+  Every Key of the fleet the signer may hold or hold an active shard of, at
+  `reads`' head: those the chain reader recorded, and those that reached the
+  signer in the blocks it hasn't read yet, which the chain is asked for in one
+  read, of the Key collection's moves and the shards issued from the reader's
+  next block to the head. The chain is then asked which of them the signer may
+  act for, so a Key that has left since drops out there.
+
+  `{keys, nil}` is every such Key. `{recorded, :unread}` is the recorded ones
+  alone, when the chain didn't answer that read: the signer may hold more, so
+  no press is held back for want of a Key, and the build says the chain
+  couldn't be read.
   """
-  def own_keys(fleet, signer) do
+  def own_keys(reads, fleet, signer) do
+    # The reader records Keys and moves its cursor together, so the cursor is
+    # read before the Keys: whatever it records in between is in both.
+    from = next_block(fleet)
     held = fleet.id |> Keys.keys_held_in_fleet!([signer]) |> Enum.map(& &1.token_id)
 
     sharded =
@@ -169,6 +185,33 @@ defmodule Keyfleet.WalletSteps.Build do
           shard.fleet_id == fleet.id,
           do: shard.token_id
 
-    Enum.sort(Enum.uniq(held ++ sharded))
+    case arrived(reads, fleet, signer, from) do
+      {:ok, arrived} -> {Enum.sort(Enum.uniq(held ++ sharded ++ arrived)), nil}
+      {:error, _reason} -> {Enum.sort(Enum.uniq(held ++ sharded)), :unread}
+    end
   end
+
+  defp next_block(fleet) do
+    case Chain.get_cursor!(fleet.id) do
+      nil -> fleet.deployed_block
+      cursor -> cursor.next_block
+    end
+  end
+
+  defp arrived(reads, fleet, signer, from) do
+    with {:ok, logs} <-
+           Reads.logs(
+             reads,
+             [fleet.keys_address, fleet.shards_address],
+             [OwnershipLog.topic(), ShardsLog.issued_topic()],
+             from
+           ),
+         {:ok, records} <- Logs.decode(logs, fleet, nil, from, Reads.block(reads)) do
+      {:ok, for(record <- records, key = to_signer(record, signer), do: key)}
+    end
+  end
+
+  defp to_signer({:ownership, %{owner_wallet: signer, token_id: key}}, signer), do: key
+  defp to_signer({:shard, %{kind: :issued, wallet: signer, token_id: key}}, signer), do: key
+  defp to_signer(_record, _signer), do: nil
 end

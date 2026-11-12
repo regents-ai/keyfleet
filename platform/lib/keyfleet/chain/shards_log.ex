@@ -19,6 +19,9 @@ defmodule Keyfleet.Chain.ShardsLog do
   @doc "The topic0 of every event read here."
   def topics, do: [@issued, @ended, @agent_voting]
 
+  @doc "The topic0 of `ShardIssued`."
+  def issued_topic, do: @issued
+
   @doc """
   A log's indexed topics after topic0, as 32-byte words, and its data, as one
   record; `:error` for any other log or a malformed one.

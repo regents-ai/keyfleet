@@ -1661,3 +1661,49 @@ features:
       - platform/test/keyfleet_web/controllers/share_card_controller_test.exs
     gaps:
       - A picture with a real Key's card is first seen live; the tests draw it with a stand-in card.
+
+  - id: wallet-keys-at-head
+    what: >-
+      Mark present, Vote and Claim all send with every Key the wallet holds,
+      or holds an active shard of, as the chain stands at its latest block
+      (Sean, 12 Nov 2026, 3b): the Keys the site has recorded and any that
+      reached the wallet since, found in one read of the Key moves and shards
+      issued after the site's last recorded block. A Key sent to the wallet a
+      moment ago is in the press and its button is live. A wallet whose only
+      Key just left has the button disabled with "No Keys to use" beside it,
+      and it comes back when a Key reaches the wallet again. A pending or
+      repeated press never disables it. When the chain doesn't answer that
+      read, the press still goes with the Keys the site has recorded, nothing
+      is disabled for want of a Key, the panel says it can't reach the network
+      and reads again, and an agent asking for the same transactions is
+      answered 503 chain_unavailable.
+    who: person
+    level: protected
+    paths:
+      - platform/lib/keyfleet/wallet_steps/build.ex
+      - platform/lib/keyfleet/wallet_steps/key_steps.ex
+      - platform/lib/keyfleet/wallet_steps/vote_steps.ex
+      - platform/lib/keyfleet/wallet_steps/reads.ex
+      - platform/lib/keyfleet/chain/shards_log.ex
+    entry:
+      - route: GET /:fleet/:number/proposals
+      - route: GET /:fleet/:number/proposals/:proposal
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+      - route: POST /api/v1/agent/fleets/{fleet_id}/presence
+      - route: POST /api/v1/agent/fleets/{fleet_id}/proposals/vote
+      - route: POST /api/v1/agent/fleets/{fleet_id}/keys/claim
+    proofs:
+      - platform/test/keyfleet/wallet_steps_test.exs
+      - platform/test/browser/wallet_keys.spec.ts
+      - verification/formal/guards/ActionGuards.tla
+    regressions:
+      - id: R-20261112-unrecorded-key-left-out
+        from: Keyfleet chief, 12 November 2026, formal finding F4
+        test: platform/test/browser/wallet_keys.spec.ts
+    gaps:
+      - The Account page lists a wallet's fleets from the site's record, so a fleet where the wallet holds only Keys the site hasn't recorded yet has no Claim all until the reader records one.
+      - The read runs from the site's last recorded block to the latest one; a reader far behind makes it wide, and a node refusing it leaves the press with the recorded Keys.
+      - A Key minted a moment ago is in the list but waits two days before it votes or is marked present, so its button says so.
+      - The presence timer skips an hour in which the chain doesn't answer that read.
+      - WebKit is not run on the Mac.

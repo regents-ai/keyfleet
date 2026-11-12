@@ -139,7 +139,6 @@ done <<'BREAKING'
 pairing PairingLife PairingLife.cfg none INVARIANT NoWriteAfterUnpair
 shard ShardLife ShardLife.cfg none INVARIANT NothingAfterRecordedEnd
 shard ShardLife ShardLife.cfg none INVARIANT NothingAfterChainEnd
-guards ActionGuards ActionGuards.cfg none INVARIANT BlockedOnlyWhenChainSaysNo
 pairing PairingLife PairingLife-lock.cfg smart_on_ethereum INVARIANT SmartWalletOnlyOnBase
 pairing PairingLife PairingLife-lock.cfg pair_over_row PROPERTY OnePairingAtATime
 pairing PairingLife PairingLife-lock.cfg code_reused INVARIANT CodeSingleUse
@@ -172,6 +171,7 @@ guards ActionGuards ActionGuards.cfg fork_needs_owner INVARIANT AnyoneMayFork
 guards ActionGuards ActionGuards.cfg anyone_ends_polls INVARIANT PollEndOnlyByStarter
 guards ActionGuards ActionGuards.cfg hook_allows_rewrites INVARIANT CodeStoreOnlyAdds
 guards ActionGuards ActionGuards.cfg takeover_deletes INVARIANT OnlyOwnProjectsDeleted
+guards ActionGuards ActionGuards.cfg record_only_keys INVARIANT BlockedOnlyWhenChainSaysNo
 guards ActionGuards ActionGuards.cfg steps_ignore_head INVARIANT WalletStepsOnlyForHolder
 guards ActionGuards ActionGuards.cfg contract_ignores_voting INVARIANT AgentVotingOffStopsBallots
 BREAKING

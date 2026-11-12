@@ -58,6 +58,17 @@ export const fillLevel = (fleet: string, owner: string) => JSON.parse(call("fill
 /** Moves a key to `owner`. */
 export const moveKey = (fleet: string, key: number, owner: string) => void call("transfer!", [fleet, key, owner])
 
+/**
+ * Moves a key to `owner` in a block the site hasn't read yet: the pages' chain
+ * has the move, and the site's record has it once the fleet's next sale or
+ * move is read.
+ */
+export const moveKeyUnread = (fleet: string, key: number, owner: string) =>
+  void call("move_unread!", [fleet, key, owner])
+
+/** Records the fleet's proposal 1, open for a day. */
+export const propose = (fleet: string) => void call("propose!", [fleet])
+
 /** A key has `atoms` USDC waiting from now on; any other key's rewards can't be read. */
 export const offerRewards = (fleet: string, key: number, atoms: number) =>
   void call("offer_rewards!", [fleet, key, atoms])

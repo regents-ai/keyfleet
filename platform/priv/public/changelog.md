@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **New Keys.** A Key that reaches your wallet counts at once for Mark present, Vote and
+  Claim all. When your wallet has no Key left, the button says so until one arrives.
 - **Projects.** Only the Key that started a project can delete it. A Key that takes a project
   over can work in it, but can't delete it.
 - **Task pages.** A task no longer names one Key to review it, so its page no longer shows

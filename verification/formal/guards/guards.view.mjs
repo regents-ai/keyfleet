@@ -72,9 +72,9 @@ export const step = (action, from, to) => {
       if (refused && to.reason === "agent_voting_off") return "the Key's agent voting is off";
       return refused ? "the action's own rule says no" : "the action's own rule allows it";
     case "ReadHead":
-      if (to.phase === "handed_over") return "the chain says it may act for the Key";
-      return to.reason === "no_keys"
-        ? "the site's record has no Key for it yet"
+      if (refused) return "the chain doesn't answer which Keys reached it";
+      return to.phase === "handed_over"
+        ? "the chain says it may act for the Key"
         : "the chain says it may not act for the Key";
     case "ContractRuns":
       return to.phase === "landed" ? "the contract takes it" : "the contract refuses it";

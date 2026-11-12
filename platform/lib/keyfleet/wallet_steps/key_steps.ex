@@ -114,15 +114,15 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   end
 
   # One step for each token the ledger pays keys in, claiming for every key
-  # the signer holds or holds an active shard of at once: it settles each key
-  # to its holder and pays each holder, and the signer's own credit. Only keys
-  # the signer may act for are named, since the ledger refuses the whole claim
-  # for any other. A token with nothing waiting for any of them, or for the
-  # signer, is certain to be refused.
+  # the signer holds or holds an active shard of at once (`Build.own_keys/3`):
+  # it settles each key to its holder and pays each holder, and the signer's
+  # own credit. Only keys the signer may act for are named, since the ledger
+  # refuses the whole claim for any other. A token with nothing waiting for
+  # any of them, or for the signer, is certain to be refused, unless the chain
+  # didn't say which Keys reached the signer lately.
   def steps(:claim_all, %{fleet: fleet, signer: signer}) do
-    candidates = Build.own_keys(fleet, signer)
-
     with {:ok, reads} <- Reads.at_head(),
+         {candidates, unread} = Build.own_keys(reads, fleet, signer),
          {:ok, assets} <-
            Reads.one(reads, fleet.rewards_address, "rewardAssets()", [], {:array, :address}),
          {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "isActive"),
@@ -144,10 +144,11 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
       blocked =
         for %{asset: asset, amount: 0} <- waiting,
+            unread == nil,
             into: %{},
             do: {"claim-#{asset}", :nothing_to_claim}
 
-      {:ok, steps, %{keys: keys, waiting: named(fleet, waiting), blocked: blocked}}
+      {:ok, steps, %{keys: keys, waiting: named(fleet, waiting), blocked: blocked}, unread}
     else
       _unread -> {:problem, :unread, %{keys: [], waiting: []}}
     end
@@ -192,16 +193,16 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   end
 
   # Marking Keys present: the one Key a Key's page is about, or every Key the
-  # signer holds or holds an active shard of. A Key's page shows whether its
-  # Key is present whoever is looking. A Key sold less than two days ago can't
-  # be marked yet, and the vote contract refuses a call naming one, so only
-  # the Keys old enough are named; with none old enough the press is certain
-  # to fail. A visitor holds no Keys.
+  # signer holds or holds an active shard of (`Build.own_keys/3`). A Key's
+  # page shows whether its Key is present whoever is looking. A Key sold less
+  # than two days ago can't be marked yet, and the vote contract refuses a
+  # call naming one, so only the Keys old enough are named; with none old
+  # enough the press is certain to fail. A visitor holds no Keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
-    candidates = present_candidates(fleet, signer, token_id)
     figures = %{keys: []}
 
     with {:ok, reads} <- Reads.at_head(),
+         {candidates, unread} = present_candidates(reads, fleet, signer, token_id),
          {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "isActive"),
          keys = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
          {:ok, presence} <-
@@ -217,8 +218,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
          ready: ready,
-         blocked: present_blocked(keys, ready, token_id)
-       }}
+         blocked: present_blocked(keys, ready, token_id, unread)
+       }, unread}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -328,16 +329,21 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp club(fleet), do: if(Presets.given?(fleet.id), do: :ok, else: {:problem, :not_club})
 
   # The Keys a presence step covers: the one named, else the signer's own.
-  defp present_candidates(_fleet, _signer, token_id) when is_integer(token_id), do: [token_id]
-  defp present_candidates(_fleet, nil, nil), do: []
-  defp present_candidates(fleet, signer, nil), do: Build.own_keys(fleet, signer)
+  defp present_candidates(_reads, _fleet, _signer, token_id) when is_integer(token_id),
+    do: {[token_id], nil}
 
-  defp present_blocked([], _ready, token_id) when is_integer(token_id),
+  defp present_candidates(_reads, _fleet, nil, nil), do: {[], nil}
+  defp present_candidates(reads, fleet, signer, nil), do: Build.own_keys(reads, fleet, signer)
+
+  defp present_blocked([], _ready, token_id, _unread) when is_integer(token_id),
     do: %{"present" => :not_your_key}
 
-  defp present_blocked([], _ready, nil), do: %{"present" => :no_keys}
-  defp present_blocked(_keys, [], _token_id), do: %{"present" => :too_new}
-  defp present_blocked(_keys, _ready, _token_id), do: %{}
+  # Only a list of the signer's Keys brought up to the head says it has none
+  # to mark; one the chain didn't bring up holds no press back.
+  defp present_blocked(_keys, _ready, _token_id, :unread), do: %{}
+  defp present_blocked([], _ready, nil, nil), do: %{"present" => :no_keys}
+  defp present_blocked(_keys, [], _token_id, nil), do: %{"present" => :too_new}
+  defp present_blocked(_keys, _ready, _token_id, nil), do: %{}
 
   # The next Key, at its price, bought from the fleet's manager, which takes
   # the USDC. How many Keys are sold, the next one's price and when the
