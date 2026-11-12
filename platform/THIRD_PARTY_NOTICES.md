@@ -19,11 +19,12 @@ are drawn in Geist, Geist Mono and Geist Pixel, which the Regent design system
 ships under the SIL Open Font License 1.1. They are pictures made with the
 fonts; no font file is copied into this repository.
 
-## thiings-grid — key map camera
+## thiings-grid — key map and workspace canvas camera
 
 The key map's drag and coast began as the camera in Charlie Clark's `thiings-grid`.
-`assets/js/hooks/key_map/camera.ts` is a rewrite of that behaviour, not a copy of
-the file, and carries a header comment pointing here.
+`assets/js/camera.ts`, which the key map and the workspace's canvas share, is a
+rewrite of that behaviour, not a copy of the file, and carries a header comment
+pointing here.
 
 - Project: `charlieclark/thiings-grid` — https://github.com/charlieclark/thiings-grid
 - Commit: `a1607d3cee9e6969f5f504f0c253ee94aa50bf54`
@@ -47,7 +48,8 @@ mouse and touch listeners, and the fixed 16 ms update step. The key map places h
 tiles from its own pool, uses pointer events with pointer capture, tells a tap from
 a drag by distance travelled, stops a coasting map on a press without choosing a
 key, honours the wheel's line and page units, runs frames only while the map moves,
-and does not coast under reduced motion.
+and does not coast under reduced motion. The workspace's canvas adds a zoom of its
+own: the wheel and a pinch zoom about the pointer there instead of panning.
 
 ### License
 

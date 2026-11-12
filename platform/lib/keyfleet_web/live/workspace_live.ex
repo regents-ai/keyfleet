@@ -311,9 +311,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp title(projects, name), do: Enum.find_value(projects, &(&1.name == name && &1.title))
 
-  # The picker keeps the Project's graph open while it is.
+  # The picker keeps the Project's graph open while it is, and the Docs
+  # shown as they are.
   defp picker_path(%{place: :project, filter: %{view: :graph}} = board, project),
     do: WorkspacePage.board_path(board.fleet_id, %{graph_filter(board.filter) | project: project})
+
+  defp picker_path(%{place: :docs, docs: docs} = board, project),
+    do: WorkspacePage.docs_path(board.fleet_id, project, docs)
 
   defp picker_path(board, project),
     do: WorkspacePage.place_path(board.fleet_id, board.place, project)
@@ -559,12 +563,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :board, :map, required: true
 
-  # The items and the links between them as one picture, coloured by where
-  # each stands, above the same items as a list, each with its links in
-  # words. Pressing an item in either opens its page. The picture is drawn
-  # whole by the server; on a screen with WebGPU, the links are drawn again
-  # on the GPU and the ones around the item pointed at light up
-  # (`KeyfleetWeb.WorkspaceGraph`).
+  # The items and the links between them as a tree on an endless canvas,
+  # each coloured by where it stands and arranged as the address says, above
+  # the same items as a list, each with its links in words. Pressing an
+  # item's title in either opens its page (`KeyfleetWeb.WorkspaceGraph`).
   defp graph_view(assigns) do
     assigns =
       assign(assigns,
@@ -583,8 +585,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
       id="workspace-graph"
       class="workspace-panel workspace-graph"
       aria-labelledby="workspace-graph-title"
-      phx-hook="WorkspaceGraph"
-      phx-mounted={JS.ignore_attributes(["data-graph-ready", "data-lighting"])}
     >
       <header class="workspace-graph-head">
         <h2 id="workspace-graph-title">Graph</h2>
@@ -717,66 +717,19 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </:action>
         </Regent.Primitives.empty_state>
 
-        <div :if={@graph.nodes != []} id="workspace-graph-frame" class="workspace-graph-frame">
-          <div class="workspace-graph-stage">
-            <canvas
-              id="workspace-graph-canvas"
-              data-graph-canvas
-              phx-update="ignore"
-              aria-hidden="true"
-            ></canvas>
-            <svg
-              id="workspace-graph-picture"
-              class="workspace-graph-picture"
-              width={@graph.width}
-              height={@graph.height}
-              viewBox={"0 0 #{@graph.width} #{@graph.height}"}
-              aria-hidden="true"
-              focusable="false"
-            >
-              <g class="workspace-graph-edges">
-                <path
-                  :for={edge <- @graph.edges}
-                  d={edge.path}
-                  data-edge={edge.id}
-                  data-type={edge.type}
-                  data-source={edge.source}
-                  data-target={edge.target}
-                  data-curve={edge.curve}
-                />
-              </g>
-              <g class="workspace-graph-nodes">
-                <.link
-                  :for={node <- @graph.nodes}
-                  patch={node.path}
-                  tabindex="-1"
-                  data-node={node.id}
-                  data-tone={node.tone}
-                  data-archived={node.archived?}
-                >
-                  <title>{node.title}</title>
-                  <path class="workspace-graph-card" d={node.shape} />
-                  <text class="workspace-graph-kind" x={node.x + 14} y={node.y + 21}>
-                    {node.kind}{if node.owner, do: " · #{node.owner}"}
-                  </text>
-                  <text
-                    :if={node.standing}
-                    class="workspace-graph-standing"
-                    x={node.x + node.width - 14}
-                    y={node.y + 21}
-                    text-anchor="end"
-                  >
-                    <tspan class="workspace-graph-dot">●</tspan>
-                    {node.standing}
-                  </text>
-                  <text class="workspace-graph-title" x={node.x + 14} y={node.y + 41}>
-                    {node.shown_title}
-                  </text>
-                </.link>
-              </g>
-            </svg>
-          </div>
-        </div>
+        <.arrange
+          :if={@graph.nodes != []}
+          id="workspace-graph-arrange"
+          at={@filter}
+          to={&WorkspacePage.board_path(@board.fleet_id, &1)}
+        />
+        <.tree_canvas
+          :if={@graph.nodes != []}
+          id="workspace-graph-tree"
+          tree={@board.canvas}
+          at={@filter}
+          label="Graph"
+        />
 
         <ol
           id="workspace-ticker"
@@ -1016,15 +969,36 @@ defmodule KeyfleetWeb.WorkspaceLive do
             class="kf-empty"
             title="Notebooks aren’t connected for this fleet yet."
           />
+          <nav
+            :if={@board.hub?}
+            id="workspace-docs-views"
+            class="workspace-views"
+            aria-label="Notebook views"
+          >
+            <.link
+              :for={{view, label} <- [canvas: "Canvas", list: "List"]}
+              id={"workspace-docs-view-#{view}"}
+              class="rg-panel"
+              patch={
+                WorkspacePage.docs_path(@board.fleet_id, @board.project, %{@board.docs | view: view})
+              }
+              aria-current={if @board.docs.view == view, do: "page"}
+            >
+              {label}
+            </.link>
+          </nav>
+          <.notebook_canvas :if={@board.canvas} board={@board} />
           <.notebook_rows
-            :if={@board.hub? and @board.project}
+            :if={@board.hub? and @board.project != nil and @board.docs.view == :list}
             notebooks={@board.notebooks}
             pins={@board.pins}
             project={@board.project}
             active?={@board.active?}
           />
           <section
-            :for={section <- if(@board.hub?, do: @board.sections, else: [])}
+            :for={
+              section <- if(@board.hub? and @board.docs.view == :list, do: @board.sections, else: [])
+            }
             id={"workspace-docs-#{section.project}"}
             class="workspace-folder"
             data-project={section.project}
@@ -1120,6 +1094,131 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </form>
           </div>
         </section>
+      </div>
+    </div>
+    """
+  end
+
+  attr :board, :map, required: true
+
+  # The notebooks shown, one project's or each project's newest, as a tree
+  # canvas with the tasks that name them, and which projects' notebooks
+  # can't be read now.
+  defp notebook_canvas(assigns) do
+    assigns =
+      assign(assigns,
+        unread: for(%{notebooks: :unreadable, title: title} <- assigns.board.sections, do: title),
+        drawn?: assigns.board.canvas.cards != []
+      )
+
+    ~H"""
+    <p :if={@board.notebooks == :unreadable} id="workspace-notebooks-unreadable">
+      The notebooks can’t be read right now. Try again in a minute.
+    </p>
+    <p :if={@unread != []} id="workspace-docs-unreadable" class="workspace-detail">
+      Not read right now: {Enum.join(@unread, ", ")}
+    </p>
+    <Regent.Primitives.empty_state
+      :if={not @drawn? and @unread == [] and @board.notebooks != :unreadable}
+      id="workspace-notebooks-empty"
+      class="kf-empty"
+      title="No notebooks yet."
+    >
+      Open the notebooks to start the first one.
+    </Regent.Primitives.empty_state>
+    <.arrange
+      :if={@drawn?}
+      id="workspace-docs-arrange"
+      at={@board.docs}
+      to={&WorkspacePage.docs_path(@board.fleet_id, @board.project, &1)}
+    />
+    <.tree_canvas
+      :if={@drawn?}
+      id="workspace-docs-tree"
+      tree={@board.canvas}
+      at={@board.docs}
+      label="Notebooks"
+    />
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :at, :map, required: true, doc: "the arrangement shown, its `arrange` and `every`"
+  attr :to, :any, required: true, doc: "the path showing the arrangement it is given"
+
+  # How a tree canvas is arranged: by when each card was made, in slices of
+  # an hour or a day, by the Key that made it, or by how recently it
+  # changed. Each choice opens its own address.
+  defp arrange(assigns) do
+    ~H"""
+    <div id={@id} class="tree-canvas-arrange">
+      <div class="tree-canvas-segments" role="group" aria-labelledby={"#{@id}-label"}>
+        <span id={"#{@id}-label"} class="tree-canvas-arrange-label">Arrange</span>
+        <button
+          :for={{arrange, label} <- [time: "Time", author: "Author", activity: "Activity"]}
+          id={"#{@id}-#{arrange}"}
+          type="button"
+          phx-click={JS.patch(@to.(%{@at | arrange: arrange}))}
+          aria-pressed={to_string(@at.arrange == arrange)}
+        >
+          {label}
+        </button>
+      </div>
+      <div
+        :if={@at.arrange == :time}
+        class="tree-canvas-segments"
+        role="group"
+        aria-label="Slices"
+      >
+        <button
+          :for={{every, label} <- [hour: "Hourly", day: "Daily"]}
+          id={"#{@id}-#{every}"}
+          type="button"
+          phx-click={JS.patch(@to.(%{@at | every: every}))}
+          aria-pressed={to_string(@at.every == every)}
+        >
+          {label}
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :tree, :map, required: true, doc: "the cards and links, as the canvas reads them"
+  attr :at, :map, required: true, doc: "the arrangement shown, its `arrange` and `every`"
+  attr :label, :string, required: true
+
+  # An endless surface of cards and the links between them, drawn in the
+  # browser (the `TreeCanvas` hook) from `tree`; the page changes only what
+  # it draws and how it is arranged. Its corner zooms and fits it.
+  defp tree_canvas(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="tree-canvas"
+      phx-hook="TreeCanvas"
+      data-tree={Jason.encode!(@tree)}
+      data-arrange={@at.arrange}
+      data-every={@at.every}
+    >
+      <div id={"#{@id}-stage"} class="tree-canvas-stage" phx-update="ignore">
+        <div class="tree-canvas-surface" role="group" aria-label={@label} data-tree-surface>
+          <div class="tree-canvas-grid" aria-hidden="true" data-tree-grid></div>
+          <div class="tree-canvas-world" aria-hidden="true" data-tree-back></div>
+          <canvas class="tree-canvas-glow" aria-hidden="true" data-tree-canvas></canvas>
+          <div class="tree-canvas-world" data-tree-front>
+            <svg class="tree-canvas-links" aria-hidden="true" data-tree-links></svg>
+            <div data-tree-cards></div>
+          </div>
+          <div class="tree-canvas-headings" aria-hidden="true" data-tree-headings></div>
+        </div>
+        <div class="tree-canvas-zoom" role="group" aria-label="Zoom">
+          <button type="button" aria-label="Zoom out" data-tree-zoom="out">−</button>
+          <output aria-label="Zoom" data-tree-zoom-level>100%</output>
+          <button type="button" aria-label="Zoom in" data-tree-zoom="in">+</button>
+          <button type="button" data-tree-zoom="fit">Fit</button>
+        </div>
       </div>
     </div>
     """

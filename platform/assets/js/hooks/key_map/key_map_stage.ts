@@ -1,4 +1,4 @@
-import {createCamera} from "./camera"
+import {createCamera} from "../../camera"
 import {axialToPixel, nearestCopy, pixelToAxial, SQRT3, type Cell, type Point} from "./lattice"
 import {buildMap, levelStart, type KeyMapGrid, type LayoutKind} from "./layouts"
 import {

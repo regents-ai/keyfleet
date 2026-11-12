@@ -358,6 +358,28 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The tasks still in the workspace that name any of `uris` (the
+    # notebooks a page shows) as their notebook, the most recently changed
+    # first, as many as the Graph view draws, each with what its card shows
+    # and when it was made.
+    read :naming_notebooks do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :uris, {:array, :string}, allow_nil?: false, constraints: [max_length: 200]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == "task" and
+                 fragment("(? ->> 'notebook_ref') = ANY(?)", data, ^arg(:uris)) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 120,
+                select: [:fleet_id, :id, :type, :data, :sys, :changed_seq, :changed_at],
+                load: [:title, :standing, :owner_key, :created_at]
+              )
+    end
+
     # The work around one goal that is still in the workspace, the most
     # recently changed first: every object linked to the goal either way, and
     # what the tasks that deliver on it produced. Each comes with what its card
@@ -639,6 +661,7 @@ defmodule Keyfleet.Graph.Object do
              :joined_by,
              :citing,
              :citing_any,
+             :naming_notebooks,
              :search
            ]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
@@ -673,6 +696,23 @@ defmodule Keyfleet.Graph.Object do
   calculations do
     # When the object last changed, as a time (`changed_at` is the log's own text).
     calculate :changed, :utc_datetime_usec, expr(fragment("(?::timestamptz)", changed_at))
+
+    # When the object was made: the time of the log's event that made it,
+    # read through the events' index on the object they name. Page data
+    # only; agents read an object's history instead.
+    calculate :created_at,
+              :string,
+              expr(
+                fragment(
+                  """
+                  (SELECT e.timestamp FROM keyfleet_app.graph_events AS e
+                   WHERE e.fleet_id = ? AND (e.payload ->> 'id') = ? AND e.type = 'object.created'
+                   ORDER BY e.seq LIMIT 1)
+                  """,
+                  fleet_id,
+                  id
+                )
+              )
 
     # The id in byte order, as a search orders objects that changed at once.
     calculate :id_in_byte_order, :string, expr(fragment("(? COLLATE \"C\")", id))

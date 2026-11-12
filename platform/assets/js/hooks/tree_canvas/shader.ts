@@ -1,17 +1,20 @@
 /**
- * The workspace graph's links, one ribbon each over a clear canvas with
+ * A tree canvas's links, one ribbon each over a clear canvas with
  * premultiplied alpha, so the page shows through. Each ribbon follows its
- * link's curve, fades from where the link leaves to where it arrives, and
- * widens into a soft glow as it lights up. Lit links take the page's link
- * colour; one that contradicts its target takes the error colour; the rest
- * recede while any link is lit. A fork's, a review's or a contradiction's
- * link is dashed, as the page draws it.
+ * link's curve through the camera, fades from where the link leaves to where
+ * it arrives, and widens into a soft glow as it lights up. Lit links take
+ * the page's link colour; one that contradicts its target takes the error
+ * colour; the rest recede while any link is lit. A fork's, a review's or a
+ * contradiction's link is dashed, as is one that closes a loop.
  */
 export const graphWgsl = /* wgsl */ `
 struct Params {
-  // Width and height in device pixels, device pixels per point of the
-  // picture, and how far the unlit links recede, 0..1.
+  // Width and height in device pixels, device pixels per CSS pixel, and how
+  // far the unlit links recede, 0..1.
   size: vec4f,
+  // Where the world's origin is on the canvas, in CSS pixels, and CSS pixels
+  // per world pixel.
+  view: vec4f,
   // The resting links' colour and strength.
   ink: vec4f,
   // The lit links' colour.
@@ -34,11 +37,12 @@ struct Ribbon {
   @location(2) along: f32,
   @location(3) light: f32,
   @location(4) against: f32,
-  // How long the link runs, in points, when it is dashed; 0 when solid.
+  // How long the link runs on screen, in CSS pixels, when it is dashed; 0
+  // when solid.
   @location(5) dashed: f32,
 }
 
-// A dash and the gap after it, in points, as the page draws them.
+// A dash and the gap after it, in CSS pixels, as the page draws them.
 const DASH = 5.0;
 const PERIOD = 9.0;
 
@@ -52,9 +56,9 @@ fn slope(a: vec4f, b: vec4f, t: f32) -> vec2f {
   return 3.0 * s * s * (a.zw - a.xy) + 6.0 * s * t * (b.xy - a.zw) + 3.0 * t * t * (b.zw - b.xy);
 }
 
-// a: start and first handle, b: second handle and end, in points of the
-// picture; c: how lit the link is, 0..1, 1 when it contradicts, and how long
-// it runs when it is dashed.
+// a: start and first handle, b: second handle and end, in world pixels;
+// c: how lit the link is, 0..1, 1 when it contradicts, and how long it runs
+// in world pixels when it is dashed.
 @vertex fn vs_main(
   @builtin(vertex_index) vertex: u32,
   @location(0) a: vec4f,
@@ -73,7 +77,7 @@ fn slope(a: vec4f, b: vec4f, t: f32) -> vec2f {
   let normal = normalize(vec2f(-direction.y, direction.x));
   let half = (0.6 + 0.65 * light) * scale;
   let reach = half + (1.0 + 6.0 * light) * scale;
-  let at = curve(a, b, t) * scale + normal * side * reach;
+  let at = (curve(a, b, t) * params.view.z + params.view.xy) * scale + normal * side * reach;
 
   var ribbon: Ribbon;
   ribbon.position = vec4f(at.x / params.size.x * 2.0 - 1.0, 1.0 - at.y / params.size.y * 2.0, 0.0, 1.0);
@@ -82,7 +86,7 @@ fn slope(a: vec4f, b: vec4f, t: f32) -> vec2f {
   ribbon.along = t;
   ribbon.light = light;
   ribbon.against = c.y;
-  ribbon.dashed = c.z;
+  ribbon.dashed = c.z * params.view.z;
   return ribbon;
 }
 

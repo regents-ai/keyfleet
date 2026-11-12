@@ -1,18 +1,9 @@
 defmodule KeyfleetWeb.WorkspaceGraph do
   @moduledoc """
-  Lays out the workspace's graph, as `Keyfleet.Graph.Workspace` reads it
-  (its `graph` action), for the Graph view of a workspace's Project, and
-  one goal's map as a tree for the goal's page (`tree/2`).
-
-  Items stand in columns by the way work flows: goals, then the tasks and
-  services that deliver on them, then what the work found (evidence,
-  findings and reviews), then notes and dead ends. A column of more than
-  twelve items wraps into several. Within a column each item sits as near as
-  it can to the items it links to in the column before it, so most links run
-  short and level. Every place is worked out here, in whole points of the
-  picture, so the page draws it with no script at all; links run from the
-  right of the item they leave to the left of the one they reach, or round
-  the right side when both stand in one column.
+  The workspace's graph, as `Keyfleet.Graph.Workspace` reads it (its
+  `graph` action): its items and links for the Graph view of a workspace's
+  Project, laid out by the page's tree canvas (`canvas/2`), and one goal's
+  map as a tree for the goal's page (`tree/2`).
 
   Each item is coloured by its standing (`tone/1`): open, in progress,
   submitted or awaiting review, held up (blocked or disputed), done (accepted,
@@ -22,21 +13,6 @@ defmodule KeyfleetWeb.WorkspaceGraph do
 
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.WorkspacePage
-
-  @columns [~w(goal), ~w(task service), ~w(evidence finding review), ~w(note dead_end)]
-  @rows 12
-
-  @node_width 256
-  @node_height 56
-  @row_pitch 72
-  # How far each item's card is cut at two opposite corners.
-  @cut 8
-  @wrap_gap 24
-  @column_gap 72
-
-  # The longest title an item shows in the picture; its full title is in the
-  # list under it and in its own page.
-  @title_shown 32
 
   @tones %{
     "open" => :open,
@@ -77,24 +53,18 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   }
 
   @doc """
-  The picture and the list of `graph`: each item with its place, its tone and
-  the address of its page; each link with the path it runs along; the tones
-  in use, for the key; each item's links in words, for the list; and when
-  the most recently changed item changed (`newest`), nil for none.
-  `labels` names each project by its title in the whole fleet's view.
+  The items and links of `graph`: each item with its tone and the address of
+  its page; the tones in use, for the key; each item's links in words, for
+  the list; and when the most recently changed item changed (`newest`), nil
+  for none. `labels` names each project by its title in the whole fleet's
+  view.
   """
-  def draw(graph, fleet_id, labels) do
-    placed = place(graph.nodes, graph.edges)
-    by_id = Map.new(placed, &{&1.id, &1})
-
-    nodes = Enum.map(placed, &node(&1, fleet_id, labels))
-    edges = for edge <- graph.edges, do: edge(edge, by_id)
+  def items(graph, fleet_id, labels) do
+    nodes = Enum.map(graph.nodes, &node(&1, fleet_id, labels))
 
     %{
-      width: width(placed),
-      height: height(placed),
       nodes: nodes,
-      edges: edges,
+      edges: graph.edges,
       tones: tones(nodes),
       owners: graph.owners,
       rows: rows(nodes, graph.edges, Map.new(nodes, &{&1.id, &1})),
@@ -105,8 +75,46 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   end
 
   @doc """
-  One goal's map as a tree, for the goal's page, from what `draw/3` drew of
-  it: the items linked to the goal, each with the items linked to it in
+  What the tree canvas draws of `items/3`, for its `data-tree`: a card for
+  each item, headed by the Key that made it, or Keyfleet for a starting goal,
+  with when it was made (`created`, the log's time by id) and last changed;
+  and each link from the item the other came from. What a task produces
+  comes from the task; every other link names the item it came from as its
+  target: a task delivers on its goal, a review judges its task, a copy
+  copies its task.
+  """
+  def canvas(%{nodes: nodes, edges: edges}, created) do
+    %{
+      cards:
+        for node <- nodes do
+          %{
+            id: node.id,
+            kind: node.kind,
+            title: node.title,
+            href: node.path,
+            patch: true,
+            tone: node.tone,
+            standing: node.standing,
+            author: node.owner || "Keyfleet",
+            created: Map.fetch!(created, node.id),
+            changed: node.changed_at,
+            archived: node.archived?,
+            folder: nil
+          }
+        end,
+      links: Enum.map(edges, &link/1)
+    }
+  end
+
+  @doc "A link of the workspace's graph as the tree canvas runs it, from the item the other came from."
+  def link(%{type: "produces"} = edge),
+    do: %{id: edge.id, type: edge.type, from: edge.source, to: edge.target}
+
+  def link(edge), do: %{id: edge.id, type: edge.type, from: edge.target, to: edge.source}
+
+  @doc """
+  One goal's map as a tree, for the goal's page, from what `items/3` read
+  of it: the items linked to the goal, each with the items linked to it in
   turn. Every item stands once, under the first item that reaches it along
   the links, nearest the goal first and the oldest link first. Each says by
   which kind of link it hangs from the one above it (`via`). Items no link
@@ -183,85 +191,8 @@ defmodule KeyfleetWeb.WorkspaceGraph do
   @doc "The tone an item is drawn in, by its standing."
   def tone(standing), do: Map.get(@tones, standing, :plain)
 
-  # Columns first, then each column's order, then each item's point.
-  defp place(nodes, edges) do
-    neighbours = neighbours(edges)
-
-    @columns
-    |> Enum.map(fn types -> Enum.filter(nodes, &(&1.type in types)) end)
-    |> Enum.reject(&(&1 == []))
-    |> order(neighbours)
-    |> points()
-  end
-
-  defp neighbours(edges) do
-    Enum.reduce(edges, %{}, fn %{source: source, target: target}, around ->
-      around
-      |> Map.update(source, [target], &[target | &1])
-      |> Map.update(target, [source], &[source | &1])
-    end)
-  end
-
-  # The first column keeps the order the read gave it, the most recently
-  # changed first. Each column after it is sorted by the mean row of the
-  # items each of its items links to in the columns before it; one linked to
-  # none of them keeps its place after those that are.
-  defp order([first | rest], neighbours) do
-    {columns, _rows} =
-      Enum.reduce(rest, {[first], rows_of(first)}, fn column, {done, rows} ->
-        sorted =
-          column
-          |> Enum.with_index()
-          |> Enum.sort_by(fn {node, index} -> {mean_row(node, neighbours, rows), index} end)
-          |> Enum.map(&elem(&1, 0))
-
-        {[sorted | done], Map.merge(rows, rows_of(sorted))}
-      end)
-
-    Enum.reverse(columns)
-  end
-
-  defp order([], _neighbours), do: []
-
-  defp rows_of(column),
-    do:
-      column |> Enum.with_index() |> Map.new(fn {node, index} -> {node.id, rem(index, @rows)} end)
-
-  defp mean_row(node, neighbours, rows) do
-    case for(id <- Map.get(neighbours, node.id, []), row = rows[id], do: row) do
-      [] -> @rows
-      seen -> Enum.sum(seen) / length(seen)
-    end
-  end
-
-  # Each column wraps every twelve items; columns stand further apart than
-  # the wraps of one column.
-  defp points(columns) do
-    {placed, _x} =
-      Enum.reduce(columns, {[], 0}, fn column, {placed, x} ->
-        wraps = div(length(column) + @rows - 1, @rows)
-
-        at =
-          column
-          |> Enum.with_index()
-          |> Enum.map(fn {node, index} ->
-            Map.merge(node, %{
-              x: x + div(index, @rows) * (@node_width + @wrap_gap),
-              y: rem(index, @rows) * @row_pitch
-            })
-          end)
-
-        {placed ++ at, x + wraps * (@node_width + @wrap_gap) - @wrap_gap + @column_gap}
-      end)
-
-    placed
-  end
-
-  defp width([]), do: 0
-  defp width(placed), do: placed |> Enum.map(& &1.x) |> Enum.max() |> Kernel.+(@node_width)
-
-  defp height([]), do: 0
-  defp height(placed), do: placed |> Enum.map(& &1.y) |> Enum.max() |> Kernel.+(@node_height)
+  @doc "An item's standing in words, nil for an item with none."
+  def standing_name(standing), do: Map.get(@standing_names, standing)
 
   defp node(node, fleet_id, labels) do
     {kind, _plural} = WorkspacePage.type_name(node.type)
@@ -269,79 +200,18 @@ defmodule KeyfleetWeb.WorkspaceGraph do
 
     %{
       id: node.id,
-      x: node.x,
-      y: node.y,
-      width: @node_width,
-      height: @node_height,
       type: node.type,
       kind: String.capitalize(kind),
       title: node.title,
-      shown_title: shorten(node.title),
-      shape: shape(node.x, node.y),
       tone: tone,
-      standing: Map.get(@standing_names, node.standing),
+      standing: standing_name(node.standing),
       owner_key: node.owner_key,
       owner: node.owner_key && ActivityLines.key_name(node.owner_key, nil),
       joined_keys: node.joined_keys,
       project: labels[node.project],
       archived?: node.archived,
+      changed_at: node.changed_at,
       path: WorkspacePage.item_path(fleet_id, node.id)
-    }
-  end
-
-  # A card cut at its top left and bottom right corners, as the site's panels
-  # are.
-  defp shape(x, y),
-    do:
-      "M #{x + @cut} #{y} H #{x + @node_width} V #{y + @node_height - @cut} " <>
-        "L #{x + @node_width - @cut} #{y + @node_height} H #{x} V #{y + @cut} Z"
-
-  defp shorten(nil), do: ""
-
-  defp shorten(title) do
-    if String.length(title) > @title_shown,
-      do: String.slice(title, 0, @title_shown - 1) <> "…",
-      else: title
-  end
-
-  # A link leaves the middle of its source's right side and reaches the
-  # middle of its target's left side, or the other way round when it runs
-  # back; between two items of one column it bows out to the right, never
-  # past the gap before the next column. `curve` is its four points, start,
-  # two handles and end, which the page's script hands the GPU.
-  defp edge(edge, by_id) do
-    from = Map.fetch!(by_id, edge.source)
-    to = Map.fetch!(by_id, edge.target)
-    y1 = from.y + div(@node_height, 2)
-    y2 = to.y + div(@node_height, 2)
-
-    points =
-      cond do
-        from.x == to.x ->
-          x = from.x + @node_width
-          bow = x + min(div(@column_gap, 2) + div(abs(y2 - y1), 8), @column_gap)
-          [x, y1, bow, y1, bow, y2, x, y2]
-
-        from.x < to.x ->
-          {x1, x2} = {from.x + @node_width, to.x}
-          bend = div(x2 - x1, 2)
-          [x1, y1, x1 + bend, y1, x2 - bend, y2, x2, y2]
-
-        true ->
-          {x1, x2} = {from.x, to.x + @node_width}
-          bend = div(x1 - x2, 2)
-          [x1, y1, x1 - bend, y1, x2 + bend, y2, x2, y2]
-      end
-
-    [x1, y1, c1x, c1y, c2x, c2y, x2, y2] = points
-
-    %{
-      id: edge.id,
-      type: edge.type,
-      source: edge.source,
-      target: edge.target,
-      path: "M #{x1} #{y1} C #{c1x} #{c1y}, #{c2x} #{c2y}, #{x2} #{y2}",
-      curve: Enum.join(points, " ")
     }
   end
 
@@ -353,8 +223,8 @@ defmodule KeyfleetWeb.WorkspaceGraph do
         do: %{tone: tone, name: name, count: count}
   end
 
-  # The list under the picture: every item, in the picture's order, with
-  # each of its links in words, as its own page says them.
+  # The list under the canvas: every item, the most recently changed first,
+  # with each of its links in words, as its own page says them.
   defp rows(nodes, edges, by_id) do
     links =
       Enum.reduce(edges, %{}, fn edge, links ->

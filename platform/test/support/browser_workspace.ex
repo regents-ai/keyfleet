@@ -134,13 +134,16 @@ defmodule Keyfleet.BrowserWorkspace do
 
   defp route("POST", ["api", "v1", "projects", @project, "notebooks"], conn, request) do
     %{"title" => title} = fields = Jason.decode!(request.body)
+    now = DateTime.to_iso8601(DateTime.utc_now())
 
     notebook = %{
       id: "nb-" <> random(16),
       title: title,
       description: fields["description"] || "",
       tags: fields["tags"] || [],
-      created_at: DateTime.to_iso8601(DateTime.utc_now()),
+      created_at: now,
+      updated_at: now,
+      last_run_at: nil,
       meta: %{author: request.subject}
     }
 

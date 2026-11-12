@@ -38,6 +38,7 @@ export default defineConfig({
     "setup_list.spec.ts",
     "fleet_search.spec.ts",
     "homepage_cards.spec.ts",
+    "tree_canvas.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

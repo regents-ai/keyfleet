@@ -1271,7 +1271,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         ]
       end)
 
-      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general&view=list")
       assert_received {:listed, %{"limit" => "24"} = query}
       refute Map.has_key?(query, "tag")
 
@@ -1318,7 +1318,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       hold!(2, other)
 
       {:ok, theirs, _html} =
-        live(signed_in_as(visitor, other), @board <> "?place=docs&project=general")
+        live(signed_in_as(visitor, other), @board <> "?place=docs&project=general&view=list")
 
       assert has_element?(
                theirs,
@@ -1337,6 +1337,104 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(view, "#workspace-docs-pins-empty")
       assert has_element?(view, ~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
+    end
+
+    # Costly failure: a notebook hung from the wrong task, or a canvas that
+    # left the list's locks and pins out of reach, would mislead the members
+    # or strand them.
+    test "Docs draws the notebooks with the tasks that name them, and keeps the list a press away",
+         %{conn: conn} do
+      project = "proj-0123456789abcdef"
+      price = "nb-0123456789abcdef"
+      plan = "nb-fedcba9876543210"
+      maker = "0x" <> String.duplicate("b", 40)
+      hold!(2, maker)
+
+      account =
+        Accounts.register_verified!("did:privy:workspace-page:maker", maker, [maker],
+          actor: %Actors.System{}
+        )
+
+      hub!(project, fn _query ->
+        [
+          %{
+            "id" => plan,
+            "title" => "Launch plan",
+            "description" => "",
+            "author" => "u_#{account.id}",
+            "created_at" => "2026-10-20T09:00:00Z",
+            "updated_at" => "2026-10-21T09:00:00Z",
+            "last_run_at" => "2026-10-21T08:00:00Z",
+            "tags" => ["folder/plans"]
+          },
+          %{
+            "id" => price,
+            "title" => "Price model",
+            "description" => "",
+            "author" => "someone-else",
+            "created_at" => "2026-10-19T09:00:00Z",
+            "updated_at" => "2026-10-19T09:00:00Z",
+            "last_run_at" => nil,
+            "tags" => []
+          }
+        ]
+      end)
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Model the price",
+          "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, price)
+        })
+
+      create(@fleet, "task", %{"title" => "Unrelated"})
+
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
+      assert has_element?(view, ~s(#workspace-docs-view-canvas[aria-current="page"]))
+      refute has_element?(view, "#workspace-notebook-rows")
+      tree = tree(view, "workspace-docs-tree")
+
+      assert %{
+               "kind" => "Notebook",
+               "author" => "Key 2",
+               "folder" => "plans",
+               "changed" => "2026-10-21T09:00:00Z",
+               "ran" => "2026-10-21T08:00:00Z",
+               "patch" => false
+             } = tree_card(tree, plan)
+
+      open =
+        "/fleets/#{@fleet}/notebooks/open?" <>
+          URI.encode_query(to: Keyfleet.Notebooks.notebook_path(project, price))
+
+      assert %{"author" => "No Key", "ran" => nil, "href" => ^open} = tree_card(tree, price)
+
+      assert %{"kind" => "Task", "title" => "Model the price", "author" => "Key 17"} =
+               tree_card(tree, task)
+
+      assert length(tree["cards"]) == 3
+      assert [%{"from" => ^price, "to" => ^task, "type" => "notebook"}] = tree["links"]
+
+      # Every project's newest notebooks are drawn the same way.
+      {:ok, every, _html} = live(conn, @board <> "?place=docs")
+
+      assert every |> tree("workspace-docs-tree") |> Map.fetch!("cards") |> length() == 3
+
+      view |> element("#workspace-docs-arrange-activity") |> render_click()
+      assert_patch(view, @board <> "?place=docs&project=general&arrange=activity")
+      assert has_element?(view, ~s(#workspace-docs-tree[data-arrange="activity"]))
+
+      # The list keeps each notebook's lock and pin.
+      view |> element("#workspace-docs-view-list") |> render_click()
+      assert_patch(view, @board <> "?place=docs&project=general&view=list")
+      refute has_element?(view, "#workspace-docs-tree")
+      assert has_element?(view, "#workspace-notebook-#{price}-pin")
+      assert has_element?(view, "#workspace-notebook-#{price}-lock", "Locked")
+
+      for query <- ["view=canvas", "view=list&arrange=author", "every=week"] do
+        assert_raise KeyfleetWeb.NotFoundError, fn ->
+          live(conn, @board <> "?place=docs&project=general&" <> query)
+        end
+      end
     end
 
     test "Docs says so when the notebooks aren't connected, or can't be read", %{conn: conn} do
@@ -1975,9 +2073,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                }
       end
 
-      # The Graph colours a reproduced task as done, as the count does.
+      # The Graph colours a reproduced task as done, as the count does, on
+      # the canvas and in the list.
       {:ok, view, _html} = live(conn, @board <> "?view=graph")
-      assert has_element?(view, ~s([data-node="#{reproduced}"][data-tone="done"]), "Reproduced")
+      assert has_element?(view, ~s([data-row="#{reproduced}"][data-tone="done"]), "Reproduced")
+
+      assert %{"tone" => "done", "standing" => "Reproduced"} =
+               view |> tree("workspace-graph-tree") |> tree_card(reproduced)
     end
 
     test "one project's counts leave out the others' work", %{conn: conn} do
@@ -2067,6 +2169,76 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         assert has_element?(refused, "#workspace-members-only")
         refute has_element?(refused, "#workspace-graph")
         refute render(refused) =~ "Ours"
+      end
+    end
+
+    # Costly failure: a card dated by its last change, or a link drawn the
+    # wrong way, would hang work under what came after it.
+    test "hands the canvas each item with when it was made, and each link from what came first",
+         %{conn: conn} do
+      open_log(@fleet)
+      goal = create(@fleet, "goal", %{"title" => "Revenue"})
+      task = create(@fleet, "task", %{"title" => "Draft the brief"}, by: 4)
+      [%{changed_at: made}] = Graph.read_objects!(@fleet, [task], actor: %Actors.System{})
+      link(@fleet, task, goal, "implements")
+      finding = create(@fleet, "finding", %{"title" => "Funds read briefs", "statement" => "S"})
+      link(@fleet, task, finding, "produces")
+      submit(@fleet, task, "https://example.com/brief", by: 4)
+
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+      assert has_element?(view, ~s(#workspace-graph-tree[data-arrange="time"][data-every="day"]))
+      tree = tree(view, "workspace-graph-tree")
+
+      assert %{
+               "kind" => "Task",
+               "title" => "Draft the brief",
+               "author" => "Key 4",
+               "created" => ^made,
+               "tone" => "waiting",
+               "patch" => true
+             } = card = tree_card(tree, task)
+
+      assert card["changed"] > made
+      assert card["href"] == KeyfleetWeb.WorkspacePage.item_path(@fleet, task)
+      assert Enum.sort(Enum.map(tree["cards"], & &1["id"])) == Enum.sort([goal, task, finding])
+
+      assert tree["links"] |> Enum.map(&{&1["from"], &1["to"], &1["type"]}) |> Enum.sort() ==
+               Enum.sort([{goal, task, "implements"}, {task, finding, "produces"}])
+    end
+
+    test "arranges the canvas by the address, and keeps the arrangement through the filters",
+         %{conn: conn} do
+      open_log(@fleet)
+      create(@fleet, "task", %{"title" => "Draft the brief"})
+      {:ok, view, _html} = live(conn, @board <> "?view=graph")
+
+      assert has_element?(view, ~s(#workspace-graph-arrange-time[aria-pressed="true"]))
+      assert has_element?(view, ~s(#workspace-graph-arrange-day[aria-pressed="true"]))
+
+      view |> element("#workspace-graph-arrange-hour") |> render_click()
+      assert_patch(view, @board <> "?view=graph&every=hour")
+      assert has_element?(view, ~s(#workspace-graph-tree[data-arrange="time"][data-every="hour"]))
+
+      view |> element("#workspace-graph-arrange-author") |> render_click()
+      assert_patch(view, @board <> "?view=graph&arrange=author&every=hour")
+      assert has_element?(view, ~s(#workspace-graph-tree[data-arrange="author"]))
+      assert has_element?(view, ~s(#workspace-graph-arrange-author[aria-pressed="true"]))
+      refute has_element?(view, "#workspace-graph-arrange-hour")
+
+      view |> element(~s(#workspace-graph [data-type-filter="task"])) |> render_click()
+      assert_patch(view, @board <> "?view=graph&type=task&arrange=author&every=hour")
+
+      view |> element("#workspace-view-board") |> render_click()
+      assert_patch(view, @board <> "?type=task")
+
+      for query <- [
+            "view=graph&arrange=time",
+            "view=graph&arrange=size",
+            "view=graph&every=week",
+            "arrange=author",
+            "every=hour"
+          ] do
+        assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, @board <> "?" <> query) end
       end
     end
   end
@@ -2317,7 +2489,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, @board <> "?view=graph&goal=goal%23999")
       assert has_element?(view, "#workspace-graph-empty")
-      refute has_element?(view, "[data-node], [data-row]")
+      refute has_element?(view, "#workspace-graph-tree, [data-row]")
 
       for path <- [
             @board <> "?view=graph&goal=" <> URI.encode_www_form(task),
@@ -2878,6 +3050,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   end
 
   defp id_number(id), do: id |> String.split("#") |> List.last()
+
+  # What a tree canvas draws, as the page hands it to the browser.
+  defp tree(view, id) do
+    view
+    |> element("#" <> id)
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.attribute("data-tree")
+    |> hd()
+    |> Jason.decode!()
+  end
+
+  defp tree_card(%{"cards" => cards}, id), do: Enum.find(cards, &(&1["id"] == id))
 
   defp card(id), do: ~s(#workspace-cards [data-item="#{id}"])
 

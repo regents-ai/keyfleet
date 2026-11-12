@@ -1,24 +1,24 @@
 /**
- * Draws the workspace graph's links with WebGPU through vgpu, under the
- * items the page drew, only when something changed. There is no clock and
- * no idle loop: pointing at an item sets which links should light, the
- * picture eases toward it for a few frames and stops.
+ * Draws a tree canvas's links with WebGPU through vgpu, under its cards,
+ * only when something changed. There is no clock and no idle loop: moving
+ * the camera, moving the links or lighting some of them asks for frames,
+ * the lighting eases toward its target for a few of them and stops.
  *
- * The links reach the GPU once each time the page's graph changes, one
- * instance each; only how lit each one is changes from frame to frame.
+ * The links reach the GPU, one instance each, whenever their places change;
+ * the camera and how lit each link is are set apart from them.
  */
 import {prepareShader} from "@vgpu/wgsl/prepare"
 import {draw, frame, geometry, init, surface} from "vgpu"
 
-import type {IslandRenderer} from "../canvas_island"
+import type {IslandRenderer} from "../../canvas_island"
 import {graphWgsl} from "./shader"
 
 type Rgb = readonly [number, number, number]
 
 /**
- * One link: its start, two handles and end, in points of the picture,
- * whether it contradicts, and whether it is dashed, as a fork, a review or a
- * contradiction is.
+ * One link: its start, two handles and end, in world pixels, whether it
+ * contradicts, and whether it is dashed, as a fork, a review, a
+ * contradiction or a link closing a loop is.
  */
 export type Link = {
   readonly points: readonly number[]
@@ -35,7 +35,7 @@ const length = ([x1, y1, c1x, c1y, c2x, c2y, x2, y2]: readonly number[]) => {
   return (chord + hull) / 2
 }
 
-/** As many links as the workspace's graph read answers. */
+/** As many links as a canvas draws: the workspace's graph read answers at most 600. */
 export const MAX_LINKS = 600
 
 const SEGMENTS = 32
@@ -48,10 +48,12 @@ const CLOSE = 0.002
 export type GraphRenderer = IslandRenderer & {
   /** The resting links' colour and strength, the lit ones' colour and a contradicting one's. */
   tones(ink: Rgb, strength: number, lit: Rgb, against: Rgb): void
-  /** The links to draw, as the page laid them out. */
+  /** The links to draw, where they stand now. */
   links(links: readonly Link[]): void
   /** Which links should be lit, by their place in `links`. */
   light(lit: ReadonlySet<number>): void
+  /** Where the world's origin is on the canvas, in CSS pixels, and CSS pixels per world pixel. */
+  view(x: number, y: number, zoom: number): void
 }
 
 export async function createGraphRenderer(
@@ -59,10 +61,11 @@ export async function createGraphRenderer(
   size: readonly [number, number],
   onDeviceLost: () => void,
 ): Promise<GraphRenderer> {
-  // Device pixels per point of the picture, which the island may have
-  // capped below the screen's own.
+  // Device pixels per CSS pixel, which the island may have capped below the
+  // screen's own.
   let scale = 1
   let pixels: readonly [number, number] = [size[0], size[1]]
+  let camera: readonly [number, number, number] = [0, 0, 1]
   let count = 0
   const data = new Float32Array(MAX_LINKS * FLOATS)
   const lights = Array.from({length: MAX_LINKS}, () => ({value: 0, target: 0}))
@@ -81,12 +84,12 @@ export async function createGraphRenderer(
       autoResize: false,
       alphaMode: "premultiplied",
       clearColor: [0, 0, 0, 0],
-      label: "workspace-graph",
+      label: "tree-canvas",
     })
     stage.resize([size[0], size[1]])
     const strips = geometry(gpu, {
       topology: "triangle-strip",
-      label: "workspace-graph.links",
+      label: "tree-canvas.links",
       buffers: [
         {
           stepMode: "instance",
@@ -100,14 +103,15 @@ export async function createGraphRenderer(
       ],
     })
     const ribbons = draw(gpu, {
-      shader: prepareShader(graphWgsl, "workspace-graph.wgsl"),
+      shader: prepareShader(graphWgsl, "tree-canvas.wgsl"),
       geometry: strips,
       blend: "premultiplied",
       vertices: (SEGMENTS + 1) * 2,
-      label: "workspace-graph.pass",
+      label: "tree-canvas.pass",
       set: {
         params: {
           size: [size[0], size[1], 1, 0],
+          view: [0, 0, 1, 0],
           ink: [0.5, 0.5, 0.5, 0.5],
           lit: [1, 1, 1, 1],
           against: [1, 0, 0, 1],
@@ -126,18 +130,18 @@ export async function createGraphRenderer(
       },
       links(links) {
         count = Math.min(links.length, MAX_LINKS)
-        data.fill(0)
         links.slice(0, count).forEach((link, i) => {
           data.set(link.points.slice(0, 8), i * FLOATS)
           data[i * FLOATS + 9] = link.against ? 1 : 0
           data[i * FLOATS + 10] = link.dashed ? length(link.points) : 0
         })
-        for (const light of lights) light.value = light.target = 0
-        recede.value = recede.target = 0
       },
       light(lit) {
         lights.forEach((light, i) => (light.target = lit.has(i) ? 1 : 0))
         recede.target = lit.size > 0 ? 1 : 0
+      },
+      view(x, y, zoom) {
+        camera = [x, y, zoom]
       },
       resize(width, height) {
         stage.resize([width, height])
@@ -155,7 +159,9 @@ export async function createGraphRenderer(
       present() {
         for (let i = 0; i < count; i++) data[i * FLOATS + 8] = lights[i].value
         strips.write(data)
-        ribbons.set({params: {size: [pixels[0], pixels[1], scale, recede.value]}})
+        ribbons.set({
+          params: {size: [pixels[0], pixels[1], scale, recede.value], view: [camera[0], camera[1], camera[2], 0]},
+        })
         frame(gpu, current =>
           current.pass(stage, pass => {
             if (count > 0) pass.draw(ribbons, {instances: count})

@@ -512,6 +512,42 @@ defmodule Keyfleet.BrowserChain do
   def item_path(fleet_id, id), do: KeyfleetWeb.WorkspacePage.item_path(fleet_id, id)
 
   @doc """
+  Gives the fleet's workspace a small tree of work, opening its log first
+  when no other walk has: a goal from Key 3; two tasks on it, from Keys 4 and
+  5; a finding the first task produced; a copy of that task from Key 6; and
+  a note from Key 7 that nothing links to. Returns their ids as JSON.
+  """
+  def tree!(fleet_id) do
+    unless Keyfleet.Graph.get_cursor!(fleet_id, actor: @system),
+      do: WorkspaceFixtures.open_log(fleet_id)
+
+    goal = WorkspaceFixtures.create(fleet_id, "goal", %{"title" => "Chart the harbour"}, by: 3)
+    task = WorkspaceFixtures.create(fleet_id, "task", %{"title" => "Sound the channel"}, by: 4)
+    other = WorkspaceFixtures.create(fleet_id, "task", %{"title" => "Count the moorings"}, by: 5)
+
+    finding =
+      WorkspaceFixtures.create(fleet_id, "finding", %{"title" => "Nine metres at low tide"},
+        by: 4
+      )
+
+    fork = WorkspaceFixtures.create(fleet_id, "task", %{"title" => "Sound it again"}, by: 6)
+    note = WorkspaceFixtures.create(fleet_id, "note", %{"title" => "Tide tables"}, by: 7)
+    WorkspaceFixtures.link(fleet_id, task, goal, "implements", by: 4)
+    WorkspaceFixtures.link(fleet_id, other, goal, "implements", by: 5)
+    WorkspaceFixtures.link(fleet_id, task, finding, "produces", by: 4)
+    WorkspaceFixtures.link(fleet_id, fork, task, "forks", by: 6)
+
+    Jason.encode!(%{
+      goal: goal,
+      task: task,
+      other: other,
+      finding: finding,
+      fork: fork,
+      note: note
+    })
+  end
+
+  @doc """
   Records that `wallet`, holding Key `key`, sent `general`'s repository a
   change ending at `head`, as the code store's gateway does after git has its
   answer.

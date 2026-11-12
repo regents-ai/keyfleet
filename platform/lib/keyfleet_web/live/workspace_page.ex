@@ -50,6 +50,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias Keyfleet.Projects.Publish
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Message
+  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
   alias KeyfleetWeb.FleetPage
@@ -172,6 +173,14 @@ defmodule KeyfleetWeb.WorkspacePage do
   # each project's in the whole fleet's view.
   @docs_shown 24
   @section_shown 6
+  # How many notebooks the Docs place's canvas draws, the most recently
+  # changed, as many as the Graph view draws items.
+  @canvas_notebooks 120
+
+  # How a tree canvas arranges its cards, as the address names each: by when
+  # each was made when it names none, by the Key that made it, or by how
+  # recently it changed. Made times are sliced by the day, or by the hour.
+  @arranges %{"author" => :author, "activity" => :activity}
 
   # How many goals the Graph view steps through.
   @step_goals 120
@@ -216,20 +225,22 @@ defmodule KeyfleetWeb.WorkspacePage do
   @doc """
   The path of the fleet's workspace, showing `filter` from `position`: on the
   board, or in the graph (`view: :graph`), where `owner` names the Key whose
-  items it draws.
+  items it draws, arranged as `arrange` and `every` say.
   """
   def board_path(fleet_id, filter, position \\ []) do
+    graph? = filter.view == :graph
+
     with_query(
       "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
       given(
         [
-          view: if(filter.view == :graph, do: "graph"),
+          view: if(graph?, do: "graph"),
           project: filter.project,
           type: filter.type,
           owner: filter.owner,
           goal: filter.goal,
           archived: if(filter.archived?, do: "shown")
-        ] ++ position
+        ] ++ if(graph?, do: arrangement(filter), else: []) ++ position
       )
     )
   end
@@ -244,6 +255,27 @@ defmodule KeyfleetWeb.WorkspacePage do
       given(place: if(place != :project, do: place), project: project)
     )
   end
+
+  @doc """
+  The path of the Docs place, in one project or, for nil, all of them,
+  showing the notebooks as `docs` says: on a canvas arranged as `arrange` and
+  `every` say, or as a list (`view: :list`).
+  """
+  def docs_path(fleet_id, project, docs) do
+    canvas? = docs.view == :canvas
+
+    with_query(
+      "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+      given(
+        [place: :docs, project: project, view: if(not canvas?, do: "list")] ++
+          if(canvas?, do: arrangement(docs), else: [])
+      )
+    )
+  end
+
+  # A canvas's arrangement in its address, left out where it is the first one.
+  defp arrangement(%{arrange: arrange, every: every}),
+    do: [arrange: if(arrange != :time, do: arrange), every: if(every != :day, do: every)]
 
   @doc "The address a workspace cites one commit of a project's repository by."
   def commit_url(fleet_id, repository, hash),
@@ -419,34 +451,51 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp labels(nil, projects), do: Map.new(projects, &{&1.name, &1.title})
   defp labels(_shown, _projects), do: %{}
 
-  # The project's items, or the whole fleet's, drawn as a graph with the
-  # links between them (`KeyfleetWeb.WorkspaceGraph`), under how many goals
-  # and tasks stand where (`Keyfleet.Graph.tally/3`).
+  # The project's items, or the whole fleet's, with the links between them
+  # (`KeyfleetWeb.WorkspaceGraph`), for the tree canvas with when each was
+  # made, read from one snapshot, under how many goals and tasks stand where
+  # (`Keyfleet.Graph.tally/3`).
   defp place(fleet, :project, shown, projects, params, opts)
        when is_map_key(params, "view") do
     filter = filter!(params, shown)
 
     case ready(fleet, opts) do
       {:ready, cursor} ->
-        graph =
-          Graph.workspace_graph!(
-            fleet.id,
-            %{
-              project: filter.project,
-              type: filter.type,
-              owner_key: filter.owner,
-              goal: filter.goal,
-              archived: filter.archived?
-            },
-            opts
-          )
+        {:ok, {graph, created}} =
+          Graph.in_snapshot(fn ->
+            graph =
+              Graph.workspace_graph!(
+                fleet.id,
+                %{
+                  project: filter.project,
+                  type: filter.type,
+                  owner_key: filter.owner,
+                  goal: filter.goal,
+                  archived: filter.archived?
+                },
+                opts
+              )
+
+            made =
+              fleet.id
+              |> Graph.object_titles!(
+                Enum.map(graph.nodes, & &1.id),
+                [load: [:created_at]] ++ opts
+              )
+              |> Map.new(&{&1.id, &1.created_at})
+
+            {graph, made}
+          end)
+
+        items = WorkspaceGraph.items(graph, fleet.id, labels(shown, projects))
 
         %{
           ready?: true,
           seen: seen(cursor),
           filter: filter,
           counts: Graph.tally!(fleet.id, filter.project, opts),
-          graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects)),
+          graph: items,
+          canvas: WorkspaceGraph.canvas(items, created),
           goals: step_goals(fleet.id, filter, opts),
           instruments: instruments(fleet.id, filter, projects, opts)
         }
@@ -516,24 +565,43 @@ defmodule KeyfleetWeb.WorkspacePage do
   # One project's newest notebooks, each locked or open to every member's
   # edits, with whether the member is the one who locks it, and the daily
   # copies of them the member may bring back; or each project's few newest in
-  # turn; and what the fleet's members pinned there. None of it comes from
-  # the workspace's log, so it keeps no place in it (`seen`), and its notices
-  # don't read it again.
-  defp place(fleet, :docs, shown, projects, _params, opts) do
+  # turn; and what the fleet's members pinned there. On the canvas
+  # (`docs.view`), the notebooks shown are its cards as well
+  # (`notebook_canvas/3`). None of it comes from the workspace's log, so it
+  # keeps no place in it (`seen`), and its notices don't read it again.
+  defp place(fleet, :docs, shown, projects, params, opts) do
+    docs = docs!(params)
     hub? = Notebooks.hub?(fleet.id)
     spaces = Map.new(projects, &{&1.name, hub? && &1.hub_project_id})
     labels = labels(shown, projects)
     shown_hub? = hub? and shown != nil
 
+    notebooks =
+      shown &&
+        fleet.id
+        |> notebooks(spaces[shown.name], limit: @docs_shown)
+        |> with_locks(fleet.id, shown_hub?, opts[:actor])
+
+    sections = if(is_nil(shown), do: sections(fleet.id, projects, spaces, docs), else: [])
+
     %{
+      docs: docs,
       hub?: hub?,
-      notebooks:
-        shown &&
-          fleet.id
-          |> notebooks(spaces[shown.name], limit: @docs_shown)
-          |> with_locks(fleet.id, shown_hub?, opts[:actor]),
+      notebooks: notebooks,
       copies: if(shown_hub?, do: copies(fleet.id, opts[:actor], shown.name), else: []),
-      sections: if(is_nil(shown), do: sections(fleet.id, projects, spaces), else: []),
+      sections: sections,
+      canvas:
+        if(hub? and docs.view == :canvas,
+          do:
+            notebook_canvas(
+              fleet.id,
+              if(shown,
+                do: readable(notebooks),
+                else: Enum.flat_map(sections, &readable(&1.notebooks))
+              ),
+              opts
+            )
+        ),
       pins:
         for pin <- Graph.pins!(fleet.id, :docs, shown && shown.name, opts),
             Map.has_key?(spaces, pin.project) do
@@ -771,7 +839,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # Each project's newest few notebooks, the projects read at once; one the
   # hub doesn't answer in time is `:unreadable`.
-  defp sections(fleet_id, projects, spaces) do
+  defp sections(fleet_id, projects, spaces, docs) do
     projects
     |> Task.async_stream(&notebooks(fleet_id, spaces[&1.name], limit: @section_shown),
       max_concurrency: 4,
@@ -780,23 +848,132 @@ defmodule KeyfleetWeb.WorkspacePage do
     )
     |> Enum.zip_with(projects, fn
       {:ok, notebooks}, project ->
-        section(fleet_id, project, notebooks)
+        section(fleet_id, project, notebooks, docs)
 
       {:exit, :timeout}, project ->
         Logger.warning("The notebooks of #{fleet_id} could not be read: timeout")
-        section(fleet_id, project, :unreadable)
+        section(fleet_id, project, :unreadable, docs)
     end)
   end
 
-  defp section(fleet_id, project, notebooks) do
+  defp section(fleet_id, project, notebooks, docs) do
     %{
       project: project.name,
       title: project.title,
       key: project.key,
       state: project.state,
       notebooks: notebooks,
-      link: place_path(fleet_id, :docs, project.name)
+      link: docs_path(fleet_id, project.name, docs)
     }
+  end
+
+  # The notebooks shown as a tree canvas's cards, the #{@canvas_notebooks}
+  # most recently changed, each headed by the Key that made it
+  # (`notebook_keys/2`), with when it last ran; and the tasks that name one
+  # of them as their notebook (`notebook_ref`), each linked from its
+  # notebook. The hub keeps nothing of which notebook another was made from,
+  # so notebooks link to nothing else.
+  defp notebook_canvas(fleet_id, notebooks, opts) do
+    notebooks =
+      notebooks
+      |> Enum.sort_by(& &1.changed, :desc)
+      |> Enum.take(@canvas_notebooks)
+
+    keys = notebook_keys(fleet_id, notebooks)
+    by_url = Map.new(notebooks, &{&1.url, &1.id})
+
+    tasks =
+      if notebooks == [],
+        do: [],
+        else: Graph.tasks_naming_notebooks!(fleet_id, Map.keys(by_url), opts)
+
+    %{
+      cards:
+        Enum.map(notebooks, fn notebook ->
+          %{
+            id: notebook.id,
+            kind: "Notebook",
+            title: notebook.title,
+            href: notebook.open,
+            patch: false,
+            tone: :plain,
+            standing: nil,
+            author: key_label(keys[notebook.id]),
+            created: notebook.added,
+            changed: notebook.changed,
+            archived: false,
+            folder: notebook.folder,
+            ran: notebook.ran
+          }
+        end) ++
+          Enum.map(tasks, fn task ->
+            %{
+              id: task.id,
+              kind: "Task",
+              title: task.title,
+              href: item_path(fleet_id, task.id),
+              patch: true,
+              tone: WorkspaceGraph.tone(task.standing),
+              standing: WorkspaceGraph.standing_name(task.standing),
+              author: key_label(task.owner_key),
+              created: task.created_at,
+              changed: task.changed_at,
+              archived: false,
+              folder: nil
+            }
+          end),
+      links:
+        Enum.map(
+          tasks,
+          &%{
+            id: &1.id <> " notebook",
+            type: "notebook",
+            from: Map.fetch!(by_url, &1.data["notebook_ref"]),
+            to: &1.id
+          }
+        )
+    }
+  end
+
+  # The notebooks read, none when there are none or they can't be read.
+  defp readable(notebooks) when is_list(notebooks), do: notebooks
+  defp readable(_none_or_unreadable), do: []
+
+  defp key_label(nil), do: "No Key"
+  defp key_label(key), do: ActivityLines.key_name(key, nil)
+
+  # The Key each notebook's maker writes as in the fleet, by notebook: the
+  # Key whose scratchpad it is, else its author's, a person's or an agent's
+  # (`Keyfleet.Keys.identity/2`); none for a notebook this site didn't make
+  # for someone, or whose maker holds no Key now.
+  defp notebook_keys(fleet_id, notebooks) do
+    locks = Notebooks.locks(fleet_id)
+    authors = notebooks |> Enum.map(& &1.author) |> Enum.uniq()
+
+    people =
+      for "u_" <> id <- authors, {account, ""} <- [Integer.parse(id)], do: account
+
+    agents =
+      for "a_" <> id <- authors, {:ok, profile} <- [Ecto.UUID.cast(id)], do: profile
+
+    people_keys =
+      for account <- Keyfleet.Accounts.accounts_by_ids!(people, actor: %System{}),
+          key = Keys.identity(Human.for_account(account), fleet_id),
+          into: %{},
+          do: {Notebooks.subject(%Human{human_account_id: account.id}), key.token_id}
+
+    agent_keys =
+      for profile <-
+            Agents.listings!(agents, load: [key: %{fleet_id: fleet_id}], actor: %System{}),
+          profile.key,
+          into: %{},
+          do: {Notebooks.agent_subject(profile.id), profile.key}
+
+    by_author = Map.merge(people_keys, agent_keys)
+
+    Map.new(notebooks, fn notebook ->
+      {notebook.id, get_in(locks, [notebook.id, :key]) || by_author[notebook.author]}
+    end)
   end
 
   @doc """
@@ -1389,9 +1566,36 @@ defmodule KeyfleetWeb.WorkspacePage do
       type: type!(params["type"]),
       owner: owner!(view, params["owner"]),
       goal: goal!(view, params["goal"]),
-      archived?: archived!(params["archived"])
+      archived?: archived!(params["archived"]),
+      arrange: arrange!(view == :graph, params["arrange"]),
+      every: every!(view == :graph, params["every"])
     }
   end
+
+  # The Docs place shows its notebooks on a canvas, or as a list.
+  defp docs!(params) do
+    view =
+      case params["view"] do
+        nil -> :canvas
+        "list" -> :list
+        _unknown -> raise NotFoundError
+      end
+
+    %{
+      view: view,
+      arrange: arrange!(view == :canvas, params["arrange"]),
+      every: every!(view == :canvas, params["every"])
+    }
+  end
+
+  # Only a canvas is arranged.
+  defp arrange!(_canvas?, nil), do: :time
+  defp arrange!(true, arrange), do: Map.get(@arranges, arrange) || raise(NotFoundError)
+  defp arrange!(false, _arrange), do: raise(NotFoundError)
+
+  defp every!(_canvas?, nil), do: :day
+  defp every!(true, "hour"), do: :hour
+  defp every!(_canvas?, _every), do: raise(NotFoundError)
 
   # The graph is one picture, so it has no pages, and only it is drawn for
   # one Key.
@@ -1551,7 +1755,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     map =
       fleet_id
       |> Graph.workspace_graph!(%{goal: goal.id, archived: archived?}, opts)
-      |> WorkspaceGraph.draw(fleet_id, %{})
+      |> WorkspaceGraph.items(fleet_id, %{})
 
     %{
       map: WorkspaceGraph.tree(map, goal.id),
@@ -1563,7 +1767,9 @@ defmodule KeyfleetWeb.WorkspacePage do
           type: nil,
           owner: nil,
           goal: goal.id,
-          archived?: archived?
+          archived?: archived?,
+          arrange: :time,
+          every: :day
         }),
       results:
         for {object, uri, {:notebook_result, uri}} <- cited do
@@ -1684,6 +1890,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # A notebook as a page shows it: when it last changed (`changed`) and ran
+  # (`ran`, nil for never) as the hub writes them, and the address tasks cite
+  # it by (`url`).
   defp notebook_row(fleet_id, space, notebook) do
     {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
 
@@ -1694,7 +1903,10 @@ defmodule KeyfleetWeb.WorkspacePage do
       description: notebook["description"],
       folder: Enum.find_value(notebook["tags"], &folder/1),
       added: added,
-      open: notebook_link(fleet_id, space, notebook["id"])
+      changed: notebook["updated_at"],
+      ran: notebook["last_run_at"],
+      open: notebook_link(fleet_id, space, notebook["id"]),
+      url: Notebooks.notebook_url(fleet_id, space, notebook["id"])
     }
   end
 

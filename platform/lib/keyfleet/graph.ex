@@ -77,6 +77,7 @@ defmodule Keyfleet.Graph do
       define :shown_goal_tasks, action: :shown_goal_tasks, args: [:fleet_id, :project, :goal]
       define :work_citing, action: :citing, args: [:fleet_id, :uri]
       define :work_citing_any, action: :citing_any, args: [:fleet_id, :uris]
+      define :tasks_naming_notebooks, action: :naming_notebooks, args: [:fleet_id, :uris]
       define :tasks_joined_by, action: :tasks_joined_by, args: [:fleet_id, :token_id, :wallet]
       define :awaiting_review, action: :awaiting_review, args: [:fleet_id]
 
