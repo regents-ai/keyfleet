@@ -151,7 +151,7 @@ body:has(> .harbour-sea) #app-shell-scroller > .regent-footer {
   pointer-events: none;
 }
 
-body.sea-lifted .harbour-sea__harbour {
+body[data-sea-lifted] .harbour-sea__harbour {
   pointer-events: auto;
 }
 
@@ -202,7 +202,7 @@ body.sea-lifted .harbour-sea__harbour {
   display: none;
 }
 
-body.sea-lifted .harbour-sea__bar {
+body[data-sea-lifted] .harbour-sea__bar {
   position: fixed;
   z-index: 2;
   inset-block-start: var(--space-2);
@@ -248,7 +248,7 @@ body.sea-lifted .harbour-sea__bar {
    Chat and Workspace share one row on a 390-wide screen. Narrower than that,
    the name takes the first row and Chat and Workspace share the second. */
 @media (max-width: 30rem) {
-  body.sea-lifted .harbour-sea__bar {
+  body[data-sea-lifted] .harbour-sea__bar {
     gap: 0.25rem;
     padding: 0.25rem;
     font-size: 0.9375rem;
@@ -277,13 +277,13 @@ body.sea-lifted .harbour-sea__bar {
 /* Lifted: the page, menus and footer included, rises off the top and only the
    city is left. Hidden once it has gone, so the keyboard and screen readers
    skip it and land on the button and the city. */
-body.sea-lifted:has(> .harbour-sea) {
+body[data-sea-lifted]:has(> .harbour-sea) {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
 }
 
-body.sea-lifted:has(> .harbour-sea) #app-shell {
+body[data-sea-lifted]:has(> .harbour-sea) #app-shell {
   translate: 0 -100%;
   opacity: 0;
   visibility: hidden;
@@ -443,12 +443,12 @@ body.sea-lifted:has(> .harbour-sea) #app-shell {
 @media (prefers-reduced-motion: reduce) {
   .harbour-sea__stage canvas,
   body:has(> .harbour-sea) #app-shell,
-  body.sea-lifted:has(> .harbour-sea) #app-shell {
+  body[data-sea-lifted]:has(> .harbour-sea) #app-shell {
     transition: none;
   }
 
   /* No slide: the page simply goes. */
-  body.sea-lifted:has(> .harbour-sea) #app-shell {
+  body[data-sea-lifted]:has(> .harbour-sea) #app-shell {
     translate: none;
   }
 }

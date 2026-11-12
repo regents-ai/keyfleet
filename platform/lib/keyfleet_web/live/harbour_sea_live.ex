@@ -496,6 +496,10 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   handing focus to the bar's first button, which brings it back (`land/0`). A
   press on the margin around the fleet's panel does the same
   (`assets/js/hooks/harbour_sea.ts`).
+
+  The page is lifted while the body has `data-sea-lifted`. An attribute is set
+  at once, where a class waits for the next frame, so the button that takes
+  focus is already shown when it is asked to.
   """
   def lift(assigns) do
     ~H"""
@@ -506,7 +510,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       aria-controls="app-shell"
       aria-label="Show the city"
       title="Show the city"
-      phx-click={JS.add_class("sea-lifted", to: "body") |> JS.focus(to: "#sea-return")}
+      phx-click={JS.set_attribute({"data-sea-lifted", ""}, to: "body") |> JS.focus(to: "#sea-return")}
     >
       <svg viewBox="0 0 20 18" fill="currentColor" aria-hidden="true">
         <rect :for={{x, y, w, h} <- city_skyline()} x={x} y={y} width={w} height={h} />
@@ -517,7 +521,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   end
 
   @doc "Brings the lifted page back, with focus on the button that lifted it."
-  def land, do: JS.remove_class("sea-lifted", to: "body") |> JS.focus(to: "#sea-lift")
+  def land, do: JS.remove_attribute("data-sea-lifted", to: "body") |> JS.focus(to: "#sea-lift")
 
   # The lift button's picture, drawn in blocks like the Regents crown: four
   # towers of a skyline. Each tower is {x, y, width, height}; the beacon on the

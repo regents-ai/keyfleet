@@ -387,7 +387,7 @@ export const HarbourSea = {
     this.onPageLoaded = event => {
       const kind = event?.detail.kind
       if (kind === "patch" || kind === "redirect")
-        this.liveSocket.js().removeClass(document.body, "sea-lifted")
+        this.liveSocket.js().removeAttribute(document.body, "data-sea-lifted")
       const page = window.location.pathname + window.location.search
       if (this.shownPage !== undefined && page !== this.shownPage && document.getElementById("harbour-agent"))
         this.pushEvent("close_agent", {})
@@ -401,7 +401,7 @@ export const HarbourSea = {
     this.onPageLoaded()
     this.onKey = event => {
       const back = document.getElementById("sea-return")
-      if (event.key === "Escape" && back && document.body.classList.contains("sea-lifted") && !document.querySelector("dialog[open]"))
+      if (event.key === "Escape" && back && document.body.hasAttribute("data-sea-lifted") && !document.querySelector("dialog[open]"))
         this.liveSocket.js().exec(back, back.getAttribute("phx-click")!)
     }
     window.addEventListener("keydown", this.onKey)

@@ -20,7 +20,7 @@ test("the city button beside the fleet's name lifts the page, and the bar and Es
 
   const back = page.locator("#sea-return")
   await lift.click()
-  await expect(page.locator("body")).toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("body")).toHaveAttribute("data-sea-lifted")
   await expect(page.locator("#app-shell")).toBeHidden()
   await expect(back).toHaveText("Keyfleet Classic #1")
   await expect(back).toBeFocused()
@@ -28,19 +28,19 @@ test("the city button beside the fleet's name lifts the page, and the bar and Es
   await expect(page.locator("#sea-workspace")).toBeVisible()
 
   await back.click()
-  await expect(page.locator("body")).not.toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("body")).not.toHaveAttribute("data-sea-lifted")
   await expect(page.locator("#app-shell")).toBeVisible()
   await expect(lift).toBeFocused()
 
   await lift.click()
-  await expect(page.locator("body")).toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("body")).toHaveAttribute("data-sea-lifted")
   await page.keyboard.press("Escape")
-  await expect(page.locator("body")).not.toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("body")).not.toHaveAttribute("data-sea-lifted")
 
   await lift.click()
   await page.locator("#sea-workspace").click()
   await expect(page).toHaveURL(/\/classic\/1\/workspace$/)
-  await expect(page.locator("body")).not.toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("body")).not.toHaveAttribute("data-sea-lifted")
   await expect(page.locator("#app-shell")).toBeVisible()
   expect(errors).toEqual([])
 })

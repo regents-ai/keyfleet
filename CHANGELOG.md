@@ -8273,3 +8273,24 @@ can't read; on Base the read is answered and both presses reach the wallet.
 
 Check: the walk passes on its own and with the rest of `wallet_buttons.spec.ts`
 (12 passed).
+
+## 2026-11-12 — Bringing the page back from the city puts focus on the city button again
+
+`sea_lift.spec.ts` saw focus nowhere after the bar's fleet name brought the
+page back. LiveView 1.2.13 (in since 3 Nov) retries a `JS.focus` only when
+focus hasn't moved since its first try. Landing removed the `sea-lifted`
+class, which LiveView applies a frame later, so the first try met a page
+still hidden; the class then hid the bar holding the focused button, the
+browser dropped focus to the page, and the retry never ran. Keyboard and
+screen reader users were left on nothing; with reduced motion, lifting the
+page could lose focus the same way.
+
+- The lifted state is the body's `data-sea-lifted` attribute, which
+  `JS.set_attribute` and `JS.remove_attribute` set at once, so the button
+  each command focuses is already shown: the bar's fleet name on lifting, the
+  city button on landing. `KeyfleetWeb.HarbourSeaLive`, the `HarbourSea`
+  hook (Escape, and landing on navigation) and `pages/harbour.css` use it;
+  the class is gone.
+
+Check: `sea_lift.spec.ts` passes, and passes with reduced motion (checked
+once by hand, not kept as a walk).
