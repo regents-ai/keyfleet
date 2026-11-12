@@ -1441,7 +1441,7 @@
     },
     {
       "command": "keys agents <fleet>",
-      "description": "List your person's Keys in the fleet, those with agents first, then by number, each with the agents on it, none or many; the agents paired with your person now; and the Key you are on. An agent on a Key writes as that Key while your person's wallets hold it. A Key that changes hands, even between your person's own wallets, loses its agents; they stay paired.",
+      "description": "List your person's Keys in the fleet, those with agents first, then by number, each with the agents on it, none or many; the agents paired with your person now; and the Key you are on. An agent on a Key writes as that Key while your person's wallets hold it. A Key that changes hands, even between your person's own wallets, loses its agents; they stay paired. Only your person puts an agent on a Key, moves it or takes it off, under Your Keys on their Account page.",
       "operation_id": "listAgentKeys",
       "method": "GET",
       "path": "/api/v1/agent/fleets/{fleet_id}/agent_keys",
@@ -1455,43 +1455,6 @@
           "in": "path",
           "field": "fleet_id",
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
-        }
-      ]
-    },
-    {
-      "command": "keys assign-agent <fleet> <key>",
-      "description": "Put one of your person's paired agents that is on no Key in the fleet, you included, onto one of their Keys there; a Key holds any number of their agents. Only your person moves an agent that is on a Key or takes one off, under Your Keys on their Account page: naming an agent on another Key answers 403 person_only and changes nothing.",
-      "operation_id": "assignAgentKey",
-      "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/agent_keys/assign",
-      "webmcp": "keys_assign_agent",
-      "authority": "paired_agent",
-      "effect": "write",
-      "arguments": [
-        {
-          "name": "fleet",
-          "type": "string",
-          "in": "path",
-          "field": "fleet_id",
-          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
-        },
-        {
-          "name": "key",
-          "type": "integer",
-          "in": "body",
-          "field": "token_id",
-          "minimum": 1,
-          "description": "One of the Keys your person's wallets hold in this fleet."
-        }
-      ],
-      "flags": [
-        {
-          "name": "agent",
-          "type": "address",
-          "in": "body",
-          "field": "agent_wallet",
-          "required": true,
-          "description": "The wallet of one of the agents paired with your person, as `keys agents` lists it."
         }
       ]
     },

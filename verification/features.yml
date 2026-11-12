@@ -1292,3 +1292,41 @@ features:
       - platform/test/keyfleet/posting_key_test.exs
     gaps:
       - The four agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.
+
+  - id: agents-on-keys
+    what: >-
+      A signed-in person puts any of their paired agents on any of their Keys
+      in a fleet under Your Keys on the Account page, moves one or takes one
+      off; a Key holds several agents and an agent sits on one Key per fleet,
+      writing as it while the person's wallets hold it. Only the person does
+      this (Sean, 12 Nov 2026): no agent places an agent, itself included, and
+      only an agent paired with the account goes on its Keys. Unpairing an
+      agent, on any Regent site, takes it off every Key as it commits; a Key
+      that changes hands loses its agents. Paired agents read where each agent
+      is.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/keys/agent_key.ex
+      - platform/lib/keyfleet/keys/changes/put_agent.ex
+      - platform/lib/keyfleet/keys/changes/tell_keys_changed.ex
+      - platform/lib/keyfleet/keys.ex
+      - platform/lib/keyfleet_web/components/key_gallery.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet_web/agent_tools/keys/answer.ex
+      - platform/lib/keyfleet_web/controllers/agent_key_controller.ex
+      - platform/priv/repo/migrations/20261111164247_agent_keys.exs
+    entry:
+      - route: GET /account
+      - route: GET /api/v1/agent/fleets/{fleet_id}/agent_keys
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/agent_key_test.exs
+      - platform/test/keyfleet/agent_key_race_test.exs
+      - platform/test/keyfleet_web/agent_key_route_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/account_agents.spec.ts
+    gaps:
+      - An agent that owns its own account would place agents as that owner on the page, which waits on sign-in for agents (K1).
+      - An unpaired agent's row stays in agent_keys and never counts again; deleting it in the unpair's own transaction needs a link to the shared pairing table, a shared database change.
+      - WebKit is not run on the Mac.

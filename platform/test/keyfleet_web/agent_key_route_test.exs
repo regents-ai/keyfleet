@@ -1,8 +1,7 @@
 defmodule KeyfleetWeb.AgentKeyRouteTest do
   # A paired agent reads which of its person's agents are on which of their
-  # Keys, and puts one that is on no Key onto any of them, through its own
-  # signed requests and its tools; a Key holds several, and only the person
-  # moves one or takes one off.
+  # Keys, through its own signed requests and its tools; a Key holds several,
+  # and only the person puts one there, moves it or takes it off.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
@@ -10,14 +9,11 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys}
-  alias KeyfleetWeb.AgentTools.Keys.Answer
-  alias KeyfleetWeb.AgentTools.Refused
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
   @read "/api/v1/agent/fleets/#{@fleet}/agent_keys"
-  @assign "/api/v1/agent/fleets/#{@fleet}/agent_keys/assign"
   @person "0x00000000000000000000000000000000000000ab"
   @other "0x00000000000000000000000000000000000000cd"
   @second "0x00000000000000000000000000000000000000ef"
@@ -43,11 +39,10 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
     agent = Keyfleet.PairingHelpers.pair_wallet!(wallet, @person)
     pair!(agent.privy_user_id, "Second", @second)
 
-    %{secret: secret, signer: signer, wallet: wallet}
+    %{secret: secret, signer: signer, wallet: wallet, person: agent.pairing}
   end
 
-  test "the agent puts itself and its person's other agent on Keys, and reads where each is",
-       c do
+  test "the agent reads where its person put it and their other agent", c do
     read = c |> get!(@read) |> json_response(200)
 
     assert ContractSchema.response_errors(read, "GET", path(), 200) == []
@@ -62,125 +57,30 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
              "yours" => nil
            }
 
-    put =
-      c |> post!(@assign, %{"token_id" => 9, "agent_wallet" => c.wallet}) |> json_response(200)
+    for agent_wallet <- [c.wallet, @second],
+        do: assert({:ok, _assigned} = Keys.assign_agent(@fleet, 9, agent_wallet, actor: c.person))
 
-    assert ContractSchema.response_errors(put, "POST", path("/assign"), 200) == []
+    read = c |> get!(@read) |> json_response(200)
 
-    assert put["agent_keys"]["keys"] == [
-             %{"token_id" => 9, "agents" => [%{"name" => "Test agent", "wallet" => c.wallet}]},
-             %{"token_id" => 3, "agents" => []}
-           ]
-
-    assert put["agent_keys"]["yours"] == 9
-
-    # The second agent goes onto the same Key, named by its wallet in any case.
-    second = String.upcase(@second) |> String.replace_prefix("0X", "0x")
-    put = c |> post!(@assign, %{"token_id" => 9, "agent_wallet" => second}) |> json_response(200)
-
-    assert names(put) == [{9, ["Test agent", "Second"]}, {3, []}]
+    assert ContractSchema.response_errors(read, "GET", path(), 200) == []
+    assert names(read) == [{9, ["Test agent", "Second"]}, {3, []}]
+    assert read["agent_keys"]["yours"] == 9
 
     # The fleet check names the Key it acts as, put there by its person.
     doctor = c |> get!("/api/v1/agent/fleets/#{@fleet}/doctor") |> json_response(200)
     assert %{"token_id" => 9, "for_person" => true, "assigned" => true} = doctor["key"]
   end
 
-  test "moving an agent that is on a Key, itself or another, is answered person_only", c do
-    assert post!(c, @assign, %{"token_id" => 9, "agent_wallet" => c.wallet}).status == 200
-    assert post!(c, @assign, %{"token_id" => 9, "agent_wallet" => @second}).status == 200
-
-    for body <- [
-          %{"token_id" => 3, "agent_wallet" => c.wallet},
-          %{"token_id" => 3, "agent_wallet" => @second}
-        ] do
-      refused = c |> post!(@assign, body) |> json_response(403)
-      assert refused["error"]["code"] == "person_only", inspect(body)
-      assert ContractSchema.response_errors(refused, "POST", path("/assign"), 403) == []
-    end
-
-    assert c |> get!(@read) |> json_response(200) |> names() == [
-             {9, ["Test agent", "Second"]},
-             {3, []}
-           ]
-  end
-
-  test "a Key the person doesn't hold, or a wallet no agent of theirs has, is refused", c do
-    assert post!(c, @assign, %{"token_id" => 9, "agent_wallet" => c.wallet}).status == 200
-
-    for {body, code} <- [
-          {%{"token_id" => 4, "agent_wallet" => c.wallet}, "key_not_held"},
-          {%{"token_id" => 999, "agent_wallet" => c.wallet}, "key_not_held"},
-          {%{"token_id" => 3, "agent_wallet" => @other}, "agent_unknown"}
-        ] do
-      refused = c |> post!(@assign, body) |> json_response(409)
-      assert refused["error"]["code"] == code, inspect(body)
-      assert ContractSchema.response_errors(refused, "POST", path("/assign"), 409) == []
-    end
-
-    assert c |> get!(@read) |> json_response(200) |> get_in(["agent_keys", "yours"]) == 9
-  end
-
-  test "a body that isn't one Key and one wallet is refused", c do
-    for body <- [
-          %{},
-          %{"token_id" => 9},
-          %{"token_id" => "nine", "agent_wallet" => c.wallet},
-          %{"token_id" => 0, "agent_wallet" => c.wallet},
-          %{"token_id" => 9, "agent_wallet" => "0xab"},
-          %{"token_id" => 9, "agent_wallet" => nil},
-          %{"token_id" => 9, "wallet" => c.wallet}
-        ] do
-      assert post!(c, @assign, body).status == 422, inspect(body)
-    end
-  end
-
-  test "the agent's tools read and put an agent on a Key as its signed requests do", c do
+  test "the agent's tool reads its person's Keys as its signed request does", c do
     {:ok, agent} = Keyfleet.Agents.with_pairing(agent(c))
 
     assert {:ok, %{agent_keys: %{yours: nil}}} = tool(:agents, %{fleet_id: @fleet}, agent)
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 3, c.wallet, actor: c.person)
 
-    assert {:ok, %{agent_keys: %{yours: 3}}} =
-             tool(:assign_agent, %{fleet_id: @fleet, token_id: 3, agent_wallet: c.wallet}, agent)
+    assert {:ok, %{agent_keys: %{yours: 3, keys: [%{token_id: 3, agents: [_on_it]} | _]}}} =
+             tool(:agents, %{fleet_id: @fleet}, agent)
 
     assert %{token_id: 3, for_person: true} = Keys.identity(agent, @fleet)
-
-    assert {:error, %Ash.Error.Invalid{errors: [%Refused{status: 409} = refused]}} =
-             tool(:assign_agent, %{fleet_id: @fleet, token_id: 4, agent_wallet: c.wallet}, agent)
-
-    assert refused.body.error.code == "key_not_held"
-
-    assert {:error, %Ash.Error.Invalid{errors: [%Refused{status: 403} = refused]}} =
-             tool(:assign_agent, %{fleet_id: @fleet, token_id: 9, agent_wallet: c.wallet}, agent)
-
-    assert refused.body.error.code == "person_only"
-    assert %{token_id: 3} = Keys.identity(agent, @fleet)
-  end
-
-  # The tools take a body the signed route has not checked, so each shape it
-  # refuses answers its own reason too; none is a fault.
-  test "each refusal answers its own reason, an agent unpaired on the way included", c do
-    {:ok, agent} = Keyfleet.Agents.with_pairing(agent(c))
-    answer = &Answer.answer(:assign_agent, Map.put(&1, "fleet_id", @fleet), agent, nil)
-
-    for {params, status, code} <- [
-          {%{"token_id" => 9, "agent_wallet" => "0xab"}, 422, "invalid_request"},
-          {%{"token_id" => 0, "agent_wallet" => c.wallet}, 422, "invalid_request"},
-          {%{"token_id" => 4, "agent_wallet" => c.wallet}, 409, "key_not_held"},
-          {%{"token_id" => 9, "agent_wallet" => @other}, 409, "agent_unknown"},
-          {%{"token_id" => 9}, 422, "invalid_request"}
-        ] do
-      assert {^status, %{error: %{code: ^code}}, nil} = answer.(params), inspect(params)
-    end
-
-    # Unpaired after its request was signed, it puts no agent on a Key.
-    person = %RegentAgents.Person{privy_user_id: agent.privy_user_id}
-    {:ok, agents} = RegentAgents.list_my_agents(actor: person)
-    :ok = RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == c.wallet)), actor: person)
-
-    assert {403, %{error: %{code: "agent_not_paired"}}, nil} =
-             answer.(%{"token_id" => 9, "agent_wallet" => @second})
-
-    assert Keys.agent_keys_of_person!(actor: agent) == []
   end
 
   test "a fleet that doesn't exist answers fleet_unknown", c do
@@ -202,7 +102,7 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
       audience: "keyfleet"
     }
 
-  defp path(suffix \\ ""), do: "/api/v1/agent/fleets/{fleet_id}/agent_keys" <> suffix
+  defp path, do: "/api/v1/agent/fleets/{fleet_id}/agent_keys"
 
   # Each Key of the answer, in its order, with the names of the agents on it.
   defp names(%{"agent_keys" => %{"keys" => keys}}),
@@ -223,17 +123,6 @@ defmodule KeyfleetWeb.AgentKeyRouteTest do
       put_req_header(conn, name, value)
     end)
     |> dispatch(@endpoint, :get, path)
-  end
-
-  defp post!(c, path, body) do
-    raw = Jason.encode!(body)
-    request = SignedAgentHelpers.sign(c.signer, c.secret, "www.example.com", "POST", path, raw)
-
-    request.headers
-    |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 152}}, fn {name, value}, conn ->
-      put_req_header(conn, name, value)
-    end)
-    |> dispatch(@endpoint, :post, path, raw)
   end
 
   defp record!(token_id, wallet) do

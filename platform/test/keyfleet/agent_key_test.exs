@@ -5,12 +5,14 @@ defmodule Keyfleet.AgentKeyTest do
   no other, while the person's wallets hold it and that pairing lasts; their
   other agents and the person keep the person's Key. A Key that changes hands,
   even between the person's own wallets, loses its agents, which stay paired.
-  Only the person, or an agent of theirs, does it, only on a Key their wallets
-  hold and only with an agent paired with them now; an agent of theirs only
-  puts an agent that is on no Key in the fleet onto a Key, and only the person
-  moves one or takes one off. A refused write changes nothing.
+  Only the signed-in person does it, putting an agent on a Key, moving it or
+  taking it off, only on a Key their wallets hold and only with an agent
+  paired with them now; no agent does any of it, itself included (Sean, 12
+  November 2026). Unpairing an agent takes it off every Key, and only the
+  person puts it on one again. A refused write changes nothing.
   """
   use ExUnit.Case, async: false
+  use ExUnitProperties
 
   alias Ash.Error.Changes.Required
   alias Keyfleet.Accounts
@@ -20,7 +22,7 @@ defmodule Keyfleet.AgentKeyTest do
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Keys
-  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError, PersonOnlyError}
+  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError}
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
 
@@ -108,11 +110,24 @@ defmodule Keyfleet.AgentKeyTest do
     assert {:ok, _command} = KeyActor.command(c.bolt, @fleet, 25, "c-4", 1_000)
   end
 
-  test "an agent of the person's puts another of theirs on a Key, as the person would", c do
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.astra)
+  # Any actor, any write, in any order: a write lands only when it is the
+  # signed-in person's, on a Key their wallets hold, naming an agent paired
+  # with them; anyone else's, an agent's above all, changes nothing.
+  property "only the person puts their own paired agents on their Keys, moves them or takes them off",
+           c do
+    check all steps <- list_of(step(), min_length: 1, max_length: 8), max_runs: 25 do
+      clear!(c)
 
-    assert Keys.identity(c.bolt, @fleet) == %{token_id: 60, wallet: wallet("a"), for_person: true}
-    assert on_keys(c.astra) == %{60 => ["Bolt"]}
+      Enum.reduce(steps, %{}, fn step, placed ->
+        placed = take_step(step, placed, c)
+
+        assert on_keys(c.person) == expected(placed, [{"1", "Astra"}, {"2", "Bolt"}])
+        assert on_keys(c.other) == expected(placed, [{"3", "Cato"}])
+        assert Keys.identity(c.astra, @fleet).token_id == Map.get(placed, "1", 25)
+        assert Keys.identity(c.bolt, @fleet).token_id == Map.get(placed, "2", 25)
+        placed
+      end)
+    end
   end
 
   test "a Key holds several agents, each writing as it; putting one on another Key moves it",
@@ -182,6 +197,13 @@ defmodule Keyfleet.AgentKeyTest do
 
     assert Keys.identity(again, @fleet) == %{token_id: 25, wallet: wallet("a"), for_person: true}
     assert {:ok, nil} = Keys.assigned_key(again, @fleet)
+
+    # Only the person puts it on a Key again.
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Keys.assign_agent(@fleet, 60, wallet("2"), actor: again)
+
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.person)
+    assert Keys.identity(again, @fleet).token_id == 60
   end
 
   test "a Key the person doesn't hold, or an agent not paired with them now, is refused and changes nothing",
@@ -200,14 +222,12 @@ defmodule Keyfleet.AgentKeyTest do
                Keys.assign_agent(@fleet, 41, agent_wallet, actor: c.person)
     end
 
-    # Another person, or their agent, on the person's Key, or with the person's agent.
-    for actor <- [c.other, c.cato] do
-      assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
-               Keys.assign_agent(@fleet, 41, wallet("3"), actor: actor)
+    # Another person on the person's Key, or with the person's agent.
+    assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
+             Keys.assign_agent(@fleet, 41, wallet("3"), actor: c.other)
 
-      assert {:error, %Ash.Error.Invalid{errors: [%AgentUnknownError{}]}} =
-               Keys.assign_agent(@fleet, 7, wallet("1"), actor: actor)
-    end
+    assert {:error, %Ash.Error.Invalid{errors: [%AgentUnknownError{}]}} =
+             Keys.assign_agent(@fleet, 7, wallet("1"), actor: c.other)
 
     # Naming no agent.
     assert {:error, %Ash.Error.Invalid{errors: [%Required{field: :agent_wallet}]}} =
@@ -229,61 +249,53 @@ defmodule Keyfleet.AgentKeyTest do
     assert on_keys(c.other) == %{}
   end
 
-  test "an agent puts an agent on no Key onto any Key; only the person moves or takes one off",
-       c do
+  test "no agent puts an agent on a Key, moves one or takes one off, itself or another", c do
     cass = pair!("did:privy:agent-keys", "Cass", wallet("4"))
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.person)
 
-    # Itself, and another of the person's agents, onto the same Key.
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.astra)
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("2"), actor: c.astra)
-    assert on_keys(c.person) == %{41 => ["Astra", "Bolt"]}
-
-    # Taking an agent off, itself or another, is the person's alone.
-    for pairing_id <- [c.astra.pairing_id, c.bolt.pairing_id] do
+    # Onto a Key: itself, or another of the person's agents, on no Key yet.
+    for {agent_wallet, actor} <- [{wallet("2"), c.bolt}, {wallet("4"), c.astra}] do
       assert {:error, %Ash.Error.Forbidden{}} =
-               Keys.release_agent(@fleet, pairing_id, actor: c.astra)
+               Keys.assign_agent(@fleet, 41, agent_wallet, actor: actor)
     end
 
-    # So is moving an agent on a Key, itself or another.
-    for {token_id, agent_wallet, actor} <- [
-          {25, wallet("1"), c.astra},
-          {60, wallet("2"), c.astra},
-          {60, wallet("1"), cass}
-        ] do
-      assert {:error, %Ash.Error.Forbidden{errors: [%PersonOnlyError{}]}} =
-               Keys.assign_agent(@fleet, token_id, agent_wallet, actor: actor)
+    # Moving an agent that is on a Key, itself or another.
+    for {agent_wallet, actor} <- [{wallet("1"), c.astra}, {wallet("1"), cass}] do
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keys.assign_agent(@fleet, 60, agent_wallet, actor: actor)
     end
 
-    assert on_keys(c.person) == %{41 => ["Astra", "Bolt"]}
+    # Taking an agent off, itself or another.
+    for actor <- [c.astra, c.bolt] do
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keys.release_agent(@fleet, c.astra.pairing_id, actor: actor)
+    end
 
-    # An agent on a Key still puts one on no Key onto a Key that has agents,
-    # and naming an agent on the Key it names changes nothing.
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("4"), actor: c.bolt)
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.astra)
-    assert on_keys(c.person) == %{41 => ["Astra", "Bolt", "Cass"]}
+    assert on_keys(c.person) == %{41 => ["Astra"]}
 
     # The person moves agents and takes them off.
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("4"), actor: c.person)
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
-    assert :ok = Keys.release_agent(@fleet, c.bolt.pairing_id, actor: c.person)
-    assert on_keys(c.person) == %{25 => ["Astra"], 41 => ["Cass"]}
+    assert :ok = Keys.release_agent(@fleet, cass.pairing_id, actor: c.person)
+    assert on_keys(c.person) == %{25 => ["Astra"]}
   end
 
   test "a Key whose agents were unpaired, or that changed hands, has none", c do
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.person)
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.person)
 
-    # Bolt unpairs, so Key 60 has no agents and Astra puts another there.
+    # Bolt unpairs, so Key 60 has no agents and the person puts another there.
     person = %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
     {:ok, agents} = RegentAgents.list_my_agents(actor: person)
     :ok = RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == wallet("2"))), actor: person)
     cass = pair!("did:privy:agent-keys", "Cass", wallet("4"))
 
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("4"), actor: c.astra)
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("4"), actor: c.person)
     assert on_keys(c.person) == %{41 => ["Astra"], 60 => ["Cass"]}
 
     # Key 41 goes to someone else and comes back. Astra came off it when it
-    # left, stays paired, acts as their Key again, and is on no Key, so an
-    # agent of theirs may put it on one.
+    # left, stays paired, acts as their Key again, and is on no Key until the
+    # person puts it on one; Astra can't put itself back, nor can Cass.
     epoch!(41, wallet("c"), ownership_epoch: 2, log_index: 1)
     assert {:ok, nil} = Keys.assigned_key(c.astra, @fleet)
 
@@ -299,7 +311,13 @@ defmodule Keyfleet.AgentKeyTest do
     assert on_keys(c.person) == %{60 => ["Cass"]}
     assert {:ok, nil} = Keys.assigned_key(c.astra, @fleet)
 
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: cass)
+    for actor <- [c.astra, cass] do
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keys.assign_agent(@fleet, 41, wallet("1"), actor: actor)
+    end
+
+    assert on_keys(c.person) == %{60 => ["Cass"]}
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
     assert on_keys(c.person) == %{25 => ["Astra"], 60 => ["Cass"]}
     assert %{token_id: 25, ownership_epoch: 1} = row(c.person, c.astra)
 
@@ -325,9 +343,8 @@ defmodule Keyfleet.AgentKeyTest do
 
     assert on_keys(c.person) == %{}
 
-    # Their old places block nobody: an agent puts another agent on the Key,
-    # and the person puts Astra back.
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("2"), actor: c.astra)
+    # Their old places block nothing: the person puts them back.
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("2"), actor: c.person)
     assert on_keys(c.person) == %{25 => ["Bolt"]}
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
     assert on_keys(c.person) == %{25 => ["Astra", "Bolt"]}
@@ -368,6 +385,84 @@ defmodule Keyfleet.AgentKeyTest do
       assert {:error, %Ash.Error.Forbidden{}} =
                Keys.agent_keys_of_agents(@fleet, [wallet("1")], actor: actor)
     end
+  end
+
+  @actors [:person, :other, :astra, :bolt, :cato, :system]
+
+  # Agents by their wallet's character: Astra "1" and Bolt "2" are the
+  # person's, Cato "3" the other person's, and "9" is paired with nobody.
+  defp step do
+    one_of([
+      tuple({
+        constant(:assign),
+        member_of(@actors),
+        member_of([25, 41, 60, 7, 999]),
+        member_of(~w(1 2 3 9))
+      }),
+      tuple({constant(:release), member_of(@actors), member_of(~w(1 2 3))})
+    ])
+  end
+
+  # Each write, with what it must answer, and where the agents are after it.
+  defp take_step({:assign, who, token_id, agent}, placed, c) do
+    result = Keys.assign_agent(@fleet, token_id, wallet(agent), actor: actor(who, c))
+
+    cond do
+      placeable?(who, token_id, agent) ->
+        assert {:ok, _assigned} = result
+        Map.put(placed, agent, token_id)
+
+      who in [:astra, :bolt, :cato, :system] ->
+        assert {:error, %Ash.Error.Forbidden{}} = result
+        placed
+
+      true ->
+        assert {:error, %Ash.Error.Invalid{}} = result
+        placed
+    end
+  end
+
+  defp take_step({:release, who, agent}, placed, c) do
+    result = Keys.release_agent(@fleet, pairing_id(agent, c), actor: actor(who, c))
+
+    cond do
+      {who, agent} in [{:person, "1"}, {:person, "2"}, {:other, "3"}] ->
+        assert :ok = result
+        Map.delete(placed, agent)
+
+      who in [:astra, :bolt, :cato] and same_person?(who, agent) and Map.has_key?(placed, agent) ->
+        assert {:error, %Ash.Error.Forbidden{}} = result
+        placed
+
+      true ->
+        placed
+    end
+  end
+
+  # The person's own Keys with their own agents, and the other person's.
+  defp placeable?(:person, token_id, agent), do: token_id in [25, 41, 60] and agent in ~w(1 2)
+  defp placeable?(:other, token_id, agent), do: token_id == 7 and agent == "3"
+  defp placeable?(_who, _token_id, _agent), do: false
+
+  defp same_person?(who, agent), do: who == :cato == (agent == "3")
+
+  defp actor(:system, _c), do: @system
+  defp actor(who, c), do: Map.fetch!(c, who)
+
+  defp pairing_id("1", c), do: c.astra.pairing_id
+  defp pairing_id("2", c), do: c.bolt.pairing_id
+  defp pairing_id("3", c), do: c.cato.pairing_id
+
+  defp expected(placed, agents) do
+    for {agent, name} <- agents, token_id = placed[agent], reduce: %{} do
+      on_keys -> Map.update(on_keys, token_id, [name], &(&1 ++ [name]))
+    end
+  end
+
+  # Every agent off every Key, as each person takes them off.
+  defp clear!(c) do
+    for {person, agent} <- [{c.person, c.astra}, {c.person, c.bolt}, {c.other, c.cato}],
+        do: :ok = Keys.release_agent(@fleet, agent.pairing_id, actor: person)
   end
 
   defp on_keys(actor) do

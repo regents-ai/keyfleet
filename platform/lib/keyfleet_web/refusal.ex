@@ -225,12 +225,6 @@ defmodule KeyfleetWeb.Refusal do
     "key_not_held" =>
       {"Your person's wallets don't hold this Key now.",
        "Choose one of the Keys your person holds in this fleet. GET /api/v1/agent/fleets/FLEET_ID/keys/KEY says who holds a Key."},
-    "agent_unknown" =>
-      {"No agent paired with your person has this wallet now.",
-       "Choose one of the agents GET /api/v1/agent/fleets/FLEET_ID/agent_keys lists."},
-    "person_only" =>
-      {"Only your person takes an agent off a Key or moves an agent that is on a Key.",
-       "Nothing was changed. You may put an agent that is on no Key onto any of your person's Keys; GET /api/v1/agent/fleets/FLEET_ID/agent_keys shows which agents are on which Keys. Ask your person to make any other change under Your Keys on their Account page."},
     "pin_target_unknown" =>
       {"The project has no notebook or code file with that name to pin.",
        "Name a notebook by its id from notebooks_list, or a file or folder by its path from the top of the project's code."},

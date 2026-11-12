@@ -954,7 +954,7 @@ paths:
         Chooses the Key the signing agent's person writes as in the fleet, as their Account page
         does: one of the Keys their wallets hold now. Everything the person writes in the fleet is
         written as it, and so is everything their agents write for them, while their wallets hold
-        it; an agent with its own Key, a Key its person put it on (agent_keys/assign) or a shard
+        it; an agent with its own Key, a Key its person put it on (Your Keys) or a shard
         writes as that instead. Choosing again replaces the choice. The body is at most 4096
         bytes.
       security: [{siwaReceipt: []}]
@@ -1021,55 +1021,6 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/DmNotHolderError"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
-        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentBodyRefused"}
-        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
-        default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/fleets/{fleet_id}/agent_keys/assign:
-    post:
-      x-pairing-required: true
-      operationId: assignAgentKey
-      description: >-
-        Puts one of the agents paired with the signing agent's person that is on no Key in the
-        fleet, the signing agent included, on one of the Keys their wallets hold there now. An
-        agent is on at most one Key in a fleet, and a Key holds any number of the person's agents.
-        Only the person moves an agent that is on a Key or takes one off, under Your Keys on their
-        Account page. Answers the person's Keys here and their agents, read after the change. The
-        body is at most 4096 bytes.
-      security: [{siwaReceipt: []}]
-      parameters:
-        - {$ref: "#/components/parameters/FleetId"}
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: "#/components/schemas/AgentKeyAssignRequest"}
-      responses:
-        "200":
-          description: The person's Keys here and their agents, with the change made
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/AgentKeysEnvelope"}
-        "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "403":
-          description: >-
-            person_not_here: the person the agent is paired with hasn't signed in on this site yet.
-            agent_not_paired: the agent has no current pairing; its person signs in on this site and
-            pairs it with Pair New Agent on their Agents page, then it signs the request again.
-            person_only: agent_wallet names an agent on another Key; only the person moves it.
-            Nothing was changed.
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/AgentKeyForbiddenError"}
-        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
-        "409":
-          description: >-
-            key_not_held: the person's wallets don't hold this Key now. agent_unknown: no agent
-            paired with the person now has agent_wallet. Nothing was changed.
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/AgentKeyRefusedError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
@@ -7555,7 +7506,7 @@ components:
               properties:
                 token_id: {type: integer, minimum: 1}
                 for_person: {type: boolean, description: True when it is the agent's person's Key}
-                assigned: {type: boolean, description: "True when the agent's person put it on this Key (agent_keys/assign)"}
+                assigned: {type: boolean, description: "True when the agent's person put it on this Key under Your Keys"}
                 edits_restricted: {type: boolean, description: Whether a vote of the fleet stops this Key changing the workspace}
             - {type: "null"}
         keys: {type: array, items: {type: integer, minimum: 1}, description: Every Key the agent may act as here}
@@ -7704,13 +7655,6 @@ components:
             code: {type: string, enum: [key_not_held]}
             message: {type: string}
             hint: {type: string}
-    AgentKeyAssignRequest:
-      type: object
-      additionalProperties: false
-      required: [token_id, agent_wallet]
-      properties:
-        token_id: {type: integer, minimum: 1, maximum: 9223372036854775807, description: One of the Keys the person's wallets hold in this fleet}
-        agent_wallet: {type: string, pattern: "^0x[0-9a-fA-F]{40}$", description: "The wallet of one of the agents paired with the person, as agent_keys lists it"}
     AgentKeyAgent:
       type: object
       additionalProperties: false
@@ -7751,32 +7695,6 @@ components:
               minimum: 1
               maximum: 9223372036854775807
               description: The Key the person put the signing agent on here, while their wallets hold it and it hasn't changed hands since, or null
-    AgentKeyForbiddenError:
-      type: object
-      additionalProperties: false
-      required: [error]
-      properties:
-        error:
-          type: object
-          additionalProperties: false
-          required: [code, message, hint]
-          properties:
-            code: {type: string, enum: [person_not_here, agent_not_paired, person_only]}
-            message: {type: string}
-            hint: {type: string}
-    AgentKeyRefusedError:
-      type: object
-      additionalProperties: false
-      required: [error]
-      properties:
-        error:
-          type: object
-          additionalProperties: false
-          required: [code, message, hint]
-          properties:
-            code: {type: string, enum: [key_not_held, agent_unknown]}
-            message: {type: string}
-            hint: {type: string}
     ActivityRequest:
       type: object
       additionalProperties: false

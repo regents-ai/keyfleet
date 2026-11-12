@@ -7633,3 +7633,32 @@ sync's `tasks` are those the agent joined as its Key, whichever Key that is),
 and the public changelog tells it under 12 November. Migration 20261111164247
 gains a `down` that drops the table, as most of this repository's migrations
 have; there is no rule against one.
+
+## 2026-11-12 — Only the person puts an agent on a Key
+
+Sean's rule of 12 November 2026: only agents paired to a person go on that
+person's Keys, and only the person puts one there, moves it or takes it off.
+
+- `Keyfleet.Keys.AgentKey`'s `:assign` and `:release` policies refuse every
+  actor but the signed-in person; `Keyfleet.Keys.Changes.PutAgent` locks the
+  named agent's current pairing with the person and refuses any other wallet
+  (`AgentUnknownError`). `NotPairedError` and `PersonOnlyError` are gone.
+- The agent's placing path is removed: the `POST
+  /api/v1/agent/fleets/{fleet_id}/agent_keys/assign` route, the
+  `keys_assign_agent` tool, the `keys assign-agent` command, their refusals,
+  and the contract's request and error schemas. Agents still read through
+  `GET .../agent_keys` and `keys_agents`. API contract stays 29.1.0, as this
+  ships in the same release; the joining guide is unchanged.
+- Unpairing an agent, on any Regent site, takes it off every Key as the
+  unpair commits: every reader matches the row against the agent's current
+  pairing. The row itself stays, inert; removing it would need a shared
+  database change.
+- Agent docs, the parity table (row 90, gap K1), the feature map and
+  `verification/features.yml` (`agents-on-keys`) say so.
+
+Check: `platform/test/keyfleet/agent_key_test.exs` (a property over person,
+other-person, agent and system writes; no agent places, moves or removes
+another or itself), `platform/test/keyfleet/agent_key_race_test.exs` (an
+unpair crossing a put, in both orders),
+`platform/test/keyfleet_web/agent_key_route_test.exs`, and
+`platform/test/browser/account_agents.spec.ts` in Chromium.

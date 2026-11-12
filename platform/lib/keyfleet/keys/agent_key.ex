@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys.AgentKey do
   @moduledoc """
   Which of a person's Keys in a fleet each of their paired agents is on, set
-  on the Account page's Your Keys or by an agent paired with them. While the
+  by the person on the Account page's Your Keys. While the
   person's wallets hold the Key and the agent's pairing lasts, the agent
   writes as that Key there in place of its person's Keys
   (`Keyfleet.Keys.identity/2`, `Keyfleet.Keys.held_keys/2`), unless its own
@@ -15,9 +15,11 @@ defmodule Keyfleet.Keys.AgentKey do
   The agent is named by its wallet and kept by its pairing's id
   (`RegentAgents.PairedAgent`'s `id`, the `Keyfleet.Actors.Agent`'s
   `pairing_id`), checked against the person's pairings as they stand when it
-  is saved (`Keyfleet.Keys.Changes.PutAgent`): unpairing an agent ends its
-  place on a Key, and pairing it again starts with none. Only its own person,
-  or their agent, sets it, and only on a Key the person's wallets hold then.
+  is saved (`Keyfleet.Keys.Changes.PutAgent`), so only an agent paired with
+  the account whose wallets hold the Key goes on it. Every reader matches the
+  row against the agent's current pairing, so unpairing it, on any Regent
+  site, takes it off every Key of that account as the unpair commits, and
+  pairing it again starts with none; only the person puts it on one again.
 
   It is kept with the Key's ownership record as it stood when it was saved
   (`ownership_epoch`), and counts only while the Key stays in that record and
@@ -25,13 +27,13 @@ defmodule Keyfleet.Keys.AgentKey do
   that changes hands, even between the person's own wallets or back to them,
   has no agents on it. The agents stay paired; each is on no Key in the fleet.
 
-  Only the person takes an agent off a Key (`:release`) or moves one that is
-  on a Key; an agent of theirs puts an agent that is on no Key in the fleet,
-  itself included, onto any of their Keys
-  (`Keyfleet.Keys.Errors.PersonOnlyError` otherwise). Each write tells the
-  fleet's pages which Keys it changed (`Keyfleet.Keys.Changes.TellKeysChanged`).
-  Each reads only their own person's; which Key any agent is on is read by
-  trusted code alone, through `Keyfleet.Keys.assigned_keys/3`.
+  Putting an agent on a Key, moving it and taking it off (`:assign`,
+  `:release`) are the signed-in person's alone (Sean, 12 November 2026): no
+  agent places an agent, itself included. Each write tells the fleet's pages
+  which Keys it changed (`Keyfleet.Keys.Changes.TellKeysChanged`). The person
+  and their paired agents read only their own person's rows; which Key any
+  agent is on is read by trusted code alone, through
+  `Keyfleet.Keys.assigned_keys/3`.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -116,10 +118,15 @@ defmodule Keyfleet.Keys.AgentKey do
   # the person's account (`Keyfleet.Actors.Agent`'s `human_account_id`);
   # nobody else does.
   policies do
-    # An agent that would move an agent on a Key is refused under lock
-    # (`Keyfleet.Keys.Changes.PutAgent`).
+    # Only the signed-in person places, moves or takes off an agent on a Key.
     policy action(:assign) do
+      forbid_unless actor_attribute_equals(:role, :human)
       authorize_if expr(not is_nil(^actor(:human_account_id)))
+    end
+
+    policy action(:release) do
+      forbid_unless actor_attribute_equals(:role, :human)
+      authorize_if expr(human_account_id == ^actor(:human_account_id))
     end
 
     policy action(:of_person) do
@@ -127,12 +134,6 @@ defmodule Keyfleet.Keys.AgentKey do
     end
 
     policy action(:read) do
-      authorize_if expr(human_account_id == ^actor(:human_account_id))
-    end
-
-    # Only the person takes an agent off a Key.
-    policy action(:release) do
-      forbid_unless actor_attribute_equals(:role, :human)
       authorize_if expr(human_account_id == ^actor(:human_account_id))
     end
 

@@ -52,9 +52,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @search_path ~r"\A/api/v1/agent/fleets/#{@fleet}/search\z"
   # The Key the agent's person writes as.
   @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"
-  # Which of the person's agents is on which of their Keys, read and set.
+  # Which of the person's agents is on which of their Keys.
   @agent_keys_path ~r"\A/api/v1/agent/fleets/#{@fleet}/agent_keys\z"
-  @agent_key_assign_path ~r"\A/api/v1/agent/fleets/#{@fleet}/agent_keys/assign\z"
   # What the agent's posts and workspace writes made under one send key or
   # command id.
   @receipts_path ~r"\A/api/v1/agent/fleets/#{@fleet}/receipts\z"
@@ -163,7 +162,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@search_path, {~w(query), ~w(cursor limit)}},
     {@code_history_path, {[], ~w(from page)}},
     {@posting_key_path, {~w(token_id), []}},
-    {@agent_key_assign_path, {~w(token_id), ~w(agent_wallet)}},
     {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}}
@@ -734,7 +732,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @activity_path,
         @search_path,
         @posting_key_path,
-        @agent_key_assign_path,
         @receipts_path,
         @sync_path,
         @proposal_read_path,
@@ -884,8 +881,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_room_body(nil, _params), do: :invalid
 
   # Taking a post off a Key's wall, finding the Keys a wallet holds, reading
-  # the fleet's activity, searching it, choosing the Key a person posts as and
-  # putting an agent on a Key each name fields of their own.
+  # the fleet's activity, searching it and choosing the Key a person posts as
+  # each name fields of their own.
   defp key_op(path) do
     Enum.find_value(
       [
@@ -893,8 +890,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         keys_held: @keys_held_path,
         activity: @activity_path,
         search: @search_path,
-        posting_key: @posting_key_path,
-        agent_key_assign: @agent_key_assign_path
+        posting_key: @posting_key_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -905,7 +901,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_key_body(:activity, params), do: admit(valid_activity_body?(params))
   defp check_key_body(:search, params), do: check_search_body(params)
   defp check_key_body(:posting_key, params), do: check_posting_key_body(params)
-  defp check_key_body(:agent_key_assign, params), do: check_agent_key_body(params)
 
   # Catching up, reading a proposal, starting a notebook run, making a
   # notebook and working with its files each name fields of their own.
@@ -1334,17 +1329,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(token_id in 1..@max_seq)
 
   defp check_posting_key_body(_params), do: :invalid
-
-  # Putting an agent on a Key names the Key, and the agent by its wallet;
-  # naming none, taking the Key's agent off, is refused past here as the
-  # person's alone.
-  defp check_agent_key_body(%{"agent_wallet" => wallet} = params) do
-    if is_binary(wallet) and Regex.match?(@wallet, wallet),
-      do: check_posting_key_body(Map.delete(params, "agent_wallet")),
-      else: :invalid
-  end
-
-  defp check_agent_key_body(params), do: check_posting_key_body(params)
 
   # A created room names its address and its name; naming an open room names
   # its topic.

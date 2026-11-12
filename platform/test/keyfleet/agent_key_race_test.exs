@@ -2,10 +2,10 @@ defmodule Keyfleet.AgentKeyRaceTest do
   @moduledoc """
   Changes to a person's agents on their Keys at the same moment, each on a
   connection of its own, as two requests are. Two changes about one agent run
-  one after the other, so an agent's change that crosses the person's move
-  sees where the person put it. Changes about different agents, onto one Key
+  one after the other. Changes about different agents, onto one Key
   or swapping Keys, all land. A Key that changes hands while an agent is put
-  on it ends with no agents, whichever is saved first. Everything committed
+  on it ends with no agents, whichever is saved first, and so does an agent
+  unpaired while the person puts it on a Key. Everything committed
   here is removed, and the fleet put back unbound, when each test ends.
   """
   use ExUnit.Case, async: false
@@ -15,7 +15,7 @@ defmodule Keyfleet.AgentKeyRaceTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias Keyfleet.{Accounts, Actors, ChainHelpers, CommittedAccount, CommittedCatalog, Keys, Repo}
   alias Keyfleet.Fleets.Fleet
-  alias Keyfleet.Keys.Errors.{KeyNotHeldError, PersonOnlyError}
+  alias Keyfleet.Keys.Errors.{AgentUnknownError, KeyNotHeldError}
 
   @fleet "fibonacci_syndicate"
 
@@ -53,6 +53,7 @@ defmodule Keyfleet.AgentKeyRaceTest do
 
       %{
         person: person,
+        person_id: person_id,
         astra: pair!(person_id, "Astra"),
         bolt: pair!(person_id, "Bolt"),
         first: first,
@@ -76,28 +77,11 @@ defmodule Keyfleet.AgentKeyRaceTest do
     assert on_keys(c) == %{c.second => ["Astra"]}
   end
 
-  test "an agent's change that crosses the person's move waits, then is refused", c do
-    # The person puts Bolt on the first Key while Astra, an agent of theirs,
-    # would put Bolt, still on no Key when it asked, onto the second.
-    {held, release} = hold(fn -> assign(c.first, c.bolt, c.person) end)
-    assert {:ok, _assigned} = held
-
-    crossing = on_own_connection(fn -> assign(c.second, c.bolt, c.astra) end)
-    refute Task.yield(crossing, 300)
-
-    release.()
-
-    assert {:error, %Ash.Error.Forbidden{errors: [%PersonOnlyError{}]}} =
-             Task.await(crossing, 10_000)
-
-    assert on_keys(c) == %{c.first => ["Bolt"]}
-  end
-
   test "agents put on one Key, or swapping Keys, at the same moment all land", c do
     assert [{:ok, _}, {:ok, _}] =
              race([
                fn -> assign(c.first, c.astra, c.person) end,
-               fn -> assign(c.first, c.bolt, c.astra) end
+               fn -> assign(c.first, c.bolt, c.person) end
              ])
 
     assert on_keys(c) == %{c.first => ["Astra", "Bolt"]}
@@ -149,6 +133,41 @@ defmodule Keyfleet.AgentKeyRaceTest do
     # Once the transfer has landed, the Key is not the person's to put agents on.
     assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
              Sandbox.unboxed_run(Repo, fn -> assign(c.second, c.bolt, c.person) end)
+  end
+
+  test "an agent unpaired while the person puts it on a Key ends on no Key, in either order",
+       c do
+    # The put holds the agent's pairing; the unpair waits for it, then lands.
+    {held, release} = hold(fn -> assign(c.first, c.astra, c.person) end)
+    assert {:ok, _assigned} = held
+
+    unpairing = on_own_connection(fn -> unpair(c, c.astra) end)
+    refute Task.yield(unpairing, 300)
+
+    release.()
+    assert :ok = Task.await(unpairing, 10_000)
+    assert on_keys(c) == %{}
+
+    # The unpair holds the pairing; the put waits, then finds the agent no
+    # longer paired with the person.
+    {held, release} = hold(fn -> unpair(c, c.bolt) end)
+    assert :ok = held
+
+    putting = on_own_connection(fn -> assign(c.second, c.bolt, c.person) end)
+    refute Task.yield(putting, 300)
+
+    release.()
+
+    assert {:error, %Ash.Error.Invalid{errors: [%AgentUnknownError{}]}} =
+             Task.await(putting, 10_000)
+
+    assert on_keys(c) == %{}
+  end
+
+  defp unpair(c, %Actors.Agent{wallet_address: wallet}) do
+    person = %RegentAgents.Person{privy_user_id: c.person_id}
+    {:ok, agents} = RegentAgents.list_my_agents(actor: person)
+    RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == wallet)), actor: person)
   end
 
   # A held write runs inside the test's own open transaction, so its pages

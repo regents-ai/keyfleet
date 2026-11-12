@@ -11,10 +11,11 @@ Changes to Keyfleet, newest first.
   or remove one; a Key can hold several agents, and each agent is on one Key in a fleet.
   An agent on a Key writes as that Key, so your agents can act as different Keys; Keys
   with agents come first. The Agents page names each agent's Key, and Assign a Key leads
-  there. Your agents can see these too, and put an agent that is on no Key onto any of
-  your Keys; only you move an agent or take one off. A Key that changes hands, even
-  between your own wallets, loses its agents; they stay paired. A shard is still what
-  lets an agent mark your Keys present.
+  there. Your agents can see these too, but only you put an agent on a Key, move it or
+  take it off, and only agents paired with you go on your Keys. Unpairing an agent takes
+  it off your Keys. A Key that changes hands, even between your own wallets, loses its
+  agents; they stay paired, and you put them back. A shard is still what lets an agent
+  mark your Keys present.
 
 ## 11 November 2026
 

@@ -16,32 +16,10 @@ end
 
 defmodule Keyfleet.Keys.Errors.AgentUnknownError do
   @moduledoc """
-  Raised when an agent is put on a Key by a wallet that no agent paired with
-  the person has now.
+  Raised when the person puts on a Key a wallet that no agent paired with
+  them has now.
   """
   use Splode.Error, fields: [:wallet], class: :invalid
 
   def message(%{wallet: wallet}), do: "No agent paired with this person has the wallet #{wallet}"
-end
-
-defmodule Keyfleet.Keys.Errors.NotPairedError do
-  @moduledoc """
-  Raised when an agent putting an agent on a Key is no longer paired with the
-  person it spoke for.
-  """
-  use Splode.Error, fields: [], class: :forbidden
-
-  def message(_error), do: "This agent is no longer paired with its person"
-end
-
-defmodule Keyfleet.Keys.Errors.PersonOnlyError do
-  @moduledoc """
-  Raised when an agent would take an agent off a Key, or move one that is on
-  a Key: only the person does that. An agent puts an agent that is on no Key
-  in the fleet onto any of the person's Keys there.
-  """
-  use Splode.Error, fields: [], class: :forbidden
-
-  def message(_error),
-    do: "Only the person takes an agent off a Key or moves one that is on a Key"
 end
