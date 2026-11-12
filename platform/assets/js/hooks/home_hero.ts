@@ -9,7 +9,8 @@ import {animate, createAnimatable, createScope, type AnimatableObject, type JSAn
 import {createCanvasIsland, type CanvasIslandController} from "../canvas_island"
 import type {FieldRenderer, Tile} from "../home_hero/renderer"
 import {EASE_IN_OUT, EASE_OUT, FAST, still} from "./motion/shared"
-import {tone, watchTheme} from "../theme_tone"
+import {watchTheme} from "../theme"
+import {tone} from "../theme_tone"
 
 /** A number the stylesheet states in a custom property. */
 const measure = (el: HTMLElement, property: string) => parseFloat(getComputedStyle(el).getPropertyValue(property)) || 0

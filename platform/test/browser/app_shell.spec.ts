@@ -43,7 +43,7 @@ async function chooseTheme(page: Page, choice: "light" | "dark") {
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   if ((await page.locator("html").getAttribute("data-theme")) !== choice) {
-    await page.locator("#theme-control [data-theme-toggle]").click()
+    await page.locator("#theme-control").getByRole("switch", {name: "Light theme"}).click()
   }
   await expect(page.locator("html")).toHaveAttribute("data-theme", choice)
 }
@@ -171,7 +171,8 @@ test("a signed-in account shows its account menu", async ({page}) => {
 
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await expect(page.locator("#theme-control [data-theme-toggle]")).toBeVisible()
+  // Signed in, the theme switch is a row of the account menu, not in the header.
+  await expect(page.locator("#theme-control")).toHaveCount(0)
   await auth.expectAuthenticatedSession()
   await auth.expectCounts({documents: 1, sessionChecks: 1, syncs: 1})
 
@@ -186,13 +187,13 @@ test("a signed-in account shows its account menu", async ({page}) => {
   // The name opens the account menu, which holds Sign out.
   await account.locator("#account-chip").click()
   await expect(page.locator("#account-menu").getByRole("button", {name: "Sign out"})).toBeVisible()
-  await page.keyboard.press("Escape")
 
   // Nothing chosen and a device that asks for dark: light shows, so a press chooses dark.
   await page.emulateMedia({colorScheme: "dark"})
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light")
-  await page.locator("#theme-control [data-theme-toggle]").click()
+  await page.locator("#account-menu").getByRole("switch", {name: "Light theme"}).click()
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
+  await page.keyboard.press("Escape")
   expect(await page.evaluate(() => document.cookie)).toContain("regent_theme=dark")
 
   await page.reload()
@@ -322,34 +323,31 @@ test("a page picked with the mouse slides in solid", async ({page}) => {
 })
 
 // Before any choice every page is light, whatever the device asks for, and the
-// switch names the theme showing. A press chooses the opposite, and the choice
+// switch, named Light theme, is on. A press chooses the opposite, and the choice
 // then holds on every later page.
 for (const device of ["dark", "light"] as const) {
   test(`with nothing chosen a ${device} device shows light, and a choice sticks`, async ({page}) => {
-    const named = {
-      dark: "Dark theme on. Switch to light theme.",
-      light: "Light theme on. Switch to dark theme.",
-    }
+    const on = {dark: "false", light: "true"}
     const html = page.locator("html")
-    const toggle = page.locator("#theme-control [data-theme-toggle]")
+    const toggle = page.locator("#theme-control").getByRole("switch", {name: "Light theme"})
 
     await page.emulateMedia({colorScheme: device})
     await page.goto("/account")
     await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
     await expect(html).toHaveAttribute("data-theme", "light")
-    await expect(toggle).toHaveAccessibleName(named.light)
+    await expect(toggle).toHaveAttribute("aria-checked", on.light)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("light")
     const unchosen = await readFamily(page)
 
     await toggle.click()
     await expect(html).toHaveAttribute("data-theme", "dark")
-    await expect(toggle).toHaveAccessibleName(named.dark)
+    await expect(toggle).toHaveAttribute("aria-checked", on.dark)
     expect(await page.evaluate(() => document.cookie)).toContain("regent_theme=dark")
 
     await page.reload()
     await expect(html).toHaveAttribute("data-theme", "dark")
-    await expect(toggle).toHaveAccessibleName(named.dark)
+    await expect(toggle).toHaveAttribute("aria-checked", on.dark)
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("dark")
     expect(await readFamily(page)).not.toEqual(unchosen)
 
@@ -357,7 +355,7 @@ for (const device of ["dark", "light"] as const) {
     await expect(html).toHaveAttribute("data-theme", "light")
     await page.reload()
     await expect(html).toHaveAttribute("data-theme", "light")
-    await expect(toggle).toHaveAccessibleName(named.light)
+    await expect(toggle).toHaveAttribute("aria-checked", on.light)
     // Light, once chosen, is the same palette it showed unchosen.
     expect(await readFamily(page)).toEqual(unchosen)
   })

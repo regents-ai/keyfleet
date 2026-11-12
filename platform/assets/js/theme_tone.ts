@@ -1,7 +1,7 @@
 /**
  * The page's own colours, for the pictures drawn beside it: any colour the
- * stylesheet states, as a shader takes it, and a call each time the page
- * turns light or dark.
+ * stylesheet states, as a shader takes it. A picture hears the page turn light
+ * or dark through `watchTheme` (theme.ts).
  */
 let swatch: CanvasRenderingContext2D | undefined
 
@@ -19,11 +19,4 @@ export const tone = (root: HTMLElement, property: string): readonly [number, num
   swatch.fillRect(0, 0, 1, 1)
   const [red = 0, green = 0, blue = 0] = swatch.getImageData(0, 0, 1, 1).data
   return [red / 255, green / 255, blue / 255]
-}
-
-/** Calls `retone` whenever the page's light or dark changes. */
-export const watchTheme = (retone: () => void) => {
-  const observer = new MutationObserver(retone)
-  observer.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]})
-  return () => observer.disconnect()
 }

@@ -27,7 +27,7 @@ class Control {
 
   closest(selector: string) {
     if (selector === "[data-motion='reduced']") return this.marks.reduced ? this : null
-    return this.marks.own && selector.includes(":not(.rg-theme-toggle") ? null : this
+    return this.marks.own && selector.includes(":not([role='switch']") ? null : this
   }
 
   getAttribute(name: string) {

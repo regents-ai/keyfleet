@@ -5,6 +5,7 @@ import type {Place} from "../swarm_city/city"
 import type {Theme} from "../swarm_city/looks"
 import type {CityView, SwarmCityRenderer} from "../swarm_city/renderer"
 import type {Agent} from "../swarm_city/swarm"
+import {showingTheme, watchTheme} from "../theme"
 import {SLOW} from "./motion/shared"
 
 /** The browser is saving data, by its own setting or the system's. */
@@ -27,9 +28,6 @@ type District = {readonly name: string; readonly path: string}
 /** Where each district leads, when the city stands for one fleet. */
 const districtsOf = (root: HTMLElement): Partial<Record<Place, District>> =>
   root.dataset.harbourDistricts ? (JSON.parse(root.dataset.harbourDistricts) as Record<Place, District>) : {}
-
-/** The page's theme, which the server always writes on the page. */
-const themeOf = (): Theme => document.documentElement.dataset.theme as Theme
 
 const PLACES: readonly Place[] = ["castle", "forge", "inn"]
 
@@ -85,7 +83,7 @@ const createHarbourSeaController = (
 
   const browserLoad: LoadRenderer<SwarmCityRenderer> = async (canvas, size, onDeviceLost) => {
     const {createSwarmCityRenderer} = await import("../swarm_city/renderer")
-    return createSwarmCityRenderer(canvas, size, onDeviceLost, view, themeOf())
+    return createSwarmCityRenderer(canvas, size, onDeviceLost, view, showingTheme())
   }
 
   const island = createCanvasIsland<SwarmCityRenderer>(root, {}, {
@@ -104,7 +102,7 @@ const createHarbourSeaController = (
       const tag = root.querySelector<HTMLElement>("[data-harbour-tag]")!
       let crew = crewOf(root)
       let districts = districtsOf(root)
-      let theme = themeOf()
+      let theme: Theme = showingTheme()
       let hovered: Place | null = null
 
       scope.add("light", () => {
@@ -122,7 +120,7 @@ const createHarbourSeaController = (
       })
 
       const restyle = () => {
-        const next = themeOf()
+        const next = showingTheme()
         if (next === theme) return
         theme = next
         void renderer()?.setTheme(theme).then(() => nudge())
@@ -131,7 +129,6 @@ const createHarbourSeaController = (
         renderer()?.setCalm(holding())
         nudge()
       }
-      const themeObserver = new MutationObserver(restyle)
 
       const pointOf = (event: MouseEvent): [number, number] => {
         const box = canvas.getBoundingClientRect()
@@ -285,7 +282,7 @@ const createHarbourSeaController = (
         city.setCalm(holding())
         city.setAgents(crew)
         // The theme may have changed while the city was loading.
-        theme = themeOf()
+        theme = showingTheme()
         void city.setTheme(theme).then(() => nudge())
       })
       sync = () => {
@@ -294,7 +291,7 @@ const createHarbourSeaController = (
         renderer()?.setAgents(crew)
         nudge()
       }
-      themeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]})
+      const forgetTheme = watchTheme(restyle)
       calm.addEventListener("change", onCalmChange)
       canvas.addEventListener("pointerdown", onPointerDown)
       stage.addEventListener("pointermove", onPointerMove)
@@ -307,7 +304,7 @@ const createHarbourSeaController = (
       return () => {
         sync = () => {}
         drag = undefined
-        themeObserver.disconnect()
+        forgetTheme()
         calm.removeEventListener("change", onCalmChange)
         hideTag()
         canvas.removeEventListener("pointerdown", onPointerDown)

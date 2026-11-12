@@ -65,37 +65,15 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute_push_event(view, "verified-connections:request", _payload)
   end
 
-  test "the switch carries a sentence for each theme, whatever was served", %{conn: conn} do
-    for cookie <- [nil, "light", "dark"] do
-      conn = if cookie, do: Plug.Test.put_req_cookie(conn, "regent_theme", cookie), else: conn
-      {:ok, view, _html} = live(conn, "/account")
-
-      assert has_element?(
-               view,
-               ~s(#theme-control button.theme-toggle[title="Switch between light and dark"])
-             )
-
-      assert has_element?(
-               view,
-               "#theme-control .rg-theme-toggle__state--dark",
-               "Dark theme on. Switch to light theme."
-             )
-
-      assert has_element?(
-               view,
-               "#theme-control .rg-theme-toggle__state--light",
-               "Light theme on. Switch to dark theme."
-             )
-    end
-  end
-
   test "anonymous account control renders Sign in separately from the brand link", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/account")
 
     assert has_element?(view, ~s(#shell-brand[href="/"]), "Keyfleet")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-light")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-dark")
-    assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
+    # Signed out, the one theme switch is in the header.
+    assert has_element?(view, ~s(#theme-control button[role=switch][aria-label="Light theme"]))
+    assert view |> element("#app-shell") |> render() |> count_switches() == 1
     assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
 
     assert has_element?(
@@ -152,7 +130,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
              "Manage"
            )
 
-    assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
+    # Signed in, the one theme switch is a row of the account menu.
+    assert has_element?(
+             view,
+             ~s(#account-menu #account-menu-theme button[role=switch][aria-label="Light theme"])
+           )
+
+    refute has_element?(view, "#theme-control")
+    assert view |> element("#app-shell") |> render() |> count_switches() == 1
     refute has_element?(view, "#account-control [phx-click]")
   end
 
@@ -1183,5 +1168,9 @@ defmodule KeyfleetWeb.ShellLiveTest do
       content: [%{inner_block: fn _, _ -> "Fixture content" end}],
       agents: []
     )
+  end
+
+  defp count_switches(html) do
+    html |> LazyHTML.from_fragment() |> LazyHTML.query("[role=switch]") |> Enum.count()
   end
 end

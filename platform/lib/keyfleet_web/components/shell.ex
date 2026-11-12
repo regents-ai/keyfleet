@@ -10,7 +10,9 @@ defmodule KeyfleetWeb.Components.Shell do
   Signed in, the account's picture and name at the top right open the account
   menu (`Regent.Account.menu`), the same on the app's pages and the homepage: the
   person's picture, name and wallet, the agents paired with the account (the
-  `agents` slot), Pair New Agent, Manage Account and Sign out. Pair New Agent
+  `agents` slot), Pair New Agent, the theme switch, Manage Account and Sign
+  out. Signed out, with no account menu, the theme switch sits in the header
+  instead. Pair New Agent
   opens the pairing window (`pairing_window/1`) over the page; the agents are on
   the Agents page, and the account's wallets and everything else about the
   account are on the Account page. The browser opens and closes the menu (`popover`); following a
@@ -124,7 +126,7 @@ defmodule KeyfleetWeb.Components.Shell do
         <main id="route-content" tabindex="-1">
           {render_slot(@content)}
         </main>
-        <KeyfleetWeb.Layouts.product_links />
+        <KeyfleetWeb.Layouts.product_links theme_toggle={false} />
       </div>
 
       {render_slot(@buy_key)}
@@ -208,9 +210,9 @@ defmodule KeyfleetWeb.Components.Shell do
 
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
-  switch (not on the always-dark homepage), the Regents crown and links,
-  "Buy Key" (once Classic is open), the account control and, signed in,
-  the account menu its name opens. It fits one line on a phone.
+  switch signed out, the Regents crown and links, "Buy Key" (once Classic is
+  open), the account control and, signed in, the account menu its name opens,
+  with the theme switch as one of its rows. It fits one line on a phone.
   """
   def header(assigns) do
     ~H"""
@@ -244,7 +246,11 @@ defmodule KeyfleetWeb.Components.Shell do
       </Regent.Primitives.button>
 
       <span class="shell-spacer" />
-      <.theme_toggle :if={@theme} id="theme-control" />
+      <.theme_toggle
+        :if={@theme and @account_control.kind != :signed_in}
+        id="theme-control"
+        class="shell-header-theme"
+      />
       <div class="rl-header-links">
         <RegentLinks.token_menu id="shell-regents-crown" />
         <RegentLinks.header_links id="shell-token-menu" />
@@ -274,6 +280,10 @@ defmodule KeyfleetWeb.Components.Shell do
           />
         </:picture>
         <:agents>{render_slot(@agents)}</:agents>
+        <:theme :if={@theme}>
+          <span class="shell-theme-label" aria-hidden="true">Light theme</span>
+          <.theme_toggle id="account-menu-theme" />
+        </:theme>
       </Regent.Account.menu>
     </header>
     """
@@ -395,22 +405,148 @@ defmodule KeyfleetWeb.Components.Shell do
     """
   end
 
+  # The theme switch's two pictures, row by row from the top: "#" is a block. Both
+  # have as many blocks, so every block of the moon flies to exactly one of the
+  # sun, and both keep their outer ring clear, where a block would sit under the
+  # glass's bevel and smear. The still face draws them, and the browser reads
+  # them from there.
+  @theme_moon [
+    ".............",
+    "....##.......",
+    "...##.....#..",
+    "..##.........",
+    ".###.........",
+    ".###.....#...",
+    ".###.........",
+    ".#####.......",
+    ".######......",
+    "..#########..",
+    "...#######...",
+    "....#####....",
+    "............."
+  ]
+
+  @theme_sun [
+    ".............",
+    ".#....#....#.",
+    "..#.......#..",
+    ".....###.....",
+    "....#####....",
+    "...#######...",
+    ".#.#######.#.",
+    "...#######...",
+    "....#####....",
+    ".....###.....",
+    "..#.......#..",
+    ".#....#....#.",
+    "............."
+  ]
+
+  block_count = fn rows ->
+    rows |> Enum.join() |> :binary.matches("#") |> length()
+  end
+
+  if block_count.(@theme_moon) != block_count.(@theme_sun) do
+    raise ArgumentError, "the theme switch's moon and sun need as many blocks"
+  end
+
+  for rows <- [@theme_moon, @theme_sun] do
+    if Enum.any?(rows, &(String.length(&1) != length(rows))) do
+      raise ArgumentError, "the theme switch's pictures are square"
+    end
+
+    ring = [hd(rows), List.last(rows) | Enum.map(rows, &(String.first(&1) <> String.last(&1)))]
+
+    if Enum.any?(ring, &String.contains?(&1, "#")) do
+      raise ArgumentError, "the theme switch's pictures keep their outer ring clear"
+    end
+  end
+
   attr(:id, :string, required: true)
+  attr(:class, :any, default: nil)
 
   @doc """
-  The colour theme switch: one control that flips between the two themes.
+  The light and dark theme switch: a button with the role of a switch, on for
+  the light theme, with a knob that slides from night on the left to day on the
+  right. A press, Enter or Space turns it, and the knob can be dragged; it
+  settles on the nearer side when let go.
 
-  It names the theme showing by itself, from the page's theme, so the server
-  passes no theme. The browser owns the press: it writes
-  the theme cookie the server reads on the next render and restyles the page, so
-  the control is left out of LiveView's patching.
+  Signed in it is a row of the account menu; signed out it sits in the header
+  (`header/1`), and on the reading pages, which have no header, in the footer
+  (`KeyfleetWeb.Layouts.product_links/1`). A page never shows two.
+
+  The server draws a still face: a flat square track and knob with the moon or
+  the sun, each a picture of tiny square blocks, placed for the theme showing. Once
+  the browser has drawn a first frame of the glass knob, with the same blocks
+  behind it and its light, on the canvas inside (`assets/js/hooks/theme_switch.ts`,
+  `assets/js/theme_switch/`), that picture takes over. Without WebGPU, with Less
+  motion on or in forced colours the still face stays, and it is a whole working
+  switch on its own.
+
+  The browser owns the press: it writes the theme cookie the server reads on
+  the next render (`assets/js/theme.ts`), so the switch is left out of
+  LiveView's patching, and the attributes the browser writes on it are kept.
   """
   def theme_toggle(assigns) do
+    assigns = assign(assigns, moon: @theme_moon, sun: @theme_sun)
+
     ~H"""
-    <div id={@id} class="theme-control" phx-update="ignore">
-      <Regent.ThemeToggle.button id={"#{@id}-button"} data-theme-toggle />
+    <div
+      id={@id}
+      class={["theme-switch", @class]}
+      phx-hook="ThemeSwitch"
+      phx-update="ignore"
+      phx-mounted={JS.ignore_attributes(["data-theme-switch-ready", "style"])}
+      data-theme-switch
+    >
+      <button
+        id={"#{@id}-button"}
+        class="theme-switch__button"
+        type="button"
+        role="switch"
+        aria-checked="false"
+        aria-label="Light theme"
+      >
+        <span class="theme-switch__still" aria-hidden="true">
+          <span class="theme-switch__track" data-theme-switch-track>
+            <span class="theme-switch__knob" data-theme-switch-knob>
+              <.theme_blocks rows={@moon} class="theme-switch__moon" />
+              <.theme_blocks rows={@sun} class="theme-switch__sun" />
+            </span>
+          </span>
+        </span>
+        <canvas class="theme-switch__canvas" data-theme-switch-canvas aria-hidden="true"></canvas>
+      </button>
     </div>
     """
+  end
+
+  attr :rows, :list, required: true
+  attr :class, :string, required: true
+
+  # One of the switch's pictures, a block for each "#", one unit square apiece
+  # with a hairline between neighbours.
+  defp theme_blocks(assigns) do
+    assigns = assign(assigns, size: length(assigns.rows), blocks: blocks(assigns.rows))
+
+    ~H"""
+    <svg
+      class={@class}
+      viewBox={"0 0 #{@size} #{@size}"}
+      shape-rendering="crispEdges"
+      aria-hidden="true"
+    >
+      <g transform="translate(0.06 0.06)">
+        <rect :for={{x, y} <- @blocks} x={x} y={y} width="0.88" height="0.88" />
+      </g>
+    </svg>
+    """
+  end
+
+  defp blocks(rows) do
+    for {row, y} <- Enum.with_index(rows),
+        {"#", x} <- Enum.with_index(String.graphemes(row)),
+        do: {x, y}
   end
 
   attr(:target, :map, required: true)

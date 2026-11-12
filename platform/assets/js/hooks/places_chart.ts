@@ -6,7 +6,8 @@
  */
 import {createCanvasIsland, type CanvasIslandController} from "../canvas_island"
 import type {ChartRenderer} from "../places_chart/renderer"
-import {tone, watchTheme} from "../theme_tone"
+import {watchTheme} from "../theme"
+import {tone} from "../theme_tone"
 
 /** How far a ridge rises: over the open place, the one pointed at, and the rest. */
 const OPEN = 1

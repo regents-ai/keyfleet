@@ -7,7 +7,8 @@
  */
 import {createCanvasIsland, type CanvasIslandController} from "../canvas_island"
 import type {GraphRenderer, Link} from "../workspace_graph/renderer"
-import {tone, watchTheme} from "../theme_tone"
+import {watchTheme} from "../theme"
+import {tone} from "../theme_tone"
 
 type Island = {renderer(): GraphRenderer | undefined; nudge(): void}
 

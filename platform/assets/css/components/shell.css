@@ -82,8 +82,7 @@
   outline-offset: -2px;
 }
 
-.account-control,
-.theme-control {
+.account-control {
   position: relative;
 }
 
@@ -151,16 +150,19 @@ span.account-chip {
   min-height: 2.75rem;
 }
 
-/* The shared prism control draws its own box and hover; the header only centres it.
-   Its prism sits .5rem inside the press target, so this margin leaves the same space
-   before the X icon as between the icons themselves. */
-.theme-control {
-  display: flex;
-  align-items: center;
+/* The theme switch has a row of the account menu to itself, its words at the
+   start, so it can be larger than elsewhere and its blocks read. Its light
+   spills only above and below its own press, inside the row. */
+#account-menu .theme-switch {
+  --theme-switch-lens: var(--space-5);
+  --theme-switch-track: var(--space-4);
+  --theme-switch-travel: var(--space-4);
+  --theme-switch-press: var(--space-6);
 }
 
-#shell-header .theme-control {
-  margin-inline-end: var(--space-1);
+/* Signed out, the header's switch stands in the header's middle line. */
+#shell-header .shell-header-theme {
+  align-self: center;
 }
 
 @media (hover: hover) {
@@ -504,7 +506,7 @@ span.account-chip {
   .shell-get-key > .rg-button { font-size: .75rem; margin: 4px var(--space-1) 4px 0; padding: var(--space-1) .5rem; gap: .375rem; }
   /* The crown keeps its size; only the name beside it gives way. */
   #shell-header .shell-brand__mark { flex: none; }
-  #shell-header .theme-control,
+  #shell-header .shell-header-theme,
   #shell-header .shell-get-key,
   #shell-header .account-control,
   #shell-header .account-chip { flex: 0 0 auto; }
@@ -513,7 +515,7 @@ span.account-chip {
 @media (max-width: 22.49rem) {
   /* A 320px phone has no room for the theme switch beside Buy Key; the
      device's own light or dark setting applies until the screen is wider. */
-  #shell-header:has(.shell-get-key) .theme-control { display: none; }
+  #shell-header:has(.shell-get-key) .shell-header-theme { display: none; }
 }
 
 /* ---- Header marks ---- */
@@ -522,16 +524,12 @@ span.account-chip {
    hairline after the theme switch and after the nine-dot menu. Under a mouse
    each mark keeps its own size with an even gap between; under a finger each
    fills a 2.75rem press target with nothing between them. */
-#shell-header .theme-control {
-  margin-inline-end: 0;
-}
-
 #shell-header .rl-header-links,
 .regent-footer__social {
   gap: var(--space-3);
 }
 
-#shell-header .theme-control + .rl-header-links::before,
+#shell-header .shell-header-theme + .rl-header-links::before,
 .rl-header-links__rule {
   content: "";
   flex: none;
@@ -542,7 +540,7 @@ span.account-chip {
 
 /* The theme switch sits outside the marks' row, so its hairline brings its own
    gap before it. */
-#shell-header .theme-control + .rl-header-links::before {
+#shell-header .shell-header-theme + .rl-header-links::before {
   margin-inline-start: var(--space-3);
 }
 
@@ -584,7 +582,7 @@ span.account-chip {
     gap: 0;
   }
 
-  #shell-header .theme-control + .rl-header-links::before,
+  #shell-header .shell-header-theme + .rl-header-links::before,
   .rl-header-links__rule {
     margin-inline: 0.5rem;
   }

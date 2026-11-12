@@ -5,6 +5,7 @@
 @import "../vendor/regent_ui/primitives.css";
 @import "./tokens/root.css";
 @import "./components/shell.css";
+@import "./components/theme_switch.css";
 @import "./components/buttons.css";
 @import "./components/sticky_actions.css";
 @import "./components/key_map.css";
@@ -207,7 +208,7 @@ input:focus-visible,
 }
 /* Under a mouse the theme switch is no taller than the links beside it. */
 @media not (pointer: coarse) {
-  .regent-footer .rg-theme-toggle.rg-button { width: 2rem; height: 2rem; min-width: 2rem; min-height: 2rem; }
+  .regent-footer .theme-switch { --theme-switch-press: 2rem; }
 }
 /* On a phone the brand marks and the copyright share the first line, and the
    links run on below them. */

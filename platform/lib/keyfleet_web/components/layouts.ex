@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.Layouts do
 
   attr :theme_toggle, :boolean,
     default: true,
-    doc: "false on the home page, whose header already has the theme switch"
+    doc: "false under a header, which holds the theme switch (the home page and the app's pages)"
 
   @doc """
   The footer of the home page and every public page, the same on every Regent site:

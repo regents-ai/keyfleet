@@ -76,6 +76,11 @@ type IslandKind<Renderer extends IslandRenderer> = {
   readonly motionSensitive: boolean
   /** A picture that keeps moving by itself never runs out of frames to settle in. */
   readonly continuous: boolean
+  /**
+   * The sharpest the picture is drawn, in device pixels per CSS pixel. A small
+   * picture may go past the usual ceiling; the pixel budget still holds.
+   */
+  readonly maxDevicePixelRatio?: number
   /** Listeners the island keeps for as long as it is watching. */
   interact?(island: IslandInteraction<Renderer>): () => void
 }
@@ -118,8 +123,9 @@ export function drawingBufferSize(
   width: number,
   height: number,
   devicePixelRatio: number,
+  maxDevicePixelRatio: number = MAX_DEVICE_PIXEL_RATIO,
 ): readonly [number, number] {
-  const ratio = Math.min(MAX_DEVICE_PIXEL_RATIO, Math.max(1, devicePixelRatio))
+  const ratio = Math.min(maxDevicePixelRatio, Math.max(1, devicePixelRatio))
   const requested = width * height * ratio * ratio
   const fit =
     requested > MAX_DRAWING_BUFFER_PIXELS ? Math.sqrt(MAX_DRAWING_BUFFER_PIXELS / requested) : 1
@@ -190,7 +196,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
 
   const measure = (): readonly [number, number] => {
     const {width, height} = canvas().getBoundingClientRect()
-    return drawingBufferSize(width, height, devicePixelRatio())
+    return drawingBufferSize(width, height, devicePixelRatio(), kind.maxDevicePixelRatio)
   }
 
   const stopFrame = () => {

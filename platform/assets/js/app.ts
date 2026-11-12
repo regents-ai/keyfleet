@@ -46,11 +46,13 @@ import {OnchainSteps} from "./hooks/onchain_steps"
 import {MenuAgents} from "./hooks/menu_agents"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
+import {ThemeSwitch} from "./hooks/theme_switch"
 import {TokenMenu} from "./hooks/token_menu"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {WorkspaceGraph} from "./hooks/workspace_graph"
 import {mountMotion} from "./motion"
 import {installVisitLog} from "./visit_log"
+import {syncTheme} from "./theme"
 
 // First, so an error anywhere below is reported too.
 installVisitLog()
@@ -63,42 +65,6 @@ type ShellHook = Hook & {
 }
 
 let cachedShellState: ShellState | undefined
-
-// The colour theme, light until the visitor chooses. A press chooses the
-// opposite of the theme showing and writes it to the cookie the
-// server reads, so the next page is drawn in it. The switch names the theme
-// showing by itself, so nothing here rewrites its words.
-const themeCookie = "regent_theme"
-const themeMaxAge = 60 * 60 * 24 * 365
-type Theme = "light" | "dark"
-const themeColors: Record<Theme, string> = {dark: "#161616", light: "#e5e3d2"}
-
-// The visitor's choice, light until they choose.
-function chosenTheme(): Theme {
-  const prefix = `${themeCookie}=`
-  const value = document.cookie
-    .split("; ")
-    .find(cookie => cookie.startsWith(prefix))
-    ?.slice(prefix.length)
-
-  return value === "dark" ? "dark" : "light"
-}
-
-// Live navigation keeps the document, so each page restates its theme.
-function syncTheme() {
-  const theme = chosenTheme()
-  document.documentElement.dataset.theme = theme
-  document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", theme)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themeColors[theme])
-}
-
-document.addEventListener("click", event => {
-  if (!(event.target instanceof Element) || !event.target.closest("[data-theme-toggle]")) return
-  const theme: Theme = chosenTheme() === "dark" ? "light" : "dark"
-  const secure = window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie = `${themeCookie}=${theme}; Path=/; Max-Age=${themeMaxAge}; SameSite=Lax${secure}`
-  syncTheme()
-})
 
 // A room opened from its fleet's hall takes the keyboard to its name, and on
 // a phone, where the hall stacks above the room, brings the name into view.
@@ -118,6 +84,8 @@ function revealRoom(event: Event) {
   if (!inView) title.scrollIntoView({block: "start"})
 }
 
+// Live navigation keeps the document, so each page restates its theme
+// (theme.ts); every theme switch follows what it shows.
 window.addEventListener("phx:page-loading-stop", syncTheme)
 window.addEventListener("phx:page-loading-stop", revealRoom)
 window.addEventListener("popstate", syncTheme)
@@ -361,6 +329,7 @@ const hooks = {
   OnchainSteps,
   PlacesChart,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
+  ThemeSwitch,
   TokenMenu,
   VerifiedConnections,
   WorkspaceGraph,

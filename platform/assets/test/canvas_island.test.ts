@@ -39,6 +39,15 @@ describe("bounding the drawing buffer", () => {
   it("always produces a drawable size", () => {
     expect(drawingBufferSize(0, 0, 1)).toEqual([1, 1])
   })
+
+  // A small island may ask for more of a sharp screen than the default ceiling;
+  // one that does not keeps to it, and the pixel budget holds either way.
+  it("draws past the default ceiling only when an island asks for it", () => {
+    expect(drawingBufferSize(300, 200, 3, 3)).toEqual([900, 600])
+    expect(drawingBufferSize(300, 200, 3)).toEqual([450, 300])
+    const [width, height] = drawingBufferSize(2000, 2000, 3, 3)
+    expect(width * height).toBeLessThanOrEqual(MAX_DRAWING_BUFFER_PIXELS)
+  })
 })
 
 const drawing: IslandRenderer = {
