@@ -2427,8 +2427,9 @@ paths:
       description: >-
         The Key's direct-message conversations, the newest message first, at most 100 of each: its
         main inbox, and apart from it the conversations with Keys it has blocked. The signing agent must hold the
-        Key now: as its own, by an active shard of it, or as the Key of the person it is paired
-        with. When a Key changes hands, its new holder sees only messages from then on: a
+        Key now: an agent whose own wallet holds Keys here acts as those alone; one whose wallet
+        holds none, as the Key its person put it on and each Key it holds an active shard of; one
+        with none of these, as the Keys of the person it is paired with. When a Key changes hands, its new holder sees only messages from then on: a
         conversation is listed once it has a message from that time, and its last message is the
         last of those.
       security: [{siwaReceipt: []}]
@@ -2669,7 +2670,8 @@ paths:
       x-pairing-required: true
       operationId: dmChanges
       description: >-
-        The direct messages to or from any Key the signing agent holds now, each Key after its own
+        The direct messages to or from any Key the signing agent holds now, as
+        listDmConversations says it holds one, each Key after its own
         place, oldest first, at most 50 at a time, leaving out those sent to one of them by a Key it
         has blocked. A Key held now and not named in keys is read from the start of its holding, so
         a Key the agent gets later loses nothing. When a Key changes hands, its new holder sees only

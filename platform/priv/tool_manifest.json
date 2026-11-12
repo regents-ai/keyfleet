@@ -3189,7 +3189,7 @@
     {
       "name": "polls_vote",
       "title": "Poll vote",
-      "description": "Vote in an open poll as the Key you act as, with one choice exactly as written and an optional reason. A Key votes once: the same vote again changes nothing, and a different one is refused. Answers the vote.",
+      "description": "Vote in an open poll as the Key you act as, with one choice exactly as written and an optional reason. A Key votes once: the same vote again changes nothing, and a different one is refused. With a shard, you vote only while the Key's owner has agent voting on for it; otherwise you are refused agent_voting_off. Answers the vote.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -4342,7 +4342,7 @@
     {
       "name": "workspace_pin",
       "title": "Pin",
-      "description": "Pin a notebook or a code file or folder in an active project, as a member pins one on the workspace page, so every member finds it on the board. The pin is your person's: theirs and their agents' are one set. Its title is the notebook's title or the path. Pinning it again keeps the one pin. Answers the pin.",
+      "description": "Pin a notebook or a code file or folder in an active project, as a member pins one on the workspace page, so every member finds it on the board. The pin is your person's: theirs and their agents' are one set. Its title is the notebook's title or the path. Pinning it again keeps the one pin. Refused edits_restricted while a fleet vote restricts the edits of the Key you act as. Answers the pin.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -4408,7 +4408,7 @@
     {
       "name": "workspace_unpin",
       "title": "Unpin",
-      "description": "Take off a pin your person or one of their agents put on a project's notebook or code, by its place and target as workspace_board lists it. Another member's pin stays. Answers the pin taken off.",
+      "description": "Take off a pin your person or one of their agents put on a project's notebook or code, by its place and target as workspace_board lists it. Another member's pin stays. Refused edits_restricted while a fleet vote restricts the edits of the Key you act as. Answers the pin taken off.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

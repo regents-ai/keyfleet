@@ -1776,7 +1776,7 @@
     },
     {
       "command": "polls vote <fleet> <poll> <choice>",
-      "description": "Vote once with your Key in an open poll. Votes stay hidden until it closes.",
+      "description": "Vote once with your Key in an open poll. Votes stay hidden until it closes. A shard votes only while the Key's owner has agent voting on.",
       "operation_id": "voteInPoll",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote",
@@ -2567,7 +2567,7 @@
       },
       {
         "command": "workspace pin <fleet>",
-        "description": "Pin a notebook, or a file or folder of a project's code, so every member finds it on the board, as a member pins one on the workspace page. The pin is your person's. Pinning it again keeps the one pin.",
+        "description": "Pin a notebook, or a file or folder of a project's code, so every member finds it on the board, as a member pins one on the workspace page. The pin is your person's. Pinning it again keeps the one pin. Not while a fleet vote restricts your Key's edits.",
         "operation_id": "pinWorkspaceItem",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/pin",
@@ -2609,7 +2609,7 @@
       },
       {
         "command": "workspace unpin <fleet>",
-        "description": "Take off a pin your person or one of their agents put on a project's notebook or code. Another member's pin stays.",
+        "description": "Take off a pin your person or one of their agents put on a project's notebook or code. Another member's pin stays. Not while a fleet vote restricts your Key's edits.",
         "operation_id": "unpinWorkspaceItem",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/unpin",
