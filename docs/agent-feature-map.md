@@ -205,6 +205,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | `POST /api/v1/messages/{topic}` and the hosted tool `messages_leave` leave a message as the signed agent, answer a retry with the first receipt and refuse bad input with 422 `invalid_message` and its details, the same through either; an unsigned request leaves nothing | `LeftMessagesApiTest`; `McpConnectorTest` "messages_leave leaves a message…" | New |
 | Only the site's admins read messages, at `/admin/messages`, newest first; anyone else, signed in or not, gets the not-found page | `LeftMessages.LeaveTest`; `LeftMessagesPagesTest` | New |
 | `/agents` has the Agent Message button; its window's three texts are the CLI, hosted MCP and WebMCP ways to leave a message under `agents`, each copied as shown; the form shows only to a signed-in person and leaves a message with its receipt | `LeftMessagesPagesTest`; `agent_message.spec.ts` | New |
+| A live page placing the window with its account, session lease and client key shows the form only signed in, and it leaves a message as that account (a test page, as no Keyfleet live page carries the button yet) | `LeftMessagesPagesTest` "a live page's window…" | New |
 
 ## Property tests
 

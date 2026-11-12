@@ -3,7 +3,8 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 
 // The Agent Message button on /agents opens its window at a desktop, a phone
 // and the narrowest phone width: each of its three texts fits the screen and
-// copies exactly what it shows, and Escape and the X close it. Signed in as
+// copies exactly what it shows, and Escape and the X close it, beside the
+// page's shared confirm window, which stays shut. Signed in as
 // "valid" (test/support/test_privy_verifier.ex), a person leaves a message
 // from its form and sees the receipt, after an empty message is refused when
 // the field is left. Each width's button and open window are attached to the
@@ -36,6 +37,9 @@ test("on /agents, an agent's texts fit and copy at every width", async ({page}, 
 
     await opener(page).click()
     await expect(window(page)).toBeVisible()
+    // The page's shared confirm window is there too, and stays shut.
+    await expect(page.locator("#rg-confirm")).toBeAttached()
+    await expect(page.locator("#rg-confirm")).toBeHidden()
     const texts = window(page).locator(".agent-message__text")
     await expect(texts).toHaveCount(3)
     for (const text of await texts.all()) {
