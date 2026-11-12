@@ -370,7 +370,7 @@ defmodule Keyfleet.Agents.AgentProfile do
 
     # The key the agent acts as in the fleet, by the same rule as
     # `Keyfleet.Keys.identity/2`: the lowest-numbered key its wallet holds,
-    # else the key its person put it on (`Keyfleet.Keys.assigned_keys/2`),
+    # else the key its person put it on (`Keyfleet.Keys.assigned_keys/3`),
     # else the key of its active shard, else the key the person it is paired
     # with writes as.
     calculate :key, :integer, Keyfleet.Agents.Calculations.Key do

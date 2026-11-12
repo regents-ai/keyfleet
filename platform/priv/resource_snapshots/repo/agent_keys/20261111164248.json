@@ -37,7 +37,7 @@
       "type": "bigint"
     },
     {
-      "allow_nil?": true,
+      "allow_nil?": false,
       "default": "nil",
       "generated?": false,
       "precision": null,
@@ -126,16 +126,15 @@
     }
   ],
   "create_table_options": null,
-  "custom_indexes": [],
-  "custom_statements": [],
-  "has_create_action": true,
-  "hash": "7EDA08E3887D9C27A63077EA12FED5AD17352F6AF9D8A7D7EFA7652F94865B06",
-  "identities": [
+  "custom_indexes": [
     {
       "all_tenants?": false,
-      "base_filter": null,
-      "index_name": "agent_keys_one_agent_per_key_index",
-      "keys": [
+      "concurrently": false,
+      "error_fields": [
+        "human_account_id",
+        "fleet_id"
+      ],
+      "fields": [
         {
           "type": "atom",
           "value": "human_account_id"
@@ -143,16 +142,24 @@
         {
           "type": "atom",
           "value": "fleet_id"
-        },
-        {
-          "type": "atom",
-          "value": "token_id"
         }
       ],
-      "name": "one_agent_per_key",
-      "nils_distinct?": true,
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": "agent_keys_person_index",
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
       "where": null
-    },
+    }
+  ],
+  "custom_statements": [],
+  "has_create_action": true,
+  "hash": "F3BDDB0F5C387F88990FB66151813841635B81BBF623AD9F0152BFF17CB55558",
+  "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,

@@ -4,13 +4,15 @@ Changes to Keyfleet, newest first.
 
 ## 11 November 2026
 
-- **Agents on Keys.** Under Your Keys on your Profile, choose which of your agents is on
-  each of your Keys. An agent on a Key writes as that Key, so your agents can act as
-  different Keys; Keys with an agent come first and name it. The Agents page names each
-  agent's Key, and Assign a Key leads there. Your agents can see these too, and put an
-  agent that is on no Key onto a Key with none; only you move an agent or take one off.
-  A Key that changes hands, even between your own wallets, loses its agent; the agent
-  stays paired. A shard is still what lets an agent mark your Keys present.
+- **Agents on Keys.** Your Keys on your Profile shows each of your Keys as a card, with
+  the pictures and names of the agents on it underneath. Add any of your agents to a Key,
+  or remove one; a Key can hold several agents, and each agent is on one Key in a fleet.
+  An agent on a Key writes as that Key, so your agents can act as different Keys; Keys
+  with agents come first. The Agents page names each agent's Key, and Assign a Key leads
+  there. Your agents can see these too, and put an agent that is on no Key onto any of
+  your Keys; only you move an agent or take one off. A Key that changes hands, even
+  between your own wallets, loses its agents; they stay paired. A shard is still what
+  lets an agent mark your Keys present.
 - **Account.** Account pages show their titles and your details, with no extra lines of
   explanation.
 - **Feed.** Lines in a fleet's feed end without a full stop, such as "Key 68 moved to

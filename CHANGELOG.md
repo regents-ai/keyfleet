@@ -7544,3 +7544,50 @@ Check: "a Key whose agent was unpaired, or that changed hands, has none" and
 "a Key moved between the person's own wallets loses its agent too" in
 `platform/test/keyfleet/agent_key_test.exs`; both fail with the record left
 out of `placed_on?/3`.
+
+## 2026-11-12 — A Key holds several agents; Your Keys is a gallery
+
+Owner's ask, 11 November: "make sure the agent pairing UI allows multiple
+agents to be paired to a single Key. I envision it as a gallery of Keys, and
+each clearly shows the icons of the agents paired to it under it (if any)".
+An agent is still on at most one Key in a fleet. 4.a and the transfer rule
+are unchanged.
+
+- `Keyfleet.Keys.AgentKey` is one row per agent per fleet
+  (`one_key_per_agent` on the pairing and fleet), with no limit per Key.
+  `:assign` takes `agent_wallet` (required) and upserts the agent's row, so a
+  put moves it; `:release` is the person's own destroy of one agent's row
+  (`Keys.release_agent/3`). Naming no agent is gone, and with it
+  `agent_keys_changed`: writes about one agent run in turn under its
+  pairing's lock, and writes about different agents no longer cross.
+- `Keyfleet.Keys.Changes.TellKeysChanged` tells the fleet's pages which Keys a
+  saved put or release changed (`{:keys_changed, fleet_id, token_ids}`), after
+  the commit; a refused write tells nobody.
+- `Keys.agents_on_keys/2` answers the agents on each Key as a list;
+  `Keys.person_wallets/1` is public, read by it and by `PutAgent` alike;
+  `KeyActor` passes its read options to `Keys.assigned_key/3`; `HeldByPerson`
+  no longer guards `:assign` (`PutAgent` reads the Key under its locks).
+- Your Keys is `KeyfleetWeb.KeyGallery`: each Key a card with its small
+  picture, then its agents' pictures and names with a remove button each, then
+  Add agent (an agent on another Key is listed with that Key, and choosing it
+  moves it). Keys with agents come first. Each change says what it did from a
+  read made after it saved. On a phone each Key is a row and its buttons are a
+  finger's height. `KeyfleetWeb.KeyAgentChoice` is gone.
+- `keys_agents` and the signed read answer each Key's `agents` as a list;
+  `keys_assign_agent` needs `agent_wallet` (422 `invalid_request` without it).
+  Contract 28.1.0 (unreleased) changes in place: the shape, the refusals and
+  the descriptions. `cli/COMMANDS.md`, `cli/commands.json`, the tool
+  manifest, docs, llms.md, agents.md, the Claude guide, the public changelog,
+  the feature map and the parity table say so.
+- Migration `20261111164247_agent_keys` is rewritten before it ships: the
+  pairing id is required, one unique index per agent and fleet, and a plain
+  index on the person and fleet. Still one new, empty table, up only, with
+  no down by the project's rule. No production data.
+
+Check: `platform/test/keyfleet/agent_key_test.exs` (several agents on one
+Key, release, broadcasts; the broadcast test fails without
+`TellKeysChanged`), `platform/test/keyfleet/agent_key_race_test.exs` (one
+agent's writes in turn, an agent's put crossing the person's move, a transfer
+during a put in both orders), `platform/test/keyfleet_web/agent_key_route_test.exs`,
+the gallery test in `platform/test/keyfleet_web/shell_live_test.exs` and
+`platform/test/browser/account_agents.spec.ts` in Chromium.

@@ -1,21 +1,21 @@
 defmodule Keyfleet.AgentKeyRaceTest do
   @moduledoc """
-  Two changes to a person's agents on their Keys at the same moment, each on
-  a connection of its own, as two requests are. A swap runs one change after
-  the other and both land. Two agents put on one Key with no agent yet leave
-  the first there, and the second change, by the person or by their agent, is
-  told to read again and try again. Everything committed here is removed,
-  and the fleet put back unbound, when each test ends.
+  Changes to a person's agents on their Keys at the same moment, each on a
+  connection of its own, as two requests are. Two changes about one agent run
+  one after the other, so an agent's change that crosses the person's move
+  sees where the person put it. Changes about different agents, onto one Key
+  or swapping Keys, all land. A Key that changes hands while an agent is put
+  on it ends with no agents, whichever is saved first. Everything committed
+  here is removed, and the fleet put back unbound, when each test ends.
   """
   use ExUnit.Case, async: false
 
   import Ecto.Query
 
-  alias Ash.Error.Changes.StaleRecord
   alias Ecto.Adapters.SQL.Sandbox
   alias Keyfleet.{Accounts, Actors, ChainHelpers, CommittedAccount, CommittedCatalog, Keys, Repo}
   alias Keyfleet.Fleets.Fleet
-  alias KeyfleetWeb.AgentTools.Refused
+  alias Keyfleet.Keys.Errors.{KeyNotHeldError, PersonOnlyError}
 
   @fleet "fibonacci_syndicate"
 
@@ -61,26 +61,47 @@ defmodule Keyfleet.AgentKeyRaceTest do
     end)
   end
 
-  test "two agents swapping Keys at the same moment both land, one after the other", c do
-    put!(c.first, c.astra, c.person)
-    put!(c.second, c.bolt, c.person)
-
-    # Astra goes onto Bolt's Key and holds its locks while Bolt goes onto
-    # Astra's: the second waits for the first, then lands.
-    {held, release} = hold(fn -> assign(c.second, c.astra, c.person) end)
+  test "two changes about one agent at the same moment run one after the other", c do
+    # The person moves Astra and holds its locks while a second move of
+    # Astra waits for the first, then lands.
+    {held, release} = hold(fn -> assign(c.first, c.astra, c.person) end)
     assert {:ok, _assigned} = held
 
-    crossing = on_own_connection(fn -> assign(c.first, c.bolt, c.person) end)
+    crossing = on_own_connection(fn -> assign(c.second, c.astra, c.person) end)
     refute Task.yield(crossing, 300)
 
     release.()
     assert {:ok, _assigned} = Task.await(crossing, 10_000)
 
-    assert on_keys(c) == %{c.first => "Bolt", c.second => "Astra"}
+    assert on_keys(c) == %{c.second => ["Astra"]}
   end
 
-  test "swaps sent at the same moment, again and again, all land", c do
-    put!(c.first, c.astra, c.person)
+  test "an agent's change that crosses the person's move waits, then is refused", c do
+    # The person puts Bolt on the first Key while Astra, an agent of theirs,
+    # would put Bolt, still on no Key when it asked, onto the second.
+    {held, release} = hold(fn -> assign(c.first, c.bolt, c.person) end)
+    assert {:ok, _assigned} = held
+
+    crossing = on_own_connection(fn -> assign(c.second, c.bolt, c.astra) end)
+    refute Task.yield(crossing, 300)
+
+    release.()
+
+    assert {:error, %Ash.Error.Forbidden{errors: [%PersonOnlyError{}]}} =
+             Task.await(crossing, 10_000)
+
+    assert on_keys(c) == %{c.first => ["Bolt"]}
+  end
+
+  test "agents put on one Key, or swapping Keys, at the same moment all land", c do
+    assert [{:ok, _}, {:ok, _}] =
+             race([
+               fn -> assign(c.first, c.astra, c.person) end,
+               fn -> assign(c.first, c.bolt, c.astra) end
+             ])
+
+    assert on_keys(c) == %{c.first => ["Astra", "Bolt"]}
+
     put!(c.second, c.bolt, c.person)
 
     for round <- 1..10 do
@@ -94,60 +115,50 @@ defmodule Keyfleet.AgentKeyRaceTest do
         ])
 
       assert [{:ok, _}, {:ok, _}] = results, "round #{round}"
-      assert on_keys(c) == %{astra_to => "Astra", bolt_to => "Bolt"}, "round #{round}"
+      assert on_keys(c) == %{astra_to => ["Astra"], bolt_to => ["Bolt"]}, "round #{round}"
     end
   end
 
-  test "of two agents put on a Key with none at the same moment, the second is told to try again",
-       c do
+  test "a Key that changes hands while an agent is put on it ends with no agents", c do
+    elsewhere = random_wallet()
+
+    # The transfer is recorded while the put waits to commit: the put saved
+    # the record before it, so the agent is on no Key.
     {held, release} = hold(fn -> assign(c.first, c.astra, c.person) end)
     assert {:ok, _assigned} = held
 
-    crossing = on_own_connection(fn -> assign(c.first, c.bolt, c.person) end)
-    refute Task.yield(crossing, 300)
+    assert {:ok, _moved} =
+             Task.await(on_own_connection(fn -> record!(c.first, elsewhere, 2) end), 10_000)
 
     release.()
-    assert {:error, %Ash.Error.Invalid{errors: errors}} = Task.await(crossing, 10_000)
-    assert Enum.any?(errors, &match?(%StaleRecord{}, &1))
+    assert on_keys(c) == %{}
+    assert {:ok, nil} = Sandbox.unboxed_run(Repo, fn -> Keys.assigned_key(c.astra, @fleet) end)
 
-    assert on_keys(c) == %{c.first => "Astra"}
+    # The put arrives while the transfer waits to commit: it reads the record
+    # before it, and the agent is on no Key once the transfer lands.
+    {held, release} = hold(fn -> record!(c.second, elsewhere, 2) end)
+    assert {:ok, _moved} = held
 
-    # Sent again, it replaces the agent there, as the person asked.
     assert {:ok, _assigned} =
-             Sandbox.unboxed_run(Repo, fn -> assign(c.first, c.bolt, c.person) end)
+             Task.await(on_own_connection(fn -> assign(c.second, c.bolt, c.person) end), 10_000)
 
-    assert on_keys(c) == %{c.first => "Bolt"}
-  end
-
-  test "an agent whose change crossed another for the same Key is answered agent_keys_changed",
-       c do
-    {held, release} = hold(fn -> assign(c.second, c.astra, c.person) end)
-    assert {:ok, _assigned} = held
-
-    crossing =
-      on_own_connection(fn ->
-        KeyfleetWeb.AgentTools.Keys
-        |> Ash.ActionInput.for_action(
-          :assign_agent,
-          %{fleet_id: @fleet, token_id: c.second, agent_wallet: c.bolt.wallet_address},
-          actor: c.bolt,
-          context: %{waiter: nil}
-        )
-        |> Ash.run_action()
-      end)
-
-    refute Task.yield(crossing, 300)
+    assert on_keys(c) == %{c.second => ["Bolt"]}
     release.()
+    assert on_keys(c) == %{}
 
-    assert {:error, %Ash.Error.Invalid{errors: [%Refused{status: 409} = refused]}} =
-             Task.await(crossing, 10_000)
-
-    assert refused.body.error.code == "agent_keys_changed"
-    assert on_keys(c) == %{c.second => "Astra"}
+    # Once the transfer has landed, the Key is not the person's to put agents on.
+    assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
+             Sandbox.unboxed_run(Repo, fn -> assign(c.second, c.bolt, c.person) end)
   end
 
-  defp assign(token_id, %Actors.Agent{wallet_address: wallet}, actor),
-    do: Keys.assign_agent(@fleet, token_id, wallet, actor: actor)
+  # A held write runs inside the test's own open transaction, so its pages
+  # hear of it before it commits; that is the hold's doing, not the write's.
+  defp assign(token_id, %Actors.Agent{wallet_address: wallet}, actor) do
+    Keys.assign_agent(@fleet, token_id, wallet,
+      actor: actor,
+      context: %{warn_on_transaction_hooks?: false}
+    )
+  end
 
   defp put!(token_id, agent, actor) do
     assert {:ok, _assigned} = Sandbox.unboxed_run(Repo, fn -> assign(token_id, agent, actor) end)
@@ -210,10 +221,10 @@ defmodule Keyfleet.AgentKeyRaceTest do
 
   defp on_keys(c) do
     Sandbox.unboxed_run(Repo, fn ->
-      for {{@fleet, token_id}, agent} <-
+      for {{@fleet, token_id}, on_key} <-
             Keys.agents_on_keys(c.person, Keys.person_agents(c.person)),
           into: %{},
-          do: {token_id, agent.name}
+          do: {token_id, Enum.map(on_key, & &1.name)}
     end)
   end
 
@@ -236,17 +247,17 @@ defmodule Keyfleet.AgentKeyRaceTest do
     agent
   end
 
-  defp record!(token_id, owner) do
-    Keys.record_epoch!(
+  defp record!(token_id, owner, epoch \\ 1) do
+    Keys.record_epoch(
       %{
         fleet_id: @fleet,
         token_id: token_id,
-        ownership_epoch: 1,
+        ownership_epoch: epoch,
         owner_wallet: owner,
         block_number: 10,
         block_hash: "0x" <> String.duplicate("a", 64),
         transaction_hash: "0x" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower),
-        log_index: 0
+        log_index: epoch - 1
       },
       actor: %Actors.System{}
     )
