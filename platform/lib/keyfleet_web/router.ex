@@ -37,6 +37,12 @@ defmodule KeyfleetWeb.Router do
     plug KeyfleetWeb.Plugs.FleetComingSoon
   end
 
+  # A signed agent's live feed: no `:accepts`, since the answer is an event
+  # stream, which a JSON-only door would refuse. Its refusals are JSON.
+  pipeline :agent_feed do
+    plug :put_format, "json"
+  end
+
   # The open fleet directory's Markdown.
   # This pipeline and the three below set the reading policy in the header map.
   # Sobelow cannot read a policy built by a function call, so each says so here.
@@ -362,6 +368,13 @@ defmodule KeyfleetWeb.Router do
   scope "/api/v1/account", KeyfleetWeb do
     pipe_through [:api, :agent]
     get "/points", AgentAccountController, :points
+  end
+
+  # A paired agent's live feed, signed once as it opens
+  # (`KeyfleetWeb.Plugs.SignedAgent`).
+  scope "/api/v1", KeyfleetWeb do
+    pipe_through :agent_feed
+    get "/feed", FeedController, :show
   end
 
   scope "/api/v1/agent", KeyfleetWeb do

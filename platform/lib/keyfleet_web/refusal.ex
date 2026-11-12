@@ -38,6 +38,8 @@ defmodule KeyfleetWeb.Refusal do
        "Sign the request again with its whole body, then send it again."},
     "siwa_request_failed" =>
       {"The sign-in service could not be reached.", "Try again in a moment."},
+    "feed_full" =>
+      {"This site has as many feeds open as it can hold right now.", "Try again in a minute."},
     "request_too_large" =>
       {"The request body is larger than this operation takes.",
        "Send a shorter body. /docs gives each operation's limit."},

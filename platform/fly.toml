@@ -42,6 +42,18 @@ kill_timeout = "60s"
   force_https = true
   processes = ["site"]
 
+# Open pages, waiting syncs and agents' live feeds each hold a connection for
+# minutes, so the proxy's small default would refuse them long before the site
+# machine is full. Sized for that machine (4 GB, two dedicated processors, the
+# [[vm]] below): at about 0.9 MB a connection, 3,000 come to about 2.7 GB and
+# leave the rest for the site itself. The site holds at most 600 waiting syncs
+# and 200 feeds of its own (config/config.exs). Past the soft limit the proxy
+# prefers another machine when one runs, as during a release.
+[http_service.concurrency]
+  type = "connections"
+  soft_limit = 2500
+  hard_limit = 3000
+
 # Session creation can wait three minutes for a cold notebook runner.
 [http_service.http_options]
   idle_timeout = 240

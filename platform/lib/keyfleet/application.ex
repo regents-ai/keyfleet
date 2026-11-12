@@ -81,6 +81,8 @@ defmodule Keyfleet.Application do
       points_board_child(),
       # Agent requests held open waiting for news, by client address.
       KeyfleetWeb.AgentWaits,
+      # Counts this machine's open agent feeds.
+      KeyfleetWeb.FeedController,
       # Start a worker by calling: Keyfleet.Worker.start_link(arg)
       # {Keyfleet.Worker, arg},
       # Start to serve requests, typically the last entry

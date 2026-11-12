@@ -12,6 +12,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @update_path "/api/v1/agent/profile/update"
   @profile_path "/api/v1/agent/profile"
   @points_path "/api/v1/account/points"
+  # The agent's live feed, signed once as it opens (`KeyfleetWeb.FeedController`).
+  @feed_path "/api/v1/feed"
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
@@ -306,13 +308,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     if agent_request?(conn), do: authenticate(conn), else: conn
   end
 
-  # A paired agent's Points read sits at /api/v1/account, the address every
-  # Regent site gives it; everything else an agent signs is under /api/v1/agent.
+  # A paired agent's Points read sits at /api/v1/account, and its live feed at
+  # /api/v1/feed, the addresses every Regent site gives them; everything else an
+  # agent signs is under /api/v1/agent.
   defp agent_request?(conn),
     do:
       Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) in [
         ["api", "v1", "agent"],
-        ["api", "v1", "account"]
+        ["api", "v1", "account"],
+        ["api", "v1", "feed"]
       ]
 
   # An address no operation has, a method its operation doesn't take and a
@@ -690,6 +694,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("POST", @preview_path), do: true
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", @points_path), do: true
+  defp supported?("GET", @feed_path), do: true
 
   defp supported?("GET", path),
     do:

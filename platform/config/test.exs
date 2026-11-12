@@ -85,6 +85,9 @@ config :keyfleet, :agent_wait_ms, 200
 config :keyfleet, :agent_waits_per_address, 1
 config :keyfleet, :agent_waits_total, 1
 
+# An agent's live feed sends its keep-alive line soon, and every test's feeds fit.
+config :keyfleet, KeyfleetWeb.FeedController, max_open: 1000, keep_alive_ms: 300
+
 # A fleet page reads its feed again soon after a notice.
 config :keyfleet, :fleet_feed_wait_ms, 200
 

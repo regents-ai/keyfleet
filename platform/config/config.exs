@@ -158,6 +158,11 @@ config :keyfleet, :agent_waits_per_address, 4
 # And how many one machine holds open across every address.
 config :keyfleet, :agent_waits_total, 600
 
+# A signed agent's live feed (`GET /api/v1/feed`): how many one machine holds open
+# at once, and how often a quiet feed sends a keep-alive line. Fly's proxy closes a
+# connection that sends nothing for 60 seconds.
+config :keyfleet, KeyfleetWeb.FeedController, max_open: 200, keep_alive_ms: 25_000
+
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,
