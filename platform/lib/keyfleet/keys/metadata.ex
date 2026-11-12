@@ -93,17 +93,34 @@ defmodule Keyfleet.Keys.Metadata do
   def small_cards(fleet, token_ids), do: small_pictures(fleet, token_ids, :small_card_cid)
 
   defp small_pictures(fleet, token_ids, field) do
+    for {token_id, cid} <- kept_cids(fleet, token_ids, field),
+        into: %{},
+        do: {token_id, KeyArt.link(cid)}
+  end
+
+  @doc """
+  The IPFS address of the card of each of the minted Keys `token_ids` of
+  `fleet`, by Key number, in two reads however many Keys are asked for, a
+  hundred at most. A Key still waiting for its card is left out; its picture
+  is the pass (`pass_cid/0`).
+  """
+  def card_cids(fleet, token_ids), do: kept_cids(fleet, token_ids, :cid)
+
+  defp kept_cids(fleet, token_ids, field) do
     seeds = Keys.card_seeds(fleet, token_ids)
 
     for kept <- Keys.pictures_of_keys!(fleet.id, Map.keys(seeds)),
         cid = Map.fetch!(kept, field),
         is_binary(cid) and seeds[kept.token_id] == kept.seed,
         into: %{},
-        do: {kept.token_id, KeyArt.link(cid)}
+        do: {kept.token_id, cid}
   end
 
   @doc "The picture a Key not minted yet shows: the pass."
   def pass, do: picture(nil)
+
+  @doc "The IPFS address of the pass, the picture a Key without its card shows."
+  def pass_cid, do: @interim_pass_cid
 
   defp picture(kept), do: KeyArt.link(cid(kept))
 

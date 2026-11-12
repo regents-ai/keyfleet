@@ -8045,3 +8045,36 @@ Rebuilt on main 9de7fc8cd from the 11 Nov bundle's 22a77bd8 (itself from
 Check: `room_page_test.exs`, `dms_page_test.exs`, `key_profile_test.exs`,
 `workspace_page_test.exs` and `fleet_page_test.exs` (237 tests);
 `shell_links.spec.ts` drops the who-writes tip from its footnote check.
+## 2026-11-12 — Project share pictures
+
+Rebuilt from the 11 Nov bundle (a3234e8e, itself from
+`claude/quick-wins-dist-1029`, b6143e18 and 9eed485b) on today's share
+pictures.
+
+- A link to a project's page in Classic #1 or the Regents Club now shows that
+  project's own picture where it is shared: the fleet's name, the project's
+  title, the name and card of the Key holding it ("The whole fleet" for a
+  shared project, as its page says) and the line "Bring your agent to work on
+  it with a Key." A project started in the last minute shows its fleet's
+  picture until the next read. A title with a character the picture can't
+  set is shown as the project's name.
+- `/share/projects/<fleet>/<project>.png` serves it: 404 for a name that is no
+  project once the fleet's projects have been read, 503 while they can't be.
+  Each project's figures are one shared reading (`project_cards`), read with
+  the fleet's Treasury page each minute.
+- Every share picture, the fleets' too, is now kept by the version of what it
+  shows in a bounded cache (`KeyfleetWeb.SharePictures`, at most 64, swept
+  every ten minutes) instead of `:persistent_term`. A draw that failed is
+  kept for a minute, and a Key's card is waited for five seconds at most, so
+  a card host that doesn't answer is asked once a minute however often a
+  preview asks. Every `/share` address now spends the per-address budget.
+- `scripts/share-cards/render.mjs` draws each fleet's project picture
+  without its figures and the title characters. The bases in `priv/share`
+  are redrawn on the Mac; the site's and fleets' pictures come out
+  byte-identical to main's.
+- Left out: "Show Classic #1's agent week on the homepage" (3f7eb0ed), since
+  the homepage is the hero alone.
+- No migration; no production data.
+
+Check: `share_card_controller_test.exs`, `router_gate_coverage_test.exs`,
+`mix keyfleet.route_handoff --check`.

@@ -77,20 +77,17 @@ defmodule Keyfleet.Keys.KeyArt do
 
   @doc """
   The card kept on IPFS at `cid`, read back from where it is shown:
-  `{:ok, png}` or `{:error, reason}`.
+  `{:ok, png}` or `{:error, reason}`. It waits up to a minute for the answer;
+  a caller answering a request of its own shortens that with `waits`, Req's
+  `receive_timeout` and `connect_options`.
   """
-  def kept(cid) do
+  def kept(cid, waits \\ []) do
     config = Application.fetch_env!(:keyfleet, __MODULE__)
 
-    Req.get(
-      [
-        url: link(cid),
-        decode_body: false,
-        retry: false,
-        redirect: false,
-        receive_timeout: 60_000
-      ] ++ config[:req_options]
-    )
+    asked = [url: link(cid), decode_body: false, retry: false, redirect: false]
+    waited = Keyword.merge([receive_timeout: 60_000], waits)
+
+    Req.get(asked ++ waited ++ config[:req_options])
     |> case do
       {:ok, %Req.Response{status: 200, body: <<0x89, "PNG", _rest::binary>> = png}} ->
         {:ok, png}

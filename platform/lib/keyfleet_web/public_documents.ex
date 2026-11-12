@@ -233,7 +233,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   defp grouped(token_id), do: token_id |> String.to_integer() |> Rules.grouped()
 
   # The homepage and the early-access page carry the site's name in their own title.
-  # The share picture is its fleet's on a fleet's pages (`KeyfleetWeb.ShareCard`).
+  # The share picture is its fleet's on a fleet's pages, and a project's own
+  # on its page (`KeyfleetWeb.ShareCard`).
   def metadata(path, title, description) do
     suffix = if path in ["/", "/early"], do: "", else: " · Keyfleet"
     {image, image_alt} = KeyfleetWeb.ShareCard.image(path)

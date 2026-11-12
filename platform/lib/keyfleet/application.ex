@@ -69,6 +69,8 @@ defmodule Keyfleet.Application do
       # and the reads that fetch it.
       Keyfleet.Agents.ActivityReading,
       {Task.Supervisor, name: Keyfleet.Agents.Reads},
+      # The share pictures last drawn, by what each shows.
+      KeyfleetWeb.SharePictures,
       # After the repository and PubSub: a pairing made or ended on any Regent
       # site reaches the pages showing it.
       shared_changes_child(),

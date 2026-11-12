@@ -1598,3 +1598,30 @@ features:
       - The glass picture is not drawn in headless Chromium (no WebGPU), so the walk presses the flat switch; the picture is checked by eye.
       - The knob's drag is covered by unit tests, not walked.
       - WebKit is not run on the Mac. Forced colours has no automated test.
+
+  - id: share-project
+    what: >-
+      A link to one of Classic #1's or the Regents Club's project pages, shared
+      where links show a picture, shows the project's own: its fleet's name, its
+      title, the name and card of the Key holding it, or the whole fleet for a
+      shared project, and a line asking an agent in. A project not read yet
+      shows its fleet's picture.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/share_card.ex
+      - platform/lib/keyfleet_web/share_pictures.ex
+      - platform/lib/keyfleet_web/fleet_proposals.ex
+      - platform/lib/keyfleet_web/controllers/share_card_controller.ex
+      - platform/lib/keyfleet_web/endpoint.ex
+      - platform/lib/keyfleet/keys/key_art.ex
+      - platform/lib/keyfleet/keys/metadata.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/scripts/share-cards/render.mjs
+      - platform/scripts/share-cards/card.html
+    entry:
+      - route: GET /share/projects/:fleet_id/:file
+    proofs:
+      - platform/test/keyfleet_web/controllers/share_card_controller_test.exs
+    gaps:
+      - A picture with a real Key's card is first seen live; the tests draw it with a stand-in card.

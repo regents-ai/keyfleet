@@ -2,12 +2,16 @@
 //
 //   priv/static/images/keyfleet-share.png   the site's picture
 //   priv/share/<fleet_id>.png               each fleet's picture, without its figures
+//   priv/share/project_<fleet_id>.png       each fleet's project picture, without
+//                                           the project's title or its Key
 //   priv/share/glyphs-<style>.png           the characters the server sets figures in
 //   priv/share/layout.json                  where the server puts them, and
 //                                           each fleet's name and labels
 //
 // The server (KeyfleetWeb.ShareCard) adds each fleet's figures, its latest
-// Key's name and that Key's card to its picture when the picture is asked for.
+// Key's name and that Key's card to its picture, and each project's title,
+// the name of the Key holding it and that Key's card to its fleet's project
+// picture, when the picture is asked for.
 //
 // Run from platform/ after `mix deps.get` and `npm ci`:
 //   node scripts/share-cards/render.mjs
@@ -29,10 +33,13 @@ const fleets = [
 ];
 
 // The characters each style can set: the Keys in `value`, the treasury's
-// amounts, one to a line, in `amount`, and Key names in `name`.
+// amounts, one to a line, in `amount`, project titles in `title` (a title
+// with any other character is set as its project's name), and Key names in
+// `name`.
 const glyphs = {
   value: "0123456789,/ ",
   amount: "0123456789,. ACDEGHNRSTU",
+  title: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;'’!?&()-–—/#+",
   name: "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ—",
 };
 
@@ -58,16 +65,14 @@ await page.screenshot({ path: join(platform, "priv", "static", "images", "keyfle
 
 const layout = {
   slots: null,
+  project_slots: null,
   glyphs: {},
   fleets: Object.fromEntries(fleets.map(({ id, name, keys, key }) => [id, { name, keys, key }])),
 };
 
-for (const fleet of fleets) {
-  await open({ card: "fleet", name: fleet.name, keys: fleet.keys, key: fleet.key });
-  await page.screenshot({ path: join(share, `${fleet.id}.png`) });
-
-  // Every fleet's picture has its slots in the same places.
-  layout.slots = await page.evaluate(() =>
+// Where the server puts what it adds to the picture open now.
+const slots = () =>
+  page.evaluate(() =>
     Object.fromEntries(
       [...document.querySelectorAll("[data-slot]")].map((el) => {
         const { x, y, width, height } = el.getBoundingClientRect();
@@ -75,6 +80,18 @@ for (const fleet of fleets) {
       }),
     ),
   );
+
+for (const fleet of fleets) {
+  await open({ card: "fleet", name: fleet.name, keys: fleet.keys, key: fleet.key });
+  await page.screenshot({ path: join(share, `${fleet.id}.png`) });
+
+  // Every fleet's picture has its slots in the same places, and so does
+  // every project picture.
+  layout.slots = await slots();
+
+  await open({ card: "project", name: fleet.name });
+  await page.screenshot({ path: join(share, `project_${fleet.id}.png`) });
+  layout.project_slots = await slots();
 }
 
 for (const [style, characters] of Object.entries(glyphs)) {

@@ -3,11 +3,13 @@ defmodule KeyfleetWeb.ShareCardControllerTest do
 
   import Keyfleet.ProposalHelpers, only: [keys_sold!: 2, treasury_reading!: 3]
 
+  alias Keyfleet.Actors.System
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys.KeyArt
   alias Keyfleet.SharedReading
-  alias KeyfleetWeb.{FleetProposals, ShareCard}
+  alias Keyfleet.WorkspaceFixtures, as: Workspace
+  alias KeyfleetWeb.{FleetProposals, ShareCard, SharePictures}
   alias Vix.Vips.{Image, Operation}
 
   @classic "fleet_tech_classic"
@@ -22,18 +24,16 @@ defmodule KeyfleetWeb.ShareCardControllerTest do
   setup do
     Fleets.bootstrap_catalog!()
 
-    # The figures every page shares outlive a test's database, so each test
-    # starts with none held.
     for fleet_id <- [@classic, @club] do
       ChainHelpers.deploy!(fleet_id)
       ChainHelpers.seed_cursor!(fleet_id)
-      SharedReading.delete(ShareCard.key(fleet_id))
-
-      on_exit(fn ->
-        SharedReading.delete(ShareCard.key(fleet_id))
-        :persistent_term.erase({ShareCard, fleet_id})
-      end)
+      forget(fleet_id)
+      on_exit(fn -> forget(fleet_id) end)
     end
+
+    # The pictures drawn, and the draws that failed, are kept by version.
+    SharePictures.delete_all()
+    on_exit(fn -> SharePictures.delete_all() end)
 
     test = self()
     {:ok, card} = Image.write_to_buffer(Operation.black!(767, 959, bands: 3), ".png")
@@ -160,6 +160,121 @@ defmodule KeyfleetWeb.ShareCardControllerTest do
     for file <- ["fibonacci_cascade.png", "fleet_tech_classic.webp", "fleet_tech_classic"] do
       assert get(conn, "/share/" <> file).status == 404, file
     end
+  end
+
+  describe "a project's picture" do
+    test "its page names it, with its title and the Key holding it, and a new holder redraws it",
+         %{conn: conn} do
+      project = Workspace.start_project(@classic, "virtual-cell", "Virtual Cell", by: 20)
+      Workspace.open_log(@classic)
+      FleetProposals.read(@classic)
+
+      {image, alt} = ShareCard.image("/classic/1/projects/virtual-cell")
+
+      assert image =~
+               ~r{\Ahttps?://[^/]+/share/projects/fleet_tech_classic/virtual-cell\.png\?v=[0-9a-z]+\z}
+
+      assert alt == "Virtual Cell, a project of Classic #1 on Keyfleet. Held by CLASSIC—001—020."
+      assert conn |> get("/classic/1/projects/virtual-cell") |> html_response(200) =~ image
+
+      response = get(conn, "/share/projects/fleet_tech_classic/virtual-cell.png")
+      assert response.status == 200
+      assert get_resp_header(response, "content-type") == ["image/png"]
+      assert get_resp_header(response, "cache-control") == ["public, max-age=300"]
+      assert size(response.resp_body) == {1200, 630}
+      # Key 20 has no card yet, so its picture is the pass.
+      assert_received {:kept, @pass_at}
+
+      # The same project is the same picture, kept: the card is not read again.
+      assert get(conn, "/share/projects/fleet_tech_classic/virtual-cell.png").resp_body ==
+               response.resp_body
+
+      refute_received {:kept, _path}
+
+      # Another Key taking it over is a new version and a new picture.
+      project
+      |> Ash.Changeset.for_update(:archived, %{}, actor: %System{})
+      |> Ash.update!()
+      |> Ash.Changeset.for_update(:taken_over, %{key: 21}, actor: %System{})
+      |> Ash.update!()
+
+      FleetProposals.read(@classic)
+      {now, alt} = ShareCard.image("/classic/1/projects/virtual-cell")
+      assert now != image
+      assert alt =~ "Held by CLASSIC—001—021."
+
+      redrawn = get(conn, "/share/projects/fleet_tech_classic/virtual-cell.png")
+      assert redrawn.status == 200
+      assert redrawn.resp_body != response.resp_body
+    end
+
+    test "a project no Key holds shows the whole fleet's, with no card to read", %{conn: conn} do
+      FleetProposals.read(@club)
+
+      {image, alt} = ShareCard.image("/app/fleets/regents_club/projects/understanding")
+      assert image =~ "/share/projects/regents_club/understanding.png?v="
+      assert alt =~ "a project of Regents Club on Keyfleet. Shared by the whole fleet."
+
+      response = get(conn, "/share/projects/regents_club/understanding.png")
+      assert response.status == 200
+      assert size(response.resp_body) == {1200, 630}
+      refute_received {:kept, _path}
+    end
+
+    test "before its fleet's projects are read, its page names the fleet's picture and its own isn't ready",
+         %{conn: conn} do
+      Workspace.start_project(@classic, "virtual-cell", "Virtual Cell")
+
+      {image, _alt} = ShareCard.image("/classic/1/projects/virtual-cell")
+      assert image =~ "/share/fleet_tech_classic.png?v="
+
+      response = get(conn, "/share/projects/fleet_tech_classic/virtual-cell.png")
+      assert response.status == 503
+      assert get_resp_header(response, "retry-after") == ["60"]
+    end
+
+    test "one its fleet's last read didn't find is not there, and one started since waits for the next",
+         %{conn: conn} do
+      FleetProposals.read(@classic)
+
+      for file <- [
+            "virtual-cell.png",
+            "Understanding.png",
+            "understanding.webp",
+            "understanding",
+            String.duplicate("a", 33) <> ".png"
+          ] do
+        assert get(conn, "/share/projects/fleet_tech_classic/" <> file).status == 404, file
+      end
+
+      assert get(conn, "/share/projects/fibonacci_cascade/understanding.png").status == 404
+
+      project = Workspace.start_project(@classic, "virtual-cell", "Virtual Cell")
+      {image, _alt} = ShareCard.image("/classic/1/projects/virtual-cell")
+      assert image =~ "/share/fleet_tech_classic.png?v="
+
+      FleetProposals.read(@classic)
+      {image, _alt} = ShareCard.image("/classic/1/projects/virtual-cell")
+      assert image =~ "/share/projects/fleet_tech_classic/virtual-cell.png?v="
+
+      # Deleted, it goes with the next read.
+      project
+      |> Ash.Changeset.for_update(:archived, %{}, actor: %System{})
+      |> Ash.update!()
+      |> Ash.Changeset.for_update(:deleted, %{key: 20}, actor: %System{})
+      |> Ash.update!()
+
+      FleetProposals.read(@classic)
+      assert get(conn, "/share/projects/fleet_tech_classic/virtual-cell.png").status == 404
+    end
+  end
+
+  # The readings every page shares outlive a test's database, so each test
+  # starts with none of a fleet's held.
+  defp forget(fleet_id) do
+    SharedReading.delete(ShareCard.key(fleet_id))
+    SharedReading.delete(ShareCard.projects_key(fleet_id))
+    for id <- ShareCard.project_ids(fleet_id), do: SharedReading.delete({:project_cards, id})
   end
 
   defp size(png) do
