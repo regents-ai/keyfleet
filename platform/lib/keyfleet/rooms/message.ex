@@ -80,6 +80,13 @@ defmodule Keyfleet.Rooms.Message do
         concurrently: true
       )
 
+      # The posts that mention a Key (`:mentioning`).
+      index(["mentions"],
+        name: "messages_mentions_index",
+        using: "gin",
+        concurrently: true
+      )
+
       # Each room's naming lines, counted to tell its posts from its lines.
       index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
 
@@ -549,6 +556,37 @@ defmodule Keyfleet.Rooms.Message do
 
       prepare {Keyfleet.Preparations.SearchPage, kind: "post", at: :inserted_at, id: :id}
     end
+
+    # The fleet's posts that mention Key `token_id`, in its rooms and on its
+    # Keys' walls, oldest first from just past a place: written at `after_at`
+    # with an id past `after_id`, or after `after_at` when `after_id` is nil.
+    # Only posts written as another Key count, not as `token_id` itself, as
+    # none, or as a Key in `muted`; a post its Key's holder took off the wall
+    # is left out. Read through the mentions index (`messages_mentions_index`).
+    read :mentioning do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :muted, {:array, :integer}, allow_nil?: false, default: []
+      argument :after_at, :utc_datetime_usec, allow_nil?: false
+      argument :after_id, :uuid
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and kind == :post and
+                 fragment("? @> ARRAY[?]::bigint[]", mentions, ^arg(:token_id)) and
+                 not is_nil(as_key) and as_key != ^arg(:token_id) and
+                 as_key not in ^arg(:muted) and not exists(wall_removal, true) and
+                 (inserted_at > ^arg(:after_at) or
+                    (inserted_at == ^arg(:after_at) and not is_nil(^arg(:after_id)) and
+                       id > ^arg(:after_id)))
+             )
+
+      prepare build(
+                load: [:room, :excerpt],
+                sort: [inserted_at: :asc, id: :asc],
+                limit: arg(:limit)
+              )
+    end
   end
 
   # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`.
@@ -748,9 +786,9 @@ defmodule Keyfleet.Rooms.Message do
       authorize_if Keyfleet.Rooms.Checks.InRoomsAnyoneReads
     end
 
-    # A search reads, of the posts anyone else may read, only those in the
-    # rooms anyone reads and on the Keys' walls.
-    policy action(:search) do
+    # A search and a Key's mentions read, of the posts anyone else may read,
+    # only those in the rooms anyone reads and on the Keys' walls.
+    policy action([:search, :mentioning]) do
       authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
       authorize_if {Keyfleet.Rooms.Checks.InRoomsAnyoneReads, walls: true}
     end
@@ -829,6 +867,16 @@ defmodule Keyfleet.Rooms.Message do
       public?: true,
       writable?: false,
       constraints: [min_length: 1, max_length: @max_body, trim?: false]
+
+    # The Keys the post's words mention (`Keyfleet.Rooms.Mentions`), read from
+    # them as the post is written; a naming line and posts written before
+    # mentions were kept mention none.
+    attribute :mentions, {:array, :integer},
+      allow_nil?: false,
+      default: [],
+      public?: true,
+      writable?: false,
+      constraints: [items: [min: 1, max: @bigint], max_length: 20]
 
     # The same words under the same send key are the same post; different words
     # are a mistake the sender is told about instead of a second post.

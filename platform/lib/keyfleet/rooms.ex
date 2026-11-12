@@ -29,6 +29,10 @@ defmodule Keyfleet.Rooms do
   # How far back a Key's own posts count when telling it where others have
   # posted after it.
   @posted_after_days 7
+  # A Key's mentions answered at once, and how far back they are read with
+  # no place to read on from.
+  @mentions_page 20
+  @mentions_days 7
 
   resources do
     resource Keyfleet.Rooms.Room do
@@ -60,6 +64,7 @@ defmodule Keyfleet.Rooms do
 
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
       define :search_posts, action: :search, args: [:fleet_id, :query]
+      define :mentioning, action: :mentioning, args: [:fleet_id, :token_id]
       define :recent_posts, action: :recent_in_fleet, args: [:fleet_id]
 
       define :fleet_lines_before,
@@ -386,6 +391,39 @@ defmodule Keyfleet.Rooms do
         end
 
       {:ok, %{requests: page, next_cursor: next_cursor, has_more: more != []}}
+    end
+  end
+
+  @doc """
+  The fleet's posts that mention Key `token_id`, as `actor` may read them,
+  after the place `place` (`{inserted_at, id}` of the last one read, or nil
+  for the last #{@mentions_days} days), oldest first and at most
+  #{@mentions_page} at a time: `{:ok, %{posts, next_cursor, has_more}}`.
+  Only posts written as another Key count, never as a Key `actor` muted.
+  Send `next_cursor` as `place` next time; it is `place` when nothing was
+  read.
+  """
+  def mention_changes(fleet_id, token_id, place, actor) do
+    {after_at, after_id} =
+      place || {DateTime.add(DateTime.utc_now(), -@mentions_days * 86_400), nil}
+
+    args = %{
+      muted: fleet_id |> muted_keys!(actor) |> MapSet.to_list(),
+      after_at: after_at,
+      after_id: after_id,
+      limit: @mentions_page + 1
+    }
+
+    with {:ok, posts} <- mentioning(fleet_id, token_id, args, actor: actor) do
+      {page, more} = Enum.split(posts, @mentions_page)
+
+      next_cursor =
+        case List.last(page) do
+          nil -> place
+          last -> {last.inserted_at, last.id}
+        end
+
+      {:ok, %{posts: page, next_cursor: next_cursor, has_more: more != []}}
     end
   end
 

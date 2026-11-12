@@ -214,6 +214,12 @@ defmodule KeyfleetWeb.AgentTools.Rooms do
 
       # The person's requests to quote them, followed only when named.
       argument :quotes, :map, constraints: [fields: [after_seq: @after_seq]]
+
+      # Where the Key's mentions were read to: the cursor the last sync
+      # answered, or null for the last week.
+      argument :mentions, :map,
+        constraints: [fields: [after: [type: :string, constraints: [max_length: 128]]]]
+
       argument :max_bytes, :integer, constraints: [min: 16_384, max: 67_108_864]
       run {Run, tool: "fleets_sync"}
     end

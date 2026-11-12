@@ -30,6 +30,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   alias KeyfleetWeb.AgentTools.Dms.Answer, as: DmAnswer
   alias KeyfleetWeb.AgentWaits
   alias KeyfleetWeb.Budget
+  alias KeyfleetWeb.MentionJSON
   alias KeyfleetWeb.ProposalJSON
   alias KeyfleetWeb.Refusal
   alias KeyfleetWeb.RoomJSON
@@ -224,12 +225,15 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       quotes: get_in(params, ["quotes", "after_seq"])
     }
 
+    # The body's checks have already opened the mentions' cursor.
+    {:ok, mentions_after} = MentionJSON.opened(get_in(params, ["mentions", "after"]))
+
     # Only a few syncs from one waiter are held open at once; past that a sync
     # answers straight away with what it has.
     with {:ok, synced} <-
            AgentWaits.hold(waiter, &Rooms.sync(fleet_id, cursors, places, actor, &1)),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
-         {:ok, yours} <- yours(fleet_id, actor, %{project: places.project}) do
+         {:ok, yours} <- yours(fleet_id, actor, %{project: places.project}, mentions_after) do
       muted = Rooms.muted_keys!(fleet_id, actor)
 
       refused =
@@ -249,7 +253,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       sent = %{
         graph: places.graph,
         rooms: Map.new(cursors, &{&1.slug, &1.after_seq}),
-        keys: Map.new(places.keys, &{&1.token_id, &1.after_seq})
+        keys: Map.new(places.keys, &{&1.token_id, &1.after_seq}),
+        mentions: get_in(params, ["mentions", "after"])
       }
 
       case Budget.sync(answer, params["max_bytes"], sent) do
@@ -401,7 +406,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         yours
         | tasks: Enum.map(yours.tasks, &task_json/1),
           reviews: Enum.map(yours.reviews, &review_ask_json/1),
-          goals: Enum.map(yours.goals, &goal_json/1)
+          goals: Enum.map(yours.goals, &goal_json/1),
+          mentions: MentionJSON.changes(yours.mentions)
       }
     }
   end
@@ -451,17 +457,19 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
   # the key the agent writes as here (its own lowest key, or its shard's),
   # whether a vote of the fleet has stopped that key changing the workspace,
   # the unfinished tasks and the goals the agent joined as it, the submitted
-  # tasks it may review, oldest wait first, with how many wait in all, and
-  # the rooms where others have posted since the Key last did. An agent with
-  # neither a key nor a shard here writes as none.
-  defp yours(fleet_id, actor, within) do
+  # tasks it may review, oldest wait first, with how many wait in all, the
+  # rooms where others have posted since the Key last did, and the posts that
+  # mention the Key after `mentions_after`. An agent with neither a key nor a
+  # shard here writes as none, and nothing mentions it.
+  defp yours(fleet_id, actor, within, mentions_after) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
          {:ok, tasks} <-
            Graph.tasks_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor),
          {:ok, reviews} <- reviews(fleet_id, token_id, restricted, actor, within),
          {:ok, goals} <-
-           Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor) do
+           Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor),
+         {:ok, mentions} <- Rooms.mention_changes(fleet_id, token_id, mentions_after, actor) do
       {:ok,
        %{
          as_key: token_id,
@@ -470,7 +478,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
          reviews: reviews.results,
          reviews_waiting: reviews.count,
          goals: goals,
-         posted_after_you: Rooms.posted_after_key(fleet_id, token_id)
+         posted_after_you: Rooms.posted_after_key(fleet_id, token_id),
+         mentions: mentions
        }}
     else
       nil ->
@@ -482,7 +491,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
            reviews: [],
            reviews_waiting: 0,
            goals: [],
-           posted_after_you: []
+           posted_after_you: [],
+           mentions: %{posts: [], next_cursor: mentions_after, has_more: false}
          }}
 
       error ->

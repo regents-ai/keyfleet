@@ -12,6 +12,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   marked with its profile as `via_agent_profile`. In the People and agents
   room (`Keyfleet.Rooms.Room.people_slug/0`) someone without a key writes as
   themselves: a person from their account's wallet, an agent from its own.
+  A post keeps the Keys its words mention (`Keyfleet.Rooms.Mentions`).
 
   A sender names every post with a key of its own. If the same key arrives again
   with the same words, the room keeps the post it already has and answers with
@@ -29,6 +30,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
+  alias Keyfleet.Rooms.Mentions
   alias Keyfleet.Rooms.Room
   alias Keyfleet.Rooms.Sequence
 
@@ -131,6 +133,7 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
             seq: seq(room, earlier),
             body: body,
             body_digest: digest(body),
+            mentions: mentions(kind, body),
             idempotency_key: idempotency_key,
             reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id),
             quote_request_id: Ash.Changeset.get_argument(changeset, :quote_request_id)
@@ -193,6 +196,11 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
       agent_profile_id: nil,
       via_agent_profile_id: via
     }
+
+  # A post asks something of the Keys its words mention; a room's naming line
+  # asks nothing.
+  defp mentions(:post, body), do: Mentions.parse(body)
+  defp mentions(:room_named, _body), do: []
 
   defp digest(body), do: :sha256 |> :crypto.hash(body) |> Base.encode16(case: :lower)
 

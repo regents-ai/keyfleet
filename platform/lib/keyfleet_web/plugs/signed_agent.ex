@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
   @body_fields [
-    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes max_bytes)}},
+    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes mentions max_bytes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@project_start_path, {~w(as_key name title), []}},
     {@project_archive_path, {~w(as_key), []}},
@@ -1344,14 +1344,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # Keys' walls are followed only when `keys` names them, direct messages
   # only when `dms` names a place in each Key's, and the person's requests to
-  # quote them only when `quotes` does.
+  # quote them only when `quotes` does. The Key's mentions are read on from
+  # `mentions`' cursor when it names one, and over the last week otherwise.
   # A body that doesn't fit is refused as that before one with a place out of
   # range.
   defp check_sync_body(params) do
     checks = [
       check_sync_rooms(params),
       check_key_cursors(Map.get(params, "keys", []), @max_sync_walls),
-      check_sync_dms(params)
+      check_sync_dms(params),
+      check_sync_mentions(params)
     ]
 
     cond do
@@ -1387,15 +1389,27 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_sync_rooms(_params), do: :invalid
 
   # The sync body names its rooms, graph, proposals and run, and may name keys,
-  # direct messages and quotes; each part is shaped as its cursor is.
+  # direct messages, quotes and mentions; each part is shaped as its cursor is.
   defp sync_shape?(params, rooms, graph, others, run) do
-    map_size(Map.drop(params, ["keys", "dms", "quotes"])) == 4 and
+    map_size(Map.drop(params, ["keys", "dms", "quotes", "mentions"])) == 4 and
       Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph) and
       Enum.all?(others, &log_cursor?/1) and run?(run)
   end
 
   defp check_sync_dms(%{"dms" => dms}), do: check_dm_cursors(dms)
   defp check_sync_dms(_params), do: :ok
+
+  # A cursor a sync answered in `yours.mentions.next_cursor`, unchanged, or null.
+  defp check_sync_mentions(%{"mentions" => %{"after" => cursor} = mentions})
+       when map_size(mentions) == 1 do
+    case KeyfleetWeb.MentionJSON.opened(cursor) do
+      {:ok, _place} -> :ok
+      :error -> :invalid
+    end
+  end
+
+  defp check_sync_mentions(%{"mentions" => _mentions}), do: :invalid
+  defp check_sync_mentions(_params), do: :ok
 
   # A proposal is named by its number, and its votes are read on from a place.
   defp check_proposal_read_body(%{"number" => number, "votes_after_seq" => after_seq} = params)
