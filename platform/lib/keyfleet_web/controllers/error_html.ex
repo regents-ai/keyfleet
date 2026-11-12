@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.ErrorHTML do
         <link rel="stylesheet" href={~p"/assets/js/app.css"} />
       </head>
       <body>
-        <Regent.Utility.page title={@title} context="Keyfleet" id="error-page">
+        <Regent.Utility.page title={@title} id="error-page">
           <p :if={@retry}>It’s on our side. Try again in a moment.</p>
           <:actions>
             <a :if={@retry} class="rg-button rg-button--primary" href="">Try again</a>

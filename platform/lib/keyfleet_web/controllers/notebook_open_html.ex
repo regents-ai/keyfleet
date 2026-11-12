@@ -22,7 +22,6 @@ defmodule KeyfleetWeb.NotebookOpenHTML do
       <body>
         <Regent.Utility.page
           title={if @by_itself?, do: "Opening notebooks", else: "Open notebooks"}
-          context={@fleet_name}
           id="notebook-entry-page"
         >
           <p :if={!@by_itself?}>
