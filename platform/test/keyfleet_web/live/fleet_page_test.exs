@@ -50,6 +50,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     # but a member draws from the reading the test takes (`read_now/1`).
     Enum.each(Fleets.catalog_ids(), &SharedReading.delete(FleetNow.key(&1)))
 
+    # Nor its proposals: a test's own read of them (`FleetProposals.read/1`)
+    # outlives its database, and the bar counts the open ones.
+    for kind <- [:fleet_proposals, :fleet_treasury, :proposal],
+        id <- SharedReading.ids(kind),
+        do: SharedReading.delete({kind, id})
+
     %{conn: signed_in(conn)}
   end
 
