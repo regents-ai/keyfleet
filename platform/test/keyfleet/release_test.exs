@@ -219,6 +219,7 @@ defmodule Keyfleet.ReleaseTest do
              "key_presences",
              "key_reveal_expiries",
              "key_reveals",
+             "left_messages",
              "linked_identities",
              "messages",
              "mutes",
