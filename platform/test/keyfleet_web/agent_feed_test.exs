@@ -7,6 +7,7 @@ defmodule KeyfleetWeb.AgentFeedTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.ContractSchema
   alias Keyfleet.Dms
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -113,8 +114,10 @@ defmodule KeyfleetWeb.AgentFeedTest do
     quiet!(feed)
   end
 
-  test "the agent never hears another Key's messages, a muted Key's posts or its own posts", c do
+  test "the agent never hears another Key's messages, a muted Key's posts, a blocked Key's messages or its own posts",
+       c do
     Rooms.mute_key!(@fleet, 3, actor: c.me)
+    Dms.block_key!(@fleet, 2, 1, actor: human("b"))
     feed = open!(c, c.signer)
 
     post!(c.c, "general", "From a Key it muted")
@@ -122,6 +125,7 @@ defmodule KeyfleetWeb.AgentFeedTest do
     post!(c.me, "general", "Its own post")
     wall!(c.a, 3, "On another Key's wall")
     dm!(human("a"), 1, 3, "To another Key")
+    dm!(human("a"), 1, 2, "From a Key it blocked")
     heard = post!(c.a, "general", "Heard")
 
     assert {[%{data: %{"kind" => "room_post", "id" => id}}], feed} = take(feed, 1)
@@ -213,7 +217,10 @@ defmodule KeyfleetWeb.AgentFeedTest do
         spawn_holder("0x" <> String.pad_leading(Integer.to_string(n), 40, "0"))
       end
 
-    assert refused!(c, c.signer).status == 503
+    full = refused!(c, c.signer)
+    assert full.status == 503
+    assert full.body["error"]["code"] == "feed_full"
+    assert ContractSchema.response_errors(full.body, "GET", @path, 503) == []
 
     Process.exit(hd(holders), :kill)
     wait_until(fn -> Registry.count(KeyfleetWeb.OpenFeeds) < 200 end)
@@ -222,7 +229,9 @@ defmodule KeyfleetWeb.AgentFeedTest do
   end
 
   test "an unsigned request is refused", c do
-    assert Req.get!(c.site <> @path, retry: false).status == 401
+    unsigned = Req.get!(c.site <> @path, retry: false)
+    assert unsigned.status == 401
+    assert ContractSchema.response_errors(unsigned.body, "GET", @path, 401) == []
   end
 
   ## The feed, read as a client reads it
@@ -272,8 +281,12 @@ defmodule KeyfleetWeb.AgentFeedTest do
     lines = String.split(frame, "\n")
 
     case for("data: " <> data <- lines, do: Jason.decode!(data)) do
-      [data] -> %{id: Enum.find_value(lines, fn line -> match_id(line) end), data: data}
-      [] -> nil
+      [data] ->
+        assert ContractSchema.errors(data, "FeedEvent") == []
+        %{id: Enum.find_value(lines, fn line -> match_id(line) end), data: data}
+
+      [] ->
+        nil
     end
   end
 

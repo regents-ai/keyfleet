@@ -126,6 +126,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/shards",
              "/api/v1/avatar/upload/{ticket}",
              "/api/v1/docs",
+             "/api/v1/feed",
              "/api/v1/fleets",
              "/api/v1/fleets/{fleet_id}",
              "/api/v1/fleets/{fleet_id}/proposals",
