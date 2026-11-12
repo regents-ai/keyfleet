@@ -48,6 +48,7 @@ defmodule Keyfleet.Proposals.Words do
       return_skipped_upsert? true
       change Keyfleet.Proposals.Changes.Fingerprint
       change Keyfleet.Proposals.Changes.LimitWords
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
     end
   end
 

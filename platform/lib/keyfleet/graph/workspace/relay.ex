@@ -55,13 +55,15 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   end
 
   @doc """
-  The command a write carries, read at the write's turn: the actor's standing
-  on the Key it acts as (`Keyfleet.Graph.Checks.KeyActor.command/5`) and
+  The command a write carries, read at the write's turn, inside the writer's
+  transaction that lasts until the graph has answered: the actor's standing
+  on the Key it acts as, an agent's pairing held until then
+  (`Keyfleet.Graph.Checks.KeyActor.held_command/5`), and
   `projects`, each of the fleet's projects that is not deleted by name, with
   its state, `active` or `archived`.
   """
   def command(actor, fleet_id, as_key, command_id, within) do
-    with {:ok, command} <- KeyActor.command(actor, fleet_id, as_key, command_id, within),
+    with {:ok, command} <- KeyActor.held_command(actor, fleet_id, as_key, command_id, within),
          {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}) do
       {:ok, Map.put(command, :projects, Map.new(projects, &{&1.name, &1.state}))}
     end

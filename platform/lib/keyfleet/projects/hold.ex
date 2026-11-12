@@ -3,9 +3,9 @@ defmodule Keyfleet.Projects.Hold do
   Starts, archives, takes over and deletes a project as one of the fleet's
   Keys, shows its page's work to everyone or to members only, and describes
   it (`Keyfleet.Projects.Project`). The actor acts as the Key the same way
-  a workspace write does (`Keyfleet.Graph.Checks.KeyActor`); then, in one
-  transaction, the step is checked against the projects the Key holds and
-  made. A refusal says why in words that name the project
+  a workspace write does (`Keyfleet.Graph.Checks.KeyActor`), read in the
+  one transaction in which the step is checked against the projects the Key
+  holds and made, an agent's pairing held until it commits. A refusal says why in words that name the project
   (`Keyfleet.Projects.Errors.HoldError`).
 
   The database keeps each rule even when two steps run at once: one active
@@ -41,9 +41,12 @@ defmodule Keyfleet.Projects.Hold do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
     step = Keyword.fetch!(opts, :step)
 
-    with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within),
-         {:ok, project} <-
-           Ash.transact(Project, fn -> step(step, fleet_id, key, input.arguments) end) do
+    held_step = fn ->
+      with {:ok, _command} <- KeyActor.held_command(actor, fleet_id, key, nil, within),
+           do: step(step, fleet_id, key, input.arguments)
+    end
+
+    with {:ok, project} <- Ash.transact(Project, held_step) do
       if step == :delete, do: Notebooks.end_access(fleet_id)
       {:ok, project}
     end

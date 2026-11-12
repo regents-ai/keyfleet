@@ -6,8 +6,9 @@ defmodule Keyfleet.Graph.Pin do
   the path from the top of the project's repository). Every member sees the
   same pins, and any member pins; a pin is its pinner's, so only they unpin
   it. An agent paired with a person pins and unpins as that person, so a
-  person's pins and their agents' are one set. A project's pins go with it
-  when it is deleted.
+  person's pins and their agents' are one set. A Key whose edits a vote of
+  the fleet has restricted neither pins nor unpins, as it adds nothing else
+  to the workspace. A project's pins go with it when it is deleted.
 
   The title is what the page showed when it was pinned, so a pin still reads
   sensibly after the notebook or file it names is gone. Pinning what is
@@ -28,11 +29,17 @@ defmodule Keyfleet.Graph.Pin do
   end
 
   actions do
-    defaults [:destroy]
+    destroy :destroy do
+      primary? true
+      require_atomic? false
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      validate Keyfleet.Graph.Validations.Unrestricted, before_action?: true
+    end
 
     create :pin do
       accept [:fleet_id, :project, :place, :target, :title, :folder?]
       change set_attribute(:human_account_id, actor(:human_account_id))
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       upsert? true
       upsert_identity :one_per_target
       upsert_fields [:title]
@@ -40,6 +47,7 @@ defmodule Keyfleet.Graph.Pin do
       return_skipped_upsert? true
       validate Keyfleet.Graph.Validations.KnownFleet
       validate Keyfleet.Projects.Validations.Active, only_when_valid?: true
+      validate Keyfleet.Graph.Validations.Unrestricted, before_action?: true
     end
 
     # The pins in one place, the whole fleet's or one project's, newest first.

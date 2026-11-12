@@ -525,6 +525,17 @@ defmodule Keyfleet.Notebooks do
     with {:ok, space} <- open_space(fleet_id, project),
          :ok <- unrestricted(actor, fleet_id),
          :ok <- creator(fleet_id, actor, subject, space, notebook_id) do
+      Keyfleet.Repo.transaction(fn ->
+        switch(actor, fleet_id, notebook_id, locked?)
+      end)
+    end
+  end
+
+  # Saved with an agent's pairing held until it commits and the Key's edits
+  # read again in the same transaction.
+  defp switch(actor, fleet_id, notebook_id, locked?) do
+    with :ok <- held(actor),
+         :ok <- unrestricted(actor, fleet_id) do
       Setting
       |> Ash.Changeset.for_create(
         :switch,
@@ -533,8 +544,14 @@ defmodule Keyfleet.Notebooks do
       )
       |> Ash.create!()
 
-      {:ok, %{notebook_id: notebook_id, locked: locked?}}
+      %{notebook_id: notebook_id, locked: locked?}
+    else
+      {:error, reason} -> Keyfleet.Repo.rollback(reason)
     end
+  end
+
+  defp held(actor) do
+    with {:error, _not_paired} <- KeyActor.hold_pairing(actor), do: {:error, :not_holder}
   end
 
   defp creator(fleet_id, actor, subject, space, notebook_id) do

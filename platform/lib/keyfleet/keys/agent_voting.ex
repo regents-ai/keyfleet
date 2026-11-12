@@ -102,6 +102,16 @@ defmodule Keyfleet.Keys.AgentVoting do
               identity: [:transaction_hash, :log_index], number: :shard_seq, block: :block_number}
     end
 
+    # A key's latest setting, whichever ownership it was made in.
+    read :latest_of_key do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @max_bigint]
+      filter expr(fleet_id == ^arg(:fleet_id) and token_id == ^arg(:token_id))
+      prepare build(sort: [record_seq: :desc], limit: 1)
+      get? true
+    end
+
     # What was recorded from a stretch of the fleet's blocks, so a second
     # reading of the same stretch can be checked against it.
     read :recorded_in_blocks do

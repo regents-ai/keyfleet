@@ -107,7 +107,7 @@ defmodule Keyfleet.Polls.Vote do
 
   policies do
     policy action(:cast) do
-      authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
+      authorize_if {Keyfleet.Polls.Checks.Standing, role: :voter}
     end
 
     policy action([:in_poll, :mine]) do

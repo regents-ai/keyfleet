@@ -69,6 +69,7 @@ defmodule Keyfleet.Agents do
     end
   end
 
+  alias Ash.Error.Changes.StaleRecord
   alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, CheckInStatus, Checkpoint, DeleteAvatar}
 
   @doc """
@@ -90,15 +91,22 @@ defmodule Keyfleet.Agents do
     |> Ash.Query.filter(revision == ^expected_revision)
     |> Ash.bulk_update(:save, %{state: state},
       actor: actor,
-      strategy: [:atomic],
+      strategy: [:stream],
       return_records?: true,
       return_errors?: true
     )
     |> case do
       %Ash.BulkResult{status: :success, records: [checkpoint]} -> {:ok, checkpoint}
       %Ash.BulkResult{status: :success, records: []} -> stale_or(nil, actor, fleet_id)
-      %Ash.BulkResult{errors: [error | _rest]} -> {:error, error}
+      %Ash.BulkResult{errors: [error | _rest]} -> saved_since(error, actor, fleet_id)
     end
+  end
+
+  # Another save made the next revision between this one's read and its write.
+  defp saved_since(error, actor, fleet_id) do
+    if Enum.any?(List.wrap(Map.get(error, :errors, error)), &is_struct(&1, StaleRecord)),
+      do: stale_or(nil, actor, fleet_id),
+      else: {:error, error}
   end
 
   # A first save that found one already kept, or a later one from another

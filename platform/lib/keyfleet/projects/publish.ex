@@ -2,7 +2,9 @@ defmodule Keyfleet.Projects.Publish do
   @moduledoc """
   Makes something public as one of the fleet's Keys, and takes it back
   (`Keyfleet.Projects.Publication`). The actor acts as the Key the same way a
-  workspace write does (`Keyfleet.Graph.Checks.KeyActor`).
+  workspace write does (`Keyfleet.Graph.Checks.KeyActor`), read again in
+  the transaction that saves the step, an agent's pairing held until it
+  commits.
 
   Posts are made public into an active project of the fleet, from one of the
   fleet's rooms (never a Key's thread), over a range of at most
@@ -44,10 +46,27 @@ defmodule Keyfleet.Projects.Publish do
     %{fleet_id: fleet_id, as_key: key} = input.arguments
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 
-    with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within) do
-      step(Keyword.fetch!(opts, :step), fleet_id, key, input.arguments, actor)
+    with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within),
+         {:ok, change} <- step(Keyword.fetch!(opts, :step), fleet_id, key, input.arguments, actor) do
+      Ash.transact(Publication, fn -> held_save(change, actor, fleet_id, key, within) end)
     end
   end
+
+  # What a step makes is saved with the actor's standing read again in its
+  # transaction, an agent's pairing held until it commits.
+  defp held_save(change, actor, fleet_id, key, within) do
+    with {:ok, _command} <- KeyActor.held_command(actor, fleet_id, key, nil, within),
+         {:ok, saved} <- save(change),
+         do: saved
+  end
+
+  defp save(%Ash.Changeset{action_type: :create} = change), do: Ash.create(change)
+
+  defp save(%Ash.Changeset{action_type: :destroy} = change),
+    do: Ash.destroy(change, return_destroyed?: true)
+
+  defp record(attributes),
+    do: {:ok, Ash.Changeset.for_create(Publication, :record, attributes, actor: @system)}
 
   defp step(:posts, fleet_id, key, %{project: project, room: room} = arguments, _actor) do
     %{from_seq: from, to_seq: to} = arguments
@@ -57,22 +76,16 @@ defmodule Keyfleet.Projects.Publish do
          :ok <- room(fleet_id, room),
          {:ok, %{owner_wallet: owner}} <- held(fleet_id, key),
          :ok <- written(fleet_id, room, from, to, key, owner) do
-      Publication
-      |> Ash.Changeset.for_create(
-        :record,
-        %{
-          fleet_id: fleet_id,
-          project: project,
-          key: key,
-          author_wallet: owner,
-          kind: :posts,
-          room: room,
-          from_seq: from,
-          to_seq: to
-        },
-        actor: @system
-      )
-      |> Ash.create()
+      record(%{
+        fleet_id: fleet_id,
+        project: project,
+        key: key,
+        author_wallet: owner,
+        kind: :posts,
+        room: room,
+        from_seq: from,
+        to_seq: to
+      })
     end
   end
 
@@ -82,20 +95,14 @@ defmodule Keyfleet.Projects.Publish do
          :ok <- once(Projects.item_publication(fleet_id, id, actor: @system), "item"),
          {:ok, %{owner_wallet: owner, ownership_epoch: epoch}} <- held(fleet_id, key),
          :ok <- added(object, key, epoch) do
-      Publication
-      |> Ash.Changeset.for_create(
-        :record,
-        %{
-          fleet_id: fleet_id,
-          project: object.project,
-          key: key,
-          author_wallet: owner,
-          kind: :item,
-          item: id
-        },
-        actor: @system
-      )
-      |> Ash.create()
+      record(%{
+        fleet_id: fleet_id,
+        project: object.project,
+        key: key,
+        author_wallet: owner,
+        kind: :item,
+        item: id
+      })
     end
   end
 
@@ -107,20 +114,14 @@ defmodule Keyfleet.Projects.Publish do
          :ok <- active(fleet_id, project),
          :ok <- once(Projects.page_publication(fleet_id, path, actor: @system), "page"),
          {:ok, %{owner_wallet: owner}} <- held(fleet_id, key) do
-      Publication
-      |> Ash.Changeset.for_create(
-        :record,
-        %{
-          fleet_id: fleet_id,
-          project: project,
-          key: key,
-          author_wallet: owner,
-          kind: :page,
-          page: path
-        },
-        actor: @system
-      )
-      |> Ash.create()
+      record(%{
+        fleet_id: fleet_id,
+        project: project,
+        key: key,
+        author_wallet: owner,
+        kind: :page,
+        page: path
+      })
     end
   end
 
@@ -131,28 +132,21 @@ defmodule Keyfleet.Projects.Publish do
          :ok <-
            once(Projects.commit_publication(fleet_id, project, hash, actor: @system), "commit"),
          {:ok, %{owner_wallet: owner}} <- held(fleet_id, key) do
-      Publication
-      |> Ash.Changeset.for_create(
-        :record,
-        %{
-          fleet_id: fleet_id,
-          project: project,
-          key: key,
-          author_wallet: owner,
-          kind: :commit,
-          commit_hash: hash
-        },
-        actor: @system
-      )
-      |> Ash.create()
+      record(%{
+        fleet_id: fleet_id,
+        project: project,
+        key: key,
+        author_wallet: owner,
+        kind: :commit,
+        commit_hash: hash
+      })
     end
   end
 
   defp step(:withdraw, fleet_id, key, %{id: id}, _actor) do
     case Ash.get(Publication, id, actor: @system, not_found_error?: false) do
       {:ok, %{fleet_id: ^fleet_id, key: ^key} = publication} ->
-        with :ok <- Ash.destroy(publication, action: :remove, actor: @system),
-             do: {:ok, publication}
+        {:ok, Ash.Changeset.for_destroy(publication, :remove, %{}, actor: @system)}
 
       {:ok, %{fleet_id: ^fleet_id} = publication} ->
         refuse(

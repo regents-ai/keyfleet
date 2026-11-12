@@ -119,6 +119,11 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :from_block, :to_block]
 
       define :agent_voting_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+
+      define :latest_agent_voting,
+        action: :latest_of_key,
+        args: [:fleet_id, :token_id],
+        not_found_error?: false
     end
 
     resource Keyfleet.Keys.Presence do
@@ -204,6 +209,35 @@ defmodule Keyfleet.Keys do
     with {:ok, latest} <- latest_edits_restrictions(fleet_id, [token_id], opts) do
       {:ok, match?([%{restricted: true}], latest)}
     end
+  end
+
+  @doc """
+  Whether `wallet` governs the fleet's key `token_id` now, as the shards
+  contract's `mayGovern` answers it on the chain, read from Keyfleet's record
+  of it: the wallet holding the key does; another wallet does while it holds
+  an active shard of the key and the key's agent voting is on. A new owner
+  starts with agent voting on, and only the owner turns it off for the
+  ownership it is in (`Keyfleet.Keys.AgentVoting`).
+  """
+  def governs?(fleet_id, token_id, wallet) do
+    case current_key!(fleet_id, token_id) do
+      %{owner_wallet: ^wallet} ->
+        true
+
+      %{ownership_epoch: epoch} ->
+        active_shard!(fleet_id, token_id, wallet) != nil and
+          agent_voting?(fleet_id, token_id, epoch)
+
+      nil ->
+        false
+    end
+  end
+
+  defp agent_voting?(fleet_id, token_id, epoch) do
+    not match?(
+      %{allowed: false, ownership_epoch: ^epoch},
+      latest_agent_voting!(fleet_id, token_id)
+    )
   end
 
   @doc """
@@ -492,12 +526,13 @@ defmodule Keyfleet.Keys do
   `%{token_id: token_id, ownership_epoch: epoch, wallet: wallet, for_person: boolean}`,
   the epoch being the key's current one, by the same rule
   as `identity/2`: a person is every key their wallets hold, with the wallet
-  holding it; an agent is every key its wallet holds and every key it holds an
-  active shard of, with its own wallet, and the key its person put it on
-  while it stands there (`placed_on?/3`), `for_person: true` with the wallet holding it;
-  an agent with none of these, paired with a person here, is that person's
-  keys, `for_person: true`. So an agent on a key acts as that key alone, and
-  agents on different keys stay apart.
+  holding it. An agent is every key its wallet holds, with its own wallet,
+  and then no other; an agent whose wallet holds none is every key it holds
+  an active shard of, with its own wallet, and the key its person put it on
+  while it stands there (`placed_on?/3`), `for_person: true` with the wallet
+  holding it; an agent with none of these, paired with a person here, is
+  that person's keys, `for_person: true` (`agent_keys/3`). So an agent on a
+  key acts as that key alone, and agents on different keys stay apart.
   Nobody else is any key. Direct messages read and send as these keys
   (`Keyfleet.Dms`): a key's new holder sees only messages from when they got it.
   """
@@ -513,30 +548,56 @@ defmodule Keyfleet.Keys do
 
   def held_keys(%Agent{} = actor, fleet_id) do
     case Agent.refresh(actor) do
-      {:ok, actor} -> agent_keys(actor, fleet_id)
+      {:ok, actor} -> agent_keys!(actor, fleet_id)
       _ -> []
     end
   end
 
   def held_keys(_actor, _fleet_id), do: []
 
-  # Its own Keys, the Key its person put it on and its shards' Keys, each
-  # once, lowest first, with the wallet holding it; else its person's Keys.
-  defp agent_keys(%Agent{wallet_address: wallet} = actor, fleet_id) do
-    held = for key <- keys_held_in_fleet!(fleet_id, [wallet], actor: actor), do: {key, wallet}
-    assigned = for key <- List.wrap(assigned_key!(actor, fleet_id)), do: {key, key.owner_wallet}
+  @doc """
+  Every key the agent `actor` acts as in the fleet today, lowest first, as
+  `held_keys/2` gives them. A wallet that holds one of the fleet's keys acts
+  as its own keys alone, never as a shard's key or as its person. An agent
+  whose wallet holds none acts as the key its person put it on and every
+  key it holds an active shard of; an agent with neither, paired with a
+  person here, as its person's keys.
 
-    sharded =
-      for shard <- active_shards_held_by!(wallet, actor: actor),
-          shard.fleet_id == fleet_id,
-          do: {shard, wallet}
+  This is the one rule for it: the workspace asks it for the key a write
+  names (`Keyfleet.Graph.Checks.KeyActor`) and direct messages list it
+  (`held_keys/2`). `opts` go with each read, such as a check's time limit.
+  `{:ok, keys}` or `{:error, error}`.
+  """
+  def agent_keys(%Agent{wallet_address: wallet} = actor, fleet_id, opts \\ []) do
+    case keys_held_in_fleet(fleet_id, [wallet], [actor: actor] ++ opts) do
+      {:ok, []} -> delegated_keys(actor, fleet_id, opts)
+      {:ok, own} -> {:ok, Enum.map(own, &agent_key(&1, wallet, false))}
+      {:error, error} -> {:error, error}
+    end
+  end
 
-    (held ++ assigned ++ sharded)
-    |> Enum.sort_by(&elem(&1, 0).token_id)
-    |> Enum.uniq_by(&elem(&1, 0).token_id)
-    |> case do
-      [] -> person_keys(actor.pairing, fleet_id)
-      keys -> Enum.map(keys, fn {key, owner} -> agent_key(key, owner, owner != wallet) end)
+  defp agent_keys!(actor, fleet_id) do
+    case agent_keys(actor, fleet_id) do
+      {:ok, keys} -> keys
+      {:error, error} -> raise Ash.Error.to_error_class(error)
+    end
+  end
+
+  # The Key its person put it on and its shards' Keys, each once, with the
+  # wallet holding it; else its person's Keys.
+  defp delegated_keys(%Agent{wallet_address: wallet} = actor, fleet_id, opts) do
+    with {:ok, assigned} <- assigned_key(actor, fleet_id, opts),
+         {:ok, shards} <- active_shards_held_by(wallet, [actor: actor] ++ opts) do
+      assigned = for key <- List.wrap(assigned), do: agent_key(key, key.owner_wallet, true)
+      sharded = for %{fleet_id: ^fleet_id} = shard <- shards, do: agent_key(shard, wallet, false)
+
+      (assigned ++ sharded)
+      |> Enum.sort_by(& &1.token_id)
+      |> Enum.uniq_by(& &1.token_id)
+      |> case do
+        [] -> person_keys(actor.pairing, fleet_id, opts)
+        keys -> {:ok, keys}
+      end
     end
   end
 
@@ -964,10 +1025,12 @@ defmodule Keyfleet.Keys do
       for_person: for_person?
     }
 
-  defp person_keys(%Human{} = person, fleet_id),
-    do: Enum.map(held_keys(person, fleet_id), &%{&1 | for_person: true})
+  defp person_keys(%Human{wallet_addresses: [_ | _] = wallets} = person, fleet_id, opts) do
+    with {:ok, keys} <- keys_held_in_fleet(fleet_id, wallets, [actor: person] ++ opts),
+         do: {:ok, Enum.map(keys, &agent_key(&1, &1.owner_wallet, true))}
+  end
 
-  defp person_keys(_missing, _fleet_id), do: []
+  defp person_keys(_missing, _fleet_id, _opts), do: {:ok, []}
 
   defp active_shard_in(fleet_id, wallet, actor),
     do: Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))

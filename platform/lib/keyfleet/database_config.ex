@@ -26,10 +26,10 @@ defmodule Keyfleet.DatabaseConfig do
   # as small as its work allows. The site machine serves pages and jobs from
   # five. The graph machine runs only the fleets' writers and projectors: a
   # projector holds one connection for each page of its fleet's log, about ten
-  # statements, and a writer's ownership check takes one for each single-row
-  # read, one read at a time. Neither holds a connection while it waits on the
-  # other, so three serve all five fleets. A check that cannot get a connection
-  # within its budget (the graph's :check_timeout) sends nothing.
+  # statements, and a writer holds one from its ownership check until its
+  # host has answered, so an agent's pairing stays locked across the write
+  # (`Keyfleet.Graph.Writer`); a host answers in milliseconds, so three serve
+  # all five fleets. A write that cannot get a connection sends nothing.
   @site_pool_size 5
   @graph_pool_size 3
 

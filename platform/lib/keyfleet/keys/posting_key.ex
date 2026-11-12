@@ -32,6 +32,7 @@ defmodule Keyfleet.Keys.PostingKey do
     create :choose do
       accept [:fleet_id, :token_id]
       change set_attribute(:human_account_id, actor(:human_account_id))
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       upsert? true
       upsert_identity :one_per_fleet
       upsert_fields [:token_id, :updated_at]

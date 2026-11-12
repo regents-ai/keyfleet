@@ -125,23 +125,26 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Answer do
       folder: pin.folder?
     }
 
-  # Only the fleet's members pin in its workspace, and who they are can't be
-  # read while the fleet's key ownership is not fresh.
-  defp refuse(%Ash.Error.Forbidden{}, fleet_id) do
+  # A write the workspace refused names its refusal, a restricted Key's
+  # included. Otherwise only the fleet's members pin in its workspace, and who
+  # they are can't be read while the fleet's key ownership is not fresh; any
+  # other invalid input is the request's, and anything else is a fault,
+  # raised as one.
+  defp refuse(%{errors: errors} = error, fleet_id) do
+    case Enum.find_value(errors, &WorkspaceRefusal.for_error/1) do
+      {status, body} -> {status, body, nil}
+      nil -> unnamed(error, fleet_id)
+    end
+  end
+
+  defp unnamed(%Ash.Error.Forbidden{}, fleet_id) do
     if Keyfleet.Chain.fresh?(fleet_id),
       do: refusal(403, "workspace_members_only"),
       else: refusal(503, "ownership_refreshing")
   end
 
-  # A write the workspace refused names its refusal; any other invalid input
-  # is the request's, and anything else is a fault, raised as one.
-  defp refuse(%{errors: errors} = error, _fleet_id) do
-    case Enum.find_value(errors, &WorkspaceRefusal.for_error/1) do
-      {status, body} -> {status, body, nil}
-      nil when is_struct(error, Ash.Error.Invalid) -> refusal(422, "invalid_request")
-      nil -> raise error
-    end
-  end
+  defp unnamed(%Ash.Error.Invalid{}, _fleet_id), do: refusal(422, "invalid_request")
+  defp unnamed(error, _fleet_id), do: raise(error)
 
   defp refusal(status, code) do
     {status, body} = WorkspaceRefusal.refusal(status, code)

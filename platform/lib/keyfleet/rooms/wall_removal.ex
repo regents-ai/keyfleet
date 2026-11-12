@@ -71,6 +71,7 @@ defmodule Keyfleet.Rooms.WallRemoval do
       upsert_condition expr(false)
       return_skipped_upsert? true
       change Keyfleet.Rooms.Changes.OffItsWall
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
     end
 
     # The posts off one Key's wall.

@@ -79,6 +79,21 @@ defmodule Keyfleet.PostingKeyTest do
     assert post!(writer, "Still") |> written_as() == {41, wallet("b")}
   end
 
+  # The request read the agent while it was still paired; the choice reads
+  # the pairing again as it is saved.
+  test "an agent unpaired after its request was read chooses nothing", %{writer: writer} do
+    person = %RegentAgents.Person{privy_user_id: writer.privy_user_id}
+    {:ok, agents} = RegentAgents.list_my_agents(actor: person)
+
+    :ok =
+      RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == writer.wallet_address)),
+        actor: person
+      )
+
+    assert {:error, %Ash.Error.Invalid{}} = Keys.choose_posting_key(@fleet, 41, actor: writer)
+    assert Keys.posting_key(@fleet, actor: writer.pairing) == {:ok, nil}
+  end
+
   defp post!(actor, body) do
     {:ok, message} =
       Rooms.send_message(

@@ -105,6 +105,24 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, fleet, 1, "c-1", 1_000)
   end
 
+  # The Keys an agent is offered to act as are the ones its writes are let
+  # through as: a wallet holding a Key of its own acts as that alone.
+  test "an agent whose own wallet holds a Key acts as that Key alone, in what it is offered and what it writes" do
+    fleet = "fleet_tech_classic"
+    sell(fleet, 1..2)
+    paired = Keyfleet.PairingHelpers.pair!(agent("9"), owner(1).wallet_addresses)
+    record!(fleet, 3, paired.wallet_address)
+    ChainHelpers.issue_shard!(fleet, 2, paired.wallet_address)
+
+    assert Enum.map(Keys.held_keys(paired, fleet), & &1.token_id) == [3]
+    assert {:ok, _command} = KeyActor.command(paired, fleet, 3, "c-1", 1_000)
+
+    for token_id <- [1, 2] do
+      assert {:error, %NotKeyHolderError{}} =
+               KeyActor.command(paired, fleet, token_id, "c-1", 1_000)
+    end
+  end
+
   defp agent(character),
     do: %Actors.Agent{
       wallet_address: "0x" <> String.duplicate(character, 40),
@@ -119,22 +137,24 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
   defp wallet(token_id), do: "0x" <> String.pad_leading(Integer.to_string(token_id), 40, "0")
 
   defp sell(fleet, token_ids) do
-    for token_id <- token_ids do
-      Keys.record_epoch!(
-        %{
-          fleet_id: fleet,
-          token_id: token_id,
-          ownership_epoch: 1,
-          owner_wallet: wallet(token_id),
-          block_number: 10,
-          block_hash: "0x" <> String.duplicate("a", 64),
-          transaction_hash:
-            "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}"), case: :lower),
-          log_index: 0
-        },
-        actor: %Actors.System{}
-      )
-    end
+    for token_id <- token_ids, do: record!(fleet, token_id, wallet(token_id))
+  end
+
+  defp record!(fleet, token_id, owner) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: fleet,
+        token_id: token_id,
+        ownership_epoch: 1,
+        owner_wallet: owner,
+        block_number: 10,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash:
+          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet}/#{token_id}"), case: :lower),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
   end
 
   defp transfer(fleet, token_id) do

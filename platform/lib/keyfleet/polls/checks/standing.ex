@@ -5,8 +5,11 @@ defmodule Keyfleet.Polls.Checks.Standing do
   agent paired with a person.
 
     * `role: :member`: anyone holding one of the fleet's Keys, or an active
-      shard of one, starts polls, votes, and once a poll closes reads each
-      Key's vote.
+      shard of one, starts polls and once a poll closes reads each Key's
+      vote.
+    * `role: :voter`: a member votes, except that an agent holding only a
+      shard of the Key votes while the Key's agent voting is on, as for the
+      fleet's proposals (`Keyfleet.Keys.governs?/3`).
     * `role: :starter`: only the Key that started a poll ends it early.
 
   Standing is read from the Keys and their shards every time, so a Key
@@ -15,6 +18,7 @@ defmodule Keyfleet.Polls.Checks.Standing do
   """
   use Ash.Policy.SimpleCheck
 
+  alias Keyfleet.Keys
   alias Keyfleet.Polls
 
   @impl true
@@ -25,19 +29,26 @@ defmodule Keyfleet.Polls.Checks.Standing do
     fleet_id = Ash.Subject.get_argument_or_attribute(subject, :fleet_id)
 
     with true <- is_binary(fleet_id) and Keyfleet.Chain.fresh?(fleet_id),
-         %{key: key} <- Polls.voter(actor, fleet_id) do
-      standing?(Keyword.fetch!(opts, :role), key, fleet_id, subject)
+         %{} = voter <- Polls.voter(actor, fleet_id) do
+      standing?(Keyword.fetch!(opts, :role), voter, fleet_id, subject)
     else
       _no_standing -> false
     end
   end
 
-  defp standing?(:member, _key, _fleet_id, _subject), do: true
+  defp standing?(:member, _voter, _fleet_id, _subject), do: true
 
-  defp standing?(:starter, key, fleet_id, %Ash.Changeset{
+  # An agent for its person votes as its person's Key; anyone else as the
+  # wallet the vote is cast from governs it.
+  defp standing?(:voter, %{for_person: true}, _fleet_id, _subject), do: true
+
+  defp standing?(:voter, %{key: key, wallet: wallet}, fleet_id, _subject),
+    do: Keys.governs?(fleet_id, key, wallet)
+
+  defp standing?(:starter, %{key: key}, fleet_id, %Ash.Changeset{
          data: %{started_by_key: key, fleet_id: fleet_id}
        }),
        do: true
 
-  defp standing?(:starter, _key, _fleet_id, _subject), do: false
+  defp standing?(:starter, _voter, _fleet_id, _subject), do: false
 end

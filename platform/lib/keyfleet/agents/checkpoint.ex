@@ -34,15 +34,18 @@ defmodule Keyfleet.Agents.Checkpoint do
     # The first save, as revision 1.
     create :start do
       accept [:fleet_id, :state]
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       change set_attribute(:wallet, actor(:wallet_address))
       change set_attribute(:revision, 1)
     end
 
-    # Every later save, as the next revision.
+    # Every later save, as the next revision, made only from the revision it
+    # read; the pairing lock it takes keeps it from being one statement.
     update :save do
-      require_atomic? true
+      require_atomic? false
       accept [:state]
-      change atomic_update(:revision, expr(revision + 1))
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+      change optimistic_lock(:revision)
     end
   end
 

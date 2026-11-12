@@ -56,16 +56,21 @@ defmodule Keyfleet.Polls do
   wallet: wallet}`, or nil: by `Keyfleet.Keys.identity/2`, so a person is the
   highest-ranked Key their wallets hold, an agent the Key its own wallet
   holds, the Key its person put it on or a Key it holds a shard of, and an
-  agent paired with a person here otherwise that person's Key. `wallet` is the one that acted: the agent's own, or the person's wallet
-  holding the Key.
+  agent paired with a person here otherwise that person's Key. `wallet` is
+  the one that acted: the agent's own, or the person's wallet holding the
+  Key. `for_person` says the agent takes part for its person.
   """
   def voter(actor, fleet_id) do
     case Keyfleet.Keys.identity(actor, fleet_id) do
       nil ->
         nil
 
-      %{token_id: token_id, wallet: wallet} ->
-        %{key: token_id, wallet: acting_wallet(actor, wallet)}
+      %{token_id: token_id, wallet: wallet} = identity ->
+        %{
+          key: token_id,
+          wallet: acting_wallet(actor, wallet),
+          for_person: Map.get(identity, :for_person, false)
+        }
     end
   end
 
