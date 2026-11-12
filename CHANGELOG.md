@@ -8294,3 +8294,16 @@ screen reader users were left on nothing, with reduced motion too.
 Check: `sea_lift.spec.ts` passes, and passes with reduced motion; before
 the change it failed at the same step both ways (reduced motion checked once
 by hand, not kept as a walk).
+
+## 2026-11-12 — The Vote walk votes on a proposal of its own
+
+In the full chain walks, the Vote walk in `wallet_keys.spec.ts` stopped
+before opening a page: `shell_links.spec.ts` runs first and gives the
+Syndicate proposal 1, and the walk recorded proposal 1 again.
+
+- `Keyfleet.BrowserChain.propose!/1` records the fleet's next proposal and
+  returns its number; the walk opens that proposal and checks the vote sent
+  names it.
+
+Check: the shell links and wallet Keys walks, run in that order, pass
+(8 passed).

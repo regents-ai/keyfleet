@@ -88,17 +88,17 @@ test("Mark present is held back while the chain shows the wallet no Key, and sen
 })
 
 test("Vote sends a Key that reached the wallet before the site recorded it", async ({page}) => {
-  propose(fleet)
+  const proposal = propose(fleet)
   const key = sellKey(fleet, stranger)
   moveKeyUnread(fleet, key, wallet)
-  const errors = await open(page, "/syndicate/1/proposals/1")
+  const errors = await open(page, `/syndicate/1/proposals/${proposal}`)
 
   const yes = page.locator("#proposal-vote-yes")
   await expect(yes).toBeEnabled()
   const sent = await pressTwice(page, yes)
   for (const {transaction} of sent) {
     expect(transaction.to.toLowerCase()).toBe(votesContract)
-    expect(transaction.data).toBe(voteYes(1, [key]))
+    expect(transaction.data).toBe(voteYes(proposal, [key]))
   }
   expect(errors).toEqual([])
 

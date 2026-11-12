@@ -66,8 +66,8 @@ export const moveKey = (fleet: string, key: number, owner: string) => void call(
 export const moveKeyUnread = (fleet: string, key: number, owner: string) =>
   void call("move_unread!", [fleet, key, owner])
 
-/** Records the fleet's proposal 1, open for a day. */
-export const propose = (fleet: string) => void call("propose!", [fleet])
+/** Records the fleet's next proposal, open for a day; returns its number. */
+export const propose = (fleet: string) => Number(call("propose!", [fleet]))
 
 /** A key has `atoms` USDC waiting from now on; any other key's rewards can't be read. */
 export const offerRewards = (fleet: string, key: number, atoms: number) =>

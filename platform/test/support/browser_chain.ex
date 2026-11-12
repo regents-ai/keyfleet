@@ -46,6 +46,7 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Proposals
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.SharedReading
@@ -318,10 +319,15 @@ defmodule Keyfleet.BrowserChain do
     )
   end
 
-  @doc "Records the fleet's proposal 1, open for a day, as the reader records one."
+  @doc """
+  Records the fleet's next proposal, open for a day, as the reader records
+  one; returns its number.
+  """
   def propose!(fleet_id) do
-    ProposalHelpers.proposal!(fleet_id, 1)
+    number = Proposals.highest_number!(fleet_id) + 1
+    ProposalHelpers.proposal!(fleet_id, number)
     reread()
+    number
   end
 
   @doc """
