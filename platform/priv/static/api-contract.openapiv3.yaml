@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 28.1.0
+  version: 28.2.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:

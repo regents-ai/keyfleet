@@ -7591,3 +7591,8 @@ agent's writes in turn, an agent's put crossing the person's move, a transfer
 during a put in both orders), `platform/test/keyfleet_web/agent_key_route_test.exs`,
 the gallery test in `platform/test/keyfleet_web/shell_live_test.exs` and
 `platform/test/browser/account_agents.spec.ts` in Chromium.
+
+Rebased onto fleet search (bfc9a9dd): the API contract is 28.2.0, since search
+took 28.1.0; the agent guides keep both the search and the agents-on-Keys
+sentences. Migration 20261111164247 gains a `down` that drops the table, as
+most of this repository's migrations have; there is no rule against one.

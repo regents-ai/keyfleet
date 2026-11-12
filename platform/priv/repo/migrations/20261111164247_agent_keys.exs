@@ -51,4 +51,8 @@ defmodule Keyfleet.Repo.Migrations.AgentKeys do
              """
            )
   end
+
+  def down do
+    drop(table(:agent_keys))
+  end
 end
