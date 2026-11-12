@@ -499,14 +499,14 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # An agent went onto or off one of the person's Keys on the Account page,
-  # which lists its Keys again, those with an agent first.
+  # which lists its Keys again, those with agents first.
   defp notice(
-         {KeyfleetWeb.KeyAgentChoice, :changed},
+         {KeyfleetWeb.KeyGallery, :changed},
          %{assigns: %{route_spec: %{route_id: :account}}} = socket
        ),
        do: {:noreply, read_key_agents(socket)}
 
-  defp notice({KeyfleetWeb.KeyAgentChoice, :changed}, socket), do: {:noreply, socket}
+  defp notice({KeyfleetWeb.KeyGallery, :changed}, socket), do: {:noreply, socket}
 
   # A Points award or correction landed for this account; the Points page follows.
   defp notice(

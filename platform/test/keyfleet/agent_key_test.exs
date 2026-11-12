@@ -1,16 +1,18 @@
 defmodule Keyfleet.AgentKeyTest do
   @moduledoc """
-  A person puts each of their paired agents on one of their Keys in a fleet.
-  The agent then writes as that Key, and holds it alone, while the person's
-  wallets hold it and that pairing lasts; their other agents and the person
-  keep the person's Key. A Key that changes hands, even between the person's
-  own wallets, loses its agent, which stays paired. Only the person, or an
-  agent of theirs, does it, only on a Key their wallets hold and only with an
-  agent paired with them now; an agent of theirs only puts an agent that is on
-  no Key onto a Key with none. A refused write changes nothing.
+  A person puts each of their paired agents on one of their Keys in a fleet;
+  a Key holds any number of them. The agent then writes as that Key, and as
+  no other, while the person's wallets hold it and that pairing lasts; their
+  other agents and the person keep the person's Key. A Key that changes hands,
+  even between the person's own wallets, loses its agents, which stay paired.
+  Only the person, or an agent of theirs, does it, only on a Key their wallets
+  hold and only with an agent paired with them now; an agent of theirs only
+  puts an agent that is on no Key in the fleet onto a Key, and only the person
+  moves one or takes one off. A refused write changes nothing.
   """
   use ExUnit.Case, async: false
 
+  alias Ash.Error.Changes.Required
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
@@ -79,7 +81,7 @@ defmodule Keyfleet.AgentKeyTest do
     assert listed_key(c.bolt) == 25
     assert Keys.identity(c.person, @fleet) == %{token_id: 25, wallet: wallet("a")}
 
-    assert on_keys(c.person) == %{41 => "Astra"}
+    assert on_keys(c.person) == %{41 => ["Astra"]}
   end
 
   # The workspace check: the agent first passes as its person's Key, then,
@@ -110,28 +112,41 @@ defmodule Keyfleet.AgentKeyTest do
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.astra)
 
     assert Keys.identity(c.bolt, @fleet) == %{token_id: 60, wallet: wallet("a"), for_person: true}
-    assert on_keys(c.astra) == %{60 => "Bolt"}
+    assert on_keys(c.astra) == %{60 => ["Bolt"]}
   end
 
-  test "putting an agent on another Key moves it, and a Key's new agent replaces the one there",
+  test "a Key holds several agents, each writing as it; putting one on another Key moves it",
        c do
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.person)
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("1"), actor: c.person)
 
-    assert on_keys(c.person) == %{60 => "Astra"}
+    assert on_keys(c.person) == %{60 => ["Astra"]}
     assert Keys.identity(c.astra, @fleet).token_id == 60
 
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.person)
 
-    assert on_keys(c.person) == %{60 => "Bolt"}
+    assert on_keys(c.person) == %{60 => ["Astra", "Bolt"]}
+
+    for agent <- [c.astra, c.bolt] do
+      assert Keys.identity(agent, @fleet) == %{
+               token_id: 60,
+               wallet: wallet("a"),
+               for_person: true
+             }
+
+      assert post!(agent, "On Key 60") |> written_as() == {60, wallet("a")}
+    end
+
+    # Taking one off leaves the other there.
+    assert :ok = Keys.release_agent(@fleet, c.astra.pairing_id, actor: c.person)
+
+    assert on_keys(c.person) == %{60 => ["Bolt"]}
     assert Keys.identity(c.astra, @fleet).token_id == 25
     assert Keys.identity(c.bolt, @fleet).token_id == 60
 
-    # Naming no agent takes the Key's agent off.
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, nil, actor: c.person)
-
-    assert on_keys(c.person) == %{}
-    assert Keys.identity(c.bolt, @fleet).token_id == 25
+    # Taking off an agent on no Key changes nothing.
+    assert :ok = Keys.release_agent(@fleet, c.astra.pairing_id, actor: c.person)
+    assert on_keys(c.person) == %{60 => ["Bolt"]}
   end
 
   test "once the Key leaves the person's wallets, its agent writes as their Key again", c do
@@ -194,75 +209,77 @@ defmodule Keyfleet.AgentKeyTest do
                Keys.assign_agent(@fleet, 7, wallet("1"), actor: actor)
     end
 
-    assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
-             Keys.assign_agent(@fleet, 41, nil, actor: c.other)
+    # Naming no agent.
+    assert {:error, %Ash.Error.Invalid{errors: [%Required{field: :agent_wallet}]}} =
+             Keys.assign_agent(@fleet, 41, nil, actor: c.person)
 
-    assert {:error, %Ash.Error.Forbidden{}} = Keys.assign_agent(@fleet, 41, nil, actor: c.cato)
+    # Another person, or their agent, taking the person's agent off its Key.
+    for actor <- [c.other, c.cato] do
+      assert :ok = Keys.release_agent(@fleet, c.astra.pairing_id, actor: actor)
+    end
 
     # Nobody who speaks for a person.
     assert {:error, %Ash.Error.Forbidden{}} =
              Keys.assign_agent(@fleet, 41, wallet("2"), actor: @system)
 
-    assert on_keys(c.person) == %{41 => "Astra"}
+    assert on_keys(c.person) == %{41 => ["Astra"]}
     assert Keys.identity(c.astra, @fleet).token_id == 41
     assert Keys.identity(c.bolt, @fleet).token_id == 25
     assert Keys.identity(c.cato, @fleet).token_id == 7
     assert on_keys(c.other) == %{}
   end
 
-  test "an agent puts an agent on no Key onto a Key with none; only the person moves or takes one off",
+  test "an agent puts an agent on no Key onto any Key; only the person moves or takes one off",
        c do
     cass = pair!("did:privy:agent-keys", "Cass", wallet("4"))
 
-    # Itself, and another of the person's agents, each onto a Key with none.
+    # Itself, and another of the person's agents, onto the same Key.
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.astra)
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.astra)
-    assert on_keys(c.person) == %{41 => "Astra", 60 => "Bolt"}
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("2"), actor: c.astra)
+    assert on_keys(c.person) == %{41 => ["Astra", "Bolt"]}
 
     # Taking an agent off, itself or another, is the person's alone.
-    for token_id <- [41, 60] do
-      assert {:error, %Ash.Error.Forbidden{errors: [%Ash.Error.Forbidden.Policy{}]}} =
-               Keys.assign_agent(@fleet, token_id, nil, actor: c.astra)
+    for pairing_id <- [c.astra.pairing_id, c.bolt.pairing_id] do
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Keys.release_agent(@fleet, pairing_id, actor: c.astra)
     end
 
-    # So is moving an agent on a Key, itself or another, or replacing one.
+    # So is moving an agent on a Key, itself or another.
     for {token_id, agent_wallet, actor} <- [
           {25, wallet("1"), c.astra},
-          {25, wallet("2"), c.astra},
-          {60, wallet("1"), c.astra},
-          {41, wallet("4"), c.bolt},
-          {41, wallet("4"), cass}
+          {60, wallet("2"), c.astra},
+          {60, wallet("1"), cass}
         ] do
       assert {:error, %Ash.Error.Forbidden{errors: [%PersonOnlyError{}]}} =
                Keys.assign_agent(@fleet, token_id, agent_wallet, actor: actor)
     end
 
-    assert on_keys(c.person) == %{41 => "Astra", 60 => "Bolt"}
+    assert on_keys(c.person) == %{41 => ["Astra", "Bolt"]}
 
-    # An agent on a Key still puts one on no Key onto a Key with none, and
-    # naming the agent a Key already has changes nothing.
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("4"), actor: c.bolt)
+    # An agent on a Key still puts one on no Key onto a Key that has agents,
+    # and naming an agent on the Key it names changes nothing.
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("4"), actor: c.bolt)
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.astra)
-    assert on_keys(c.person) == %{25 => "Cass", 41 => "Astra", 60 => "Bolt"}
+    assert on_keys(c.person) == %{41 => ["Astra", "Bolt", "Cass"]}
 
-    # The person moves and replaces agents, and takes them off.
+    # The person moves agents and takes them off.
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
-    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, nil, actor: c.person)
-    assert on_keys(c.person) == %{25 => "Astra"}
+    assert :ok = Keys.release_agent(@fleet, c.bolt.pairing_id, actor: c.person)
+    assert on_keys(c.person) == %{25 => ["Astra"], 41 => ["Cass"]}
   end
 
-  test "a Key whose agent was unpaired, or that changed hands, has none", c do
+  test "a Key whose agents were unpaired, or that changed hands, has none", c do
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.person)
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("2"), actor: c.person)
 
-    # Bolt unpairs, so Key 60 has no agent and Astra puts another there.
+    # Bolt unpairs, so Key 60 has no agents and Astra puts another there.
     person = %RegentAgents.Person{privy_user_id: "did:privy:agent-keys"}
     {:ok, agents} = RegentAgents.list_my_agents(actor: person)
     :ok = RegentAgents.unpair_agent(Enum.find(agents, &(&1.wallet == wallet("2"))), actor: person)
     cass = pair!("did:privy:agent-keys", "Cass", wallet("4"))
 
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("4"), actor: c.astra)
-    assert on_keys(c.person) == %{41 => "Astra", 60 => "Cass"}
+    assert on_keys(c.person) == %{41 => ["Astra"], 60 => ["Cass"]}
 
     # Key 41 goes to someone else and comes back. Astra came off it when it
     # left, stays paired, acts as their Key again, and is on no Key, so an
@@ -279,40 +296,60 @@ defmodule Keyfleet.AgentKeyTest do
     assert c.astra |> Keys.held_keys(@fleet) |> Enum.map(& &1.token_id) == [25, 60]
 
     epoch!(41, wallet("b"), ownership_epoch: 3, log_index: 2)
-    assert on_keys(c.person) == %{60 => "Cass"}
+    assert on_keys(c.person) == %{60 => ["Cass"]}
     assert {:ok, nil} = Keys.assigned_key(c.astra, @fleet)
 
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: cass)
-    assert on_keys(c.person) == %{25 => "Astra", 60 => "Cass"}
-    assert c.person |> rows() |> Map.keys() == [25, 60]
+    assert on_keys(c.person) == %{25 => ["Astra"], 60 => ["Cass"]}
+    assert %{token_id: 25, ownership_epoch: 1} = row(c.person, c.astra)
 
     # Only the person's write takes an agent off a Key.
-    [row] = Enum.filter(Keys.agent_keys_of_person!(actor: c.astra), &(&1.token_id == 25))
-    assert {:error, %Ash.Error.Forbidden{}} = Ash.destroy(row, action: :release, actor: c.astra)
-    assert :ok = Ash.destroy(row, action: :release, actor: c.person)
-    assert on_keys(c.person) == %{60 => "Cass"}
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Keys.release_agent(@fleet, c.astra.pairing_id, actor: cass)
+
+    assert :ok = Keys.release_agent(@fleet, c.astra.pairing_id, actor: c.person)
+    assert on_keys(c.person) == %{60 => ["Cass"]}
+    assert row(c.person, c.astra) == nil
   end
 
-  test "a Key moved between the person's own wallets loses its agent too", c do
+  test "a Key moved between the person's own wallets loses its agents too", c do
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
-
-    assert Keys.identity(c.astra, @fleet) == %{
-             token_id: 25,
-             wallet: wallet("a"),
-             for_person: true
-           }
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("2"), actor: c.person)
+    assert on_keys(c.person) == %{25 => ["Astra", "Bolt"]}
 
     epoch!(25, wallet("b"), ownership_epoch: 2, log_index: 1)
-    assert {:ok, nil} = Keys.assigned_key(c.astra, @fleet)
+
+    for agent <- [c.astra, c.bolt] do
+      assert {:ok, nil} = Keys.assigned_key(agent, @fleet)
+    end
+
     assert on_keys(c.person) == %{}
 
-    # Its old place blocks nobody: an agent puts another agent on the Key,
+    # Their old places block nobody: an agent puts another agent on the Key,
     # and the person puts Astra back.
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("2"), actor: c.astra)
-    assert on_keys(c.person) == %{25 => "Bolt"}
+    assert on_keys(c.person) == %{25 => ["Bolt"]}
     assert {:ok, _assigned} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.person)
-    assert on_keys(c.person) == %{25 => "Astra"}
-    assert %{25 => %{ownership_epoch: 2}} = rows(c.person)
+    assert on_keys(c.person) == %{25 => ["Astra", "Bolt"]}
+    assert %{ownership_epoch: 2} = row(c.person, c.astra)
+  end
+
+  test "the fleet's pages hear which Keys each saved change touched, and nothing of a refused one",
+       c do
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Keys.topic(@fleet))
+
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 41, wallet("1"), actor: c.person)
+    assert_receive {:keys_changed, @fleet, [41]}
+
+    assert {:ok, _assigned} = Keys.assign_agent(@fleet, 60, wallet("1"), actor: c.person)
+    assert_receive {:keys_changed, @fleet, [60, 41]}
+
+    assert {:error, _refused} = Keys.assign_agent(@fleet, 25, wallet("1"), actor: c.bolt)
+    assert {:error, _refused} = Keys.assign_agent(@fleet, 7, wallet("2"), actor: c.person)
+    refute_receive {:keys_changed, @fleet, _token_ids}
+
+    assert :ok = Keys.release_agent(@fleet, c.astra.pairing_id, actor: c.person)
+    assert_receive {:keys_changed, @fleet, [60]}
   end
 
   test "each person reads only their own agents' Keys", c do
@@ -334,14 +371,18 @@ defmodule Keyfleet.AgentKeyTest do
   end
 
   defp on_keys(actor) do
-    for {{@fleet, token_id}, agent} <- Keys.agents_on_keys(actor, Keys.person_agents(actor)),
+    for {{@fleet, token_id}, on_key} <- Keys.agents_on_keys(actor, Keys.person_agents(actor)),
         into: %{},
-        do: {token_id, agent.name}
+        do: {token_id, Enum.map(on_key, & &1.name)}
   end
 
-  # The person's saved rows, by Key, whether or not their agent still stands there.
-  defp rows(actor),
-    do: Map.new(Keys.agent_keys_of_person!(actor: actor), &{&1.token_id, &1})
+  # The agent's saved row in the fleet, whether or not it still stands on its Key.
+  defp row(person, %Actors.Agent{pairing_id: pairing_id}) do
+    Enum.find(
+      Keys.agent_keys_of_person!(actor: person),
+      &(&1.fleet_id == @fleet and &1.paired_agent_id == pairing_id)
+    )
+  end
 
   defp person!(privy_user_id, [first | _] = wallets) do
     privy_user_id

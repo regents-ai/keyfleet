@@ -15,6 +15,7 @@ defmodule Keyfleet.Keys do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Decks
   alias Keyfleet.Fleets.Fleet
+  alias Keyfleet.Keys.AgentKey
 
   resources do
     resource Keyfleet.Keys.KeyAttachment do
@@ -138,10 +139,8 @@ defmodule Keyfleet.Keys do
     end
 
     resource Keyfleet.Keys.AgentKey do
-      define :assign_agent,
-        action: :assign,
-        args: [:fleet_id, :token_id, {:optional, :agent_wallet}]
-
+      define :assign_agent, action: :assign, args: [:fleet_id, :token_id, :agent_wallet]
+      define :release_agent_key, action: :release
       define :agent_keys_of_person, action: :of_person
       define :agent_keys_of_agents, action: :of_agents, args: [:fleet_id, :wallets]
     end
@@ -285,14 +284,16 @@ defmodule Keyfleet.Keys do
   left out, or `{:error, error}`. However many agents, it is three reads, and
   one more for each hundred people beyond the first.
 
-  This is the one rule for it: an agent acting (`assigned_key/2`) and the
+  This is the one rule for it: an agent acting (`assigned_key/3`) and the
   agents a fleet lists (`Keyfleet.Agents.AgentProfile`'s `:key`) both read
-  it here.
+  it here. `opts` go with each read, such as a check's time limit.
   """
-  def assigned_keys(_fleet_id, []), do: {:ok, %{}}
+  def assigned_keys(fleet_id, wallets, opts \\ [])
 
-  def assigned_keys(fleet_id, wallets) do
-    system = [actor: %Keyfleet.Actors.System{}]
+  def assigned_keys(_fleet_id, [], _opts), do: {:ok, %{}}
+
+  def assigned_keys(fleet_id, wallets, opts) do
+    system = [actor: %Keyfleet.Actors.System{}] ++ opts
 
     case agent_keys_of_agents(fleet_id, wallets, system) do
       {:ok, []} -> {:ok, %{}}
@@ -359,16 +360,18 @@ defmodule Keyfleet.Keys do
   def placed_on?(_row, _key, _wallets), do: false
 
   @doc """
-  The Key `agent`'s person put it on in the fleet, by `assigned_keys/2`:
+  The Key `agent`'s person put it on in the fleet, by `assigned_keys/3`:
   `{:ok, key}`, `{:ok, nil}` when there is none, or `{:error, error}`.
   """
-  def assigned_key(%Agent{pairing: %Human{}, wallet_address: wallet}, fleet_id) do
-    with {:ok, keys} <- assigned_keys(fleet_id, [wallet]), do: {:ok, keys[wallet]}
+  def assigned_key(agent, fleet_id, opts \\ [])
+
+  def assigned_key(%Agent{pairing: %Human{}, wallet_address: wallet}, fleet_id, opts) do
+    with {:ok, keys} <- assigned_keys(fleet_id, [wallet], opts), do: {:ok, keys[wallet]}
   end
 
-  def assigned_key(_agent, _fleet_id), do: {:ok, nil}
+  def assigned_key(_agent, _fleet_id, _opts), do: {:ok, nil}
 
-  @doc "`assigned_key/2`, raising when the read fails."
+  @doc "`assigned_key/3`, raising when the read fails."
   def assigned_key!(agent, fleet_id) do
     case assigned_key(agent, fleet_id) do
       {:ok, key} -> key
@@ -409,11 +412,12 @@ defmodule Keyfleet.Keys do
 
   @doc """
   Which of the person's `agents` (each with its pairing `id`, as
-  `person_agents/1` gives them) is on each of the Keys their wallets hold now
-  (`Keyfleet.Keys.AgentKey`), as `%{{fleet_id, token_id} => agent}`, read in
-  one go for every fleet, for the person or an agent paired with them. A Key
-  whose agent no longer stands on it (`placed_on?/3`), or whose agent has
-  since been unpaired, is left out.
+  `person_agents/1` gives them) are on each of the Keys their wallets hold now
+  (`Keyfleet.Keys.AgentKey`), as `%{{fleet_id, token_id} => agents}`, in the
+  order of `agents`, read in one go for every fleet, for the person or an
+  agent paired with them. An agent that no longer stands on its Key
+  (`placed_on?/3`), or has since been unpaired, is left out, and so is a Key
+  with none.
   """
   def agents_on_keys(actor, agents) do
     case {person_wallets(actor), agents} do
@@ -429,17 +433,39 @@ defmodule Keyfleet.Keys do
     held =
       Map.new(keys_held_everywhere!(wallets, actor: actor), &{{&1.fleet_id, &1.token_id}, &1})
 
-    for assigned <- agent_keys_of_person!(actor: actor),
-        key = {assigned.fleet_id, assigned.token_id},
-        placed_on?(assigned, held[key], wallets),
-        agent = by_id[assigned.paired_agent_id],
-        into: %{},
-        do: {key, agent}
+    order = agents |> Enum.with_index() |> Map.new(fn {agent, index} -> {agent.id, index} end)
+
+    on_keys =
+      for assigned <- agent_keys_of_person!(actor: actor),
+          key = {assigned.fleet_id, assigned.token_id},
+          placed_on?(assigned, held[key], wallets),
+          agent = by_id[assigned.paired_agent_id],
+          do: {key, agent}
+
+    on_keys
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Map.new(fn {key, on_key} -> {key, Enum.sort_by(on_key, &order[&1.id])} end)
   end
 
-  defp person_wallets(%Human{wallet_addresses: wallets}), do: wallets
-  defp person_wallets(%Agent{pairing: %Human{wallet_addresses: wallets}}), do: wallets
-  defp person_wallets(_actor), do: []
+  @doc """
+  The person `actor` takes the agent with pairing `pairing_id` off the Key it
+  is on in the fleet (`Keyfleet.Keys.AgentKey`'s `:release`). `:ok`, also when
+  it is on none, or `{:error, error}`; only the person may.
+  """
+  def release_agent(fleet_id, pairing_id, opts) do
+    query = Ash.Query.filter(AgentKey, fleet_id == ^fleet_id and paired_agent_id == ^pairing_id)
+
+    case agent_keys_of_person(Keyword.put(opts, :query, query)) do
+      {:ok, []} -> :ok
+      {:ok, [row]} -> release_agent_key(row, opts)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc "The wallets of the person `actor` speaks for: their own, or a paired agent's person's."
+  def person_wallets(%Human{wallet_addresses: wallets}), do: wallets
+  def person_wallets(%Agent{pairing: %Human{wallet_addresses: wallets}}), do: wallets
+  def person_wallets(_actor), do: []
 
   # The key the person chose to write as, while one of their wallets holds it.
   defp chosen_key(%Human{wallet_addresses: wallets} = actor, fleet_id) do

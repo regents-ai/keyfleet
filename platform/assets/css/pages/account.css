@@ -106,81 +106,152 @@
   font-weight: 400;
 }
 
-.account-keys__list {
-  display: flex;
-  flex-wrap: wrap;
+/* A fleet's Keys as a gallery of cards, those with agents first. Each card is
+   the Key's picture and name, and under it the agents on it, each with its
+   picture, its name and a remove button, then Add agent. */
+.key-gallery {
+  display: grid;
   gap: 0.5rem;
+}
+
+.key-gallery__keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: 0.75rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.account-keys__list a {
-  display: inline-block;
-  padding: 0.25rem 0.6rem;
+.key-gallery__key {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  padding: 0.5rem;
   border: 1px solid var(--color-border);
-  font-variant-numeric: tabular-nums;
-  text-decoration: none;
+  background: var(--color-bg);
 }
 
-.account-keys__list a:hover {
+.key-gallery__key--agents {
   border-color: var(--ash-line-strong);
 }
 
-/* A new Key's time until it first shares the Treasury slice, beside it. */
-.account-keys__list li {
-  display: inline-flex;
-  align-items: center;
+.key-gallery__card {
+  display: grid;
   gap: 0.4rem;
+  color: var(--color-fg);
+  text-decoration: none;
 }
 
-.account-keys__slice {
-  color: var(--color-fg-muted);
+/* The card's picture, or its space while it is still being made, edged as
+   the fleet's own cards are. */
+.key-gallery__card img,
+.key-gallery__blank {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 767 / 959;
+  border: 1px solid
+    light-dark(
+      color-mix(in oklab, var(--palette-platinum) 80%, var(--palette-charcoal)),
+      color-mix(in oklab, var(--palette-platinum) 30%, var(--palette-charcoal))
+    );
+  background: var(--color-surface);
+  object-fit: cover;
+}
+
+.key-gallery__name {
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
 }
 
-/* A fleet's Keys and, under them, the line saying an agent change saved. */
-.account-keys__keys {
+.key-gallery__card:hover .key-gallery__name {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Under a pointer, a card's picture rises a little, like a card picked up. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .key-gallery__card :is(img, .key-gallery__blank) {
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
+  .key-gallery__card:hover :is(img, .key-gallery__blank) {
+    transform: translateY(-3px);
+  }
+}
+
+.key-gallery__agents {
   display: grid;
   gap: 0.25rem;
+  margin: 0;
+  padding: 0.5rem 0 0;
+  border-block-start: 1px solid var(--color-border);
+  list-style: none;
 }
 
-/* Once the person has paired an agent, each Key is a row of its own, the
-   agent on it at the row's end, wrapping under the Key on a narrow screen. */
-.account-keys__list--agents {
-  display: grid;
-}
-
-.account-keys__list--agents li {
+.key-gallery__agents li {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.4rem 0.75rem;
-  padding-block: 0.4rem;
-  border-block-end: 1px solid var(--color-border);
-}
-
-.account-keys__list--agents li > a {
-  margin-inline-end: auto;
-}
-
-.account-keys__key--agent > a {
-  border-color: var(--ash-line-strong);
-}
-
-.account-keys__agent {
-  flex: 0 1 14rem;
+  align-items: center;
+  gap: 0.4rem;
   min-inline-size: 0;
 }
 
-.account-keys__agent .rg-field {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.5rem;
+.key-gallery__agent-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.account-keys__agent label {
+.key-gallery__remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  min-block-size: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.key-gallery__remove:hover,
+.key-gallery__remove:focus-visible {
+  border-color: var(--color-border);
+  color: var(--color-fg);
+}
+
+.key-gallery__remove svg {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+
+.key-gallery__add select {
+  inline-size: 100%;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-fg-muted);
+  font-family: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.key-gallery__add select:hover,
+.key-gallery__add select:focus-visible {
+  border-color: var(--ash-line-strong);
+  color: var(--color-fg);
+}
+
+.key-gallery__notice {
+  min-block-size: 1lh;
+  margin: 0;
   color: var(--color-fg-muted);
   font-size: 0.875rem;
 }
@@ -344,10 +415,9 @@ div.verified-connections__notice p {
     row-gap: 0;
   }
 
-  /* Each Key, each fleet's name above its Keys and each connected account are
-     a full finger's height. */
+  /* Each fleet's name above its Keys and each connected account are a full
+     finger's height. */
   .account-keys__fleet h3 a,
-  .account-keys__list a,
   .verified-connections__list a {
     display: inline-flex;
     align-items: center;
@@ -358,9 +428,40 @@ div.verified-connections__notice p {
     justify-self: start;
   }
 
-  /* A Key's agent spans the row it wraps onto. */
-  .account-keys__agent {
-    flex: 1 1 12rem;
+  /* Each agent's remove button and each Add agent are a full finger's height. */
+  .key-gallery__remove {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    margin-inline-end: -0.5rem;
+  }
+
+  .key-gallery__add select {
+    min-block-size: 2.75rem;
+  }
+
+  /* On a phone each Key is a row: its picture and name on the left, its
+     agents and Add agent beside them. */
+  @media (max-width: 29.99rem) {
+    .key-gallery__key {
+      grid-template-columns: 5.5rem minmax(0, 1fr);
+      grid-template-rows: auto auto 1fr;
+      column-gap: 0.75rem;
+    }
+
+    .key-gallery__card {
+      grid-row: 1 / -1;
+      align-self: start;
+    }
+
+    .key-gallery__key > :not(.key-gallery__card) {
+      grid-column: 2;
+      align-self: start;
+    }
+
+    .key-gallery__agents {
+      padding: 0;
+      border: 0;
+    }
   }
 
   /* "Copy message" and "Make a new code" fill the row they wrap onto. */

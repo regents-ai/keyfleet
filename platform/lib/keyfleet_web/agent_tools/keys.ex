@@ -62,20 +62,23 @@ defmodule KeyfleetWeb.AgentTools.Keys do
     end
 
     action :agents, :map do
-      description "Your person's Keys in a fleet, the agent on each and their paired agents."
+      description "Your person's Keys in a fleet, the agents on each and their paired agents."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       run {Run, tool: "keys_agents"}
     end
 
     action :assign_agent, :map do
-      description "Puts one of your person's agents that is on no Key, you included, onto one of their Keys in a fleet that has none. Only your person moves an agent that is on a Key or takes one off: that answers 403 person_only. If another change to the Key's agent was saved first, nothing changes: read keys_agents again and send it again."
+      description "Puts one of your person's agents that is on no Key, you included, onto one of their Keys in a fleet; a Key holds any number of their agents. Only your person moves an agent that is on a Key or takes one off: that answers 403 person_only."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
 
       argument :token_id, :integer,
         allow_nil?: false,
         constraints: [min: 1, max: 9_007_199_254_740_991]
 
-      argument :agent_wallet, :string, constraints: [match: ~r/\A0x[0-9a-fA-F]{40}\z/]
+      argument :agent_wallet, :string,
+        allow_nil?: false,
+        constraints: [match: ~r/\A0x[0-9a-fA-F]{40}\z/]
+
       run {Run, tool: "keys_assign_agent"}
     end
 

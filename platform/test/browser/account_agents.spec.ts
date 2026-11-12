@@ -82,9 +82,9 @@ test("on a 320 px phone, each account tab is a whole thumb wide, the open one is
 })
 
 // Once an agent pairs, the person is led to Your Keys on the Account page,
-// where choosing the agent for one of their Keys saves it at once and lists
-// that Key first, with the agent on it. The agent's row then names the Key,
-// and the page keeps to a 320 px screen.
+// where adding the agent to one of their Keys saves it at once and lists that
+// Key first, with the agent under it. The agent's row then names the Key, and
+// the page keeps to a 320 px screen.
 test("an agent that pairs is put on the person's Key from Your Keys, and its row then names the Key", async ({page}) => {
   const fleet = "fleet_tech_classic"
   const me = "0x1111111111111111111111111111111111111111"
@@ -115,11 +115,12 @@ test("an agent that pairs is put on the person's Key from Your Keys, and its row
 
   await assign.click()
   await expect(page.locator("#shell-pairing")).toBeHidden()
-  expect(new URL(page.url()).pathname).toBe("/account")
+  await expect(page).toHaveURL(url => url.pathname === "/account")
   const keys = page.locator(`#account-key-agents-${fleet}`)
-  await keys.getByRole("combobox", {name: `Agent on Key ${key}`, exact: true}).selectOption({label: name})
-  await expect(page.locator(`#account-key-agents-${fleet}-notice`)).toHaveText(`${name} is on Key ${key} now.`)
-  await expect(keys.locator("li").first()).toHaveId(`account-key-agents-${fleet}-${key}`)
+  await keys.getByRole("combobox", {name: `Add an agent to Key ${key}`, exact: true}).selectOption({label: name})
+  await expect(page.locator(`#account-key-agents-${fleet}-notice`)).toHaveText(`${name} is on Key ${key}.`)
+  await expect(keys.locator(".key-gallery__key").first()).toHaveId(`account-key-agents-${fleet}-${key}`)
+  await expect(page.locator(`#account-key-agents-${fleet}-${key}-agents`)).toContainText(name)
 
   await page.setViewportSize({width: 320, height: 640})
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
@@ -129,5 +130,63 @@ test("an agent that pairs is put on the person's Key from Your Keys, and its row
   const row = page.locator("#account-agents li", {hasText: name})
   await expect(row.getByRole("link", {name: `Classic #1 Key ${key}`})).toHaveAttribute("href", `/classic/1/keys/${key}`)
   await expect(row.getByRole("link", {name: "Assign a Key"})).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+// Your Keys is a gallery: a Key holds several agents, each with its picture
+// and name under the Key, and Keys with agents come first. Choosing an agent
+// on another Key moves it, and its remove button takes it off. On a phone each
+// Key is a row, its remove buttons are a full finger's height, and the page
+// never scrolls sideways.
+test("a Key holds several agents in the gallery, which moves and removes them", async ({page}) => {
+  const fleet = "fleet_tech_classic"
+  const me = "0x1111111111111111111111111111111111111111"
+  prepareFleet(fleet)
+  const first = sellKey(fleet, me)
+  const second = sellKey(fleet, me)
+  const [astra, bolt] = [newAgent(), newAgent()]
+  const [nameA, nameB] = [`Astra ${astra.slice(2, 8)}`, `Bolt ${bolt.slice(2, 8)}`]
+  pairPerson(astra, person, nameA)
+  pairPerson(bolt, person, nameB)
+  const errors = await signIn(page)
+  await page.goto("/account")
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+
+  const id = `account-key-agents-${fleet}`
+  const gallery = page.locator(`#${id}`)
+  const notice = page.locator(`#${id}-notice`)
+  const add = (key: number) => gallery.getByRole("combobox", {name: `Add an agent to Key ${key}`, exact: true})
+  const onKey = (key: number) => page.locator(`#${id}-${key}-agents li`)
+
+  for (const name of [nameA, nameB]) {
+    await add(second).selectOption({label: name})
+    await expect(notice).toHaveText(`${name} is on Key ${second}.`)
+  }
+  await expect(onKey(second)).toHaveCount(2)
+  await expect(onKey(second).locator("img")).toHaveCount(2)
+  // Earlier walks may have left agents on other Keys of the person's.
+  const order = () => gallery.locator(".key-gallery__key").evaluateAll(keys => keys.map(key => key.id))
+  const before = (a: number, b: number) => async () => {
+    const ids = await order()
+    expect(ids.indexOf(`${id}-${a}`)).toBeLessThan(ids.indexOf(`${id}-${b}`))
+  }
+  await expect(before(second, first)).toPass()
+
+  await add(first).selectOption({label: `${nameA} · Key ${second}`})
+  await expect(notice).toHaveText(`${nameA} is on Key ${first}.`)
+  await expect(onKey(first)).toHaveText([nameA])
+  await expect(onKey(second)).toHaveText([nameB])
+
+  for (const viewport of [{width: 390, height: 844}, {width: 320, height: 700}]) {
+    await page.setViewportSize(viewport)
+    const remove = gallery.getByRole("button", {name: `Take ${nameB} off Key ${second}`})
+    expect((await remove.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+  }
+
+  await gallery.getByRole("button", {name: `Take ${nameB} off Key ${second}`}).click()
+  await expect(notice).toHaveText(`${nameB} is off Key ${second}.`)
+  await expect(page.locator(`#${id}-${second}-agents`)).toHaveCount(0)
+  await expect(before(first, second)).toPass()
   expect(errors).toEqual([])
 })

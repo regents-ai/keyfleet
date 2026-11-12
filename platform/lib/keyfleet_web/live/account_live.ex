@@ -3,9 +3,9 @@ defmodule KeyfleetWeb.AccountLive do
   The signed-in person's account, one tab each: Profile (who the site knows
   them as, their wallets and which one is active (`KeyfleetWeb.AccountWallets`),
   their ENS name and World ID, the keys their wallets hold, each new one with
-  the time left until it first shares the Daily Treasury Slice to Keys and,
-  once they have paired an agent, the agent on it, those with an agent first
-  (`KeyfleetWeb.KeyAgentChoice`), with one Claim per fleet for all of them at
+  the time left until it first shares the Daily Treasury Slice to Keys and
+  the agents on it, as a gallery of Key cards, those with agents first
+  (`KeyfleetWeb.KeyGallery`), with one Claim per fleet for all of them at
   once and, in a fleet where they hold several, the one they post as
   (`KeyfleetWeb.PostingKeyChoice`), and this browser's session, in
   the layout every Regent site shares, `Regent.Account.layout`, Keyfleet's own
@@ -29,9 +29,12 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.EnsIdentity
   alias Keyfleet.Actors.{Human, System}
+  alias Keyfleet.Agents
+  alias Keyfleet.Agents.Avatar
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
+  alias Keyfleet.Keys.Metadata
   alias Keyfleet.WalletSteps.Reads
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
@@ -49,7 +52,7 @@ defmodule KeyfleetWeb.AccountLive do
   attr :held_keys, :list,
     default: [],
     doc:
-      "the keys the account's wallets hold, as `%{fleet_id, chain_id, name, token_ids}` per fleet, `chain_id` nil for a fleet not on chain"
+      "the keys the account's wallets hold, as `%{fleet_id, chain_id, name, token_ids, pictures}` per fleet, `chain_id` nil for a fleet not on chain, `pictures` their small cards by Key"
 
   attr :slices, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
@@ -58,7 +61,7 @@ defmodule KeyfleetWeb.AccountLive do
 
   attr :key_agents, :map,
     default: %{agents: [], on_keys: %{}},
-    doc: "the person's paired agents and the agent on each of their Keys (`key_agents/1`)"
+    doc: "the person's paired agents and the agents on each of their Keys (`key_agents/1`)"
 
   def profile(assigns) do
     ~H"""
@@ -95,10 +98,11 @@ defmodule KeyfleetWeb.AccountLive do
                 <.link patch={Keyfleet.Fleets.path(fleet.fleet_id)}>{fleet.name}</.link>
               </h3>
               <.live_component
-                module={KeyfleetWeb.KeyAgentChoice}
+                module={KeyfleetWeb.KeyGallery}
                 id={"account-key-agents-#{fleet.fleet_id}"}
                 fleet_id={fleet.fleet_id}
                 token_ids={fleet.token_ids}
+                pictures={fleet.pictures}
                 agents={@key_agents.agents}
                 on_keys={Map.get(@key_agents.on_keys, fleet.fleet_id, %{})}
                 account={@account}
@@ -393,49 +397,77 @@ defmodule KeyfleetWeb.AccountLive do
 
   @doc """
   Every key the signed-in person's wallets hold, fleet by fleet in catalog
-  order, leaving out fleets where they hold none.
+  order, leaving out fleets where they hold none, with each Key's small card
+  where it has one (`Keyfleet.Keys.Metadata.small_cards/2`).
   """
   def held_keys(nil), do: []
 
   def held_keys(%Human{wallet_addresses: wallets} = actor) do
     held = wallets |> Keys.keys_held_everywhere!(actor: actor) |> Enum.group_by(& &1.fleet_id)
 
-    chain_ids = Map.new(Fleets.list_fleets!(), &{&1.id, &1.chain_id})
+    fleets = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
 
     for %{id: fleet_id, name: name} <- Fleets.catalog(),
         keys = Map.get(held, fleet_id, []),
-        keys != [],
-        do: %{
-          fleet_id: fleet_id,
-          chain_id: chain_ids[fleet_id],
-          name: name,
-          token_ids: Enum.map(keys, & &1.token_id)
-        }
+        keys != [] do
+      token_ids = Enum.map(keys, & &1.token_id)
+
+      %{
+        fleet_id: fleet_id,
+        chain_id: fleets[fleet_id] && fleets[fleet_id].chain_id,
+        name: name,
+        token_ids: token_ids,
+        pictures: pictures(fleets[fleet_id], token_ids)
+      }
+    end
   end
 
+  # The small cards are read a hundred Keys at a time.
+  defp pictures(nil, _token_ids), do: %{}
+
+  defp pictures(fleet, token_ids),
+    do:
+      token_ids
+      |> Enum.chunk_every(100)
+      |> Enum.reduce(%{}, &Map.merge(&2, Metadata.small_cards(fleet, &1)))
+
   @doc """
-  The agents paired with the signed-in person now and the agent on each of
-  their Keys, fleet by fleet, as `%{agents: agents, on_keys: %{fleet_id =>
-  %{token_id => agent}}}` (`Keyfleet.Keys.AgentKey`), read in one go for
-  every fleet.
+  The agents paired with the signed-in person now, each with its picture,
+  and the agents on each of their Keys, fleet by fleet, as `%{agents: agents,
+  on_keys: %{fleet_id => %{token_id => agents}}}` (`Keyfleet.Keys.AgentKey`),
+  read in one go for every fleet.
   """
   def key_agents(nil), do: %{agents: [], on_keys: %{}}
 
   def key_agents(%Human{} = actor) do
-    agents = Keys.person_agents(actor)
+    agents = actor |> Keys.person_agents() |> with_pictures()
 
     on_keys =
-      for {{fleet_id, token_id}, agent} <- Keys.agents_on_keys(actor, agents),
+      for {{fleet_id, token_id}, on_key} <- Keys.agents_on_keys(actor, agents),
           reduce: %{},
           do: (on_keys ->
                  Map.update(
                    on_keys,
                    fleet_id,
-                   %{token_id => agent},
-                   &Map.put(&1, token_id, agent)
+                   %{token_id => on_key},
+                   &Map.put(&1, token_id, on_key)
                  ))
 
     %{agents: agents, on_keys: on_keys}
+  end
+
+  # The picture each agent set, or the one made from its wallet, a hundred
+  # agents at a time.
+  defp with_pictures(agents) do
+    profiles =
+      agents
+      |> Enum.map(& &1.wallet)
+      |> Enum.chunk_every(100)
+      |> Enum.flat_map(&Agents.agents_by_wallets!(&1, actor: %System{}, load: [:avatar_src]))
+      |> Map.new(&{&1.wallet_address, &1.avatar_src})
+
+    for agent <- agents,
+        do: Map.put(agent, :picture, profiles[agent.wallet] || Avatar.shown(nil, agent.wallet))
   end
 
   @doc """

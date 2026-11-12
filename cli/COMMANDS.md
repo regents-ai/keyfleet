@@ -1249,31 +1249,31 @@ answer the choice
 
 ## regents keyfleet keys agents <fleet>
 
-- **Purpose:** lists the agent's person's Keys in the fleet with the agent of theirs on
+- **Purpose:** lists the agent's person's Keys in the fleet with the agents of theirs on
   each, as the person's Account page shows them, and the Key the agent is on.
 - **Access:** a paired agent signed in with its wallet (wallet proof), whose person has
   signed in on this site.
 - **Changes:** nothing (read).
 - **Route:** `GET /api/v1/agent/fleets/{fleet_id}/agent_keys` → `listAgentKeys`
 - **Inputs:** `<fleet>`. It sends no body.
-- **Answer:** `{"agent_keys": {"fleet_id", "keys": [{"token_id", "agent"}], "agents":
+- **Answer:** `{"agent_keys": {"fleet_id", "keys": [{"token_id", "agents"}], "agents":
   [{"name", "wallet"}], "yours"}}`. `keys` are the Keys the person's wallets hold in the
-  fleet now, those with an agent first, then by number; `agent` is `{"name", "wallet"}` or
-  null. `agents` are the agents paired with the person now, oldest pairing first. `yours`
-  is the Key the person put the signing agent on, or null. An agent on a Key writes in the
-  fleet as that Key while the person's wallets hold it, unless its own wallet holds a Key
-  there. A Key that changes hands, even between the person's own wallets, loses its agent;
-  the agent stays paired.
+  fleet now, those with agents first, then by number; each Key's `agents` are
+  `{"name", "wallet"}`, empty when none. `agents` are the agents paired with the person
+  now, oldest pairing first. `yours` is the Key the person put the signing agent on, or
+  null. An agent on a Key writes in the fleet as that Key while the person's wallets hold
+  it, unless its own wallet holds a Key there. A Key that changes hands, even between the
+  person's own wallets, loses its agents; they stay paired.
 - **Refusals:** 403 `person_not_here`; and those every signed command shares.
 
 Server:
 
 ```text
 agents = the person's pairings now (RegentAgents.pairing_histories, not revoked)
-keys   = Keys.keys_held_in_fleet(fleet, the person's wallets), each with the agent
+keys   = Keys.keys_held_in_fleet(fleet, the person's wallets), each with the agents
          Keys.agents_on_keys puts on it
 yours  = Keys.assigned_key(agent, fleet)
-answer keys (with an agent first, then by number), agents and yours
+answer keys (with agents first, then by number), agents and yours
 ```
 
 - **Server needs:** the `agent_keys` table; the person's pairings; the keys as the chain
@@ -1283,44 +1283,41 @@ answer keys (with an agent first, then by number), agents and yours
 ## regents keyfleet keys assign-agent <fleet> <key>
 
 - **Purpose:** puts one of the agent's person's paired agents that is on no Key in the
-  fleet, itself included, onto one of their Keys there that has no agent. Only the person
-  moves an agent that is on a Key or takes one off, under Your Keys on their Account page.
+  fleet, itself included, onto one of their Keys there. Only the person moves an agent
+  that is on a Key or takes one off, under Your Keys on their Account page.
 - **Access:** a paired agent signed in with its wallet (wallet proof), whose person has
   signed in on this site.
-- **Changes:** which of the person's agents is on the Key (write). An agent is on at most
-  one Key in a fleet and a Key has at most one agent.
+- **Changes:** which of the person's agents are on the Key (write). An agent is on at most
+  one Key in a fleet, and a Key holds any number of the person's agents.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/agent_keys/assign` → `assignAgentKey`
 - **Inputs:** `<fleet>`, `<key>` (body `token_id`), one of the Keys the person's wallets
   hold in the fleet now, and `--agent WALLET` (body `agent_wallet`), the wallet of one of
   the agents paired with the person now.
 - **Answer:** as `keys agents` answers, with the change made.
 - **Refusals:** 403 `person_not_here`; 403 `person_only`: the agent named is on another Key,
-  the Key has another agent, or `--agent` was left out, and only the person makes that
-  change; 409 `key_not_held`: the person's wallets don't hold this Key
-  now; 409 `agent_unknown`: no agent paired with the person now has that wallet; 409
-  `agent_keys_changed`: another change to this Key's agent was saved first, so read
-  `keys agents` again and send it again if it still applies; and those every writing
-  command shares. A refused request changes nothing.
+  and only the person moves it; 409 `key_not_held`: the person's wallets don't hold this
+  Key now; 409 `agent_unknown`: no agent paired with the person now has that wallet; 422
+  `invalid_request`: `--agent` was left out; and those every writing command shares. A
+  refused request changes nothing.
 
 Server:
 
 ```text
 Keys.assign_agent(fleet, key, agent_wallet) as the agent, for its paired person
+  no agent_wallet -> 422 invalid_request
   the person hasn't signed in here -> 403 person_not_here
-  no agent_wallet -> 403 person_only
-  the person's wallets don't hold the Key now -> 409 key_not_held
-  in one transaction, locking in one order so two writes at once run in turn:
+  in one transaction, locking in one order so two writes about one agent run in turn:
     lock the signing agent's pairing and the named agent's, in wallet order
       the signing agent is no longer paired -> 403 agent_not_paired
       no pairing of the person's now has agent_wallet -> 409 agent_unknown
-    lock the person's rows for this Key and the named agent's Key, lowest first
-      a row whose Key changed hands since it was saved puts no agent there;
-        one on another Key is cleared
-      the Key has another agent paired now -> 403 person_only
+    lock the named agent's row in the fleet, one per agent
+    read the Key and the agent's Key now as the chain records them
+      the person's wallets don't hold the Key now -> 409 key_not_held
+      a row whose Key changed hands since it was saved puts the agent on no Key
       the named agent is on another Key -> 403 person_only
-    put the agent on this Key, kept with the Key's ownership record now
-      a Key with no row was given an agent by another write meanwhile
-        -> 409 agent_keys_changed
+    put the agent on this Key, overwriting its row, kept with the Key's ownership
+      record now
+  once saved, the fleet's pages hear which Keys changed
 answer as keys agents
 ```
 

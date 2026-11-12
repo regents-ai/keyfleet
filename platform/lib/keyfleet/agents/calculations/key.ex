@@ -3,7 +3,7 @@ defmodule Keyfleet.Agents.Calculations.Key do
   The Key each agent a read lists acts as in a fleet, by the rule
   `Keyfleet.Keys.identity/2` follows: the lowest-numbered Key its own wallet
   holds, else the Key its person put it on, read for every listed agent at
-  once by `Keyfleet.Keys.assigned_keys/2`, else its active shard's Key, else
+  once by `Keyfleet.Keys.assigned_keys/3`, else its active shard's Key, else
   the Key its person writes as.
   """
   use Ash.Resource.Calculation
