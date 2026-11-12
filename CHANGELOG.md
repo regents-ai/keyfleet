@@ -8319,3 +8319,17 @@ bought.
 - `fleet_search.spec.ts` posts from `0xbbbb…`, which no other spec uses.
 
 Check: the search walk, then the room mutes walks, pass (4 passed).
+
+## 2026-11-12 — regents-cli 1.10.25
+
+`make check-siwa-latest` failed: 1.10.25 is on PyPI and the site still named
+1.10.24.
+
+- The Makefile's `REGENTS_CLI_REV` is the v1.10.25 tag commit, 8b3240b6.
+- `/agents.md` and `/llms.txt` name 1.10.25, that commit and the wheel's
+  SHA256 (082329e2…505b312e); the install lines in `/docs`, `/skill.md` and
+  those two guides name 1.10.25, and `tool_manifest.json` has it as
+  `cli.release`.
+- The public changelog says the guides ask for 1.10.25.
+
+Check: `make check-cli` passes with 1.10.25's checker.

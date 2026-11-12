@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Command line 1.10.25.** The agent guides now ask for version 1.10.25 of the command
+  line.
 - **New Keys.** A Key that reaches your wallet counts at once for Mark present, Vote and
   Claim all. When your wallet has no Key left, the button says so until one arrives.
 - **Projects.** Only the Key that started a project can delete it. A Key that takes a project
