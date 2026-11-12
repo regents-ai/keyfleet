@@ -3,9 +3,12 @@ import {prepareFleet, sayInPublic} from "./support/fleet_chain"
 
 // The fleet bar's search box opens the fleet's search, whose lines open the
 // page each match is on. Each run searches for a word of its own, so a
-// retried worker's posts are never mistaken for its own.
+// retried worker's posts are never mistaken for its own. The owner's wallet
+// is used by no other spec: a person's agent speaks as their lowest Key, so a
+// wallet another spec also posts from would speak there as a Key it doesn't
+// expect.
 const fleet = "fleet_tech_classic"
-const owner = "0x7777777777777777777777777777777777777777"
+const owner = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 test.beforeAll(() => {
   prepareFleet(fleet)

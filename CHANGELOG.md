@@ -8307,3 +8307,15 @@ Syndicate proposal 1, and the walk recorded proposal 1 again.
 
 Check: the shell links and wallet Keys walks, run in that order, pass
 (8 passed).
+
+## 2026-11-12 — The search walk posts from a wallet of its own
+
+In the full chain walks, `room_mutes.spec.ts` waited for a "Mute Key 19"
+button that never came. `fleet_search.spec.ts` runs first and posted from
+the same wallet, `0x7777…`, and a person's agent speaks as their lowest
+Key, so the room mutes walk's post spoke as the Key the search walk had
+bought.
+
+- `fleet_search.spec.ts` posts from `0xbbbb…`, which no other spec uses.
+
+Check: the search walk, then the room mutes walks, pass (4 passed).
