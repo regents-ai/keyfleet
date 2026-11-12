@@ -17,7 +17,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.AgentPicture
-  import KeyfleetWeb.Components.ConfirmDialog
   import KeyfleetWeb.Components.Countdown
 
   import Phoenix.LiveView,
@@ -132,24 +131,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <% end %>
       </div>
     </Regent.Structure.dialog>
-
-    <.confirm_dialog
-      :if={@profile.removing}
-      id="key-wall-remove-dialog"
-      question="Take this post off your wall?"
-      about="It can’t be put back."
-      close="cancel_remove_from_wall"
-      shown={@profile.removing}
-    >
-      <Regent.Primitives.button
-        id="key-wall-remove-confirm"
-        type="button"
-        phx-click="remove_from_wall"
-        phx-value-id={@profile.removing}
-      >
-        Take it off
-      </Regent.Primitives.button>
-    </.confirm_dialog>
     """
   end
 
@@ -654,9 +635,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
               class="key-profile-remove"
               type="button"
               variant="quiet"
-              phx-click="confirm_remove_from_wall"
+              phx-click="remove_from_wall"
               phx-value-id={message.id}
-              aria-haspopup="dialog"
+              data-confirm="Take this post off your wall? It can’t be put back."
+              data-confirm-action="Remove"
               aria-label="Take this post off your wall"
               title="Take this post off your wall"
             >
@@ -862,22 +844,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
     {:noreply, post_to_key(socket, body)}
   end
 
-  # Taking a post off the wall asks first.
-  def handle_event(
-        "confirm_remove_from_wall",
-        %{"id" => message_id},
-        %{assigns: %{key_profile: %{issued?: true, yours?: true}}} = socket
-      )
-      when is_binary(message_id),
-      do: {:noreply, update(socket, :key_profile, &%{&1 | removing: message_id})}
-
-  def handle_event(
-        "cancel_remove_from_wall",
-        _params,
-        %{assigns: %{key_profile: %{}}} = socket
-      ),
-      do: {:noreply, update(socket, :key_profile, &%{&1 | removing: nil})}
-
   def handle_event("remove_from_wall", %{"id" => message_id}, socket)
       when is_binary(message_id),
       do: {:noreply, remove_from_wall(socket, message_id)}
@@ -955,8 +921,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         news: nil,
         notice: nil,
         draft: "",
-        send_key: Ash.UUID.generate(),
-        removing: nil
+        send_key: Ash.UUID.generate()
       })
     )
     |> follow_seen()
@@ -1093,7 +1058,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         profile
         |> Map.delete(:thread)
         |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
-        |> Map.merge(%{dms: dms(profile, actor), removing: nil})
+        |> Map.put(:dms, dms(profile, actor))
       )
       |> follow_seen()
       |> read_rewards(%{key_profile: shown})
@@ -1224,8 +1189,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
            socket,
          message_id
        ) do
-    socket = update(socket, :key_profile, &%{&1 | removing: nil})
-
     case Rooms.remove_from_wall(fleet_id, token_id, message_id,
            actor: ShellLive.human_actor(socket)
          ) do
@@ -1239,18 +1202,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   defp remove_from_wall(socket, _message_id), do: socket
 
-  # A post being asked about that leaves the wall stops the question.
   defp off_wall(%{assigns: %{key_profile: profile}} = socket, message_id) do
     %{fleet_id: fleet_id, token_id: token_id, holder: holder} = profile
-    removing = if profile.removing == message_id, do: nil, else: profile.removing
 
     socket
-    |> assign(
-      :key_profile,
-      profile
-      |> Map.merge(Profile.activity(fleet_id, token_id, holder))
-      |> Map.put(:removing, removing)
-    )
+    |> assign(:key_profile, Map.merge(profile, Profile.activity(fleet_id, token_id, holder)))
     |> stream_delete_by_dom_id(:key_thread, "key-message-#{message_id}")
   end
 

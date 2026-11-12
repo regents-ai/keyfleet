@@ -805,7 +805,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
     |> form("#account-agent-dialog form.rg-account__name", %{"name" => "Sol​"})
     |> render_submit()
 
-    assert has_element?(view, "#account-agent-dialog [role=alert]", "That name can’t be used.")
+    assert has_element?(view, ~s(#account-agent-dialog-name[aria-invalid="true"]))
+
+    assert has_element?(
+             view,
+             "#account-agent-dialog-name-errors",
+             "That name can’t be used."
+           )
+
     assert has_element?(view, "#account-agents li", "Astra")
 
     view
@@ -820,11 +827,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(view, "#account-agents li", "Sol")
 
-    view |> element("#account-agent-dialog button", "Unpair") |> render_click()
-    assert has_element?(view, "#account-unpair-dialog h2", "Unpair Sol?")
-    view |> element("#account-unpair-confirm") |> render_click()
+    # The site's confirm window asks first in the browser; its going-ahead press
+    # is this one.
+    view
+    |> element(~s(#account-agent-dialog button[data-confirm-action="Unpair"]), "Unpair")
+    |> render_click()
 
-    refute has_element?(view, "#account-unpair-dialog")
     refute has_element?(view, "#account-agent-dialog")
     refute has_element?(view, "#account-agents li")
     assert has_element?(view, "#account-agents [role=status]", "Sol is unpaired.")

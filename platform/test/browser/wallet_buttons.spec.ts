@@ -314,12 +314,12 @@ async function useThenCloseSignIn(page: Page) {
   })
 }
 
-// Whether each dialog is a modal, and whether nothing on the page draws over
-// the Buy Key window: the middle of Buy and each corner of the window belong
-// to the window.
+// Whether each open dialog is a modal, and whether nothing on the page draws
+// over the Buy Key window: the middle of Buy and each corner of the window
+// belong to the window.
 const windowsNow = (page: Page) =>
   page.evaluate(() => {
-    const dialogs = Array.from(document.querySelectorAll("dialog"))
+    const dialogs = Array.from(document.querySelectorAll("dialog[open]"))
     const buyKey = document.getElementById("buy-key")!
     const box = buyKey.getBoundingClientRect()
     const button = buyKey.querySelector("#buy-key-button")!.getBoundingClientRect()

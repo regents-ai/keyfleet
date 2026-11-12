@@ -21,7 +21,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.AgentPicture
-  import KeyfleetWeb.Components.ConfirmDialog
   import KeyfleetWeb.Components.LoadFailed
 
   alias Keyfleet.Actors.Human
@@ -52,10 +51,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :project_notice, :string, default: nil, doc: "why a project press was refused"
   attr :publish_notice, :string, default: nil, doc: "why making posts public was refused"
 
-  attr :project_confirm_delete, :boolean,
-    default: false,
-    doc: "whether Delete is asking first about the project on show"
-
   attr :signed_out?, :boolean,
     default: false,
     doc: "whether nobody is signed in, so the members-only page offers Sign in"
@@ -80,7 +75,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <.projects
         board={@board}
         notice={@project_notice}
-        confirm_delete={@project_confirm_delete}
       />
       <.public_notice place={@board.place} />
 
@@ -152,7 +146,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :board, :map, required: true
   attr :notice, :string, default: nil
-  attr :confirm_delete, :boolean, default: false
 
   # The picker: All projects, then the active projects, then the archived
   # ones, each with the Key that holds it. Beside it what the member's Key
@@ -237,28 +230,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
           :if={@deletable?}
           id="project-delete"
           variant="secondary"
-          phx-click="confirm_project_delete"
-          aria-haspopup="dialog"
+          phx-click="project_delete"
+          phx-value-project={@on_show.name}
+          data-confirm={"Delete #{@on_show.title} for good? Its work, notebooks and code go with it."}
+          data-confirm-action="Delete"
         >
           Delete {@on_show.title}
         </Regent.Primitives.button>
-        <.confirm_dialog
-          :if={@deletable? and @confirm_delete}
-          id="project-delete-dialog"
-          question={"Delete #{@on_show.title} for good?"}
-          about="Its work, notebooks and code go with it."
-          close="cancel_project_delete"
-          shown={@on_show.name}
-        >
-          <Regent.Primitives.button
-            id="project-delete-confirm"
-            type="button"
-            phx-click="project_delete"
-            phx-value-project={@on_show.name}
-          >
-            Delete
-          </Regent.Primitives.button>
-        </.confirm_dialog>
         <Regent.Primitives.button
           :if={@on_show && @on_show.key == @board.you.key}
           id="project-show"
@@ -3220,18 +3198,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   def handle_event("project_take_over", %{"project" => name}, socket),
     do: hold(socket, &Projects.take_over_project(&1, &2, name, &3))
 
-  # Delete asks first.
-  def handle_event("confirm_project_delete", _params, socket),
-    do: {:noreply, assign(socket, :project_confirm_delete, true)}
-
-  def handle_event("cancel_project_delete", _params, socket),
-    do: {:noreply, assign(socket, :project_confirm_delete, false)}
-
-  def handle_event("project_delete", %{"project" => name}, socket) do
-    socket
-    |> assign(:project_confirm_delete, false)
-    |> hold(&Projects.delete_project(&1, &2, name, &3))
-  end
+  def handle_event("project_delete", %{"project" => name}, socket),
+    do: hold(socket, &Projects.delete_project(&1, &2, name, &3))
 
   def handle_event("project_show", %{"project" => name, "shown" => shown}, socket),
     do: hold(socket, &Projects.show_project(&1, &2, name, shown == "true", &3))

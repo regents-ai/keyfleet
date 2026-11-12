@@ -57,12 +57,12 @@ defmodule KeyfleetWeb.ShellLive do
   # The events each area's page sends, which that area's module answers.
   @fleet_events ~w(activity_earlier open_pass_key keymap_ready keymap_pictures find_keys select_key validate_quote send_quote)
   @room_events ~w(mute_key unmute_key post_to_room)
-  @key_profile_events ~w(post_to_key confirm_remove_from_wall cancel_remove_from_wall remove_from_wall close_key)
+  @key_profile_events ~w(post_to_key remove_from_wall close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
-  @poll_events ~w(start_poll confirm_end_poll cancel_end_poll end_poll cast_vote)
+  @poll_events ~w(start_poll end_poll cast_vote)
   @search_events ~w(search search_more)
   @sign_in_events ~w(open_notebooks get_code_password)
-  @workspace_events ~w(pin unpin project_start project_archive project_take_over confirm_project_delete cancel_project_delete project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
+  @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
   # The routes that show a fleet's workspace and its votes.
   @workspace_routes [:workspace, :workspace_item, :code_commit, :code_history, :code_files]
@@ -97,7 +97,6 @@ defmodule KeyfleetWeb.ShellLive do
        code_notice: nil,
        project_notice: nil,
        publish_notice: nil,
-       project_confirm_delete: false,
        connection_outcome: nil,
        held_keys: [],
        key_agents: AccountLive.key_agents(nil),
@@ -143,7 +142,6 @@ defmodule KeyfleetWeb.ShellLive do
        polls_clock: nil,
        poll_form: nil,
        polls_notice: nil,
-       poll_confirm_end: false,
        search: nil,
        shared: %{},
        buy_key: nil,
@@ -814,7 +812,6 @@ defmodule KeyfleetWeb.ShellLive do
             code_notice={@code_notice}
             project_notice={@project_notice}
             publish_notice={@publish_notice}
-            project_confirm_delete={@project_confirm_delete}
             signed_out?={is_nil(actor(@access_context))}
           />
           <WorkspaceLive.item
@@ -890,7 +887,6 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :poll}
           page={@polls}
           notice={@polls_notice}
-          confirm_end={@poll_confirm_end}
         />
       </:content>
     </.shell>
@@ -1345,8 +1341,7 @@ defmodule KeyfleetWeb.ShellLive do
       code_password: nil,
       code_notice: nil,
       project_notice: nil,
-      publish_notice: nil,
-      project_confirm_delete: false
+      publish_notice: nil
     )
     |> WorkspaceLive.read_workspace()
   end

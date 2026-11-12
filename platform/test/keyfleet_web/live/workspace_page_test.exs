@@ -1780,21 +1780,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       :ok
     end
 
-    # Deleting takes the project's work with it, so Delete asks first in
-    # Keyfleet's own window: Cancel keeps the project, and saying so deletes it.
-    test "Delete asks first, Cancel keeps the project, and saying so deletes it", %{conn: conn} do
+    # Deleting takes the project's work with it, so Delete asks first in the
+    # site's confirm window in the browser; its going-ahead press is this one.
+    test "Delete asks first, and going ahead deletes the project", %{conn: conn} do
       {:ok, view, _html} = live(conn, @board <> "?project=lab")
-
-      view |> element("#project-delete") |> render_click()
-      assert has_element?(view, "#project-delete-dialog h2", "Delete Lab for good?")
-
-      view |> render_hook("cancel_project_delete", %{})
-      refute has_element?(view, "#project-delete-dialog")
       assert %{state: :archived} = lab()
 
-      view |> element("#project-delete") |> render_click()
-      view |> element("#project-delete-confirm") |> render_click()
-      refute has_element?(view, "#project-delete-dialog")
+      view |> element(~s(#project-delete[data-confirm-action="Delete"])) |> render_click()
       assert lab() == nil
     end
   end

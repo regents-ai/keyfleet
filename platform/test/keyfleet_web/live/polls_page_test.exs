@@ -98,22 +98,14 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     assert has_element?(holder, "#poll-each-vote", ~r/Their agent \(Key 1\)\s+chose Left door/)
   end
 
-  # Ending a poll can't be undone, so End poll asks first in Keyfleet's own
-  # window: Cancel leaves the poll open, and saying so ends it.
-  test "End poll asks first, Cancel keeps the poll open, and saying so ends it", %{conn: conn} do
+  # Ending a poll can't be undone, so End poll asks first in the site's
+  # confirm window in the browser; its going-ahead press is this one.
+  test "End poll asks first, and going ahead ends it", %{conn: conn} do
     poll = start!()
     {:ok, view, _html} = live(signed_in_as(conn, @starter), "#{@list}/#{poll.id}")
-
-    view |> element("#poll-end") |> render_click()
-    assert has_element?(view, "#poll-end-dialog h2", "End this poll now?")
-
-    view |> render_hook("cancel_end_poll", %{})
-    refute has_element?(view, "#poll-end-dialog")
     assert has_element?(view, "#poll-votes-so-far")
 
-    view |> element("#poll-end") |> render_click()
-    view |> element("#poll-end-confirm") |> render_click()
-    refute has_element?(view, "#poll-end-dialog")
+    view |> element(~s(#poll-end[data-confirm-action="End"])) |> render_click()
     assert shows?(fn -> has_element?(view, "#poll-results") end)
     refute has_element?(view, "#poll-end")
   end

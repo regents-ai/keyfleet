@@ -587,8 +587,9 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
            )
   end
 
-  # Only the Key's holder takes a post off its wall, once they say so in the
-  # window that asks first, and it then leaves every page with the wall open.
+  # Only the Key's holder takes a post off its wall, after the site's confirm
+  # window asks first in the browser, and it then leaves every page with the
+  # wall open.
   test "a message written elsewhere to the key on show appears, and goes when its holder takes it off",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, @path <> "?key=12")
@@ -611,11 +612,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert render(writer) =~ "Anyone aboard?"
 
     {:ok, holder, _html} = conn |> signed_in_as(wallet("e")) |> live(@path <> "?key=12")
-    holder |> element(remove) |> render_click()
-    assert has_element?(holder, "#key-wall-remove-dialog")
-    assert render(holder) =~ "Anyone aboard?"
-    holder |> element("#key-wall-remove-confirm") |> render_click()
-    refute has_element?(holder, "#key-wall-remove-dialog")
+    holder |> element(remove <> ~s([data-confirm-action="Remove"])) |> render_click()
 
     for page <- [holder, writer, view] do
       refute render(page) =~ "Anyone aboard?"

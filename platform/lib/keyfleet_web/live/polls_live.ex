@@ -23,7 +23,6 @@ defmodule KeyfleetWeb.PollsLive do
   use KeyfleetWeb, :html
 
   import Keyfleet.Fleets.Rules, only: [counted: 3]
-  import KeyfleetWeb.Components.ConfirmDialog
   import KeyfleetWeb.Components.Countdown
   import KeyfleetWeb.Components.Footnote
   import KeyfleetWeb.Components.LoadFailed
@@ -254,7 +253,6 @@ defmodule KeyfleetWeb.PollsLive do
 
   attr :page, :any, required: true, doc: "the poll as read, or `:unreadable`"
   attr :notice, :map, default: nil
-  attr :confirm_end, :boolean, default: false, doc: "whether End poll is asking first"
 
   def detail(%{page: :unreadable} = assigns), do: ~H|<.unreadable id="poll-page" />|
   def detail(%{page: %{fleet_name: nil}} = assigns), do: ~H|<.missing_fleet id="poll-page" />|
@@ -380,23 +378,12 @@ defmodule KeyfleetWeb.PollsLive do
             id="poll-end"
             type="button"
             variant="quiet"
-            phx-click="confirm_end_poll"
-            aria-haspopup="dialog"
+            phx-click="end_poll"
+            data-confirm="End this poll now? It takes no more votes."
+            data-confirm-action="End"
           >
             End poll
           </Regent.Primitives.button>
-          <.confirm_dialog
-            :if={@confirm_end and @open? and @starter?}
-            id="poll-end-dialog"
-            question="End this poll now?"
-            about="It takes no more votes."
-            close="cancel_end_poll"
-            shown={@poll.id}
-          >
-            <Regent.Primitives.button id="poll-end-confirm" type="button" phx-click="end_poll">
-              End poll
-            </Regent.Primitives.button>
-          </.confirm_dialog>
         </section>
 
         <div class="polls-side">
@@ -562,13 +549,13 @@ defmodule KeyfleetWeb.PollsLive do
   """
   def read_polls(socket, :polls, %{"fleet_id" => fleet_id}) do
     socket
-    |> assign(polls_notice: nil, poll_form: start_form(), poll_confirm_end: false)
+    |> assign(polls_notice: nil, poll_form: start_form())
     |> read(fleet_id, nil, :unreadable)
   end
 
   def read_polls(socket, :poll, %{"fleet_id" => fleet_id, "poll_id" => poll_id}) do
     socket
-    |> assign(polls_notice: nil, poll_form: nil, poll_confirm_end: false)
+    |> assign(polls_notice: nil, poll_form: nil)
     |> read(fleet_id, poll_id, :unreadable)
   end
 
@@ -576,7 +563,7 @@ defmodule KeyfleetWeb.PollsLive do
     socket
     |> listen([])
     |> stop_clock()
-    |> assign(polls: nil, poll_form: nil, polls_notice: nil, poll_confirm_end: false)
+    |> assign(polls: nil, poll_form: nil, polls_notice: nil)
   end
 
   @doc """
@@ -857,21 +844,9 @@ defmodule KeyfleetWeb.PollsLive do
     end
   end
 
-  # End poll asks first.
-  def handle_event(
-        "confirm_end_poll",
-        _params,
-        %{assigns: %{polls: %{kind: :poll, poll: %{}}}} = socket
-      ),
-      do: {:noreply, assign(socket, :poll_confirm_end, true)}
-
-  def handle_event("cancel_end_poll", _params, socket),
-    do: {:noreply, assign(socket, :poll_confirm_end, false)}
-
   def handle_event(event, params, %{assigns: %{polls: %{kind: :poll, poll: %{}}}} = socket)
       when event in ["end_poll", "cast_vote"] do
     action = if event == "end_poll", do: :end, else: :vote
-    socket = assign(socket, :poll_confirm_end, false)
 
     case act(action, socket.assigns.polls, vote(params), ShellLive.human_actor(socket)) do
       {:error, error} -> {:noreply, socket |> refused(error, default_code(action)) |> refresh()}

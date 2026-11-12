@@ -5,8 +5,8 @@ import {prepareFleet, sellKey} from "./support/fleet_chain"
 
 // A person manages their paired agents on the Agents page, as on regents.sh:
 // See what it has done opens the agent's window, Done closes it, and Unpair,
-// once confirmed in a window of its own, takes the agent off the account. The window is the shared
-// cut-corner dialog, on a wide screen and on a phone.
+// once confirmed in the site's confirm window, takes the agent off the account. Both
+// windows are the shared cut-corner dialog, on a wide screen and on a phone.
 const person = "did:privy:verified"
 
 async function signIn(page: Page) {
@@ -43,17 +43,31 @@ for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) 
 
     await row.getByRole("button", {name: `See what ${name} has done`}).click()
     await expect(dialog).toBeVisible()
-    const confirm = page.locator("#account-unpair-dialog")
+    const confirm = page.locator("#rg-confirm")
     await dialog.getByRole("button", {name: "Unpair"}).click()
-    await expect(confirm.getByRole("heading", {name: `Unpair ${name}?`})).toBeFocused()
+    await expect(confirm).toBeVisible()
+    await expect(confirm).toHaveAccessibleName(`Unpair ${name}? It will need a new code to pair again.`)
+    await expect(confirm.getByRole("button", {name: "Cancel"})).toBeFocused()
+    const frame = (await confirm.boundingBox())!
+    expect(frame.x).toBeGreaterThanOrEqual(0)
+    expect(frame.x + frame.width).toBeLessThanOrEqual(viewport.width)
     await confirm.getByRole("button", {name: "Cancel"}).click()
-    await expect(confirm).toHaveCount(0)
+    await expect(confirm).toBeHidden()
     await expect(dialog.getByRole("button", {name: "Unpair"})).toBeFocused()
+    await expect(row).toHaveCount(1)
+
+    // Escape closes it too, and nothing is unpaired.
+    await dialog.getByRole("button", {name: "Unpair"}).click()
+    await expect(confirm).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(confirm).toBeHidden()
+    await expect(dialog).toBeVisible()
+    await expect(row).toHaveCount(1)
 
     await dialog.getByRole("button", {name: "Unpair"}).click()
     await confirm.getByRole("button", {name: "Unpair"}).click()
 
-    await expect(confirm).toHaveCount(0)
+    await expect(confirm).toBeHidden()
     await expect(dialog).toBeHidden()
     await expect(row).toHaveCount(0)
     await expect(page.locator("#account-agents [role=status]")).toHaveText(

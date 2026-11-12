@@ -6,8 +6,8 @@ defmodule KeyfleetWeb.AgentsPanel do
   New Agent opening the pairing window (`KeyfleetWeb.PairingBox`),
   and a larger view of one agent with where it has been active across the Regent
   sites, a line for each site and day (`Keyfleet.Agents.ActivityReading`), its
-  name, which the person may change, and Unpair, which asks first in a window
-  of its own. Beside each agent are the Keys it is on and those it holds a
+  name, which the person may change, and Unpair, which asks first in the site's
+  confirm window. Beside each agent are the Keys it is on and those it holds a
   shard of, or, with none, Assign a Key, which leads to Your Keys on the
   Account page (`KeyfleetWeb.AgentKeys`).
 
@@ -21,8 +21,6 @@ defmodule KeyfleetWeb.AgentsPanel do
   in or is unpaired anywhere.
   """
   use KeyfleetWeb, :live_component
-
-  import KeyfleetWeb.Components.ConfirmDialog
 
   alias Keyfleet.Agents.ActivityReading
   alias Keyfleet.Capabilities
@@ -39,7 +37,7 @@ defmodule KeyfleetWeb.AgentsPanel do
       {:ok,
        socket
        |> Session.check_component_lease(&take_account/2)
-       |> assign(detail: nil, confirming: nil, notice: nil, name_error: nil)}
+       |> assign(detail: nil, notice: nil, name_error: nil)}
 
   @impl true
   def update(%{agents_changed: true}, socket), do: {:ok, read_agents(socket)}
@@ -102,23 +100,6 @@ defmodule KeyfleetWeb.AgentsPanel do
     {:noreply, socket |> read_agents() |> assign(notice: notice, name_error: name_error)}
   end
 
-  # Unpair asks first, naming the agent as the list shows it. An agent already
-  # gone from the list says so, as Unpair itself would.
-  def handle_event("confirm_unpair", %{"id" => id}, socket) do
-    agent = is_list(socket.assigns.agents) && Enum.find(socket.assigns.agents, &(&1.id == id))
-
-    case agent do
-      %PairedAgent{id: id, name: name} ->
-        {:noreply, assign(socket, confirming: %{id: id, name: name})}
-
-      _gone ->
-        {:noreply, socket |> read_agents() |> assign(notice: {:alert, @gone})}
-    end
-  end
-
-  def handle_event("cancel_unpair", _params, socket),
-    do: {:noreply, assign(socket, confirming: nil)}
-
   def handle_event("unpair_agent", %{"id" => id}, socket) do
     actor = socket.assigns.person
 
@@ -135,7 +116,7 @@ defmodule KeyfleetWeb.AgentsPanel do
           failed_notice()
       end
 
-    {:noreply, socket |> assign(confirming: nil) |> read_agents() |> assign(notice: notice)}
+    {:noreply, socket |> read_agents() |> assign(notice: notice)}
   end
 
   defp failed_notice,
@@ -184,11 +165,12 @@ defmodule KeyfleetWeb.AgentsPanel do
             id={"#{@id}-unpair-#{agent.id}"}
             type="button"
             variant="quiet"
-            phx-click="confirm_unpair"
+            phx-click="unpair_agent"
             phx-value-id={agent.id}
             phx-target={@myself}
             aria-label={"Unpair #{agent.name}"}
-            aria-haspopup="dialog"
+            data-confirm={"Unpair #{agent.name}? It will need a new code to pair again."}
+            data-confirm-action="Unpair"
           >
             Unpair
           </P.button>
@@ -229,34 +211,16 @@ defmodule KeyfleetWeb.AgentsPanel do
                 id="account-agent-dialog-unpair"
                 type="button"
                 variant="secondary"
-                phx-click="confirm_unpair"
+                phx-click="unpair_agent"
                 phx-value-id={@detail.agent.id}
                 phx-target={@myself}
-                aria-haspopup="dialog"
+                data-confirm={"Unpair #{@detail.agent.name}? It will need a new code to pair again."}
+                data-confirm-action="Unpair"
               >
                 Unpair
               </P.button>
             </:actions>
           </Regent.Account.agent_detail>
-
-          <.confirm_dialog
-            :if={@confirming}
-            id="account-unpair-dialog"
-            question={"Unpair #{@confirming.name}?"}
-            about="It will need a new code to pair again."
-            close="cancel_unpair"
-            shown={@confirming.id}
-          >
-            <P.button
-              id="account-unpair-confirm"
-              type="button"
-              phx-click="unpair_agent"
-              phx-value-id={@confirming.id}
-              phx-target={@myself}
-            >
-              Unpair
-            </P.button>
-          </.confirm_dialog>
         </:footer>
       </Regent.Account.agents>
     </div>
