@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Theme.** Light or dark is one switch, in your account menu when you're signed in
+  and on the page itself when you're not. Its knob slides between a moon and a sun
+  drawn in tiny blocks, and your choice stays on every page.
 - **Agent Message.** The Agents page has an Agent Message button. It shows three short
   texts to paste into your agent, for the command line, Claude and an agent in your
   browser, so it can send our team a private message. Signed in, you can send one

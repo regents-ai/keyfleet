@@ -7893,3 +7893,33 @@ Check: `platform/test/keyfleet/left_messages/leave_test.exs`,
 `platform/test/keyfleet_web/left_messages_pages_test.exs`, a `messages_leave` test in
 `platform/test/keyfleet_web/mcp_connector_test.exs`, and
 `platform/test/browser/agent_message.spec.ts`.
+## 2026-11-12 — The light and dark theme switch
+
+- Rollout `2026-11-12-theme-switch`, from the template at `abe3fc40`.
+  `Shell.theme_toggle/1` is a real `role="switch"` button named "Light
+  theme", on for light. Signed in it is a row of the account menu
+  (`Regent.Account.menu`'s `theme` slot); signed out it sits in the header of
+  the homepage and the app's pages (`#theme-control`) and in the footer of the
+  reading pages. A page shows one: the app pages' footer no longer carries a
+  second switch. LiveView mounts the `ThemeSwitch` hook; there is no mount of
+  our own.
+- `assets/js/theme.ts` holds the one way the theme is stored: the same
+  `regent_theme` cookie, `syncTheme` on `phx:page-loading-stop`, `popstate`
+  and `pageshow`. Every page stays light until a theme is chosen (Sean, 19
+  Oct), so the device's setting is still not followed. The harbour, the places
+  chart, the workspace graph and the homepage pictures hear theme changes
+  through `theme.ts`; `theme_tone.ts` keeps only `tone`.
+- The picture: `hooks/theme_switch.ts` and `theme_switch/*`, with an optional
+  `maxDevicePixelRatio` on `canvas_island.ts` and `[role='switch']` left out
+  of the press motion in `motion.ts`. The canvas is hidden from screen readers,
+  pauses off screen and never starts under reduced motion; the flat square
+  switch works alone. The beam is `--brand-accent` by day and Powder Blue at
+  night.
+- Removed: `Regent.ThemeToggle` from the header, footer, Privy reference page
+  and showcase catalog, the theme click handler and cookie code in `app.ts`,
+  and the footer's prism sizing rule.
+
+Check: `ShellLiveTest`, `theme.test.ts`, the `theme_switch_*` unit tests and
+the browser walks `theme_switch.spec.ts` (signed out on `/docs`, `/account`
+and `/`, signed in from the account menu, at 1280, 390 and 320),
+`app_shell.spec.ts`, `account_menu.spec.ts` and `homepage.spec.ts`.

@@ -1531,3 +1531,48 @@ features:
     gaps:
       - regents-cli does not carry messages leave until its next release (cli/commands.json marks it pending).
       - Not yet run by a real agent.
+  - id: theme-switch
+    what: >-
+      A visitor turns the page light or dark with one switch named Light
+      theme, on for light, by pointer, a drag of its knob, Space or Enter;
+      each press turns it once. Signed in it is a row of the account menu;
+      signed out it sits in the header of the homepage and the app's pages,
+      and in the footer of the reading pages. A page shows one. Every page is
+      light until a theme is chosen, and the choice holds over a reload and a
+      live page change. Where the browser can, a glass knob with a moon and
+      sun of tiny blocks is drawn on a canvas; otherwise, and under reduced
+      motion or forced colours, the flat square switch works alone.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/components/layouts.ex
+      - platform/assets/js/theme.ts
+      - platform/assets/js/hooks/theme_switch.ts
+      - platform/assets/js/theme_switch/knob.ts
+      - platform/assets/js/theme_switch/light.ts
+      - platform/assets/js/theme_switch/morph.ts
+      - platform/assets/js/theme_switch/pixels.ts
+      - platform/assets/js/theme_switch/renderer.ts
+      - platform/assets/js/theme_switch/shader.ts
+      - platform/assets/js/canvas_island.ts
+      - platform/assets/js/app.ts
+      - platform/assets/css/components/theme_switch.css
+      - platform/assets/css/components/shell.css
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+      - live: KeyfleetWeb.ShellLive
+      - route: GET /docs
+    proofs:
+      - platform/test/browser/theme_switch.spec.ts
+      - platform/test/browser/app_shell.spec.ts
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/assets/test/theme.test.ts
+      - platform/assets/test/theme_switch_knob.test.ts
+      - platform/assets/test/theme_switch_morph.test.ts
+      - platform/assets/test/theme_switch_pixels.test.ts
+    gaps:
+      - The glass picture is not drawn in headless Chromium (no WebGPU), so the walk presses the flat switch; the picture is checked by eye.
+      - The knob's drag is covered by unit tests, not walked.
+      - WebKit is not run on the Mac. Forced colours has no automated test.

@@ -60,7 +60,7 @@ for (const width of [1280, 390, 320]) {
         const errors = watchErrors(page)
         await page.goto(path)
         await expect(page.locator(ready)).toBeAttached()
-        await expect(switches(page)).toHaveCount(1)
+        await expect(page.getByRole("switch", {name: "Light theme", includeHidden: true})).toHaveCount(1)
         const toggle = switches(page)
         await toggle.scrollIntoViewIfNeeded()
         await expect(toggle).toBeVisible()
@@ -86,9 +86,9 @@ for (const width of [1280, 390, 320]) {
       await auth.establishLocalSession()
       await page.goto("/classic/1")
       await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-      // The menu's row is the only switch; the header has none.
+      // The menu's row is the only switch, closed with the menu; the header has none.
       await expect(page.locator("#theme-control")).toHaveCount(0)
-      await expect(switches(page)).toHaveCount(1)
+      await expect(page.getByRole("switch", {name: "Light theme", includeHidden: true})).toHaveCount(1)
 
       const content = page.locator("#route-content")
       const before = await content.boundingBox()
