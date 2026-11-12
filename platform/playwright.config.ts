@@ -21,6 +21,7 @@ export default defineConfig({
     "wallet_buttons.spec.ts",
     "key_shards.spec.ts",
     "room_mutes.spec.ts",
+    "dm_confirm.spec.ts",
     "copy_buttons.spec.ts",
     "content_security_policy.spec.ts",
     "shell_links.spec.ts",
