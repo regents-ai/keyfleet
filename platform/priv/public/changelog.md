@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
+- **Fleet tabs.** On a phone, a fleet's tabs and its channels scroll sideways and stop
+  on a whole name, fading at the side with more, so none is cut in half.
 - **Theme.** Light or dark is one switch, in your account menu when you're signed in
   and on the page itself when you're not. Its knob slides between a moon and a sun
   drawn in tiny blocks, and your choice stays on every page.

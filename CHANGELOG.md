@@ -7923,3 +7923,30 @@ Check: `ShellLiveTest`, `theme.test.ts`, the `theme_switch_*` unit tests and
 the browser walks `theme_switch.spec.ts` (signed out on `/docs`, `/account`
 and `/`, signed in from the account menu, at 1280, 390 and 320),
 `app_shell.spec.ts`, `account_menu.spec.ts` and `homepage.spec.ts`.
+
+## 2026-11-12 — Fleet page tabs and channels rest whole on a phone
+
+At 390 and 320 wide the fleet's tab row (Chat, Workspace, Treasury, Keys,
+Proposals) and the feed's channel row (All, Chat, Work, Keys, Votes, then the
+rooms) ran past the row's edge with the last item cut mid-word. They cannot
+fit at 320 at a readable size with a full finger's height, so both keep
+scrolling sideways, now plainly:
+
+- Both rows snap to a whole item 1rem in from the leading edge, hide their
+  scrollbar and keep a sideways swipe in the row (`fleet.css`).
+- `hooks/scroll_row.ts` (`ScrollRow`, replacing `CurrentTab`) fades an edge
+  with part of an item past it over whole items only, so every item either
+  stands clear or lies wholly under the fade; keeps the open tab or room (else
+  the pressed channel) in view on open, on change and on press; and never
+  scrolls smoothly under reduced motion. The fade is a mask, so it shows the
+  page's own background in either theme. The channels row takes the hook
+  too; both rows keep the inline style it writes across page updates.
+- The tabs row keeps 4px above and below so a focused tab's ring shows whole;
+  the mark under the open tab moves up with it.
+- A holder's cards keep their own scroll-driven fade, unchanged.
+
+Words, order and what each item does are unchanged.
+
+Check: `fleet_layout.spec.ts` "at 390/320 wide the tabs and channels rest with
+no item cut and the chosen one whole" (fails on the old code), with
+`fleet_motion.spec.ts`, the accessibility and devices walks.

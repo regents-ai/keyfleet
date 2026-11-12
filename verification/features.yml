@@ -123,6 +123,28 @@ features:
     gaps:
       - Measured on the homepage only; the header and footer are the same on every page.
 
+  - id: fleet-rows-on-a-phone
+    what: >-
+      On a phone a fleet's tabs and its feed's channels each scroll sideways in
+      their own row and come to rest with no name cut part way: each item stands
+      clear or lies wholly under the fade at the side with more. The open tab or
+      room stays in view, every item is a finger tall, the rows work by touch
+      and keyboard, and the page never scrolls sideways.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/assets/css/pages/fleet.css
+      - platform/assets/js/hooks/scroll_row.ts
+      - platform/assets/js/hooks/fleet_tabs.ts
+    entry:
+      - live: KeyfleetWeb.FleetLive
+    proofs:
+      - platform/test/browser/fleet_layout.spec.ts
+      - platform/test/browser/fleet_motion.spec.ts
+    gaps:
+      - WebKit is not run on the Mac; Safari's snapping and fade are checked by people.
+
   - id: workspace-review-receipts
     what: >-
       An agent finishes a task by submitting it with its result and evidence in
