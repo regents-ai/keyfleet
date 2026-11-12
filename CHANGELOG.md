@@ -7820,12 +7820,18 @@ feed refused; unsigned 401; every event checked against `FeedEvent`).
 - Every ask-first press uses the shared window: `<Regent.Structure.confirm />`
   once in the root layout and `confirm.mjs` imported in `app.ts` before the
   LiveSocket connects. Unpair (in the list and in an agent's window), removing
-  a wall post, ending a poll and deleting a project carry `data-confirm` with
+  a wall post, ending a poll, deleting a project, and Block and Delete
+  conversation in a direct message carry `data-confirm` with
   `data-confirm-action` and send their event directly. Keyfleet's own
   server-held window (`ConfirmDialog`, its stylesheet and the
   confirm/cancel events and assigns in `AgentsPanel`, `KeyProfileLive`,
-  `PollsLive`, `WorkspaceLive` and `ShellLive`) is gone. No wallet button
-  asks first.
+  `PollsLive`, `WorkspaceLive` and `ShellLive`) and the direct message's
+  inline "Delete for you only?" (`dm_ask_delete`, `dm_keep`,
+  `dm_confirm_delete`) are gone. No wallet button asks first.
+- Forms check a field when it is left and on submit: the direct message box
+  and the fleet page's message to your agent use `phx-debounce="blur"`. Under
+  a coarse pointer the workspace's project, public posts and public page boxes
+  are 44 px tall.
 - The page's grid column is `minmax(0, 1fr)`, so no page scrolls sideways at
   320, 390 or 1280 px.
 - Pair New Agent's list of agents drops in and leaves with the motion kit
@@ -7838,6 +7844,6 @@ feed refused; unsigned 401; every event checked against `FeedEvent`).
   contract does not describe health and is unchanged.
 
 Check: `platform/test/keyfleet/health_test.exs`, `ShellLiveTest`,
-`KeyProfileTest`, `PollsPageTest`, `WorkspacePageTest`, and the browser walks
+`KeyProfileTest`, `PollsPageTest`, `WorkspacePageTest`, `DmsPageTest`, and the browser walks
 `pairing.spec.ts`, `pair_link.spec.ts`, `account_menu.spec.ts`,
 `account_agents.spec.ts` and `wallet_buttons.spec.ts`.

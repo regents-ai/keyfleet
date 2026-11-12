@@ -10,8 +10,9 @@ import {defineConfig, devices} from "@playwright/test"
 // paired agents on the Agents page, the Treasury's last reading and its
 // refresh icon, new work gliding into a fleet's workstream, a visit told
 // again from the server's lines, the city button beside an open fleet's name
-// with its bar, and a new owner's setup list from the purchase to its last
-// step, in Chromium.
+// with its bar, a new owner's setup list from the purchase to its last
+// step, and Block and Delete conversation asking first in a direct message,
+// in Chromium.
 // They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
 // over Erlang distribution, so the server runs as a named node on the loopback
 // address, with a secret cookie and a fixed distribution port instead of epmd.
@@ -37,7 +38,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts", "fleet_search.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

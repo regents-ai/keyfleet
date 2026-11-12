@@ -227,7 +227,7 @@ defmodule KeyfleetWeb.DmsLive do
                 rows="3"
                 maxlength="4000"
                 required
-                phx-debounce="300"
+                phx-debounce="blur"
                 aria-describedby={field.described_by != "" && field.described_by}
               >{Phoenix.HTML.Form.normalize_value("textarea", @form.params["body"])}</textarea>
             </Regent.Primitives.field>

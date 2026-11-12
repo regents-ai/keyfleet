@@ -789,6 +789,7 @@ defmodule KeyfleetWeb.FleetLive do
           rows="3"
           maxlength="1000"
           required
+          phx-debounce="blur"
           placeholder="I can review the parser fix tonight"
         >{Phoenix.HTML.Form.normalize_value("textarea", @quotes.form[:body].value)}</textarea>
         <Regent.Primitives.button type="submit" variant="secondary">

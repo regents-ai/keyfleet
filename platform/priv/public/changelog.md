@@ -4,9 +4,13 @@ Changes to Keyfleet, newest first.
 
 ## 12 November 2026
 
-- **Ask first.** Unpairing an agent, taking a post off your Key's wall, ending a poll and
-  deleting a project now ask in the same window every Regent site uses, with Cancel ready
-  first. Buying a Key and every other wallet press never ask first.
+- **Ask first.** Unpairing an agent, taking a post off your Key's wall, ending a poll,
+  deleting a project, and blocking a Key or deleting a conversation in your messages now
+  ask in the same window every Regent site uses, with Cancel ready first. Buying a Key and
+  every other wallet press never ask first.
+- **Forms.** A message to a Key or to your agent is checked when you leave the box or
+  send it, never while you type. On a phone, the workspace's project boxes are a full
+  finger's height.
 - **Pairing.** In Pair New Agent the chosen agent's picture sits in a smaller band, and
   the list of agents drops in and out with a short move. With less motion asked for, it
   opens and closes at once.

@@ -228,6 +228,13 @@
   gap: 0.25rem;
 }
 
+/* Under a finger each box is a full finger's height. */
+@media (pointer: coarse) {
+  .workspace-project-form :is(input, select) {
+    min-height: 2.75rem;
+  }
+}
+
 /* Which project an item, a goal or a pin belongs to, when all are shown. */
 .workspace-project-tag {
   color: var(--color-fg-muted);

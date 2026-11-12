@@ -1199,8 +1199,9 @@ features:
       - platform/test/keyfleet_web/live/workspace_page_test.exs
       - platform/test/keyfleet_web/live/polls_page_test.exs
       - platform/test/browser/account_agents.spec.ts
+      - platform/test/browser/dm_confirm.spec.ts
     gaps:
-      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the others use the same window.
+      - Focus going back to the opening button and Escape are walked in the browser for Unpair, Block and Delete conversation; the others use the same window.
       - WebKit is not run on the Mac.
 
   - id: claude-connector
