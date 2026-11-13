@@ -1,4 +1,4 @@
-import {expect, test, type Browser, type Page} from "@playwright/test"
+import {expect, test, type Browser, type Locator, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {offerRewards, prepareFleet, sellKey} from "./support/fleet_chain"
 
@@ -29,18 +29,27 @@ const focusInside = (page: Page) =>
   page.evaluate(() => document.querySelector("#key-profile")?.contains(document.activeElement) ?? false)
 const withoutKey = new RegExp(`${fleetPath}(\\?view=members)?$`)
 
+// The member list's first Key card, and its Key. A holder's cards show their
+// first fifty Keys, so a Key just sold has none once its holder has more.
+const firstCard = (page: Page) => page.locator("[id^='fleet-members-card-']").first()
+const keyOf = async (card: Locator) => Number((await card.getAttribute("id"))!.replace("fleet-members-card-", ""))
+
 test.describe("a key's profile", () => {
   test.beforeAll(() => {
     prepareFleet(fleet)
   })
 
   test("opens from the list with its title focused, keeps Tab inside, and Escape hands focus back", async ({page}) => {
-    const key = sellKey(fleet, me)
+    sellKey(fleet, me)
     const errors = await signIn(page)
     await openFleet(page, "?view=members")
 
-    const link = page.locator(`#fleet-members-card-${key}`)
-    await link.click()
+    // Opened from the keyboard, as by a person who goes on with Tab and Escape.
+    // A mouse left resting over the window opens any tip whose "i" the
+    // scrolling carries under it, and Escape closes that tip before the window.
+    const link = firstCard(page)
+    const key = await keyOf(link)
+    await link.press("Enter")
     await expect(page).toHaveURL(new RegExp(`[?&]key=${key}$`))
     await expect(profile(page)).toBeVisible()
     await expect(page.locator("#key-profile-title")).toHaveText(`Key ${key}`)
@@ -61,11 +70,13 @@ test.describe("a key's profile", () => {
   })
 
   test("Back closes it and Forward opens it again", async ({page}) => {
-    const key = sellKey(fleet, me)
+    sellKey(fleet, me)
     const errors = await signIn(page)
     await openFleet(page, "?view=members")
 
-    await page.locator(`#fleet-members-card-${key}`).click()
+    const card = firstCard(page)
+    const key = await keyOf(card)
+    await card.click()
     await expect(profile(page)).toBeVisible()
 
     await page.goBack()
@@ -131,6 +142,7 @@ test.describe("a key's profile", () => {
     await expect(page.locator("#key-profile-news")).toHaveText(`New message to Key ${key}.`)
     expect(await page.evaluate(() => "openedOnce" in window)).toBe(true)
     expect(errors).toEqual([])
+    await writer.context().close()
 
     async function otherVisitor(browser: Browser) {
       const context = await browser.newContext()
@@ -183,9 +195,13 @@ test.describe("a key's profile", () => {
       const sideways = await profile(page).evaluate(dialog => dialog.scrollWidth - dialog.clientWidth)
       expect(sideways).toBeLessThanOrEqual(0)
 
+      // Tab goes round the window's stops; once round reaches every one.
       const composer = page.locator("#key-profile-composer-body")
-      for (let press = 0; press < 60 && !(await composer.evaluate(box => box === document.activeElement)); press++) {
+      await page.keyboard.press("Tab")
+      const first = await page.evaluateHandle(() => document.activeElement)
+      while (!(await composer.evaluate(box => box === document.activeElement))) {
         await page.keyboard.press("Tab")
+        if (await first.evaluate(stop => stop === document.activeElement)) break
       }
       await expect(composer).toBeFocused()
       await expect(composer).toBeInViewport()
