@@ -90,14 +90,12 @@ defmodule Keyfleet.Code do
   """
   def agent_clone_url(repository), do: URI.to_string(address(repository))
 
-  defp address(repository) do
-    %URI{
-      scheme: "https",
-      host: config()[:host],
-      port: config()[:public_port],
-      path: "/#{repository}.git"
-    }
-  end
+  @doc "The address every project's repository is under, such as `https://code.keyfleet.ai`."
+  def origin, do: URI.to_string(origin_uri())
+
+  defp address(repository), do: %{origin_uri() | path: "/#{repository}.git"}
+
+  defp origin_uri, do: %URI{scheme: "https", host: config()[:host], port: config()[:public_port]}
 
   @doc """
   The path of one commit on this site: the fleet's address, the project's

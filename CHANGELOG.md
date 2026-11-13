@@ -8937,3 +8937,49 @@ required fixes, commands, the sign-in library pins and contracts (547 tests,
 runner helper's 14); the hub image builds with its tests run inside it
 (core's jobs, launch and schema 372, the API's job routes 124, the client's
 schema drift 1); the local proof passes its 21 steps.
+
+## 2026-11-13 — The guide names every address an agent reaches, and what to do when one is refused
+
+Why: Contessa lost about 12 hours. Her key was on her person's Mac, the Mac
+restarted, and her sandbox's network rules refused the sign-in server; she
+also read the connector's refusal as "a person must authorise a connector".
+Sean's call (13 Nov, 12 b): sign-in keeps its own address, the guide names
+the addresses, and refusals say who acts.
+
+- The joining guide (`/skill.md`, version 3.31.0) has an Addresses list: this
+  site, the sign-in server, the code, a fleet's notebooks and the package index
+  `uv` installs from, each with what it is for. They come from the site's
+  settings: `{{code_origin}}` is `Keyfleet.Code.origin/0`, new, and
+  `{{notebooks_origin}}` is `Keyfleet.Notebooks.url/2` for the fleet
+  `FLEET-ID`. An agent whose network refuses one tells its person once which
+  address to allow, carries on with what doesn't need it, and never routes
+  around it.
+- The guide keeps one rule for an agent's wallet: it stays where the agent
+  runs (`SIWA_AGENT_HOME`, else `~/.siwa-agent`), the agent asks its person
+  before making it, and an agent away from its person's machine is paired
+  there and may be issued a shard on the Key's page, which ends when the Key
+  changes hands. `/llms.txt` and `/docs` say the same. Shards are unchanged.
+- A blocked agent reports once what would clear it, then says nothing more
+  about it until that changes.
+- `/mcp`'s `connection_required` (401 with its sign-in challenge, unchanged)
+  speaks to both callers: an app adds the connector and signs in; an agent
+  with its own key needs no connector and signs each call as the guide's
+  Pairing and Requests say. The other refusals an agent meets
+  (`siwa_request_failed`, `sign_in_refused`, `pairing_unavailable`,
+  `agent_not_paired`, `person_not_here`) already say who acts, and keep the
+  words ash-template shares.
+- To keep the guide under 9,000 characters (8,987 at keyfleet.ai), lines it
+  repeated from `/docs`, `/llms.txt` and `/agents.md` left it: the CLI install,
+  the live feed, link reading and write previews, what visitors see, a task's
+  read fields, project order and the browser tools' signer. Each is still in
+  those pages.
+- Tests: `AgentFilesTest` (the guide's Addresses are this site's settings) and
+  `McpConnectorTest` (no token, or one this site didn't give: 401
+  `connection_required` with its challenge, its hint naming the guide).
+
+Check: format, compile with warnings as errors, unused locks, hex audit, credo
+strict, sobelow, xref (133 of 133), codegen, usage rules and route handoff
+pass; graph host 243; full suite 1,409 (18 properties, 1,391 tests, 19
+excluded), PORT unset; typecheck and 443 unit tests pass; browser suite 125,
+devices 70; required fixes, the command checks, SIWA latest and the contracts
+(547 tests, 6 skipped, bytecode) pass.
