@@ -58,7 +58,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
                      ["/code/:repository/files"] ++
                      ["/projects/:project", "/proposals"] ++
                      ["/proposals/:number", "/treasury", "/polls", "/polls/:poll_id", "/search"] ++
-                     ["/worldline", "/keys/:token_id"] ++
+                     ["/worldline", "/atlas", "/keys/:token_id"] ++
                      ["/keys/:token_id/dms", "/keys/:token_id/dms/:other_token_id"],
                  do: fleet <> page
                )

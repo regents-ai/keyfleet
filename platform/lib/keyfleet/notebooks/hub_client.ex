@@ -58,17 +58,26 @@ defmodule Keyfleet.Notebooks.HubClient do
   in turn until the last.
   """
   def all_notebooks(fleet_id, project_id, limit \\ 500),
-    do: all_notebooks(fleet_id, project_id, limit, nil, [])
+    do: all_notebooks(fleet_id, project_id, [limit: limit], nil, [])
 
-  defp all_notebooks(fleet_id, project_id, limit, cursor, found) do
-    params = [limit: limit] ++ if(cursor, do: [cursor: cursor], else: [])
+  @doc """
+  Every notebook in the project updated after `since`, as `all_notebooks/3`
+  lists them.
+  """
+  def notebooks_changed_after(fleet_id, project_id, %DateTime{} = since) do
+    query = [limit: 500, updated_after: DateTime.to_iso8601(since)]
+    all_notebooks(fleet_id, project_id, query, nil, [])
+  end
+
+  defp all_notebooks(fleet_id, project_id, query, cursor, found) do
+    params = query ++ if(cursor, do: [cursor: cursor], else: [])
 
     sent =
       request(fleet_id, :get, "/api/v1/projects/#{segment(project_id)}/notebooks", params: params)
 
     case answer(sent, [200]) do
       {:ok, %{"items" => items, "next_cursor" => next}} when is_binary(next) ->
-        all_notebooks(fleet_id, project_id, limit, next, found ++ items)
+        all_notebooks(fleet_id, project_id, query, next, found ++ items)
 
       {:ok, %{"items" => items}} ->
         {:ok, found ++ items}

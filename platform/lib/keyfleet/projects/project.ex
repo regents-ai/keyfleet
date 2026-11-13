@@ -181,6 +181,18 @@ defmodule Keyfleet.Projects.Project do
       prepare fn query, _context -> Ash.Query.lock(query, :for_update) end
     end
 
+    # The fleet's project of that name in any state, its row held until the
+    # transaction ends: a delete of it either committed already or waits
+    # (`Keyfleet.Atlas.ReadHub`).
+    read :locked_named do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :name, :string, allow_nil?: false, constraints: [trim?: false]
+      filter expr(fleet_id == ^arg(:fleet_id) and name == ^arg(:name))
+      get? true
+      prepare fn query, _context -> Ash.Query.lock(query, :for_update) end
+    end
+
     # The four Key steps call `Hold` from a function, so a change to it
     # recompiles nothing here.
 
@@ -413,7 +425,8 @@ defmodule Keyfleet.Projects.Project do
              :described,
              :record_space,
              :by_repository,
-             :locked_by_repository
+             :locked_by_repository,
+             :locked_named
            ]) do
       authorize_if actor_attribute_equals(:role, :system)
     end

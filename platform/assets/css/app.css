@@ -49,6 +49,7 @@
 @import "./pages/polls.css";
 @import "./pages/search.css";
 @import "./pages/worldline.css";
+@import "./pages/atlas.css";
 @import "./pages/animations.css";
 @import "./pages/harbour.css";
 @import "./components/account_auth_status.css";

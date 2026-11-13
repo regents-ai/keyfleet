@@ -19,6 +19,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/avatar/start",
              "/api/v1/agent/fleets/{fleet_id}/activity",
              "/api/v1/agent/fleets/{fleet_id}/agent_keys",
+             "/api/v1/agent/fleets/{fleet_id}/atlas/swarm",
+             "/api/v1/agent/fleets/{fleet_id}/atlas/things",
              "/api/v1/agent/fleets/{fleet_id}/checkpoint",
              "/api/v1/agent/fleets/{fleet_id}/checkpoint/save",
              "/api/v1/agent/fleets/{fleet_id}/dms/changes",

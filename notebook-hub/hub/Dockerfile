@@ -61,6 +61,10 @@ RUN git apply /tmp/notebook-prune-hourly.patch
 # count each fleet's notebook hours.
 COPY marimohub/notebook-machines.patch /tmp/notebook-machines.patch
 RUN git apply /tmp/notebook-machines.patch
+# A project's notebook list takes updated_after, so Keyfleet's hourly read for its
+# Atlas asks only for the notebooks saved since its last read.
+COPY marimohub/notebooks-updated-after.patch /tmp/notebooks-updated-after.patch
+RUN git apply /tmp/notebooks-updated-after.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
@@ -76,9 +80,10 @@ RUN cd packages/storage-s3 && pnpm exec vp test run
 # Cloudflare example's tests for its lease calls.
 RUN cd apps/server && pnpm exec vp test run src/backgroundLoops.test.ts src/cron.test.ts src/cron.tracing.test.ts src/bootstrap.test.ts
 RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
-# The app pool tests, with the app-pool-sweep.patch add, and the notebook-machines.patch
-# route tests with the API description it adds the route to.
-RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts src/routes/admin.machines.test.ts src/openapi.spec.test.ts
+# The app pool tests, with the app-pool-sweep.patch add, the notebook-machines.patch
+# route tests and the notebooks-updated-after.patch notebook route tests, with the API
+# description both add to.
+RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts src/routes/admin.machines.test.ts src/routes/notebooks.test.ts src/openapi.spec.test.ts
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---

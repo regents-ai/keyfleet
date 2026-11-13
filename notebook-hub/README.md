@@ -54,7 +54,9 @@ them to the hub. That part is built separately, in `platform/`.
     thumbnail cleanup to its own hourly loop, and skips reading a notebook's
     thumbnail record when no image is over a day old;
   - `notebook-machines.patch`, which lets the hub's super admin list every
-    notebook machine the hub still holds a record of (below).
+    notebook machine the hub still holds a record of (below);
+  - `notebooks-updated-after.patch`, which lets a project's notebook list ask
+    for only the notebooks updated after a time (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -316,6 +318,14 @@ its listed ID.
   and keeps its own copy to count each fleet's notebook hours. A machine that
   belongs to no session or run is not listed. Each read fetches every run the
   hub still keeps, one stored record each.
+- **A notebook list can start after a time (`notebooks-updated-after.patch`).**
+  `GET /api/v1/projects/{pid}/notebooks?updated_after=<time>` keeps only the
+  notebooks whose `updated_at` is later, newest first and paged as before.
+  Keyfleet's Atlas reads each project's list this way every hour
+  (`Keyfleet.Atlas.ReadHub`), so a read carries the notebooks saved since the
+  last one rather than the whole project. The hub does not record when a
+  notebook last ran (`last_run_at` stays null at the pin), so runs are not
+  asked for.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes

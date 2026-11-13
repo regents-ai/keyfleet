@@ -133,7 +133,11 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
     end
   end
 
-  defp known_fleet(fleet_id) do
+  @doc """
+  `:ok` for a fleet in the catalog that has opened; otherwise the error its
+  workspace's reads answer, as `answer/2` takes it.
+  """
+  def known_fleet(fleet_id) do
     case Fleets.get_fleet(fleet_id, actor: %System{}) do
       {:ok, nil} -> {:error, UnknownFleetError.exception(fleet_id: fleet_id)}
       {:ok, fleet} -> opened(fleet_id, fleet)
@@ -148,11 +152,14 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
       else: :ok
   end
 
-  # Only the fleet's members read its workspace, and who they are can't be
-  # read while the fleet's key ownership is not fresh.
-  defp answer({:ok, result}, _fleet_id), do: {:ok, result}
+  @doc """
+  A read's result as the workspace's reads answer it: only the fleet's
+  members read its workspace, and who they are can't be read while the
+  fleet's key ownership is not fresh.
+  """
+  def answer({:ok, result}, _fleet_id), do: {:ok, result}
 
-  defp answer({:error, %Ash.Error.Forbidden{} = error}, fleet_id) do
+  def answer({:error, %Ash.Error.Forbidden{} = error}, fleet_id) do
     cond do
       Enum.any?(error.errors, &WorkspaceRefusal.for_error/1) -> {:error, error}
       Keyfleet.Chain.fresh?(fleet_id) -> {:error, MembersOnlyError.exception(fleet_id: fleet_id)}
@@ -160,13 +167,13 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
     end
   end
 
-  defp answer({:error, %Ash.Error.Unknown{errors: errors} = error}, fleet_id) do
+  def answer({:error, %Ash.Error.Unknown{errors: errors} = error}, fleet_id) do
     if Enum.any?(errors, &WorkspaceRefusal.for_error/1),
       do: {:error, error},
       else: unreadable(error, fleet_id)
   end
 
-  defp answer({:error, error}, _fleet_id), do: {:error, error}
+  def answer({:error, error}, _fleet_id), do: {:error, error}
 
   # A read that failed some other way, such as the database not answering.
   # Nothing was written, so the workspace is answered as unavailable, and the

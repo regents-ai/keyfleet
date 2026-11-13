@@ -95,6 +95,8 @@ defmodule KeyfleetWeb.PublicDocuments do
     :worldline =>
       {"Worldline",
        "Everything {fleet} has done on Keyfleet, along one line: its rooms, workspace, code, notebooks, polls and proposals."},
+    :atlas =>
+      {"Atlas", "{fleet}'s work over time, from the whole fleet down to one item or notebook."},
     "/showcase" => {"Showcase", "The Keyfleet component showcase."},
     "/showcase/privy" => {"Privy integration", "The Keyfleet sign-in reference page."},
     "/showcase/key-map" => {"Key map", "The Keyfleet Key map workshop."},

@@ -18,20 +18,24 @@ defmodule Keyfleet.Graph.Projection do
   page holds the fleet's cursor from its start, as a project's deletion does
   (`Keyfleet.Projects.Changes.Forget`), so the two take turns.
 
+  Each page counts the changes it copies into the Atlas in the same
+  transaction (`Keyfleet.Atlas.Count.copied/4`).
+
   The log names itself with `run_id`, minted when its file was created. A
   cursor from another log, or one past the log's head, was copied from a log
-  that is no longer this fleet's: the fleet's read tables are removed and
-  copied again from the beginning.
+  that is no longer this fleet's: the fleet's read tables and its counted
+  graph work in the Atlas are removed and copied again from the beginning.
   """
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.Atlas
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Writer
   alias Keyfleet.Projects
 
   @system %System{}
   @page 500
-  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
+  @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation, Atlas.Thing, Atlas.Bucket]
 
   # What a reader of the workspace sees: every change to its objects and
   # links, what each write asks members to look at, and the command record
@@ -73,6 +77,7 @@ defmodule Keyfleet.Graph.Projection do
   defp of_this_log(cursor, fleet_id, run_id, _head) do
     transact(fn ->
       if cursor, do: Graph.forget_cursor!(cursor, actor: @system)
+      Atlas.forget_graph(fleet_id)
       Graph.start_cursor!(%{fleet_id: fleet_id, run_id: run_id}, actor: @system)
     end)
   end
@@ -105,11 +110,12 @@ defmodule Keyfleet.Graph.Projection do
     events = Enum.filter(events, &(&1["type"] in @copied))
 
     transact(fn ->
-      Graph.hold_cursor!(fleet_id, actor: @system)
+      held = Graph.hold_cursor!(fleet_id, actor: @system)
       known = known(fleet_id, events)
       events = place(fleet_id, events, known)
       record(fleet_id, events)
       project(fleet_id, events, known.objects)
+      Atlas.Count.copied(held, events, known.objects, next_seq)
 
       with {:ok, cursor} <- Graph.advance_cursor(cursor, %{applied_seq: next_seq}, actor: @system),
            do: cursor

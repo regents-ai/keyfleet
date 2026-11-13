@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Atlas
   alias Keyfleet.Code
   alias Keyfleet.Dms
   alias Keyfleet.Fleets
@@ -27,6 +28,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   alias KeyfleetWeb.{
     AccountLive,
+    AtlasLive,
     CodePassword,
     DmsLive,
     FleetLive,
@@ -63,6 +65,7 @@ defmodule KeyfleetWeb.ShellLive do
   @poll_events ~w(start_poll end_poll cast_vote)
   @search_events ~w(search search_more)
   @worldline_events ~w(worldline_older worldline_filter)
+  @atlas_events ~w(atlas_cells atlas_cards atlas_window atlas_older)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
@@ -89,6 +92,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:activity, [])
      |> stream_configure(:worldline, dom_id: &WorldlineLive.dom_id/1)
      |> stream(:worldline, [])
+     |> stream_configure(:atlas_things, dom_id: &AtlasLive.dom_id/1)
+     |> stream(:atlas_things, [])
      |> assign(
        route_spec: nil,
        client_key: Map.fetch!(session, "client_key"),
@@ -148,6 +153,7 @@ defmodule KeyfleetWeb.ShellLive do
        polls_notice: nil,
        search: nil,
        worldline: nil,
+       atlas: nil,
        shared: %{},
        buy_key: nil,
        pass_note: nil,
@@ -212,7 +218,8 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_proposals(route_spec, params)
        |> load_search(route_spec, params)
        |> PollsLive.read_polls(route_spec.route_id, params)
-       |> WorldlineLive.read(route_spec.route_id, params)}
+       |> WorldlineLive.read(route_spec.route_id, params)
+       |> AtlasLive.read(route_spec.route_id, params)}
     end
   end
 
@@ -268,7 +275,8 @@ defmodule KeyfleetWeb.ShellLive do
               :polls,
               :poll,
               :search,
-              :worldline
+              :worldline,
+              :atlas
             ],
        do: Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id))
 
@@ -427,6 +435,9 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp press(event, params, socket) when event in @worldline_events,
     do: WorldlineLive.handle_event(event, params, socket)
+
+  defp press(event, params, socket) when event in @atlas_events,
+    do: AtlasLive.handle_event(event, params, socket)
 
   # The Treasury's refresh, once every 30 seconds for each person: by
   # account when signed in, by visit when not.
@@ -617,7 +628,15 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice({:graph_head, fleet_id, _run_id, _watermark}, socket),
     do:
       {:noreply,
-       socket |> WorldlineLive.heard(:changes) |> FleetLive.refresh_activity_soon(fleet_id)}
+       socket
+       |> WorldlineLive.heard(:changes)
+       |> AtlasLive.heard(fleet_id)
+       |> FleetLive.refresh_activity_soon(fleet_id)}
+
+  # The fleet's Atlas counted work the workspace's own notices don't tell of:
+  # its history, or its notebooks as their hub was read.
+  defp notice({:atlas_changed, fleet_id}, socket),
+    do: {:noreply, AtlasLive.heard(socket, fleet_id)}
 
   # What anyone hears of the workspace: the fleet's activity has a new change
   # of it to show.
@@ -701,6 +720,9 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp notice(:refresh_worldline = message, socket),
     do: WorldlineLive.handle_info(message, socket)
+
+  defp notice(:refresh_atlas = message, socket),
+    do: AtlasLive.handle_info(message, socket)
 
   defp buy_key_changed(%{assigns: %{buy_key: %{id: fleet_id}}} = socket, {:fleet_now, fleet_id}),
     do: assign(socket, :buy_key, BuyKey.sale(fleet_id))
@@ -885,6 +907,12 @@ defmodule KeyfleetWeb.ShellLive do
             worldline={@worldline}
             events={@streams.worldline}
           />
+          <AtlasLive.page
+            :if={@route_spec.route_id == :atlas}
+            atlas={@atlas}
+            things={@streams.atlas_things}
+            signed_out?={is_nil(actor(@access_context))}
+          />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
             page={@proposals}
@@ -938,6 +966,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_place(:treasury), do: :treasury
   defp fleet_place(:search), do: :search
   defp fleet_place(:worldline), do: :worldline
+  defp fleet_place(:atlas), do: :atlas
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
 
   defp fleet_place(route_id)
@@ -994,7 +1023,8 @@ defmodule KeyfleetWeb.ShellLive do
               :proposals,
               :proposal,
               :search,
-              :worldline
+              :worldline,
+              :atlas
             ] do
     shown = socket.assigns.fleet
 
@@ -1181,6 +1211,7 @@ defmodule KeyfleetWeb.ShellLive do
         |> FleetLive.class_changed(fleet_id)
         |> KeyProfileLive.class_changed(fleet_id)
         |> WorldlineLive.class_changed(fleet_id)
+        |> AtlasLive.class_changed(fleet_id)
     end
   end
 
@@ -1413,7 +1444,8 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp workspace_topics(fleet_id, class) do
     code = if Access.enough?(class, :read, :code), do: [Code.topic(fleet_id)], else: []
-    [Graph.topic(fleet_id, class) | code]
+    atlas = if Access.enough?(class, :read, :workspace), do: [Atlas.topic(fleet_id)], else: []
+    [Graph.topic(fleet_id, class) | code ++ atlas]
   end
 
   # The page starts listening before it reads, so votes recorded while it

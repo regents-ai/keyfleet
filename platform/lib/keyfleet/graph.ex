@@ -43,6 +43,8 @@ defmodule Keyfleet.Graph do
 
     resource Keyfleet.Graph.Cursor do
       define :get_cursor, action: :read, get_by: [:fleet_id], not_found_error?: false
+      define :uncounted_cursors, action: :uncounted
+      define :mark_counted, action: :counted
       define :hold_cursor, action: :hold, args: [:fleet_id], not_found_error?: false
       define :start_cursor, action: :start
       define :advance_cursor, action: :advance
@@ -63,6 +65,7 @@ defmodule Keyfleet.Graph do
       define :record_events, action: :record
       define :events_with_ids, action: :with_event_ids, args: [:fleet_id, :event_ids]
       define :command_records, action: :command, args: [:fleet_id, :command_id]
+      define :changes_after, action: :changes_after, args: [:fleet_id, :after_seq]
     end
 
     resource Keyfleet.Graph.Object do

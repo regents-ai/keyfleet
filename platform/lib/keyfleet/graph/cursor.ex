@@ -57,6 +57,20 @@ defmodule Keyfleet.Graph.Cursor do
     destroy :forget do
       public? false
     end
+
+    # The Atlas has counted the copied log as far as `counted_seq`
+    # (`Keyfleet.Atlas.Count`).
+    update :counted do
+      public? false
+      accept [:counted_seq]
+    end
+
+    # The cursors whose copied log the Atlas has not counted to the end
+    # (`Keyfleet.Atlas.Fill`).
+    read :uncounted do
+      public? false
+      filter expr(counted_seq < applied_seq)
+    end
   end
 
   policies do
@@ -64,7 +78,7 @@ defmodule Keyfleet.Graph.Cursor do
       authorize_if always()
     end
 
-    policy action([:start, :advance, :forget]) do
+    policy action([:start, :advance, :forget, :counted]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -75,6 +89,15 @@ defmodule Keyfleet.Graph.Cursor do
     # The last place in the log copied, counting every event, including the
     # ones the read tables leave out.
     attribute :applied_seq, :integer, allow_nil?: false, public?: true, constraints: [min: 0]
+
+    # How far into the copied log the Atlas has counted: every change at or
+    # before it is in the Atlas's buckets, and none after. A log copied again
+    # from the beginning starts it again from nothing.
+    attribute :counted_seq, :integer,
+      allow_nil?: false,
+      public?: true,
+      default: 0,
+      constraints: [min: 0]
   end
 
   relationships do

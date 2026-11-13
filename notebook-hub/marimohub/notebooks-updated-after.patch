@@ -1,0 +1,110 @@
+diff --git a/packages/api/src/pagination.ts b/packages/api/src/pagination.ts
+--- a/packages/api/src/pagination.ts
++++ b/packages/api/src/pagination.ts
+@@ -82,6 +82,14 @@
+ 			description: 'Notebook status to match. Deleted notebooks are excluded when omitted.',
+ 			example: 'active',
+ 		}),
++	updated_after: z.iso
++		.datetime({ offset: true })
++		.optional()
++		.openapi({
++			param: { name: 'updated_after', in: 'query' },
++			description: 'Only notebooks updated after this time.',
++			example: '2026-11-13T09:00:00Z',
++		}),
+ 	...ListFilterQuery,
+ });
+ 
+diff --git a/packages/api/src/routes/notebooks.ts b/packages/api/src/routes/notebooks.ts
+--- a/packages/api/src/routes/notebooks.ts
++++ b/packages/api/src/routes/notebooks.ts
+@@ -1290,7 +1290,7 @@
+ 	const { pid } = c.req.valid('param');
+ 	const query = c.req.valid('query');
+ 	await assertProjectVisible(projects, pid, user, deps);
+-	const all = await notebooks.listNotebooks(pid, {
++	const listed = await notebooks.listNotebooks(pid, {
+ 		status: query.status,
+ 		tag: query.tag,
+ 		q: query.q,
+@@ -1298,6 +1298,8 @@
+ 		policy: deps.policy,
+ 		resourceSecurity: deps.resourceSecurity,
+ 	});
++	const after = query.updated_after === undefined ? undefined : Date.parse(query.updated_after);
++	const all = after === undefined ? listed : listed.filter((n) => Date.parse(n.updated_at) > after);
+ 	const data = paginate(all, query, {
+ 		key: (n) => n.created_at,
+ 		tiebreak: (n) => n.id,
+diff --git a/packages/api/src/routes/notebooks.test.ts b/packages/api/src/routes/notebooks.test.ts
+--- a/packages/api/src/routes/notebooks.test.ts
++++ b/packages/api/src/routes/notebooks.test.ts
+@@ -280,7 +280,36 @@
+ 				await expectError(await request('GET', nb(`?${query}`)), 422, 'VALIDATION_ERROR');
+ 			},
+ 		);
++
++		it('keeps only notebooks updated after updated_after', async () => {
++			const kept = await expectOk<any>(await create('Kept', 'Edited later', []), 201);
++			await create('Untouched', 'Never edited', []);
++			await new Promise((resolve) => setTimeout(resolve, 5));
++			const after = new Date().toISOString();
++			await new Promise((resolve) => setTimeout(resolve, 5));
++			await expectOk(await request('PATCH', nb(`/${kept.id}`), { title: 'Kept, edited' }));
++			const made = await expectOk<any>(await create('Made', 'Made later', []), 201);
+ 
++			const page = await expectOk<any>(
++				await request('GET', nb(`?updated_after=${encodeURIComponent(after)}&limit=1`)),
++			);
++			const next = await expectOk<any>(
++				await request(
++					'GET',
++					nb(
++						`?updated_after=${encodeURIComponent(after)}&limit=1&cursor=${encodeURIComponent(page.next_cursor)}`,
++					),
++				),
++			);
++			expect([...page.items, ...next.items].map((n: any) => n.id)).toEqual([made.id, kept.id]);
++			expect(next.next_cursor).toBeNull();
++			await expectError(
++				await request('GET', nb('?updated_after=yesterday')),
++				422,
++				'VALIDATION_ERROR',
++			);
++		});
++
+ 		it('rejects a malformed cursor on a filtered request', async () => {
+ 			await expectError(
+ 				await request('GET', nb('?tag=finance&cursor=not~base64')),
+diff --git a/packages/api/openapi.yaml b/packages/api/openapi.yaml
+--- a/packages/api/openapi.yaml
++++ b/packages/api/openapi.yaml
+@@ -10704,6 +10704,15 @@
+           in: query
+         - schema:
+             type: string
++            format: date-time
++            description: Only notebooks updated after this time.
++            example: 2026-11-13T09:00:00Z
++          required: false
++          description: Only notebooks updated after this time.
++          name: updated_after
++          in: query
++        - schema:
++            type: string
+             description: Exact tag to match.
+             example: analytics
+           required: false
+diff --git a/packages/client/src/schema.ts b/packages/client/src/schema.ts
+--- a/packages/client/src/schema.ts
++++ b/packages/client/src/schema.ts
+@@ -9838,6 +9838,8 @@
+ 				cursor?: string;
+ 				/** @description Notebook status to match. Deleted notebooks are excluded when omitted. */
+ 				status?: 'draft' | 'active' | 'archived' | 'deleted';
++				/** @description Only notebooks updated after this time. */
++				updated_after?: string;
+ 				/** @description Exact tag to match. */
+ 				tag?: string;
+ 				/** @description Case-insensitive substring to match against the name or title and description. */
