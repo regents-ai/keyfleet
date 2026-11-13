@@ -51,6 +51,7 @@ import {
   hourOf,
   levelAt,
   msOf,
+  nextContext,
   windowFor,
   windowOf,
   type Window,
@@ -111,6 +112,8 @@ const CARD_WIDTH = 184
 const CARD_HEIGHT = 72
 const CARD_GAP = 6
 const CARD_PAD = 8
+// The room a mark held beside the name at the left edge needs, in CSS pixels.
+const HELD_ROOM = 72
 // How far past now and back before it the picture may be moved, in hours.
 const AHEAD = 7 * 24
 const BEHIND = 20 * 8_784
@@ -394,10 +397,12 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
     })
   }
 
-  const placed = new Map<string, HTMLElement>()
+  // Each card on screen, by its hour's own entry: a thing changed in two
+  // hours has a card in each.
+  const placed = new Map<Card, HTMLElement>()
   const spots = new Map<HTMLElement, [number, number]>()
   const spare: HTMLElement[] = []
-  const seen = new Map<string, number>()
+  const seen = new Map<Card, number>()
   const chips = new Map<number, HTMLAnchorElement>()
   const spareChips: HTMLAnchorElement[] = []
   const chipSeen = new Map<number, number>()
@@ -450,16 +455,16 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
   }
 
   function takeCard(card: Card, x: number, y: number) {
-    let el = placed.get(card.id)
+    let el = placed.get(card)
     if (!el) {
       el = spare.pop() ?? makeCard()
       el.hidden = false
       fill(el, card)
-      placed.set(card.id, el)
+      placed.set(card, el)
     }
     el.toggleAttribute("data-pinned", card.id === pinned)
     place(el, x, y)
-    seen.set(card.id, pass)
+    seen.set(card, pass)
     if (card.id === pinned && focusPinned) {
       focusPinned = false
       el.querySelector<HTMLAnchorElement>(".atlas-card__title")!.focus({preventScroll: true})
@@ -536,13 +541,13 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
         }
       }
     }
-    for (const [id, el] of placed) {
-      if (seen.get(id) === pass) continue
+    for (const [card, el] of placed) {
+      if (seen.get(card) === pass) continue
       // A card in focus stays until focus leaves it.
       if (el.contains(document.activeElement)) continue
       el.hidden = true
-      placed.delete(id)
-      seen.delete(id)
+      placed.delete(card)
+      seen.delete(card)
       spare.push(el)
     }
     for (const [key, el] of chips) {
@@ -561,28 +566,55 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
   axis.append(context)
   let contextText = ""
   let contextWidth = 0
+  let contextPush = 0
   const ticks: HTMLElement[] = []
   const tickAt: number[] = []
+  const tickHeld: boolean[] = []
   let tickCount = 0
   let tickZoom = 1
+  // Where marks may stand, right of the name at the left edge, and the words
+  // of the last mark gone under it.
+  let tickEdge = 0
+  let held: string | undefined
 
-  const tick = (hour: number, text: string) => {
-    const x = Math.round((hour - camera.x) * tickZoom + width / 2)
-    if (x < contextWidth + 12 || x > width - 8) return
+  const mark = (x: number, text: string, hold: boolean) => {
     let el = ticks[tickCount]
     if (!el) {
       el = axis.appendChild(document.createElement("span"))
       el.className = "atlas-heat__tick"
       ticks.push(el)
       tickAt.push(NaN)
+      tickHeld.push(false)
     }
     if (el.hidden) el.hidden = false
     if (el.textContent !== text) el.textContent = text
+    if (tickHeld[tickCount] !== hold) {
+      el.classList.toggle("atlas-heat__tick--held", hold)
+      tickHeld[tickCount] = hold
+    }
     if (tickAt[tickCount] !== x) {
       el.style.transform = `translate3d(${x}px, 0, 0)`
       tickAt[tickCount] = x
     }
     tickCount += 1
+  }
+
+  // A mark gone under the name stays beside it while its stretch has room on
+  // screen, so the hour looked into is always named.
+  const hold = (until: number) => {
+    if (held !== undefined && until - tickEdge >= HELD_ROOM) mark(tickEdge, held, true)
+    held = undefined
+  }
+
+  const tick = (hour: number, text: string) => {
+    const x = Math.round((hour - camera.x) * tickZoom + width / 2)
+    if (x < tickEdge) {
+      held = text
+      return
+    }
+    if (x > width - 8) return
+    hold(x)
+    mark(x, text, false)
   }
 
   function placeAxis(lvl: number, from: number, to: number) {
@@ -592,9 +624,19 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
       context.textContent = text
       contextWidth = context.offsetWidth
     }
+    // The next year, month or day pushes the name of the one at the left edge
+    // out of its way as it comes in, so its own first mark is never hidden.
+    const push = Math.min(0, Math.round(screenX(nextContext(lvl, from))) - contextWidth - 12)
+    if (push !== contextPush) {
+      contextPush = push
+      context.style.transform = push ? `translate3d(${push}px, 0, 0)` : ""
+    }
+    tickEdge = contextWidth + push + 12
     tickCount = 0
     tickZoom = camera.zoom
+    held = undefined
     eachTick(lvl, from, to, tickZoom, tick)
+    hold(width)
     for (let index = tickCount; index < ticks.length; index++) if (!ticks[index].hidden) ticks[index].hidden = true
   }
 
@@ -939,7 +981,7 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
       event.preventDefault()
       if (openness(camera.zoom) >= 0.5) {
         const first = grouped.get(bucketOf(cursor.at, 1))?.get(cursor.row)?.[0]
-        const el = first && placed.get(first.id)
+        const el = first && placed.get(first)
         if (el) el.querySelector<HTMLAnchorElement>(".atlas-card__title")!.focus({preventScroll: true})
         else say(cursor)
       } else {

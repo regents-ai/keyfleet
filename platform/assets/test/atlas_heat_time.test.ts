@@ -8,6 +8,7 @@ import {
   hourOf,
   levelAt,
   msOf,
+  nextContext,
   windowFor,
   windowOf,
 } from "../js/atlas/heat/time"
@@ -81,5 +82,23 @@ describe("the Atlas heat's time", () => {
     const months: string[] = []
     eachTick(0, hourAt("2025-11-01T00:00:00Z"), hourAt("2026-03-01T00:00:00Z"), 0.1, (_, text) => months.push(text))
     expect(months).toEqual(["Nov", "Dec", "2026", "Feb", "Mar"])
+  })
+
+  it("finds where the name at the left edge changes, a mark of its own at every level", () => {
+    const at = hourAt("2025-12-31T22:30:00Z")
+    expect([0, 1, 2].map(level => iso(nextContext(level, at)))).toEqual([
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    ])
+    expect(iso(nextContext(1, hourAt("2024-02-10T00:00:00Z")))).toBe("2024-03-01T00:00:00.000Z")
+    expect(iso(nextContext(2, hourAt("2026-11-13T00:00:00Z")))).toBe("2026-11-14T00:00:00.000Z")
+
+    // Each one is drawn as a mark, so the name it pushes away never hides it.
+    for (const [level, zoom] of [[0, 0.1], [1, 2], [2, 20]]) {
+      const marks: number[] = []
+      eachTick(level, at, at + 24 * 40, zoom, hour => marks.push(hour))
+      expect(marks).toContain(nextContext(level, at))
+    }
   })
 })

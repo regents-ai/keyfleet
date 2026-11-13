@@ -111,6 +111,14 @@ export function contextOf(level: number, hour: number) {
   return `${DAYS[at.getUTCDay()]} ${at.getUTCDate()} ${MONTHS[at.getUTCMonth()]} ${at.getUTCFullYear()}`
 }
 
+/** The first hour after `hour` that `contextOf` names otherwise at `level`. */
+export function nextContext(level: number, hour: number) {
+  const at = new Date(msOf(hour))
+  if (level === 0) return hourOf(Date.UTC(at.getUTCFullYear() + 1, 0, 1))
+  if (level === 1) return hourOf(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1))
+  return bucketOf(hour, 24) + 24
+}
+
 /**
  * Each mark along the top between `from` and `to` at `level` and `zoom`, as
  * its hour and its words, far enough apart to read: months (or years alone)
