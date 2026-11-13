@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.KeyGallery do
   alias Keyfleet.Keys
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Live.Session
+  alias KeyfleetWeb.Motion
   alias RegentAgents.Harness
 
   @impl true
@@ -114,11 +115,25 @@ defmodule KeyfleetWeb.KeyGallery do
 
     ~H"""
     <div id={@id} class="key-gallery">
-      <ul class="key-gallery__keys">
+      <%!-- A Key that moves to its place, as an agent goes on or off it, glides
+      there, and the Keys it passes make room; a Key added fades in where it
+      lands (`MotionList`). The page draws the gallery again whenever it
+      changes, which moves nothing unless the Keys' order does. --%>
+      <ul
+        id={"#{@id}-keys"}
+        class="key-gallery__keys"
+        phx-hook="MotionList"
+        data-variant={Motion.standard("list")}
+        data-layout-id={"#{@id}-keys"}
+        data-children="[data-key]"
+        data-redrawn
+      >
         <li
           :for={token_id <- @shown}
           id={"#{@id}-#{token_id}"}
           class={["key-gallery__key", Map.has_key?(@on_keys, token_id) && "key-gallery__key--agents"]}
+          data-key
+          data-layout-id={"#{@id}-#{token_id}"}
         >
           <.link class="key-gallery__card" patch={KeyLinks.key_path(@fleet_id, token_id)}>
             <img

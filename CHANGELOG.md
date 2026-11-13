@@ -9378,3 +9378,27 @@ moved 0px while the figures rolled, and each figure's own box less than 1px;
 words followed by a first figure did not roll; a reconnect closed the window
 and nothing rolled; under reduced motion nothing split. WebKit is not run on
 the Mac.
+
+## 2026-11-13: Keys glide to their place on Account
+
+- On Account, a Key that moves in the gallery, as an agent goes on or off
+  it, now glides to its new place and the Keys it passes make room, where
+  before the cards jumped. A Key added to the gallery fades in where it
+  lands. Opening the page, the page reading the gallery again, and a page
+  drawn again as its connection comes back move nothing unless the Keys'
+  order changes. With reduced motion the Keys are simply in their new places.
+- What is inside each card, its agents and its Add agent choice, stays as it
+  is while the card moves.
+- The motion kit's list (`MotionList` in `assets/js/hooks/motion/moments.ts`)
+  takes `data-redrawn` for a list the server draws again whole. Lists without
+  it move as before.
+
+Check: compile with warnings as errors, format and typecheck pass. In
+headless Chromium at 1280 and 390 wide, light and dark, read from each
+painted frame: nothing moved on load or after the gallery was read again; a
+Key that took an agent glided to the front (394px at 1280, 336px at 390, in
+steps of at most 48px over about 40 frames) while the Keys it passed made
+room, and glided back when the agent came off; no card and nothing inside an
+existing card faded; the page did not scroll; a reconnect moved nothing; a
+Key added faded in while the others held still; under reduced motion a
+re-sort was at once. WebKit is not run on the Mac.
