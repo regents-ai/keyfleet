@@ -9355,3 +9355,26 @@ landing did not interrupt it; another Buy press, a reconnect and opening the
 window again stamped nothing; under reduced motion nothing moved. The lab's
 card stayed still while its stamp landed and its tick drew. WebKit is not run
 on the Mac.
+
+## 2026-11-13: Sold and Price roll as a Key sells
+
+- In the Buy Key window, Sold and Price used to change in place when a Key
+  sold while the window was open. They now roll to their new value, the
+  characters that changed turning over from the end, with the kit's count
+  roll (`MotionCount`). Opening the window, a page drawn again as its
+  connection comes back, and the first figure after "Catching up", a dash or
+  "Sold out" are simply there, and so is a price before the sale opens. With
+  reduced motion the new value simply appears. While a figure rolls, screen
+  readers are given the plain new figure.
+- Only the figures move: their rows, the facts around them, and Approve and
+  Buy keep their places. Approve and Buy are otherwise unchanged.
+
+Check: compile with warnings as errors, format and typecheck pass. In
+headless Chromium at 1280 and 390 wide, light and dark, read from each
+painted frame: opening the window rolled nothing; a sale while it was open
+rolled Sold (0 of 1,024 to 1 of 1,024) and Price (10 USDC to 10.02 USDC) once
+each and ended on the plain figure; the rows, the facts, Approve and Buy
+moved 0px while the figures rolled, and each figure's own box less than 1px;
+words followed by a first figure did not roll; a reconnect closed the window
+and nothing rolled; under reduced motion nothing split. WebKit is not run on
+the Mac.
