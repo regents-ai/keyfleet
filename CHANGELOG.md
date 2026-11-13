@@ -9402,3 +9402,26 @@ room, and glided back when the agent came off; no card and nothing inside an
 existing card faded; the page did not scroll; a reconnect moved nothing; a
 Key added faded in while the others held still; under reduced motion a
 re-sort was at once. WebKit is not run on the Mac.
+
+## 2026-11-13: Direct messages arrive as in a room
+
+- In a direct-message thread, a message from the other Key now fades in
+  where it lands, as in a room, and the messages above it hold still. A
+  message the person sends is simply there at once. A thread drawn again as
+  its connection comes back moves nothing. With reduced motion a message
+  simply appears.
+- A person reading at the end of the thread stays at the end as a message
+  lands, and one reading higher up keeps their place.
+- The motion kit's list (`MotionList`) takes `data-own` on the reader's own
+  items: a change that brings one answers at once, with no motion. Lists
+  without it move as before.
+
+Check: compile with warnings as errors, format and typecheck pass; the
+stylesheet stays within its size limit. In headless Chromium at 1280 and 390
+wide, light and dark, read from each painted frame: the person's own message
+appeared at once, never moved or faded; the other Key's message faded in
+from nothing while every message above it held still; a page at the end of
+the thread stayed at the end through the arrival, with no jump back, the
+same with and without reduced motion; a reader higher up kept their place;
+a reconnect moved nothing; the first message of a new conversation faded in
+and ended with no motion left on it. WebKit is not run on the Mac.
