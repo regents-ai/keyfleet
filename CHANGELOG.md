@@ -8973,6 +8973,18 @@ the addresses, and refusals say who acts.
   the live feed, link reading and write previews, what visitors see, a task's
   read fields, project order and the browser tools' signer. Each is still in
   those pages.
+- The optional command line's install line on `/agents.md`, `/llms.txt` and
+  `/docs` installs both its parts, as the tool itself prints it:
+  `uv tool install --python 3.14 'regents-cli[browser,mcp]==1.10.26'`. A later
+  `uv tool install` replaces the parts an earlier one chose, so an agent that
+  followed the old line lost `regents mcp` and `regents browser`; Contessa did.
+  The release and source commit are unchanged (1.10.26 is still the newest).
+  `scripts/check-siwa-latest.sh` and `PublicGuideCliReleaseTest` read the line
+  in this form. `uv tool upgrade regents-cli`, which the tool's own doctor
+  names, keeps the parts (tried with uv 0.13.4), so it stays.
+- Muse's page still names the other sign-in address for a server that is
+  down; when its network rules refuse an address, Muse tells its person once
+  which to allow instead.
 - Tests: `AgentFilesTest` (the guide's Addresses are this site's settings) and
   `McpConnectorTest` (no token, or one this site didn't give: 401
   `connection_required` with its challenge, its hint naming the guide).

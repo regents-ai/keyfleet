@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.PublicGuideCliReleaseTest do
   @moduledoc """
-  Every public guide that tells an agent to install regents-cli names the same
-  release, the source commit the Makefile pins (`REGENTS_CLI_REV`, which
+  Every public guide that tells an agent to install regents-cli, with both its
+  browser and MCP parts, names the same release, the source commit the Makefile pins (`REGENTS_CLI_REV`, which
   `make check-cli` checks the commands against), and one wheel digest. On
   9 November 2026 `/llms.txt` named another commit and a digest PyPI never
   published, while `/agents.md` named the right ones.
@@ -17,14 +17,17 @@ defmodule KeyfleetWeb.PublicGuideCliReleaseTest do
     guides =
       for path <- Path.wildcard("priv/public/**/*.md"),
           text = File.read!(path),
-          text =~ "regents-cli==",
+          text =~ "regents-cli[browser,mcp]==",
           do: {path, text}
 
     assert guides != []
 
     releases =
       for {_path, text} <- guides,
-          [release] <- Regex.scan(~r/regents-cli==(\d+(?:\.\d+)*)/, text, capture: :all_but_first),
+          [release] <-
+            Regex.scan(~r/regents-cli\[browser,mcp\]==(\d+(?:\.\d+)*)/, text,
+              capture: :all_but_first
+            ),
           uniq: true,
           do: release
 
