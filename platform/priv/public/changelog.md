@@ -4,6 +4,10 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Spin.** The Worldline's flight now spins the planets faster around the line instead of
+  streaming the history past. Each event keeps its place at its own time and turns with its
+  planet, moving along the line only as real time passes. Moving through time stops the
+  spin where it stands, and Now starts it again.
 - **Flight.** The Worldline opens close in on the last hours and flies: the fleet's history
   streams out of the sun on a loop as the planets circle and the stars drift by, slowing
   while you point at it. Each planet carries its name, which opens its place in the
