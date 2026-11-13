@@ -9666,3 +9666,10 @@ required fixes and commands pass. The pin check fails: regents-cli 1.10.28
 came out today and the pins still name 1.10.27, on main as here. Contracts,
 run on their own after it, 547 tests, 6 skipped. Firefox isn't installed
 here, so its run of these walks didn't happen; WebKit is not run on the Mac.
+
+## 2026-11-13: regents-cli 1.10.28
+
+The guides, install lines, the tool manifest's `cli.release` and the Makefile's
+checker pin name the newest release, its tag commit (1608c835) and its wheel
+(SHA256 f071ef49…). `make check-cli` passes Keyfleet's commands against that
+commit.
