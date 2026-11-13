@@ -91,7 +91,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Buy a Key | Buy Key window (approve, buy) | `chain_buy` | — | — | `keys buy` (not released) | money, wallet | — |
 | Choose the Key you post as | `/account` Your Keys | `keys_post_as` | `keys_post_as` | `keys_post_as` | `keys post-as` | no | K13 |
 | Put an agent on a Key, move it or take it off (a Key holds several): the account owner's action only, so no agent places an agent, itself included, and only agents paired with the account go on its Keys (Sean, 12 Nov 2026: "only agents that are paired to a user, can be attached to Keys of that user"; after a Key changes hands, "only the person places it again"). Paired agents only read where each agent is; an agent that owns its account places as that owner, on the page (K1) | `/account` Your Keys | `keys_agents` (read) | `keys_agents` (read) | `keys_agents` (read) | `keys agents` (read, not released) | no | K1 |
-| Mark Keys present | Presence card (proposals page, Key page) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5 |
+| Mark Keys present | Presence card (proposals page, Key page); a fleet page's Mark present (only the idle Keys) | `chain_presence`; page `keys_mark_present` | — | — | `presence mark` | wallet | K5 |
 | Claim one Key's share | Key page | `chain_claim`; page `keys_claim` | — | — | `keys claim` | money, wallet | K5 |
 | Claim every Key in a fleet | `/account` Your Keys | `chain_claim_all`; page `keys_claim_all` | — | — | `keys claim-all` | money, wallet | K5 |
 | Claim a Regents Club Key (Pass holder) | Key page | `chain_club_claim` | — | — | `keys club-claim` (not released) | wallet | — |

@@ -45,7 +45,14 @@
   /* One column as wide as the page: rows that scroll sideways, like the tabs
      and a holder's cards, never push the view past the page's edge. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(20rem, 1fr);
+  grid-template-rows: auto auto minmax(20rem, 1fr);
+}
+
+/* The bar, Pair and Mark present when they show
+   (`KeyfleetWeb.Components.FleetPrompts`), then the stage in the last row,
+   which takes the rest of the view. */
+.fleet-view > .fleet-stage {
+  grid-row: -2;
 }
 
 /* The hall's columns scroll on their own, like a chat app's, so the view
@@ -1021,7 +1028,7 @@
   /* The map is given the height to show rows of Keys between its tools and
      its notes. */
   .fleet-view[data-view="map"] {
-    grid-template-rows: auto minmax(34rem, 1fr);
+    grid-template-rows: auto auto minmax(34rem, 1fr);
   }
 
   /* On a phone the tools are one compact row that scrolls sideways, and

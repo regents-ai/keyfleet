@@ -847,7 +847,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
 
     # Marked reads a Key waiting for its automatic start as needing no mark,
-    # as the setup list's Present step does.
+    # as the fleet page's idle Keys do.
     test "every dot is done once the run repeats, the wallet has ETH and the Key waits to start",
          %{conn: conn, agent: agent} do
       ChainHelpers.issue_shard!(@fleet, 20, agent.wallet_address)

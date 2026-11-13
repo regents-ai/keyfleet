@@ -12,9 +12,9 @@ defmodule KeyfleetWeb.FleetLive do
   opens the "Buy Key" window (`KeyfleetWeb.Components.BuyKey`), as "Buy Key"
   in the header does.
   Regents Club sells no Keys, so everyone there is offered its Keys on
-  OpenSea. Under the tabs, a signed-in person who holds a Key here and hasn't
-  finished setting up their agent sees the setup list
-  (`KeyfleetWeb.Components.SetupList`) above the view.
+  OpenSea. Under the tabs, a signed-in person who holds a Key here sees Pair
+  while no agent of theirs is paired, and Mark present while some of their
+  Keys are idle (`KeyfleetWeb.Components.FleetPrompts`), above the view.
 
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
@@ -88,9 +88,9 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.BuyKey
   alias KeyfleetWeb.Components.Count
+  alias KeyfleetWeb.Components.FleetPrompts
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
-  alias KeyfleetWeb.Components.SetupList
   alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.FeedLines
   alias KeyfleetWeb.FleetNow
@@ -402,16 +402,17 @@ defmodule KeyfleetWeb.FleetLive do
           </nav>
         </header>
 
+        <.live_component
+          :if={match?(%Human{}, @actor) and @account != nil}
+          module={FleetPrompts}
+          id="fleet-prompts"
+          fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+          actor={@actor}
+          account={@account}
+          lease={@lease}
+        />
+
         <div class="fleet-stage">
-          <.live_component
-            :if={match?(%Human{}, @actor) and @account != nil}
-            module={SetupList}
-            id="fleet-setup"
-            fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
-            actor={@actor}
-            account={@account}
-            lease={@lease}
-          />
           <ProposalsLive.open_list
             :if={@view == :workspace}
             fleet={@fleet}

@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorldlineLive
   }
 
-  alias KeyfleetWeb.Components.{AgentSetup, BuyKey, Reading, SetupList}
+  alias KeyfleetWeb.Components.{AgentSetup, BuyKey, FleetPrompts, Reading}
   alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
@@ -488,12 +488,12 @@ defmodule KeyfleetWeb.ShellLive do
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired. The account menu and the pairing window follow on
   # every page, the Agents page's list on that page, the agents on the
-  # person's Keys on the Account page, the setup list on a fleet's page, and
-  # the agents' states and shard presses on the person's own Key's page.
+  # person's Keys on the Account page, Pair on a fleet's page, and the
+  # agents' states and shard presses on the person's own Key's page.
   defp notice(:agents_changed, socket) do
     send_update(KeyfleetWeb.MenuAgents, id: "shell-agents", agents_changed: true)
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
-    socket = socket |> setup_changed() |> agent_setup_changed() |> KeysLive.agents_changed()
+    socket = socket |> prompts_changed() |> agent_setup_changed() |> KeysLive.agents_changed()
 
     case socket.assigns.route_spec.route_id do
       :account ->
@@ -580,7 +580,7 @@ defmodule KeyfleetWeb.ShellLive do
     socket =
       socket
       |> reread_class(fleet_id)
-      |> setup_changed()
+      |> prompts_changed()
       |> WorldlineLive.heard(fleet_id, :keys)
 
     case PageRead.run("app", fn -> keys_changed(socket, fleet_id, token_ids) end) do
@@ -590,15 +590,16 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # Keys in a fleet were marked present: one notice for each pass of the chain
-  # reader that recorded any. Only what shows presence reads again: the fleet's
-  # setup list, when one of the Keys is the person's, and on the person's own
-  # Key's page their agents' states; and the fleet's Worldline, a moment later.
+  # reader that recorded any. Only what shows presence reads again: Mark
+  # present on the fleet's page, when one of the Keys was the person's idle
+  # Key, and on the person's own Key's page their agents' states; and the
+  # fleet's Worldline, a moment later.
   defp notice({:keys_present, fleet_id, token_ids}, socket) do
     socket = WorldlineLive.heard(socket, fleet_id, :present)
 
     case socket.assigns do
       %{fleet: %{fleet_id: ^fleet_id}} ->
-        send_update(SetupList, id: "fleet-setup", present: token_ids)
+        send_update(FleetPrompts, id: "fleet-prompts", present: token_ids)
         {:noreply, socket}
 
       %{key: %{fleet_id: ^fleet_id}} ->
@@ -687,7 +688,7 @@ defmodule KeyfleetWeb.ShellLive do
     do: ProposalsLive.handle_info(message, socket)
 
   defp notice({:onchain_landed, fleet_id}, socket),
-    do: {:noreply, socket |> setup_changed() |> ProposalsLive.onchain_landed(fleet_id)}
+    do: {:noreply, socket |> prompts_changed() |> ProposalsLive.onchain_landed(fleet_id)}
 
   # A reading every page shares has changed: the part of the page showing it
   # draws it again.
@@ -1051,16 +1052,17 @@ defmodule KeyfleetWeb.ShellLive do
        do: fleet_id
   end
 
-  # A fleet's page holds the new owner's setup list (`SetupList`), which reads
-  # its steps again when the person's agents, the fleet's Keys or a step sent
-  # from it change. Its pairing box follows a pairing as the others do.
-  defp setup_changed(%{assigns: %{fleet: %{fleet_id: _}}} = socket) do
-    send_update(SetupList, id: "fleet-setup", changed: true)
-    send_update(KeyfleetWeb.PairingBox, id: "fleet-setup-pairing", agents_changed: true)
+  # A fleet's page holds Pair and Mark present (`FleetPrompts`), which read
+  # again when the person's agents, the fleet's Keys or a step sent from the
+  # page change. Pair's pairing box hears first, so a pairing from it is
+  # recorded before Pair takes the box away.
+  defp prompts_changed(%{assigns: %{fleet: %{fleet_id: _}}} = socket) do
+    send_update(KeyfleetWeb.PairingBox, id: "fleet-prompts-pairing", agents_changed: true)
+    send_update(FleetPrompts, id: "fleet-prompts", changed: true)
     socket
   end
 
-  defp setup_changed(socket), do: socket
+  defp prompts_changed(socket), do: socket
 
   # The person's own Key's page holds their agents' states (`AgentSetup`),
   # which read again when an agent checks in or Keys are marked present.

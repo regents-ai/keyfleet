@@ -88,8 +88,8 @@ for (const [width, height] of [
 // scrolling on past the last room carries on down the page to the footer.
 // Scrolling over the left menu moves the page too. Sean, 30 October 2026. The
 // Key is sold, and the rooms opened, on a fleet of its own, so the Classic
-// fleet stays unsold. The new holder's setup list stands above the hall, so
-// the walk brings the channel list into view before scrolling over it.
+// fleet stays unsold. The new holder's Pair and Mark present stand above the
+// hall, so the walk brings the channel list into view before scrolling over it.
 test("the footer is one short row, reached from the channel list and the left menu", async ({page}) => {
   prepareFleet("fibonacci_cascade")
   sayInPublic("fibonacci_cascade", "0x1111111111111111111111111111111111111111", "Hello.")

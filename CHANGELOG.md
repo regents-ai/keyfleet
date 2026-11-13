@@ -8937,3 +8937,48 @@ required fixes, commands, the sign-in library pins and contracts (547 tests,
 runner helper's 14); the hub image builds with its tests run inside it
 (core's jobs, launch and schema 372, the API's job routes 124, the client's
 schema drift 1); the local proof passes its 21 steps.
+
+## 2026-11-13 — A fleet's page asks for two things only: Pair and Mark present
+
+- The setup list at the top of a fleet's page is gone. In its place, under
+  the tabs, a person who holds a Key in the fleet sees at most two buttons,
+  side by side, each only while it has something to do
+  (`KeyfleetWeb.Components.FleetPrompts`). A signed-out visitor, and a person
+  holding no Key in the fleet, see neither.
+- "Pair your agent to participate in workspaces" shows while the person has no
+  agent paired. It opens the pairing box in place, whose message sends the
+  agent to this fleet, and closes it again on a second press. Button and box
+  go as soon as an agent is paired; the box hears the pairing first, so the
+  visit's `agent_paired` step is still recorded (`KeyfleetWeb.VisitLog`).
+- Mark present shows while some of the person's Keys are idle, by the same
+  rule as the members list's Idle (the `idle` calculation of
+  `Keyfleet.Keys.KeyAttachment`), with how many beside it. One press sends one
+  transaction from the person's own wallet marking every idle Key that wallet
+  holds present. It is a new wallet flow, `:present_idle`
+  (`Keyfleet.WalletSteps.KeySteps`), built like the presence card's
+  `:present`: it reads at the latest block which Keys the wallet holds and
+  which of those are old enough and not present, and names only those, so no
+  present Key is renewed and a Key the wallet holds only a shard of is left to
+  its holder. The press is blocked only when it is certain to fail: the wallet
+  holds no Key, or none of its Keys is idle ("No idle Keys"). Every other
+  press reaches the wallet, a repeat press included. The button goes when the
+  page hears that the person's idle Keys were marked present. `:present`
+  itself, which the presence card, the agent API and automatic presence use,
+  is unchanged.
+- Shards stay optional and are issued from a Key's page, as before. The Daily
+  run line is gone with nothing in its place.
+- Removed: `KeyfleetWeb.Components.SetupList`, its styles,
+  `Keyfleet.Agents.Upkeep.person_setup/2`, and the setup list's tests and
+  browser walk. `Keyfleet.Agents.UpkeepTest` now checks only an agent's
+  `marked` state. The browser walk is `platform/test/browser/fleet_prompts.spec.ts`
+  in the chain suite: a new owner buys a Key, pairs an agent from Pair (the
+  visit's lines record the pairing), and marks their idle Key present from
+  Mark present, every press reaching the wallet.
+
+Check: compile with warnings as errors, unused locks, hex audit, format, credo
+strict, sobelow, xref (133 of 133), graph host's 243, codegen, usage rules and
+route handoff pass; full suite 1,413 (18 properties, 1,395 tests, 19
+excluded), run with PORT unset; typecheck and 443 unit tests pass; browser
+suite 125, devices 70 and the chain suite 126 in Chromium, on port 4593;
+required fixes, the command checks, SIWA latest and the contracts (547 tests,
+6 skipped, bytecode) pass. WebKit is not run on the Mac.

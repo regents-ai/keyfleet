@@ -24,6 +24,7 @@ defmodule Keyfleet.WalletSteps.Steps do
     :claim_all,
     :club_claim,
     :present,
+    :present_idle,
     :issue_shard,
     :end_shard,
     :agent_voting,
