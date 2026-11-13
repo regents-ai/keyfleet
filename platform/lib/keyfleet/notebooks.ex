@@ -76,6 +76,10 @@ defmodule Keyfleet.Notebooks do
       define :newest_backups, action: :newest, args: [:fleet_id]
       define :backup_copies, action: :copies, args: [:fleet_id, :project]
       define :backup, action: :read, get_by: [:id], not_found_error?: false
+
+      define :backups_changed_before,
+        action: :changed_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
     end
   end
 

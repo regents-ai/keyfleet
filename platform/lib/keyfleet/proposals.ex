@@ -43,6 +43,14 @@ defmodule Keyfleet.Proposals do
       define :proposals_recorded_before,
         action: :recorded_before,
         args: [:fleet_id, :before_seq, :limit]
+
+      define :proposals_opened_before,
+        action: :opened_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
+      define :proposals_closed_before,
+        action: :closed_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
     end
 
     resource Keyfleet.Proposals.Words do

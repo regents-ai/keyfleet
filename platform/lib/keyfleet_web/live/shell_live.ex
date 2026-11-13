@@ -46,7 +46,8 @@ defmodule KeyfleetWeb.ShellLive do
     SearchLive,
     SharedFigures,
     TreasuryLive,
-    WorkspaceLive
+    WorkspaceLive,
+    WorldlineLive
   }
 
   alias KeyfleetWeb.Components.{AgentSetup, BuyKey, Reading, SetupList}
@@ -61,12 +62,13 @@ defmodule KeyfleetWeb.ShellLive do
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
   @search_events ~w(search search_more)
+  @worldline_events ~w(worldline_older)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
   # The routes that show a fleet's workspace and its votes.
   @workspace_routes [:workspace, :workspace_item, :code_commit, :code_history, :code_files]
-  @proposals_routes [:proposals, :proposal, :treasury]
+  @proposals_routes [:proposals, :proposal, :treasury, :worldline]
 
   @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
@@ -85,6 +87,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:key_thread, [])
      |> stream_configure(:activity, dom_id: &FleetLive.activity_dom_id/1)
      |> stream(:activity, [])
+     |> stream_configure(:worldline, dom_id: &WorldlineLive.dom_id/1)
+     |> stream(:worldline, [])
      |> assign(
        route_spec: nil,
        shell_instance: System.unique_integer([:positive, :monotonic]),
@@ -142,6 +146,7 @@ defmodule KeyfleetWeb.ShellLive do
        poll_form: nil,
        polls_notice: nil,
        search: nil,
+       worldline: nil,
        shared: %{},
        buy_key: nil,
        pass_note: nil,
@@ -205,7 +210,8 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_workspace(route_spec, params)
        |> load_proposals(route_spec, params)
        |> load_search(route_spec, params)
-       |> PollsLive.read_polls(route_spec.route_id, params)}
+       |> PollsLive.read_polls(route_spec.route_id, params)
+       |> WorldlineLive.read(route_spec.route_id, params)}
     end
   end
 
@@ -258,7 +264,8 @@ defmodule KeyfleetWeb.ShellLive do
               :treasury,
               :polls,
               :poll,
-              :search
+              :search,
+              :worldline
             ],
        do: Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id))
 
@@ -415,6 +422,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp press(event, params, socket) when event in @search_events,
     do: SearchLive.handle_event(event, params, socket)
 
+  defp press(event, params, socket) when event in @worldline_events,
+    do: WorldlineLive.handle_event(event, params, socket)
+
   # The Treasury's refresh, once every 30 seconds for each person: by
   # account when signed in, by visit when not.
   defp press("refresh_treasury", _params, socket) do
@@ -464,7 +474,7 @@ defmodule KeyfleetWeb.ShellLive do
   # the room in its list as having something new when a room is open, and a
   # member's hall reads its feed again.
   defp notice(%Broadcast{event: "room_head", payload: head}, socket) do
-    socket = RoomsLive.note_head(socket, head)
+    socket = socket |> RoomsLive.note_head(head) |> WorldlineLive.heard(:posts)
     {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
   end
 
@@ -535,6 +545,10 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice(%Broadcast{event: "rooms_changed"} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)
 
+  # The Worldline on show reads the polls started a moment later.
+  defp notice(%Broadcast{event: "polls_changed"}, %{assigns: %{worldline: %{}}} = socket),
+    do: {:noreply, WorldlineLive.heard(socket, :polls)}
+
   defp notice(%Broadcast{event: event} = notice, socket)
        when event in ["poll_changed", "polls_changed"],
        do: PollsLive.handle_info(notice, socket)
@@ -591,7 +605,9 @@ defmodule KeyfleetWeb.ShellLive do
        do: {:noreply, WorkspaceLive.refresh_soon(socket, seen, run_id, watermark)}
 
   defp notice({:graph_head, fleet_id, _run_id, _watermark}, socket),
-    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
+    do:
+      {:noreply,
+       socket |> WorldlineLive.heard(:changes) |> FleetLive.refresh_activity_soon(fleet_id)}
 
   # What anyone hears of the workspace: the fleet's activity has a new change
   # of it to show.
@@ -614,7 +630,8 @@ defmodule KeyfleetWeb.ShellLive do
        ),
        do: {:noreply, WorkspaceLive.refresh_later(socket)}
 
-  defp notice({:code_pushed, _fleet_id}, socket), do: {:noreply, socket}
+  defp notice({:code_pushed, _fleet_id}, socket),
+    do: {:noreply, WorldlineLive.heard(socket, :pushes)}
 
   # A notice that the open fleet's proposal records or balances changed is a
   # nudge to read its page again, once, a moment later, like the workspace's.
@@ -633,11 +650,14 @@ defmodule KeyfleetWeb.ShellLive do
     {:noreply,
      socket
      |> KeyProfileLive.refresh_votes()
+     |> WorldlineLive.heard(:proposals)
      |> FleetLive.refresh_activity_soon(fleet_id)}
   end
 
   defp notice({:proposals_changed, fleet_id}, socket),
-    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
+    do:
+      {:noreply,
+       socket |> WorldlineLive.heard(:proposals) |> FleetLive.refresh_activity_soon(fleet_id)}
 
   # A new reading of the fleet's balances, every five minutes, may carry
   # income, so the open key's rewards are read again with it.
@@ -668,6 +688,9 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp notice({:refresh_activity, _fleet_id} = message, socket),
     do: FleetLive.handle_info(message, socket)
+
+  defp notice(:refresh_worldline = message, socket),
+    do: WorldlineLive.handle_info(message, socket)
 
   defp buy_key_changed(%{assigns: %{buy_key: %{id: fleet_id}}} = socket, {:fleet_now, fleet_id}),
     do: assign(socket, :buy_key, BuyKey.sale(fleet_id))
@@ -844,6 +867,11 @@ defmodule KeyfleetWeb.ShellLive do
             resting?={@treasury_resting != nil}
           />
           <SearchLive.results :if={@route_spec.route_id == :search} search={@search} />
+          <WorldlineLive.page
+            :if={@route_spec.route_id == :worldline}
+            worldline={@worldline}
+            events={@streams.worldline}
+          />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
             page={@proposals}
@@ -892,10 +920,11 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The fleet's places drawn inside its page, under its bar: the page's own
-  # views, its Treasury, its Workspace and its search.
+  # views, its Treasury, its Workspace, its search and its Worldline.
   defp fleet_place(:fleet), do: :fleet
   defp fleet_place(:treasury), do: :treasury
   defp fleet_place(:search), do: :search
+  defp fleet_place(:worldline), do: :worldline
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
 
   defp fleet_place(route_id)
@@ -951,7 +980,8 @@ defmodule KeyfleetWeb.ShellLive do
               :code_files,
               :proposals,
               :proposal,
-              :search
+              :search,
+              :worldline
             ] do
     shown = socket.assigns.fleet
 
@@ -985,11 +1015,12 @@ defmodule KeyfleetWeb.ShellLive do
   # hall is drawn from the fleet's reading every such page shares
   # (`KeyfleetWeb.FleetNow`), which hears them once for all of those pages,
   # so their page hears only what a Key open over it shows: its wall, in
-  # the rooms, and its votes and rewards. Each gives the fleet heard, or nil.
+  # the rooms, and its votes and rewards. The Worldline hears the rooms and
+  # votes its reader reads. Each gives the fleet heard, or nil.
   defp rooms_heard(socket, params, fleet_id) do
     if fleet_id &&
-         (member?(socket, fleet_id) or Map.has_key?(params, "key") or
-            Map.has_key?(params, "room")),
+         (member?(socket, fleet_id) or socket.assigns.route_spec.route_id == :worldline or
+            Map.has_key?(params, "key") or Map.has_key?(params, "room")),
        do: fleet_id
   end
 
@@ -1136,6 +1167,7 @@ defmodule KeyfleetWeb.ShellLive do
         |> hear_as_class()
         |> FleetLive.class_changed(fleet_id)
         |> KeyProfileLive.class_changed(fleet_id)
+        |> WorldlineLive.class_changed(fleet_id)
     end
   end
 

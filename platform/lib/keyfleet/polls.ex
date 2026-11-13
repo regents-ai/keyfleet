@@ -29,6 +29,11 @@ defmodule Keyfleet.Polls do
     resource Keyfleet.Polls.Poll do
       define :start_poll, action: :start
       define :list_polls, action: :listed, args: [:fleet_id]
+
+      define :polls_started_before,
+        action: :started_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
       define :get_poll, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
       define :end_poll, action: :end, args: [:fleet_id]
 

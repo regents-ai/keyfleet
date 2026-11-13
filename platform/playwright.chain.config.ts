@@ -13,8 +13,9 @@ import {defineConfig, devices} from "@playwright/test"
 // again from the server's lines, the city button beside an open fleet's name
 // with its bar, a new owner's setup list from the purchase to its last
 // step, Block and Delete conversation asking first in a direct message, the
-// homepage's value cards opening Classic's pages, and the workspace's Graph
-// canvas panning, zooming, rearranging and lighting a line, in Chromium.
+// homepage's value cards opening Classic's pages, the workspace's Graph canvas
+// panning, zooming, rearranging and lighting a line, and a fleet's Worldline
+// read signed out, in Chromium.
 // They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
 // over Erlang distribution, so the server runs as a named node on the loopback
 // address, with a secret cookie and a fixed distribution port instead of epmd.
@@ -40,7 +41,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts", "homepage_cards.spec.ts", "tree_canvas.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "setup_list.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts", "homepage_cards.spec.ts", "tree_canvas.spec.ts", "worldline.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,

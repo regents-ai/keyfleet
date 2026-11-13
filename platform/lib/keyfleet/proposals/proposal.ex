@@ -172,6 +172,24 @@ defmodule Keyfleet.Proposals.Proposal do
               )
     end
 
+    # The fleet's proposals by when they opened, or when their ballots stop,
+    # from just past `before_at` and `before_id`, newest first, `limit` at
+    # most.
+    for {action, time} <- [opened_before: :opened_at, closed_before: :closes_at] do
+      read action do
+        argument :fleet_id, :string, allow_nil?: false
+        argument :before_at, :utc_datetime_usec, allow_nil?: false
+        argument :before_id, :uuid
+        argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+        filter expr(fleet_id == ^arg(:fleet_id))
+
+        prepare {Keyfleet.Preparations.NewestFirst,
+                 sort: [{time, :desc}, id: :asc], before: [:before_at, :before_id]}
+
+        prepare build(select: [:id, :fleet_id, :number, :author_key, time])
+      end
+    end
+
     # What was recorded from a stretch of the fleet's blocks, so a second
     # reading of the same stretch can be checked against it.
     read :recorded_in_blocks do

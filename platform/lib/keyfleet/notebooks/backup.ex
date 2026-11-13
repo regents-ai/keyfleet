@@ -77,6 +77,21 @@ defmodule Keyfleet.Notebooks.Backup do
               )
     end
 
+    # The copies of every notebook of the fleet from just past `before_at` and
+    # `before_id`, newest first, `limit` at most, without their code.
+    read :changed_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec, allow_nil?: false
+      argument :before_id, :uuid
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [changed_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare build(select: [:id, :fleet_id, :project, :notebook_id, :title, :key, :changed_at])
+    end
+
     read :older_than do
       argument :before, :utc_datetime_usec, allow_nil?: false
       filter expr(inserted_at < ^arg(:before))
@@ -86,7 +101,12 @@ defmodule Keyfleet.Notebooks.Backup do
   end
 
   policies do
-    policy always() do
+    # When the fleet's notebooks changed is read as its workspace is.
+    policy action(:changed_before) do
+      authorize_if {Keyfleet.Access.Check, read: :workspace, scope: :fleet_id}
+    end
+
+    policy action([:read, :keep, :newest, :of_project, :copies, :older_than, :forget]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

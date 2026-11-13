@@ -133,7 +133,7 @@
   gap: 0.5rem;
 }
 
-/* The fleet's five tabs, in one row of their own. */
+/* The fleet’s six tabs, in one row of their own. */
 .fleet-bar__nav {
   display: flex;
   flex: 1 1 100%;

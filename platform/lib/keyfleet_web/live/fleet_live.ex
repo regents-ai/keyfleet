@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
   has sold and how many agents are here, Pair New Agent for a signed-in
-  person, one way in, and one row of five tabs: Chat, Workspace, Treasury,
-  Keys and Proposals.
+  person, one way in, and one row of six tabs: Chat, Workspace, Treasury,
+  Keys, Proposals and Worldline.
 
   The way in, above the tabs, is whichever applies first: the reader's own
   Keys to enter as, the Regents Club Pass a Club Key comes with, the Key on
@@ -32,7 +32,8 @@ defmodule KeyfleetWeb.FleetLive do
   "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
   page, under the same bar, in place of the other views.
   The search box beside the fleet's name opens the fleet's search
-  (`KeyfleetWeb.SearchLive`, at `/search`) the same way.
+  (`KeyfleetWeb.SearchLive`, at `/search`) the same way, and "Worldline"
+  (`KeyfleetWeb.WorldlineLive`, at `/worldline`) opens there too.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Buy Key", no "Send
@@ -109,6 +110,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
   alias KeyfleetWeb.WorkspacePage
+  alias KeyfleetWeb.WorldlineLive
 
   # How many pages of the hall's feed the page shows at most.
   @activity_pages 5
@@ -221,7 +223,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :place, :atom,
     default: :fleet,
     doc:
-      "`:fleet` for the page's own views, or `:treasury`, `:workspace` or `:search`, drawn by the inner block"
+      "`:fleet` for the page's own views, or `:treasury`, `:workspace`, `:search` or `:worldline`, drawn by the inner block"
 
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
@@ -241,7 +243,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :posts, :any, default: nil, doc: "the open room's posts"
   attr :room_notice, :map, default: nil
 
-  slot :inner_block, doc: "the Treasury, Workspace or search page, for those places"
+  slot :inner_block, doc: "the Treasury, Workspace, search or Worldline page, for those places"
 
   attr :now, :map,
     required: true,
@@ -317,7 +319,7 @@ defmodule KeyfleetWeb.FleetLive do
           </div>
 
           <.entry
-            :if={@view not in [:workspace, :proposals, :treasury, :search]}
+            :if={@view not in [:workspace, :proposals, :treasury, :search, :worldline]}
             fleet={@fleet}
             actor={@actor}
             params={@params}
@@ -381,6 +383,15 @@ defmodule KeyfleetWeb.FleetLive do
               <span :if={@fleet.open_proposals != []} class="fleet-tab-count">
                 {length(@fleet.open_proposals)}<span class="visually-hidden"> open</span>
               </span>
+            </.link>
+            <.link
+              id="fleet-tab-worldline"
+              class="rg-button rg-button--secondary"
+              data-tab="worldline"
+              patch={WorldlineLive.worldline_path(@fleet.fleet_id)}
+              aria-current={if @view == :worldline, do: "page"}
+            >
+              Worldline
             </.link>
             <span
               class="fleet-bar__ink"

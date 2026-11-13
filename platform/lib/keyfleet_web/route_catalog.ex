@@ -113,6 +113,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/polls", :polls, %{}},
     {"/polls/:poll_id", :poll, %{poll_id: :poll_id}},
     {"/search", :search, %{}},
+    {"/worldline", :worldline, %{}},
     {"/keys/:token_id", :keys, %{token_id: :token_id}},
     {"/keys/:token_id/dms", :dms, %{token_id: :token_id}},
     {"/keys/:token_id/dms/:other_token_id", :dm,
@@ -170,7 +171,9 @@ defmodule KeyfleetWeb.RouteCatalog do
       {:treasury, :product, "Keyfleet", "Treasury", "/", [:profile_actions], :product, %{}},
     polls: {:polls, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
     poll: {:poll, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
-    search: {:search, :product, "Keyfleet", "Search", "/", [:profile_actions], :product, %{}}
+    search: {:search, :product, "Keyfleet", "Search", "/", [:profile_actions], :product, %{}},
+    worldline:
+      {:worldline, :product, "Keyfleet", "Worldline", "/", [:profile_actions], :product, %{}}
   }
 
   # The account's views, each its own page under one tab bar.

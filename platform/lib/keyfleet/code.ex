@@ -40,6 +40,11 @@ defmodule Keyfleet.Code do
     resource Push do
       define :recent_pushes, action: :recent, args: [:fleet_id, :project]
       define :pushes_of_ids, action: :of_ids, args: [:fleet_id, :project, :ids]
+
+      define :pushes_before,
+        action: :pushed_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
       define :push, action: :one, args: [:id], not_found_error?: false
       define :branch_pushes, action: :branches
       define :tips_before, action: :tips_before, args: [:fleet_id, :project, :before]

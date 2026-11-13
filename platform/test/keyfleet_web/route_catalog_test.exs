@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     "/polls",
     "/polls/:poll_id",
     "/search",
+    "/worldline",
     "/keys/:token_id",
     "/keys/:token_id/dms",
     "/keys/:token_id/dms/:other_token_id"
@@ -208,13 +209,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 89
+    assert length(decoded["routes"]) == 94
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) ==
              ~w(home account account_agents points wallets connections about pair opportunities) ++
                List.flatten(
                  List.duplicate(
-                   ~w(fleet workspace workspace_item code_commit code_history code_files project proposals proposal treasury polls poll search keys dms dm),
+                   ~w(fleet workspace workspace_item code_commit code_history code_files project proposals proposal treasury polls poll search worldline keys dms dm),
                    5
                  )
                )
