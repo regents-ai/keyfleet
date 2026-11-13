@@ -27,6 +27,7 @@ defmodule KeyfleetWeb.DmsLive do
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
+  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.ShellLive
@@ -174,8 +175,26 @@ defmodule KeyfleetWeb.DmsLive do
             title="No messages yet."
           />
 
-          <ol id="dms-thread-list" class="rooms-thread-list" phx-update="stream">
-            <li :for={{dom_id, message} <- @messages} id={dom_id}>
+          <%!-- As in a room, the other Key's message fades in where it lands
+          (`MotionList`); one the person sends is simply there, and so is the
+          thread drawn again as the connection comes back. --%>
+          <ol
+            id="dms-thread-list"
+            class="rooms-thread-list"
+            phx-update="stream"
+            phx-hook="MotionList"
+            data-variant={Motion.standard("list")}
+            data-layout-id="dms-thread-list"
+            data-children="[data-message]"
+            data-redrawn
+          >
+            <li
+              :for={{dom_id, message} <- @messages}
+              id={dom_id}
+              data-message
+              data-own={message.from_token_id == @dms.token_id}
+              data-layout-id={dom_id}
+            >
               <p class="rooms-author">
                 <.link patch={KeyLinks.key_path(@dms.fleet_id, message.from_token_id)}>
                   Key {Rules.grouped(message.from_token_id)}

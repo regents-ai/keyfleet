@@ -39,14 +39,35 @@ export const LAYOUTS: Record<string, () => LayoutAnimationParams> = {
   }),
 }
 
-type ListHook = {el: HTMLElement; scope?: Scope}
+// How a list the server draws again whole stood before a change: its items in
+// order, and the place in the record each element inside it held, which the
+// redraw takes off.
+type Drawn = {order: string; ids: [HTMLElement, string][]}
+
+type ListHook = {el: HTMLElement; scope?: Scope; mine?: Set<string>; drawn?: Drawn}
+
+// The reader's own items in a list, each marked `data-own`, by id.
+const own = (list: HTMLElement) => new Set([...list.querySelectorAll<HTMLElement>("[data-own]")].map(item => item.id))
+
+const order = (list: HTMLElement) => [...list.querySelectorAll(list.dataset.children!)].map(item => item.id).join(" ")
+
+const drawn = (list: HTMLElement): Drawn => ({
+  order: order(list),
+  ids: [...list.querySelectorAll<HTMLElement>("[data-layout-id]")].map(el => [el, el.dataset.layoutId!]),
+})
 
 /**
  * A list the server owns, built from a table of versions. It renders
  * `data-layout-id` on the list and on every item, names the items in
  * `data-children` and the version in `data-variant`. An item that is leaving
  * is hidden for a moment before the server drops it, so it can fade out while
- * its neighbours close the gap.
+ * its neighbours close the gap. A change that brings the reader's own item,
+ * marked `data-own`, such as a message they just sent, answers them at once:
+ * it is simply there. A list the server may draw again whole, such as a
+ * gallery the page redraws whenever it changes or a thread whose connection
+ * comes back, is marked `data-redrawn`: it moves only when its items come, go
+ * or change places, and what is inside each item stays as it is while they
+ * move.
  */
 export const listHook = (layouts: Record<string, () => LayoutAnimationParams>): Hook => ({
   mounted(this: ListHook) {
@@ -61,10 +82,15 @@ export const listHook = (layouts: Record<string, () => LayoutAnimationParams>): 
 
   beforeUpdate(this: ListHook) {
     this.scope?.methods.record()
+    this.mine = own(this.el)
+    this.drawn = this.el.dataset.redrawn === undefined ? undefined : drawn(this.el)
   },
 
   updated(this: ListHook) {
-    if (!still(this.el)) this.scope?.methods.move()
+    const {mine, drawn} = this
+    if (drawn) for (const [el, id] of drawn.ids) el.dataset.layoutId ??= id
+    if (still(this.el) || [...own(this.el)].some(id => !mine!.has(id)) || drawn?.order === order(this.el)) return
+    this.scope?.methods.move()
   },
 
   destroyed(this: ListHook) {

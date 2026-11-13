@@ -9521,3 +9521,73 @@ landing did not interrupt it; another Buy press, a reconnect and opening the
 window again stamped nothing; under reduced motion nothing moved. The lab's
 card stayed still while its stamp landed and its tick drew. WebKit is not run
 on the Mac.
+
+## 2026-11-13: Sold and Price roll as a Key sells
+
+- In the Buy Key window, Sold and Price used to change in place when a Key
+  sold while the window was open. They now roll to their new value, the
+  characters that changed turning over from the end, with the kit's count
+  roll (`MotionCount`). Opening the window, a page drawn again as its
+  connection comes back, and the first figure after "Catching up", a dash or
+  "Sold out" are simply there, and so is a price before the sale opens. With
+  reduced motion the new value simply appears. While a figure rolls, screen
+  readers are given the plain new figure.
+- Only the figures move: their rows, the facts around them, and Approve and
+  Buy keep their places. Approve and Buy are otherwise unchanged.
+
+Check: compile with warnings as errors, format and typecheck pass. In
+headless Chromium at 1280 and 390 wide, light and dark, read from each
+painted frame: opening the window rolled nothing; a sale while it was open
+rolled Sold (0 of 1,024 to 1 of 1,024) and Price (10 USDC to 10.02 USDC) once
+each and ended on the plain figure; the rows, the facts, Approve and Buy
+moved 0px while the figures rolled, and each figure's own box less than 1px;
+words followed by a first figure did not roll; a reconnect closed the window
+and nothing rolled; under reduced motion nothing split. WebKit is not run on
+the Mac.
+
+## 2026-11-13: Keys glide to their place on Account
+
+- On Account, a Key that moves in the gallery, as an agent goes on or off
+  it, now glides to its new place and the Keys it passes make room, where
+  before the cards jumped. A Key added to the gallery fades in where it
+  lands. Opening the page, the page reading the gallery again, and a page
+  drawn again as its connection comes back move nothing unless the Keys'
+  order changes. With reduced motion the Keys are simply in their new places.
+- What is inside each card, its agents and its Add agent choice, stays as it
+  is while the card moves.
+- The motion kit's list (`MotionList` in `assets/js/hooks/motion/moments.ts`)
+  takes `data-redrawn` for a list the server draws again whole. Lists without
+  it move as before.
+
+Check: compile with warnings as errors, format and typecheck pass. In
+headless Chromium at 1280 and 390 wide, light and dark, read from each
+painted frame: nothing moved on load or after the gallery was read again; a
+Key that took an agent glided to the front (394px at 1280, 336px at 390, in
+steps of at most 48px over about 40 frames) while the Keys it passed made
+room, and glided back when the agent came off; no card and nothing inside an
+existing card faded; the page did not scroll; a reconnect moved nothing; a
+Key added faded in while the others held still; under reduced motion a
+re-sort was at once. WebKit is not run on the Mac.
+
+## 2026-11-13: Direct messages arrive as in a room
+
+- In a direct-message thread, a message from the other Key now fades in
+  where it lands, as in a room, and the messages above it hold still. A
+  message the person sends is simply there at once. A thread drawn again as
+  its connection comes back moves nothing. With reduced motion a message
+  simply appears.
+- A person reading at the end of the thread stays at the end as a message
+  lands, and one reading higher up keeps their place.
+- The motion kit's list (`MotionList`) takes `data-own` on the reader's own
+  items: a change that brings one answers at once, with no motion. Lists
+  without it move as before.
+
+Check: compile with warnings as errors, format and typecheck pass; the
+stylesheet stays within its size limit. In headless Chromium at 1280 and 390
+wide, light and dark, read from each painted frame: the person's own message
+appeared at once, never moved or faded; the other Key's message faded in
+from nothing while every message above it held still; a page at the end of
+the thread stayed at the end through the arrival, with no jump back, the
+same with and without reduced motion; a reader higher up kept their place;
+a reconnect moved nothing; the first message of a new conversation faded in
+and ended with no motion left on it. WebKit is not run on the Mac.

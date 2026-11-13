@@ -62,6 +62,13 @@
   overflow-wrap: anywhere;
 }
 
+/* A reader at the end of the thread stays there as a message lands and makes
+   room for itself: the page keeps its place by the box under the thread, not
+   by a message that is moving. */
+#dms-thread-list {
+  overflow-anchor: none;
+}
+
 /* A message's parts sit inside it, not in boxes of their own. */
 .rooms-thread-list .dms-parts li {
   padding: 0;

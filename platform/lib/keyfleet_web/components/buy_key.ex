@@ -23,7 +23,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
 
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
-  alias KeyfleetWeb.{FleetLive, FleetNow, FleetPage, WalletPanel, WalletWords}
+  alias KeyfleetWeb.{FleetLive, FleetNow, FleetPage, Motion, WalletPanel, WalletWords}
 
   @doc """
   A fleet's sale, as the window and the homepage show it:
@@ -156,7 +156,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
       <dl class="buy-key__facts">
         <div>
           <dt>Sold</dt>
-          <dd id="buy-key-sold">{@sold}</dd>
+          <.fact id="buy-key-sold" fact={@sold} />
         </div>
         <div :if={@key}>
           <dt>Key</dt>
@@ -169,7 +169,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
               Your wallet asks twice: Approve lets the sale take this much USDC, then Buy pays it and sends you the Key.
             </Regent.Primitives.tip>
           </dt>
-          <dd id="buy-key-price">{@cost}</dd>
+          <.fact id="buy-key-price" fact={price(@state, @cost)} />
         </div>
       </dl>
       <.order
@@ -359,17 +359,45 @@ defmodule KeyfleetWeb.Components.BuyKey do
   # A fleet on Base has a Key on offer, or none once it has sold out.
   defp on_base?(sale), do: match?(%{sales: %{buy: %{}}}, sale)
 
+  attr :id, :string, required: true
+  attr :fact, :any, required: true, doc: "`{:figure, text}`, or `{:words, text}` that never rolls"
+
+  # Sold or Price. A figure rolls to its next value when a sale lands while the
+  # window is open (`MotionCount`); words ("Catching up", "Sold out", a dash, a
+  # price before the sale opens) are simply there, and so is the first figure
+  # after them.
+  defp fact(assigns) do
+    ~H"""
+    <dd id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+      <%= case @fact do %>
+        <% {:figure, figure} -> %>
+          <span data-count>{figure}</span>
+        <% {:words, words} -> %>
+          {words}
+      <% end %>
+    </dd>
+    """
+  end
+
   # How many of the fleet's Keys have sold, out of how many it can ever have
   # where it has a limit. Before the sale opens nothing has sold.
-  defp sold_count(%{failed?: true, sales: nil}), do: "—"
-  defp sold_count(%{sales: %{current?: false}}), do: "Catching up"
-  defp sold_count(%{id: fleet_id, sales: nil}), do: out_of(0, Presets.max_supply(fleet_id))
+  defp sold_count(%{failed?: true, sales: nil}), do: {:words, "—"}
+  defp sold_count(%{sales: %{current?: false}}), do: {:words, "Catching up"}
+
+  defp sold_count(%{id: fleet_id, sales: nil}),
+    do: {:figure, out_of(0, Presets.max_supply(fleet_id))}
 
   defp sold_count(%{id: fleet_id, sales: %{keys: keys}}),
-    do: out_of(keys, Presets.max_supply(fleet_id))
+    do: {:figure, out_of(keys, Presets.max_supply(fleet_id))}
 
   defp out_of(keys, nil), do: grouped(keys)
   defp out_of(keys, max), do: "#{grouped(keys)} of #{grouped(max)}"
+
+  # The next Key's cost rolls only while the sale is open (`offer/1`). Before it
+  # opens, the opening price is simply there, as are the words in its place,
+  # "Sold out" or a dash.
+  defp price(:open, cost), do: {:figure, cost}
+  defp price(_state, cost), do: {:words, cost}
 
   attr :id, :string, required: true
 
