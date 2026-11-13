@@ -23,18 +23,37 @@
  * picture has the keyboard, so it opens as any link does, in a new tab too;
  * a drag never opens it.
  *
+ * The sun and each planet at now carry their names beside them, clear of
+ * each other and inside the picture (`tips` in the scene). Each planet's
+ * name and a ring on the planet are one real link to its place in the
+ * workspace, the stops for Tab after the mark's link; pointed at or given
+ * the keyboard, the planet stands out as a mark does, and a press on it that
+ * drags turns the picture instead. Now only names the sun.
+ *
+ * While it follows now, the picture flies: the planets orbit, their helices
+ * and every event on them stream back from the sun, each event riding its
+ * path, and the stars drift by the same way, the nearer faster. Once the
+ * stream has carried the oldest event past, history comes round again out of
+ * the sun, so it never runs out (`streamedAt` in the scene). With the mouse
+ * on the picture, or a finger down, the flight eases to a twentieth of its
+ * pace. Moved through time, the picture stops flying and every event glides
+ * back to its own time; Now flies on again, and Reset returns to the view it
+ * opens on.
+ *
  * The picture is drawn only with WebGPU. Without it the line and the sun the
  * page drew stay, with a note that the List has every event. For a reader who
- * asked for less motion nothing shimmers, glides, reveals or flares, and a
- * turn stops where it is let go; the picture and its links still work.
+ * asked for less motion nothing flies, shimmers, glides, reveals or flares,
+ * and a turn stops where it is let go; the picture and its links still work.
  *
  * anime.js moves every transition, by the values the GPU reads rather than
  * by the page: the first reveal (a timeline: the line and helices draw out
  * to the sun, passing each event in turn, then the planets come out onto
- * their orbits), the glides of Now, Reset and the zoom buttons, the mark in
- * focus, an arrival's flare and word, and a change of filter. A move asked
- * for from the keyboard happens at once. The orbits turn in the shader by
- * the clock.
+ * their orbits), the flight's pace, the glides of Now, Reset and the zoom
+ * buttons, every event's glide back to its own time with those nearest the
+ * sun growing back in, the mark in focus, the
+ * planet pointed at, an arrival's flare and word, and a change of filter. A
+ * move asked for from the keyboard happens at once. The shimmer runs by the
+ * clock.
  */
 import {animate, createScope, createTimeline, type AnimationParams, type JSAnimation} from "animejs"
 
@@ -44,12 +63,15 @@ import {showingTheme, watchTheme} from "../theme"
 import {tone} from "../theme_tone"
 import type {Scene, Tones, WorldlineRenderer} from "../worldline/renderer"
 import {
+  BREAK,
   CHANGE,
   DAY,
+  GROW,
   HOME,
   MAX_EVENTS,
   OPENING,
   PITCH_LIMIT,
+  PLANETS,
   TONES,
   YAW_LIMIT,
   clear,
@@ -66,10 +88,13 @@ import {
   project,
   reach,
   timeAt,
+  tips,
+  type Box,
   type Camera,
   type Frame,
   type Lens,
   type Mark,
+  type TipName,
   type WorldEvent,
 } from "../worldline/scene"
 import {localTime} from "./local_time"
@@ -89,7 +114,7 @@ type Older = {events: WorldEvent[]; older: boolean}
 type Island = IslandRenderer & {readonly gpu: WorldlineRenderer}
 
 /** Where the sun stands from the middle while the picture follows now, in spans. */
-const HEAD_AT = 0.35
+const HEAD_AT = 0.4
 /** The narrowest and widest stretch of time the picture shows, in seconds. */
 const MIN_SPAN = 120
 const MAX_SPAN = 400 * DAY
@@ -126,6 +151,13 @@ const REVEAL = 1100
 const ORBITING = 520
 /** How long a new event's word shows over the sun, in milliseconds. */
 const NEWS = 2600
+/** Seconds the picture's width of time, or the whole loop if that is shorter, takes to stream past at full pace. */
+const FLIGHT = 20
+/** The flight's pace while the mouse is on the picture or a finger is down, of full; and how long it takes to ease to a new pace, in milliseconds. */
+const CRUISE = 0.05
+const PACING = 350
+/** How fast each layer of stars drifts at full pace, in radians a second, the farthest first. */
+const DRIFT = [0.006, 0.014, 0.03]
 
 const reader = () => ({locale: undefined, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone})
 
@@ -167,6 +199,13 @@ export const Worldline: Hook = {
     const news = root.querySelector<HTMLElement>("[data-worldline-news]")!
     const view = root.querySelector<HTMLElement>("[data-worldline-view]")!
     const level = view.querySelector<HTMLOutputElement>("[data-worldline-zoom-level]")!
+    const layer = root.querySelector<HTMLElement>("[data-worldline-tips]")!
+    const tipped = new Map(
+      [...layer.querySelectorAll<HTMLElement>("[data-worldline-tip]")].map(element => [
+        element.dataset.worldlineTip as TipName,
+        {element, label: element.querySelector<HTMLElement>("[data-tip-name]")!},
+      ]),
+    )
     if (!navigator.gpu) root.dataset.worldlineStill = "true"
 
     // The events on show and where they are drawn, by the page's clock.
@@ -195,6 +234,16 @@ export const Worldline: Hook = {
     let clock = 0
     let ticked: number | undefined
     let strained = false
+    // How far the picture has flown: the orbits' seconds on, the events'
+    // seconds back round the loop and where the loop begins (`Frame`); how
+    // far each layer of stars has drifted round; and whether the mouse is on
+    // the picture or a finger is down on it.
+    let flown = 0
+    let streamed = 0
+    let loop = -BREAK
+    const drift = DRIFT.map(() => 0)
+    let hovering = false
+    let touching = false
 
     // A press on the picture, while one finger or the mouse is down: where it
     // last was, how far it has moved, when, whether it turns the picture or
@@ -218,28 +267,55 @@ export const Worldline: Hook = {
     let dragged = false
 
     // What anime.js moves: the reveal, the planets coming out onto their
-    // orbits, the mark in focus, an arrival, a change of filter, a glide back
-    // to the sun, a zoom and a turn back home.
+    // orbits, the mark in focus, the planet pointed at, an arrival, a change
+    // of filter, a glide back to the sun, a zoom, a turn back home, the
+    // flight's pace, the events' glide back to their own times and how far
+    // those nearest the sun grow in out of it (`Frame`).
     const motion = {
       revealed: 1e12,
       orbiting: 1,
       emphasis: 1,
+      lift: 1,
       arrival: 0,
       arrivedFrom: 1e12,
       change: 1,
       home: 0,
       zoom: 0,
       turn: 0,
+      pace: 0,
+      landing: 0,
+      emerging: 0,
     }
     // Which heads flare for what just arrived: the sun, then each planet.
     let flaring = [0, 0, 0, 0]
     let homing: {from: number; animation: JSAnimation} | undefined
     let zooming: {from: number; to: number; animation: JSAnimation} | undefined
     let turning: {from: Camera; animation: JSAnimation} | undefined
+    // The pace the flight is easing to, and the events gliding back to their
+    // own times: from how far they had streamed, by how far, the shorter way
+    // round. The loop grows on with now meanwhile, so the glide stops short
+    // of its end, and the last of the way is taken as it finishes. Then the
+    // events nearest the sun growing back in.
+    let aim = 0
+    let pacing: JSAnimation | undefined
+    let landing: {from: number; by: number; animation: JSAnimation} | undefined
+    let settling: JSAnimation | undefined
     // While the filter changes: the events that leave and those that arrive.
     let changing: {leaving: Set<string>; arriving: Set<string>; animation: JSAnimation} | undefined
     let focus: number | undefined
     let focusBy: "pointer" | "key" | undefined
+    // The planet's link the mouse is on and the one with the keyboard, and
+    // the head that stands out for them: 1 to 3, the planets innermost first.
+    let pointed: Element | null = null
+    let keyed: Element | null = null
+    let lifted: number | undefined
+    // The names' sizes, and what stands over the picture that they keep
+    // clear of: the zoom, and Now while it shows.
+    const sizes = Object.fromEntries([...tipped.keys()].map(name => [name, {width: 0, height: 0}])) as Record<
+      TipName,
+      {width: number; height: number}
+    >
+    let blocked: Box[] = []
 
     let nudge = () => {}
 
@@ -248,7 +324,19 @@ export const Worldline: Hook = {
     this.scope = scope
 
     const now = () => (Date.now() + skew - anchor) / 1000
-    const frame = (): Frame => ({width, height, mid, span, now: now(), anchor, camera: {yaw, pitch}})
+    const frame = (): Frame => ({
+      width,
+      height,
+      mid,
+      span,
+      now: now(),
+      anchor,
+      camera: {yaw, pitch},
+      flown,
+      streamed,
+      loop,
+      emerging: motion.emerging,
+    })
     const look = () => {
       const shown = frame()
       return {shown, at: lens(shown)}
@@ -273,6 +361,95 @@ export const Worldline: Hook = {
           },
         }),
       )
+
+    // Where the loop begins: the oldest event loaded, less a break.
+    const begins = () => (oldest() ?? now()) - BREAK
+
+    // The picture flies on to where the events have streamed `to` seconds
+    // back, the orbits turning on as far. Each time round the loop, and
+    // whenever nothing has streamed, it begins afresh at the oldest event
+    // loaded; every event stands at its own time then, so nothing moves.
+    const travel = (to: number) => {
+      const length = now() - loop
+      flown += to - streamed
+      streamed = to >= length ? to - length : to
+      if (streamed === 0 || streamed < to) loop = begins()
+    }
+
+    // Every event back at its own time, the way round the loop it was going.
+    const landed = (round: boolean) => {
+      flown += (round ? now() - loop : 0) - streamed
+      streamed = 0
+      loop = begins()
+    }
+
+    // The events nearest the sun grow in out of it from here on, as copies
+    // coming round do. Once the flight has carried every event clear of the
+    // sun, so none of them shows the change.
+    const emerge = () => {
+      settling?.cancel()
+      settling = undefined
+      motion.emerging = 1
+    }
+
+    // The events nearest the sun grow back in, alongside a glide or at once.
+    const settle = (glides: boolean) => {
+      settling?.cancel()
+      settling = undefined
+      if (glides) settling = run({emerging: 0, duration: HOMING, ease: EASE_OUT})
+      else motion.emerging = 0
+    }
+
+    // Every event glides back to its own time, the shorter way round the
+    // loop, and those nearest the sun grow back in: going back, as they
+    // glide; going on round, once the copies have met their own events. At
+    // once from the keyboard or for a reader who asked for less motion. The
+    // flight stops meanwhile.
+    const land = (glides: boolean) => {
+      if (streamed === 0 || (landing !== undefined && glides)) return
+      landing?.animation.cancel()
+      const round = streamed > (now() - loop) / 2
+      if (!glides || still(root)) {
+        landing = undefined
+        landed(round)
+        settle(false)
+        nudge()
+        return
+      }
+      motion.landing = 0
+      landing = {
+        from: streamed,
+        by: (round ? now() - loop : 0) - streamed,
+        animation: run({landing: [0, 1], duration: HOMING, ease: EASE_OUT}, () => {
+          landing = undefined
+          landed(round)
+          if (round) settle(true)
+        }),
+      }
+      if (!round) settle(true)
+    }
+
+    // A reader who takes the picture away from now has the events at their
+    // own times.
+    const leave = (glides: boolean) => {
+      if (!following) land(glides)
+    }
+
+    // The flight's pace: full while the picture follows now, a twentieth
+    // while the mouse is on it or a finger is down, and none while the reader
+    // has it elsewhere in time, while the events glide back, before it has
+    // opened, or for a reader who asked for less motion. A pace is eased
+    // into, and none is at once.
+    const steer = () => {
+      const opened = loaded && motion.revealed >= 1e12
+      const want = !opened || !following || landing || still(root) ? 0 : hovering || touching ? CRUISE : 1
+      if (want === aim) return
+      aim = want
+      pacing?.cancel()
+      pacing = undefined
+      if (want === 0) motion.pace = 0
+      else pacing = run({pace: want, duration: PACING, ease: EASE_IN_OUT})
+    }
 
     // The latest the middle may stand, with the sun where it follows now; and
     // the earliest, with the oldest event a tenth of the way in, once nothing
@@ -299,6 +476,7 @@ export const Worldline: Hook = {
       mid += seconds
       following = false
       hold()
+      leave(true)
     }
 
     // Moves through time as far as a drag of (dx, dy) runs along the line on
@@ -327,6 +505,7 @@ export const Worldline: Hook = {
       span = next
       following = false
       hold()
+      leave(true)
     }
 
     const stop = (each: {animation: JSAnimation} | undefined) => each?.animation.cancel()
@@ -341,14 +520,15 @@ export const Worldline: Hook = {
       zooming = undefined
     }
 
-    // Zooms in or out by a step about the middle, or the sun while following
-    // it: a glide when asked for with the pointer, at once from the keyboard
-    // or for a reader who asked for less motion.
-    const zoomBy = (factor: number, glides: boolean) => {
-      takeOver()
-      const to = Math.min(MAX_SPAN, Math.max(MIN_SPAN, span * factor))
+    // Zooms to show `seconds` across, about the middle, or the sun while
+    // following it: a glide when asked for with the pointer, at once from the
+    // keyboard or for a reader who asked for less motion.
+    const zoomTo = (seconds: number, glides: boolean) => {
+      stop(zooming)
+      zooming = undefined
+      const to = Math.min(MAX_SPAN, Math.max(MIN_SPAN, seconds))
       if (!glides || still(root)) {
-        zoom(factor)
+        zoom(to / span)
       } else {
         motion.zoom = 0
         zooming = {
@@ -358,6 +538,12 @@ export const Worldline: Hook = {
         }
       }
       nudge()
+    }
+
+    // Zooms in or out by a step.
+    const zoomBy = (factor: number, glides: boolean) => {
+      takeOver()
+      zoomTo(span * factor, glides)
     }
 
     // The reader takes the camera: a turn let go and a turn home both stop.
@@ -387,10 +573,12 @@ export const Worldline: Hook = {
       nudge()
     }
 
-    // Back to the view the picture opens on, turning there unless asked from
-    // the keyboard or by a reader who asked for less motion.
+    // Back to the view the picture opens on, turned home and at 100%, gliding
+    // there unless asked from the keyboard or by a reader who asked for less
+    // motion.
     const reset = (glides: boolean) => {
       holdCamera()
+      zoomTo(OPENING, glides)
       if (!glides || still(root)) {
         yaw = HOME.yaw
         pitch = HOME.pitch
@@ -408,19 +596,34 @@ export const Worldline: Hook = {
       nudge()
     }
 
+    // The names' sizes, and where the zoom and Now stand over the picture.
+    const measureTips = () => {
+      for (const [name, {label}] of tipped) sizes[name] = {width: label.offsetWidth, height: label.offsetHeight}
+      const box = layer.getBoundingClientRect()
+      blocked = [view, back]
+        .filter(each => !each.hidden)
+        .map(each => {
+          const over = each.getBoundingClientRect()
+          return {left: over.left - box.left, top: over.top - box.top, width: over.width, height: over.height}
+        })
+    }
+
     // Now shows while the picture stands away from the sun. Pressed from the
     // keyboard, the picture keeps the keyboard once Now goes.
     const showBack = () => {
       if (back.hidden === following) return
       if (following && document.activeElement === back) root.focus({preventScroll: true})
       back.hidden = following
+      measureTips()
       if (!following && !still(root)) play(back, {opacity: [0, 1], duration: FAST, ease: EASE_OUT})
     }
 
     // The mark in focus stays the same event when others arrive around it.
+    // While every event stands at its own time, the loop begins afresh.
     const relayout = () => {
       const kept = focus === undefined ? undefined : marks[focus].event.id
       marks = place([...events.values()], anchor)
+      if (streamed === 0) loop = begins()
       if (kept !== undefined) {
         const index = marks.findIndex(mark => mark.event.id === kept)
         focus = index < 0 ? undefined : index
@@ -478,16 +681,53 @@ export const Worldline: Hook = {
     // While the picture has the keyboard, the mark nearest its middle is the one shown.
     const chooseMiddle = () => choose(pointAt(width / 2, height / 2, width), "key")
 
+    // The planet whose link the mouse is on, or else the one with the
+    // keyboard, stands out: rising for the pointer, at once for the keyboard
+    // or for a reader who asked for less motion.
+    const lift = (glides: boolean) => {
+      const name = (pointed ?? keyed)?.getAttribute("data-worldline-tip")
+      const head = name ? PLANETS.findIndex(planet => planet.name === name) + 1 : undefined
+      if (head === lifted) return
+      lifted = head
+      if (head !== undefined) {
+        if (!glides || still(root)) motion.lift = 1
+        else run({lift: [0, 1], duration: BASE, ease: EASE_OUT})
+      }
+      nudge()
+    }
+
+    // Each head's name stands beside it, the links of the nearer heads over
+    // the farther ones'. A head out of sight takes its link and name with it,
+    // and gives the keyboard back to the picture.
+    const placeTips = (shown: Frame, at: Lens) => {
+      layer.style.opacity = `${motion.orbiting}`
+      const placed = tips(shown, at, motion.orbiting, sizes, blocked)
+      const depths = placed.map(tip => tip.depth).sort((a, b) => b - a)
+      for (const tip of placed) {
+        const {element, label} = tipped.get(tip.name)!
+        if (!tip.shown && element.contains(document.activeElement)) root.focus({preventScroll: true})
+        element.toggleAttribute("data-shown", tip.shown)
+        if (!tip.shown) continue
+        element.style.translate = `${tip.x.toFixed(1)}px ${tip.y.toFixed(1)}px`
+        element.style.zIndex = `${depths.indexOf(tip.depth) + 1}`
+        label.toggleAttribute("data-room", tip.label !== null)
+        if (tip.label !== null)
+          label.style.translate = `${(tip.label.left - tip.x).toFixed(1)}px ${(tip.label.top - tip.y).toFixed(1)}px`
+      }
+    }
+
     // The link stands on the mark in focus, its words to whichever side has
-    // room, and a new event's word over the sun. A mark turned out of sight
-    // is let go.
+    // room, the heads' names beside them, and a new event's word over the
+    // sun, each frame, so they ride along as the picture flies. A mark turned
+    // or streamed out of sight is let go.
     const placeLabels = (shown: Frame, at: Lens) => {
       const sun = project(point(shown.now, 0, 0, shown, at), shown, at)
       news.style.transform = `translate(${sun.x.toFixed(1)}px, ${sun.y.toFixed(1)}px)`
+      placeTips(shown, at)
       if (focus === undefined) return
       const spot = markAt(marks[focus], shown, at)
       const outside = spot.x < 0 || spot.x > width || spot.y < 0 || spot.y > height
-      if (outside || clear(spot.depth, at) < 0.2) {
+      if (outside || clear(spot.depth, at) < 0.2 || spot.full < 0.2) {
         choose(undefined, "pointer")
         return
       }
@@ -498,10 +738,11 @@ export const Worldline: Hook = {
 
     // Older events are read a page at a time while fewer than a picture's
     // width of them stand ready past where the drawn history begins, so they
-    // are there before the reader moves back to them.
+    // are there before the reader moves back to them; and only while every
+    // event stands at its own time, so the loop begins afresh with them.
     const readOlder = () => {
       const first = oldest()
-      if (!older || asking || first === undefined || events.size >= MAX_EVENTS) return
+      if (!older || asking || streamed !== 0 || first === undefined || events.size >= MAX_EVENTS) return
       if (first < current.shown.mid + current.drawn.line.from - span) return
       asking = true
       this.pushEvent<Older>("worldline_older", {}, reply => {
@@ -618,14 +859,26 @@ export const Worldline: Hook = {
     this.handleEvent<Page>("worldline:page", page)
     this.handleEvent<{events: WorldEvent[]}>("worldline:heard", heard)
 
-    // One frame: the clock runs on, a move or a turn let go glides on or
-    // springs back, a glide to the sun, a zoom or a turn home closes in, and
-    // the sun follows now. True while anything still moves.
+    // One frame: the clock runs on, the picture flies on at its pace (a
+    // picture's width of time, or the whole loop, every `FLIGHT` seconds at
+    // full) and the stars drift with it, or the events glide back to their
+    // own times; a move or a turn let go glides on or springs back, a glide
+    // to the sun, a zoom or a turn home closes in, and the sun follows now.
+    // True while anything still moves.
     const advance = (time: number) => {
       const dt = ticked === undefined ? 0 : Math.min(50, time - ticked)
       ticked = time
       const moving = !still(root) && !strained
       if (moving) clock += dt / 1000
+      steer()
+      if (landing) {
+        travel(landing.from + landing.by * motion.landing)
+      } else if (moving && motion.pace > 0) {
+        const seconds = (motion.pace * dt) / 1000
+        travel(streamed + (seconds * Math.min(span, now() - loop)) / FLIGHT)
+        if (streamed >= GROW && motion.emerging < 1) emerge()
+        for (let i = 0; i < drift.length; i++) drift[i] = (drift[i] + seconds * DRIFT[i]) % (2 * Math.PI)
+      }
       if (zooming) {
         span = zooming.from * (zooming.to / zooming.from) ** motion.zoom
         if (following) follow()
@@ -679,10 +932,12 @@ export const Worldline: Hook = {
       focus: focus ?? -1,
       emphasis: motion.emphasis,
       flare: flaring.map(head => head * motion.arrival),
+      lift: [0, 1, 2, 3].map(head => (head === lifted ? motion.lift : 0)),
       clock,
       shimmer: !still(root) && !strained ? 1 : 0,
       orbiting: motion.orbiting,
       change: motion.change,
+      drift,
     })
 
     this.controller = createCanvasIsland<Island>(root, {}, {
@@ -718,6 +973,7 @@ export const Worldline: Hook = {
           const box = canvas.getBoundingClientRect()
           width = Math.max(1, box.width)
           height = Math.max(1, box.height)
+          measureTips()
           if (following) follow()
         }
         measure()
@@ -738,6 +994,9 @@ export const Worldline: Hook = {
         }
         const onControl = (event: Event) =>
           back.contains(event.target as Node) || view.contains(event.target as Node)
+        // The planet's link an event happened on, if any.
+        const onTip = (event: Event) =>
+          event.target instanceof Element ? event.target.closest("a[data-worldline-tip]") : null
         const pointers = new Map<number, {x: number; y: number}>()
         const fingers = () => {
           const [a, b] = [...pointers.values()]
@@ -756,6 +1015,7 @@ export const Worldline: Hook = {
             if (event.button !== 0 || onControl(event)) return
             const spot = local(event)
             pointers.set(event.pointerId, spot)
+            if (event.pointerType === "touch") touching = true
             takeOver()
             holdCamera()
             if (pointers.size === 1) {
@@ -786,10 +1046,16 @@ export const Worldline: Hook = {
           event => {
             const spot = local(event)
             if (!pointers.has(event.pointerId)) {
-              // The mark shown stays while the pointer is on its link, card and all.
+              // The mark shown stays while the pointer is on its link, card
+              // and all; on a planet's link no mark shows, and the planet
+              // stands out. The flight slows while the mouse is on the picture.
+              if (event.pointerType !== "mouse") return
+              hovering = true
               const onLink = link.contains(event.target as Node)
-              if (event.pointerType === "mouse" && focusBy !== "key" && !onLink && !onControl(event))
-                choose(pointAt(spot.x, spot.y, NEAR), "pointer")
+              pointed = onTip(event)
+              lift(true)
+              if (focusBy !== "key" && !onLink && !onControl(event))
+                choose(pointed ? undefined : pointAt(spot.x, spot.y, NEAR), "pointer")
               return
             }
             pointers.set(event.pointerId, spot)
@@ -840,7 +1106,7 @@ export const Worldline: Hook = {
           if (!pointers.delete(event.pointerId)) return
           if (pointers.size < 2) pair = undefined
           if (press?.id === event.pointerId) {
-            if (press.moved <= DRAG && press.touch) {
+            if (press.moved <= DRAG && press.touch && !onTip(event)) {
               const spot = local(event)
               choose(pointAt(spot.x, spot.y, NEAR_TOUCH), "pointer")
             }
@@ -856,7 +1122,10 @@ export const Worldline: Hook = {
             yaw = within(yaw, YAW_LIMIT)
             pitch = within(pitch, PITCH_LIMIT)
           }
-          if (pointers.size === 0) delete root.dataset.dragging
+          if (pointers.size === 0) {
+            delete root.dataset.dragging
+            touching = false
+          }
           island.nudge()
         }
         root.addEventListener("pointerup", release, options)
@@ -864,11 +1133,15 @@ export const Worldline: Hook = {
         root.addEventListener(
           "pointerleave",
           event => {
-            if (event.pointerType === "mouse" && focusBy === "pointer" && !pointers.size) choose(undefined, "pointer")
+            if (event.pointerType !== "mouse") return
+            hovering = false
+            pointed = null
+            lift(true)
+            if (focusBy === "pointer" && !pointers.size) choose(undefined, "pointer")
           },
           options,
         )
-        // A drag that ends on the link opens nothing; a click does.
+        // A drag that ends on a link opens nothing; a click does.
         root.addEventListener(
           "click",
           event => {
@@ -882,7 +1155,7 @@ export const Worldline: Hook = {
         root.addEventListener(
           "dblclick",
           event => {
-            if (onControl(event) || link.contains(event.target as Node)) return
+            if (onControl(event) || link.contains(event.target as Node) || onTip(event)) return
             event.preventDefault()
             reset(true)
           },
@@ -990,6 +1263,7 @@ export const Worldline: Hook = {
             }
             event.preventDefault()
             if (event.key !== "End") takeOver()
+            leave(false)
             if (event.key !== "Escape" && event.key !== "Enter") chooseMiddle()
             island.nudge()
           },
@@ -1014,8 +1288,18 @@ export const Worldline: Hook = {
           options,
         )
         root.addEventListener(
+          "focusin",
+          event => {
+            keyed = event.target instanceof Element && event.target.matches("a[data-worldline-tip]:focus-visible") ? event.target : null
+            lift(false)
+          },
+          options,
+        )
+        root.addEventListener(
           "focusout",
           event => {
+            keyed = null
+            lift(false)
             if (!root.contains(event.relatedTarget as Node | null) && focusBy === "key") choose(undefined, "key")
           },
           options,
@@ -1025,11 +1309,13 @@ export const Worldline: Hook = {
           island.renderer()?.gpu.tones(tones())
           island.nudge()
         })
+        // The picture's size, and each name's as its font arrives.
         const resized = new ResizeObserver(() => {
           measure()
           island.nudge()
         })
         resized.observe(canvas)
+        for (const {label} of tipped.values()) resized.observe(label)
 
         return () => {
           listening.abort()

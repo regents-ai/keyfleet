@@ -8722,3 +8722,77 @@ and 3 budgets pass; the six shaders compile in Dawn and pass `vgpu check`;
 the Chromium Worldline walk (12 tests: 390 and 1280 wide, both themes, turned
 side-on, three-quarter and down the axis) passes; frames hold at 16.7 ms at
 390 and 1280 wide with no long tasks.
+
+## 2026-11-13 — The Worldline flies, and each planet carries its name
+
+Sean asked for each planet's name at the tip of its line, opening its place
+in the workspace, and for the Worldline to open closer in and fly: the lines
+and their events streaming through space, the planets orbiting, the stars
+drifting by, all slowing to a twentieth while the mouse is on the picture.
+
+- Names: each planet at now carries its name beside its head, and the name
+  and a fingertip-sized ring on the planet are one link to its place
+  (`WorkspacePage.place_path/3`): Workspace to the project's goals and tasks,
+  Code to `?place=code`, Notebooks to `?place=docs`. The sun carries Now,
+  which is not a link. `tips` in `assets/js/worldline/scene.ts` puts each name
+  on the side facing away from the sun with room for it, inside the picture
+  and clear of the other heads, the other names, the zoom and Now; a name with
+  no room fades out, and a head out of sight or behind a nearer one takes its
+  link with it. Pointed at or given the keyboard, the planet's head stands
+  out; a press on it that drags turns the picture and opens nothing, and a
+  double-click on it does not reset. The legend's three planets link to the
+  same places.
+- Opening: the picture opens on the last 16 hours (`OPENING`), three-quarters
+  on from just above the line with the sun near the right, and calls that
+  100%. Reset and a double-click bring back that turn and that zoom, keeping
+  the place in time.
+- Flight: while the picture follows now, two values move on each frame in the
+  frame loop that was already there: `flown`, how far the orbits have turned
+  on, and `streamed`, how far every event has streamed back from the sun.
+  Each event rides its own planet's path, so it never slides along it. The
+  stream runs on a loop from the oldest event loaded, less a four-hour break
+  (`BREAK`), up to now. Copies coming round grow in out of the sun over two
+  hours of the picture's time (`GROW`), and the events nearest the loop's end
+  shrink away. Once every event has streamed clear of the sun, the newest grow
+  in as the copies do (`emerging`), so going round the loop shows no jump.
+  `streamedAt` in the scene and the vertex shader work this out the same way.
+  At full pace a picture's width of time, or the whole loop if that is
+  shorter, streams past every 20 seconds. The new uniforms are filled in
+  place each frame.
+- Pace: anime.js eases it over 350 ms. It is full while following now, a
+  twentieth while the mouse is on the picture or a finger is down, and none
+  while the reader is elsewhere in time, before the picture opens, or for a
+  reader who asks for less motion, who sees a still picture.
+- Moving through time stops the flight: the wheel, Shift and a drag, the
+  arrow keys, or a pinch or Ctrl and the wheel that zooms away from now. Every
+  event glides back to its own time the shorter way round the loop, over
+  700 ms (at once from the keyboard), the orbits turning by as much. The zoom
+  buttons zoom about the sun and keep it flying. Now starts the flight again.
+  Older events are read only while every event stands at its own time, so the
+  loop starts again with them.
+- Stars: three layers drift the way the lines stream, the nearer faster, by
+  the pace, and wrap round the sky without a seam.
+- Caption: one more sentence about the flight, hidden for a reader who asks
+  for less motion.
+- Tests: the scene tests cover beads on their helices while flying, events
+  streaming with their paths, going round the loop with nothing popping, every
+  event at its own time at rest, picking a mark while flying, and the heads
+  and names. The browser walk covers the names' links, hover and keyboard
+  focus, the flight slowing under the mouse and stopping when the reader moves
+  through time, Now starting it again, and the mark's link following its mark
+  while it flies. Since the opening shows 16 hours, the walks zoom out to 12%
+  before they point at marks.
+
+Check: format, compile with warnings as errors, credo strict, xref (132 of
+132), codegen and route handoff pass; of the full suite's 1,395 (18
+properties, 1,377 tests, 19 excluded), 1,394 pass with `PORT=4595` set, and
+the boundary test, which reads that port for its origins, passes without it;
+typecheck, vitest (443 in 33 files), 3 budgets and the asset build pass; the
+browser suite (125), the devices suite (70) and the Chromium Worldline walk
+(15) pass; the style check reports the same 51
+breaks as before, none in the Worldline; the required fixes are all present.
+Measured in Chromium: under the mouse the planets, the events and the stars
+move about a twentieth as far as at full pace (0.048, 0.048, 0.059); a mark's
+link stays within 0.6 px of the mark while it flies; 601 frames over 10
+seconds average 16.7 ms, none over 20 ms; for a reader who asks for less
+motion two frames a second apart are identical.
