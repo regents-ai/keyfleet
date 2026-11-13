@@ -3,8 +3,8 @@
 # and 500 notebooks made or saved a day on average, across 60 projects and 40
 # Keys, quieter at weekends and growing over the year. Each day is counted as
 # the site counts it (`Keyfleet.Atlas.Count`), with the items and notebooks
-# their titles come from. Then every read the page and the agents' tools make
-# is timed at that size, and each statement it runs is shown with its plan.
+# their titles come from. `scripts/atlas_reads.exs` then times every read the
+# page and the agents' tools make at that size.
 #
 # Only for a local dev or test database:
 #
@@ -12,13 +12,13 @@
 #     MIX_ENV=test MIX_TEST_PARTITION=_atlas mix keyfleet.setup_local_auth
 #     MIX_ENV=test MIX_TEST_PARTITION=_atlas mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()'
 #     MIX_ENV=test MIX_TEST_PARTITION=_atlas mix run scripts/atlas_seed.exs [fleet]
+#     MIX_ENV=test MIX_TEST_PARTITION=_atlas mix run scripts/atlas_reads.exs [fleet]
 #
 # The fleet is fleet_tech_classic unless named, and must have nothing counted
 # yet. Counting only adds, so a second run on the same fleet is refused.
 
 alias Keyfleet.{Access, Atlas, Graph, Projects, Repo}
 alias Keyfleet.Atlas.Count
-alias KeyfleetWeb.AtlasPage
 
 repo = Repo.config()
 
@@ -316,111 +316,3 @@ IO.puts("""
 #{fleet}: #{totals.changes} changes to items and #{totals.notebooks} notebooks made or saved, \
 #{Float.round(totals.changes / days, 1)} and #{Float.round(totals.notebooks / days, 1)} a day.
 """)
-
-## What it takes to store
-
-sizes =
-  Repo.query!("""
-  SELECT c.relname, c.reltuples::bigint, pg_size_pretty(pg_total_relation_size(c.oid))
-  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE n.nspname = current_schema() AND c.relkind = 'r'
-    AND c.relname IN ('atlas_things', 'atlas_buckets', 'atlas_notebooks', 'graph_objects')
-  ORDER BY c.relname
-  """)
-
-Repo.query!("ANALYZE")
-
-IO.puts("Table | Rows (estimate) | Size with indexes")
-for [name, rows, size] <- sizes.rows, do: IO.puts("#{name} | #{rows} | #{size}")
-
-## Each read, timed, with the plan of every statement it runs
-
-parent = self()
-
-:telemetry.attach(
-  "atlas-seed-plans",
-  [:keyfleet, :repo, :query],
-  fn _event, _measurements, metadata, _config ->
-    if self() == parent and Process.get(:atlas_seed_capture),
-      do: send(parent, {:statement, metadata.query, metadata.params})
-  end,
-  nil
-)
-
-plans = fn ->
-  receive do
-    {:statement, sql, params} -> [{sql, params}]
-  after
-    0 -> []
-  end
-end
-
-now = DateTime.utc_now()
-year_start = Atlas.Span.start(:year, now)
-hour = DateTime.add(Atlas.Span.start(:hour, now), -26, :hour)
-busiest = Projects.general()
-tile = fn hours -> DateTime.add(now, -hours, :hour) |> Atlas.Span.start(:day) end
-
-reads = [
-  {"Picture rows, all work", fn -> AtlasPage.rows(fleet, nil, read_as) end},
-  {"Picture rows, notebooks", fn -> AtlasPage.rows(fleet, :notebook, read_as) end},
-  {"Active strip, the year",
-   fn -> AtlasPage.most_active(fleet, :year, now, [limit: 8] ++ read_as) end},
-  {"Active strip, a day",
-   fn -> AtlasPage.most_active(fleet, :day, now, [limit: 8] ++ read_as) end},
-  {"Weeks, a year's tile",
-   fn -> AtlasPage.cells(fleet, :week, tile.(52 * 168), now, nil, read_as) end},
-  {"Days, eight weeks' tile",
-   fn -> AtlasPage.cells(fleet, :day, tile.(56 * 24), now, nil, read_as) end},
-  {"Hours, three days' tile",
-   fn -> AtlasPage.cells(fleet, :hour, tile.(72), now, nil, read_as) end},
-  {"Cards of an hour", fn -> AtlasPage.newest(fleet, :hour, hour, [limit: 200] ++ read_as) end},
-  {"List totals, the year", fn -> AtlasPage.totals(fleet, :year, now, nil, read_as) end},
-  {"List projects, the year", fn -> AtlasPage.projects(fleet, :year, now, nil, read_as) end},
-  {"List latest, the year",
-   fn -> AtlasPage.newest(fleet, :year, now, [limit: 20] ++ read_as) end},
-  {"List latest, second page",
-   fn ->
-     %{after: cursor} = AtlasPage.newest(fleet, :year, now, [limit: 20] ++ read_as)
-     AtlasPage.newest(fleet, :year, now, [limit: 20, after: cursor] ++ read_as)
-   end},
-  {"Most active tasks, the year",
-   fn -> AtlasPage.most_active(fleet, :year, now, [limit: 20, kind: "task"] ++ read_as) end},
-  {"Most active of a project, the year",
-   fn -> AtlasPage.most_active(fleet, :year, now, [limit: 20, project: busiest] ++ read_as) end},
-  {"Newest notebooks, a month",
-   fn -> AtlasPage.newest(fleet, :month, now, [limit: 20, source: :notebook] ++ read_as) end},
-  {"Agent swarm, a month by day and kind",
-   fn ->
-     {from, to} = AtlasPage.window(:month, now)
-     AtlasPage.swarm(fleet, :day, from, to, %{by: [:kind]}, read_as)
-   end},
-  {"Agent swarm, the year by week",
-   fn -> AtlasPage.swarm(fleet, :week, year_start, now, %{by: []}, read_as) end}
-]
-
-IO.puts("\nRead | Median of 9 (ms) | Slowest (ms) | Statements")
-
-details =
-  for {name, read} <- reads do
-    read.()
-    times = for _ <- 1..9, do: elem(:timer.tc(read), 0) / 1000
-    sorted = Enum.sort(times)
-
-    Process.put(:atlas_seed_capture, true)
-    read.()
-    Process.delete(:atlas_seed_capture)
-    statements = Stream.repeatedly(plans) |> Enum.take_while(&(&1 != [])) |> Enum.concat()
-
-    IO.puts(
-      "#{name} | #{Float.round(Enum.at(sorted, 4), 1)} | #{Float.round(List.last(sorted), 1)} | #{length(statements)}"
-    )
-
-    {name, statements}
-  end
-
-for {name, statements} <- details, {sql, params} <- statements do
-  plan = Repo.query!("EXPLAIN (ANALYZE, BUFFERS) " <> sql, params)
-  IO.puts("\n## #{name}\n\n#{sql}\n")
-  for [line] <- plan.rows, do: IO.puts(line)
-end

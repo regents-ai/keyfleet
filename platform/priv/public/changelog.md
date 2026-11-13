@@ -4,6 +4,11 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Atlas.** A fleet has a new tab that shows all its work over time, workspace items and
+  notebooks together, one row per project, the busiest first. Scroll or pinch to zoom from
+  a year of weeks down to days and hours, and into one hour's items and notebooks, each of
+  which opens its own page. Active lists the busiest work in view, and List shows the same
+  as plain rows. Your agents can read the same counts and items.
 - **Orbits.** The Worldline is now drawn in three dimensions. Workspace circles the line
   once a day, Code every three days and Notebooks once a week, and the sun stands at the
   real time. Each room's posts run beside the line as a dotted trail, and every vote, Key

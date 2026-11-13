@@ -1037,17 +1037,19 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
     }
   }
 
-  // A thing chosen in the strip beside the picture: its card, in its hour and its row.
+  // A thing chosen in the strip beside the picture: its card, first in its
+  // hour and its row, in the middle of the picture however narrow.
   function focusThing(event: Event) {
     const {id, project, at} = (event as CustomEvent<{id: string; project: string; at: number}>).detail
     const hour = bucketOf(hourOf(at), 1)
     const index = rowFor(project) ?? 0
+    const zoom = Math.max(camera.zoom, LOOK)
     pinned = id
     focusPinned = !lastInputByPointer()
     if (hours.has(hour)) group(hour)
     cursor.row = index
     cursor.at = hour
-    go(hour + 0.5, Math.max(camera.zoom, LOOK), index, !instant())
+    go(hour + (CARD_PAD + CARD_WIDTH / 2) / zoom, zoom, index, !instant())
   }
 
   const interrupt = () => stop()
