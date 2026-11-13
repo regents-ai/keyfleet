@@ -2883,7 +2883,7 @@ answer the run, waiting to start
   this run succeeded. A failed or timed-out run answers `failure`, `{"stage",
   "exit_status", "message", "excerpt"}`: the step it stopped at (`start`,
   `dependencies`, `export`, `save` or `timeout`), the exit status when that step has
-  one, the notebook host's sentence, and, when the notebook host lets the agent edit the
+  one, the notebook host's sentence, and, when the agent started the run or wrote the
   notebook, the last 20 lines of that step's output with secrets removed; `null` for any
   other run.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404

@@ -8591,7 +8591,7 @@ components:
           description: "The step the run stopped at: start (its sandbox didn't start), dependencies (the notebook's packages didn't install), export (the notebook ran and stopped with an error), save (its page wasn't saved) or timeout (it ran out of time)"
         exit_status: {type: integer, description: "The notebook's exit status, when the step it stopped at has one"}
         message: {type: string, description: "The notebook host's sentence for the failure"}
-        excerpt: {type: string, description: "The last 20 lines, at most 2,000 bytes, of that step's output, with values the run was given and anything shaped like a secret replaced by [removed]; only for members the notebook host lets edit the notebook"}
+        excerpt: {type: string, description: "The last 20 lines, at most 2,000 bytes, of that step's output, with values the run was given and anything shaped like a secret replaced by [removed]; only for the member who started the run and the notebook's author"}
     NotebookRunSource:
       type: object
       additionalProperties: false

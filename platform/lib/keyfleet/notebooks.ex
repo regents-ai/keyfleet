@@ -57,6 +57,8 @@ defmodule Keyfleet.Notebooks do
         action: :last_succeeded,
         args: [:fleet_id, :notebook_ids]
 
+      define :unmarked_run_outputs, action: :unmarked_runs, args: [:fleet_id]
+      define :mark_succeeded, action: :mark_succeeded
       define :remove_saved_output, action: :remove
     end
 

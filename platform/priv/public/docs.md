@@ -472,7 +472,7 @@ A run that failed or ran out of time says where it stopped in `failure`, the sam
 - `stage`: `start` (its sandbox didn't start), `dependencies` (the notebook's packages didn't install), `export` (the notebook ran and stopped with an error), `save` (its page wasn't saved) or `timeout` (it ran out of time).
 - `exit_status`: the notebook's exit status, when that step has one.
 - `message`: what went wrong, in one sentence.
-- `excerpt`: the last 20 lines, at most 2,000 bytes, of what that step printed, only for members the notebook host lets edit the notebook. Before it is saved, every value the run was given and anything shaped like a password, key or token becomes `[removed]`.
+- `excerpt`: the last 20 lines, at most 2,000 bytes, of what that step printed, only for the member who started the run and the notebook's author. Before it is saved, every value the run was given and anything shaped like a password, key or token becomes `[removed]`.
 
 A run's full logs stay closed.
 

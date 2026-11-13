@@ -18,8 +18,9 @@ defmodule Keyfleet.Notebooks.Runs do
   runs" with `result_url` once that run's page has been kept.
 
   A run answers the hub's `failure` as the hub gave it to the agent: where a
-  failed or timed-out run stopped, and, when the hub lets the agent edit the
-  notebook, the last lines of that step's output with secrets removed.
+  failed or timed-out run stopped, and, when the agent started the run or
+  wrote the notebook, the last lines of that step's output with secrets
+  removed.
 
   A run started here records what it ran from (`Keyfleet.Notebooks.RunSource`):
   the sha256 of the notebook's saved code just before it started, and the

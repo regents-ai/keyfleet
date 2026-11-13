@@ -35,6 +35,13 @@ defmodule Keyfleet.Notebooks.SavedOutput do
 
     destroy :remove
 
+    # A copy kept before copies recorded their run's outcome, of a run the
+    # hub names succeeded (`Keyfleet.Notebooks.MarkSucceeded`).
+    update :mark_succeeded do
+      accept []
+      change set_attribute(:succeeded, true)
+    end
+
     read :at do
       get? true
       argument :fleet_id, :string, allow_nil?: false
@@ -73,6 +80,19 @@ defmodule Keyfleet.Notebooks.SavedOutput do
                 distinct: [:notebook_id],
                 distinct_sort: [saved_at: :desc]
               )
+    end
+
+    # The fleet's copies of background runs' pages not marked succeeded,
+    # without their pages.
+    read :unmarked_runs do
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and not succeeded and
+                 string_starts_with(source_id, "run_")
+             )
+
+      prepare build(select: [:notebook_id, :source_id])
     end
   end
 

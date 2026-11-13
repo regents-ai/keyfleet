@@ -58,17 +58,38 @@ defmodule Keyfleet.Notebooks.HubClient do
   in turn until the last.
   """
   def all_notebooks(fleet_id, project_id, limit \\ 500),
-    do: all_notebooks(fleet_id, project_id, limit, nil, [])
+    do: every(fleet_id, "/api/v1/projects/#{segment(project_id)}/notebooks", limit)
 
-  defp all_notebooks(fleet_id, project_id, limit, cursor, found) do
+  @doc """
+  Every job of the notebook, as the hub lists them (`id`, `name`, ...), each
+  page read in turn until the last.
+  """
+  def jobs(fleet_id, project_id, notebook_id),
+    do: every(fleet_id, notebook_path(project_id, notebook_id) <> "/jobs", 500)
+
+  @doc """
+  Every run of the job the hub still holds (it keeps them 30 days), newest
+  first, each with `run_id` and `status`, each page read in turn until the
+  last.
+  """
+  def runs(fleet_id, project_id, notebook_id, job_id),
+    do:
+      every(
+        fleet_id,
+        notebook_path(project_id, notebook_id) <> "/jobs/#{segment(job_id)}/runs",
+        500
+      )
+
+  defp notebook_path(project_id, notebook_id),
+    do: "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}"
+
+  defp every(fleet_id, path, limit, cursor \\ nil, found \\ []) do
     params = [limit: limit] ++ if(cursor, do: [cursor: cursor], else: [])
-
-    sent =
-      request(fleet_id, :get, "/api/v1/projects/#{segment(project_id)}/notebooks", params: params)
+    sent = request(fleet_id, :get, path, params: params)
 
     case answer(sent, [200]) do
       {:ok, %{"items" => items, "next_cursor" => next}} when is_binary(next) ->
-        all_notebooks(fleet_id, project_id, limit, next, found ++ items)
+        every(fleet_id, path, limit, next, found ++ items)
 
       {:ok, %{"items" => items}} ->
         {:ok, found ++ items}

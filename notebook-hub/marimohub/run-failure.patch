@@ -33,10 +33,10 @@ index a0887864..17b5aa4d 100644
            type: object
            properties:
 diff --git a/packages/api/openapi.yaml b/packages/api/openapi.yaml
-index 00ba8fbf..5f328e5a 100644
+index 00ba8fbf..19f70fb8 100644
 --- a/packages/api/openapi.yaml
 +++ b/packages/api/openapi.yaml
-@@ -4078,6 +4078,34 @@ components:
+@@ -4078,6 +4078,35 @@ components:
              - message
            description: Sanitized failure detail, present on failed, timed-out, or skipped
              runs.
@@ -62,7 +62,8 @@ index 00ba8fbf..5f328e5a 100644
 +            excerpt:
 +              type: string
 +              description: The last lines of the stage's output, with secrets removed. Present
-+                only for callers who may edit the notebook.
++                only for the member who started the run and the notebook's
++                author.
 +          required:
 +            - stage
 +            - message
@@ -72,45 +73,35 @@ index 00ba8fbf..5f328e5a 100644
            type: object
            properties:
 diff --git a/packages/api/src/jobs/operations.ts b/packages/api/src/jobs/operations.ts
-index 5e2f5869..6e3bcc07 100644
+index 5e2f5869..329f0bc2 100644
 --- a/packages/api/src/jobs/operations.ts
 +++ b/packages/api/src/jobs/operations.ts
-@@ -21,7 +21,12 @@ import type { ApiDeps, JobsConfig } from '../context';
- import { idempotentOperation } from '../idempotency';
- import { appendAudit } from '../log';
- import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor, MAX_PAGE_SIZE } from '../pagination';
--import { assertProjectRole, loadAuthorizedNotebook, loadVisibleProject } from '../shared';
-+import {
-+	assertProjectRole,
-+	authorizationService,
-+	loadAuthorizedNotebook,
-+	loadVisibleProject,
-+} from '../shared';
- import type { CreateJobBody, TriggerRunBody, UpdateJobBody } from './schemas';
- 
- export function requireJobs(deps: ApiDeps): JobsConfig {
-@@ -55,6 +60,19 @@ export async function authorizeJobNotebook(
+@@ -15,6 +15,7 @@ import type {
+ 	NotebookId,
+ 	ProjectId,
+ 	RunId,
++	RunReader,
+ } from '@marimo-hub/core';
+ import type { z } from 'zod';
+ import type { ApiDeps, JobsConfig } from '../context';
+@@ -55,6 +56,15 @@ export async function authorizeJobNotebook(
  
  export type AuthorizedNotebook = Awaited<ReturnType<typeof authorizeJobNotebook>>;
  
-+/** Whether the caller may write the notebook: the right that reads a run's logs and failure excerpt. */
-+export async function canEditJobNotebook(
-+	deps: ApiDeps,
-+	target: AuthorizedNotebook,
-+): Promise<boolean> {
-+	const decision = await authorizationService(deps).authorize(target.user, 'notebook.write', {
-+		kind: 'project',
-+		project: target.project,
-+		notebookLabels: target.notebook.meta.security_labels ?? null,
-+	});
-+	return decision.allowed;
++/** The caller as a reader of the job's runs (`toPublicJobRun`). */
++export function runReader(target: AuthorizedNotebook, job: JobDefinition): RunReader {
++	return {
++		user: target.user.id,
++		notebookAuthor: target.notebook.meta.author,
++		jobCreator: job.created_by,
++	};
 +}
 +
  export async function listNotebookJobs(
  	deps: ApiDeps,
  	pid: ProjectId,
 diff --git a/packages/api/src/jobs/schemas.ts b/packages/api/src/jobs/schemas.ts
-index 950ee15e..fed24026 100644
+index 950ee15e..3e43b5ee 100644
 --- a/packages/api/src/jobs/schemas.ts
 +++ b/packages/api/src/jobs/schemas.ts
 @@ -12,6 +12,7 @@ import {
@@ -132,7 +123,7 @@ index 950ee15e..fed24026 100644
 +				message: z.string(),
 +				excerpt: z.string().optional().openapi({
 +					description:
-+						"The last lines of the stage's output, with secrets removed. Present only for callers who may edit the notebook.",
++						"The last lines of the stage's output, with secrets removed. Present only for the member who started the run and the notebook's author.",
 +				}),
 +			})
 +			.optional()
@@ -144,103 +135,117 @@ index 950ee15e..fed24026 100644
  			.object({
  				html_bytes: z.number().int().nonnegative(),
 diff --git a/packages/api/src/mcp/jobRuns.ts b/packages/api/src/mcp/jobRuns.ts
-index 669cab59..98690721 100644
+index 669cab59..8ce91263 100644
 --- a/packages/api/src/mcp/jobRuns.ts
 +++ b/packages/api/src/mcp/jobRuns.ts
-@@ -5,9 +5,8 @@ import { toPublicJobRun, withAbortSignal, withDeadline } from '@marimo-hub/core'
- import type { JobDefinition, JobRun, RunId } from '@marimo-hub/core';
+@@ -2,10 +2,10 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
+ import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+ import { z } from 'zod';
+ import { toPublicJobRun, withAbortSignal, withDeadline } from '@marimo-hub/core';
+-import type { JobDefinition, JobRun, RunId } from '@marimo-hub/core';
++import type { JobDefinition, JobRun, RunId, RunReader } from '@marimo-hub/core';
  import { isTerminalRunStatus } from '@marimo-hub/core/jobs';
  import type { ApiDeps } from '../context';
 -import { authorizeJobNotebook, loadJobRun } from '../jobs/operations';
-+import { authorizeJobNotebook, canEditJobNotebook, loadJobRun } from '../jobs/operations';
++import { authorizeJobNotebook, loadJobRun, runReader } from '../jobs/operations';
  import type { AuthorizedNotebook } from '../jobs/operations';
--import { authorizationService } from '../shared';
+ import { authorizationService } from '../shared';
  import type { StartRequestContext } from './server';
- 
- export type JobToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
-@@ -99,6 +98,7 @@ function runResult(
+@@ -99,6 +99,7 @@ function runResult(
  	run: JobRun,
  	waitExpired: boolean,
  	appBaseUrl: string,
-+	editor: boolean,
++	reader: RunReader,
  	artifacts: { html: boolean; logs: boolean },
  ) {
  	const completed = isTerminalRunStatus(run.status);
-@@ -106,7 +106,7 @@ function runResult(
+@@ -106,7 +107,7 @@ function runResult(
  	const notebookPath = `/projects/${run.project_id}/notebooks/${run.notebook_id}`;
  	const statusUrl = `${base}/api/v1${notebookPath}/jobs/${run.job_id}/runs/${run.run_id}`;
  	return {
 -		run: toPublicJobRun(run),
-+		run: toPublicJobRun(run, { editor }),
++		run: toPublicJobRun(run, reader),
  		completed,
  		wait_expired: waitExpired && !completed,
  		links: {
-@@ -189,22 +189,12 @@ export async function observeJobRun({
- 			signal,
- 		});
- 	}
--	const logs =
--		run.output?.logs_bytes !== undefined &&
--		(
--			await withAbortSignal(
--				authorizationService(deps).authorize(authorized.user, 'notebook.write', {
--					kind: 'project',
--					project: authorized.project,
--					notebookLabels: authorized.notebook.meta.security_labels ?? null,
--				}),
--				signal,
--			)
--		).allowed;
-+	const editor = await withAbortSignal(canEditJobNotebook(deps, authorized), signal);
-+	const logs = run.output?.logs_bytes !== undefined && editor;
- 	// Zero bytes can mean either an empty HTML file or a run that only captured logs.
- 	const html =
+@@ -206,5 +207,8 @@ export async function observeJobRun({
  		run.output !== undefined &&
  		(run.output.html_bytes > 0 ||
  			(await withAbortSignal(deps.services.jobRuns.readHtml(run), signal)) !== null);
 -	return runResult(run, waitExpired, request.appBaseUrl, { html, logs });
-+	return runResult(run, waitExpired, request.appBaseUrl, editor, { html, logs });
++	return runResult(run, waitExpired, request.appBaseUrl, runReader(authorized, job), {
++		html,
++		logs,
++	});
  }
 diff --git a/packages/api/src/mcp/jobs.test.ts b/packages/api/src/mcp/jobs.test.ts
-index a659c04d..020bac4c 100644
+index a659c04d..2069cad6 100644
 --- a/packages/api/src/mcp/jobs.test.ts
 +++ b/packages/api/src/mcp/jobs.test.ts
-@@ -458,6 +458,24 @@ describe('MCP run execution and authorization', () => {
+@@ -458,6 +458,43 @@ describe('MCP run execution and authorization', () => {
  		}
  	});
  
-+	it('gives a failed run’s excerpt to editors and its summary alone to viewers', async () => {
-+		const queued = await enqueue();
++	it('gives a failed run’s excerpt to its starter and the notebook’s author alone', async () => {
++		const editor = (name: string): AuthenticatedPrincipal => ({
++			id: UserId.parse(name),
++			email: `${name}@example.com`,
++			credential: { kind: 'sso' },
++		});
++		const starter = editor('job-starter');
++		const other = editor('job-editor');
++		for (const member of [starter, other]) {
++			await deps.services.projects.addMember(pid, { user_id: member.id }, 'editor', USER.id);
++		}
++		const queued = await deps.services.jobRuns.enqueue({
++			job,
++			trigger: 'manual',
++			triggeredBy: starter.id,
++			timeoutSeconds: 60,
++		});
 +		const error = { code: 'NOTEBOOK_FAILED', message: 'cells failed' };
 +		await deps.services.jobRuns.transition(queued, 'fail', () => ({
 +			error,
 +			failure: { stage: 'export', exit_status: 1, message: error.message, excerpt: 'tail' },
 +		}));
 +		const summary = { stage: 'export', exit_status: 1, message: error.message };
-+		const ownerRead = await call('get_job_run', { run_id: queued.run_id });
-+		expect(ownerRead.structuredContent?.run).toMatchObject({
-+			failure: { ...summary, excerpt: 'tail' },
-+		});
-+		client = await connectMcpClient(deps, VIEWER, requestContext);
-+		const viewerRead = await call('get_job_run', { run_id: queued.run_id });
-+		expect(viewerRead.structuredContent?.run).toMatchObject({ failure: summary });
-+		expect(viewerRead.structuredContent?.run).not.toHaveProperty('failure.excerpt');
++		const reads = [
++			[starter, { ...summary, excerpt: 'tail' }],
++			[USER, { ...summary, excerpt: 'tail' }],
++			[other, summary],
++			[VIEWER, summary],
++		] as const;
++		for (const [member, failure] of reads) {
++			client = await connectMcpClient(deps, member, requestContext);
++			const read = await call('get_job_run', { run_id: queued.run_id });
++			const { run } = read.structuredContent as { run: { failure: unknown } };
++			expect(run.failure).toEqual(failure);
++		}
 +	});
 +
  	it('enforces token grants and hides inaccessible projects', async () => {
  		const restricted: AuthenticatedPrincipal = {
  			...USER,
 diff --git a/packages/api/src/routes/jobs.test.ts b/packages/api/src/routes/jobs.test.ts
-index 4d83d5b2..a18d8c7c 100644
+index 4d83d5b2..c8ba54d0 100644
 --- a/packages/api/src/routes/jobs.test.ts
 +++ b/packages/api/src/routes/jobs.test.ts
-@@ -408,6 +408,33 @@ describe('Job routes', () => {
+@@ -14,6 +14,7 @@ import {
+ 
+ const VIEWER = uid('viewer-1');
+ const EDITOR = uid('editor-1');
++const OTHER_EDITOR = uid('editor-2');
+ 
+ describe('Job routes', () => {
+ 	let bucket: MemoryBucket;
+@@ -408,6 +409,32 @@ describe('Job routes', () => {
  		expect(await logs.text()).toBe('line 1');
  	});
  
-+	it('shows a failed run’s excerpt only to callers who may edit the notebook', async () => {
++	it('shows a failed run’s excerpt only to its starter and the notebook’s author', async () => {
++		await services.projects.addMember(pid, { user_id: OTHER_EDITOR }, 'editor', ACTOR);
 +		const job = await createJob();
-+		const queued = await expectOk<any>(await request('POST', `${base()}/${job.id}/runs`), 201);
++		const queued = await expectOk<any>(await as(EDITOR)('POST', `${base()}/${job.id}/runs`), 201);
 +		const run = await services.jobRuns.getRun(pid, nid as never, job.id, queued.run_id);
 +		const error = { code: 'NOTEBOOK_FAILED', message: 'cells failed' };
 +		await services.jobRuns.transition(run, 'fail', () => ({
@@ -250,41 +255,39 @@ index 4d83d5b2..a18d8c7c 100644
 +		const runPath = `${base()}/${job.id}/runs/${queued.run_id}`;
 +		const summary = { stage: 'export', exit_status: 1, message: error.message };
 +
-+		for (const who of [request, as(EDITOR)]) {
-+			expect((await expectOk<any>(await who('GET', runPath))).failure).toEqual({
-+				...summary,
-+				excerpt: 'tail',
-+			});
++		const reads = [
++			[as(EDITOR), { ...summary, excerpt: 'tail' }],
++			[request, { ...summary, excerpt: 'tail' }],
++			[as(OTHER_EDITOR), summary],
++			[as(VIEWER), summary],
++		] as const;
++		for (const [who, failure] of reads) {
++			expect((await expectOk<any>(await who('GET', runPath))).failure).toEqual(failure);
 +			const [listed] = await expectPage<any>(await who('GET', `${base()}/${job.id}/runs`));
-+			expect(listed.failure).toEqual({ ...summary, excerpt: 'tail' });
++			expect(listed.failure).toEqual(failure);
 +		}
-+
-+		const viewer = as(VIEWER);
-+		expect((await expectOk<any>(await viewer('GET', runPath))).failure).toEqual(summary);
-+		const [listed] = await expectPage<any>(await viewer('GET', `${base()}/${job.id}/runs`));
-+		expect(listed.failure).toEqual(summary);
 +	});
 +
  	it('404s a run under a different job', async () => {
  		const a = await createJob({ name: 'a' });
  		const b = await createJob({ name: 'b' });
 diff --git a/packages/api/src/routes/jobs.ts b/packages/api/src/routes/jobs.ts
-index 660417bf..d79b8cf1 100644
+index 660417bf..7333c2d4 100644
 --- a/packages/api/src/routes/jobs.ts
 +++ b/packages/api/src/routes/jobs.ts
-@@ -21,6 +21,7 @@ import {
- import {
- 	requireJobs,
- 	authorizeJobNotebook,
-+	canEditJobNotebook,
- 	listNotebookJobs,
- 	loadJobRun,
+@@ -26,6 +26,7 @@ import {
  	createNotebookJob,
+ 	updateNotebookJob,
+ 	triggerJobRun,
++	runReader,
+ } from '../jobs/operations';
+ import { idempotentCreate } from '../idempotency';
+ import { appendAudit, describeError, logEvent } from '../log';
 @@ -429,6 +430,7 @@ app.openapi(triggerRun, async (c) => {
  					method: c.req.method,
  					path: c.req.path,
  				}),
-+				{ editor: true },
++				runReader(target, target.job),
  			),
  	);
  	return c.json({ success: true, data }, 201);
@@ -294,7 +297,7 @@ index 660417bf..d79b8cf1 100644
  	const { pid, nid, jid } = c.req.valid('param');
 -	const { job } = await loadAuthorizedJob(c, pid, nid, jid);
 +	const { job, ...target } = await loadAuthorizedJob(c, pid, nid, jid);
-+	const viewer = { editor: await canEditJobNotebook(deps, target) };
++	const reader = runReader(target, job);
  	const query = c.req.valid('query');
  	const cursor = decodeCursor(query.cursor);
  	let afterRunId: RunId | undefined;
@@ -303,11 +306,11 @@ index 660417bf..d79b8cf1 100644
  			success: true,
  			data: {
 -				items: page.items.map(toPublicJobRun),
-+				items: page.items.map((run) => toPublicJobRun(run, viewer)),
++				items: page.items.map((run) => toPublicJobRun(run, reader)),
  				next_cursor: page.nextRunId ? encodeCursor(page.nextRunId, page.nextRunId) : null,
  			},
  		},
-@@ -462,9 +465,10 @@ app.openapi(listRuns, async (c) => {
+@@ -462,16 +465,16 @@ app.openapi(listRuns, async (c) => {
  app.openapi(getRun, async (c) => {
  	const deps = c.get('deps');
  	const { pid, nid, jid, rid } = c.req.valid('param');
@@ -315,22 +318,29 @@ index 660417bf..d79b8cf1 100644
 +	const { job, ...target } = await loadAuthorizedJob(c, pid, nid, jid);
  	const run = await loadJobRun(deps, job, rid);
 -	return c.json({ success: true, data: toPublicJobRun(run) }, 200);
-+	const viewer = { editor: await canEditJobNotebook(deps, target) };
-+	return c.json({ success: true, data: toPublicJobRun(run, viewer) }, 200);
++	return c.json({ success: true, data: toPublicJobRun(run, runReader(target, job)) }, 200);
  });
  
  app.openapi(cancelRun, async (c) => {
-@@ -502,7 +506,7 @@ app.openapi(cancelRun, async (c) => {
+ 	const deps = c.get('deps');
+ 	const user = c.get('user');
+ 	const { pid, nid, jid, rid } = c.req.valid('param');
+-	const { job } = await loadAuthorizedJob(c, pid, nid, jid, 'notebook.write');
++	const { job, ...target } = await loadAuthorizedJob(c, pid, nid, jid, 'notebook.write');
+ 	const existing = await loadJobRun(deps, job, rid);
+ 	const { run, transitioned } = await deps.services.jobRuns.cancel(existing, user.id);
+ 	if (transitioned) {
+@@ -502,7 +505,7 @@ app.openapi(cancelRun, async (c) => {
  			() => appendJobRunFinishEvent(deps.services.events, run),
  		);
  	}
 -	return c.json({ success: true, data: toPublicJobRun(run) }, 200);
-+	return c.json({ success: true, data: toPublicJobRun(run, { editor: true }) }, 200);
++	return c.json({ success: true, data: toPublicJobRun(run, runReader(target, job)) }, 200);
  });
  
  app.openapi(getRunHtml, async (c) => {
 diff --git a/packages/client/src/schema.ts b/packages/client/src/schema.ts
-index 5b46d99f..874ee375 100644
+index 5b46d99f..1f4ef83e 100644
 --- a/packages/client/src/schema.ts
 +++ b/packages/client/src/schema.ts
 @@ -4159,6 +4159,19 @@ export interface components {
@@ -347,7 +357,7 @@ index 5b46d99f..874ee375 100644
 +				stage: 'start' | 'dependencies' | 'export' | 'save' | 'timeout' | 'unknown';
 +				exit_status?: number;
 +				message: string;
-+				/** @description The last lines of the stage's output, with secrets removed. Present only for callers who may edit the notebook. */
++				/** @description The last lines of the stage's output, with secrets removed. Present only for the member who started the run and the notebook's author. */
 +				excerpt?: string;
 +			};
  			/** @description Captured write-once artifacts, present after execution. */
@@ -375,29 +385,59 @@ index a549da6d..965d764f 100644
  }
  
 diff --git a/packages/core/src/schema.test.ts b/packages/core/src/schema.test.ts
-index 5ef68c9e..23b642cf 100644
+index 5ef68c9e..a572adc2 100644
 --- a/packages/core/src/schema.test.ts
 +++ b/packages/core/src/schema.test.ts
-@@ -372,9 +372,11 @@ describe('job schema evolution', () => {
+@@ -372,9 +372,41 @@ describe('job schema evolution', () => {
  		expect(parsed.error).toMatchObject({ future_error: true });
  		expect(parsed.output).toMatchObject({ future_output: true });
  		expect(parsed.compute_resources).toMatchObject({ future_resource: true });
 -		expect(toPublicJobRun(parsed).error).not.toHaveProperty('future_error');
 -		expect(toPublicJobRun(parsed).output).not.toHaveProperty('future_output');
 -		expect(toPublicJobRun(parsed).compute_resources).not.toHaveProperty('future_resource');
-+		expect(toPublicJobRun(parsed, { editor: true }).error).not.toHaveProperty('future_error');
-+		expect(toPublicJobRun(parsed, { editor: true }).output).not.toHaveProperty('future_output');
-+		expect(toPublicJobRun(parsed, { editor: true }).compute_resources).not.toHaveProperty(
-+			'future_resource',
-+		);
++		const reader = { user: 'reader', notebookAuthor: 'author', jobCreator: 'creator' };
++		expect(toPublicJobRun(parsed, reader).error).not.toHaveProperty('future_error');
++		expect(toPublicJobRun(parsed, reader).output).not.toHaveProperty('future_output');
++		expect(toPublicJobRun(parsed, reader).compute_resources).not.toHaveProperty('future_resource');
++	});
++
++	it.each([
++		['manual', 'starter', true],
++		['manual', 'author', true],
++		['manual', 'creator', false],
++		['manual', 'editor', false],
++		['schedule', 'creator', true],
++		['schedule', 'author', true],
++		['schedule', 'editor', false],
++	] as const)('gives a %s run’s excerpt to %s: %s', (trigger, user, sees) => {
++		const run = JobRunSchema.parse({
++			schema_version: 1,
++			run_id: createRunId(),
++			job_id: createJobId(),
++			notebook_id: createNotebookId(),
++			project_id: createProjectId(),
++			status: 'failed',
++			trigger,
++			...(trigger === 'manual' ? { triggered_by: 'starter' } : {}),
++			attempt: 1,
++			timeout_seconds: 60,
++			queued_at: NOW,
++			failure: { stage: 'export', exit_status: 1, message: 'failed', excerpt: 'tail' },
++		});
++		const failure = toPublicJobRun(run, {
++			user,
++			notebookAuthor: 'author',
++			jobCreator: 'creator',
++		}).failure;
++		expect(failure?.excerpt).toBe(sees ? 'tail' : undefined);
  	});
  });
  
 diff --git a/packages/core/src/schema.ts b/packages/core/src/schema.ts
-index e486368f..ff80b295 100644
+index e486368f..5d01fffe 100644
 --- a/packages/core/src/schema.ts
 +++ b/packages/core/src/schema.ts
-@@ -1132,6 +1132,22 @@ export const RunErrorSchema = z.looseObject({ code: z.string(), message: z.strin
+@@ -1132,6 +1132,23 @@ export const RunErrorSchema = z.looseObject({ code: z.string(), message: z.strin
  
  export type RunError = z.infer<typeof RunErrorSchema>;
  
@@ -406,7 +446,8 @@ index e486368f..ff80b295 100644
 +/**
 + * Where a failed or timed-out run stopped, written at the moment it failed.
 + * `message` is the run error's own sentence; `excerpt` is the tail of that
-+ * stage's output, redacted before it is stored and shown to editors only.
++ * stage's output, redacted before it is stored and shown only to the run's
++ * starter and the notebook's author (`toPublicJobRun`).
 + */
 +export const RunFailureSchema = z.looseObject({
 +	stage: z.enum(RUN_FAILURE_STAGES),
@@ -420,7 +461,7 @@ index e486368f..ff80b295 100644
  export const JobRunSchema = z.looseObject({
  	schema_version: z.literal(CURRENT_JOB_RUN_VERSION),
  	run_id: RunIdSchema,
-@@ -1167,6 +1183,7 @@ export const JobRunSchema = z.looseObject({
+@@ -1167,6 +1184,7 @@ export const JobRunSchema = z.looseObject({
  	exit_code: z.number().int().optional(),
  	/** Sanitized like a session's `error`; never carries secret material. */
  	error: RunErrorSchema.optional(),
@@ -428,7 +469,7 @@ index e486368f..ff80b295 100644
  	output: z
  		.looseObject({
  			html_bytes: z.number().int().nonnegative(),
-@@ -1312,11 +1329,13 @@ export type PublicJobRun = Pick<
+@@ -1312,11 +1330,25 @@ export type PublicJobRun = Pick<
  	| 'deadline_at'
  	| 'exit_code'
  	| 'error'
@@ -438,12 +479,24 @@ index e486368f..ff80b295 100644
  >;
  
 -export function toPublicJobRun(run: JobRun): PublicJobRun {
-+/** `editor`: the caller may write the notebook, the right that reads run logs and the failure excerpt. */
-+export function toPublicJobRun(run: JobRun, viewer: { editor: boolean }): PublicJobRun {
++/** Who asks for a run: the caller, the notebook's author and the creator of the run's job. */
++export type RunReader = { user: string; notebookAuthor: string; jobCreator: string };
++
++/**
++ * A failed run's `excerpt` goes only to the member who started the run (a
++ * scheduled run's starter is its job's creator) and to the notebook's author.
++ */
++function readsExcerpt(run: JobRun, reader: RunReader): boolean {
++	return (
++		reader.user === (run.triggered_by ?? reader.jobCreator) || reader.user === reader.notebookAuthor
++	);
++}
++
++export function toPublicJobRun(run: JobRun, reader: RunReader): PublicJobRun {
  	return {
  		run_id: run.run_id,
  		job_id: run.job_id,
-@@ -1353,6 +1372,20 @@ export function toPublicJobRun(run: JobRun): PublicJobRun {
+@@ -1353,6 +1385,20 @@ export function toPublicJobRun(run: JobRun): PublicJobRun {
  		...(run.error !== undefined
  			? { error: { code: run.error.code, message: run.error.message } }
  			: {}),
@@ -455,7 +508,7 @@ index e486368f..ff80b295 100644
 +							? { exit_status: run.failure.exit_status }
 +							: {}),
 +						message: run.failure.message,
-+						...(viewer.editor && run.failure.excerpt !== undefined
++						...(run.failure.excerpt !== undefined && readsExcerpt(run, reader)
 +							? { excerpt: run.failure.excerpt }
 +							: {}),
 +					},

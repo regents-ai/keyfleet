@@ -87,7 +87,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-f8c176f`, about 430 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-1a4de6a`, about 430 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -112,7 +112,7 @@ What runs:
 
 What it checks, in 21 steps:
 
-- The super admin makes a project with an editor and a viewer in it.
+- The super admin makes a project with two editors and a viewer in it.
 - A session starts on a new machine.
 - The hub reaches the notebook through the relay.
 - A cell runs as the ordinary user, and the helper password is nowhere it can
@@ -123,11 +123,12 @@ What it checks, in 21 steps:
 - A second hub name sees only its own machines.
 - Three runs fail where they should: one whose `pyproject.toml` asks for
   Python below 3.13 stops at `dependencies`, one whose cell raises and one that
-  prints planted secrets stop at `export`. The editor reads each `failure`
-  with its excerpt and the viewer reads it without, in the run and in the
-  listing. The raw logs hold every planted value, and no run answer, listing,
-  stored run record or hub output holds any of them. It prints each `failure`
-  as the editor and the viewer read it.
+  prints planted secrets stop at `export`. The editor who wrote the notebooks
+  and started the runs reads each `failure` with its excerpt; the other editor
+  and the viewer read it without, in the run and in the listing. The raw logs
+  hold every planted value, and no run answer, listing, stored run record or
+  hub output holds any of them. It prints each `failure` as each of the three
+  reads it.
 
 It uses a free local port (4791) and removes everything it started. Hub and
 stand-in logs are kept in `notebook-hub/.work/local/`.
@@ -196,7 +197,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-f8c176f` as `registry.fly.io/kf-nb-<fleet>:626ec14-f8c176f`
+   - tag `keyfleet/notebook-hub:626ec14-1a4de6a` as `registry.fly.io/kf-nb-<fleet>:626ec14-1a4de6a`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -356,8 +357,10 @@ its listed ID.
   characters long, plain, URL-encoded and base64-encoded, then masks anything
   shaped like a credential, then cuts to size, writing `[removed]` in place of
   each. Everyone who can read the run reads `stage`, `exit_status` and
-  `message`; only callers who may edit the notebook read `excerpt`. The
-  excerpt is never logged. The raw logs stay as they were, for editors only.
+  `message`; only the member who started the run (for a scheduled run, its
+  job's creator) and the notebook's author read `excerpt`, whatever other
+  editors there are. The excerpt is never logged. The raw logs stay as they
+  were, for editors only.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes

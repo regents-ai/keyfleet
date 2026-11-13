@@ -1,8 +1,8 @@
 diff --git a/packages/api/src/routes/jobs.test.ts b/packages/api/src/routes/jobs.test.ts
-index a18d8c7c..45eef011 100644
+index c8ba54d0..7e7d3a3f 100644
 --- a/packages/api/src/routes/jobs.test.ts
 +++ b/packages/api/src/routes/jobs.test.ts
-@@ -397,6 +397,7 @@ describe('Job routes', () => {
+@@ -398,6 +398,7 @@ describe('Job routes', () => {
  		expect(html.headers.get('content-type')).toContain('text/html');
  		expect(html.headers.get('content-security-policy')).toBe('sandbox allow-scripts');
  		expect(html.headers.get('x-marimohub-run-id')).toBe(queued.run_id);
@@ -11,7 +11,7 @@ index a18d8c7c..45eef011 100644
  
  		const viewerHtml = await as(VIEWER)('GET', `${runPath}/html`);
 diff --git a/packages/api/src/routes/jobs.ts b/packages/api/src/routes/jobs.ts
-index d79b8cf1..7f27aa03 100644
+index 7333c2d4..b90fb7b9 100644
 --- a/packages/api/src/routes/jobs.ts
 +++ b/packages/api/src/routes/jobs.ts
 @@ -298,6 +298,7 @@ function rawOutputHeaders(c: Context<HonoEnv>, run: JobRun): void {

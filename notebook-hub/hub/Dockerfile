@@ -69,7 +69,7 @@ COPY marimohub/python-check.patch /tmp/python-check.patch
 RUN git apply /tmp/python-check.patch
 # A failed or timed-out run records where it stopped: the stage, the exit status and
 # the error sentence for anyone who reads the run, and the last lines of that stage's
-# output, with secrets removed, only for those who may edit the notebook.
+# output, with secrets removed, only for the run's starter and the notebook's author.
 COPY marimohub/run-failure.patch /tmp/run-failure.patch
 RUN git apply /tmp/run-failure.patch
 # A run's page and logs name how the run ended, so Keyfleet's copy of the page

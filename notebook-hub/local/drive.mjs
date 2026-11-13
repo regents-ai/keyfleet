@@ -10,9 +10,11 @@ const { HUB_URL, DATA_DIR, NET6, APP, HUB_IMAGE, FLY_TOKEN, HELPER_SECRET } = pr
 const { PASS_KEY, PASS_ISSUER, PASS_AUDIENCE } = process.env;
 const MARKER = 'kf-relay-ok-42';
 const LABEL = 'keyfleet.local-fly';
-// The hub's super admin makes the project; an editor and a viewer are its members.
+// The hub's super admin makes the project; two editors and a viewer are its
+// members. The first editor writes the notebooks and starts their runs.
 const PROVISIONER = 'kf_provisioner_local';
 const EDITOR = 'kf_local_editor';
+const OTHER_EDITOR = 'kf_local_other_editor';
 const VIEWER = 'kf_local_viewer';
 
 const NOTEBOOK = `import marimo
@@ -318,6 +320,7 @@ async function main() {
 	});
 	for (const [subject, role] of [
 		[EDITOR, 'editor'],
+		[OTHER_EDITOR, 'editor'],
 		[VIEWER, 'viewer'],
 	]) {
 		await api(PROVISIONER, 'POST', `/projects/${project.id}/members`, {
@@ -325,7 +328,9 @@ async function main() {
 			role,
 		});
 	}
-	ok(`${PROVISIONER} made the project, with ${EDITOR} as an editor and ${VIEWER} as a viewer`);
+	ok(
+		`${PROVISIONER} made the project, with ${EDITOR} and ${OTHER_EDITOR} as editors and ${VIEWER} as a viewer`,
+	);
 
 	const notebook = await api(EDITOR, 'POST', `/projects/${project.id}/notebooks`, {
 		title: 'Relay proof',
@@ -488,44 +493,44 @@ async function failedRuns(project) {
 	for (const [name, notebook] of Object.entries(notebooks)) {
 		const { jobPath, runPath, run } = await finishedRun(project.id, notebook.id);
 		check(run.status === 'failed', `${name}: run failed (got ${run.status})`);
-		const editor = await api(EDITOR, 'GET', runPath);
-		const viewer = await api(VIEWER, 'GET', runPath);
-		const listedBy = async (subject) =>
-			(await api(subject, 'GET', `${jobPath}/runs?limit=10`)).items.find(
-				(item) => item.run_id === run.run_id,
+		const reads = {};
+		for (const [who, subject] of [
+			['starter', EDITOR],
+			['other editor', OTHER_EDITOR],
+			['viewer', VIEWER],
+		]) {
+			const listing = await api(subject, 'GET', `${jobPath}/runs?limit=10`);
+			reads[who] = {
+				run: await api(subject, 'GET', runPath),
+				listed: listing.items.find((item) => item.run_id === run.run_id),
+			};
+		}
+		const { failure } = reads.starter.run;
+		check(
+			failure?.stage === expected[name],
+			`${name}: stopped at ${expected[name]} (got ${failure?.stage})`,
+		);
+		check(
+			typeof failure.excerpt === 'string' && failure.excerpt.length > 0,
+			`${name}: its starter, who wrote the notebook, reads an excerpt`,
+		);
+		const { excerpt: _excerpt, ...summary } = failure;
+		for (const who of ['other editor', 'viewer']) {
+			check(
+				JSON.stringify(reads[who].run.failure) === JSON.stringify(summary),
+				`${name}: the ${who} reads the same failure without the excerpt`,
 			);
-		const editorListed = await listedBy(EDITOR);
-		const viewerListed = await listedBy(VIEWER);
+		}
 		check(
-			editor.failure?.stage === expected[name],
-			`${name}: stopped at ${expected[name]} (got ${editor.failure?.stage})`,
-		);
-		check(
-			typeof editor.failure.excerpt === 'string' && editor.failure.excerpt.length > 0,
-			`${name}: the editor reads an excerpt`,
-		);
-		const { excerpt: _excerpt, ...summary } = editor.failure;
-		check(
-			JSON.stringify(viewer.failure) === JSON.stringify(summary),
-			`${name}: the viewer reads the same failure without the excerpt`,
-		);
-		check(
-			JSON.stringify(editorListed.failure) === JSON.stringify(editor.failure) &&
-				JSON.stringify(viewerListed.failure) === JSON.stringify(viewer.failure),
+			Object.values(reads).every(
+				({ run: read, listed }) => JSON.stringify(listed.failure) === JSON.stringify(read.failure),
+			),
 			`${name}: each one's listing answers the same failure`,
 		);
 		const records = findFile(DATA_DIR, 'run.json').filter((path) => path.includes(run.run_id));
 		check(records.length === 1, `${name}: one stored run record (found ${records.length})`);
-		answers.push({
-			name,
-			runPath,
-			editor,
-			viewer,
-			editorListed,
-			viewerListed,
-			record: readFileSync(records[0], 'utf8'),
-		});
-		ok(`${name}: run ${run.run_id} failed at ${editor.failure.stage}; only the editor reads its excerpt`);
+		answers.push({ name, runPath, reads, record: readFileSync(records[0], 'utf8') });
+		ok(`${name}: run ${run.run_id} failed at ${failure.stage}; only its starter reads the excerpt`);
 	}
 
 	// The raw logs hold every planted value, so the checks below look for something there.
@@ -541,11 +546,11 @@ async function failedRuns(project) {
 	ok(`the raw logs hold all ${planted.secrets.length} planted values; the viewer is refused them`);
 
 	// Named, never quoted: a value found here is a secret.
-	const places = answers.flatMap(({ name, editor, viewer, editorListed, viewerListed, record }) => [
-		[`${name}, editor's run`, JSON.stringify(editor)],
-		[`${name}, viewer's run`, JSON.stringify(viewer)],
-		[`${name}, editor's listing`, JSON.stringify(editorListed)],
-		[`${name}, viewer's listing`, JSON.stringify(viewerListed)],
+	const places = answers.flatMap(({ name, reads, record }) => [
+		...Object.entries(reads).flatMap(([who, { run, listed }]) => [
+			[`${name}, ${who}'s run`, JSON.stringify(run)],
+			[`${name}, ${who}'s listing`, JSON.stringify(listed)],
+		]),
 		[`${name}, stored run record`, record],
 	]);
 	places.push(["the hub's output", hubOutput()]);
@@ -555,9 +560,10 @@ async function failedRuns(project) {
 	check(found.length === 0, `planted values got through: ${found.join('; ')}`);
 	ok(`no planted value is in any run answer, listing, stored run record or the hub's output`);
 
-	for (const { name, editor, viewer } of answers) {
-		console.log(`      ${name}, editor: ${JSON.stringify(editor.failure)}`);
-		console.log(`      ${name}, viewer: ${JSON.stringify(viewer.failure)}`);
+	for (const { name, reads } of answers) {
+		for (const [who, { run }] of Object.entries(reads)) {
+			console.log(`      ${name}, ${who}: ${JSON.stringify(run.failure)}`);
+		}
 	}
 }
 
