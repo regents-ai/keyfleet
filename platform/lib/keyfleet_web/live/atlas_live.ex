@@ -6,8 +6,10 @@ defmodule KeyfleetWeb.AtlasLive do
   whole swarm down to one thing, read from `KeyfleetWeb.AtlasPage`. Only the
   fleet's members read it, as they read its workspace; anyone else is told so.
 
-  The address holds everything the page shows: `?view=` the picture (only
-  `heat` is built: `KeyfleetWeb.AtlasLive.Heat` and `assets/js/atlas/heat/`),
+  The address holds everything the page shows: `?view=` the picture (`heat`,
+  `KeyfleetWeb.AtlasLive.Heat` and `assets/js/atlas/heat/`, shown unless
+  another is named; or `blocks`, `KeyfleetWeb.AtlasLive.Blocks` and
+  `assets/js/atlas/blocks/`),
   `?show=list` the List, the same work as text and links, `?window=` the day,
   week, month or year shown (a year unless named), `?at=` a day it holds
   (today unless named), and `?kind=` `graph` or `notebooks` for one of them.
@@ -25,11 +27,11 @@ defmodule KeyfleetWeb.AtlasLive do
   import Phoenix.LiveView,
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
 
-  alias KeyfleetWeb.AtlasLive.Heat
+  alias KeyfleetWeb.AtlasLive.{Blocks, Heat}
   alias KeyfleetWeb.{AtlasPage, PageRead, ShellLive}
 
   # The pictures built so far, the first one shown unless another is named.
-  @views [:heat]
+  @views [:heat, :blocks]
   @kinds %{"graph" => :graph, "notebooks" => :notebook}
   @list_read 20
   @most_read 10
@@ -76,7 +78,7 @@ defmodule KeyfleetWeb.AtlasLive do
 
     atlas = %{
       fleet_id: fleet_id,
-      view: hd(@views),
+      view: view(params["view"]),
       show: if(params["show"] == "list", do: :list, else: :picture),
       window: window,
       at: at,
@@ -111,6 +113,9 @@ defmodule KeyfleetWeb.AtlasLive do
 
   def read(socket, _route_id, _params),
     do: socket |> assign(:atlas, nil) |> stream(:atlas_things, [], reset: true)
+
+  defp view("blocks"), do: :blocks
+  defp view(_word), do: hd(@views)
 
   defp window(word) when word in ~w(day week month), do: String.to_existing_atom(word)
   defp window(_word), do: :year
@@ -251,6 +256,9 @@ defmodule KeyfleetWeb.AtlasLive do
      |> stream(:atlas_things, things)}
   end
 
+  def handle_event("atlas_blocks_" <> _ = event, params, socket),
+    do: Blocks.handle_event(event, params, socket)
+
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # A project's counts in one bucket, as the picture takes them: the bucket's
@@ -332,6 +340,7 @@ defmodule KeyfleetWeb.AtlasLive do
     params =
       %{
         "fleet_id" => fleet_id,
+        "view" => Atom.to_string(atlas.view),
         "window" => Atom.to_string(atlas.window),
         "at" => atlas.at |> DateTime.to_date() |> Date.to_iso8601(),
         "kind" => kind_word(atlas.source)
@@ -402,6 +411,13 @@ defmodule KeyfleetWeb.AtlasLive do
               Heat
             </.link>
             <.link
+              id="atlas-show-blocks"
+              patch={moved(@atlas, show: :picture, view: :blocks)}
+              aria-current={if @atlas.show == :picture and @atlas.view == :blocks, do: "page"}
+            >
+              Blocks
+            </.link>
+            <.link
               id="atlas-show-list"
               patch={moved(@atlas, show: :list)}
               aria-current={if @atlas.show == :list, do: "page"}
@@ -443,6 +459,11 @@ defmodule KeyfleetWeb.AtlasLive do
 
         <Heat.picture
           :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :heat}
+          atlas={@atlas}
+        />
+
+        <Blocks.picture
+          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :blocks}
           atlas={@atlas}
         />
 

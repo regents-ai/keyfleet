@@ -8857,3 +8857,58 @@ helper's 14). The site's accessibility rules over every Atlas state, light and
 dark, at 1280 and 390, find nothing in the Atlas; they find one serious
 finding in every fleet page's setup panel (`label-content-name-mismatch` on
 the agent picker, `Regent.Account` in regent_ui), which is not this change's.
+
+## 2026-11-13 — Atlas blocks: the fleet's work as nested blocks, down to one item
+
+- A second Atlas picture, `?view=blocks`, beside Heat and the List
+  (`KeyfleetWeb.AtlasLive.Blocks`, `assets/js/atlas/blocks/`,
+  `assets/js/hooks/atlas_blocks.ts`, `assets/css/pages/atlas_blocks.css`). Each
+  project is a block as big as the work it holds in the window, coloured by
+  how recently it was worked on along the Atlas's scale, with its legend; a
+  corner marks a block changed today, and the quieter things of a kind sit in
+  one hatched More block, so nothing is told by colour alone. Names, counts
+  and the latest work show only on blocks big enough to hold them; where
+  neither the page's ink nor its background reads on a block's colour at
+  4.5:1, the name sits on a plate of the background.
+- Choosing or zooming into a block opens it in place: a project into a block
+  for each kind, a kind into its things sized by their changes (a hundred
+  most active a page, the rest as More, which opens the same way and is never
+  bigger than a third of the things beside it), then the thing, whose name
+  links to its page. The parent grows to fill the stage while its children
+  fade in over its colour. The path above the picture (Fleet, project, kind)
+  goes back up.
+- The layout is squarified in an order fixed when first seen, newcomers
+  after, and keeps its cuts while its worst block stays within 1.5 times a
+  fresh layout's, so new counts ease every block to its new size where it
+  stands, under 300 ms, never reshuffled. The blocks are one vgpu instanced
+  layer drawn from coordinates relative to the block in view, redrawn only
+  when something moved; names are page elements from a pool, at most 160.
+- Wheel and pinch zoom about the pointer, dragging moves and a press opens;
+  hovering tells a block's changes, things and Keys, or a thing's changes,
+  Keys, kind, last Key and last change. With the keyboard, the arrows move a
+  ring between neighbouring blocks and say each, Enter opens the one ringed
+  (and a thing's page once it fills the stage), Escape goes back up, and plus
+  and minus zoom. Moves glide with anime.js, interruptible, and jump at once
+  after a key or under reduced motion.
+- The page sends the projects, kinds and window; the blocks ask
+  (`atlas_blocks_fleet`, `atlas_blocks_things`) for the window's counts by
+  project and kind and for a kind's things as they open, through
+  `AtlasPage.swarm` and `AtlasPage.most_active`, with no new reads. The window
+  control, kind filter, Active strip (choosing a thing opens the blocks down
+  to it), List and live updates are the Atlas page's own; the address keeps
+  `view=blocks` through them.
+
+At scale (a local fleet year of 4,989 changes and 492 notebooks a day from
+`scripts/atlas_seed.exs`): the first picture is drawn 222 to 292 ms after
+navigation (median 256 ms), from a first reply of 23.0 KB. Ten seconds of
+zooming in and out between the fleet and single items: 604 frames, median
+16.7 ms, 99th percentile 16.8 ms, none over 20 ms. The CSS is 57,108 of
+61,440 bytes gzipped in the minified build (the blocks add 568); the
+everyday unminified build is 63,347, over the budget before the blocks too
+(62,767 at the base, 61,443 on main).
+
+Check: compile with warnings as errors, deps, hex audit, format, credo
+strict, sobelow, xref (137 of 137), pytest (243), the full suite (1,423: 19
+properties, 1,404 tests, 19 excluded), codegen, usage rules and route
+handoff pass; typecheck and 452 unit tests pass; browser suite 125, devices
+70; required fixes, CLI, SIWA and contracts (547 passed, 6 skipped) pass.

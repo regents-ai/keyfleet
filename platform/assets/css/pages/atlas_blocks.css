@@ -1,0 +1,318 @@
+@layer regents-product {
+/* The Atlas as blocks: the path, the picture with its names, the zoom in the
+   corner, and the strip of the most active things beside it. */
+
+.atlas-blocks-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17.5rem;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.atlas-blocks {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.atlas-blocks__stage {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.atlas-blocks__stage:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Fleet, project, kind: each step back up is a button. */
+.atlas-blocks__trail {
+  min-width: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.atlas-blocks__trail ol {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 0.375rem;
+  overflow-x: auto;
+  list-style: none;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.atlas-blocks__trail li + li::before {
+  content: "/";
+  padding-inline: 0.125rem;
+  color: var(--color-fg-muted);
+}
+
+.atlas-blocks__trail :is(button, span) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-fg-muted);
+  font: inherit;
+}
+
+.atlas-blocks__trail button {
+  cursor: pointer;
+}
+
+.atlas-blocks__trail span {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .atlas-blocks__trail button:hover,
+  .atlas-blocks__zoom button:hover {
+    background: var(--ash-panel-strong);
+  }
+}
+
+.atlas-blocks__trail button:focus-visible,
+.atlas-blocks__zoom button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.atlas-blocks__surface {
+  position: relative;
+  height: clamp(18rem, 60svh, 40rem);
+  overflow: clip;
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  contain: strict;
+}
+
+.atlas-blocks__surface[data-dragging] {
+  cursor: grabbing;
+}
+
+.atlas-blocks__canvas,
+.atlas-blocks__names {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.atlas-blocks__names {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* A block's name, in the ink that reads on its colour. */
+.atlas-blocks__name {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  display: grid;
+  align-content: start;
+  padding: 0.25rem 0.5rem;
+  overflow: hidden;
+  color: var(--color-fg);
+  font-size: 0.8125rem;
+  line-height: 1rem;
+}
+
+.atlas-blocks__name[data-ink="bg"] {
+  color: var(--color-bg);
+}
+
+/* Where neither ink reads on the block, each line sits on the page's background. */
+.atlas-blocks__name[data-ink="plate"] :is(a, small) {
+  justify-self: start;
+  max-width: 100%;
+  padding-inline: 0.25rem;
+  background: var(--color-bg);
+}
+
+.atlas-blocks__name[hidden] {
+  display: none;
+}
+
+.atlas-blocks__name :is(a, small) {
+  overflow: hidden;
+  color: inherit;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.atlas-blocks__name a {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.atlas-blocks__name a[href] {
+  pointer-events: auto;
+}
+
+.atlas-blocks__name a[href]:hover {
+  text-decoration: underline;
+}
+
+.atlas-blocks__name a:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.atlas-blocks__name small {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-blocks__note {
+  position: absolute;
+  inset-inline: 1rem;
+  top: 45%;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Said only when the browser cannot draw the blocks. */
+.atlas-blocks__still {
+  display: none;
+}
+
+.atlas-blocks__surface[data-atlas-still] .atlas-blocks__still {
+  display: block;
+}
+
+.atlas-blocks__surface[data-atlas-still] .atlas-blocks__names {
+  display: none;
+}
+
+/* What a block holds, beside the pointer. */
+.atlas-blocks__tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: grid;
+  gap: 0.125rem;
+  max-width: 16rem;
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--color-fg) 12%, transparent);
+  color: var(--color-fg-muted);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.atlas-blocks__tip[hidden] {
+  display: none;
+}
+
+.atlas-blocks__tip strong {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+
+.atlas-blocks__zoom {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 3;
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-family: var(--font-family-ui);
+}
+
+.atlas-blocks__zoom button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.atlas-blocks__zoom output {
+  display: grid;
+  place-items: center;
+  min-width: 4rem;
+  border-inline: 1px solid var(--color-border);
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+}
+
+/* How to move, and the key. */
+.atlas-blocks-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+}
+
+.atlas-blocks__ramp,
+.atlas-blocks__key {
+  height: 0.75rem;
+  border: 1px solid var(--color-border);
+}
+
+.atlas-blocks__ramp {
+  width: 6rem;
+  background: linear-gradient(to right in oklab, var(--atlas-heat-1), var(--atlas-heat-2), var(--atlas-heat-3));
+}
+
+.atlas-blocks__key {
+  width: 0.75rem;
+}
+
+/* A corner in the ink that reads on the newest colour, as on a block changed today. */
+.atlas-blocks__key[data-key="today"] {
+  background: linear-gradient(225deg, var(--color-bg) 30%, var(--atlas-heat-3) 0);
+}
+
+.atlas-blocks__key[data-key="more"] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--ash-panel-strong) 0 3px,
+    color-mix(in oklab, var(--ash-panel-strong) 82%, var(--color-fg)) 0 6px
+  );
+}
+
+@media (max-width: 64rem) {
+  .atlas-blocks-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .atlas-blocks__zoom {
+    right: 0.5rem;
+    bottom: 0.5rem;
+  }
+
+  .atlas-blocks__zoom button {
+    min-width: 2.5rem;
+  }
+}
+}

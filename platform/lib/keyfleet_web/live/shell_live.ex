@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.ShellLive do
   @poll_events ~w(start_poll end_poll cast_vote)
   @search_events ~w(search search_more)
   @worldline_events ~w(worldline_older worldline_filter)
-  @atlas_events ~w(atlas_cells atlas_cards atlas_window atlas_older)
+  @atlas_events ~w(atlas_cells atlas_cards atlas_window atlas_older atlas_blocks_fleet atlas_blocks_things)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
