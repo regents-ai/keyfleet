@@ -30,9 +30,9 @@ defmodule Keyfleet.Agents.UpkeepTest do
 
     did = "did:privy:test-" <> @person
     account = Accounts.register_verified!(did, @person, [@person], actor: %Actors.System{})
-    pair!()
+    agent = pair!()
     for token_id <- [1, 2], do: ChainHelpers.issue_shard!(@fleet, token_id, @agent)
-    %{person: Actors.Human.for_account(account)}
+    %{person: Actors.Human.for_account(account), agent: agent}
   end
 
   test "an agent's Keys need no mark while present or waiting for their automatic start",
@@ -55,9 +55,9 @@ defmodule Keyfleet.Agents.UpkeepTest do
   end
 
   # Money nobody has moved is the agents' to move, never an error the site saves.
-  test "money waiting too long reaches the agent's check-in, oldest first, and saves no error" do
+  test "money waiting too long reaches the agent's check-in, oldest first, and saves no error",
+       %{agent: agent} do
     errors = saved_errors()
-    agent = pair!()
     assert Upkeep.read(agent, @fleet, false).money_waiting == []
 
     now = DateTime.utc_now()
