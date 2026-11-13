@@ -4,6 +4,10 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Flight.** The Worldline opens close in on the last hours and flies: the fleet's history
+  streams out of the sun on a loop as the planets circle and the stars drift by, slowing
+  while you point at it. Each planet carries its name, which opens its place in the
+  workspace.
 - **Orbits.** The Worldline is now drawn in three dimensions. Workspace circles the line
   once a day, Code every three days and Notebooks once a week, and the sun stands at the
   real time. Each room's posts run beside the line as a dotted trail, and every vote, Key

@@ -135,6 +135,13 @@ li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"]) .
   border-radius: 0;
 }
 
+/* A planet's name in the legend is a link to its place in the workspace,
+   its underline full under the pointer, as a planet's name is. */
+.worldline-legend a {
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+  text-underline-offset: 0.2em;
+}
+
 /* The filter: its field, Apply and Clear on one row, and what went wrong
    under them. */
 .worldline-filter {
@@ -172,8 +179,8 @@ li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"]) .
 /* The picture, edge to edge inside the panel, on the page's own ground; its
    stars by night are drawn with it. A mouse dragging across it turns it; a
    finger dragging across it moves through time, and one dragging up or down
-   still scrolls the page. The link on the mark in focus, Now and the zoom
-   stand over it. */
+   still scrolls the page. The heads' names, the link on the mark in focus,
+   Now and the zoom stand over it. */
 .worldline-stage {
   position: relative;
   isolation: isolate;
@@ -188,12 +195,16 @@ li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"]) .
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 
-  & .worldline-focus {
+  & .worldline-tips {
     z-index: 1;
   }
 
-  & :is(.worldline-now, .worldline-view) {
+  & .worldline-focus {
     z-index: 2;
+  }
+
+  & :is(.worldline-now, .worldline-view) {
+    z-index: 3;
   }
 }
 
@@ -265,6 +276,83 @@ li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"]) .
 
 .worldline-stage[data-worldline-still] .worldline-stage__still {
   display: block;
+}
+
+/* The sun and each planet at now, named beside it where the picture draws
+   it, once it is drawn. A planet's name, underlined in its colour, and a
+   ring the size of a fingertip on the planet are one link; Now only names
+   the sun. A name with no room beside its head fades out. */
+.worldline-tips {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.worldline-stage:not([data-worldline-ready]) .worldline-tips,
+.worldline-tip:not([data-shown]) {
+  visibility: hidden;
+}
+
+.worldline-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2rem;
+  height: 2rem;
+  margin: -1rem 0 0 -1rem;
+  border-radius: 50%;
+  text-decoration: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.worldline-tip__name {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  padding: 0.1875rem 0.375rem;
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--color-bg) 80%, transparent);
+  color: var(--color-fg);
+  font-family: var(--font-family-ui);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: underline 2px var(--worldline-tone);
+  text-underline-offset: 0.25em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out, scale 120ms ease-out;
+}
+
+.worldline-tip__name[data-room] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.worldline-tip:active .worldline-tip__name {
+  scale: 0.97;
+}
+
+.worldline-tip:focus-visible .worldline-tip__name {
+  text-decoration-color: currentColor;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .worldline-legend a:hover,
+  .worldline-tip:hover .worldline-tip__name {
+    text-decoration-color: currentColor;
+  }
+}
+
+.worldline-tip--now,
+.worldline-tip--now .worldline-tip__name {
+  pointer-events: none;
+}
+
+.worldline-tip--now .worldline-tip__name {
+  color: var(--color-fg-muted);
+  text-decoration-line: none;
 }
 
 /* The one link, standing on the mark in focus: a ring the size of a
@@ -446,6 +534,13 @@ li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"]) .
 
   .worldline-help__touch {
     display: inline;
+  }
+}
+
+/* Nothing flies for a reader who asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .worldline-help__flight {
+    display: none;
   }
 }
 

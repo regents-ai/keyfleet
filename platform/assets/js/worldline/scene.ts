@@ -18,8 +18,16 @@
  * radius R around the sun. Here v is 1 / `Lens.unit` and x is measured from
  * the middle of the picture.
  *
- * Every place is a pure function of time, the orbits' constants and the
- * camera; nothing depends on which events are loaded, so pages read later
+ * The picture flies. The orbits run on ahead of now by `flown` seconds, so
+ * the planets turn and their helices stream back from the sun, and every
+ * event streams back with its path by `streamed` seconds, riding it, never
+ * sliding along it. History is a loop: an event streamed back past the oldest
+ * one, less a break, comes round again out of the sun, so the stream never
+ * runs out. While nothing has streamed, every event stands at its own time.
+ *
+ * Every place is a pure function of time, the flight, the orbits' constants
+ * and the camera. All the events loaded decide is where the loop begins, and
+ * that is read afresh only while nothing has streamed, so pages read later
  * extend the same helices without moving anything. The shader draws the same
  * sums (`shader.ts`) and picking reads them here, so a mark is found exactly
  * where it is drawn. The camera is vgpu's orbit rig, and its matrices place
@@ -110,11 +118,10 @@ const OUTER = PLANETS[PLANETS.length - 1].radius
 export const DISTANCE = 7
 
 /**
- * The seconds across the picture it opens on, and shows at 100%: about five
- * of Workspace's turns from the left edge to the sun, so its helix reads as
- * clean coils, with Code's and Notebooks' slower ones around it.
+ * The seconds across the picture it opens on, and shows at 100%: sixteen
+ * hours, close in, so the helices read as long waves running off from the sun.
  */
-export const OPENING = 6 * DAY
+export const OPENING = 16 * 3600
 
 /**
  * How the camera looks at the line, as vgpu's orbit rig takes it: turned
@@ -122,8 +129,12 @@ export const OPENING = 6 * DAY
  */
 export type Camera = {readonly yaw: number; readonly pitch: number}
 
-/** The view Reset returns to: three-quarters on, from a little above, the sun nearer. */
-export const HOME: Camera = {yaw: 0.42, pitch: 0.24}
+/**
+ * The view the picture opens on and Reset returns to: three-quarters on,
+ * from just above the line, so it runs off to the left into the distance and
+ * the sun stands near the right, its orbits a tall ellipse.
+ */
+export const HOME: Camera = {yaw: 0.8, pitch: 0.08}
 
 /** As far as the camera turns: almost down the line either way, and well short of straight down or up. */
 export const YAW_LIMIT = 1.48
@@ -143,6 +154,22 @@ export type Frame = {
   /** The anchor, in milliseconds since 1970. */
   readonly anchor: number
   readonly camera: Camera
+  /** Seconds the orbits have run on ahead of now as the picture flies. */
+  readonly flown: number
+  /**
+   * Seconds every event has streamed back from its own time, from 0 up to
+   * the loop's length, now less `loop`; and where the loop begins, in seconds
+   * from the anchor: the oldest event less `BREAK`.
+   */
+  readonly streamed: number
+  readonly loop: number
+  /**
+   * How far the events nearest the sun grow in out of it, 0..1, as copies
+   * coming round do: none while the flight has yet to carry every event
+   * clear of the sun, and fully after, so that a copy coming round meets its
+   * own event as it was.
+   */
+  readonly emerging: number
 }
 
 export type Vec3 = readonly [number, number, number]
@@ -300,8 +327,10 @@ const run = (span: {from: number; to: number}, mid: number, finest: number): Run
   return {from: span.from - mid, to: span.to - mid, step, pieces: length > 0 ? Math.ceil(length / step / SEGMENTS) : 0}
 }
 
+// As the picture flies, the orbits stand where `orbitAngle` has them
+// `flown` seconds on.
 const phaseAt = (planet: Planet, frame: Frame) => {
-  const turns = (frame.anchor / 1000 + frame.mid) / planet.period
+  const turns = (frame.anchor / 1000 + frame.mid + frame.flown) / planet.period
   return turns - Math.floor(turns)
 }
 
@@ -321,10 +350,37 @@ export function paths(frame: Frame, at: Lens, until = Infinity): {readonly line:
   }
 }
 
-/** The point of a planet's helix `rel` seconds from the middle, as the shader places it: where `orbitAngle` has the planet then. */
+/** The point of a planet's helix `rel` seconds from the middle, as the shader places it: where `orbitAngle` has the planet then, `flown` seconds on. */
 export function helixAt(planet: Planet, rel: number, frame: Frame, at: Lens): Vec3 {
   const angle = 2 * Math.PI * (phaseAt(planet, frame) + rel / planet.period) + planet.offset
   return point(frame.mid + rel, planet.radius, angle, frame, at)
+}
+
+/**
+ * The empty stretch of the loop between the newest event and the oldest
+ * coming round again, and how long a copy coming round takes to grow in out
+ * of the sun, or an event nearing the loop's end to shrink away, in seconds.
+ */
+export const BREAK = 4 * 3600
+export const GROW = BREAK / 2
+
+/**
+ * When the event at `t` is drawn as the picture flies, in seconds from the
+ * anchor, and how fully, 0..1: `streamed` seconds back from its own time, or,
+ * streamed back past where the loop begins, come round again a loop's length
+ * later, nearer the sun. A copy coming round grows in out of the sun, an
+ * event near the sun grows in the same way as far as `emerging`, and an event
+ * nearing the loop's end shrinks away, so none of them ever pops.
+ */
+export function streamedAt(t: number, frame: Frame): {readonly t: number; readonly full: number} {
+  const length = frame.now - frame.loop
+  const back = t - frame.streamed
+  const again = back < frame.loop
+  const shown = again ? back + length : back
+  const age = frame.now - shown
+  const grown = smoothstep(0, GROW, age)
+  const fading = 1 - smoothstep(length - GROW, length, age)
+  return {t: shown, full: again ? grown : fading * (1 - frame.emerging * (1 - grown))}
 }
 
 /** An event where it is drawn. */
@@ -335,7 +391,10 @@ export type Mark = {
   /** 0 the line, 1 to 3 the planets innermost first, 4 a room. */
   readonly lane: number
   readonly radius: number
-  /** How far around the line, in radians: for a planet's bead, where its planet stood then. */
+  /**
+   * How far around the line a room's line runs, in radians; 0 for the rest. A
+   * planet's bead stands on its helix where it is drawn (`markAt`).
+   */
   readonly angle: number
   /** How far across its room's line a post's pixel stands, in CSS pixels. */
   readonly across: number
@@ -423,8 +482,7 @@ export function place(events: readonly WorldEvent[], anchor: number): Mark[] {
       const planet = PLANETS.findIndex(each => each.name === event.trail)
       if (planet >= 0) {
         const {radius, tone} = PLANETS[planet]
-        const angle = orbitAngle(PLANETS[planet], t, anchor)
-        return {event, t, lane: planet + 1, radius, angle, across: 0, size: 5, strength: 1, tone, form: FORM.round}
+        return {event, t, lane: planet + 1, radius, angle: 0, across: 0, size: 5, strength: 1, tone, form: FORM.round}
       }
       if (event.trail.startsWith("room:")) {
         const {radius, angle, tone} = room(event.trail)
@@ -436,17 +494,27 @@ export function place(events: readonly WorldEvent[], anchor: number): Mark[] {
     })
 }
 
-/** Where a mark stands in the picture: on its path at its time, and a post across its room's line by its row. */
-export function markAt(mark: Mark, frame: Frame, at: Lens): Seen {
-  const here = project(point(mark.t, mark.radius, mark.angle, frame, at), frame, at)
-  if (mark.across === 0) return here
+/** A mark as the picture shows it, with when it is drawn and how fully, 0..1, as `streamedAt` has it. */
+export type Spot = Seen & {readonly t: number; readonly full: number}
+
+/**
+ * Where a mark stands in the picture: on its path at the time it is drawn
+ * (`streamedAt`), a planet's bead where its helix is then, and a post across
+ * its room's line by its row.
+ */
+export function markAt(mark: Mark, frame: Frame, at: Lens): Spot {
+  const {t, full} = streamedAt(mark.t, frame)
+  const planet = PLANETS[mark.lane - 1]
+  const angle = mark.lane >= 1 && mark.lane <= 3 ? orbitAngle(planet, t + frame.flown, frame.anchor) : mark.angle
+  const here = project(point(t, mark.radius, angle, frame, at), frame, at)
+  if (mark.across === 0) return {...here, t, full}
   // Square to the way the room's line runs on the screen there.
-  const ahead = project(point(mark.t + 0.05 * at.unit, mark.radius, mark.angle, frame, at), frame, at)
+  const ahead = project(point(t + 0.05 * at.unit, mark.radius, angle, frame, at), frame, at)
   const dx = ahead.x - here.x
   const dy = ahead.y - here.y
   const length = Math.hypot(dx, dy)
   const [nx, ny] = length < 1e-6 ? [0, 1] : [-dy / length, dx / length]
-  return {x: here.x + nx * mark.across, y: here.y + ny * mark.across, depth: here.depth}
+  return {x: here.x + nx * mark.across, y: here.y + ny * mark.across, depth: here.depth, t, full}
 }
 
 /** How near two marks' distances from the pointer may be, in CSS pixels, to count as a tie. */
@@ -457,7 +525,8 @@ const CROWD = 4
 /**
  * The mark nearest (x, y) within `within` CSS pixels, by its index, with how
  * many others stand with it there; on a tie, the one nearer the camera.
- * Marks not yet shown (later than `shown`), or faded out, are passed over.
+ * Marks not yet shown (drawn later than `shown`), faded out, or all but
+ * grown in or shrunk away at either end of the loop, are passed over.
  */
 export function nearest(
   marks: readonly Mark[],
@@ -469,7 +538,7 @@ export function nearest(
   shown = Infinity,
 ): {readonly index: number; readonly crowd: number} | undefined {
   const seen = marks.map(mark => markAt(mark, frame, at))
-  const showing = (i: number) => marks[i].t <= shown && clear(seen[i].depth, at) >= 0.2
+  const showing = (i: number) => seen[i].t <= shown && clear(seen[i].depth, at) >= 0.2 && seen[i].full >= 0.2
   let best = -1
   let bestDistance = within
   let bestDepth = Infinity
@@ -543,6 +612,15 @@ export function percent(span: number): string {
 export const MARK_FLOATS = 12
 export const HEADS = 4
 
+/** How wide the sun and each planet at now are drawn, in CSS pixels, before perspective. */
+export const SUN_SIZE = 13
+export const PLANET_SIZE = 8
+
+/** How much larger what is nearer is drawn, gently, as `perspective` in the marks shader. */
+export function magnify(depth: number): number {
+  return Math.min(1.4, Math.max(0.7, Math.sqrt(DISTANCE / Math.max(depth, 0.01))))
+}
+
 // Times reach the GPU in two parts, whole stretches of `SPLIT` seconds and
 // what is left, so subtracting the middle's time loses nothing, however far
 // back the picture looks.
@@ -568,21 +646,161 @@ export function pack(marks: readonly Mark[], change: (mark: Mark) => number = ()
   return data
 }
 
-/** The sun at now and the three planets beside it, farthest first, so the nearer stand over the farther. */
+/**
+ * The sun at now and the three planets beside it, where their orbits stand
+ * `flown` seconds on, farthest first, so the nearer stand over the farther.
+ */
 export function heads(frame: Frame, at: Lens): Float32Array<ArrayBuffer> {
   const [hi, lo] = split(frame.now)
   const depth = (radius: number, angle: number) => project(point(frame.now, radius, angle, frame, at), frame, at).depth
   const standing = [
-    {depth: depth(0, 0), data: [hi, lo, 0, 0, TONE.line, 13, -1, 1, FORM.sun, 0, 0, 0]},
+    {depth: depth(0, 0), data: [hi, lo, 0, 0, TONE.line, SUN_SIZE, -1, 1, FORM.sun, 0, 0, 0]},
     ...PLANETS.map((planet, i) => {
-      const angle = orbitAngle(planet, frame.now, frame.anchor)
+      const angle = orbitAngle(planet, frame.now + frame.flown, frame.anchor)
       return {
         depth: depth(planet.radius, angle),
-        data: [hi, lo, planet.radius, angle, planet.tone, 8, -1, 1, FORM.planet, 0, i + 1, 0],
+        data: [hi, lo, planet.radius, angle, planet.tone, PLANET_SIZE, -1, 1, FORM.planet, 0, i + 1, 0],
       }
     }),
   ].sort((a, b) => b.depth - a.depth)
   const data = new Float32Array(HEADS * MARK_FLOATS)
   standing.forEach((head, i) => data.set(head.data, i * MARK_FLOATS))
   return data
+}
+
+/** What stands beside each head at now: each planet's name, and Now beside the sun. */
+export type TipName = Planet["name"] | "now"
+
+/** A box in the picture, in CSS pixels. */
+export type Box = {readonly left: number; readonly top: number; readonly width: number; readonly height: number}
+
+/**
+ * A head at now as the picture shows it: where, how far in front of the
+ * camera, whether it shows at all, and the box its name stands in, or null
+ * when the name has no room.
+ */
+export type Tip = {
+  readonly name: TipName
+  readonly x: number
+  readonly y: number
+  readonly depth: number
+  readonly shown: boolean
+  readonly label: Box | null
+}
+
+// A name stands this far clear of its own head, in CSS pixels; this far
+// clear of every other head, name and box over the picture; and this far
+// inside the picture's edges. Beside the sun it keeps clear of its glow too,
+// and off the ring each other planet's link takes on it (`.worldline-tip`,
+// 2rem across), so a press on a name follows that name.
+const GAP = 6
+const APART = 4
+const EDGE = 8
+const GLOW = 8
+const RING = 16
+
+// The eight sides of its head a name may stand on, as which way from it.
+const AROUND = [
+  [1, 0],
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+] as const
+
+const overlaps = (a: Box, b: Box) =>
+  a.left < b.left + b.width + APART &&
+  b.left < a.left + a.width + APART &&
+  a.top < b.top + b.height + APART &&
+  b.top < a.top + a.height + APART
+
+// Whether a box comes within `radius` of (x, y).
+const touches = (box: Box, x: number, y: number, radius: number) => {
+  const dx = x - Math.min(Math.max(x, box.left), box.left + box.width)
+  const dy = y - Math.min(Math.max(y, box.top), box.top + box.height)
+  return Math.hypot(dx, dy) < radius
+}
+
+// A box `width` by `height` on the side (ax, ay) of (x, y), its nearest
+// point `reach` away.
+const beside = (x: number, y: number, [ax, ay]: readonly [number, number], reach: number, width: number, height: number) => {
+  const slant = ax !== 0 && ay !== 0 ? Math.SQRT1_2 : 1
+  const along = (a: number, centre: number, extent: number) =>
+    a > 0 ? centre + reach * slant : a < 0 ? centre - reach * slant - extent : centre - extent / 2
+  return {left: along(ax, x, width), top: along(ay, y, height), width, height}
+}
+
+/**
+ * The sun and the planets at now where the picture draws them, the planets
+ * `orbiting` of the way out onto their orbits, and where each one's name
+ * stands. A head shows while it stands in the picture, not faded out and
+ * not hidden behind a nearer one. The names are placed in order, the planets
+ * innermost first and Now last, each beside its head on the side away from
+ * the sun (Now under the sun), or the next side round with room: clear of
+ * every head that shows and every other planet's link, of the names placed
+ * before it, of `blocked` and of the picture's edges. A name with no room on
+ * any side is left out.
+ */
+export function tips(
+  frame: Frame,
+  at: Lens,
+  orbiting: number,
+  sizes: Readonly<Record<TipName, {readonly width: number; readonly height: number}>>,
+  blocked: readonly Box[] = [],
+): Tip[] {
+  const seen = (radius: number, angle: number) => project(point(frame.now, radius, angle, frame, at), frame, at)
+  const standing = [
+    ...PLANETS.map(planet => ({
+      name: planet.name as TipName,
+      seen: seen(planet.radius * orbiting, orbitAngle(planet, frame.now + frame.flown, frame.anchor)),
+      size: PLANET_SIZE,
+      glow: 0,
+    })),
+    {name: "now" as TipName, seen: seen(0, 0), size: SUN_SIZE, glow: GLOW},
+  ].map(head => ({...head, disc: (head.size / 2) * magnify(head.seen.depth)}))
+  const sun = standing[standing.length - 1].seen
+  const shown = standing.map(
+    head =>
+      head.seen.x >= 0 &&
+      head.seen.x <= frame.width &&
+      head.seen.y >= 0 &&
+      head.seen.y <= frame.height &&
+      clear(head.seen.depth, at) >= 0.2 &&
+      !standing.some(
+        other =>
+          other.seen.depth < head.seen.depth &&
+          Math.hypot(other.seen.x - head.seen.x, other.seen.y - head.seen.y) < other.disc,
+      ),
+  )
+  const showing = standing.filter((_, i) => shown[i])
+  const placed: Box[] = []
+  const fits = (box: Box, own: TipName) =>
+    box.left >= EDGE &&
+    box.top >= EDGE &&
+    box.left + box.width <= frame.width - EDGE &&
+    box.top + box.height <= frame.height - EDGE &&
+    !showing.some(head => {
+      const ringed = head.name !== own && head.name !== "now"
+      return touches(box, head.seen.x, head.seen.y, Math.max(head.disc + head.glow + APART, ringed ? RING : 0))
+    }) &&
+    !placed.some(other => overlaps(box, other)) &&
+    !blocked.some(other => overlaps(box, other))
+  return standing.map((head, i) => {
+    const {x, y, depth} = head.seen
+    if (!shown[i]) return {name: head.name, x, y, depth, shown: false, label: null}
+    const [awayX, awayY] = head.name === "now" ? [0, 1] : [x - sun.x, y - sun.y]
+    const toward = ([ax, ay]: readonly [number, number]) => (ax * awayX + ay * awayY) / Math.hypot(ax, ay)
+    const {width, height} = sizes[head.name]
+    const reach = head.disc + head.glow + GAP
+    const label =
+      [...AROUND]
+        .sort((a, b) => toward(b) - toward(a))
+        .map(side => beside(x, y, side, reach, width, height))
+        .find(box => fits(box, head.name)) ?? null
+    if (label) placed.push(label)
+    return {name: head.name, x, y, depth, shown: true, label}
+  })
 }

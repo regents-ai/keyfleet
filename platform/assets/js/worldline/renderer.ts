@@ -9,12 +9,27 @@
  * The paths are worked out on the GPU from time alone, so they take no
  * buffers; the events are instances of one buffer that reaches the GPU only
  * when they change, so thousands of them cost one write when they arrive and
- * nothing after. Each frame sends only the camera and the four heads.
+ * nothing after. Each frame sends only the camera, how far the picture has
+ * flown and the four heads.
  */
 import {prepareShader} from "@vgpu/wgsl/prepare"
 import {draw, effect, frame as render, geometry, init, sampler, surface, target} from "vgpu"
 
-import {HEADS, MARK_FLOATS, MAX_EVENTS, PLANETS, RING_PIECES, SEGMENTS, TONES, split, type Frame, type Lens, type Orbit, type Run} from "./scene"
+import {
+  GROW,
+  HEADS,
+  MARK_FLOATS,
+  MAX_EVENTS,
+  PLANETS,
+  RING_PIECES,
+  SEGMENTS,
+  TONES,
+  split,
+  type Frame,
+  type Lens,
+  type Orbit,
+  type Run,
+} from "./scene"
 import {blurWgsl, brightWgsl, compositeWgsl, marksWgsl, pathsWgsl, starsWgsl} from "./shader"
 
 type Rgb = readonly [number, number, number]
@@ -47,12 +62,16 @@ export type Scene = {
   readonly emphasis: number
   /** How near its arrival each head still is, 1 to 0: the sun, then the planets innermost first. */
   readonly flare: readonly number[]
+  /** How far each head stands out while its link is pointed at or has the keyboard, 0..1, in the same order. */
+  readonly lift: readonly number[]
   /** The clock in seconds, and 1 while things shimmer. */
   readonly clock: number
   readonly shimmer: number
   /** How far the planets have come out onto their orbits, and how far a change of filter has gone, 0..1. */
   readonly orbiting: number
   readonly change: number
+  /** How far round each layer of stars has drifted as the picture flies, in radians, the farthest first. */
+  readonly drift: readonly number[]
 }
 
 export type WorldlineRenderer = {
@@ -133,9 +152,12 @@ export async function createWorldlineRenderer(
       pieces: four(),
       focus: [1e12, 1e12, -1, 0],
       flare: four(),
+      lift: four(),
       mood: four(),
       pulse: four(),
       entrance: [1, 1, 0, 0],
+      flight: four(),
+      cycle: [0, 1, GROW, 0],
       ground: four(),
       tones: TONES.map(() => [1, 1, 1, 1]),
     }
@@ -171,7 +193,7 @@ export async function createWorldlineRenderer(
 
     const sky = effect(gpu, prepareShader(starsWgsl, "worldline-stars.wgsl"), {
       label: "worldline.stars",
-      set: {sky: {size: four(), right: four(), up: four(), forward: four(), tone: four()}},
+      set: {sky: {size: four(), right: four(), up: four(), forward: four(), tone: four(), drift: four()}},
     })
     const bright = effect(gpu, prepareShader(brightWgsl, "worldline-bright.wgsl"), {
       label: "worldline.bright",
@@ -206,6 +228,10 @@ export async function createWorldlineRenderer(
     const set = (values: Partial<typeof params>) => {
       for (const each of draws) each.set({params: values})
     }
+    // The flight, filled in place each frame.
+    const flight = four()
+    const cycle = [0, 1, GROW, 0]
+    const drift = four()
 
     return {
       resize(width, height) {
@@ -234,6 +260,12 @@ export async function createWorldlineRenderer(
       present(scene) {
         const {frame, lens: at, paths: drawn} = scene
         const [hi, lo] = split(frame.mid)
+        const length = frame.now - frame.loop
+        ;[flight[0], flight[1]] = split(frame.mid + frame.streamed)
+        ;[flight[2], flight[3]] = split(frame.mid + frame.streamed - length)
+        cycle[0] = frame.loop - frame.mid
+        cycle[1] = length
+        cycle[3] = frame.emerging
         set({
           size: [frame.width, frame.height, scale, at.aspect],
           time: [hi, lo, at.unit, 0],
@@ -244,16 +276,21 @@ export async function createWorldlineRenderer(
           pieces: [...drawn.orbits.map(orbit => orbit.pieces), frame.now - frame.mid],
           focus: [scene.revealed - frame.mid, scene.arrivedFrom - frame.mid, scene.focus, scene.emphasis],
           flare: [...scene.flare],
+          lift: [...scene.lift],
           pulse: [scene.clock, scene.shimmer, 0, 0],
           entrance: [scene.orbiting, scene.change, 0, 0],
+          flight,
+          cycle,
         })
         if (stars > 0) {
+          for (let i = 0; i < scene.drift.length; i++) drift[i] = scene.drift[i]
           sky.set({
             sky: {
               size: [frame.width, frame.height, scale, at.focal],
               right: [...at.right, 0],
               up: [...at.up, 0],
               forward: [...at.forward, 0],
+              drift,
             },
           })
         }

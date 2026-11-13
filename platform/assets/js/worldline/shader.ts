@@ -39,7 +39,8 @@ struct Params {
   // between its samples, and its instances.
   line: vec4f,
   // Each planet's run: from, to and the seconds between samples, and how far
-  // into its turn it stands at the middle's time, 0..1.
+  // into its turn it stands at the middle's time, as the picture has flown
+  // on, 0..1.
   orbits: array<vec4f, ${PLANETS.length}>,
   // How many instances each planet's helix takes, and where now stands, in
   // seconds from the middle.
@@ -51,6 +52,9 @@ struct Params {
   // How near its arrival each head still is, 1 to 0: the sun, then the
   // planets innermost first.
   flare: vec4f,
+  // How far each head stands out while its link is pointed at or has the
+  // keyboard, 0..1, in the same order.
+  lift: vec4f,
   // How strong the glow, and how faint the far side.
   mood: vec4f,
   // The clock in seconds, and 1 while things shimmer.
@@ -58,6 +62,14 @@ struct Params {
   // How far the planets have come out onto their orbits, and how far a
   // change of filter has gone, 0..1.
   entrance: vec4f,
+  // As the events stream back (\`streamedAt\` in scene.ts): the middle's time
+  // plus how far they have streamed, in two parts, and the same a loop's
+  // length earlier, for a copy come round again.
+  flight: vec4f,
+  // Where the loop begins, in seconds from the middle, its length, how long
+  // a copy takes to grow in or an event to shrink away, in seconds, and how
+  // far the events nearest the sun grow in as copies do, 0..1.
+  cycle: vec4f,
   ground: vec4f,
   tones: array<vec4f, ${TONES.length}>,
 }
@@ -122,7 +134,8 @@ fn nearness(p: vec3f, radius: f32) -> f32 {
   return clamp(-(p.y * params.forward.y + p.z * params.forward.z) / radius, -1.0, 1.0);
 }
 
-// How much larger what is nearer is drawn, gently.
+// How much larger what is nearer is drawn, gently, as \`magnify\` in
+// scene.ts.
 fn perspective(depth: f32) -> f32 {
   return clamp(sqrt(DISTANCE / max(depth, 0.01)), 0.7, 1.4);
 }
@@ -302,9 +315,11 @@ fn on(path: u32, ring: bool, u: f32) -> vec3f {
  * buffer: a bead, a room's pixel, a ring, a tick across the line, a planet or
  * the sun. With `SIDE` -1 only the marks behind the line are drawn, with 1
  * the rest; with 2 these are the heads, all drawn. The mark in focus grows
- * and takes a ring, and so does what just arrived while its head flares.
+ * and takes a ring, and so does what just arrived while its head flares,
+ * and a planet whose link is pointed at or has the keyboard.
  * While the filter changes, the marks that no longer match shrink away and
- * the ones that now do come in.
+ * the ones that now do come in. As the picture flies, every event streams
+ * back along its path and comes round again out of the sun.
  */
 export const marksWgsl = /* wgsl */ `
 ${shared}
@@ -326,7 +341,8 @@ struct Mark {
   @location(6) flare: f32,
 }
 
-// a: its time in two parts, how far out from the line and how far around;
+// a: its time in two parts, how far out from the line and how far around (a
+// head's, or a room's line's);
 // b: its colour, width in CSS pixels, index and strength; c: its form, how
 // far across its room's line, its lane, and how it takes part in a change of
 // filter (\`CHANGE\` in scene.ts).
@@ -336,12 +352,34 @@ struct Mark {
   @location(1) b: vec4f,
   @location(2) c: vec4f,
 ) -> Mark {
-  let rel = (a.x - params.time.x) + (a.y - params.time.y);
+  // When it happened, from the middle, and when it is drawn: streamed back
+  // as the picture flies, or come round again past where the loop begins,
+  // growing in out of the sun or shrinking away at the loop's end. A head
+  // stands at now.
+  let real = (a.x - params.time.x) + (a.y - params.time.y);
   let lane = u32(c.z + 0.5);
   let head = SIDE > 1.5;
+  var rel = real;
+  var full = 1.0;
+  if (!head) {
+    let back = (a.x - params.flight.x) + (a.y - params.flight.y);
+    let again = back < params.cycle.x;
+    rel = select(back, (a.x - params.flight.z) + (a.y - params.flight.w), again);
+    let age = params.pieces.w - rel;
+    let grown = smoothstep(0.0, params.cycle.z, age);
+    let fading = 1.0 - smoothstep(params.cycle.y - params.cycle.z, params.cycle.y, age);
+    full = select(fading * mix(1.0, grown, params.cycle.w), grown, again);
+  }
+  // A planet's bead stands on its helix where it is drawn, as \`on\` places
+  // the helix in the paths' shader.
+  var angle = a.w;
+  if (!head && lane >= 1u && lane <= 3u) {
+    let orbit = planet(lane - 1u);
+    angle = TAU * (params.orbits[lane - 1u].w + rel / orbit.period) + orbit.offset;
+  }
   // The planets come out from the sun onto their orbits as the picture opens.
   let out = select(a.z, a.z * params.entrance.x, head && lane >= 1u);
-  let p = point(rel, out, a.w);
+  let p = point(rel, out, angle);
   let here = project(p);
   let near = nearness(p, out);
   let form = u32(c.x + 0.5);
@@ -352,7 +390,7 @@ struct Mark {
 
   // Which way its path runs on the screen there, for a post's row and a
   // tick standing across the line.
-  let ahead = project(point(rel + 0.05 * params.time.z, a.z, a.w));
+  let ahead = project(point(rel + 0.05 * params.time.z, a.z, angle));
   let run = ahead.xy - here.xy;
   let runs = length(run);
   var along = vec2f(1.0, 0.0);
@@ -364,9 +402,10 @@ struct Mark {
 
   let flare = params.flare[select(0u, lane, lane >= 1u && lane <= 3u)];
   let focused = select(0.0, params.focus.w, params.focus.z >= 0.0 && abs(b.z - params.focus.z) < 0.5);
-  let arrived = select(0.0, flare, !head && rel >= params.focus.y);
+  let arrived = select(0.0, flare, !head && real >= params.focus.y);
   let flaring = select(0.0, flare, head);
-  let lit = max(focused, arrived);
+  let lifted = select(0.0, params.lift[min(lane, 3u)], head);
+  let lit = max(max(focused, arrived), lifted);
   let scale = params.size.z;
 
   // A change of filter: what leaves shrinks and fades, what arrives grows in.
@@ -382,7 +421,7 @@ struct Mark {
   if (form != ${FORM.pixel}u) {
     grow = perspective(here.z) * select(1.0, fullness(near), a.z > 0.0);
   }
-  let radius = b.y * 0.5 * scale * grow * (0.5 + 0.5 * stays) * (1.0 + 0.8 * focused + 0.8 * arrived + 0.45 * flaring);
+  let radius = b.y * 0.5 * scale * grow * full * (0.5 + 0.5 * stays) * (1.0 + 0.8 * focused + 0.8 * arrived + 0.45 * flaring + 0.3 * lifted);
   var room = radius + 4.0 * scale;
   if (form == ${FORM.pixel}u) {
     room = radius + 0.75 * scale;
@@ -393,7 +432,7 @@ struct Mark {
   } else if (form == ${FORM.sun}u) {
     room = radius + 32.0 * scale * (1.0 + flaring);
   }
-  room = (room + 9.0 * scale * lit) * shown * select(1.0, 0.0, stays <= 0.0);
+  room = (room + 9.0 * scale * lit) * shown * select(1.0, 0.0, stays <= 0.0 || full <= 0.0);
   let corner = vec2f(select(-1.0, 1.0, (vertex & 1u) == 1u), select(-1.0, 1.0, (vertex & 2u) == 2u));
   // A tick stands square to the line; everything else square to the screen.
   var shift = corner * room / scale;
@@ -401,7 +440,7 @@ struct Mark {
     shift = (along * corner.x + square * corner.y) * room / scale;
   }
 
-  var strength = b.w * clear(here.z) * stays;
+  var strength = b.w * clear(here.z) * stays * full;
   if (!head) {
     strength = strength * cue(near);
   }
@@ -468,8 +507,11 @@ struct Mark {
 /**
  * The stars, a full-screen effect drawn first: far beyond everything, so
  * they turn with the camera and stay put as the picture moves through time.
- * The sky is cut into cells of about `CELL` pixels by which way the camera
- * looks, and some cells hold a star, placed and lit by a hash of the cell.
+ * They lie in three layers, and as the picture flies each drifts round the
+ * upright axis the way the events stream, the nearer faster. Each layer cuts
+ * the sky into cells by which way the camera looks, a whole number of them
+ * round it, so a drift all the way round meets itself; some cells hold a
+ * star, placed and lit by a hash of the cell.
  */
 export const starsWgsl = /* wgsl */ `
 struct Sky {
@@ -482,17 +524,17 @@ struct Sky {
   forward: vec4f,
   // The stars' colour, and how strongly they show.
   tone: vec4f,
+  // How far round each layer has drifted, in radians, the farthest first.
+  drift: vec4f,
 }
 @group(0) @binding(0) var<uniform> sky: Sky;
 
-// About how far apart the cells of the sky are, in CSS pixels, and how many
-// of them hold a star.
-const CELL = 46.0;
-const STARRY = 0.32;
+const TAU = 6.2831853;
 
-// Three numbers from 0 to 1 for a cell: Jarzynski and Olano's PCG3D hash.
-fn hash(cell: vec2f) -> vec3f {
-  var v = vec3u(bitcast<vec2u>(vec2i(cell)), 0x9e3779b9u);
+// Three numbers from 0 to 1 for a cell of a layer: Jarzynski and Olano's
+// PCG3D hash.
+fn hash(cell: vec2f, layer: u32) -> vec3f {
+  var v = vec3u(bitcast<vec2u>(vec2i(cell)), 0x9e3779b9u + layer);
   v = v * 1664525u + 1013904223u;
   v.x += v.y * v.z;
   v.y += v.z * v.x;
@@ -504,26 +546,36 @@ fn hash(cell: vec2f) -> vec3f {
   return vec3f(v) / 4294967295.0;
 }
 
-@fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+// How much of a star of one layer covers this point of the sky: its cells
+// about \`apart\` CSS pixels across, \`starry\` of them holding a star, each
+// \`light\` bright at most and \`large\` times the farthest's size.
+fn layer(latitude: f32, longitude: f32, index: u32, apart: f32, starry: f32, light: f32, large: f32) -> f32 {
   let scale = sky.size.z;
+  let focal = sky.size.w;
+  let count = max(round(TAU * focal / apart), 1.0);
+  let cell = TAU / count;
+  let grid = vec2f(longitude + sky.drift[index], latitude) / cell;
+  let which = floor(grid);
+  let seed = hash(vec2f(which.x - count * floor(which.x / count), which.y), index);
+  if (seed.x > starry) {
+    return 0.0;
+  }
+  let middle = which + 0.25 + 0.5 * seed.yz;
+  let away = length((grid - middle) * cell * vec2f(cos(latitude), 1.0)) * focal * scale;
+  let size = (0.45 + 0.5 * seed.z) * large * scale;
+  return (1.0 - smoothstep(size, size + scale, away)) * light * (0.3 + 0.7 * pow(seed.x / starry, 2.0));
+}
+
+@fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let focal = sky.size.w;
   let offset = (uv - 0.5) * sky.size.xy / focal * vec2f(1.0, -1.0);
   let ray = normalize(sky.forward.xyz + sky.right.xyz * offset.x + sky.up.xyz * offset.y);
   let latitude = asin(clamp(ray.y, -1.0, 1.0));
   let longitude = atan2(ray.z, ray.x);
-  // Radians a cell spans, so the stars keep their spacing on any screen.
-  let cell = CELL / focal;
-  let grid = vec2f(longitude, latitude) / cell;
-  let which = floor(grid);
-  let seed = hash(which);
-  if (seed.x > STARRY) {
-    return vec4f(0.0);
-  }
-  let middle = which + 0.25 + 0.5 * seed.yz;
-  let apart = length((grid - middle) * cell * vec2f(cos(latitude), 1.0)) * focal * scale;
-  let light = 0.3 + 0.7 * pow(seed.x / STARRY, 2.0);
-  let size = (0.45 + 0.5 * seed.z) * scale;
-  let alpha = (1.0 - smoothstep(size, size + scale, apart)) * light * sky.tone.w;
+  let shine = layer(latitude, longitude, 0u, 46.0, 0.32, 0.75, 1.0)
+    + layer(latitude, longitude, 1u, 95.0, 0.3, 0.9, 1.3)
+    + layer(latitude, longitude, 2u, 180.0, 0.28, 1.0, 1.7);
+  let alpha = min(shine, 1.0) * sky.tone.w;
   return vec4f(sky.tone.rgb * alpha, alpha);
 }
 `

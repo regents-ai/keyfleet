@@ -7,13 +7,16 @@ defmodule KeyfleetWeb.WorldlineLive do
 
   The picture is drawn in the browser (`assets/js/hooks/worldline.ts`), in
   space: the line runs through time to the sun at now, the workspace, code
-  and notebooks are planets orbiting it for ever, each event of theirs a bead
-  on its planet's path, each room a dithered line of a pixel for each post,
-  and everything fleet-wide a point on the line itself. The page sends it the
-  newest events once it is live, older ones as the reader moves back to them,
-  and new ones a moment after they happen. `?show=list` shows the same events
-  as links, newest first, with "Older" for the page before. Every event links
-  to the page it happened on.
+  and notebooks are planets orbiting it for ever, each named beside it and
+  linked to its place in the workspace (`WorkspacePage.place_path/3`), each
+  event of theirs a bead on its planet's path, each room a dithered line of
+  a pixel for each post, and everything fleet-wide a point on the line
+  itself. While it shows now, the picture flies: the fleet's history streams
+  back from the sun on a loop, slowing while the reader points at it. The page
+  sends it the newest events once it is live, older ones as the reader moves
+  back to them, and new ones a moment after they happen. `?show=list` shows
+  the same events as links, newest first, with "Older" for the page before.
+  Every event links to the page it happened on.
 
   `?by=` keeps one Key's events or one wallet's (`WorldlinePage.by/1`), in
   the picture and the list alike; the filter field above them sets it.
@@ -27,7 +30,7 @@ defmodule KeyfleetWeb.WorldlineLive do
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4, stream_insert: 4]
 
   alias Keyfleet.Fleets
-  alias KeyfleetWeb.{PageRead, PollsLive, ShellLive, WorldlinePage}
+  alias KeyfleetWeb.{PageRead, PollsLive, ShellLive, WorkspacePage, WorldlinePage}
 
   # How many of each source's events a read takes: the picture's, the
   # list's, and a read of what was just heard.
@@ -35,9 +38,16 @@ defmodule KeyfleetWeb.WorldlineLive do
   @list_read 20
   @heard_read 20
 
-  # The legend: the three planets, drawn for every reader as they hold no
-  # events of their own, and an entry for each other source the reader reads.
-  @planets [{"workspace", "Workspace"}, {"code", "Code"}, {"notebooks", "Notebooks"}]
+  # The three planets, each with its place in the fleet's workspace: the
+  # project's goals and tasks, its code, and its docs, where the notebooks
+  # are. The legend names them for every reader, as they hold no events of
+  # their own, each a link to its place, and then each other source the
+  # reader reads.
+  @planets [
+    {"workspace", "Workspace", :project},
+    {"code", "Code", :code},
+    {"notebooks", "Notebooks", :docs}
+  ]
   @legend [
     posts: {"chat", "Chat"},
     opened: {"proposals", "Proposals"},
@@ -125,10 +135,18 @@ defmodule KeyfleetWeb.WorldlineLive do
     end
   end
 
-  # The planets, then what the reader may read of the rest.
+  # The planets with their links, then what the reader may read of the rest.
   defp legend(fleet_id, read_as) do
     sources = WorldlinePage.sources(fleet_id, read_as)
-    @planets ++ for {source, entry} <- @legend, source in sources, do: entry
+
+    planets(fleet_id) ++
+      for {source, {trail, name}} <- @legend, source in sources, do: {trail, name, nil}
+  end
+
+  # Each planet's trail, name and the path of its place in the workspace.
+  defp planets(fleet_id) do
+    for {trail, name, place} <- @planets,
+        do: {trail, name, WorkspacePage.place_path(fleet_id, place)}
   end
 
   # A filter as the field shows it.
@@ -330,7 +348,10 @@ defmodule KeyfleetWeb.WorldlineLive do
         </header>
 
         <ul id="worldline-legend" class="worldline-legend" aria-label="Legend">
-          <li :for={{trail, name} <- @worldline.legend} data-trail={trail}>{name}</li>
+          <li :for={{trail, name, path} <- @worldline.legend} data-trail={trail}>
+            <.link :if={path} patch={path}>{name}</.link>
+            <span :if={path == nil}>{name}</span>
+          </li>
         </ul>
 
         <form
@@ -441,9 +462,11 @@ defmodule KeyfleetWeb.WorldlineLive do
   attr :worldline, :map, required: true
 
   # The picture the browser draws, and what stands until it does: the line
-  # and the sun at now. One link follows the event pointed at, so it opens as
-  # any link does, in a new tab too; a word names what just arrived at the
-  # sun, and Now goes back to it. The zoom and Reset stand in a corner.
+  # and the sun at now. Once it is drawn, each planet at now carries its name,
+  # the name and the planet one link to its place in the workspace, and the
+  # sun carries Now. One link follows the event pointed at, so it opens as any
+  # link does, in a new tab too; a word names what just arrived at the sun,
+  # and Now goes back to it. The zoom and Reset stand in a corner.
   defp picture(assigns) do
     ~H"""
     <div
@@ -475,6 +498,21 @@ defmodule KeyfleetWeb.WorldlineLive do
           <span class="worldline-focus__meta" data-focus-meta></span>
         </span>
       </a>
+      <div class="worldline-tips" data-worldline-tips>
+        <.link
+          :for={{trail, name, path} <- planets(@worldline.fleet_id)}
+          class="worldline-tip"
+          data-trail={trail}
+          data-worldline-tip={trail}
+          patch={path}
+          draggable="false"
+        >
+          <span class="worldline-tip__name" data-tip-name>{name}</span>
+        </.link>
+        <span class="worldline-tip worldline-tip--now" data-worldline-tip="now" aria-hidden="true">
+          <span class="worldline-tip__name" data-tip-name>Now</span>
+        </span>
+      </div>
       <div class="worldline-view" role="group" aria-label="View" data-worldline-view>
         <button type="button" aria-label="Zoom out" data-worldline-zoom="out">−</button>
         <output aria-label="Zoom" data-worldline-zoom-level>100%</output>
@@ -499,6 +537,9 @@ defmodule KeyfleetWeb.WorldlineLive do
         Swipe sideways to move through time, pinch to zoom, and twist two fingers to turn it.
       </span>
       Workspace orbits once a day, Code every three days and Notebooks once a week.
+      <span class="worldline-help__flight">
+        At now, the fleet's history streams out of the sun on a loop, slowing while you point at it or touch it; moving through time stops it, and Now starts it again.
+      </span>
       <span class="visually-hidden">
         Arrow keys move through time, Alt and the arrow keys turn it, plus and minus zoom, End goes back to now, and Enter opens the event shown.
       </span>
