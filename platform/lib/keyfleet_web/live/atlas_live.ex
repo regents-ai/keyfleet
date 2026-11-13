@@ -9,8 +9,9 @@ defmodule KeyfleetWeb.AtlasLive do
   The address holds everything the page shows: `?view=` the picture (`heat`,
   `KeyfleetWeb.AtlasLive.Heat` and `assets/js/atlas/heat/`, shown unless
   another is named; `field`, `KeyfleetWeb.AtlasLive.Field` and
-  `assets/js/atlas/field/`; or `river`, `KeyfleetWeb.AtlasLive.River` and
-  `assets/js/atlas/river/`),
+  `assets/js/atlas/field/`; `river`, `KeyfleetWeb.AtlasLive.River` and
+  `assets/js/atlas/river/`; or `blocks`, `KeyfleetWeb.AtlasLive.Blocks` and
+  `assets/js/atlas/blocks/`),
   `?show=list` the List, the same work as text and links, `?window=` the day,
   week, month or year shown (a year unless named), `?at=` a day it holds
   (today unless named), and `?kind=` `graph` or `notebooks` for one of them.
@@ -28,11 +29,11 @@ defmodule KeyfleetWeb.AtlasLive do
   import Phoenix.LiveView,
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
 
-  alias KeyfleetWeb.AtlasLive.{Field, Heat, River}
+  alias KeyfleetWeb.AtlasLive.{Blocks, Field, Heat, River}
   alias KeyfleetWeb.{AtlasPage, PageRead, ShellLive}
 
   # The pictures built so far, the first one shown unless another is named.
-  @views [:heat, :field, :river]
+  @views [:heat, :field, :river, :blocks]
   @kinds %{"graph" => :graph, "notebooks" => :notebook}
   @list_read 20
   @most_read 10
@@ -117,6 +118,7 @@ defmodule KeyfleetWeb.AtlasLive do
 
   defp view("field"), do: :field
   defp view("river"), do: :river
+  defp view("blocks"), do: :blocks
   defp view(_word), do: hd(@views)
 
   defp window(word) when word in ~w(day week month), do: String.to_existing_atom(word)
@@ -272,6 +274,9 @@ defmodule KeyfleetWeb.AtlasLive do
 
   def handle_event("atlas_field_" <> _ = event, params, socket),
     do: Field.handle_event(event, params, socket)
+
+  def handle_event("atlas_blocks_" <> _ = event, params, socket),
+    do: Blocks.handle_event(event, params, socket)
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
@@ -439,6 +444,13 @@ defmodule KeyfleetWeb.AtlasLive do
               River
             </.link>
             <.link
+              id="atlas-show-blocks"
+              patch={moved(@atlas, show: :picture, view: :blocks)}
+              aria-current={if @atlas.show == :picture and @atlas.view == :blocks, do: "page"}
+            >
+              Blocks
+            </.link>
+            <.link
               id="atlas-show-list"
               patch={moved(@atlas, show: :list)}
               aria-current={if @atlas.show == :list, do: "page"}
@@ -490,6 +502,11 @@ defmodule KeyfleetWeb.AtlasLive do
 
         <River.picture
           :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :river}
+          atlas={@atlas}
+        />
+
+        <Blocks.picture
+          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :blocks}
           atlas={@atlas}
         />
 
