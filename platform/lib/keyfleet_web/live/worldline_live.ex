@@ -6,11 +6,11 @@ defmodule KeyfleetWeb.WorldlineLive do
   left to now on the right (`KeyfleetWeb.WorldlinePage`).
 
   The picture is drawn in the browser (`assets/js/hooks/worldline.ts`). Its
-  workspace, code and notebooks are three wide trails around the line, each
-  room a thin one with a pixel for each post, and proposals and polls bright
-  points on the line itself. The page sends it the newest events once it is
-  live, older ones as the reader pans back to them, and new ones a moment
-  after they happen. `?show=list` shows the same events as links, newest
+  workspace, code and notebooks are three wide trails turning around the
+  line, each room a thin one with a pixel for each post, and proposals and
+  polls bright points on the line itself. The page sends it the newest events
+  once it is live, older ones as the reader moves back to them, and new ones a
+  moment after they happen. `?show=list` shows the same events as links, newest
   first, with "Older" for the page before. Every event links to the page it
   happened on.
   """
@@ -317,7 +317,8 @@ defmodule KeyfleetWeb.WorldlineLive do
 
   # The picture the browser draws, and what stands until it does: the line
   # and its head. One link follows the event pointed at, so it opens as any
-  # link does, in a new tab too.
+  # link does, in a new tab too; a word names what just arrived at the head,
+  # and Now goes back to it.
   defp picture(assigns) do
     ~H"""
     <div
@@ -341,6 +342,7 @@ defmodule KeyfleetWeb.WorldlineLive do
         <.link patch={worldline_path(@worldline.fleet_id, :list)}>List</.link>
         has every event.
       </p>
+      <span class="worldline-news" data-worldline-news aria-hidden="true"></span>
       <a class="worldline-focus" data-worldline-focus draggable="false" hidden>
         <span class="worldline-focus__card" data-focus-card>
           <span class="worldline-focus__what" data-focus-what></span>
@@ -348,11 +350,25 @@ defmodule KeyfleetWeb.WorldlineLive do
           <span class="worldline-focus__meta" data-focus-meta></span>
         </span>
       </a>
+      <Regent.Primitives.button
+        variant="secondary"
+        arrow={false}
+        class="worldline-now"
+        data-worldline-now
+        hidden
+      >
+        Now
+      </Regent.Primitives.button>
     </div>
     <p id="worldline-help" class="worldline-help">
-      Drag to move through time. Scroll or pinch to zoom.
+      <span class="worldline-help__mouse">
+        Scroll or drag to move through time. Pinch, or hold Ctrl and scroll, to zoom.
+      </span>
+      <span class="worldline-help__touch">
+        Swipe sideways to move through time. Pinch to zoom.
+      </span>
       <span class="visually-hidden">
-        Arrow keys move through time, plus and minus zoom, and Enter opens the event shown.
+        Arrow keys move through time, plus and minus zoom, End goes back to now, and Enter opens the event shown.
       </span>
     </p>
     """

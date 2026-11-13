@@ -1,20 +1,28 @@
 /**
  * A fleet's Worldline (`KeyfleetWeb.WorldlineLive`): its line runs through
  * time from left to right, the head at now, with the fleet's trails turning
- * around it and every event a mark on its trail (`../worldline/trails`).
+ * around it and every event a curl on its trail (`../worldline/trails`).
  *
  * The page sends the newest events once it is live (`worldline:page`), older
- * ones as the reader pans back to them (the reply to `worldline_older`), and
- * new ones a moment after they happen (`worldline:heard`), which arrive at
- * the head. Drag pans through time and keeps going a little when let go; the
- * wheel or a pinch zooms; the arrow keys pan and plus and minus zoom. One
- * real link follows the mark pointed at, tapped or nearest the middle while
- * the picture has the keyboard, so it opens as any link does, in a new tab
- * too.
+ * ones as the reader moves back to them (the reply to `worldline_older`), and
+ * new ones a moment after they happen (`worldline:heard`): each leaves the
+ * head as it flares, with a word for what it was, and settles onto its trail.
+ * The trails keep turning slowly, and beads ride along them into the head.
+ *
+ * Scrolling over the picture moves through time, as a drag does, which keeps
+ * going a little when let go; a pinch, or scrolling with Ctrl or ⌘ held,
+ * zooms. A scroll on past now, or back past the oldest event, or one that
+ * began on the page, scrolls the page; a sideways one always moves the
+ * picture. On a phone a sideways swipe moves through time and an upward one
+ * scrolls the page. Now glides back to the head. The arrow keys move, plus
+ * and minus zoom. One real link follows the mark pointed at, tapped or
+ * nearest the middle while the picture has the keyboard, so it opens as any
+ * link does, in a new tab too; while it shows, the trails ease to a stop, so
+ * it stays on its mark.
  *
  * The picture is drawn only with WebGPU. Without it the line and its head the
  * page drew stay, with a note that the List has every event. For a reader who
- * asked for less motion nothing orbits, reveals, glides or pulses; the
+ * asked for less motion nothing turns, rides, reveals, glides or flares; the
  * picture and its links still work.
  */
 import {animate, type AnimationParams, type JSAnimation} from "animejs"
@@ -24,7 +32,7 @@ import type {Hook} from "../hook_composition"
 import {showingTheme, watchTheme} from "../theme"
 import {tone} from "../theme_tone"
 import type {Tones, WorldlineRenderer} from "../worldline/renderer"
-import {MAX_EVENTS, lay, nearest, pack, project, type Layout, type View, type WorldEvent} from "../worldline/trails"
+import {MAX_EVENTS, beads, lay, markAt, nearest, pack, type Layout, type View, type WorldEvent} from "../worldline/trails"
 import {localTime} from "./local_time"
 import {BASE, EASE_OUT, FAST, play, still} from "./motion/shared"
 
@@ -46,8 +54,10 @@ const HEAD_AT = 0.85
 /** The narrowest and widest stretch of time the picture shows, in seconds. */
 const MIN_SPAN = 120
 const MAX_SPAN = 400 * 24 * 3600
-/** How fast the trails orbit the line, in radians a second. */
-const ORBIT = (2 * Math.PI) / 90
+/** How fast the trails turn around the line, in radians a second. */
+const ORBIT = (2 * Math.PI) / 120
+/** How quickly the trails ease to a stop while a mark shows, and back, in milliseconds. */
+const SETTLE = 200
 /** How near a mark must be to point at it, in CSS pixels, by mouse and by finger. */
 const NEAR = 24
 const NEAR_TOUCH = 36
@@ -58,6 +68,18 @@ const KEY_ZOOM = 0.7
 const GLIDE = 325
 /** How far a press moves before it is a drag, in CSS pixels. */
 const DRAG = 4
+/**
+ * A pause this long between turns of the wheel, in milliseconds, ends one
+ * scroll; until then it stays with what it began on, the picture or the page.
+ */
+const LATCH = 300
+/** How far each pixel of a pinch zooms, and the most one turn of the wheel does. */
+const PINCH = 0.01
+const MOST_PINCH = 50
+/** How long Now takes to glide back to the head, in milliseconds. */
+const HOMING = 700
+/** How long a new event's word shows at the head, in milliseconds. */
+const NEWS = 2600
 
 const reader = () => ({locale: undefined, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone})
 
@@ -69,6 +91,8 @@ export const Worldline: Hook = {
     const what = link.querySelector<HTMLElement>("[data-focus-what]")!
     const title = link.querySelector<HTMLElement>("[data-focus-title]")!
     const meta = link.querySelector<HTMLElement>("[data-focus-meta]")!
+    const back = root.querySelector<HTMLButtonElement>("[data-worldline-now]")!
+    const news = root.querySelector<HTMLElement>("[data-worldline-news]")!
     if (!navigator.gpu) root.dataset.worldlineStill = "true"
 
     // The events on show and how they lay out, by the page's clock.
@@ -88,21 +112,27 @@ export const Worldline: Hook = {
     let following = true
     let width = 1
     let height = 1
+    // How far the trails have turned, how fast they turn now against their
+    // full pace, and how far the beads have ridden, in seconds.
     let orbit = 0
+    let pace = 1
+    let clock = 0
     let ticked: number | undefined
     let velocity = 0
     let strained = false
 
-    // What anime.js moves: the reveal, the mark in focus, and an arrival.
-    const motion = {revealed: 1e12, emphasis: 1, arrival: 0, arrivedFrom: 1e12}
+    // What anime.js moves: the reveal, the mark in focus, an arrival, and a
+    // glide back to the head.
+    const motion = {revealed: 1e12, emphasis: 1, arrival: 0, arrivedFrom: 1e12, home: 0}
     const running = new Set<JSAnimation>()
+    let homing: {from: number; animation: JSAnimation} | undefined
     let focus: number | undefined
     let focusBy: "pointer" | "key" | undefined
 
     let nudge = () => {}
 
     const now = () => (Date.now() + skew - anchor) / 1000
-    const view = (): View => ({left: right - span, perPx: span / width, width, height})
+    const view = (): View => ({left: right - span, perPx: span / width, width, height, now: now()})
     const oldest = () => layout.placed[0]?.t
 
     // One of anime.js's runs over `motion`, each frame of it drawn. A run
@@ -118,22 +148,27 @@ export const Worldline: Hook = {
         },
       })
       running.add(animation)
+      return animation
+    }
+
+    // The latest the right edge may stand, with the head where it follows
+    // now; and the earliest, with the oldest event a tenth of the way in,
+    // once nothing older is left to read.
+    const latest = () => now() + span * (1 - HEAD_AT)
+    const earliest = () => {
+      const first = oldest()
+      return older || first === undefined ? -Infinity : first + span * 0.1
     }
 
     const follow = () => {
       following = true
-      right = now() + span * (1 - HEAD_AT)
+      right = latest()
     }
 
-    // The picture never runs past now on the right, nor far into the empty
-    // past on the left when nothing older is left to read.
     const hold = () => {
       span = Math.min(MAX_SPAN, Math.max(MIN_SPAN, span))
-      const latest = now() + span * (1 - HEAD_AT)
-      if (right >= latest) follow()
-      const first = oldest()
-      if (!older && first !== undefined && right - span < first - span * 0.9 && right < latest)
-        right = Math.min(latest, first + span * 0.1)
+      right = Math.max(right, earliest())
+      if (right >= latest()) follow()
     }
 
     const pan = (dx: number) => {
@@ -165,11 +200,52 @@ export const Worldline: Hook = {
       hold()
     }
 
+    // The reader takes the picture: a pan let go and a glide home both stop.
+    const takeOver = () => {
+      velocity = 0
+      if (homing === undefined) return
+      homing.animation.cancel()
+      running.delete(homing.animation)
+      homing = undefined
+    }
+
+    // Back to the head: a glide, or at once for a reader who asked for less motion.
+    const home = () => {
+      takeOver()
+      if (following) return
+      if (still(root)) {
+        follow()
+      } else {
+        motion.home = 0
+        homing = {
+          from: right,
+          animation: run({home: [0, 1], duration: HOMING, ease: EASE_OUT}, () => {
+            homing = undefined
+            follow()
+          }),
+        }
+      }
+      nudge()
+    }
+
+    // Now shows while the picture stands away from the head. Pressed from
+    // the keyboard, the picture keeps the keyboard once Now goes.
+    const showBack = () => {
+      if (back.hidden === following) return
+      if (following && document.activeElement === back) root.focus({preventScroll: true})
+      back.hidden = following
+      if (!following && !still(root)) play(back, {opacity: [0, 1], duration: FAST, ease: EASE_OUT})
+    }
+
     // The mark in focus stays the same event when others arrive around it.
     const relayout = () => {
       const kept = focus === undefined ? undefined : layout.placed[focus].event.id
       layout = lay([...events.values()], anchor)
-      if (kept !== undefined) focus = layout.placed.findIndex(point => point.event.id === kept)
+      if (kept !== undefined) {
+        const index = layout.placed.findIndex(point => point.event.id === kept)
+        focus = index < 0 ? undefined : index
+        link.hidden = focus === undefined
+      }
       changed = true
     }
 
@@ -214,21 +290,25 @@ export const Worldline: Hook = {
     const chooseMiddle = () =>
       choose(nearest(layout.placed, view(), orbit, width / 2, height / 2, width), "key")
 
-    // The link stands on the mark in focus, its words to whichever side has room.
-    const placeLink = () => {
+    // The link stands on the mark in focus, its words to whichever side has
+    // room, and a new event's word over the head.
+    const placeLabels = () => {
+      const head = (now() - (right - span)) / (span / width)
+      news.style.transform = `translate(${head.toFixed(1)}px, ${(height / 2).toFixed(1)}px)`
       if (focus === undefined) return
-      const point = layout.placed[focus]
-      const at = project(point.t, point.theta, point.shape, view(), orbit)
+      const at = markAt(layout.placed[focus], view(), orbit)
       link.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px)`
       link.dataset.side = at.x > width - 232 ? "left" : "right"
       link.dataset.edge = at.y < 76 ? "below" : "above"
     }
 
-    // Older events are read as the reader pans back to them, one page at a time.
+    // Older events are read a page at a time while fewer than a picture's
+    // width of them stand ready past the left edge, so they are there before
+    // the reader moves back to them.
     const readOlder = () => {
       const first = oldest()
       if (!older || asking || first === undefined || events.size >= MAX_EVENTS) return
-      if (right - span > first + span * 0.15) return
+      if (first < right - 2 * span) return
       asking = true
       this.pushEvent<Older>("worldline_older", {}, reply => {
         asking = false
@@ -249,6 +329,7 @@ export const Worldline: Hook = {
       events.clear()
       for (const event of newest) events.set(event.id, event)
       choose(undefined, "pointer")
+      takeOver()
       relayout()
       fit()
       const start = oldest()
@@ -259,6 +340,7 @@ export const Worldline: Hook = {
       nudge()
     }
 
+    // What just happened leaves the head as it flares, and its word shows there.
     const heard = ({events: arrived}: {events: WorldEvent[]}) => {
       const fresh = arrived.filter(event => !events.has(event.id))
       for (const event of arrived) events.set(event.id, event)
@@ -266,6 +348,15 @@ export const Worldline: Hook = {
       if (fresh.length > 0 && !still(root)) {
         motion.arrivedFrom = Math.min(...fresh.map(event => (event.at - anchor) / 1000))
         run({arrival: [1, 0], duration: 1400, ease: EASE_OUT})
+        news.textContent = fresh.reduce((newest, event) => (event.at > newest.at ? event : newest)).what
+        play(news, {
+          opacity: [
+            {from: 0, to: 1, duration: BASE},
+            {to: 1, duration: NEWS - BASE - 600},
+            {to: 0, duration: 600},
+          ],
+          ease: "linear",
+        })
       }
       nudge()
     }
@@ -273,13 +364,19 @@ export const Worldline: Hook = {
     this.handleEvent<Page>("worldline:page", page)
     this.handleEvent<{events: WorldEvent[]}>("worldline:heard", heard)
 
-    // One frame: the orbit turns, a pan let go glides on, and the head
-    // follows now. True while anything still moves.
+    // One frame: the trails turn and the beads ride on, a pan let go glides
+    // on, a glide home closes in, and the head follows now. True while
+    // anything still moves.
     const advance = (time: number) => {
       const dt = ticked === undefined ? 0 : Math.min(50, time - ticked)
       ticked = time
       const moving = !still(root) && !strained
-      if (moving) orbit = (orbit + (dt / 1000) * ORBIT) % (2 * Math.PI)
+      if (moving) {
+        pace += ((focus === undefined ? 1 : 0) - pace) * (1 - Math.exp(-dt / SETTLE))
+        orbit = (orbit + (dt / 1000) * ORBIT * pace) % (2 * Math.PI)
+        clock += dt / 1000
+      }
+      if (homing) right = homing.from + (latest() - homing.from) * motion.home
       if (velocity !== 0) {
         pan(velocity * dt)
         velocity *= Math.exp(-dt / GLIDE)
@@ -287,6 +384,7 @@ export const Worldline: Hook = {
       }
       if (following) follow()
       readOlder()
+      showBack()
       return moving || velocity !== 0 || running.size > 0
     }
 
@@ -301,10 +399,12 @@ export const Worldline: Hook = {
         opened: tone(root, "--worldline-opened"),
         closed: tone(root, "--worldline-closed"),
         poll: tone(root, "--worldline-polls"),
-        glow: dark ? 0.34 : 0.14,
-        far: dark ? 0.36 : 0.42,
+        glow: dark ? 0.34 : 0.08,
+        far: dark ? 0.34 : 0.4,
       }
     }
+
+    const none = new Float32Array(0)
 
     this.controller = createCanvasIsland<Island>(root, {}, {
       canvasSelector: "[data-worldline-canvas]",
@@ -326,18 +426,23 @@ export const Worldline: Hook = {
               gpu.load(packed.segments, packed.points)
               changed = false
             }
+            const shown = view()
+            // Beads ride once the picture has revealed, and never for a
+            // reader who asked for less motion.
+            const riding = !still(root) && motion.revealed >= shown.now
             gpu.present({
-              now: now(),
-              left: right - span,
-              perPx: span / width,
+              now: shown.now,
+              left: shown.left,
+              perPx: shown.perPx,
               orbit,
               revealed: motion.revealed,
               focus: focus ?? -1,
               emphasis: motion.emphasis,
               arrivedFrom: motion.arrivedFrom,
               arrival: motion.arrival,
+              beads: riding ? beads(layout, shown, orbit, clock) : none,
             })
-            placeLink()
+            placeLabels()
           },
           settled: () => gpu.settled(),
           dispose: () => gpu.dispose(),
@@ -368,6 +473,7 @@ export const Worldline: Hook = {
           const box = canvas.getBoundingClientRect()
           return {x: event.clientX - box.left, y: event.clientY - box.top}
         }
+        const onBack = (event: Event) => back.contains(event.target as Node)
         const pointers = new Map<number, {x: number; y: number}>()
         // A press on the picture: where it last was, how far it has moved, when,
         // and how fast it was going, in CSS pixels a millisecond.
@@ -381,10 +487,10 @@ export const Worldline: Hook = {
         root.addEventListener(
           "pointerdown",
           event => {
-            if (event.button !== 0) return
+            if (event.button !== 0 || onBack(event)) return
             const at = local(event)
             pointers.set(event.pointerId, at)
-            velocity = 0
+            takeOver()
             if (pointers.size === 1) drag = {x: at.x, moved: 0, at: event.timeStamp, id: event.pointerId, speed: 0}
             if (pointers.size === 2) {
               drag = undefined
@@ -401,7 +507,7 @@ export const Worldline: Hook = {
             if (!pointers.has(event.pointerId)) {
               // The mark shown stays while the pointer is on its link, card and all.
               const onLink = link.contains(event.target as Node)
-              if (event.pointerType === "mouse" && focusBy !== "key" && !onLink)
+              if (event.pointerType === "mouse" && focusBy !== "key" && !onLink && !onBack(event))
                 choose(nearest(layout.placed, view(), orbit, at.x, at.y, NEAR), "pointer")
               return
             }
@@ -457,16 +563,41 @@ export const Worldline: Hook = {
           options,
         )
 
+        // Which of the picture and the page the scroll under way belongs to,
+        // and when it last turned.
+        let scroll = {owner: "page", at: -Infinity}
+        document.addEventListener(
+          "wheel",
+          event => {
+            if (!root.contains(event.target as Node)) scroll = {owner: "page", at: event.timeStamp}
+          },
+          {signal: listening.signal, passive: true},
+        )
         root.addEventListener(
           "wheel",
           event => {
-            event.preventDefault()
             const lines = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1
             const dx = event.deltaX * lines
             const dy = event.deltaY * lines
-            velocity = 0
-            if (Math.abs(dx) > Math.abs(dy)) pan(-dx)
-            else zoom(local(event).x, Math.exp(dy * (event.ctrlKey ? 0.01 : 0.0015)))
+            if (event.ctrlKey || event.metaKey) {
+              // A pinch on a trackpad, or Ctrl or ⌘ and the wheel, zooms.
+              event.preventDefault()
+              takeOver()
+              zoom(local(event).x, Math.exp(Math.max(-MOST_PINCH, Math.min(MOST_PINCH, dy)) * PINCH))
+              island.nudge()
+              return
+            }
+            const sideways = Math.abs(dx) > Math.abs(dy)
+            const toward = sideways ? dx : dy
+            // Down or right moves toward now. Past either end the page
+            // scrolls on, unless the picture has this scroll already.
+            const stuck = !sideways && (toward > 0 ? following : right <= earliest())
+            if (event.timeStamp - scroll.at > LATCH) scroll.owner = stuck ? "page" : "picture"
+            scroll.at = event.timeStamp
+            if (scroll.owner === "page" && !sideways) return
+            event.preventDefault()
+            takeOver()
+            pan(-toward)
             island.nudge()
           },
           {signal: listening.signal, passive: false},
@@ -501,7 +632,7 @@ export const Worldline: Hook = {
                 break
               }
               case "End":
-                follow()
+                home()
                 break
               case "Enter":
                 if (focus === undefined) return
@@ -514,12 +645,13 @@ export const Worldline: Hook = {
                 return
             }
             event.preventDefault()
-            velocity = 0
+            if (event.key !== "End") takeOver()
             if (event.key !== "Escape" && event.key !== "Enter") chooseMiddle()
             island.nudge()
           },
           options,
         )
+        back.addEventListener("click", home, options)
         root.addEventListener(
           "focus",
           () => {

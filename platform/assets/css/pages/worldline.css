@@ -10,14 +10,16 @@
 
 .worldline-panel {
   /* The picture's colours, as its shader and the legend take them. The three
-     large trails are blues around the gold line, each its own depth of the
-     palette's one blue: Powder Blue by night, deep teal by day, and Powder
-     Blue folded into Charcoal at two strengths. */
+     large trails are blues around the gold line, each its own: Workspace the
+     strongest, Powder Blue by night and deep teal by day; Notebooks leaning
+     green, the blue folded into the green of success; Code the same blue
+     sunk toward the page, deeper by night and paler by day. Chat is the
+     page's muted ink. */
   --worldline-line: var(--color-warning);
   --worldline-workspace: var(--color-info);
-  --worldline-code: color-mix(in oklab, var(--palette-powder-blue) 55%, var(--palette-charcoal));
-  --worldline-notebooks: color-mix(in oklab, var(--palette-powder-blue) 78%, var(--palette-charcoal));
-  --worldline-chat: var(--color-info);
+  --worldline-notebooks: color-mix(in oklab, var(--color-success) 65%, var(--color-info));
+  --worldline-code: color-mix(in oklab, var(--color-info) 72%, var(--color-bg));
+  --worldline-chat: var(--color-fg-muted);
   --worldline-opened: var(--ash-accent-warm);
   --worldline-closed: var(--color-fg);
   --worldline-polls: var(--ash-accent);
@@ -80,6 +82,10 @@
   background: var(--worldline-tone);
 }
 
+.worldline-legend li[data-trail="workspace"]::before {
+  height: 3px;
+}
+
 .worldline-legend li[data-trail="chat"]::before {
   height: 1px;
 }
@@ -90,16 +96,26 @@
   border-radius: 50%;
 }
 
-/* The picture, edge to edge inside the panel, on the page's own ground. A
-   finger dragging across it moves through time; one dragging up or down
-   still scrolls the page. */
+/* The picture, edge to edge inside the panel, on the page's own ground, with
+   a faint field of stars by night. A finger dragging across it moves
+   through time; one dragging up or down still scrolls the page. */
 .worldline-stage {
+  --worldline-star: light-dark(transparent, color-mix(in oklab, var(--color-fg) 50%, transparent));
+  --worldline-star-faint: light-dark(transparent, color-mix(in oklab, var(--color-fg) 26%, transparent));
+
   position: relative;
   height: clamp(18rem, 56vw, 32rem);
   margin-inline: calc(var(--rg-panel-padding) * -1);
   overflow: hidden;
   border-block: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background:
+    radial-gradient(circle at 23px 41px, var(--worldline-star) 0.6px, transparent 1.3px) 0 0 / 173px 149px,
+    radial-gradient(circle at 140px 190px, var(--worldline-star) 0.8px, transparent 1.6px) 0 0 / 251px 223px,
+    radial-gradient(circle at 97px 12px, var(--worldline-star-faint) 0.6px, transparent 1.2px) 0 0 / 113px 89px,
+    radial-gradient(circle at 61px 77px, var(--worldline-star-faint) 0.5px, transparent 1.1px) 0 0 / 89px 131px,
+    radial-gradient(circle at 30px 160px, var(--worldline-star-faint) 0.6px, transparent 1.2px) 0 0 / 197px 181px,
+    radial-gradient(circle at 210px 60px, var(--worldline-star-faint) 0.5px, transparent 1.1px) 0 0 / 233px 107px,
+    var(--color-bg);
   cursor: grab;
   touch-action: pan-y;
   user-select: none;
@@ -244,8 +260,10 @@
   color: var(--color-fg-muted);
 }
 
-.worldline-focus:hover .worldline-focus__title {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .worldline-focus:hover .worldline-focus__title {
+    text-decoration: underline;
+  }
 }
 
 .worldline-focus:focus-visible {
@@ -257,10 +275,48 @@
   outline-offset: 2px;
 }
 
+/* A word for what just arrived, over the head, shown a moment as it flares. */
+.worldline-news {
+  position: absolute;
+  top: 0;
+  left: 0;
+  translate: -50% calc(-100% - 1.25rem);
+  color: var(--worldline-line);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Back to the head, once the picture stands away from it. */
+.worldline-now {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+}
+
 .worldline-help {
   margin: 0;
   color: var(--color-fg-muted);
   font-size: 0.8125rem;
+}
+
+/* The words for a mouse and trackpad, or for a finger. */
+.worldline-help__touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .worldline-help__mouse {
+    display: none;
+  }
+
+  .worldline-help__touch {
+    display: inline;
+  }
 }
 
 /* The list: each event a line that opens the page it happened on. */

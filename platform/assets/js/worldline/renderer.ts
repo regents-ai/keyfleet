@@ -1,16 +1,16 @@
 /**
  * Draws a fleet's Worldline with WebGPU through vgpu: the trails as ribbons,
- * one instance per stretch between two events, and every event's mark as a
- * point, one instance each. The events reach the GPU only when they change;
- * each frame sends only where the picture stands, its orbit and what is in
- * focus, so thousands of events cost one buffer write when they arrive and
- * nothing after.
+ * one instance per stretch between two events, the beads riding them, and
+ * every event's mark as a point, one instance each. The events reach the GPU
+ * only when they change; each frame sends only where the picture stands, its
+ * orbit, what is in focus and the few beads, so thousands of events cost one
+ * buffer write when they arrive and nothing after.
  */
 import {prepareShader} from "@vgpu/wgsl/prepare"
 import {draw, frame, geometry, init, surface} from "vgpu"
 
-import {pointsWgsl, trailsWgsl} from "./shader"
-import {MAX_EVENTS, POINT_FLOATS, SEGMENT_FLOATS} from "./trails"
+import {beadsWgsl, pointsWgsl, SEGMENTS, trailsWgsl} from "./shader"
+import {BEAD_FLOATS, MAX_BEADS, MAX_EVENTS, POINT_FLOATS, SEGMENT_FLOATS} from "./trails"
 
 type Rgb = readonly [number, number, number]
 
@@ -41,6 +41,8 @@ export type Frame = {
   readonly emphasis: number
   readonly arrivedFrom: number
   readonly arrival: number
+  /** The beads riding the trails, as `beads` in trails.ts places them. */
+  readonly beads: Float32Array<ArrayBuffer>
 }
 
 export type WorldlineRenderer = {
@@ -56,23 +58,15 @@ export type WorldlineRenderer = {
   dispose(): void
 }
 
-const SEGMENTS = 40
-// Every event has a stretch and every trail one more on to now, so twice the
-// events and the line hold them all; every event has a mark, and the head one.
-const SEGMENT_ROOM = MAX_EVENTS * 2 + 1
-const POINT_ROOM = MAX_EVENTS + 1
+// Every event has one stretch, on to its trail's next event or to now, and
+// one mark; the line is one stretch more and the head one mark more.
+const ROOM = MAX_EVENTS + 1
 
-const instance = (data: Float32Array<ArrayBuffer>) => [
-  {
-    stepMode: "instance" as const,
-    data,
-    attributes: {
-      a: {format: "float32x4" as const, location: 0},
-      b: {format: "float32x4" as const, location: 1},
-      c: {format: "float32x4" as const, location: 2},
-    },
-  },
+const vector = (location: number) => ({format: "float32x4" as const, location})
+const instance = (data: Float32Array<ArrayBuffer>, attributes: Record<string, ReturnType<typeof vector>>) => [
+  {stepMode: "instance" as const, data, attributes},
 ]
+const four = {a: vector(0), b: vector(1), c: vector(2), d: vector(3)}
 
 export async function createWorldlineRenderer(
   canvas: HTMLCanvasElement,
@@ -85,6 +79,7 @@ export async function createWorldlineRenderer(
   let pixels: readonly [number, number] = [size[0], size[1]]
   let segmentCount = 0
   let pointCount = 0
+  let beadCount = 0
 
   const gpu = await init()
   let disposed = false
@@ -105,12 +100,17 @@ export async function createWorldlineRenderer(
     const strips = geometry(gpu, {
       topology: "triangle-strip",
       label: "worldline.trails",
-      buffers: instance(new Float32Array(SEGMENT_ROOM * SEGMENT_FLOATS)),
+      buffers: instance(new Float32Array(ROOM * SEGMENT_FLOATS), four),
     })
     const quads = geometry(gpu, {
       topology: "triangle-strip",
       label: "worldline.marks",
-      buffers: instance(new Float32Array(POINT_ROOM * POINT_FLOATS)),
+      buffers: instance(new Float32Array(ROOM * POINT_FLOATS), four),
+    })
+    const pearls = geometry(gpu, {
+      topology: "triangle-strip",
+      label: "worldline.beads",
+      buffers: instance(new Float32Array(MAX_BEADS * BEAD_FLOATS), {a: vector(0), b: vector(1)}),
     })
     const params = {
       size: [size[0], size[1], 1, 0],
@@ -134,6 +134,14 @@ export async function createWorldlineRenderer(
       label: "worldline.trails.pass",
       set: {params},
     })
+    const riders = draw(gpu, {
+      shader: prepareShader(beadsWgsl, "worldline-beads.wgsl"),
+      geometry: pearls,
+      blend: "premultiplied",
+      vertices: 4,
+      label: "worldline.beads.pass",
+      set: {params},
+    })
     const marks = draw(gpu, {
       shader: prepareShader(pointsWgsl, "worldline-marks.wgsl"),
       geometry: quads,
@@ -142,7 +150,7 @@ export async function createWorldlineRenderer(
       label: "worldline.marks.pass",
       set: {params},
     })
-    await Promise.all([trails.compile(stage), marks.compile(stage)])
+    await Promise.all([trails.compile(stage), riders.compile(stage), marks.compile(stage)])
     const unsubscribe = stage.onResize(({width, height}) => {
       scale = width / Math.max(1, canvas.clientWidth)
       pixels = [width, height]
@@ -150,6 +158,7 @@ export async function createWorldlineRenderer(
 
     const set = (values: Partial<typeof params>) => {
       trails.set({params: values})
+      riders.set({params: values})
       marks.set({params: values})
     }
 
@@ -182,9 +191,12 @@ export async function createWorldlineRenderer(
           view: [at.left, at.perPx / scale, at.orbit, at.revealed],
           focus: [at.focus, at.emphasis, at.arrivedFrom, at.arrival],
         })
+        beadCount = Math.min(MAX_BEADS, at.beads.length / BEAD_FLOATS)
+        if (beadCount > 0) pearls.write(at.beads.subarray(0, beadCount * BEAD_FLOATS))
         frame(gpu, current =>
           current.pass(stage, pass => {
             if (segmentCount > 0) pass.draw(trails, {instances: segmentCount})
+            if (beadCount > 0) pass.draw(riders, {instances: beadCount})
             if (pointCount > 0) pass.draw(marks, {instances: pointCount})
           }),
         )
@@ -198,6 +210,7 @@ export async function createWorldlineRenderer(
         unsubscribe()
         strips.destroy()
         quads.destroy()
+        pearls.destroy()
         stage.dispose()
         gpu.dispose()
       },

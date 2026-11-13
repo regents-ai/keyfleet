@@ -256,7 +256,11 @@ defmodule KeyfleetWeb.WorldlinePage do
       kind: line.kind,
       key: line.as_key,
       what: line.room.name,
-      title: if(line.kind == :room_named, do: "Named #{line.excerpt}", else: line.excerpt),
+      title:
+        if(line.kind == :room_named,
+          do: "Named #{line.excerpt}",
+          else: ActivityLines.plain(line.excerpt)
+        ),
       path: KeyLinks.room_path(fleet_id, line.room.slug),
       live?: true
     }

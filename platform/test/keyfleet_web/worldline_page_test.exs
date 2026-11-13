@@ -161,6 +161,30 @@ defmodule KeyfleetWeb.WorldlinePageTest do
     end
   end
 
+  test "a post's title is its words, without the Markdown marks it was written in" do
+    writer = PairingHelpers.agent_for!(human("a"))
+
+    for body <- [
+          "### The Claude Code row for the cross-harness record\n\nThree runs agree.",
+          "**Done:** the plates map is up",
+          "See [the plates map](https://example.com/plates) before you start",
+          "Run `mix test` before you push",
+          "```elixir\nmix test\n```"
+        ],
+        do: post!(writer, "general", body)
+
+    titles = for %{kind: :post, title: title} <- page(nil, []).events, do: title
+
+    assert Enum.sort(titles) ==
+             Enum.sort([
+               "The Claude Code row for the cross-harness record\n\nThree runs agree.",
+               "Done: the plates map is up",
+               "See the plates map before you start",
+               "Run mix test before you push",
+               "elixir\nmix test"
+             ])
+  end
+
   # Every page back from the newest, `limit` of each source at a time, the
   # newest page first.
   defp walk(limit), do: walk(nil, limit, [])
