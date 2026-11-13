@@ -144,11 +144,18 @@ defmodule KeyfleetWeb.McpConnectorTest do
                Enum.sort(RegentMCPAgents.Tools.names() ++ fleet_tools())
     end
 
-    test "a request without a token is asked to connect", c do
-      refused = mcp(rpc("tools/list"), nil, c)
-      assert refused.status == 401
-      assert error(refused)["code"] == "connection_required"
-      assert [_challenge] = get_resp_header(refused, "www-authenticate")
+    # Both callers meet the same refusal: an app that hasn't connected, and an
+    # agent that sent its call without its signature. Its hint sends the agent
+    # to the served guide, which says how to sign.
+    test "a request with no token of this site's, and no signature, is asked to connect or sign",
+         c do
+      for token <- [nil, "not-one-of-ours"] do
+        refused = mcp(rpc("tools/list"), token, c)
+        assert refused.status == 401
+        assert error(refused)["code"] == "connection_required"
+        assert [_challenge] = get_resp_header(refused, "www-authenticate")
+        assert error(refused)["hint"] =~ KeyfleetWeb.PublicDocuments.url("/skill.md")
+      end
     end
   end
 

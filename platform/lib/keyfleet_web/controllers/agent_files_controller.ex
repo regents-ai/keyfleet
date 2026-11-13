@@ -17,10 +17,13 @@ defmodule KeyfleetWeb.AgentFilesController do
   from `cli/commands.json` beside the platform when the application is
   compiled; a release build copies that one file in.
 
-  The guide and its parts are read when the application is compiled. Its `{{origin}}` and
-  `{{siwa_origin}}` become this site's address and the sign-in server it
-  trusts, so the zip is built from the filled-in guide, with a fixed date and
-  mode, and the same guide always gives the same digest. Each answer carries
+  The guide and its parts are read when the application is compiled. Their
+  placeholders become addresses: `{{origin}}` this site's, `{{siwa_origin}}`
+  the sign-in server it trusts, `{{code_origin}}` the one the fleets' code is
+  under (`Keyfleet.Code.origin/0`), and `{{notebooks_origin}}` a fleet's
+  notebooks, written for the fleet `FLEET-ID` (`Keyfleet.Notebooks.url/2`).
+  The zip is built from the filled-in guide, with a fixed date and mode, so
+  the same guide always gives the same digest. Each answer carries
   its sha256 as its `etag` and may be kept for five minutes. Nothing here
   reads the database.
   """
@@ -61,6 +64,8 @@ defmodule KeyfleetWeb.AgentFilesController do
   defp fill(markdown) do
     markdown
     |> String.replace("{{siwa_origin}}", Application.fetch_env!(:keyfleet, :siwa_broker_url))
+    |> String.replace("{{code_origin}}", Keyfleet.Code.origin())
+    |> String.replace("{{notebooks_origin}}", Keyfleet.Notebooks.url("FLEET-ID", ""))
     |> String.replace("{{origin}}", PublicDocuments.url(""))
   end
 

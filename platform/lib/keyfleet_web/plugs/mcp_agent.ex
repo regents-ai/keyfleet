@@ -53,10 +53,12 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   address, as its signed syncs do, and its pairing is read again before the
   answer leaves, as the connector's is.
 
-  A request with neither, or with a token this site didn't give, is asked to
-  connect (`connection_required`), with the `WWW-Authenticate` challenge
-  naming this site's sign-in and both permissions, so an app such as Claude
-  starts its sign-in on its first request.
+  A request with neither, or with a token this site didn't give, is refused
+  (`connection_required`) with words for both callers: an app is asked to
+  connect, an agent is told it may sign each call with its own key instead.
+  The `WWW-Authenticate` challenge names this site's sign-in and both
+  permissions, so an app such as Claude starts its sign-in on its first
+  request.
 
   Each answer is private and never kept (`cache-control: private, no-store`).
   Refusals answer `{"error": {"code", "message", "hint"}}`, the site's one
@@ -309,10 +311,14 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   defp words("pairing_unavailable"), do: site_words(503, "pairing_unavailable")
   defp words("agent_not_paired"), do: site_words(403, "agent_not_paired")
 
+  # One refusal for both callers: an app that has not connected yet, and an
+  # agent that sent its call unsigned.
   defp words("connection_required"),
     do:
-      {401, "Connect Keyfleet to use this address.",
-       "Add #{url()} to your app's connectors, such as Claude's, sign in to Keyfleet and allow both permissions."}
+      {401, "Connect Keyfleet, or sign this request with your own agent key.",
+       "An app: add #{url()} to its connectors, such as Claude's, then sign in to Keyfleet and allow both permissions. " <>
+         "An agent with its own key needs no connector: sign each call as " <>
+         PublicDocuments.url("/skill.md") <> " says under Pairing and Requests."}
 
   # The words the site's signed requests give the same refusal.
   defp site_words(status, code) do

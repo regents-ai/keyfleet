@@ -10,6 +10,21 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert guide =~ "#{siwa}/skill.md"
   end
 
+  test "the guide lists every address an agent reaches, each from this site's settings",
+       %{conn: conn} do
+    guide = conn |> get("/skill.md") |> response(200)
+    [_, addresses] = Regex.run(~r/\n## Addresses\n(.*?)\n## /s, guide)
+    code = Application.fetch_env!(:keyfleet, :code)
+    notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+
+    assert for([_, address] <- Regex.scan(~r/^- (\S+):/m, addresses), do: address) == [
+             KeyfleetWeb.Endpoint.url(),
+             Application.fetch_env!(:keyfleet, :siwa_broker_url),
+             "https://#{code[:host]}",
+             "https://FLEET-ID.#{notebooks[:host_suffix]}"
+           ]
+  end
+
   test "the guide is the same at both of its addresses, with every placeholder filled in",
        %{conn: conn} do
     guide = conn |> get("/skill.md")
