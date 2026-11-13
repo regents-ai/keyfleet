@@ -29,8 +29,11 @@ defmodule KeyfleetWeb.Live.WorldlineLiveTest do
 
     assert has_element?(view, "#fleet-tab-worldline[aria-current=page]")
     assert has_element?(view, "#worldline-stage[phx-hook=Worldline]")
-    assert has_element?(view, ~s(#worldline-legend li[data-trail="chat"]))
-    refute has_element?(view, ~s(#worldline-legend li[data-trail="workspace"]))
+    # The planets are drawn for everyone; the polls only for members.
+    for trail <- ~w(workspace code notebooks chat proposals keys),
+        do: assert(has_element?(view, ~s(#worldline-legend li[data-trail="#{trail}"])))
+
+    refute has_element?(view, ~s(#worldline-legend li[data-trail="polls"]))
 
     assert_push_event(view, "worldline:page", %{events: events, older: false, now: now})
     assert is_integer(now)
@@ -42,9 +45,13 @@ defmodule KeyfleetWeb.Live.WorldlineLiveTest do
                who: "Key 1",
                title: "Hull survey started",
                path: "/classic/1?room=general",
-               live: true
+               live: true,
+               place: place
              }
-           ] = events
+           ] = Enum.filter(events, &(&1.kind == :post))
+
+    # Its place in its room, which sets its row on the room's line.
+    assert is_integer(place) and place > 0
   end
 
   test "the picture reads the page before as it asks, and hears a post as it happens",
@@ -54,7 +61,7 @@ defmodule KeyfleetWeb.Live.WorldlineLiveTest do
 
     {:ok, view, _html} = live(conn, @path)
     assert_push_event(view, "worldline:page", %{events: newest, older: true})
-    assert length(newest) == 100
+    assert Enum.count(newest, &(&1.kind == :post)) == 100
 
     render_hook(view, "worldline_older", %{})
     assert_reply(view, %{events: older, older: false})
@@ -78,14 +85,15 @@ defmodule KeyfleetWeb.Live.WorldlineLiveTest do
 
     assert has_element?(view, "#worldline-show-list[aria-current=page]")
     refute has_element?(view, "#worldline-stage")
-    assert count_lines(view) == 20
     assert has_element?(view, ~s(#worldline-events a[href="/classic/1?room=general"]))
 
-    titles = view |> element("#worldline-events") |> render() |> titles()
-    assert hd(titles) == "Line at #{DateTime.to_iso8601(hour_ago)}"
+    # The fleet's newer actions come first: Key 1 bought, and its projects.
+    posts = fn -> view |> element("#worldline-events") |> render() |> titles() |> lines() end
+    assert length(posts.()) == 20
+    assert hd(posts.()) == "Line at #{DateTime.to_iso8601(hour_ago)}"
 
     view |> element("#worldline-older") |> render_click()
-    assert count_lines(view) == 25
+    assert length(posts.()) == 25
     refute has_element?(view, "#worldline-older")
 
     view |> element("#worldline-show-picture") |> render_click()
@@ -93,19 +101,59 @@ defmodule KeyfleetWeb.Live.WorldlineLiveTest do
     assert has_element?(view, "#worldline-stage")
   end
 
-  test "a fleet with nothing yet says so", %{conn: conn} do
-    {:ok, view, _html} = live(conn, @path <> "?show=list")
-    assert has_element?(view, "#worldline-empty")
+  test "a filter in the address keeps one Key's events in the picture, its pages and the list",
+       %{conn: conn} do
+    hour_ago = DateTime.utc_now() |> DateTime.add(-3600) |> DateTime.truncate(:second)
+    for n <- 0..104, do: line!("general", DateTime.add(hour_ago, -n))
+    epoch!(2, "0x" <> String.duplicate("e", 40))
+
+    {:ok, view, _html} = live(conn, @path <> "?by=1")
+    assert_push_event(view, "worldline:page", %{events: newest, older: true})
+    assert Enum.frequencies_by(newest, & &1.kind) == %{post: 100, sold: 1}
+    assert Enum.all?(newest, &(&1.who == "Key 1"))
+
+    render_hook(view, "worldline_older", %{})
+    assert_reply(view, %{events: older, older: false})
+    assert Enum.frequencies_by(older, & &1.kind) == %{post: 5}
+
+    assert has_element?(view, ~s(#worldline-filter-by[value="Key 1"]))
+    assert has_element?(view, ~s(#worldline-show-list[href="#{@path}?show=list&by=1"]))
+    assert has_element?(view, ~s(#worldline-filter-clear[href="#{@path}"]))
+
+    # Key 2 has only been bought; a Key nobody has done anything as says so.
+    {:ok, view, _html} = live(conn, @path <> "?show=list&by=2")
+    assert view |> element("#worldline-events") |> render() |> titles() == ["Key 2 bought"]
+
+    {:ok, view, _html} = live(conn, @path <> "?show=list&by=9")
+    assert view |> element("#worldline-empty") |> render() =~ "Nothing matches this filter yet."
   end
 
-  defp count_lines(view),
-    do:
-      view
-      |> element("#worldline-events")
-      |> render()
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("li")
-      |> Enum.count()
+  test "the filter field takes a Key number or an address into the address, and answers anything else beside it",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path <> "?show=list")
+
+    view |> form("#worldline-filter", by: "#1") |> render_submit()
+    assert_patch(view, @path <> "?show=list&by=1")
+
+    view |> form("#worldline-filter", by: String.upcase(@holder)) |> render_submit()
+    assert_patch(view, @path <> "?show=list&by=" <> @holder)
+    assert view |> element("#worldline-events") |> render() |> titles() == ["Key 1 bought"]
+
+    view |> form("#worldline-filter", by: "Lamp") |> render_submit()
+    refute_patched(view)
+    assert has_element?(view, "#worldline-filter-by[aria-invalid=true]")
+
+    assert view |> element("#worldline-filter-by-errors") |> render() =~
+             "Enter a Key number or a 0x address."
+
+    # A filter in the address that names nothing reads nothing.
+    {:ok, view, _html} = live(conn, @path <> "?by=Lamp")
+    assert_push_event(view, "worldline:page", %{events: [], older: false})
+    assert has_element?(view, "#worldline-filter-by[aria-invalid=true][value=Lamp]")
+    refute has_element?(view, "#worldline-empty")
+  end
+
+  defp lines(titles), do: Enum.filter(titles, &String.starts_with?(&1, "Line at"))
 
   defp titles(html),
     do:

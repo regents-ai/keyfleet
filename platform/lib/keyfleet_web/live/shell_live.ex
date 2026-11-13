@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.ShellLive do
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
   @search_events ~w(search search_more)
-  @worldline_events ~w(worldline_older)
+  @worldline_events ~w(worldline_older worldline_filter)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
@@ -568,8 +568,13 @@ defmodule KeyfleetWeb.ShellLive do
   # Keys changed in a fleet. What the reader may read of the fleet in the
   # address is read again first, and the page moves to what that class hears.
   # The class read stands, with what it hears, when the page can't be read again.
+  # The fleet's Worldline reads its Keys and shards again a moment later.
   defp notice({:keys_changed, fleet_id, token_ids}, socket) do
-    socket = socket |> reread_class(fleet_id) |> setup_changed()
+    socket =
+      socket
+      |> reread_class(fleet_id)
+      |> setup_changed()
+      |> WorldlineLive.heard(fleet_id, :keys)
 
     case PageRead.run("app", fn -> keys_changed(socket, fleet_id, token_ids) end) do
       {:ok, answer} -> answer
@@ -580,8 +585,10 @@ defmodule KeyfleetWeb.ShellLive do
   # Keys in a fleet were marked present: one notice for each pass of the chain
   # reader that recorded any. Only what shows presence reads again: the fleet's
   # setup list, when one of the Keys is the person's, and on the person's own
-  # Key's page their agents' states.
+  # Key's page their agents' states; and the fleet's Worldline, a moment later.
   defp notice({:keys_present, fleet_id, token_ids}, socket) do
+    socket = WorldlineLive.heard(socket, fleet_id, :present)
+
     case socket.assigns do
       %{fleet: %{fleet_id: ^fleet_id}} ->
         send_update(SetupList, id: "fleet-setup", present: token_ids)

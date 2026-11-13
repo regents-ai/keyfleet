@@ -78,16 +78,22 @@ defmodule Keyfleet.Notebooks.Backup do
     end
 
     # The copies of every notebook of the fleet from just past `before_at` and
-    # `before_id`, newest first, `limit` at most, without their code.
+    # `before_id`, newest first, `limit` at most, without their code. `keys`
+    # keeps the copies changed last as those Keys; a copy names no wallet, so
+    # `wallet` alone keeps none (`Keyfleet.Preparations.DoneBy`).
     read :changed_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_at, :utc_datetime_usec, allow_nil?: false
       argument :before_id, :uuid
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [changed_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :key}
 
       prepare build(select: [:id, :fleet_id, :project, :notebook_id, :title, :key, :changed_at])
     end

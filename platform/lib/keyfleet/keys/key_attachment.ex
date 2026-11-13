@@ -163,15 +163,21 @@ defmodule Keyfleet.Keys.KeyAttachment do
 
     # The fleet's epochs recorded before its epoch number `before_seq` (from
     # the newest when nil), newest first, `limit` at most: each key sold (its
-    # epoch 1, the mint) and each time one changed hands.
+    # epoch 1, the mint) and each time one changed hands. `keys` and `wallet`
+    # keep the epochs of those Keys or of that wallet taking a Key
+    # (`Keyfleet.Preparations.DoneBy`).
     read :recorded_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: 9_223_372_036_854_775_807]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :token_id, wallet: :owner_wallet}
 
       prepare build(
                 select: [

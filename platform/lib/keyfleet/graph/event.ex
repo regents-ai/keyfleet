@@ -217,16 +217,20 @@ defmodule Keyfleet.Graph.Event do
 
     # The fleet's notable changes before `before_seq` (from the newest when
     # nil), newest first, `limit` at most, each with what a line about it
-    # needs and not the text it carries.
+    # needs and not the text it carries. `keys` and `wallet` keep the changes
+    # made as those Keys or by that wallet (`Keyfleet.Preparations.DoneBy`).
     read :notable_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
       prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: [:before_seq]}
+      prepare {Keyfleet.Preparations.DoneBy, member: :actor}
       prepare build(select: [:projects | @brief_fields], load: [:brief])
     end
 

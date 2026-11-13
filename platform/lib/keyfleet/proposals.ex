@@ -75,6 +75,10 @@ defmodule Keyfleet.Proposals do
       define :cancellations_recorded_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+
+      define :cancellations_recorded_before,
+        action: :recorded_before,
+        args: [:fleet_id, :before_seq, :limit]
     end
 
     resource Keyfleet.Proposals.Execution do

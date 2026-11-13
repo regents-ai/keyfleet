@@ -55,16 +55,23 @@ defmodule Keyfleet.Code.Push do
     end
 
     # The fleet's pushes to every project's repository from just past
-    # `before_at` and `before_id`, newest first, `limit` at most.
+    # `before_at` and `before_id`, newest first, `limit` at most. `keys` and
+    # `wallet` keep the pushes made as those Keys, or by that wallet holding
+    # the Key or acting for it (`Keyfleet.Preparations.DoneBy`).
     read :pushed_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_at, :utc_datetime_usec, allow_nil?: false
       argument :before_id, :uuid
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [pushed_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare {Keyfleet.Preparations.DoneBy,
+               key: :token_id, wallet: [:wallet, :acting_agent_wallet]}
 
       prepare build(select: [:id, :fleet_id, :project, :token_id, :ref, :head, :pushed_at])
     end

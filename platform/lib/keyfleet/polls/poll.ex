@@ -80,19 +80,31 @@ defmodule Keyfleet.Polls.Poll do
               )
     end
 
-    # The fleet's polls started from just past `before_at` and `before_id`,
-    # newest first, `limit` at most.
-    read :started_before do
-      argument :fleet_id, :string, allow_nil?: false
-      argument :before_at, :utc_datetime_usec, allow_nil?: false
-      argument :before_id, :uuid
-      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
-      filter expr(fleet_id == ^arg(:fleet_id))
+    # The fleet's polls started, or stopped as they were ended or closed,
+    # from just past `before_at` and `before_id`, newest first, `limit` at
+    # most. `keys` and `wallet` keep the polls started as those Keys or by
+    # that wallet (`Keyfleet.Preparations.DoneBy`).
+    for {action, time} <- [started_before: :inserted_at, stopped_before: :stopped_at] do
+      read action do
+        argument :fleet_id, :string, allow_nil?: false
+        argument :before_at, :utc_datetime_usec, allow_nil?: false
+        argument :before_id, :uuid
+        argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+        argument :keys, {:array, :integer}
+        argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+        filter expr(fleet_id == ^arg(:fleet_id))
 
-      prepare {Keyfleet.Preparations.NewestFirst,
-               sort: [inserted_at: :desc, id: :asc], before: [:before_at, :before_id]}
+        prepare {Keyfleet.Preparations.NewestFirst,
+                 sort: [{time, :desc}, id: :asc], before: [:before_at, :before_id]}
 
-      prepare build(select: [:id, :fleet_id, :question, :started_by_key, :inserted_at])
+        prepare {Keyfleet.Preparations.DoneBy,
+                 key: :started_by_key, wallet: [:started_by_wallet, :acting_agent_wallet]}
+
+        prepare build(
+                  select: [:id, :fleet_id, :question, :started_by_key, :inserted_at],
+                  load: [:stopped_at]
+                )
+      end
     end
 
     read :in_fleet do
@@ -143,7 +155,7 @@ defmodule Keyfleet.Polls.Poll do
 
     # The fleet's members, and the site finding a poll before it asks whose
     # it is (`KeyfleetWeb.AgentPollController`).
-    policy action([:listed, :started_before, :in_fleet, :last_started]) do
+    policy action([:listed, :started_before, :stopped_before, :in_fleet, :last_started]) do
       authorize_if {Keyfleet.Access.Check, read: :polls, scope: :fleet_id}
       authorize_if actor_attribute_equals(:role, :system)
     end
@@ -220,6 +232,12 @@ defmodule Keyfleet.Polls.Poll do
 
   calculations do
     calculate :totals, {:array, :map}, Keyfleet.Polls.Calculations.Totals, public?: true
+
+    # When its voting stops: when its starter ended it, or else when it closes.
+    calculate :stopped_at,
+              :utc_datetime_usec,
+              expr(if is_nil(ended_at), do: closes_at, else: ended_at),
+              public?: true
   end
 
   pub_sub do

@@ -414,22 +414,30 @@ defmodule Keyfleet.Rooms.Message do
     # room and author but only the start of its words. It reads the fleet's
     # lines index (`messages_fleet_lines_index`) from the given line down, or
     # the Public room's (`messages_fleet_room_lines_index`) for anyone without a key.
+    # `keys` and `wallet` keep the lines written as those Keys, or by that
+    # wallet or by an agent with it (`Keyfleet.Preparations.DoneBy`).
     read :fleet_lines_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_at, :utc_datetime_usec
       argument :before_id, :uuid
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
       filter expr(fleet_id == ^arg(:fleet_id) and not in_key_thread)
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [inserted_at: :desc, id: :asc], before: [:before_at, :before_id]}
 
+      prepare {Keyfleet.Preparations.DoneBy,
+               key: :as_key, wallet: [:author_wallet, :acting_agent_wallet]}
+
       prepare build(
                 select: [
                   :id,
                   :fleet_id,
                   :room_id,
+                  :seq,
                   :kind,
                   :author_kind,
                   :author_wallet,

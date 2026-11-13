@@ -161,6 +161,25 @@ defmodule Keyfleet.Treasury.Event do
         |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
       end
     end
+
+    # The fleet's records of the kinds named recorded before its record
+    # number `before_seq` (from the newest when nil), newest first, `limit`
+    # at most. `keys` and `wallet` keep the records of those Keys and those
+    # paying or made by that wallet (`Keyfleet.Preparations.DoneBy`).
+    read :of_kinds_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :kinds, {:array, :atom}, allow_nil?: false
+      argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+      filter expr(fleet_id == ^arg(:fleet_id) and kind in ^arg(:kinds))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :token_id, wallet: [:account, :by]}
+    end
   end
 
   policies do

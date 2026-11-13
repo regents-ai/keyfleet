@@ -174,17 +174,22 @@ defmodule Keyfleet.Proposals.Proposal do
 
     # The fleet's proposals by when they opened, or when their ballots stop,
     # from just past `before_at` and `before_id`, newest first, `limit` at
-    # most.
+    # most. `keys` and `wallet` keep the proposals made as those Keys or by
+    # that wallet (`Keyfleet.Preparations.DoneBy`).
     for {action, time} <- [opened_before: :opened_at, closed_before: :closes_at] do
       read action do
         argument :fleet_id, :string, allow_nil?: false
         argument :before_at, :utc_datetime_usec, allow_nil?: false
         argument :before_id, :uuid
         argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+        argument :keys, {:array, :integer}
+        argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
         filter expr(fleet_id == ^arg(:fleet_id))
 
         prepare {Keyfleet.Preparations.NewestFirst,
                  sort: [{time, :desc}, id: :asc], before: [:before_at, :before_id]}
+
+        prepare {Keyfleet.Preparations.DoneBy, key: :author_key, wallet: :proposer}
 
         prepare build(select: [:id, :fleet_id, :number, :author_key, time])
       end

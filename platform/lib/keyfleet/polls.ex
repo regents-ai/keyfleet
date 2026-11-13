@@ -34,6 +34,10 @@ defmodule Keyfleet.Polls do
         action: :started_before,
         args: [:fleet_id, :before_at, :before_id, :limit]
 
+      define :polls_stopped_before,
+        action: :stopped_before,
+        args: [:fleet_id, :before_at, :before_id, :limit]
+
       define :get_poll, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
       define :end_poll, action: :end, args: [:fleet_id]
 

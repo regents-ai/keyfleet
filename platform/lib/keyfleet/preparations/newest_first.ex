@@ -4,8 +4,9 @@ defmodule Keyfleet.Preparations.NewestFirst do
   never more than `limit` entries, whatever a caller tried to add to the query.
 
   `sort` names the log's order: one key, newest first (`[record_seq: :desc]`),
-  or a time newest first with a tie-break in ascending order
-  (`[inserted_at: :desc, id: :asc]`). `before` names the arguments giving the
+  a time newest first with a tie-break in ascending order
+  (`[inserted_at: :desc, id: :asc]`), or a block and the log's place in it,
+  both newest first (`[block_number: :desc, log_index: :desc]`). `before` names the arguments giving the
   place, one per key; an entry is read when it comes after that place in the
   order. A time with no tie-break reads the entries strictly before that
   time. With the place's arguments nil, or with no `before`, the log is read
@@ -44,6 +45,13 @@ defmodule Keyfleet.Preparations.NewestFirst do
     Ash.Query.filter(
       query,
       ^ref(key) <= ^value and (^ref(key) < ^value or ^ref(tie) > ^tie_value)
+    )
+  end
+
+  defp past(query, [{key, :desc}, {tie, :desc}], [value, tie_value]) do
+    Ash.Query.filter(
+      query,
+      ^ref(key) <= ^value and (^ref(key) < ^value or ^ref(tie) < ^tie_value)
     )
   end
 end

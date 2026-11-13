@@ -121,15 +121,21 @@ defmodule Keyfleet.Proposals.Vote do
 
     # The fleet's votes recorded before its record number `before_seq` (from
     # the newest when nil), newest first, `limit` at most, each with the
-    # number of the proposal it was cast on.
+    # number of the proposal it was cast on. `keys` and `wallet` keep the
+    # votes cast with those Keys or by that wallet
+    # (`Keyfleet.Preparations.DoneBy`).
     read :recorded_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare {Keyfleet.Preparations.DoneBy, keys: :token_ids, wallet: :voter}
 
       prepare build(
                 select: [

@@ -115,6 +115,27 @@ defmodule Keyfleet.Projects.Project do
               )
     end
 
+    # Anyone reads when the fleet's projects were started, newest first, from
+    # just past `before_at` and `before_name`, `limit` at most: each one's
+    # title and the Key that started it. A deleted one is left out. `keys`
+    # keeps those the Keys started (`Keyfleet.Preparations.DoneBy`); a
+    # project names no wallet.
+    read :started_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec, allow_nil?: false
+      argument :before_name, :string, constraints: [trim?: false]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+      filter expr(fleet_id == ^arg(:fleet_id) and state != :deleted)
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [inserted_at: :desc, name: :asc], before: [:before_at, :before_name]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :created_by_key}
+      prepare build(select: [:fleet_id, :name, :title, :created_by_key, :inserted_at])
+    end
+
     read :named do
       argument :fleet_id, :string, allow_nil?: false
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
@@ -368,7 +389,7 @@ defmodule Keyfleet.Projects.Project do
       authorize_if KeyActor
     end
 
-    policy action([:titles, :page]) do
+    policy action([:titles, :page, :started_before]) do
       authorize_if always()
     end
 

@@ -50,6 +50,10 @@ defmodule Keyfleet.Treasury do
         args: [:fleet_id, :from_block, :to_block]
 
       define :latest_events, action: :latest_of_kinds, args: [:fleet_id, :kinds, :limit]
+
+      define :events_recorded_before,
+        action: :of_kinds_before,
+        args: [:fleet_id, :kinds, :before_seq, :limit]
     end
   end
 

@@ -119,6 +119,38 @@ defmodule Keyfleet.Keys.Presence do
                  block_number <= ^arg(:to_block)
              )
     end
+
+    # The Keys marked present on their own, newest first, from just before
+    # the log at `before_block` and `before_log` (from the newest when nil),
+    # `limit` at most: each renewal whose transaction proposed, voted and
+    # cancelled nothing, as those renew their Keys too. `keys` keeps those
+    # Keys' renewals (`Keyfleet.Preparations.DoneBy`); a renewal names no
+    # wallet.
+    read :marked_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_block, :integer, constraints: [min: 0, max: @max_bigint]
+      argument :before_log, :integer, constraints: [min: 0, max: @max_bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and kind == :present and
+                 fragment(
+                   "NOT EXISTS (SELECT 1 FROM keyfleet_app.proposal_votes AS v WHERE v.transaction_hash = ?) AND NOT EXISTS (SELECT 1 FROM keyfleet_app.proposals AS p WHERE p.transaction_hash = ?) AND NOT EXISTS (SELECT 1 FROM keyfleet_app.proposal_cancellations AS c WHERE c.transaction_hash = ?)",
+                   transaction_hash,
+                   transaction_hash,
+                   transaction_hash
+                 )
+             )
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [block_number: :desc, log_index: :desc],
+               before: [:before_block, :before_log]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :token_id}
+      prepare build(select: [:id, :fleet_id, :token_id, :block_number, :log_index, :observed_at])
+    end
   end
 
   policies do

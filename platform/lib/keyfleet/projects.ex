@@ -41,6 +41,11 @@ defmodule Keyfleet.Projects do
     resource Keyfleet.Projects.Project do
       define :projects, action: :in_fleet, args: [:fleet_id]
       define :project_titles, action: :titles, args: [:fleet_id]
+
+      define :projects_started_before,
+        action: :started_before,
+        args: [:fleet_id, :before_at, :before_name, :limit]
+
       define :project, action: :named, args: [:fleet_id, :name], not_found_error?: false
 
       define :project_of_repository,

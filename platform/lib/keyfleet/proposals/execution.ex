@@ -105,15 +105,21 @@ defmodule Keyfleet.Proposals.Execution do
 
     # The fleet's executions recorded before its record number `before_seq`
     # (from the newest when nil), newest first, `limit` at most, each with
-    # the number of the proposal carried out.
+    # the number of the proposal carried out. `keys` and `wallet` keep the
+    # proposals those Keys made and those that wallet carried out
+    # (`Keyfleet.Preparations.DoneBy`).
     read :recorded_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
       filter expr(fleet_id == ^arg(:fleet_id))
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :author_key, wallet: :executor}
 
       prepare build(
                 select: [:id, :fleet_id, :proposal_id, :record_seq, :observed_at],
@@ -181,6 +187,7 @@ defmodule Keyfleet.Proposals.Execution do
 
   calculations do
     calculate :proposal_number, :integer, expr(proposal.number), public?: true
+    calculate :author_key, :integer, expr(proposal.author_key), public?: true
   end
 
   identities do

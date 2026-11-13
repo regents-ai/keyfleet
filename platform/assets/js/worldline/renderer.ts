@@ -1,72 +1,83 @@
 /**
- * Draws a fleet's Worldline with WebGPU through vgpu: the trails as ribbons,
- * one instance per stretch between two events, the beads riding them, and
- * every event's mark as a point, one instance each. The events reach the GPU
- * only when they change; each frame sends only where the picture stands, its
- * orbit, what is in focus and the few beads, so thousands of events cost one
- * buffer write when they arrive and nothing after.
+ * Draws a fleet's Worldline with WebGPU through vgpu. Into one picture, an
+ * offscreen target: the stars (an effect), then six draws, the helices' and
+ * circles' far halves, the marks behind the line, the line, the near halves,
+ * the marks in front, and the sun and planets at now. Then a bloom in three
+ * effects at half size, and a last effect that lays the picture over its
+ * bloom on the canvas.
+ *
+ * The paths are worked out on the GPU from time alone, so they take no
+ * buffers; the events are instances of one buffer that reaches the GPU only
+ * when they change, so thousands of them cost one write when they arrive and
+ * nothing after. Each frame sends only the camera and the four heads.
  */
 import {prepareShader} from "@vgpu/wgsl/prepare"
-import {draw, frame, geometry, init, surface} from "vgpu"
+import {draw, effect, frame as render, geometry, init, sampler, surface, target} from "vgpu"
 
-import {beadsWgsl, pointsWgsl, SEGMENTS, trailsWgsl} from "./shader"
-import {BEAD_FLOATS, MAX_BEADS, MAX_EVENTS, POINT_FLOATS, SEGMENT_FLOATS} from "./trails"
+import {HEADS, MARK_FLOATS, MAX_EVENTS, PLANETS, RING_PIECES, SEGMENTS, TONES, split, type Frame, type Lens, type Orbit, type Run} from "./scene"
+import {blurWgsl, brightWgsl, compositeWgsl, marksWgsl, pathsWgsl, starsWgsl} from "./shader"
 
 type Rgb = readonly [number, number, number]
 
-/** The colours, in the shader's palette order (`TONE` in trails.ts). */
+/** The colours: every one in `TONES` order (scene.ts), the page's ground, and the stars'. */
 export type Tones = {
-  readonly line: Rgb
-  readonly workspace: Rgb
-  readonly code: Rgb
-  readonly notebooks: Rgb
-  readonly chat: Rgb
-  readonly opened: Rgb
-  readonly closed: Rgb
-  readonly poll: Rgb
-  /** How strong the glow is, and how faint a trail's far side, 0..1. */
+  readonly palette: readonly Rgb[]
+  readonly ground: Rgb
+  readonly sky: Rgb
+  /** How strong the glow is, how faint the far side, how strongly the stars show and how strong the bloom, 0..1. */
   readonly glow: number
   readonly far: number
+  readonly stars: number
+  readonly bloom: number
 }
 
-/** Where the picture stands this frame, in seconds from the anchor. */
-export type Frame = {
-  readonly now: number
-  readonly left: number
-  /** Seconds across one CSS pixel. */
-  readonly perPx: number
-  readonly orbit: number
+/** What one frame shows. */
+export type Scene = {
+  readonly frame: Frame
+  readonly lens: Lens
+  /** The line and the helices, as `paths` in scene.ts gives them. */
+  readonly paths: {readonly line: Run; readonly orbits: readonly Orbit[]}
+  /** The sun and the planets at now, as `heads` in scene.ts packs them. */
+  readonly heads: Float32Array<ArrayBuffer>
+  /** The latest time shown yet as the picture reveals, and the earliest that just arrived, in seconds from the anchor. */
   readonly revealed: number
+  readonly arrivedFrom: number
+  /** The mark in focus by its index, -1 for none, and how far it stands out. */
   readonly focus: number
   readonly emphasis: number
-  readonly arrivedFrom: number
-  readonly arrival: number
-  /** The beads riding the trails, as `beads` in trails.ts places them. */
-  readonly beads: Float32Array<ArrayBuffer>
+  /** How near its arrival each head still is, 1 to 0: the sun, then the planets innermost first. */
+  readonly flare: readonly number[]
+  /** The clock in seconds, and 1 while things shimmer. */
+  readonly clock: number
+  readonly shimmer: number
+  /** How far the planets have come out onto their orbits, and how far a change of filter has gone, 0..1. */
+  readonly orbiting: number
+  readonly change: number
 }
 
 export type WorldlineRenderer = {
   resize(width: number, height: number): void
   tones(tones: Tones): void
-  /**
-   * Every stretch of trail and every mark, as `pack` in trails.ts writes them
-   * for at most `MAX_EVENTS` events.
-   */
-  load(segments: Float32Array<ArrayBuffer>, points: Float32Array<ArrayBuffer>): void
-  present(at: Frame): void
+  /** Every mark, as `pack` in scene.ts writes them for at most `MAX_EVENTS` events. */
+  load(marks: Float32Array<ArrayBuffer>): void
+  present(scene: Scene): void
   settled(): Promise<void>
   dispose(): void
 }
 
-// Every event has one stretch, on to its trail's next event or to now, and
-// one mark; the line is one stretch more and the head one mark more.
-const ROOM = MAX_EVENTS + 1
-
 const vector = (location: number) => ({format: "float32x4" as const, location})
-const instance = (data: Float32Array<ArrayBuffer>, attributes: Record<string, ReturnType<typeof vector>>) => [
-  {stepMode: "instance" as const, data, attributes},
+const instances = (data: Float32Array<ArrayBuffer>) => [
+  {stepMode: "instance" as const, data, attributes: {a: vector(0), b: vector(1), c: vector(2)}},
 ]
-const four = {a: vector(0), b: vector(1), c: vector(2), d: vector(3)}
+const four = () => [0, 0, 0, 0]
+const half = (size: readonly [number, number]): [number, number] => [
+  Math.max(1, Math.ceil(size[0] / 2)),
+  Math.max(1, Math.ceil(size[1] / 2)),
+]
+// How bright a pixel begins to glow and glows fully, by luminance; and how
+// far apart the blur's samples stand, in texels at half size.
+const BRIGHT = [0.22, 0.7, 0, 0]
+const SPREAD = 1.6
 
 export async function createWorldlineRenderer(
   canvas: HTMLCanvasElement,
@@ -76,10 +87,9 @@ export async function createWorldlineRenderer(
   // Device pixels per CSS pixel, which the island may have capped below the
   // screen's own.
   let scale = 1
-  let pixels: readonly [number, number] = [size[0], size[1]]
-  let segmentCount = 0
-  let pointCount = 0
-  let beadCount = 0
+  let markCount = 0
+  let stars = 0
+  let bloom = 0
 
   const gpu = await init()
   let disposed = false
@@ -97,109 +107,178 @@ export async function createWorldlineRenderer(
       label: "worldline",
     })
     stage.resize([size[0], size[1]])
-    const strips = geometry(gpu, {
-      topology: "triangle-strip",
-      label: "worldline.trails",
-      buffers: instance(new Float32Array(ROOM * SEGMENT_FLOATS), four),
-    })
+    const picture = target(gpu, {size: [size[0], size[1]], format: "rgba16float", label: "worldline.picture"})
+    const glow = target(gpu, {size: half(size), format: "rgba16float", label: "worldline.glow"})
+    const across = target(gpu, {size: half(size), format: "rgba16float", label: "worldline.glow-across"})
+    const filtering = sampler(gpu, {minFilter: "linear", magFilter: "linear"})
+
+    const strips = geometry(gpu, {topology: "triangle-strip", label: "worldline.paths", buffers: []})
     const quads = geometry(gpu, {
       topology: "triangle-strip",
       label: "worldline.marks",
-      buffers: instance(new Float32Array(ROOM * POINT_FLOATS), four),
+      buffers: instances(new Float32Array(MAX_EVENTS * MARK_FLOATS)),
     })
-    const pearls = geometry(gpu, {
+    const tops = geometry(gpu, {
       topology: "triangle-strip",
-      label: "worldline.beads",
-      buffers: instance(new Float32Array(MAX_BEADS * BEAD_FLOATS), {a: vector(0), b: vector(1)}),
+      label: "worldline.heads",
+      buffers: instances(new Float32Array(HEADS * MARK_FLOATS)),
     })
     const params = {
-      size: [size[0], size[1], 1, 0],
-      view: [0, 1, 0, 0],
-      focus: [-1, 0, 0, 0],
-      mood: [0.3, 0.4, 0, 0],
-      line: [1, 1, 1, 1],
-      workspace: [1, 1, 1, 1],
-      code: [1, 1, 1, 1],
-      notebooks: [1, 1, 1, 1],
-      chat: [1, 1, 1, 1],
-      opened: [1, 1, 1, 1],
-      closed: [1, 1, 1, 1],
-      poll: [1, 1, 1, 1],
+      size: [size[0], size[1], 1, 1],
+      time: four(),
+      viewProjection: new Array(16).fill(0),
+      forward: four(),
+      line: four(),
+      orbits: PLANETS.map(four),
+      pieces: four(),
+      focus: [1e12, 1e12, -1, 0],
+      flare: four(),
+      mood: four(),
+      pulse: four(),
+      entrance: [1, 1, 0, 0],
+      ground: four(),
+      tones: TONES.map(() => [1, 1, 1, 1]),
     }
-    const trails = draw(gpu, {
-      shader: prepareShader(trailsWgsl, "worldline-trails.wgsl"),
-      geometry: strips,
-      blend: "premultiplied",
-      vertices: (SEGMENTS + 1) * 2,
-      label: "worldline.trails.pass",
-      set: {params},
+    const pathsShader = prepareShader(pathsWgsl, "worldline-paths.wgsl")
+    const marksShader = prepareShader(marksWgsl, "worldline-marks.wgsl")
+    const paths = (side: number, label: string) =>
+      draw(gpu, {
+        shader: pathsShader,
+        geometry: strips,
+        blend: "premultiplied",
+        vertices: (SEGMENTS + 1) * 2,
+        constants: {SIDE: side},
+        label,
+        set: {params},
+      })
+    const marks = (side: number, shape: typeof quads, label: string) =>
+      draw(gpu, {
+        shader: marksShader,
+        geometry: shape,
+        blend: "premultiplied",
+        vertices: 4,
+        constants: {SIDE: side},
+        label,
+        set: {params},
+      })
+    const farPaths = paths(-1, "worldline.paths.far")
+    const farMarks = marks(-1, quads, "worldline.marks.far")
+    const line = paths(0, "worldline.line")
+    const nearPaths = paths(1, "worldline.paths.near")
+    const nearMarks = marks(1, quads, "worldline.marks.near")
+    const headMarks = marks(2, tops, "worldline.heads")
+    const draws = [farPaths, farMarks, line, nearPaths, nearMarks, headMarks]
+
+    const sky = effect(gpu, prepareShader(starsWgsl, "worldline-stars.wgsl"), {
+      label: "worldline.stars",
+      set: {sky: {size: four(), right: four(), up: four(), forward: four(), tone: four()}},
     })
-    const riders = draw(gpu, {
-      shader: prepareShader(beadsWgsl, "worldline-beads.wgsl"),
-      geometry: pearls,
-      blend: "premultiplied",
-      vertices: 4,
-      label: "worldline.beads.pass",
-      set: {params},
+    const bright = effect(gpu, prepareShader(brightWgsl, "worldline-bright.wgsl"), {
+      label: "worldline.bright",
+      set: {picture, filtering, bright: {level: BRIGHT}},
     })
-    const marks = draw(gpu, {
-      shader: prepareShader(pointsWgsl, "worldline-marks.wgsl"),
-      geometry: quads,
-      blend: "premultiplied",
-      vertices: 4,
-      label: "worldline.marks.pass",
-      set: {params},
+    const blur = prepareShader(blurWgsl, "worldline-blur.wgsl")
+    const blurAcross = effect(gpu, blur, {
+      label: "worldline.blur-across",
+      set: {source: glow, filtering, blur: {step: [SPREAD * glow.texelSize[0], 0, 0, 0]}},
     })
-    await Promise.all([trails.compile(stage), riders.compile(stage), marks.compile(stage)])
-    const unsubscribe = stage.onResize(({width, height}) => {
+    const blurDown = effect(gpu, blur, {
+      label: "worldline.blur-down",
+      set: {source: across, filtering, blur: {step: [0, SPREAD * glow.texelSize[1], 0, 0]}},
+    })
+    const composite = effect(gpu, prepareShader(compositeWgsl, "worldline-composite.wgsl"), {
+      label: "worldline.composite",
+      set: {picture, glow, filtering, composite: {strength: four()}},
+    })
+
+    await Promise.all([
+      ...draws.map(each => each.compile(picture)),
+      sky.compile(picture),
+      bright.compile(glow),
+      blurAcross.compile(across),
+      blurDown.compile(glow),
+      composite.compile(stage),
+    ])
+    const unsubscribe = stage.onResize(({width}) => {
       scale = width / Math.max(1, canvas.clientWidth)
-      pixels = [width, height]
     })
 
     const set = (values: Partial<typeof params>) => {
-      trails.set({params: values})
-      riders.set({params: values})
-      marks.set({params: values})
+      for (const each of draws) each.set({params: values})
     }
 
     return {
       resize(width, height) {
         stage.resize([width, height])
+        picture.resize([width, height])
+        glow.resize(half([width, height]))
+        across.resize(half([width, height]))
+        blurAcross.set({blur: {step: [SPREAD * glow.texelSize[0], 0, 0, 0]}})
+        blurDown.set({blur: {step: [0, SPREAD * glow.texelSize[1], 0, 0]}})
       },
       tones(tones) {
         set({
           mood: [tones.glow, tones.far, 0, 0],
-          line: [...tones.line, 1],
-          workspace: [...tones.workspace, 1],
-          code: [...tones.code, 1],
-          notebooks: [...tones.notebooks, 1],
-          chat: [...tones.chat, 1],
-          opened: [...tones.opened, 1],
-          closed: [...tones.closed, 1],
-          poll: [...tones.poll, 1],
+          ground: [...tones.ground, 1],
+          tones: tones.palette.map(rgb => [...rgb, 1]),
         })
+        stars = tones.stars
+        bloom = tones.bloom
+        sky.set({sky: {tone: [...tones.sky, tones.stars]}})
+        composite.set({composite: {strength: [tones.bloom, 0, 0, 0]}})
       },
-      load(segments, points) {
-        segmentCount = segments.length / SEGMENT_FLOATS
-        pointCount = points.length / POINT_FLOATS
-        strips.write(segments)
-        quads.write(points)
+      load(packed) {
+        markCount = packed.length / MARK_FLOATS
+        quads.write(packed)
       },
-      present(at) {
+      present(scene) {
+        const {frame, lens: at, paths: drawn} = scene
+        const [hi, lo] = split(frame.mid)
         set({
-          size: [pixels[0], pixels[1], scale, at.now],
-          view: [at.left, at.perPx / scale, at.orbit, at.revealed],
-          focus: [at.focus, at.emphasis, at.arrivedFrom, at.arrival],
+          size: [frame.width, frame.height, scale, at.aspect],
+          time: [hi, lo, at.unit, 0],
+          viewProjection: [...at.viewProjection],
+          forward: [...at.forward, 0],
+          line: [drawn.line.from, drawn.line.to, drawn.line.step, drawn.line.pieces],
+          orbits: drawn.orbits.map(orbit => [orbit.from, orbit.to, orbit.step, orbit.phase]),
+          pieces: [...drawn.orbits.map(orbit => orbit.pieces), frame.now - frame.mid],
+          focus: [scene.revealed - frame.mid, scene.arrivedFrom - frame.mid, scene.focus, scene.emphasis],
+          flare: [...scene.flare],
+          pulse: [scene.clock, scene.shimmer, 0, 0],
+          entrance: [scene.orbiting, scene.change, 0, 0],
         })
-        beadCount = Math.min(MAX_BEADS, at.beads.length / BEAD_FLOATS)
-        if (beadCount > 0) pearls.write(at.beads.subarray(0, beadCount * BEAD_FLOATS))
-        frame(gpu, current =>
-          current.pass(stage, pass => {
-            if (segmentCount > 0) pass.draw(trails, {instances: segmentCount})
-            if (beadCount > 0) pass.draw(riders, {instances: beadCount})
-            if (pointCount > 0) pass.draw(marks, {instances: pointCount})
-          }),
-        )
+        if (stars > 0) {
+          sky.set({
+            sky: {
+              size: [frame.width, frame.height, scale, at.focal],
+              right: [...at.right, 0],
+              up: [...at.up, 0],
+              forward: [...at.forward, 0],
+            },
+          })
+        }
+        tops.write(scene.heads)
+        const helices = drawn.orbits.reduce((sum, orbit) => sum + orbit.pieces, 0)
+        // Each planet's helix, then its circle in the plane of the present.
+        const turns = helices + PLANETS.length * RING_PIECES
+        const clear = [0, 0, 0, 0] as const
+        render(gpu, current => {
+          current.pass({target: picture, clear}, pass => {
+            if (stars > 0) pass.draw(sky)
+            pass.draw(farPaths, {instances: turns})
+            if (markCount > 0) pass.draw(farMarks, {instances: markCount})
+            if (drawn.line.pieces > 0) pass.draw(line, {instances: drawn.line.pieces})
+            pass.draw(nearPaths, {instances: turns})
+            if (markCount > 0) pass.draw(nearMarks, {instances: markCount})
+            pass.draw(headMarks, {instances: HEADS})
+          })
+          if (bloom > 0) {
+            current.pass({target: glow, clear}, pass => pass.draw(bright))
+            current.pass({target: across, clear}, pass => pass.draw(blurAcross))
+            current.pass({target: glow, clear}, pass => pass.draw(blurDown))
+          }
+          current.pass({target: stage, clear}, pass => pass.draw(composite))
+        })
       },
       settled() {
         return gpu.settled()
@@ -210,7 +289,8 @@ export async function createWorldlineRenderer(
         unsubscribe()
         strips.destroy()
         quads.destroy()
-        pearls.destroy()
+        tops.destroy()
+        // The offscreen targets go with the device.
         stage.dispose()
         gpu.dispose()
       },

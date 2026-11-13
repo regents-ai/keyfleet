@@ -105,6 +105,30 @@ defmodule Keyfleet.Proposals.Cancellation do
                  block_number <= ^arg(:to_block)
              )
     end
+
+    # The fleet's cancellations recorded before its record number
+    # `before_seq` (from the newest when nil), newest first, `limit` at most,
+    # each with the number of the proposal cancelled. `keys` and `wallet`
+    # keep the proposals those Keys made and those that wallet cancelled
+    # (`Keyfleet.Preparations.DoneBy`).
+    read :recorded_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_seq, :integer, constraints: [min: 1, max: @max_bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 100]
+      argument :keys, {:array, :integer}
+      argument :wallet, :string, constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [record_seq: :desc], before: [:before_seq]}
+
+      prepare {Keyfleet.Preparations.DoneBy, key: :author_key, wallet: :cancelled_by}
+
+      prepare build(
+                select: [:id, :fleet_id, :proposal_id, :record_seq, :observed_at],
+                load: [:proposal_number]
+              )
+    end
   end
 
   policies do
@@ -162,6 +186,11 @@ defmodule Keyfleet.Proposals.Cancellation do
       allow_nil? false
       public? true
     end
+  end
+
+  calculations do
+    calculate :proposal_number, :integer, expr(proposal.number), public?: true
+    calculate :author_key, :integer, expr(proposal.author_key), public?: true
   end
 
   identities do

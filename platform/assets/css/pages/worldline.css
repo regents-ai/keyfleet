@@ -9,20 +9,34 @@
 }
 
 .worldline-panel {
-  /* The picture's colours, as its shader and the legend take them. The three
-     large trails are blues around the gold line, each its own: Workspace the
-     strongest, Powder Blue by night and deep teal by day; Notebooks leaning
-     green, the blue folded into the green of success; Code the same blue
-     sunk toward the page, deeper by night and paler by day. Chat is the
-     page's muted ink. */
+  /* The picture's colours, as its shader, the legend and the list take them.
+     Four hues nothing else is taken for: the line and the sun gold;
+     Workspace the vivid blue; Code mint by night and deep green by day; and
+     Notebooks platinum by night and charcoal by day. Each room takes one of
+     six faint tints, a swatch folded into the page's muted ink, and the
+     points on the line take their own. */
   --worldline-line: var(--color-warning);
-  --worldline-workspace: var(--color-info);
-  --worldline-notebooks: color-mix(in oklab, var(--color-success) 65%, var(--color-info));
-  --worldline-code: color-mix(in oklab, var(--color-info) 72%, var(--color-bg));
-  --worldline-chat: var(--color-fg-muted);
-  --worldline-opened: var(--ash-accent-warm);
-  --worldline-closed: var(--color-fg);
+  /* --palette-cornflower, stated here until the design system's pin that
+     publishes it. */
+  --worldline-workspace: #4D79E4;
+  --worldline-code: var(--color-success);
+  --worldline-notebooks: light-dark(var(--palette-charcoal), var(--palette-platinum));
+  --worldline-chat-1: color-mix(in oklab, var(--palette-powder-blue) 55%, var(--color-fg-muted));
+  --worldline-chat-2: color-mix(in oklab, var(--palette-tangerine-tango) 40%, var(--color-fg-muted));
+  --worldline-chat-3: color-mix(in oklab, var(--color-success) 45%, var(--color-fg-muted));
+  --worldline-chat-4: color-mix(in oklab, var(--color-error) 45%, var(--color-fg-muted));
+  --worldline-chat-5: color-mix(in oklab, var(--color-warning) 45%, var(--color-fg-muted));
+  --worldline-chat-6: color-mix(in oklab, var(--worldline-workspace) 45%, var(--color-fg-muted));
+  --worldline-proposals: var(--ash-accent-warm);
+  --worldline-votes: color-mix(in oklab, var(--ash-accent-warm) 55%, var(--color-fg-muted));
   --worldline-polls: var(--ash-accent);
+  --worldline-keys: var(--color-fg);
+  --worldline-shards: color-mix(in oklab, var(--color-fg) 55%, var(--ash-accent));
+  --worldline-present: var(--color-fg-muted);
+  --worldline-treasury: color-mix(in oklab, var(--color-warning) 55%, var(--color-fg));
+  --worldline-projects: color-mix(in oklab, var(--color-info) 50%, var(--color-fg));
+  /* The stars, drawn by night only. */
+  --worldline-stars: var(--color-fg);
 
   display: grid;
   gap: 1rem;
@@ -32,13 +46,18 @@
   background: var(--color-surface);
 }
 
-.worldline-panel [data-trail="chat"] { --worldline-tone: var(--worldline-chat); }
 .worldline-panel [data-trail="workspace"] { --worldline-tone: var(--worldline-workspace); }
 .worldline-panel [data-trail="code"] { --worldline-tone: var(--worldline-code); }
 .worldline-panel [data-trail="notebooks"] { --worldline-tone: var(--worldline-notebooks); }
-.worldline-panel [data-trail="opened"] { --worldline-tone: var(--worldline-opened); }
-.worldline-panel [data-trail="closed"] { --worldline-tone: var(--worldline-closed); }
+.worldline-panel [data-trail="chat"] { --worldline-tone: var(--worldline-chat-1); }
+.worldline-panel [data-trail="proposals"] { --worldline-tone: var(--worldline-proposals); }
+.worldline-panel [data-trail="votes"] { --worldline-tone: var(--worldline-votes); }
 .worldline-panel [data-trail="polls"] { --worldline-tone: var(--worldline-polls); }
+.worldline-panel [data-trail="keys"] { --worldline-tone: var(--worldline-keys); }
+.worldline-panel [data-trail="shards"] { --worldline-tone: var(--worldline-shards); }
+.worldline-panel [data-trail="present"] { --worldline-tone: var(--worldline-present); }
+.worldline-panel [data-trail="treasury"] { --worldline-tone: var(--worldline-treasury); }
+.worldline-panel [data-trail="projects"] { --worldline-tone: var(--worldline-projects); }
 
 .worldline-head {
   display: flex;
@@ -56,7 +75,9 @@
   line-height: 1.1;
 }
 
-/* Each trail's colour as a short stroke, and the points on the line as dots. */
+/* Each planet's path as a short stroke, the outer ones finer; the rooms as a
+   dither of pixels; the points on the line as dots; and the daily split as a
+   tick across it. */
 .worldline-legend {
   display: flex;
   flex-wrap: wrap;
@@ -76,51 +97,104 @@
 
 .worldline-legend li::before {
   content: "";
-  width: 0.875rem;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--worldline-tone);
-}
-
-.worldline-legend li[data-trail="workspace"]::before {
-  height: 3px;
-}
-
-.worldline-legend li[data-trail="chat"]::before {
-  height: 1px;
-}
-
-.worldline-legend li:is([data-trail="opened"], [data-trail="polls"])::before {
   width: 0.4375rem;
   height: 0.4375rem;
   border-radius: 50%;
+  background: var(--worldline-tone);
 }
 
-/* The picture, edge to edge inside the panel, on the page's own ground, with
-   a faint field of stars by night. A finger dragging across it moves
-   through time; one dragging up or down still scrolls the page. */
-.worldline-stage {
-  --worldline-star: light-dark(transparent, color-mix(in oklab, var(--color-fg) 50%, transparent));
-  --worldline-star-faint: light-dark(transparent, color-mix(in oklab, var(--color-fg) 26%, transparent));
+.worldline-legend li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"])::before {
+  width: 1rem;
+  height: 3px;
+  border-radius: 0;
+}
 
+.worldline-legend li[data-trail="code"]::before {
+  height: 2.5px;
+}
+
+.worldline-legend li[data-trail="notebooks"]::before {
+  height: 2px;
+}
+
+.worldline-legend li[data-trail="chat"]::before {
+  width: 0.75rem;
+  height: 0.5rem;
+  border-radius: 0;
+  background: repeating-conic-gradient(var(--worldline-chat-1) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+}
+
+.worldline-legend li:is([data-trail="votes"], [data-trail="present"])::before {
+  width: 0.3125rem;
+  height: 0.3125rem;
+}
+
+.worldline-legend li[data-trail="treasury"]::before {
+  width: 2px;
+  height: 0.75rem;
+  border-radius: 0;
+}
+
+/* The filter: its field, Apply and Clear on one row, and what went wrong
+   under them. */
+.worldline-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 22rem) auto auto;
+  justify-content: start;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+  min-width: 0;
+}
+
+.worldline-filter .rg-field {
+  display: contents;
+}
+
+.worldline-filter .rg-field__label {
+  grid-column: 1 / -1;
+}
+
+.worldline-filter input {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.worldline-filter .rg-field-errors {
+  grid-row: 3;
+  grid-column: 1 / -1;
+}
+
+.worldline-filter__clear {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+/* The picture, edge to edge inside the panel, on the page's own ground; its
+   stars by night are drawn with it. A mouse dragging across it turns it; a
+   finger dragging across it moves through time, and one dragging up or down
+   still scrolls the page. The link on the mark in focus, Now and the zoom
+   stand over it. */
+.worldline-stage {
   position: relative;
+  isolation: isolate;
   height: clamp(18rem, 56vw, 32rem);
   margin-inline: calc(var(--rg-panel-padding) * -1);
   overflow: hidden;
   border-block: 1px solid var(--color-border);
-  background:
-    radial-gradient(circle at 23px 41px, var(--worldline-star) 0.6px, transparent 1.3px) 0 0 / 173px 149px,
-    radial-gradient(circle at 140px 190px, var(--worldline-star) 0.8px, transparent 1.6px) 0 0 / 251px 223px,
-    radial-gradient(circle at 97px 12px, var(--worldline-star-faint) 0.6px, transparent 1.2px) 0 0 / 113px 89px,
-    radial-gradient(circle at 61px 77px, var(--worldline-star-faint) 0.5px, transparent 1.1px) 0 0 / 89px 131px,
-    radial-gradient(circle at 30px 160px, var(--worldline-star-faint) 0.6px, transparent 1.2px) 0 0 / 197px 181px,
-    radial-gradient(circle at 210px 60px, var(--worldline-star-faint) 0.5px, transparent 1.1px) 0 0 / 233px 107px,
-    var(--color-bg);
+  background: var(--color-bg);
   cursor: grab;
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+
+  & .worldline-focus {
+    z-index: 1;
+  }
+
+  & :is(.worldline-now, .worldline-view) {
+    z-index: 2;
+  }
 }
 
 .worldline-stage[data-dragging] {
@@ -152,7 +226,7 @@
   height: 100%;
 }
 
-/* What stands until the picture is drawn: the line, and its head at now. */
+/* What stands until the picture is drawn: the line, and the sun at now. */
 .worldline-stage__line {
   position: absolute;
   top: 50%;
@@ -172,7 +246,7 @@
   margin: -0.3125rem 0 0 -0.3125rem;
   border-radius: 50%;
   background: var(--worldline-line);
-  box-shadow: 0 0 0 0.3125rem color-mix(in oklab, var(--worldline-line) 22%, transparent);
+  outline: 0.3125rem solid color-mix(in oklab, var(--worldline-line) 22%, transparent);
 }
 
 .worldline-stage[data-worldline-ready] :is(.worldline-stage__line, .worldline-stage__head) {
@@ -199,7 +273,6 @@
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 1;
   width: 2rem;
   height: 2rem;
   margin: -1rem 0 0 -1rem;
@@ -223,9 +296,8 @@
   max-width: min(15rem, 62vw);
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   background: var(--color-surface);
-  box-shadow: var(--shadow-md);
   font-size: 0.8125rem;
   line-height: 1.3;
   cursor: pointer;
@@ -251,7 +323,6 @@
 .worldline-focus__title {
   display: -webkit-box;
   overflow: hidden;
-  font-weight: 600;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -275,7 +346,7 @@
   outline-offset: 2px;
 }
 
-/* A word for what just arrived, over the head, shown a moment as it flares. */
+/* A word for what just arrived, over the sun, shown a moment as it flares. */
 .worldline-news {
   position: absolute;
   top: 0;
@@ -290,12 +361,71 @@
   pointer-events: none;
 }
 
-/* Back to the head, once the picture stands away from it. */
+/* Back to the sun, once the picture stands away from it. */
 .worldline-now {
   position: absolute;
   right: 0.75rem;
   bottom: 0.75rem;
-  z-index: 2;
+}
+
+/* The zoom and Reset, in the corner across from Now. */
+.worldline-view {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-family: var(--font-family-ui);
+  font-size: 0.8rem;
+  cursor: auto;
+}
+
+.worldline-view button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.worldline-view button:first-child {
+  border-left: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .worldline-view button:hover {
+    background: var(--ash-panel-strong);
+  }
+}
+
+.worldline-view button:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.worldline-view output {
+  display: grid;
+  place-items: center;
+  min-width: 3.25rem;
+  border-left: 1px solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 30rem) {
+  .worldline-view button {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  .worldline-view output {
+    min-width: 2.75rem;
+  }
 }
 
 .worldline-help {
@@ -384,10 +514,6 @@
 
 .worldline-event__at {
   margin-inline-start: auto;
-}
-
-.worldline-event__title {
-  font-weight: 600;
 }
 
 .worldline-panel > .rg-button {

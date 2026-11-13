@@ -132,6 +132,10 @@ defmodule Keyfleet.Keys do
       define :presences_in_blocks,
         action: :recorded_in_blocks,
         args: [:fleet_id, :from_block, :to_block]
+
+      define :presences_marked_before,
+        action: :marked_before,
+        args: [:fleet_id, :before_block, :before_log, :limit]
     end
 
     resource Keyfleet.Keys.PostingKey do
