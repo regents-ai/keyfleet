@@ -11,8 +11,8 @@ import chain from "./playwright.chain.config"
 // The server is the chain config's own, unchanged: the specs need a fleet
 // that is open, and only that server can open one. Before any spec runs,
 // club_world.ts opens the Regents Club with a post, a goal and a proposal,
-// and leaves Classic #1 coming soon, as the site launches. The server
-// throws everything away when it stops, so every run starts the same.
+// and leaves Classic #1 coming soon, as the site launches. The server's
+// database is made afresh for each run, so every run starts the same.
 export default defineConfig({
   ...chain,
   testMatch: ["main_flows.spec.ts", "accessibility.spec.ts"],

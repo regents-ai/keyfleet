@@ -9428,3 +9428,39 @@ Escape on the focused Worldline lets go of the chosen event and no longer also
 closes an open section elsewhere on the page (which scrolled the picture out of
 view), the same rule the Atlas's Heat cards follow. The served guide is 3.32.0:
 the release's check-in line with `money_waiting` added from the alerts branch.
+
+## 2026-11-13: The chain walks' server writes as the site does
+
+The chain walks (`npm run test:chain`) failed on the follow-up release branch
+at a new owner's "Set up your agent" step, and every walk after it could not
+start. The site was not at fault, and main had the same weakness. The walks'
+server ran every process through one database connection, inside one
+transaction it never committed. Leaving a page stops the reads that page
+started; a read stopped in the middle of a query drops its connection, and
+there that was the only one, so the whole transaction went with it. After the
+purchase, the fleet page was still reading for its Mark present prompt when
+"Set up your agent" left it, so the next page could not open and nothing after
+it could reach the database. A busier machine widens that window, which is why
+the release folder's runs failed and quieter runs passed.
+
+The walks' server now writes to its database as the site does, and the walks
+make that database afresh before each run (about four seconds), so every run
+still starts from the same unsold fleets. Both browser test servers use
+production's kind of connection pool, so a read stopped mid-query drops only
+its own connection and no background worker is cut off for holding one for two
+minutes. A walk that pairs an agent now reaches the open pages through the
+database's own notice, as on the site, and the agent tools walk no longer waits
+for the network to go quiet before leaving a page, which it did only to avoid
+this.
+
+Check (partition `_kf_s4`): chain walks in Chromium on port 4595, 126 of 126,
+twice, each run by itself. With the Mark present prompt's read held 1.5 seconds
+in the database (a diagnosis copy loaded into the running server, not in the
+repository), the purchase walks failed as the release folder did before (3
+failed, 1 not run) and pass 4 of 4 in each of three runs after; in two of them
+the read was stopped mid-query and dropped only its own connection. `make check`, every stage,
+PORT unset, passes: compile with warnings as errors, unused locks, hex audit,
+format, credo strict, sobelow, xref, graph host 243, full suite 1,454 (20
+properties, 1,434 tests, 19 excluded), codegen, route handoff, typecheck and
+486 unit tests, browser suite 125 of 125, devices 70 of 70, required fixes,
+commands, the pin check and contracts (547 tests, 6 skipped).

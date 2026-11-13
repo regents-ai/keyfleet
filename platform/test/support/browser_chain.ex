@@ -9,9 +9,8 @@ defmodule Keyfleet.BrowserChain do
   second look at recent blocks never finds a record the made-up chain has
   forgotten.
 
-  The server holds its database in one transaction for as long as it runs
-  (`hold_database!/0`), and the transaction is never committed, so every run
-  starts from the same unsold fleets.
+  The server's database is made afresh for each run, so every run starts from
+  the same unsold fleets.
 
   The pages' own chain reads are answered by one chain the server's pages
   share. A key sold or moved here is held by its new owner there too, and a
@@ -91,31 +90,6 @@ defmodule Keyfleet.BrowserChain do
     verification_method: :eoa_recovery,
     audience: "keyfleet"
   }
-
-  @doc """
-  Opens one transaction that every process on the server shares until it
-  stops, and that is thrown away with it.
-  """
-  def hold_database! do
-    caller = self()
-
-    spawn(fn ->
-      # At repeatable read, so the fleet page's one-snapshot reads can run in it.
-      :ok =
-        Ecto.Adapters.SQL.Sandbox.checkout(Repo,
-          ownership_timeout: :infinity,
-          isolation: "REPEATABLE READ"
-        )
-
-      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
-      send(caller, :held)
-      Process.sleep(:infinity)
-    end)
-
-    receive do
-      :held -> :ok
-    end
-  end
 
   @doc """
   Deploys the fleet the first time, puts its Keys on sale through the manager

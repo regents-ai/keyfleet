@@ -106,20 +106,13 @@ defmodule Keyfleet.BrowserAgents do
   end
 
   @doc """
-  Pairs `agent`, called `name`, with the `code` a pairing box shows, and tells
-  the person's open pages, as `RegentAgents.Listener` does once the pairing
-  commits; the walk's one held transaction never commits, so the database's
-  notice never comes.
+  Pairs `agent`, called `name`, with the `code` a pairing box shows. The
+  pairing's database notice tells the person's open pages
+  (`RegentAgents.Listener`).
   """
   def use_code!(agent, code, name) do
-    paired =
-      RegentAgents.pair_agent!(code, name, :hermes, actor: %RegentAgents.Agent{wallet: agent})
-
-    Phoenix.PubSub.broadcast(
-      Keyfleet.PubSub,
-      RegentAgents.topic(paired.privy_user_id),
-      :agents_changed
-    )
+    RegentAgents.pair_agent!(code, name, :hermes, actor: %RegentAgents.Agent{wallet: agent})
+    :ok
   end
 
   @doc """

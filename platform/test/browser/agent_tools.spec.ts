@@ -35,9 +35,7 @@ test.beforeEach(async ({page}) => {
   await installModelContext(page)
 })
 
-// The page has offered the browser every one of its tools, and its own reads
-// have landed, so leaving it never cuts one off inside the server's one
-// transaction.
+// The page has offered the browser every one of its tools.
 async function open(page: Page, path: string) {
   await page.goto(path)
   await settle(page)
@@ -45,7 +43,6 @@ async function open(page: Page, path: string) {
 
 async function settle(page: Page) {
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-  await page.waitForLoadState("networkidle")
   await expectEverySiteTool(page)
 }
 

@@ -23,11 +23,10 @@ import {defineConfig, devices} from "@playwright/test"
 // that `Keyfleet.BrowserAgents` starts.
 //
 // The server gets a database of its own, the partition's name with
-// `_fleet_map` after it, created and brought up to date before the server
-// starts; the ExUnit suite never reads it. The server holds it in one
-// transaction it never commits, so the keys and shards a run records are
-// gone when the server stops, and every run starts from the same unsold
-// fleets.
+// `_fleet_map` after it, made afresh and brought up to date before the server
+// starts; the ExUnit suite never reads it. The server writes to it as the site
+// does, and the next run drops what this one recorded, so every run starts
+// from the same unsold fleets.
 const port = process.env.PORT || "4502"
 const partition = `${process.env.MIX_TEST_PARTITION ?? ""}_fleet_map`
 const baseURL = `https://localhost:${port}`
@@ -58,9 +57,10 @@ export default defineConfig({
     command: [
       "mkdir -p tmp/cert && rm -f tmp/walk-lines.jsonl",
       "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
+      `${env} mix ecto.drop --quiet`,
       `${env} mix ecto.create --quiet`,
       `${env} mix keyfleet.setup_local_auth`,
-      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!(); Keyfleet.TestChainNode.start!(); Keyfleet.BrowserAgents.start!()'`,
+      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.TestChainNode.start!(); Keyfleet.BrowserAgents.start!()'`,
     ].join(" && "),
     url: `${baseURL}/`,
     ignoreHTTPSErrors: true,

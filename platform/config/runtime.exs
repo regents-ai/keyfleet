@@ -83,11 +83,11 @@ end
 
 # The browser test server. Production can never take this branch.
 if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
-  # Under the test pool every process that touches the database keeps its own
-  # connection until it exits: the site's background workers for good, and each
-  # page for as long as it is open. One homepage load alone takes seven (the
-  # request, the page and its five reads), so ten runs out between pages.
-  config :keyfleet, Keyfleet.Repo, pool_size: 20
+  # The server uses production's pool, not the test suite's: a process holds a
+  # connection only while it uses one, so a read stopped mid-query (its page was
+  # left) drops that one connection alone, and no worker is cut off for holding
+  # one too long. It keeps the test setting's ten connections, twice the site's.
+  config :keyfleet, Keyfleet.Repo, pool: DBConnection.ConnectionPool
 
   # The browser test server (playwright.config.ts) writes its lines in
   # production's shape to a file, which test/browser/visits.spec.ts reads to

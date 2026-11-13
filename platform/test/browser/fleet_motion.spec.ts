@@ -17,9 +17,7 @@ import {
 // its line joins the hall's feed, and everything ends clean. Nothing moves for a reader
 // who asked for less motion.
 const fleet = "fleet_tech_classic"
-// A fleet no walk talks in, for the feed. The test server records every chain
-// line at the moment it started (it holds one transaction), while a post
-// carries the real time, so any post an earlier walk made stays above a sale.
+// A fleet no walk talks in, so its feed holds only the lines this walk makes.
 const quiet = "fleet_tech_accelerant"
 const buyer = "0x2222222222222222222222222222222222222222"
 const heir = "0x3333333333333333333333333333333333333333"
