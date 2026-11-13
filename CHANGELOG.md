@@ -8715,9 +8715,9 @@ event and every page read added another.
   dot. The legend's Chat swatch blends in oklch. The style check reports 51
   breaks, none in the Worldline.
 
-Check: format, compile with warnings as errors, credo strict, xref (131 of
-131), codegen, route handoff and usage rules pass; full suite 1,389 (18
-properties, 1,371 tests, 19 excluded); typecheck, vitest (431 in 33 files)
+Check: format, compile with warnings as errors, credo strict, xref (132 of
+132), codegen, route handoff and usage rules pass; full suite 1,395 (18
+properties, 1,377 tests, 19 excluded); typecheck, vitest (431 in 33 files)
 and 3 budgets pass; the six shaders compile in Dawn and pass `vgpu check`;
 the Chromium Worldline walk (12 tests: 390 and 1280 wide, both themes, turned
 side-on, three-quarter and down the axis) passes; frames hold at 16.7 ms at
