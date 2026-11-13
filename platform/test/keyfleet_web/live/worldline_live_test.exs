@@ -65,7 +65,9 @@ defmodule KeyfleetWeb.Live.WorldlineLiveTest do
 
     render_hook(view, "worldline_older", %{})
     assert_reply(view, %{events: older, older: false})
-    assert length(older) == 5
+    # The five lines left over; the fleet's own older actions (its Key's
+    # purchase, at the chain's clock) may come with them.
+    assert Enum.count(older, &(&1.kind == :post)) == 5
     assert Enum.max_by(older, & &1.at).at < Enum.min_by(newest, & &1.at).at
 
     # What is heard is read as the newest of its source; the picture keeps
