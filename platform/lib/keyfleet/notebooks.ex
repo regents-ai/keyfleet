@@ -592,6 +592,46 @@ defmodule Keyfleet.Notebooks do
   end
 
   @doc """
+  The Key each notebook's maker writes as in the fleet, by notebook id: the
+  Key whose scratchpad it is, else its author's, a person's or an agent's
+  (`Keyfleet.Keys.identity/2`); nil for a notebook this site didn't make for
+  someone, or whose maker holds no Key now. Each notebook is a map with its
+  `id` and `author` as the hub lists them.
+  """
+  def keys(fleet_id, notebooks) do
+    locks = locks(fleet_id)
+    authors = notebooks |> Enum.map(& &1.author) |> Enum.uniq()
+
+    people =
+      for "u_" <> id <- authors, {account, ""} <- [Integer.parse(id)], do: account
+
+    agents =
+      for "a_" <> id <- authors, {:ok, profile} <- [Ecto.UUID.cast(id)], do: profile
+
+    people_keys =
+      for account <- Keyfleet.Accounts.accounts_by_ids!(people, actor: %System{}),
+          key = Keyfleet.Keys.identity(Human.for_account(account), fleet_id),
+          into: %{},
+          do: {subject(%Human{human_account_id: account.id}), key.token_id}
+
+    agent_keys =
+      for profile <-
+            Keyfleet.Agents.listings!(agents,
+              load: [key: %{fleet_id: fleet_id}],
+              actor: %System{}
+            ),
+          profile.key,
+          into: %{},
+          do: {agent_subject(profile.id), profile.key}
+
+    by_author = Map.merge(people_keys, agent_keys)
+
+    Map.new(notebooks, fn notebook ->
+      {notebook.id, get_in(locks, [notebook.id, :key]) || by_author[notebook.author]}
+    end)
+  end
+
+  @doc """
   Forgets what Keyfleet keeps of a notebook once its hub deleted it. When
   that can't be done now it is reported, and the next scratchpad run
   forgets a deleted scratchpad (`Keyfleet.Notebooks.Scratchpads`).

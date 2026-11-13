@@ -33,7 +33,8 @@ defmodule KeyfleetWeb.FleetLive do
   page, under the same bar, in place of the other views.
   The search box beside the fleet's name opens the fleet's search
   (`KeyfleetWeb.SearchLive`, at `/search`) the same way, and "Worldline"
-  (`KeyfleetWeb.WorldlineLive`, at `/worldline`) opens there too.
+  (`KeyfleetWeb.WorldlineLive`, at `/worldline`) and "Atlas"
+  (`KeyfleetWeb.AtlasLive`, at `/atlas`) open there too.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Buy Key", no "Send
@@ -85,6 +86,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.QuoteRequest
   alias Keyfleet.Search
   alias KeyfleetWeb.ActivityLines
+  alias KeyfleetWeb.AtlasLive
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.BuyKey
   alias KeyfleetWeb.Components.Count
@@ -223,7 +225,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :place, :atom,
     default: :fleet,
     doc:
-      "`:fleet` for the page's own views, or `:treasury`, `:workspace`, `:search` or `:worldline`, drawn by the inner block"
+      "`:fleet` for the page's own views, or `:treasury`, `:workspace`, `:search`, `:worldline` or `:atlas`, drawn by the inner block"
 
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
@@ -319,7 +321,7 @@ defmodule KeyfleetWeb.FleetLive do
           </div>
 
           <.entry
-            :if={@view not in [:workspace, :proposals, :treasury, :search, :worldline]}
+            :if={@view not in [:workspace, :proposals, :treasury, :search, :worldline, :atlas]}
             fleet={@fleet}
             actor={@actor}
             params={@params}
@@ -392,6 +394,15 @@ defmodule KeyfleetWeb.FleetLive do
               aria-current={if @view == :worldline, do: "page"}
             >
               Worldline
+            </.link>
+            <.link
+              id="fleet-tab-atlas"
+              class="rg-button rg-button--secondary"
+              data-tab="atlas"
+              patch={AtlasLive.atlas_path(@fleet.fleet_id)}
+              aria-current={if @view == :atlas, do: "page"}
+            >
+              Atlas
             </.link>
             <span
               class="fleet-bar__ink"

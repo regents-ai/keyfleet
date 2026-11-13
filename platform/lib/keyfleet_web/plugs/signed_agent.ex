@@ -127,6 +127,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork pin unpin)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
+  # A fleet's Atlas: the swarm's work in one window, and its things a page at a time.
+  @atlas_path ~r"\A/api/v1/agent/fleets/#{@fleet}/atlas/(swarm|things)\z"
   @outside_projects_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(notebooks|code)(/|\z)"
 
   # The fields each room, sync, proposal read and poll body holds: the ones it
@@ -233,6 +235,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # How many posts either side of one read by its place.
   @max_context 20
   @max_graph_page 500
+  # How many most active things an Atlas swarm answers, and how many things
+  # one page of the Atlas's things holds.
+  @max_most_active 50
+  @max_atlas_page 100
   # How many bytes of posts a room or wall read, and a sync, may be asked to
   # fit in: the least holds the largest post with its room.
   @post_budgets (64 * 1024)..(8 * 1024 * 1024)
@@ -297,6 +303,33 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     # A pin is its person's, as on the page, so it names no Key or command.
     "pin" => {%{"project" => :text, "place" => :pin_place, "target" => :pin_target}, %{}},
     "unpin" => {%{"project" => :text, "place" => :pin_place, "target" => :pin_target}, %{}}
+  }
+  # What each Atlas read's body may hold, every field of it optional; the read
+  # itself checks each word it names.
+  @atlas_bodies %{
+    "swarm" =>
+      {%{},
+       %{
+         "window" => :text,
+         "at" => :text,
+         "bucket" => :text,
+         "source" => :text,
+         "project" => :text,
+         "by" => :text,
+         "most_active" => :most_active
+       }},
+    "things" =>
+      {%{},
+       %{
+         "window" => :text,
+         "at" => :text,
+         "order" => :text,
+         "source" => :text,
+         "project" => :text,
+         "kind" => :text,
+         "limit" => :atlas_page,
+         "after" => :text
+       }}
   }
   @verification_methods %{
     "eoa_recovery" => :eoa_recovery,
@@ -767,6 +800,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @copy_restore_path,
         @chain_path,
         @graph_path,
+        @atlas_path,
         @dm_path,
         @code_history_path,
         @dm_changes_path
@@ -852,9 +886,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   def check_body(path, params) do
-    if Regex.match?(@message_path, path),
-      do: check_message_body(params),
-      else: check_op_body(path, params)
+    cond do
+      Regex.match?(@message_path, path) -> check_message_body(params)
+      op = atlas_op(path) -> check_fields(Map.fetch!(@atlas_bodies, op), params)
+      true -> check_op_body(path, params)
+    end
   end
 
   defp check_op_body(path, params) do
@@ -1186,13 +1222,20 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
+  defp atlas_op(path) do
+    case Regex.run(@atlas_path, path, capture: :all_but_first) do
+      [op] -> op
+      nil -> nil
+    end
+  end
+
   # One project's changes or one object's, never both.
   defp check_graph_body("changes", %{"project" => _, "object" => _}), do: :invalid
+  defp check_graph_body(op, params), do: check_fields(Map.fetch!(@graph_bodies, op), params)
 
   # Nothing outside an operation's own fields is admitted, so a request can
   # never name its own author, standing or scope rules.
-  defp check_graph_body(op, params) when is_map(params) do
-    {required, optional} = Map.fetch!(@graph_bodies, op)
+  defp check_fields({required, optional}, params) when is_map(params) do
     fields = Map.merge(required, optional)
 
     cond do
@@ -1208,7 +1251,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  defp check_graph_body(_op, _params), do: :invalid
+  defp check_fields(_spec, _params), do: :invalid
 
   defp shaped?(:text, value), do: is_binary(value)
   defp shaped?(:object, value), do: is_map(value)
@@ -1225,8 +1268,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp shaped?(:get_parts, _value), do: false
 
-  defp shaped?(kind, value) when kind in [:key, :version, :seq, :graph_page, :change_budget],
-    do: is_integer(value)
+  defp shaped?(kind, value)
+       when kind in [:key, :version, :seq, :graph_page, :change_budget, :most_active, :atlas_page],
+       do: is_integer(value)
 
   defp shaped?(nil, _value), do: false
 
@@ -1234,6 +1278,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp in_bounds?(:seq, value), do: value in 0..@max_seq
   defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
   defp in_bounds?(:change_budget, value), do: value in @min_change_budget..@max_change_budget
+  defp in_bounds?(:most_active, value), do: value in 0..@max_most_active
+  defp in_bounds?(:atlas_page, value), do: value in 1..@max_atlas_page
   # As long as a pin's target is kept (`Keyfleet.Graph.Pin`).
   defp in_bounds?(:pin_target, value), do: byte_size(value) in 1..1024
   defp in_bounds?(_kind, _value), do: true
@@ -1644,7 +1690,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         chain_fields(op)
 
       op = graph_op(path) ->
-        graph_fields(op)
+        spec_fields(Map.fetch!(@graph_bodies, op))
+
+      op = atlas_op(path) ->
+        spec_fields(Map.fetch!(@atlas_bodies, op))
 
       op = dm_op(path) ->
         dm_fields(op)
@@ -1677,10 +1726,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp dm_fields("changes"), do: {~w(keys), []}
   defp dm_fields(_op), do: {[], []}
 
-  defp graph_fields(op) do
-    {required, optional} = Map.fetch!(@graph_bodies, op)
-    {required |> Map.keys() |> Enum.sort(), optional |> Map.keys() |> Enum.sort()}
-  end
+  defp spec_fields({required, optional}),
+    do: {required |> Map.keys() |> Enum.sort(), optional |> Map.keys() |> Enum.sort()}
 
   defp admit(true), do: :ok
   defp admit(false), do: :invalid

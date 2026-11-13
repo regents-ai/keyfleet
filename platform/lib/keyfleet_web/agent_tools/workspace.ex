@@ -2,23 +2,26 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
   @moduledoc """
   A fleet's workspace as an agent reads it: one item as its page shows it
   (`show`), what the workspace's pages keep at hand (`board`), its items and
-  links as the Graph view draws them (`view`), and its changes after a place
-  in its log (`changes`), and pinning or unpinning a project's notebook or
-  code on its board (`pin`, `unpin`). Each answers what its signed request answers
-  (`KeyfleetWeb.AgentGraphController`) and refuses as it does
-  (`KeyfleetWeb.WorkspaceRefusal`): a reader who is none of the fleet's
-  members is told so, or that the fleet's Key ownership is being refreshed.
-  A pin takes what its signed request takes, checked as that request's body
-  is (`KeyfleetWeb.AgentTools.Run`, `KeyfleetWeb.AgentTools.Workspace.Answer`).
-  Only an agent runs them, never a connected app on its own; the workspace's
-  own policies decide every read (`Keyfleet.Graph.Checks.KeyReader`).
+  links as the Graph view draws them (`view`), its changes after a place in
+  its log (`changes`), its Atlas, the swarm's work in one window and a page
+  of the things changed in it (`atlas`, `atlas_things`,
+  `KeyfleetWeb.AgentTools.Workspace.Atlas`), and pinning or unpinning a
+  project's notebook or code on its board (`pin`, `unpin`). Each answers what
+  its signed request answers (`KeyfleetWeb.AgentGraphController`) and refuses
+  as it does (`KeyfleetWeb.WorkspaceRefusal`): a reader who is none of the
+  fleet's members is told so, or that the fleet's Key ownership is being
+  refreshed. A pin takes what its signed request takes, checked as that
+  request's body is (`KeyfleetWeb.AgentTools.Run`,
+  `KeyfleetWeb.AgentTools.Workspace.Answer`). Only an agent runs them, never
+  a connected app on its own; the workspace's own policies decide every read
+  (`Keyfleet.Graph.Checks.KeyReader`), and the Atlas's its own.
   """
   use Ash.Resource,
     domain: KeyfleetWeb.AgentTools,
     authorizers: [Ash.Policy.Authorizer]
 
   alias KeyfleetWeb.AgentTools.Run
-  alias KeyfleetWeb.AgentTools.Workspace.Read
+  alias KeyfleetWeb.AgentTools.Workspace.{Atlas, Read}
 
   @bigint 9_223_372_036_854_775_807
   # Ids, names and text are passed on exactly as written; the graph checks them.
@@ -80,6 +83,58 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
 
       argument :limit, :integer, allow_nil?: false, default: 100, constraints: [min: 1, max: 500]
       run {Read, read: :changes}
+    end
+
+    action :atlas, :map do
+      description "The fleet's Atlas for one window: its changes, things changed and Keys at work, in all and by bucket, and its most active things."
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :window, :atom,
+        allow_nil?: false,
+        default: :week,
+        constraints: [one_of: [:day, :week, :month, :year]]
+
+      argument :at, :utc_datetime_usec
+      argument :bucket, :atom, constraints: [one_of: [:hour, :day, :week, :month]]
+      argument :source, :atom, constraints: [one_of: [:graph, :notebook]]
+      argument :project, :string, constraints: @text
+      argument :by, :atom, constraints: [one_of: [:project, :kind]]
+
+      argument :most_active, :integer,
+        allow_nil?: false,
+        default: 5,
+        constraints: [min: 0, max: 50]
+
+      run fn input, context -> Atlas.swarm(input.arguments, Ash.Context.to_opts(context)) end
+    end
+
+    action :atlas_things, :map do
+      description "A page of the things changed in one window of the fleet's Atlas, the one changed last first or the most active first."
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :window, :atom,
+        allow_nil?: false,
+        default: :day,
+        constraints: [one_of: [:hour, :day, :week, :month, :year]]
+
+      argument :at, :utc_datetime_usec
+
+      argument :order, :atom,
+        allow_nil?: false,
+        default: :newest,
+        constraints: [one_of: [:newest, :active]]
+
+      argument :source, :atom, constraints: [one_of: [:graph, :notebook]]
+      argument :project, :string, constraints: @text
+
+      argument :kind, :string,
+        constraints: [
+          match: ~r/\A(goal|task|finding|evidence|service|note|dead_end|review|notebook)\z/
+        ]
+
+      argument :limit, :integer, allow_nil?: false, default: 20, constraints: [min: 1, max: 100]
+      argument :after, :string, constraints: @text
+      run fn input, context -> Atlas.things(input.arguments, Ash.Context.to_opts(context)) end
     end
 
     action :pin, :map do

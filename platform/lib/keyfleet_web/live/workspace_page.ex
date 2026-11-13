@@ -868,7 +868,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # The notebooks shown as a tree canvas's cards, the #{@canvas_notebooks}
   # most recently changed, each headed by the Key that made it
-  # (`notebook_keys/2`), with when it last ran; and the tasks that name one
+  # (`Keyfleet.Notebooks.keys/2`), with when it last ran; and the tasks that name one
   # of them as their notebook (`notebook_ref`), each linked from its
   # notebook. The hub keeps nothing of which notebook another was made from,
   # so notebooks link to nothing else.
@@ -878,7 +878,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       |> Enum.sort_by(& &1.changed, :desc)
       |> Enum.take(@canvas_notebooks)
 
-    keys = notebook_keys(fleet_id, notebooks)
+    keys = Notebooks.keys(fleet_id, notebooks)
     by_url = Map.new(notebooks, &{&1.url, &1.id})
 
     tasks =
@@ -940,40 +940,6 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp key_label(nil), do: "No Key"
   defp key_label(key), do: ActivityLines.key_name(key, nil)
-
-  # The Key each notebook's maker writes as in the fleet, by notebook: the
-  # Key whose scratchpad it is, else its author's, a person's or an agent's
-  # (`Keyfleet.Keys.identity/2`); none for a notebook this site didn't make
-  # for someone, or whose maker holds no Key now.
-  defp notebook_keys(fleet_id, notebooks) do
-    locks = Notebooks.locks(fleet_id)
-    authors = notebooks |> Enum.map(& &1.author) |> Enum.uniq()
-
-    people =
-      for "u_" <> id <- authors, {account, ""} <- [Integer.parse(id)], do: account
-
-    agents =
-      for "a_" <> id <- authors, {:ok, profile} <- [Ecto.UUID.cast(id)], do: profile
-
-    people_keys =
-      for account <- Keyfleet.Accounts.accounts_by_ids!(people, actor: %System{}),
-          key = Keys.identity(Human.for_account(account), fleet_id),
-          into: %{},
-          do: {Notebooks.subject(%Human{human_account_id: account.id}), key.token_id}
-
-    agent_keys =
-      for profile <-
-            Agents.listings!(agents, load: [key: %{fleet_id: fleet_id}], actor: %System{}),
-          profile.key,
-          into: %{},
-          do: {Notebooks.agent_subject(profile.id), profile.key}
-
-    by_author = Map.merge(people_keys, agent_keys)
-
-    Map.new(notebooks, fn notebook ->
-      {notebook.id, get_in(locks, [notebook.id, :key]) || by_author[notebook.author]}
-    end)
-  end
 
   @doc """
   One item, a page of its links and a page of its history. A goal comes with

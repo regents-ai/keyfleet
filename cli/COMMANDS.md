@@ -1821,6 +1821,81 @@ the counts, the newest 24 goals, then the pinned notebooks and code
 - **History:** 2026-10-28 added; the browser tool `workspace_board` had no command before.
   2026-10-29 answers `counts`.
 
+## regents keyfleet atlas swarm <fleet>
+
+- **Purpose:** shows the fleet's work over one calendar window in UTC, as its Atlas page
+  counts it: how many changes, things changed and Keys at work in the window, the same for
+  each of its buckets that saw work, and its most active things. A thing is a workspace
+  item or a notebook.
+- **Access:** a paired agent that is one of the fleet's members.
+- **Changes:** nothing (read).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/atlas/swarm` → `readAtlasSwarm`
+- **Inputs:** `<fleet>`. `--window W` (body `window`: `day`, `week`, `month` or `year`;
+  `week` by default). `--at T` (body `at`, ISO 8601; now by default): the window is the one
+  holding it. `--bucket B` (body `bucket`: `hour`, `day`, `week` or `month`, shorter than
+  the window and at most 1,000 in it; by default an hour in a day, a day in a week or a
+  month, and a week in a year). `--source S` (body `source`: `graph` or `notebook`; both
+  when left out). `--project NAME` (body `project`). `--by B` (body `by`: `project` or
+  `kind`; the whole fleet's when left out). `--most-active N` (body `most_active`, 0 to 50;
+  5 by default).
+- **Answer:** `{"window": {"span", "start", "end"}, "bucket", "totals": {"changes",
+  "things", "actors"}, "buckets": [...], "most_active": [...]}`. Each bucket is `{"at",
+  "changes", "things", "actors"}`, with `project` or `kind` when `--by` names it, oldest
+  first. Each thing is `{"id", "kind", "project", "title", "key", "changed_at", "changes",
+  "actors", "page"}`, the most changes and then the most Keys first; `key` is the Key that
+  changed it last, or null. Titles are other people's words.
+- **Refusals:** 403 `workspace_members_only`, 404 `fleet_unknown` or `fleet_coming_soon`,
+  422 `invalid_request` (a bucket not shorter than the window, or more than 1,000 of them
+  in it), 503 `ownership_refreshing` or `graph_unavailable`. And those every signed
+  command shares.
+
+Server:
+
+```text
+window  = the calendar window of its span holding at, in UTC
+totals  = the window's own bucket, each thing and Key counted once
+buckets = the window's buckets of the bucket span with work, by project or kind if asked
+most    = the window's things, most changes then most Keys first, up to most_active
+```
+
+- **Server needs:** the Atlas's `atlas_buckets` and `atlas_things` tables.
+- **History:** 2026-11-13 added.
+
+## regents keyfleet atlas things <fleet>
+
+- **Purpose:** lists the things changed in one calendar window in UTC, a page at a time:
+  the one changed last first, or the busiest first. A thing is a workspace item or a
+  notebook.
+- **Access:** a paired agent that is one of the fleet's members.
+- **Changes:** nothing (read).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/atlas/things` → `listAtlasThings`
+- **Inputs:** `<fleet>`. `--window W` (body `window`: `hour`, `day`, `week`, `month` or
+  `year`; `day` by default). `--at T` (body `at`, ISO 8601; now by default): the window is
+  the one holding it. `--order O` (body `order`: `newest`, the default, or `active`, the
+  most changes and then the most Keys first). `--source S` (body `source`: `graph` or
+  `notebook`). `--project NAME` (body `project`). `--kind K` (body `kind`: an item type,
+  `goal` to `review`, or `notebook`). `--limit N` (body `limit`, 1 to 100; 20 by default).
+  `--after A` (body `after`): the last answer's `next_after`, unchanged.
+- **Answer:** `{"window": {"span", "start", "end"}, "things": [...], "next_after"}`. Each
+  thing is `{"id", "kind", "project", "title", "key", "changed_at", "changes", "actors",
+  "page"}`. While `next_after` is not null, pass it as `--after` to read on. Titles are
+  other people's words.
+- **Refusals:** 403 `workspace_members_only`, 404 `fleet_unknown` or `fleet_coming_soon`,
+  422 `invalid_request` (such as an `--after` no answer gave), 503 `ownership_refreshing`
+  or `graph_unavailable`. And those every signed command shares.
+
+Server:
+
+```text
+window = the calendar window of its span holding at, in UTC
+page   = the window's things in the order asked, of the source, project and kind asked,
+         from after, up to limit
+answer the page, and next_after while more follow, or null
+```
+
+- **Server needs:** the Atlas's `atlas_things` table.
+- **History:** 2026-11-13 added.
+
 ## regents keyfleet workspace graph <fleet>
 
 - **Purpose:** reads the workspace's graph as its Graph view draws it, every project's

@@ -8937,3 +8937,86 @@ required fixes, commands, the sign-in library pins and contracts (547 tests,
 runner helper's 14); the hub image builds with its tests run inside it
 (core's jobs, launch and schema 372, the API's job routes 124, the client's
 schema drift 1); the local proof passes its 21 steps.
+
+## 2026-11-13 — Atlas: a fleet's work over time, from the swarm to one thing
+
+- A fleet has an Atlas tab after Worldline (`<fleet path>/atlas`,
+  `KeyfleetWeb.AtlasLive` inside `KeyfleetWeb.FleetLive`, read through
+  `KeyfleetWeb.AtlasPage`), for its members only, as its workspace is. The
+  address holds what it shows: `?view=heat` (the only picture built; the
+  switch lists only built ones), `?show=list`, `?window=day|week|month|year`
+  (a year unless named), `?at=` a day it holds and `?kind=graph|notebooks`.
+- Heat (`KeyfleetWeb.AtlasLive.Heat`, `assets/js/atlas/heat/`): one row per
+  project, busiest first, twelve shown and the rest behind More, on a
+  sequential blue scale with its legend. It zooms from a year of weeks to a
+  month of days to a day of hours, then into one hour's cards, items and
+  notebooks, each opening its own page: wheel, pinch, drag, the arrow keys
+  and the − and + buttons. Active lists the window's most active things and
+  takes the picture to the card chosen; the hover tip gives a square's
+  changes, things and Keys. The squares are vgpu instanced quads in two
+  layers; cards are DOM, only at the deepest level and only on screen; motion
+  is animejs, under 300 ms, interruptible, none under reduced motion. The
+  browser asks for what is on screen as it moves; the corpus stays on the
+  server. New work arrives over PubSub (`Keyfleet.Atlas.changed/1`), at most
+  once a moment, with no polling.
+- List: the window's totals, each project's share, the most active and the
+  latest things, a page at a time.
+- The data layer is `Keyfleet.Atlas` (documented in its moduledoc): the
+  `Bucket`, `Thing` and `Notebook` records (`atlas_buckets`, `atlas_things`,
+  `atlas_notebooks`) and three reads, `swarm/5`, `most_active/4` and
+  `newest_things/4`, keyset paged. Every span (hour, day, week from Monday,
+  month, year, in UTC) has rows of its own rather than hours summed into
+  days and weeks, because the things changed and the Keys at work in a day or
+  a week are not a sum of hours; a read of a span reads that span's rows only.
+- Counting (`Keyfleet.Atlas.Count`) adds only. Graph changes are counted in
+  the projector's page transaction (`Keyfleet.Graph.Projection`), and
+  `Keyfleet.Atlas.Fill`, every minute, counts what the copied log holds past
+  `graph_cursors.counted_seq` (2,000 a batch, 40 s a run), which back-fills
+  every workspace copied before today. Notebooks: `Keyfleet.Atlas.ReadHubs`,
+  hourly at :29, queues `Keyfleet.Atlas.ReadHub` for each fleet with a hub on
+  the `notebook_hubs` queue (one try, one waiting per fleet), which asks each
+  project for the notebooks updated since an hour before the last one seen.
+  Deleting a project forgets its Atlas rows; a reset graph copy forgets its
+  counted graph work.
+- Agents: `atlas_swarm` and `atlas_things` (`KeyfleetWeb.AgentTools`,
+  `KeyfleetWeb.AgentTools.Workspace.Atlas`), signed as
+  `POST /api/v1/agent/fleets/{fleet_id}/atlas/swarm` and `.../atlas/things`.
+  Small by default: a week with its 5 most active things, and a day's 20
+  newest things a page. The contract is 30.2.0 (was 30.1.0), with the tool
+  manifest, docs, llms and agents pages. The `regents keyfleet atlas`
+  commands wait for a regents-cli release.
+- notebook-hub: `notebooks-updated-after.patch` adds `updated_after` to
+  `GET /api/v1/projects/{pid}/notebooks`, with the notebook route tests run in
+  the hub image. The hub image tag is now 626ec14-4a93e50 in the five fleet
+  files and the README.
+- Migration `20261113072054_atlas`, additions only: the three tables with
+  their keys, six indexes on `atlas_things` (most active and newest, each for
+  all, by kind and by project), one on `atlas_buckets` and one on
+  `atlas_notebooks`, and `graph_cursors.counted_seq` (default 0).
+- The compile-connected count is 137 against the budget of 133, so xref
+  fails. The four new edges are the Atlas domain's to its Bucket, Notebook
+  and Thing records, and the Thing record's to `Keyfleet.Access.Check`. The
+  budget is not raised here.
+- At scale (`scripts/atlas_seed.exs` seeds a local year of 4,989 changes and
+  492 notebooks a day for one fleet; `scripts/atlas_reads.exs` times every
+  read): every read's median is between 0.2 and 39 ms except a year of weeks
+  for the picture, 70 ms, each on its own index. That fleet-year takes
+  `atlas_things` 1.0 GB of rows and 5.6 GB of indexes, `atlas_buckets`
+  170 MB and 103 MB. Ten seconds of zooming at full scale: median and worst
+  frame 16.7 and 16.8 ms, none over 20 ms; the renderer alone at 16,384
+  squares a layer, the same.
+
+Release the five hubs first, then the site. A hub without the patch ignores
+`updated_after`, so the site's hourly read would list each project whole:
+counted right, but every notebook every hour.
+
+Check: format, compile with warnings as errors, credo strict, sobelow,
+pytest, codegen, usage rules and route handoff pass; xref fails at 137 of
+133; full suite 1,419 (19 properties, 1,400 tests, 19 excluded); typecheck
+and 439 unit tests pass; assets build; browser suite 125, devices 70;
+required fixes, CLI, SIWA and contracts pass; the notebook hub check passes
+(compute-fly 73 tests, the route tests in the hub image 153, the runner
+helper's 14). The site's accessibility rules over every Atlas state, light and
+dark, at 1280 and 390, find nothing in the Atlas; they find one serious
+finding in every fleet page's setup panel (`label-content-name-mismatch` on
+the agent picker, `Regent.Account` in regent_ui), which is not this change's.

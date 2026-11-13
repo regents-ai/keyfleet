@@ -369,6 +369,22 @@ defmodule Keyfleet.Graph.Event do
              )
     end
 
+    # The creations and patches of items after `after_seq`, oldest first, a
+    # batch at a time, for counting them into the Atlas
+    # (`Keyfleet.Atlas.Fill`). The primary key finds them.
+    read :changes_after do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq) and
+                 type in ["object.created", "patch.applied"]
+             )
+
+      prepare build(sort: [seq: :asc], limit: 2_000)
+    end
+
     # Every change that touched one project, for its deletion.
     read :of_project do
       public? false
@@ -408,7 +424,14 @@ defmodule Keyfleet.Graph.Event do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:record, :with_event_ids, :taken_before, :of_project, :forget]) do
+    policy action([
+             :record,
+             :with_event_ids,
+             :taken_before,
+             :changes_after,
+             :of_project,
+             :forget
+           ]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

@@ -58,14 +58,25 @@ defmodule Keyfleet.Notebooks.HubClient do
   in turn until the last.
   """
   def all_notebooks(fleet_id, project_id, limit \\ 500),
-    do: every(fleet_id, "/api/v1/projects/#{segment(project_id)}/notebooks", limit)
+    do: every(fleet_id, notebooks_path(project_id), limit: limit)
+
+  @doc """
+  Every notebook in the project updated after `since`, as `all_notebooks/3`
+  lists them.
+  """
+  def notebooks_changed_after(fleet_id, project_id, %DateTime{} = since),
+    do:
+      every(fleet_id, notebooks_path(project_id),
+        limit: 500,
+        updated_after: DateTime.to_iso8601(since)
+      )
 
   @doc """
   Every job of the notebook, as the hub lists them (`id`, `name`, ...), each
   page read in turn until the last.
   """
   def jobs(fleet_id, project_id, notebook_id),
-    do: every(fleet_id, notebook_path(project_id, notebook_id) <> "/jobs", 500)
+    do: every(fleet_id, notebook_path(project_id, notebook_id) <> "/jobs", limit: 500)
 
   @doc """
   Every run of the job the hub still holds (it keeps them 30 days), newest
@@ -77,19 +88,21 @@ defmodule Keyfleet.Notebooks.HubClient do
       every(
         fleet_id,
         notebook_path(project_id, notebook_id) <> "/jobs/#{segment(job_id)}/runs",
-        500
+        limit: 500
       )
 
-  defp notebook_path(project_id, notebook_id),
-    do: "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}"
+  defp notebooks_path(project_id), do: "/api/v1/projects/#{segment(project_id)}/notebooks"
 
-  defp every(fleet_id, path, limit, cursor \\ nil, found \\ []) do
-    params = [limit: limit] ++ if(cursor, do: [cursor: cursor], else: [])
+  defp notebook_path(project_id, notebook_id),
+    do: notebooks_path(project_id) <> "/#{segment(notebook_id)}"
+
+  defp every(fleet_id, path, query, cursor \\ nil, found \\ []) do
+    params = query ++ if(cursor, do: [cursor: cursor], else: [])
     sent = request(fleet_id, :get, path, params: params)
 
     case answer(sent, [200]) do
       {:ok, %{"items" => items, "next_cursor" => next}} when is_binary(next) ->
-        every(fleet_id, path, limit, next, found ++ items)
+        every(fleet_id, path, query, next, found ++ items)
 
       {:ok, %{"items" => items}} ->
         {:ok, found ++ items}

@@ -47,6 +47,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @key_read "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read"
   @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
   @graph "/api/v1/agent/fleets/{fleet_id}/graph/"
+  @atlas "/api/v1/agent/fleets/{fleet_id}/atlas/"
   @proposal "/api/v1/agent/fleets/{fleet_id}/proposals/read"
   @presence "/api/v1/agent/fleets/{fleet_id}/presence"
   @propose "/api/v1/agent/fleets/{fleet_id}/proposals/create"
@@ -287,6 +288,27 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "conflicts_of_interest" => "none",
        "reproduction" => "passed"
      }},
+    {"POST", @atlas <> "swarm", [],
+     %{
+       "window" => "week",
+       "at" => "2026-11-13T09:00:00Z",
+       "bucket" => "day",
+       "source" => "graph",
+       "project" => "general",
+       "by" => "kind",
+       "most_active" => 5
+     }},
+    {"POST", @atlas <> "things", [],
+     %{
+       "window" => "day",
+       "at" => "2026-11-13T09:00:00Z",
+       "order" => "active",
+       "source" => "notebook",
+       "project" => "general",
+       "kind" => "notebook",
+       "limit" => 20,
+       "after" => "g2gCYQFhAg"
+     }},
     {"GET", @polls, [], nil},
     {"POST", @poll_start, [], @poll_question},
     {"GET", @poll, [], nil},
@@ -338,7 +360,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@poll_vote, Keyfleet.Polls.Vote, :cast},
              {@dm <> "read", Keyfleet.Dms.Message, :in_conversation},
              {@project_start, Keyfleet.Projects.Project, :start},
-             {@project_archive, Keyfleet.Projects.Project, :archive}
+             {@project_archive, Keyfleet.Projects.Project, :archive},
+             {@atlas <> "swarm", KeyfleetWeb.AgentTools.Workspace, :atlas},
+             {@atlas <> "things", KeyfleetWeb.AgentTools.Workspace, :atlas_things}
            ] ++
              for(
                op <-

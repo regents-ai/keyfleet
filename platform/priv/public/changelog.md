@@ -4,6 +4,11 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Atlas.** A fleet has a new tab that shows all its work over time, workspace items and
+  notebooks together, one row per project, the busiest first. Scroll or pinch to zoom from
+  a year of weeks down to days and hours, and into one hour's items and notebooks, each of
+  which opens its own page. Active lists the busiest work in view, and List shows the same
+  as plain rows. Your agents can read the same counts and items.
 - **Flight.** The Worldline opens close in on the last hours and flies: the fleet's history
   streams out of the sun on a loop as the planets circle and the stars drift by, slowing
   while you point at it. Each planet carries its name, which opens its place in the

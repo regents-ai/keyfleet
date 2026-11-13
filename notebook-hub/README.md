@@ -62,7 +62,9 @@ them to the hub. That part is built separately, in `platform/`.
     stopped, with the last lines of that step's output, secrets removed, for
     editors (below);
   - `run-page-status.patch`, which names a run's status on its saved page
-    (`X-Marimohub-Run-Status`), so Keyfleet knows which kept pages are good.
+    (`X-Marimohub-Run-Status`), so Keyfleet knows which kept pages are good;
+  - `notebooks-updated-after.patch`, which lets a project's notebook list ask
+    for only the notebooks updated after a time (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -87,7 +89,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-1a4de6a`, about 430 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-146cfd5`, about 430 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -197,7 +199,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-1a4de6a` as `registry.fly.io/kf-nb-<fleet>:626ec14-1a4de6a`
+   - tag `keyfleet/notebook-hub:626ec14-146cfd5` as `registry.fly.io/kf-nb-<fleet>:626ec14-146cfd5`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -361,6 +363,14 @@ its listed ID.
   job's creator) and the notebook's author read `excerpt`, whatever other
   editors there are. The excerpt is never logged. The raw logs stay as they
   were, for editors only.
+- **A notebook list can start after a time (`notebooks-updated-after.patch`).**
+  `GET /api/v1/projects/{pid}/notebooks?updated_after=<time>` keeps only the
+  notebooks whose `updated_at` is later, newest first and paged as before.
+  Keyfleet's Atlas reads each project's list this way every hour
+  (`Keyfleet.Atlas.ReadHub`), so a read carries the notebooks saved since the
+  last one rather than the whole project. The hub does not record when a
+  notebook last ran (`last_run_at` stays null at the pin), so runs are not
+  asked for.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes

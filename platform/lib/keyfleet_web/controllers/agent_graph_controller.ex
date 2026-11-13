@@ -53,6 +53,28 @@ defmodule KeyfleetWeb.AgentGraphController do
         )
       )
 
+  def atlas_swarm(conn, %{"fleet_id" => fleet_id} = params),
+    do:
+      answer_read(
+        conn,
+        AgentTools.atlas_swarm(
+          fleet_id,
+          Map.take(params, ~w(window at bucket source project by most_active)),
+          actor: conn.assigns.agent_actor
+        )
+      )
+
+  def atlas_things(conn, %{"fleet_id" => fleet_id} = params),
+    do:
+      answer_read(
+        conn,
+        AgentTools.atlas_things(
+          fleet_id,
+          Map.take(params, ~w(window at order source project kind limit after)),
+          actor: conn.assigns.agent_actor
+        )
+      )
+
   def create(conn, params),
     do: write(conn, &Graph.create_object/3, params, ~w(project type data))
 
