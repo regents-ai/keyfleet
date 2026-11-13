@@ -4,12 +4,14 @@ defmodule KeyfleetWeb.LaunchGateTest do
   import ExUnit.CaptureLog
   import KeyfleetWeb.RefusalHelpers
 
-  alias KeyfleetWeb.ContentSecurityPolicy
+  alias Keyfleet.Accounts
+  alias KeyfleetWeb.{ContentSecurityPolicy, PublicDocuments}
   alias KeyfleetWeb.Live.LaunchGateHook
   alias KeyfleetWeb.Plugs.LaunchGate
 
-  @closed_pages ~w(/ /docs /about /opportunities /account /app /syndicate/1
+  @closed_pages ~w(/ /opportunities /account /app /syndicate/1
                    /syndicate/1/keys/1 /fleets/fibonacci_syndicate /no-such-page)
+  @reading ~w(/agents /agents/dots /docs /changelog /about /privacy /terms)
   @closed_message "This part of the site isn't open yet."
 
   setup do
@@ -114,7 +116,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
           get(build_conn(), "/fleets/fibonacci_syndicate.md"),
           get(build_conn(), "/api-contract.openapiv3.yaml"),
           build_conn() |> put_req_header("accept", "text/markdown") |> get("/"),
-          build_conn() |> put_req_header("accept", "text/markdown") |> get("/docs")
+          build_conn() |> put_req_header("accept", "text/markdown") |> get("/opportunities")
         ] do
       assert response(conn, 503) == @closed_message <> "\n", conn.request_path
       assert response_content_type(conn, :md) =~ "text/markdown"
@@ -138,11 +140,11 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert secure_headers(open) != %{}
   end
 
-  test "while closed, the early-access page, the legal pages, the operational files and the static files stay open" do
+  test "while closed, the early-access page, the operational files and the static files stay open" do
     close_surfaces()
 
     for path <-
-          ~w(/early /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
+          ~w(/early /healthz /robots.txt /.well-known/security.txt) ++
             ~w(/sitemap.xml /favicon.ico /favicon-32.png /mark.png /images/brand/mark-flat-dark.svg /metadata/collection.json) do
       assert get(build_conn(), path).status == 200, "#{path} closed"
     end
@@ -153,25 +155,47 @@ defmodule KeyfleetWeb.LaunchGateTest do
     assert json_response(post(build_conn(), "/metadata/collection.json", %{}), 503) ==
              refused("not_open_yet")
 
-    for path <- ~w(/privacy /terms) do
-      conn = build_conn() |> put_req_header("accept", "text/markdown") |> get(path)
-      assert response(conn, 200) =~ "# Keyfleet"
+    assert get(build_conn(), "/healthz").resp_body == "ok"
+  end
+
+  test "while closed, the reading pages stay open inside the shell, as pages and as Markdown" do
+    close_surfaces()
+    {signed_in, _account} = signed_in()
+
+    for path <- @reading, conn <- [build_conn(), signed_in] do
+      page = conn |> get(path) |> html_response(200) |> LazyHTML.from_document()
+      assert Enum.count(LazyHTML.query(page, "#app-shell #route-content .reading__prose")) == 1
+      assert Enum.count(LazyHTML.query(page, "#app-shell-scroller > footer.regent-footer")) == 1
+
+      # Each is headed by its document's title; the developer documentation by Docs.
+      "# " <> document = PublicDocuments.document(path).markdown
+      [title | _rest] = String.split(document, "\n", parts: 2)
+      heading = page |> LazyHTML.query("#route-content h1") |> LazyHTML.text()
+      assert heading == if(path == "/docs", do: "Docs", else: title), path
+
+      markdown = build_conn() |> put_req_header("accept", "text/markdown") |> get(path)
+      assert response(markdown, 200) |> String.starts_with?("# " <> title), path
+      assert response_content_type(markdown, :md) =~ "text/markdown"
     end
 
-    assert get(build_conn(), "/healthz").resp_body == "ok"
+    # Over the socket too, signed out and signed in.
+    for conn <- [build_conn(), signed_in] do
+      assert {:ok, _view, _html} = live(conn, "/privacy")
+    end
   end
 
   test "while closed, the sitemap lists only the pages still open" do
     close_surfaces()
 
     assert locations(get(build_conn(), "/sitemap.xml")) ==
-             Enum.map(~w(/early /privacy /terms), &KeyfleetWeb.PublicDocuments.url/1)
+             Enum.map(
+               ~w(/early /agents /docs /changelog /about /privacy /terms),
+               &PublicDocuments.url/1
+             )
 
     open_surfaces()
 
-    assert KeyfleetWeb.PublicDocuments.url("/early") not in locations(
-             get(build_conn(), "/sitemap.xml")
-           )
+    assert PublicDocuments.url("/early") not in locations(get(build_conn(), "/sitemap.xml"))
   end
 
   test "while open, the homepage is itself and the early-access page and its form send visitors to it" do
@@ -200,8 +224,9 @@ defmodule KeyfleetWeb.LaunchGateTest do
   test "a mount arriving over the socket is sent to the early-access page instead" do
     close_surfaces()
 
-    assert {:halt, halted} =
-             LaunchGateHook.on_mount(:default, %{}, %{}, %Phoenix.LiveView.Socket{})
+    socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}, live_action: :account}}
+
+    assert {:halt, halted} = LaunchGateHook.on_mount(:default, %{}, %{}, socket)
 
     assert halted.redirected == {:redirect, %{to: "/early", status: 302}}
   end
@@ -210,9 +235,23 @@ defmodule KeyfleetWeb.LaunchGateTest do
     {:ok, view, _html} = live(conn, "/account")
 
     close_surfaces()
-    render_patch(view, "/syndicate/1")
 
+    # A reading page is open either way.
+    assert render_patch(view, "/docs") =~ "reading__prose"
+
+    render_patch(view, "/syndicate/1")
     assert_redirect(view, "/early")
+  end
+
+  defp signed_in do
+    wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
+
+    account =
+      Accounts.register_verified!("did:privy:launch-gate-" <> wallet, wallet, [wallet],
+        actor: %Keyfleet.Actors.System{}
+      )
+
+    {init_test_session(build_conn(), %{human_account_id: account.id}), account}
   end
 
   defp locations(conn) do

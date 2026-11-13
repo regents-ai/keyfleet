@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.Live.Session do
 
   alias Keyfleet.AccessContext
   alias Keyfleet.Accounts.{EnsIdentity, SessionAuthority}
+  alias KeyfleetWeb.ClientAddress
 
   @public_root "/"
 
@@ -17,7 +18,9 @@ defmodule KeyfleetWeb.Live.Session do
   because a connected mount cannot otherwise learn it before `handle_params`,
   which is too late to refuse the mount. LiveView merges these keys over the
   handshake session, so they can never stand in for the authority the socket
-  connected with.
+  connected with. The page keeps the client key of the request that drew it
+  (`KeyfleetWeb.ClientAddress.client_key/1`), which the Agent Message form
+  counts its messages against.
   """
   def render_context(conn) do
     conn.assigns.current_lineage
@@ -26,7 +29,8 @@ defmodule KeyfleetWeb.Live.Session do
       "render_route" => local_route(conn.request_path, conn.query_string),
       "visit" => conn.assigns.visit,
       "arrival" => conn.assigns[:arrival],
-      "gpc" => conn.assigns.gpc
+      "gpc" => conn.assigns.gpc,
+      "client_key" => conn |> ClientAddress.key() |> ClientAddress.client_key()
     })
   end
 
@@ -97,7 +101,9 @@ defmodule KeyfleetWeb.Live.Session do
     |> assign_principal(account)
     # Opening a fleet's notebooks names the sign-in they hang on.
     |> assign(session_lineage: lineage, session_lease: lease)
-    |> recheck_navigation(lease)
+    |> attach_hook(:session_authority_params, :handle_params, fn _params, _uri, socket ->
+      recheck(socket, lease, &redirect(&1, to: @public_root))
+    end)
     |> attach_hook(:session_authority_event, :handle_event, fn _event, _params, socket ->
       recheck(socket, lease, & &1)
     end)
@@ -123,17 +129,6 @@ defmodule KeyfleetWeb.Live.Session do
     end)
     |> attach_hook(:session_authority_async, :handle_async, fn _name, _result, socket ->
       recheck(socket, lease, & &1)
-    end)
-  end
-
-  # A view drawn inside a plain page (`live_render(@conn, …)`), such as the
-  # message form (`KeyfleetWeb.AgentMessageLive`), is not mounted at the router
-  # and never navigates; its presses are still rechecked.
-  defp recheck_navigation(%{router: nil} = socket, _lease), do: socket
-
-  defp recheck_navigation(socket, lease) do
-    attach_hook(socket, :session_authority_params, :handle_params, fn _params, _uri, socket ->
-      recheck(socket, lease, &redirect(&1, to: @public_root))
     end)
   end
 

@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   @moduledoc "Canonical behavior metadata for the route allowlist."
 
   alias Keyfleet.Fleets
-  alias KeyfleetWeb.NotFoundError
+  alias KeyfleetWeb.{AgentGuides, NotFoundError}
 
   alias __MODULE__.{
     Entry,
@@ -91,6 +91,48 @@ defmodule KeyfleetWeb.RouteCatalog do
       parameter_schema: %{},
       reserved_values: %{},
       route_spec_id: :opportunities
+    },
+    %Entry{
+      path_pattern: "/docs",
+      live_action: :docs,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :docs
+    },
+    %Entry{
+      path_pattern: "/changelog",
+      live_action: :changelog,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :changelog
+    },
+    %Entry{
+      path_pattern: "/agents",
+      live_action: :agents,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :agents
+    },
+    %Entry{
+      path_pattern: "/agents/:agent",
+      live_action: :agent,
+      parameter_schema: %{agent: :agent},
+      reserved_values: %{},
+      route_spec_id: :agent
+    },
+    %Entry{
+      path_pattern: "/privacy",
+      live_action: :privacy,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :privacy
+    },
+    %Entry{
+      path_pattern: "/terms",
+      live_action: :terms,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :terms
     }
   ]
 
@@ -143,11 +185,18 @@ defmodule KeyfleetWeb.RouteCatalog do
     wallets: {:wallets, :product, "Keyfleet", "Wallets", "/", [:profile_actions], :product, %{}},
     connections:
       {:connections, :product, "Keyfleet", "Connections", "/", [:profile_actions], :product, %{}},
-    about: {:about, :product, "Keyfleet", "About", "/", [:profile_actions], :product, %{}},
+    about: {:about, :reading, "Keyfleet", "About", "/", [:profile_actions], :product, %{}},
     pair: {:pair, :product, "Keyfleet", "Pair New Agent", "/", [:profile_actions], :product, %{}},
     opportunities:
-      {:opportunities, :product, "Keyfleet", "Opportunities", "/", [:profile_actions], :product,
+      {:opportunities, :reading, "Keyfleet", "Opportunities", "/", [:profile_actions], :product,
        %{}},
+    docs: {:docs, :reading, "Keyfleet", "Docs", "/", [:profile_actions], :product, %{}},
+    changelog:
+      {:changelog, :reading, "Keyfleet", "Changelog", "/", [:profile_actions], :product, %{}},
+    agents: {:agents, :reading, "Keyfleet", "Agents", "/", [:profile_actions], :product, %{}},
+    agent: {:agent, :reading, "Keyfleet", "Agents", "/", [:profile_actions], :product, %{}},
+    privacy: {:privacy, :reading, "Keyfleet", "Privacy", "/", [:profile_actions], :product, %{}},
+    terms: {:terms, :reading, "Keyfleet", "Terms", "/", [:profile_actions], :product, %{}},
     fleet: {:fleet, :product, "Keyfleet", "Fleet", "/", [:profile_actions], :product, %{}},
     keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, %{}},
     dms: {:dms, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
@@ -185,6 +234,18 @@ defmodule KeyfleetWeb.RouteCatalog do
     %RouteTarget{route_id: :connections, label: "Connections", path: "/account/connections"}
   ]
   @account_tab_ids Enum.map(@account_tabs, & &1.route_id)
+
+  # The reading pages (`KeyfleetWeb.Components.Reading`), listed beside every one
+  # of them.
+  @reading_targets [
+    %RouteTarget{route_id: :agents, label: "Agents", path: "/agents"},
+    %RouteTarget{route_id: :docs, label: "Docs", path: "/docs"},
+    %RouteTarget{route_id: :changelog, label: "Changelog", path: "/changelog"},
+    %RouteTarget{route_id: :about, label: "About", path: "/about"},
+    %RouteTarget{route_id: :opportunities, label: "Opportunities", path: "/opportunities"},
+    %RouteTarget{route_id: :privacy, label: "Privacy", path: "/privacy"},
+    %RouteTarget{route_id: :terms, label: "Terms", path: "/terms"}
+  ]
 
   def entries, do: @entries
 
@@ -239,6 +300,10 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp valid_parameter?(:commit, value), do: is_binary(value) and Regex.match?(@commit, value)
 
+  # An agent's page is one `KeyfleetWeb.AgentGuides` has.
+  defp valid_parameter?(:agent, value),
+    do: is_binary(value) and "/agents/#{value}" in AgentGuides.paths()
+
   defp build_spec(route_spec_id, destination, fleet_id) do
     {route_id, app_id, app_label, page_label, root, controls, background, local_state} =
       Map.fetch!(@specs, route_spec_id)
@@ -264,6 +329,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   defp tabs(_route_id), do: []
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
+  defp sidebar_model(:reading), do: %SidebarModel{id: :reading, targets: @reading_targets}
 
   # The fleets the sidebar links to, each to the fleet's page, then the account page.
   defp sidebar_model(:product) do

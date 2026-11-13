@@ -1,17 +1,11 @@
 defmodule KeyfleetWeb.PublicPagesController do
-  @moduledoc "Public documentation and discovery; no account or database reads."
+  @moduledoc """
+  Public discovery files, the public documents as JSON and two redirects; no
+  account or database reads. The reading pages themselves open in the app
+  shell (`KeyfleetWeb.Components.Reading`).
+  """
   use KeyfleetWeb, :controller
   alias KeyfleetWeb.PublicDocuments
-
-  def show(conn, _params) do
-    case PublicDocuments.document(conn.request_path) do
-      nil ->
-        raise KeyfleetWeb.NotFoundError
-
-      document ->
-        render(conn, :show, [document: document] ++ PublicDocuments.page(conn.request_path))
-    end
-  end
 
   @doc "`/app` opens the Regents Club's hall, the fleet every Club Pass comes with."
   def app(conn, _params), do: redirect(conn, to: ~p"/app/fleets/regents_club")
@@ -97,56 +91,5 @@ defmodule KeyfleetWeb.PublicPagesController do
     conn
     |> put_resp_header("etag", ~s("#{Base.encode16(:crypto.hash(:sha256, body), case: :lower)}"))
     |> put_resp_header("cache-control", "public, max-age=300")
-  end
-end
-
-defmodule KeyfleetWeb.PublicPagesHTML do
-  @moduledoc false
-  use KeyfleetWeb, :html
-
-  alias KeyfleetWeb.Components.AgentMessage
-
-  def show(assigns) do
-    ~H"""
-    <div class="rl-root legal-root rg-sheet rg-frame public-document">
-      <header class="legal-header">
-        <a href={~p"/"} class="legal-home">Keyfleet</a>
-        <nav class="legal-nav" aria-label="Pages">
-          <a
-            :for={
-              {label, path} <- [
-                {"Opportunities", "/opportunities"},
-                {"Docs", "/docs"},
-                {"Agents", "/agents"},
-                {"Changelog", "/changelog"},
-                {"About", "/about"},
-                {"Privacy", "/privacy"},
-                {"Terms", "/terms"}
-              ]
-            }
-            href={path}
-            aria-current={if(@conn.request_path == path, do: "page")}
-          >
-            {label}
-          </a>
-        </nav>
-      </header>
-      <main class="legal-page">
-        {KeyfleetWeb.PublicDocuments.html(@document.markdown)}
-        <AgentMessage.button
-          :if={@conn.request_path == "/agents"}
-          id="agents-message-button"
-          dialog="agents-message"
-        />
-      </main>
-    </div>
-    <%!-- Outside the document, so its reading styles stay off the window. --%>
-    <AgentMessage.dialog
-      :if={@conn.request_path == "/agents"}
-      id="agents-message"
-      topic="agents"
-      conn={@conn}
-    />
-    """
   end
 end

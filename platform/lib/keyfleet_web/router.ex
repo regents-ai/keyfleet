@@ -44,7 +44,7 @@ defmodule KeyfleetWeb.Router do
   end
 
   # The open fleet directory's Markdown.
-  # This pipeline and the three below set the reading policy in the header map.
+  # This pipeline and the two below set the reading policy in the header map.
   # Sobelow cannot read a policy built by a function call, so each says so here.
   # sobelow_skip ["Config.CSP"]
   pipeline :directory do
@@ -53,23 +53,6 @@ defmodule KeyfleetWeb.Router do
     # Reading only: Markdown never starts sign-in.
     plug :put_secure_browser_headers, %{
       "content-security-policy" => ContentSecurityPolicy.reading()
-    }
-  end
-
-  # sobelow_skip ["Config.CSP"]
-  pipeline :public_documents do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    # Read only, for the message form a page may hold (`AgentMessage`).
-    plug :enforce_session_authority
-    plug KeyfleetWeb.Plugs.Theme
-    plug :put_root_layout, html: {KeyfleetWeb.Layouts, :root}
-    plug :protect_from_forgery
-
-    # Reading only: these pages never start sign-in, so they send no referrer.
-    plug :put_secure_browser_headers, %{
-      "content-security-policy" => ContentSecurityPolicy.reading(),
-      "referrer-policy" => "no-referrer"
     }
   end
 
@@ -254,16 +237,6 @@ defmodule KeyfleetWeb.Router do
   end
 
   scope "/", KeyfleetWeb do
-    pipe_through :public_documents
-    get "/docs", PublicPagesController, :show
-    get "/agents", PublicPagesController, :show
-    get "/agents/:agent", PublicPagesController, :show
-    get "/changelog", PublicPagesController, :show
-    get "/privacy", PublicPagesController, :show
-    get "/terms", PublicPagesController, :show
-  end
-
-  scope "/", KeyfleetWeb do
     pipe_through :early
     get "/early", EarlyController, :show
     post "/early", EarlyController, :create
@@ -285,7 +258,7 @@ defmodule KeyfleetWeb.Router do
     pipe_through :api
     get "/health", HealthController, :status
     get "/about", PublicPagesController, :document, assigns: %{document: "/about", page: :about}
-    get "/docs", PublicPagesController, :document, assigns: %{document: "/docs", page: "/docs"}
+    get "/docs", PublicPagesController, :document, assigns: %{document: "/docs", page: :docs}
     get "/fleets", DirectoryController, :index_json
     get "/fleets/:fleet_id", DirectoryController, :show_json
     get "/fleets/:fleet_id/workspace/pulse", WorkspacePulseController, :show
@@ -605,6 +578,8 @@ defmodule KeyfleetWeb.Router do
   end
 
   # The pages drawn in the product shell, with the harbour's sea behind them.
+  # The reading pages, `/docs` to `/terms`, open in it as every other page
+  # does (`KeyfleetWeb.Components.Reading`).
   scope "/", KeyfleetWeb do
     pipe_through [:browser, :harbour_sea]
 
@@ -619,6 +594,12 @@ defmodule KeyfleetWeb.Router do
       live "/about", ShellLive, :about
       live "/pair", ShellLive, :pair
       live "/opportunities", ShellLive, :opportunities
+      live "/docs", ShellLive, :docs
+      live "/changelog", ShellLive, :changelog
+      live "/agents", ShellLive, :agents
+      live "/agents/:agent", ShellLive, :agent
+      live "/privacy", ShellLive, :privacy
+      live "/terms", ShellLive, :terms
 
       # Each fleet's pages, under the fleet's own address, such as `/classic/1`.
       for %{fleet_id: fleet_id} = page when fleet_id != nil <- KeyfleetWeb.RouteCatalog.entries() do

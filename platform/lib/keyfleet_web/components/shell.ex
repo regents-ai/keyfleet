@@ -472,8 +472,9 @@ defmodule KeyfleetWeb.Components.Shell do
   settles on the nearer side when let go.
 
   Signed in it is a row of the account menu; signed out it sits in the header
-  (`header/1`), and on the reading pages, which have no header, in the footer
-  (`KeyfleetWeb.Layouts.product_links/1`). A page never shows two.
+  (`header/1`), and on a page without the header, such as the team's messages
+  page, in the footer (`KeyfleetWeb.Layouts.product_links/1`). A page never
+  shows two.
 
   The server draws a still face: a flat square track and knob with the moon or
   the sun, each a picture of tiny square blocks, placed for the theme showing. Once
@@ -557,17 +558,23 @@ defmodule KeyfleetWeb.Components.Shell do
     assigns = assign(assigns, :label, sidebar_label(target, assigns.account_control))
 
     ~H"""
-    <.link
-      patch={@target.path}
-      aria-current={current?(@target, @route_spec) && "page"}
-    >
+    <.link patch={@target.path} aria-current={current(@target, @route_spec)}>
       {@label}
     </.link>
     """
   end
 
   # A destination with tabs stays current on every one of its tabs, and a fleet
-  # on every one of its pages.
+  # on every one of its pages. A listed page is the location of the pages under
+  # it (an agent's page under /agents).
+  defp current(target, route_spec) do
+    cond do
+      current?(target, route_spec) -> "page"
+      String.starts_with?(route_spec.destination, target.path <> "/") -> "location"
+      true -> nil
+    end
+  end
+
   defp current?(target, route_spec),
     do:
       Enum.any?(

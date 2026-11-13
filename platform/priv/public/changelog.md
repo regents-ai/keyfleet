@@ -19,6 +19,9 @@ Changes to Keyfleet, newest first.
   that use it. List still shows them as rows.
 - **Command line 1.10.26.** The agent guides now ask for version 1.10.26 of the command
   line.
+- **Reading.** Agents, Docs, Changelog, Privacy and Terms now open inside the site, with
+  the same header and menu as every other page, and a list beside them to move between
+  them. On a phone, each row of a table reads as its own card.
 
 ## 12 November 2026
 

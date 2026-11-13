@@ -127,15 +127,16 @@ body:has(> .harbour-sea) #app-shell {
     visibility 0s;
 }
 
-/* The account tabs and the reading column (/about, /opportunities) carry text
-   straight on the ground, so they keep it. Cards already paint their own. The
-   account pages stand on the ground whole, so the city never shows through them. */
+/* The account tabs and the reading pages' document (/docs, /about and the
+   rest) carry text straight on the ground, so they keep it. Cards already paint
+   their own. The account pages stand on the ground whole, so the city never
+   shows through them. */
 body:has(> .harbour-sea) #shell-tabs,
 body:has(> .harbour-sea) #route-content:has(.account-page) {
   background: var(--color-bg);
 }
 
-body:has(> .harbour-sea) #route-content .legal-page {
+body:has(> .harbour-sea) #route-content .reading__prose {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
 }

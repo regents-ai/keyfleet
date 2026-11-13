@@ -179,7 +179,7 @@ security policy; the router's pipelines choose one.
 
 | Profile | Pipelines | What it allows |
 | --- | --- | --- |
-| `reading` | `:public_documents` (the reading pages, including Privacy and Terms, which also send no referrer), `:early` (the early-access page, which also sends no referrer), `:directory`, and the launch gate's "not open yet" answers | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
+| `reading` | `:early` (the early-access page, which also sends no referrer), `:directory`, and every answer no pipeline sets, the Markdown answers and the launch gate's "not open yet" answers among them | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
 | `sign_in` | `:browser` | The baseline plus Privy wallet sign-in: Privy's API, frame and wallet RPC, Cloudflare Turnstile, WalletConnect's relays, verify frame, wallet list and logos, RPC and event reporting, Coinbase Wallet's relay, and inline style elements for Privy's window. |
 | `showcase` | `:local_showcase` | `sign_in` that may frame its own preview page. Local development only. |
 

@@ -82,8 +82,7 @@ test("reading pages load with nothing refused", async ({page}) => {
   const refusals = await watchRefusals(page)
 
   for (const path of ["/docs", "/privacy"]) {
-    await page.goto(path)
-    await page.waitForLoadState("networkidle")
+    await open(page, path)
     expect(refusals, path).toEqual([])
   }
 })

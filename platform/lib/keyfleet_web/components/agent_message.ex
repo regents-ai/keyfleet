@@ -10,13 +10,12 @@ defmodule KeyfleetWeb.Components.AgentMessage do
   page that tells an agent how.
 
   Below the texts, a signed-in person leaves a message themselves
-  (`KeyfleetWeb.Components.AgentMessage.Form`), on a plain page and on a live
-  page alike; a signed-out visitor sees only the texts.
+  (`KeyfleetWeb.Components.AgentMessage.Form`); a signed-out visitor sees only
+  the texts.
   """
 
   use Phoenix.Component
 
-  alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.PublicDocuments
 
   commands = Path.expand("../../../../cli/commands.json", __DIR__)
@@ -124,24 +123,19 @@ defmodule KeyfleetWeb.Components.AgentMessage do
   attr :id, :string, required: true
   attr :topic, :string, required: true, doc: "The topic its messages are left under."
 
-  attr :conn, Plug.Conn,
-    default: nil,
-    doc: "On a plain page: the page's request, from which the form reads the sign-in."
+  attr :account, :map, required: true, doc: "The signed-in account, or nil."
+  attr :lease, :map, required: true, doc: "The page's `session_lease`, or nil."
 
-  attr :account, :map, default: nil, doc: "On a live page: the signed-in account, or nil."
-  attr :lease, :map, default: nil, doc: "On a live page: its `session_lease`."
-  attr :client_key, :string, default: nil, doc: "On a live page: its client key."
+  attr :client_key, :string,
+    required: true,
+    doc:
+      "The client key of the request that drew the page (`KeyfleetWeb.ClientAddress.client_key/1`)."
 
   @doc """
   The window: the three texts, each with its copy button, and for a signed-in
-  person the form that leaves a message (`AgentMessage.Form`). Closed with its
-  X, Escape or a press beside it (`assets/js/agent_message.ts`).
-
-  A plain page passes its `conn`, and the form runs in a live view of its own
-  (`KeyfleetWeb.AgentMessageLive`), which keeps the client key of the request
-  that drew it (`KeyfleetWeb.ClientAddress.client_key/1`); a live page passes
-  its signed-in `account`, `session_lease` as `lease` and its client key, and
-  the form runs in it.
+  person the form that leaves a message (`AgentMessage.Form`), which runs in
+  the page. Closed with its X, Escape or a press beside it
+  (`assets/js/agent_message.ts`).
   """
   def dialog(assigns) do
     assigns = assign(assigns, texts: texts(assigns.topic), form: "#{assigns.id}-person")
@@ -183,29 +177,14 @@ defmodule KeyfleetWeb.Components.AgentMessage do
           <pre><code id={"#{@id}-text-#{text.id}"}>{text.text}</code></pre>
         </li>
       </ol>
-      <%= if @conn do %>
-        {Phoenix.Component.live_render(@conn, KeyfleetWeb.AgentMessageLive,
-          id: "#{@id}-live",
-          session:
-            @conn
-            |> Session.render_context()
-            |> Map.merge(%{
-              "id" => @form,
-              "topic" => @topic,
-              "client_key" =>
-                @conn |> KeyfleetWeb.ClientAddress.key() |> KeyfleetWeb.ClientAddress.client_key()
-            })
-        )}
-      <% else %>
-        <.live_component
-          module={KeyfleetWeb.Components.AgentMessage.Form}
-          id={@form}
-          topic={@topic}
-          account={@account}
-          lease={@lease}
-          client_key={@client_key}
-        />
-      <% end %>
+      <.live_component
+        module={KeyfleetWeb.Components.AgentMessage.Form}
+        id={@form}
+        topic={@topic}
+        account={@account}
+        lease={@lease}
+        client_key={@client_key}
+      />
     </Regent.Structure.dialog>
     """
   end

@@ -34,6 +34,8 @@ const stops: Stop[] = [
   at("the polls", `${club}/polls`),
   at("About", "/about"),
   at("Opportunities", "/opportunities"),
+  at("Agents", "/agents"),
+  at("Docs", "/docs"),
 ]
 
 const screens = [

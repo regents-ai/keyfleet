@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
 
   test "every code block and table on the docs page can take keyboard focus, so a wide one can be scrolled" do
     blocks = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
-    blocks = LazyHTML.query(blocks, ".public-document :is(pre, table)")
+    blocks = LazyHTML.query(blocks, ".reading__prose :is(pre, table)")
 
     refute Enum.empty?(blocks)
     assert blocks |> LazyHTML.filter("[tabindex='0']") |> Enum.count() == Enum.count(blocks)
@@ -55,7 +55,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
   # the one list in PublicDocuments; the site name is added once.
   test "every reading page has its own title and description" do
     pages =
-      for path <- ~w(/docs /about /opportunities /privacy /terms) do
+      for path <- ~w(/agents /agents/dots /docs /changelog /about /opportunities /privacy /terms) do
         document = build_conn() |> get(path) |> html_response(200) |> LazyHTML.from_document()
         title = document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim()
 
@@ -66,10 +66,37 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         {title, description}
       end
 
-    assert pages |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length() == 5
-    assert pages |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 5
+    assert pages |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> length() == 8
+    assert pages |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 8
 
     assert {"Terms of Use · Keyfleet", "The terms that apply when you use Keyfleet."} in pages
+  end
+
+  test "the section list marks the open document, and an agent's page marks Agents" do
+    for {path, href, current} <- [
+          {"/docs", "/docs", "page"},
+          {"/privacy", "/privacy", "page"},
+          {"/agents/dots", "/agents", "location"}
+        ] do
+      marked =
+        build_conn()
+        |> get(path)
+        |> html_response(200)
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#shell-sidebar a[aria-current]")
+
+      assert {LazyHTML.attribute(marked, "href"), LazyHTML.attribute(marked, "aria-current")} ==
+               {[href], [current]},
+             path
+    end
+  end
+
+  test "an agent page that is not here is not found, and an escaped address opens its page" do
+    assert_error_sent(404, fn -> get(build_conn(), "/agents/no-such-agent") end)
+
+    page = build_conn() |> get("/%70rivacy") |> html_response(200) |> LazyHTML.from_document()
+    assert Enum.count(LazyHTML.query(page, "#route-content .reading__prose")) == 1
+    assert {:ok, _view, _html} = live(build_conn(), "/%70rivacy")
   end
 
   test "the homepage is titled with the site name and what it is for" do
