@@ -277,8 +277,22 @@ defmodule KeyfleetWeb.Components.BuyKey do
           disabled={WalletPanel.blocked(panel, "approve") != nil or approve_done?(panel)}
           aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
         >
-          <span class="fleet-step-mark" aria-hidden="true">
-            <Regent.Icons.icon :if={approve_done?(panel)} name="check" />
+          <%!-- The tick draws in as an approval sent from here lands. The
+          page leaves its line alone once it shows, so an update that lands
+          while it draws (the panel reading the chain again) lets it finish. --%>
+          <span
+            id={"#{@id}-approve-mark"}
+            class="fleet-step-mark"
+            phx-hook="MotionTick"
+            data-done={approve_done?(panel)}
+            aria-hidden="true"
+          >
+            <Regent.Icons.icon
+              :if={approve_done?(panel)}
+              id={"#{@id}-approve-tick"}
+              name="check"
+              phx-update="ignore"
+            />
             <span :if={not approve_done?(panel)}>1</span>
           </span>
           <span data-press-label>

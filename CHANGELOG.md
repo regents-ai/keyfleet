@@ -9298,3 +9298,30 @@ checker pin name the newest release, its tag commit (2f7eee7e) and its wheel
 (SHA256 c9e28ef0…). `make check-cli` passes Keyfleet's commands against that
 commit, so the guides' wording stands. Found by the release check: 1.10.27 was
 published while this release was being checked.
+
+## 2026-11-13: Approve's tick draws in
+
+- In the Buy Key window, the mark on Approve turns into a tick whose line draws
+  in over 280ms, easing out, once an approval sent from there lands while the
+  person watches. Only the line is drawn: the tick is the same icon, size and
+  colour as before, and nothing around it moves. A page drawn again as its
+  connection comes back shows it as it is, and with reduced motion the tick is
+  simply there. An update to the window while it draws (the panel reading the
+  chain again, or Buy pressed straight away) lets it finish. Approve still
+  can't be pressed once it is done, as before.
+- The motion kit (`assets/js/hooks/motion/`) has the piece: `drawTick` and the
+  `MotionTick` hook in `moments.ts`, and `watched` in `shared.ts`, which tells a
+  change the person saw from a page that has just opened or reconnected. The
+  motion lab's stamp draws its tick with the same `drawTick`.
+- The fleet page's setup list this was first asked for was replaced by Pair
+  and Mark present earlier today; those buttons go once done and carry no tick.
+
+Check: compile with warnings as errors, format, typecheck and the 486 unit
+tests pass. In headless Chromium at 1280 and 390 wide, light and dark, read
+from each painted frame, the tick grew once from part of it to all of it as
+the approval landed, with every box around it still to the hundredth of a
+pixel; with Buy pressed the moment the approval landed, the window updated
+5 to 14ms into the draw and the draw went on to the end, where before it
+jumped straight to a whole tick; a later re-render and a reconnect drew
+nothing; under reduced motion it never drew; the drawn tick ends pixel for
+pixel as the still one. WebKit is not run on the Mac.
