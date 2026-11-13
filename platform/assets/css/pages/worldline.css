@@ -16,9 +16,7 @@
      six faint tints, a swatch folded into the page's muted ink, and the
      points on the line take their own. */
   --worldline-line: var(--color-warning);
-  /* --palette-cornflower, stated here until the design system's pin that
-     publishes it. */
-  --worldline-workspace: #4D79E4;
+  --worldline-workspace: var(--palette-cornflower);
   --worldline-code: var(--color-success);
   --worldline-notebooks: light-dark(var(--palette-charcoal), var(--palette-platinum));
   --worldline-chat-1: color-mix(in oklab, var(--palette-powder-blue) 55%, var(--color-fg-muted));
@@ -121,7 +119,7 @@
   width: 0.75rem;
   height: 0.5rem;
   border-radius: 0;
-  background: repeating-conic-gradient(var(--worldline-chat-1) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  background: repeating-conic-gradient(in oklch, var(--worldline-chat-1) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
 }
 
 .worldline-legend li:is([data-trail="votes"], [data-trail="present"])::before {

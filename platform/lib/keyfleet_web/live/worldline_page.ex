@@ -355,7 +355,12 @@ defmodule KeyfleetWeb.WorldlinePage do
 
   defp read(:shards, fleet_id, seq, limit, done_by, read_as) do
     fleet_id
-    |> Keys.shard_events_recorded_before!(seq, limit, done_by, [load: [:agent_profile]] ++ read_as)
+    |> Keys.shard_events_recorded_before!(
+      seq,
+      limit,
+      done_by,
+      [load: [:agent_profile]] ++ read_as
+    )
     |> Enum.map(&entry(:shards, &1, &1.observed_at, &1.record_seq))
   end
 
@@ -553,7 +558,12 @@ defmodule KeyfleetWeb.WorldlinePage do
 
   defp event(:votes, vote, fleet_id, _known) do
     keys = Enum.sort(vote.token_ids)
-    with_keys = if length(keys) > 1, do: " with #{Rules.keys(length(keys))}", else: ""
+
+    with_keys =
+      case keys do
+        [_one] -> ""
+        many -> " with #{Rules.keys(length(many))}"
+      end
 
     %{
       id: "vote:#{vote.id}",

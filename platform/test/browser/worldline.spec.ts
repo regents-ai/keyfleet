@@ -1,3 +1,4 @@
+import {randomBytes} from "node:crypto"
 import {expect, test, type Locator, type Page} from "@playwright/test"
 import {prepareFleet, writeHistory} from "./support/fleet_chain"
 
@@ -9,9 +10,10 @@ import {prepareFleet, writeHistory} from "./support/fleet_chain"
 // happened on, in a new tab too, and the filter shows one Key's events or
 // one wallet's. The first walks ask for less motion, so the picture holds
 // still and a mark stays where it was found; the last ones watch it move.
-// The owner's wallet is used by no other spec.
+// Each worker's owner is a new wallet, so it holds the one Key its history
+// is written as.
 const fleet = "fleet_tech_classic"
-const owner = "0x7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d7d"
+const owner = `0x7d${randomBytes(19).toString("hex")}`
 // A wallet with nothing in the fleet.
 const stranger = "0x0000000000000000000000000000000000000001"
 
@@ -58,11 +60,22 @@ function watchErrors(page: Page) {
   return errors
 }
 
+// Opens a Worldline page; the picture is drawn once it is in view.
 async function open(page: Page, url: string) {
   await page.goto(url)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-  await expect(page.locator("#worldline-stage")).toHaveAttribute("data-worldline-ready", "true")
+  const stage = page.locator("#worldline-stage")
+  await stage.scrollIntoViewIfNeeded()
+  await expect(stage).toHaveAttribute("data-worldline-ready", "true", {timeout: 15_000})
 }
+
+// Where the sun stands in the picture: its word for what just arrived is
+// kept over it, wherever the camera turns.
+const sun = (page: Page) =>
+  page.locator("[data-worldline-news]").evaluate(element => {
+    const shift = new DOMMatrix(getComputedStyle(element).transform)
+    return {x: shift.m41, y: shift.m42}
+  })
 
 const sideways = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth)
 // The page scrolls in the app shell's scroller.
@@ -108,51 +121,56 @@ for (const width of [390, 1280]) {
     const href = (await link.getAttribute("href"))!
     expect(href).toMatch(/^\/classic\/1[/?]/)
     const before = (await link.boundingBox())!
+    const home = await sun(page)
 
     // A drag begun on the mark turns the picture, the mark's link turning with
     // it, and opens nothing.
     await drag(page, found, 60)
-    const turned = (await link.boundingBox())!
-    expect(apart(turned, before)).toBeGreaterThan(4)
+    expect(apart((await link.boundingBox())!, before)).toBeGreaterThan(4)
+    expect(apart(await sun(page), home)).toBeGreaterThan(4)
     expect(await link.innerText()).toBe(card)
     expect(path(page.url())).toBe("/classic/1/worldline")
 
-    // Reset turns it back.
+    // Reset turns it back, the mark and all.
     await page.locator("[data-worldline-reset]").click()
-    await expect.poll(async () => apart((await link.boundingBox())!, before)).toBeLessThan(1)
+    await expect.poll(async () => apart(await sun(page), home)).toBeLessThan(0.5)
+    expect(apart((await link.boundingBox())!, before)).toBeLessThan(0.5)
 
     // So does a double-click on the picture.
     await drag(page, found, 60)
+    expect(apart(await sun(page), home)).toBeGreaterThan(4)
     const empty = (await stage.boundingBox())!
     await page.mouse.dblclick(empty.x + empty.width / 2, empty.y + 6)
-    await page.mouse.move(found.x, found.y)
-    await expect(link).toBeVisible()
-    expect(apart((await link.boundingBox())!, before)).toBeLessThan(1)
-    expect(await link.innerText()).toBe(card)
+    await expect.poll(async () => apart(await sun(page), home)).toBeLessThan(0.5)
 
     // Scrolling over the picture moves it back through time, carrying the mark
     // with the line, and leaves the page where it was; Now brings it back.
+    await page.mouse.move(found.x, found.y)
+    await expect(link).toBeVisible()
+    const shown = await link.innerText()
+    const at = (await link.boundingBox())!
     const pageTop = await scrolled(page)
     await page.mouse.wheel(0, -100)
     await expect(now).toBeVisible()
-    const back = (await link.boundingBox())!
-    expect(back.x - before.x).toBeGreaterThan(40)
-    expect(back.x - before.x).toBeLessThan(160)
+    await expect.poll(async () => (await link.boundingBox())!.x - at.x).toBeGreaterThan(40)
+    expect((await link.boundingBox())!.x - at.x).toBeLessThan(160)
     expect(await scrolled(page)).toBe(pageTop)
-    expect(await link.innerText()).toBe(card)
+    expect(await link.innerText()).toBe(shown)
     await now.click()
     await expect(now).toBeHidden()
-    await page.mouse.move(found.x, found.y)
-    await expect.poll(async () => apart((await link.boundingBox())!, before)).toBeLessThan(2)
+    await expect.poll(async () => apart((await link.boundingBox())!, at)).toBeLessThan(0.5)
 
     // A drag with Shift held moves through time too, and opens nothing.
+    await page.mouse.move(found.x, found.y)
+    const pressed = (await link.boundingBox())!
+    const held = await link.innerText()
     await page.keyboard.down("Shift")
     await drag(page, found, 80)
     await page.keyboard.up("Shift")
     await expect(now).toBeVisible()
-    const slid = (await link.boundingBox())!
-    expect(slid.x - before.x).toBeGreaterThan(30)
-    expect(slid.x - before.x).toBeLessThan(130)
+    await expect.poll(async () => (await link.boundingBox())!.x - pressed.x).toBeGreaterThan(30)
+    expect((await link.boundingBox())!.x - pressed.x).toBeLessThan(130)
+    expect(await link.innerText()).toBe(held)
     expect(path(page.url())).toBe("/classic/1/worldline")
     await now.click()
     await expect(now).toBeHidden()
@@ -227,7 +245,8 @@ for (const width of [390, 1280]) {
 
     const stage = page.locator("#worldline-stage")
     const now = page.locator("[data-worldline-now]")
-    await page.locator("#app-shell-scroller").evaluate(element => element.scrollTo(0, 0))
+    const scroller = page.locator("#app-shell-scroller")
+    await scroller.evaluate(element => element.scrollTo(0, 0))
 
     // Off the picture the wheel scrolls the page.
     const legend = (await page.locator("#worldline-legend").boundingBox())!
@@ -236,11 +255,16 @@ for (const width of [390, 1280]) {
     await expect.poll(() => scrolled(page)).toBeGreaterThan(0)
 
     // On it, at now, scrolling on toward now scrolls the page too, and the
-    // picture stays at the head.
+    // picture stays at the head. The picture's top is brought near the
+    // window's first, with the page still able to scroll on.
+    await page.waitForTimeout(600)
+    const below = (await stage.boundingBox())!.y - 100
+    await scroller.evaluate((element, by) => element.scrollBy(0, by), below)
     await page.waitForTimeout(600)
     const top = await scrolled(page)
     const over = (await stage.boundingBox())!
-    await page.mouse.move(over.x + over.width / 2, (over.y + Math.min(over.y + over.height, 520)) / 2)
+    expect(over.y).toBeLessThan(160)
+    await page.mouse.move(over.x + over.width / 2, over.y + 60)
     await page.mouse.wheel(0, 120)
     await expect.poll(() => scrolled(page)).toBeGreaterThan(top)
     await expect(now).toBeHidden()
@@ -357,17 +381,24 @@ for (const [width, theme] of [
     await page.screenshot({path: info.outputPath(`worldline-${width}-${theme}-page.png`)})
     const home = await shot("three-quarter")
 
-    await stage.focus()
-    for (let i = 0; i < 3; i++) await page.keyboard.press("Alt+ArrowRight")
-    for (let i = 0; i < 2; i++) await page.keyboard.press("Alt+ArrowUp")
-    await page.keyboard.press("Escape")
+    // Turned from the keyboard, then let go of it, so its middle guide goes.
+    const turn = async (presses: string[]) => {
+      await stage.focus()
+      for (const press of presses) await page.keyboard.press(press)
+      await stage.blur()
+    }
+    await turn([...Array(3).fill("Alt+ArrowRight"), ...Array(2).fill("Alt+ArrowUp")])
     const side = await shot("side-on")
     expect(side.equals(home)).toBe(false)
 
-    for (let i = 0; i < 12; i++) await page.keyboard.press("Alt+ArrowLeft")
-    await page.keyboard.press("Escape")
+    await turn(Array(12).fill("Alt+ArrowLeft"))
     const down = await shot("down-axis")
     expect(down.equals(side)).toBe(false)
+
+    await open(page, `/classic/1/worldline?by=${stranger}`)
+    await page.waitForTimeout(1200)
+    await page.mouse.move(1, 1)
+    await shot("none")
 
     // Resized, the picture is drawn again at its new size.
     const canvas = page.locator("[data-worldline-canvas]")
@@ -382,10 +413,6 @@ for (const [width, theme] of [
     const [drawnAcross, boxAcross] = await across()
     expect(drawnAcross).toBe(boxAcross)
     await shot("resized")
-
-    await open(page, `/classic/1/worldline?by=${stranger}`)
-    await page.waitForTimeout(1200)
-    await shot("none")
     expect(errors).toEqual([])
   })
 }

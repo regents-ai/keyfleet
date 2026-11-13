@@ -229,17 +229,24 @@ defmodule KeyfleetWeb.WorldlinePageTest do
     presence!(@fleet, 2, DateTime.utc_now())
     epoch!(2, "d", 2)
     money_event!(@fleet, :daily_split_run, voted: false, keys: 2, bps: 100)
+
     money_event!(@fleet, :claimed,
       account: wallet("a"),
       by: wallet("a"),
       asset: wallet("0"),
       amount: Decimal.new(5)
     )
+
     Projects.start_project!(@fleet, 1, "plates", "Hull plates", actor: owner)
 
     poll =
       Polls.start_poll!(
-        %{fleet_id: @fleet, question: "Which door next?", choices: ["Left", "Right"], minutes: 30},
+        %{
+          fleet_id: @fleet,
+          question: "Which door next?",
+          choices: ["Left", "Right"],
+          minutes: 30
+        },
         actor: owner
       )
 
@@ -305,7 +312,9 @@ defmodule KeyfleetWeb.WorldlinePageTest do
              ["Key 1 bought", "Key 1's agent writes", "Proposal 1"]
 
     # An agent's wallet, written in any case, has what the agent wrote.
-    {:ok, by} = WorldlinePage.by(" 0X" <> String.upcase(String.slice(agent.wallet_address, 2..-1//1)))
+    {:ok, by} =
+      WorldlinePage.by(" 0X" <> String.upcase(String.slice(agent.wallet_address, 2..-1//1)))
+
     assert seen.(by) == ["Key 1's agent writes"]
 
     # A shard's wallet, and a Key nobody did anything as.
@@ -334,8 +343,10 @@ defmodule KeyfleetWeb.WorldlinePageTest do
         do: assert(WorldlinePage.by(words) == {:ok, {:key, 19}}, words)
 
     assert WorldlinePage.by("Key 1,234") == {:ok, {:key, 1234}}
+
     assert WorldlinePage.by("0x" <> String.duplicate("aB", 20)) ==
              {:ok, {:wallet, "0x" <> String.duplicate("ab", 20)}}
+
     assert WorldlinePage.by("  ") == {:ok, nil}
 
     for words <- ["0", "Key", "Key 0", "19a", "0x123", "0x" <> String.duplicate("g", 40), "Lamp"],

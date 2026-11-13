@@ -8621,3 +8621,63 @@ properties, 1,366 tests, 19 excluded); typecheck, 436 unit tests and 3
 budgets pass; browser suite 125, devices 70, chain suite in Chromium 117
 (three failed once together when the test server's held database was lost
 and passed when run again); required fixes pass.
+
+## 2026-11-13 — The Worldline in three dimensions: one helix per planet
+
+Sean asked for the Worldline as a 3D picture: three planets on fixed helices
+around the gold line, the sun at the real time, rooms as dithered lines of
+pixels, every fleet action a mark, real turning in 3D, and a filter by Key or
+wallet. The pass before drew a pile of curls closing on the sun: its trails
+were built from each event's own piece, each easing into the sun, so every
+event and every page read added another.
+
+- Orbits: Workspace (a turn a day, innermost), Code (three days) and
+  Notebooks (a week, outermost) are each one helix,
+  `(v·t, R cos(2πt/P + φ), R sin(2πt/P + φ))`, worked out on the GPU from time
+  alone (`paths` in `assets/js/worldline/scene.ts`, `pathsWgsl`) as instanced
+  strips of 64 segments, ending at the planet beside the sun, with each
+  planet's circle in the plane of the present. The paths take no event data,
+  so nothing can repeat them; `trails.ts` and its test are gone. An event is
+  a bead where its planet stood then, a room post a pixel on its room's line
+  (dithered by how busy the room is), anything fleet-wide a point on the line.
+  Turns nearer than three widths on the screen fade into a soft band; the
+  picture opens on 3 to 8 Workspace turns.
+- Where a turn seen edge-on doubles back on the screen, a strip's two sides
+  swap within a step; the room around the path closes in there, so no stub is
+  drawn across the top of a loop.
+- Camera: vgpu's orbit rig, perspective and view matrices (`vgpu/scene`). A
+  drag turns it with momentum and limits; Reset or a double-click turns it
+  back; the wheel, or Shift and a drag, moves through time; a pinch, or Ctrl
+  and the wheel, zooms toward the pointer; − and + say how far; the keyboard
+  does all of it (Alt and the arrows turn). Picking projects each mark at the
+  current turn, the nearer winning a tie.
+- Drawing: a vgpu surface, an `rgba16float` offscreen target, stars by night,
+  bright, blur and composite passes for the bloom, override constants for the
+  far and near sides, pipelines compiled before the first frame, and a lost
+  device handled. anime.js (`createScope`, `animate`, `createTimeline`) runs
+  the reveal, the glides, the focus, arrivals and a change of filter; for a
+  reader who asks for less motion the picture holds still. It pauses off
+  screen.
+- Events: posts, workspace changes, pushes, notebook backups, polls opened
+  and stopped (members only), proposals opened, closed, executed and
+  cancelled, votes, Keys sold, shards, presence, treasury split runs and
+  claims, and projects, each linking to its page. `Keyfleet.Preparations.DoneBy`
+  keeps one Key's events, or a wallet's and those of the Keys it holds now;
+  `NewestFirst` takes the cursor to read before.
+- Filter: `?by=` takes a Key number or a 0x address in any case, read on the
+  server for the picture, its older pages and the list; anything else says
+  "Enter a Key number or a 0x address." beside the field.
+- Fix: the room lines read for the Worldline (`Message` `:fleet_lines_before`)
+  select `seq`; without it a post's place reached the socket as
+  `#Ash.NotLoaded` and closed it.
+- Colour: Workspace draws in `--palette-cornflower` (the literal `#4D79E4` is
+  gone), its shades `color-mix(in oklab, …)`; the legend's Chat swatch blends
+  in oklch. The style check reports 51 breaks, none in the Worldline.
+
+Check: format, compile with warnings as errors, credo strict, xref (131 of
+131), codegen, route handoff and usage rules pass; full suite 1,389 (18
+properties, 1,371 tests, 19 excluded); typecheck, vitest (431 in 33 files)
+and 3 budgets pass; the six shaders compile in Dawn and pass `vgpu check`;
+the Chromium Worldline walk (12 tests: 390 and 1280 wide, both themes, turned
+side-on, three-quarter and down the axis) passes; frames hold at 16.7 ms at
+390 and 1280 wide with no long tasks.

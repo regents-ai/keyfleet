@@ -145,8 +145,7 @@ defmodule Keyfleet.Keys.Presence do
              )
 
       prepare {Keyfleet.Preparations.NewestFirst,
-               sort: [block_number: :desc, log_index: :desc],
-               before: [:before_block, :before_log]}
+               sort: [block_number: :desc, log_index: :desc], before: [:before_block, :before_log]}
 
       prepare {Keyfleet.Preparations.DoneBy, key: :token_id}
       prepare build(select: [:id, :fleet_id, :token_id, :block_number, :log_index, :observed_at])

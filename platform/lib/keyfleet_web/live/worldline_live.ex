@@ -87,12 +87,7 @@ defmodule KeyfleetWeb.WorldlineLive do
   def read(socket, :worldline, %{"fleet_id" => fleet_id} = params) do
     show = if params["show"] == "list", do: :list, else: :picture
     read_as = ShellLive.reads_as(socket, fleet_id)
-
-    {by, wrong?} =
-      case WorldlinePage.by(params["by"] || "") do
-        {:ok, by} -> {by, false}
-        :error -> {nil, true}
-      end
+    {by, wrong?} = filter(params["by"])
 
     worldline = %{
       fleet_id: fleet_id,
@@ -105,13 +100,7 @@ defmodule KeyfleetWeb.WorldlineLive do
       asked: params["by"],
       typed: if(wrong?, do: params["by"], else: typed(by)),
       wrong?: wrong?,
-      legend:
-        @planets ++
-          for(
-            {source, entry} <- @legend,
-            source in WorldlinePage.sources(fleet_id, read_as),
-            do: entry
-          )
+      legend: legend(fleet_id, read_as)
     }
 
     socket = stream(socket, :worldline, [], reset: true)
@@ -127,6 +116,20 @@ defmodule KeyfleetWeb.WorldlineLive do
 
   def read(socket, _route_id, _params),
     do: socket |> assign(:worldline, nil) |> stream(:worldline, [], reset: true)
+
+  # The filter the address names, and whether its words name nothing.
+  defp filter(words) do
+    case WorldlinePage.by(words || "") do
+      {:ok, by} -> {by, false}
+      :error -> {nil, true}
+    end
+  end
+
+  # The planets, then what the reader may read of the rest.
+  defp legend(fleet_id, read_as) do
+    sources = WorldlinePage.sources(fleet_id, read_as)
+    @planets ++ for {source, entry} <- @legend, source in sources, do: entry
+  end
 
   # A filter as the field shows it.
   defp typed(nil), do: ""

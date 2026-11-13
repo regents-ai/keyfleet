@@ -252,8 +252,17 @@ fn on(path: u32, ring: bool, u: f32) -> vec3f {
     }
   }
   let half = 0.5 * width * perspective(here.z);
-  // Room either side for the glow, and around the line for its veil.
-  let room = half + select(2.5 + width, 6.0, path == 0u);
+  // Room either side for the glow, and around the line for its veil. Where a
+  // turn seen edge-on doubles back on the screen, its sides swap within a
+  // step, so there the room closes in on the path, or the swap would draw a
+  // stub across it.
+  let back = here.xy - project(on(path, ring, max(u - run.z, run.x))).xy;
+  let forth = project(on(path, ring, min(u + run.z, run.y))).xy - here.xy;
+  var bend = 1.0;
+  if (length(back) > 0.0001 && length(forth) > 0.0001) {
+    bend = dot(normalize(back), normalize(forth));
+  }
+  let room = half + 1.0 + select(1.5 + width, 5.0, path == 0u) * smoothstep(0.0, 0.7, bend);
   let scale = params.size.z;
 
   var ribbon: Path;

@@ -4,6 +4,14 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Orbits.** The Worldline is now drawn in three dimensions. Workspace circles the line
+  once a day, Code every three days and Notebooks once a week, and the sun stands at the
+  real time. Each room's posts run beside the line as a dotted trail, and every vote, Key
+  sale, shard, payout and project shows as its own mark. Drag to turn the picture, scroll
+  or Shift and drag to move through time, pinch or press − and + to zoom, and press Reset
+  or double-click to turn it back.
+- **Filter.** The Worldline shows one Key's events, or one wallet's, in the picture and in
+  List. Type a Key number or an address into Filter; Clear shows everyone again.
 - **Worldline.** A fleet has a new tab that draws its whole history as one picture: a
   line running to now, with trails around it for the workspace, the code, the notebooks
   and each room, and bright points for proposals and polls. Every mark opens what it
