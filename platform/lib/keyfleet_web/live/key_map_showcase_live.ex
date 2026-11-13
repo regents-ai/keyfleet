@@ -114,6 +114,9 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
      }, socket}
   end
 
+  # The made-up keys have no cards, so the map's ask for close-ups finds none.
+  def handle_event("keymap_pictures", _params, socket), do: {:reply, %{pictures: []}, socket}
+
   # Every drawn key can be chosen: the sold ones and the next one on sale.
   def handle_event("select_key", %{"token_id" => token_id}, socket) when is_integer(token_id) do
     if token_id in 1..(socket.assigns.fleet.minted + 1)//1,
