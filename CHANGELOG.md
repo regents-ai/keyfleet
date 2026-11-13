@@ -8503,3 +8503,39 @@ Check: format, compile with warnings as errors, credo strict, xref (131 of
 tests pass (179: 4 properties, 175 tests); `make check-siwa-latest`,
 `check-cli` (1.10.26's checker) and `check-required-fixes` (ash-template
 `4f1628f1`) pass.
+
+## 2026-11-13 — The Worldline scrolls through time and moves live
+
+Sean asked for a Worldline that scrolls and moves live, closer to his
+reference picture: a gold line and sun, blue trails curling into loops with
+bright beads at their tips, stars on black. On the live site a room post that
+began with a Markdown heading showed its marks in the List and on hover.
+
+- Scrolling: the wheel and a trackpad move through time on both axes; a pinch,
+  or Ctrl or ⌘ and the wheel, zooms; a drag pans and carries on when let go;
+  the arrows, plus and minus and End work as before. Going on past now, or off
+  the picture, the page scrolls; a 300 ms pause in the wheel ends which of the
+  two has the scroll. On a phone a sideways swipe moves through time and an
+  upward one scrolls the page. Now glides back to the head.
+- Motion: the trails turn at their own pace (Notebooks a turn in 2.5 days,
+  Workspace 3.5, Code 5, rooms 1.5 to 3.5), beads ride them and the head
+  stands at the real now. A new event flares at the head with its room's name
+  (animejs); the GPU draws the steady motion. It pauses off screen and in a
+  hidden tab and holds still for a reader who asks for less motion. A mark
+  pointed at eases the turning to a stop over 200 ms, so its link holds still.
+- Shape: after each event its trail curls into a loop sized by the quiet
+  before that trail's next event, the event a bead at the tip, so a burst is
+  a run of tight loops. Every trail settles into the head over the last 15%
+  of the width. How far a trail has turned depends on the time alone, so marks
+  stay put as older history pages in.
+- Look: a faint starfield by night; Workspace, Notebooks and Code are three
+  blues from the palette (info, info mixed with success, info sunk toward the
+  page); Chat is the muted ink, thinner and fainter.
+- A post's title in the Worldline goes through `ActivityLines.plain/1`, as the
+  activity feed's quotes do, so headings, bold, code and links show as words.
+
+Check: format, compile with warnings as errors, credo strict, xref (131 of
+131), codegen and route handoff pass; the Worldline, router gate, route
+catalog and homepage tests pass (39); typecheck, vitest (436 in 33 files) and
+the budget tests (3) pass; the assets build; the Chromium Worldline walk (6
+tests, 390 and 1280 wide) passes twice.

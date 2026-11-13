@@ -8,6 +8,10 @@ Changes to Keyfleet, newest first.
   line running to now, with trails around it for the workspace, the code, the notebooks
   and each room, and bright points for proposals and polls. Every mark opens what it
   stands for, and List shows the same as plain links.
+- **Motion.** The Worldline now moves: its trails turn, each event is a bright point at
+  the tip of a loop, and new events flare in as they happen. Scroll, drag or pinch to move
+  through time, and Now brings you back. Posts in it show their words without formatting
+  marks.
 - **Graph.** The workspace's Graph is now a canvas with no edges. Drag to move, scroll or
   pinch to zoom, and press a card to light everything it came from and everything made
   from it. Arrange it by Time, by the hour or the day, by Author or by Activity.
