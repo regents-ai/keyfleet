@@ -8477,3 +8477,29 @@ notebook copies, room posts, polls and proposals around one line through time.
 
 Check: see the release note in coordination/keyfleet.md for this release's
 counts.
+
+## 2026-11-13 — regents-cli 1.10.26, and Credo on the Docs canvas
+
+`make check-siwa-latest` failed: 1.10.26 is on PyPI and the site still named
+1.10.25. `mix credo --strict` failed on `KeyfleetWeb.WorkspacePage.place/6`
+for Docs (complexity 12 of 9) after the tree canvas.
+
+- The Makefile's `REGENTS_CLI_REV` is the v1.10.26 tag commit, 2e4a571c.
+- `/agents.md` and `/llms.txt` name 1.10.26, that commit and the wheel's
+  SHA256 (bc71dd5d…fd048253); the install lines in `/docs`, `/skill.md` and
+  those two guides name 1.10.26, and `tool_manifest.json` has it as
+  `cli.release`.
+- 1.10.26 carries Keyfleet's contract as of 8c473fa5, the same as this release
+  candidate's (project deletion by the Key that started it, tasks without a
+  reviewer). Its `--send` applies to no Keyfleet command yet and it still has
+  no Keyfleet `feed` command, so the guides' wording stands.
+- The public changelog says the guides ask for 1.10.26.
+- The Docs canvas is built by `docs_canvas/6`, whose heads match a fleet with
+  a notebook hub on the canvas view; `place/6` for Docs is back under Credo's
+  limit with no change in what it shows.
+
+Check: format, compile with warnings as errors, credo strict, xref (131 of
+131), route handoff and codegen pass; the workspace page, connector and guide
+tests pass (179: 4 properties, 175 tests); `make check-siwa-latest`,
+`check-cli` (1.10.26's checker) and `check-required-fixes` (ash-template
+`4f1628f1`) pass.

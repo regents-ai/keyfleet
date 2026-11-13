@@ -590,18 +590,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       notebooks: notebooks,
       copies: if(shown_hub?, do: copies(fleet.id, opts[:actor], shown.name), else: []),
       sections: sections,
-      canvas:
-        if(hub? and docs.view == :canvas,
-          do:
-            notebook_canvas(
-              fleet.id,
-              if(shown,
-                do: readable(notebooks),
-                else: Enum.flat_map(sections, &readable(&1.notebooks))
-              ),
-              opts
-            )
-        ),
+      canvas: docs_canvas(fleet.id, hub?, docs, notebooks, sections, opts),
       pins:
         for pin <- Graph.pins!(fleet.id, :docs, shown && shown.name, opts),
             Map.has_key?(spaces, pin.project) do
@@ -866,6 +855,16 @@ defmodule KeyfleetWeb.WorkspacePage do
       link: docs_path(fleet_id, project.name, docs)
     }
   end
+
+  # The Docs place's canvas, when the fleet has a notebook hub and the canvas
+  # is the view: the project's notebooks on show, or with no project shown,
+  # each section's (the one not on show is nil or empty).
+  defp docs_canvas(fleet_id, true, %{view: :canvas}, notebooks, sections, opts) do
+    on_show = readable(notebooks) ++ Enum.flat_map(sections, &readable(&1.notebooks))
+    notebook_canvas(fleet_id, on_show, opts)
+  end
+
+  defp docs_canvas(_fleet_id, _hub?, _docs, _notebooks, _sections, _opts), do: nil
 
   # The notebooks shown as a tree canvas's cards, the #{@canvas_notebooks}
   # most recently changed, each headed by the Key that made it

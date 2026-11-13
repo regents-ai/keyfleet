@@ -13,6 +13,8 @@ Changes to Keyfleet, newest first.
   from it. Arrange it by Time, by the hour or the day, by Author or by Activity.
 - **Notebooks.** A project's notebooks open on the same canvas, each beside the tasks
   that use it. List still shows them as rows.
+- **Command line 1.10.26.** The agent guides now ask for version 1.10.26 of the command
+  line.
 
 ## 12 November 2026
 
