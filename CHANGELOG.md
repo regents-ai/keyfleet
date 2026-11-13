@@ -8722,3 +8722,55 @@ and 3 budgets pass; the six shaders compile in Dawn and pass `vgpu check`;
 the Chromium Worldline walk (12 tests: 390 and 1280 wide, both themes, turned
 side-on, three-quarter and down the axis) passes; frames hold at 16.7 ms at
 390 and 1280 wide with no long tasks.
+## 2026-11-13 — Each fleet's notebook hours, background runs included
+
+Notebook machine hours join the monthly usage meter, background runs as well
+as sessions; code stored stays out for now. This only measures.
+
+- `notebook-machines.patch` gives each hub `GET /api/v1/admin/machines`, for
+  its super admin signed in (Keyfleet's provisioner): every session that was
+  given a machine and every job run that started one, with `id`, `kind`
+  (`session` or `run`), `started_at` and `ended_at`. A session ends when the
+  hub has confirmed its machine destroyed (`sandbox_reclaimed_at` on a
+  finished session), a run when it finishes (its machine is destroyed straight
+  after); until then `ended_at` is null. The patch adds three route tests, the
+  route to marimohub's API description and client types, and exports
+  `indexedJobs`; the hub image runs the tests. The hub image tag is now
+  626ec14-7130fe0 in the five fleet files.
+- `notebook-hub/scripts/workspace.sh` applies every patch the hub image does,
+  in the image's order. With only the lockfile patch the frozen install
+  refused, because the lockfile names the catalog entry `storage-calls.patch`
+  adds.
+- `Keyfleet.Usage.Machine` (table `notebook_machines`, server only) keeps each
+  machine a hub lists, upserted on the fleet and id, with `seen_at`, the last
+  read that listed it. `Keyfleet.Usage.ReadHub` (queue `notebook_hubs`, one
+  try, at most one waiting per fleet), queued for every fleet with a hub by
+  the hourly count, records the list and counts `notebook_seconds` on this
+  month's row, and on last month's once it has a figure, so a month that
+  ended before its hub was first read stays without one. A machine counts
+  from its start until its end, or until its last sighting while its end is
+  unknown, within the month, summed in one query (`:during`, through
+  `notebook_machines_counted_index` on `fleet_id` and
+  `coalesce(ended_at, seen_at)`). One whose end is never seen stops at its
+  last sighting. A hub read outage longer than the hub keeps an ended session
+  (about a day) loses the sessions that start and end inside it; that is
+  accepted.
+- The Treasury page's Usage panel shows Notebooks, in hours to the tenth, once
+  the month has a figure. The Treasury read carries it as
+  `usage.notebook_seconds`, and the contract says so.
+- The migration adds the table with its index, and
+  `fleet_usage.notebook_seconds`, empty on every month already counted. The
+  compile-connected budget is 133: the Machine record with its domain adds
+  one.
+- `docs/code-store.md` no longer says the store's repository delete is
+  unreleased: keyfleet-code runs it (`c9a59ea`, in its `keyfleet` branch).
+
+Release the five hubs first, then the site: until a hub has the list, the
+site's hourly read of it fails and its fleet shows no notebook figure.
+
+Check: format, compile with warnings as errors, credo strict, xref (133 of
+133), codegen and route handoff pass; full suite 1,397 (18 properties, 1,379
+tests, 19 excluded); typecheck and 436 unit tests pass; assets build; browser
+suite 125, devices 70; required fixes pass; the notebook hub check passes on a
+fresh workspace (compute-fly 73 tests, the route's 3 tests and the API
+description's 8 in the hub image, the runner helper's 14).

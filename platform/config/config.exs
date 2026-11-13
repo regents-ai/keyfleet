@@ -284,6 +284,7 @@ config :keyfleet, Oban,
   # Calls to the fleets' notebook hubs wait on another server, so they have
   # their own queue. It runs one job at a time (the site runs on one
   # machine), so two roster runs never set up or change one hub together.
+  # The hourly reads of each hub's notebook machines wait their turn there.
   # Making fleets' repositories in the code store waits on it too.
   # Deleting agents' replaced pictures from their bucket waits on it too.
   # Drawing revealed Keys' cards waits on the key-art service, one at a time.

@@ -140,7 +140,8 @@ defmodule KeyfleetWeb.TreasuryLive do
   attr :usage, :map, required: true, doc: "the figures of the fleet's usage this month"
 
   # What the fleet has used of the site this month, as last counted: how large
-  # its workspace is and what its chat has taken. It only measures.
+  # its workspace is, what its chat has taken and, once its hub is read, how
+  # long its notebook machines ran. It only measures.
   defp usage(assigns) do
     ~H"""
     <section id="treasury-usage" class="proposals-panel" aria-labelledby="treasury-usage-title">
@@ -167,6 +168,15 @@ defmodule KeyfleetWeb.TreasuryLive do
             </span>
           </dd>
         </div>
+        <div :if={@usage.notebook_seconds}>
+          <dt>Notebooks</dt>
+          <dd>
+            <Regent.Primitives.figure
+              id="treasury-usage-notebooks"
+              value={hours(@usage.notebook_seconds)}
+            />
+          </dd>
+        </div>
       </dl>
       <p class="proposals-detail">
         {Calendar.strftime(@usage.month, "%B %Y")} so far, counted every hour.
@@ -187,6 +197,18 @@ defmodule KeyfleetWeb.TreasuryLive do
 
   defp counted(1, word), do: "1 #{word}"
   defp counted(count, word), do: "#{grouped(count)} #{word}s"
+
+  # Machine time to the tenth of an hour.
+  defp hours(seconds) do
+    tenths = round(seconds / 360)
+    whole = grouped(div(tenths, 10))
+
+    case rem(tenths, 10) do
+      0 when tenths == 10 -> "1 hour"
+      0 -> "#{whole} hours"
+      tenth -> "#{whole}.#{tenth} hours"
+    end
+  end
 
   attr :page, :map, required: true
 

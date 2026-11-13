@@ -629,7 +629,9 @@
   .treasury-permissions dd { margin: 0; }
   .treasury-history { display: grid; gap: 1rem; border-top: 1px solid var(--color-border); padding-block-start: 1.25rem; }
   @media (max-width: 40rem) { .treasury-permissions > div { grid-template-columns: 1fr; gap: .25rem; } }
-  /* The month's usage: each figure large under its name, with its count beneath. */
+  /* The month's usage: each figure large right under its name, with its count
+     beneath when it has one. */
+  .treasury-usage > div { align-content: start; }
   .treasury-usage dd { display: grid; gap: .15rem; }
   .treasury-usage .rg-figure { font-size: 1.6rem; line-height: 1.1; }
 }

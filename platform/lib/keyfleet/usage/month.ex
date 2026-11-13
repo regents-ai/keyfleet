@@ -8,7 +8,12 @@ defmodule Keyfleet.Usage.Month do
       (`Keyfleet.Graph.record_size/2`);
     * `chat_posts` and `chat_bytes`: the posts written in its rooms and on
       its Keys' walls during the month, and their words as stored
-      (`Keyfleet.Rooms.posts_written/3`). Direct messages are not counted.
+      (`Keyfleet.Rooms.posts_written/3`). Direct messages are not counted;
+    * `notebook_seconds`: how long its notebook machines ran during the
+      month (`Keyfleet.Usage.Machine`), as of the fleet's last hub read
+      (`Keyfleet.Usage.ReadHub`). Nil until a read of the fleet's hub counts
+      the month, so a fleet without a hub, and a month that ended before its
+      hub was first read, show no figure.
 
   Every figure is counted from the records that hold it, never written in.
   Each count replaces the month's last one. Anyone reads it: the Treasury
@@ -42,6 +47,17 @@ defmodule Keyfleet.Usage.Month do
         Ash.Changeset.before_action(changeset, &Keyfleet.Usage.Month.counted/1)
       end
     end
+
+    # Counts the month's notebook hours from the machines read from the
+    # fleet's hub, in place of their last count.
+    update :count_notebooks do
+      accept []
+      require_atomic? false
+
+      change fn changeset, _context ->
+        Ash.Changeset.before_action(changeset, &Keyfleet.Usage.Month.notebooks_counted/1)
+      end
+    end
   end
 
   policies do
@@ -49,7 +65,7 @@ defmodule Keyfleet.Usage.Month do
       authorize_if always()
     end
 
-    policy action(:count) do
+    policy action([:count, :count_notebooks]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -64,15 +80,14 @@ defmodule Keyfleet.Usage.Month do
     attribute :workspace_items, :integer, allow_nil?: false, public?: true, constraints: [min: 0]
     attribute :chat_posts, :integer, allow_nil?: false, public?: true, constraints: [min: 0]
     attribute :chat_bytes, :integer, allow_nil?: false, public?: true, constraints: [min: 0]
+    attribute :notebook_seconds, :integer, public?: true, constraints: [min: 0]
     attribute :counted_at, :utc_datetime_usec, allow_nil?: false, public?: true
   end
 
   @doc false
   def counted(changeset) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
-    month = Ash.Changeset.get_attribute(changeset, :month)
-    from = DateTime.new!(month, ~T[00:00:00])
-    to = DateTime.new!(Date.shift(month, month: 1), ~T[00:00:00])
+    {from, to} = changeset |> Ash.Changeset.get_attribute(:month) |> bounds()
     workspace = Keyfleet.Graph.record_size(fleet_id, to)
     chat = Keyfleet.Rooms.posts_written(fleet_id, from, to)
 
@@ -84,4 +99,44 @@ defmodule Keyfleet.Usage.Month do
       counted_at: DateTime.utc_now()
     })
   end
+
+  @doc false
+  def notebooks_counted(changeset) do
+    require Ash.Expr
+
+    system = [actor: %Keyfleet.Actors.System{}]
+    {from, to} = bounds(changeset.data.month)
+
+    %{seconds: seconds} =
+      Keyfleet.Usage.Machine
+      |> Ash.Query.for_read(
+        :during,
+        %{fleet_id: changeset.data.fleet_id, from: from, to: to},
+        system
+      )
+      |> Ash.aggregate!(
+        {:seconds, :sum,
+         expr:
+           Ash.Expr.expr(
+             fragment(
+               "extract(epoch FROM least(coalesce(?, ?), ?) - greatest(?, ?))::bigint",
+               ended_at,
+               seen_at,
+               ^to,
+               started_at,
+               ^from
+             )
+           ),
+         expr_type: :integer,
+         default: 0},
+        system
+      )
+
+    Ash.Changeset.force_change_attribute(changeset, :notebook_seconds, seconds)
+  end
+
+  defp bounds(month),
+    do:
+      {DateTime.new!(month, ~T[00:00:00]),
+       DateTime.new!(Date.shift(month, month: 1), ~T[00:00:00])}
 end

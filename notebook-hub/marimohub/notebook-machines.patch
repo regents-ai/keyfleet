@@ -1,0 +1,552 @@
+diff --git a/packages/api/openapi.yaml b/packages/api/openapi.yaml
+index a723b690..00ba8fbf 100644
+--- a/packages/api/openapi.yaml
++++ b/packages/api/openapi.yaml
+@@ -1402,6 +1402,46 @@ components:
+         - editors
+         - incomplete
+         - limits
++    AdminNotebookMachinePage:
++      type: object
++      properties:
++        items:
++          type: array
++          items:
++            $ref: '#/components/schemas/AdminNotebookMachine'
++        next_cursor:
++          type:
++            - string
++            - 'null'
++      required:
++        - items
++        - next_cursor
++    AdminNotebookMachine:
++      type: object
++      properties:
++        id:
++          type: string
++          description: The session id of a session machine, the run id of a job run machine
++        kind:
++          type: string
++          enum:
++            - session
++            - run
++        started_at:
++          type: string
++          format: date-time
++        ended_at:
++          type:
++            - string
++            - 'null'
++          format: date-time
++          description: "When the machine ended: a session's sandbox confirmed destroyed, a
++            run finished. Null while it may still run."
++      required:
++        - id
++        - kind
++        - started_at
++        - ended_at
+     AdminUserPage:
+       type: object
+       properties:
+@@ -8463,6 +8503,78 @@ paths:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
++  /api/v1/admin/machines:
++    get:
++      operationId: admin.machines.list
++      tags:
++        - Admin
++      summary: List the notebook machines the hub holds records of
++      description: 'Every session given a sandbox and every job run that provisioned
++        one, while the hub keeps its record: an ended session until it is
++        reaped, a run for the run retention. Currently a single page
++        (`next_cursor` is always null). Super-admin only and session-only.'
++      security: *a4
++      responses:
++        '200':
++          description: The notebook machines, sessions then runs
++          content:
++            application/json:
++              schema:
++                type: object
++                properties:
++                  success:
++                    type: boolean
++                    enum:
++                      - true
++                  data:
++                    $ref: '#/components/schemas/AdminNotebookMachinePage'
++                required:
++                  - success
++                  - data
++        '401':
++          description: Authentication required
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
++        '403':
++          description: Access forbidden
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
++        '413':
++          description: Request body too large
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
++        '422':
++          description: Validation error
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
++        '500':
++          description: Internal server error
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
++        '503':
++          description: Service unavailable
++          headers:
++            Retry-After:
++              schema:
++                type: string
++                description: Seconds to wait before retrying.
++                example: '5'
++              required: true
++              description: Seconds to wait before retrying.
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
+   /api/v1/admin/users:
+     get:
+       operationId: admin.users.list
+diff --git a/packages/api/src/routes/admin.machines.test.ts b/packages/api/src/routes/admin.machines.test.ts
+new file mode 100644
+index 00000000..b41575da
+--- /dev/null
++++ b/packages/api/src/routes/admin.machines.test.ts
+@@ -0,0 +1,142 @@
++import { beforeEach, describe, expect, it } from 'vitest';
++import { createServices, createSessionId, paths, SandboxId } from '@marimo-hub/core';
++import type { NotebookId, ProjectId, Session } from '@marimo-hub/core';
++import type { MemoryBucket } from '@marimo-hub/core/testing';
++import { ACTOR, makeSession } from '@marimo-hub/core/testing';
++import { createApi } from '../createApi';
++import {
++	createInitializedBucket,
++	createTestApi,
++	expectError,
++	expectOk,
++	makeTestDeps,
++} from '../testing';
++
++describe('GET /admin/machines', () => {
++	let bucket: MemoryBucket;
++	let services: ReturnType<typeof createServices>;
++	let pid: ProjectId;
++	let nid: NotebookId;
++
++	beforeEach(async () => {
++		bucket = await createInitializedBucket();
++		services = createServices(bucket);
++		pid = (await services.projects.createProject({ name: 'p', description: '' }, ACTOR)).id;
++		nid = (
++			await services.notebooks.createNotebook(
++				pid,
++				{ title: 'nb', description: '', code: 'import marimo' },
++				ACTOR,
++			)
++		).id;
++	});
++
++	const superAdmin = () =>
++		createTestApi({ bucket, userId: ACTOR, deps: { policy: { superAdmins: [ACTOR] } } }).request;
++
++	async function session(overrides: Partial<Session>): Promise<Session> {
++		const record = makeSession({ project_id: pid, notebook_id: nid, ...overrides });
++		await bucket.put(paths.session(pid, record.session_id), JSON.stringify(record));
++		return record;
++	}
++
++	async function run(request: ReturnType<typeof superAdmin>, jobId: string) {
++		const queued = await expectOk<any>(
++			await request('POST', `/projects/${pid}/notebooks/${nid}/jobs/${jobId}/runs`),
++			201,
++		);
++		return services.jobRuns.getRun(pid, nid, jobId as never, queued.run_id);
++	}
++
++	it('refuses anyone signed out, and anyone who is not a super admin', async () => {
++		await expectError(
++			await createApi(makeTestDeps(bucket)).request('/api/v1/admin/machines'),
++			401,
++			'UNAUTHORIZED',
++		);
++		const { request } = createTestApi({ bucket, userId: ACTOR });
++		await expectError(await request('GET', '/admin/machines'), 403, 'FORBIDDEN');
++	});
++
++	it('lists each session and run that had a machine, ended once its machine is gone', async () => {
++		const running = await session({
++			sandbox_id: SandboxId.parse('sb-0000000000000001'),
++			started_at: '2026-11-12T10:00:00.000Z',
++		});
++		const reclaimed = await session({
++			sandbox_id: SandboxId.parse('sb-0000000000000002'),
++			status: 'terminated',
++			started_at: '2026-11-12T08:00:00.000Z',
++			sandbox_reclaimed_at: '2026-11-12T09:30:00.000Z',
++		});
++		const awaitingTeardown = await session({
++			sandbox_id: SandboxId.parse('sb-0000000000000003'),
++			status: 'expired',
++			started_at: '2026-11-12T06:00:00.000Z',
++		});
++		// A starting session whose first sandbox was reclaimed before a replacement.
++		const replacing = await session({
++			sandbox_id: SandboxId.parse('sb-0000000000000004'),
++			status: 'starting',
++			started_at: '2026-11-12T11:00:00.000Z',
++			sandbox_reclaimed_at: '2026-11-12T11:00:05.000Z',
++		});
++		await session({ session_id: createSessionId(), status: 'failed' });
++
++		const request = superAdmin();
++		const job = await expectOk<any>(
++			await request('POST', `/projects/${pid}/notebooks/${nid}/jobs`, { name: 'nightly' }),
++			201,
++		);
++		const finished = await run(request, job.id);
++		await services.jobRuns.transition(finished, 'provision', () => ({
++			sandbox_id: SandboxId.parse('sb-0000000000000005'),
++			started_at: '2026-11-12T07:00:00.000Z',
++		}));
++		await services.jobRuns.transition(finished, 'start');
++		const done = await services.jobRuns.transition(finished, 'succeed', () => ({
++			finished_at: '2026-11-12T07:20:00.000Z',
++		}));
++		expect(done.run.status).toBe('succeeded');
++		const active = await run(request, job.id);
++		await services.jobRuns.transition(active, 'provision', () => ({
++			sandbox_id: SandboxId.parse('sb-0000000000000006'),
++			started_at: '2026-11-12T11:30:00.000Z',
++		}));
++		await run(request, job.id);
++
++		const res = await request('GET', '/admin/machines');
++		expect(res.headers.get('cache-control')).toBe('no-store');
++		const data = await expectOk<any>(res);
++		expect(data.next_cursor).toBeNull();
++		const byId = (id: string) => data.items.find((item: { id: string }) => item.id === id);
++		expect(data.items).toHaveLength(6);
++		expect(byId(running.session_id)).toEqual({
++			id: running.session_id,
++			kind: 'session',
++			started_at: '2026-11-12T10:00:00.000Z',
++			ended_at: null,
++		});
++		expect(byId(reclaimed.session_id)).toMatchObject({ ended_at: '2026-11-12T09:30:00.000Z' });
++		expect(byId(awaitingTeardown.session_id)).toMatchObject({ ended_at: null });
++		expect(byId(replacing.session_id)).toMatchObject({ ended_at: null });
++		expect(byId(finished.run_id)).toEqual({
++			id: finished.run_id,
++			kind: 'run',
++			started_at: '2026-11-12T07:00:00.000Z',
++			ended_at: '2026-11-12T07:20:00.000Z',
++		});
++		expect(byId(active.run_id)).toMatchObject({
++			kind: 'run',
++			started_at: '2026-11-12T11:30:00.000Z',
++			ended_at: null,
++		});
++	});
++
++	it('answers an empty page for a hub with no machines', async () => {
++		expect(await expectOk(await superAdmin()('GET', '/admin/machines'))).toEqual({
++			items: [],
++			next_cursor: null,
++		});
++	});
++});
+diff --git a/packages/api/src/routes/admin.ts b/packages/api/src/routes/admin.ts
+index 77caf375..b05c22f8 100644
+--- a/packages/api/src/routes/admin.ts
++++ b/packages/api/src/routes/admin.ts
+@@ -2,6 +2,7 @@ import { utcTimestamp } from '@marimo-hub/core/string-formats';
+ import { createRoute, z } from '@hono/zod-openapi';
+ import {
+ 	BadRequestError,
++	BUCKET_SCAN_CONCURRENCY,
+ 	ConflictError,
+ 	ProjectId,
+ 	SessionId,
+@@ -12,10 +13,13 @@ import {
+ 	DEFAULT_SANDBOX_STARTUP_TIMEOUT_MS,
+ 	ForbiddenError,
+ 	isSuperAdmin,
++	isTerminal,
++	mapWithConcurrency,
+ 	ResourceExhaustedError,
+ 	SandboxDiagnosticLease,
+ 	UserId,
+ } from '@marimo-hub/core';
++import { indexedJobs } from '@marimo-hub/core/jobs';
+ import type {
+ 	ComputeResources,
+ 	Identity,
+@@ -473,6 +477,44 @@ const inspectRuntime = createRoute({
+ 	},
+ });
+ 
++const NotebookMachineSchema = z
++	.object({
++		id: z.string().openapi({
++			description: 'The session id of a session machine, the run id of a job run machine',
++		}),
++		kind: z.enum(['session', 'run']),
++		started_at: utcTimestamp(),
++		ended_at: utcTimestamp().nullable().openapi({
++			description:
++				"When the machine ended: a session's sandbox confirmed destroyed, a run finished. Null while it may still run.",
++		}),
++	})
++	.openapi('AdminNotebookMachine');
++
++const listMachines = createRoute({
++	method: 'get',
++	path: '/admin/machines',
++	operationId: 'admin.machines.list',
++	tags: ['Admin'],
++	summary: 'List the notebook machines the hub holds records of',
++	description:
++		'Every session given a sandbox and every job run that provisioned one, while the hub keeps ' +
++		'its record: an ended session until it is reaped, a run for the run retention. Currently a ' +
++		'single page (`next_cursor` is always null). Super-admin only and session-only.',
++	security: SESSION_ONLY_SECURITY,
++	responses: {
++		200: jsonContent(
++			z.object({
++				success: z.literal(true),
++				data: pageSchema(NotebookMachineSchema, 'AdminNotebookMachinePage'),
++			}),
++			'The notebook machines, sessions then runs',
++		),
++		...commonErrors(),
++		...errorResponses(403),
++	},
++});
++
+ const reclaimRuntimeSession = createRoute({
+ 	method: 'post',
+ 	path: '/admin/runtime/projects/{pid}/sessions/{sid}/reclaim',
+@@ -611,6 +653,50 @@ app.openapi(inspectRuntime, async (c) => {
+ 	);
+ });
+ 
++app.openapi(listMachines, async (c) => {
++	const deps = c.get('deps');
++	assertSessionAuthenticated(c, 'access admin endpoints');
++	await assertSuperAdmin(c.get('user'), deps);
++	c.header('Cache-Control', 'no-store');
++	const { catalog, jobRuns, sessions } = deps.services;
++	const [held, snapshot] = await Promise.all([
++		sessions.listSessions(),
++		catalog.getCurrentSnapshot(),
++	]);
++	const runs = await mapWithConcurrency(
++		indexedJobs(snapshot),
++		BUCKET_SCAN_CONCURRENCY,
++		({ projectId, notebookId, entry }) => jobRuns.listRuns(projectId, notebookId, entry.id),
++	);
++	const items = [
++		...held.flatMap((session) =>
++			session.sandbox_id
++				? [
++						{
++							id: session.session_id,
++							kind: 'session' as const,
++							started_at: session.started_at,
++							ended_at: isTerminal(session.status) ? (session.sandbox_reclaimed_at ?? null) : null,
++						},
++					]
++				: [],
++		),
++		...runs.flat().flatMap((run) =>
++			run.started_at
++				? [
++						{
++							id: run.run_id,
++							kind: 'run' as const,
++							started_at: run.started_at,
++							ended_at: run.finished_at ?? null,
++						},
++					]
++				: [],
++		),
++	];
++	return c.json({ success: true, data: { items, next_cursor: null } }, 200);
++});
++
+ app.openapi(listUsers, async (c) => {
+ 	const deps = c.get('deps');
+ 	const user = c.get('user');
+diff --git a/packages/client/src/schema.ts b/packages/client/src/schema.ts
+index 0fea5528..5b46d99f 100644
+--- a/packages/client/src/schema.ts
++++ b/packages/client/src/schema.ts
+@@ -416,6 +416,26 @@ export interface paths {
+ 		patch?: never;
+ 		trace?: never;
+ 	};
++	'/api/v1/admin/machines': {
++		parameters: {
++			query?: never;
++			header?: never;
++			path?: never;
++			cookie?: never;
++		};
++		/**
++		 * List the notebook machines the hub holds records of
++		 * @description Every session given a sandbox and every job run that provisioned one, while the hub keeps its record: an ended session until it is reaped, a run for the run retention. Currently a single page (`next_cursor` is always null). Super-admin only and session-only.
++		 */
++		get: operations['admin.machines.list'];
++		put?: never;
++		post?: never;
++		delete?: never;
++		options?: never;
++		head?: never;
++		patch?: never;
++		trace?: never;
++	};
+ 	'/api/v1/admin/users': {
+ 		parameters: {
+ 			query?: never;
+@@ -2950,6 +2970,23 @@ export interface components {
+ 				max_sessions_per_version: number | null;
+ 			};
+ 		};
++		AdminNotebookMachinePage: {
++			items: components['schemas']['AdminNotebookMachine'][];
++			next_cursor: string | null;
++		};
++		AdminNotebookMachine: {
++			/** @description The session id of a session machine, the run id of a job run machine */
++			id: string;
++			/** @enum {string} */
++			kind: 'session' | 'run';
++			/** Format: date-time */
++			started_at: string;
++			/**
++			 * Format: date-time
++			 * @description When the machine ended: a session's sandbox confirmed destroyed, a run finished. Null while it may still run.
++			 */
++			ended_at: string | null;
++		};
+ 		AdminUserPage: {
+ 			items: components['schemas']['AdminUser'][];
+ 			next_cursor: string | null;
+@@ -7688,6 +7725,86 @@ export interface operations {
+ 			};
+ 		};
+ 	};
++	'admin.machines.list': {
++		parameters: {
++			query?: never;
++			header?: never;
++			path?: never;
++			cookie?: never;
++		};
++		requestBody?: never;
++		responses: {
++			/** @description The notebook machines, sessions then runs */
++			200: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': {
++						/** @enum {boolean} */
++						success: true;
++						data: components['schemas']['AdminNotebookMachinePage'];
++					};
++				};
++			};
++			/** @description Authentication required */
++			401: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
++			/** @description Access forbidden */
++			403: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
++			/** @description Request body too large */
++			413: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
++			/** @description Validation error */
++			422: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
++			/** @description Internal server error */
++			500: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
++			/** @description Service unavailable */
++			503: {
++				headers: {
++					/** @description Seconds to wait before retrying. */
++					'Retry-After': string;
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
++		};
++	};
+ 	'admin.users.list': {
+ 		parameters: {
+ 			query?: never;
+diff --git a/packages/core/src/services/jobs/public.ts b/packages/core/src/services/jobs/public.ts
+index 7b8eac32..9ca0e1ef 100644
+--- a/packages/core/src/services/jobs/public.ts
++++ b/packages/core/src/services/jobs/public.ts
+@@ -1,4 +1,4 @@
+-export { JobsService } from './JobsService';
++export { indexedJobs, JobsService } from './JobsService';
+ export type { CreateJobInput, JobLimits, UpdateJobInput } from './JobsService';
+ export { JobRunService } from './JobRunService';
+ export type { EnqueueRunInput } from './JobRunService';

@@ -227,6 +227,7 @@ defmodule Keyfleet.ReleaseTest do
              "notebook_backups",
              "notebook_file_makers",
              "notebook_handoffs",
+             "notebook_machines",
              "notebook_run_sources",
              "notebook_saved_outputs",
              "notebook_settings",

@@ -68,7 +68,15 @@ defmodule KeyfleetWeb.ProposalsPage do
   # The most USDC the REGENT buyer turns in one piece (its `PIECE_USDC`).
   @piece_usdc 250_000_000
   # What the Treasury page shows of a month's usage (`Keyfleet.Usage.Month`).
-  @usage [:month, :workspace_bytes, :workspace_items, :chat_posts, :chat_bytes, :counted_at]
+  @usage [
+    :month,
+    :workspace_bytes,
+    :workspace_items,
+    :chat_posts,
+    :chat_bytes,
+    :notebook_seconds,
+    :counted_at
+  ]
 
   @doc """
   The fleet's Treasury page: indexed balances, money history and contract details.

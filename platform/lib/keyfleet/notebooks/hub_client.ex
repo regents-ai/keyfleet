@@ -167,6 +167,14 @@ defmodule Keyfleet.Notebooks.HubClient do
       |> request(:get, "/api/v1/projects/#{segment(project_id)}/sessions")
       |> page()
 
+  @doc """
+  Every notebook machine the hub still holds a record of: each session given
+  one and each job run that started one, with `id` (the session's or the
+  run's), `kind` (`session` or `run`), `started_at` and `ended_at`, null while
+  it may still run.
+  """
+  def machines(fleet_id), do: fleet_id |> request(:get, "/api/v1/admin/machines") |> page()
+
   @doc "Every user who has signed in to the hub, with `suspended_at`."
   def users(fleet_id), do: fleet_id |> request(:get, "/api/v1/admin/users") |> page()
 

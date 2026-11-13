@@ -56,6 +56,11 @@ RUN git apply /tmp/maintenance-lock-landed.patch
 # when an image is over a day old.
 COPY marimohub/notebook-prune-hourly.patch /tmp/notebook-prune-hourly.patch
 RUN git apply /tmp/notebook-prune-hourly.patch
+# A super admin lists every notebook machine the hub holds a record of, sessions and
+# job runs alike, with when each started and ended; Keyfleet reads it every hour to
+# count each fleet's notebook hours.
+COPY marimohub/notebook-machines.patch /tmp/notebook-machines.patch
+RUN git apply /tmp/notebook-machines.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
@@ -71,8 +76,9 @@ RUN cd packages/storage-s3 && pnpm exec vp test run
 # Cloudflare example's tests for its lease calls.
 RUN cd apps/server && pnpm exec vp test run src/backgroundLoops.test.ts src/cron.test.ts src/cron.tracing.test.ts src/bootstrap.test.ts
 RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
-# The app pool tests, with the app-pool-sweep.patch add.
-RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts
+# The app pool tests, with the app-pool-sweep.patch add, and the notebook-machines.patch
+# route tests with the API description it adds the route to.
+RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts src/routes/admin.machines.test.ts src/openapi.spec.test.ts
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---
