@@ -9166,3 +9166,26 @@ strict, sobelow, xref (137 of 137), pytest (243), the full suite (1,423: 19
 properties, 1,404 tests, 19 excluded), codegen, usage rules and route
 handoff pass; typecheck and 452 unit tests pass; browser suite 125, devices
 70; required fixes, CLI, SIWA and contracts (547 passed, 6 skipped) pass.
+
+## 2026-11-13 — The Atlas's four views together, and two Heat fixes
+
+- One release holds the Atlas with all four pictures, `?view=heat` (shown
+  unless another is named), `field`, `river` and `blocks`, and the List; the
+  switch at the top reads Heat, Field, River, Blocks, List.
+- The notebook hub image is `626ec14-146cfd5`, in the five fleet files and
+  `notebook-hub/README.md`: `notebooks-updated-after.patch` now applies after
+  main's `python-check.patch`, `run-failure.patch` and `run-page-status.patch`
+  (the Atlas entry above named `626ec14-4a93e50`, its tag before those three).
+  The hub's paged list reads share one pager again
+  (`Keyfleet.Notebooks.HubClient`), which now takes the query, so the Atlas's
+  dated notebook read uses the same one as the job and run lists.
+- Heat: Escape on a card goes back to the picture and closes nothing else on
+  the page, as in Field and River; a card the keyboard reaches shows the
+  site's one focus ring on its link, not a second ring round the card. Field
+  draws its cards from the same page styles, so its cards show one ring too.
+- River's styles move, unchanged, from `assets/css/pages/atlas.css` into
+  `assets/css/pages/atlas_river.css`, loaded right after it, so each view is
+  its own files, as Field's and Blocks' are.
+
+The CSS is 58,384 of 61,440 bytes gzipped in the minified build (the
+everyday unminified build is 64,736, over the budget as on main).

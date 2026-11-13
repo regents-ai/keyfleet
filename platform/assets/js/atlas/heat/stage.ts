@@ -996,7 +996,9 @@ export function createHeatStage(root: HTMLElement, ask: Ask): HeatStage {
   // leave at either end; Escape goes back to the picture.
   function cardKey(event: KeyboardEvent, card: HTMLElement) {
     if (event.key === "Escape") {
+      // The picture's own: no open panel elsewhere on the page closes with it.
       event.preventDefault()
+      event.stopPropagation()
       stage.focus({preventScroll: true})
       return
     }

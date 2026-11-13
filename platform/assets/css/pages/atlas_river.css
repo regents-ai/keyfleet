@@ -1,0 +1,380 @@
+@layer regents-product {
+/* The river: each project a band of one stream, thick as its work, the
+   busiest in the middle. Neighbours wear two tints of one hue with a gap
+   between them, the rest run together in grey, the band chosen is in ink,
+   and notebooks are striped wherever they are drawn. */
+.atlas-page {
+  --atlas-river-1: color-mix(in oklab, var(--palette-cornflower) 80%, var(--color-bg));
+  --atlas-river-2: color-mix(in oklab, var(--palette-cornflower) 50%, var(--color-bg));
+  --atlas-river-rest: color-mix(in oklab, var(--color-fg-muted) 40%, var(--color-bg));
+  --atlas-river-pick: light-dark(var(--palette-charcoal), var(--palette-platinum));
+}
+
+.atlas-river-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17.5rem;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.atlas-river {
+  min-width: 0;
+}
+
+.atlas-river__stage {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.atlas-river__surface {
+  position: relative;
+  height: clamp(20rem, 58vh, 38rem);
+  overflow: clip;
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  contain: strict;
+}
+
+.atlas-river__surface[data-dragging] {
+  cursor: grabbing;
+}
+
+.atlas-river__canvas,
+.atlas-river__names {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Each band's name where it is thickest, and each lane's at its top. */
+.atlas-river__names {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.atlas-river__name,
+.atlas-river__lane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 11rem;
+  padding: 0.125rem 0.375rem;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+  color: var(--color-fg);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.atlas-river__name {
+  translate: -50% -50%;
+}
+
+.atlas-river__name[data-chosen] {
+  font-weight: 500;
+}
+
+.atlas-river__lane {
+  left: 0.5rem;
+  color: var(--color-fg-muted);
+}
+
+:is(.atlas-river__name, .atlas-river__lane, .atlas-river__tick, .atlas-river__card, .atlas-river__more-things, .atlas-river__ring, .atlas-river__tip, .atlas-river__cards)[hidden] {
+  display: none;
+}
+
+.atlas-river__axis {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2rem;
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 2rem;
+  pointer-events: none;
+}
+
+.atlas-river__context {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  padding: 0 0.625rem;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.atlas-river__tick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding-left: 0.3125rem;
+  border-left: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.atlas-river__tick--held {
+  border-left-color: transparent;
+}
+
+/* Inside an hour, a card for each thing, under its mark. */
+.atlas-river__cards {
+  position: absolute;
+  inset: 2rem 0 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.atlas-river__cards > * {
+  translate: 0 -2rem;
+}
+
+.atlas-river__card,
+.atlas-river__more-things {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: 184px;
+  height: 72px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-fg);
+}
+
+.atlas-river__card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-fg) 10%, transparent);
+}
+
+.atlas-river__card[data-pinned] {
+  border-color: var(--ash-accent);
+  box-shadow: 0 0 0 1px var(--ash-accent);
+}
+
+.atlas-river__card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
+/* A square for the workspace's items, a round mark for a notebook, as on the lanes. */
+.atlas-river__card-mark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--palette-cornflower);
+}
+
+.atlas-river__card[data-source="notebook"] .atlas-river__card-mark {
+  border-radius: 50%;
+  background: var(--atlas-river-pick);
+}
+
+.atlas-river__card-what {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.atlas-river__card-at {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-river__card-title {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-fg);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.atlas-river__more-things {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  border-color: var(--ash-line-strong);
+  text-decoration: none;
+}
+
+:is(.atlas-river__card-title, .atlas-river__more-things):hover {
+  text-decoration: underline;
+}
+
+/* The keyboard's place: a band's bucket, or a lane's hour. */
+.atlas-river__ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--color-focus);
+  border-radius: var(--radius);
+  pointer-events: none;
+}
+
+.atlas-river__still {
+  display: none;
+  position: absolute;
+  inset-inline: 1rem;
+  bottom: 4rem;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.atlas-river__surface[data-atlas-still] .atlas-river__still {
+  display: block;
+}
+
+.atlas-river__tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: grid;
+  gap: 0.125rem;
+  max-width: 16rem;
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--color-fg) 12%, transparent);
+  color: var(--color-fg-muted);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.atlas-river__tip strong {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+
+/* More, Fewer and the zoom, in the bottom right corner. */
+.atlas-river__bar {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.5rem;
+  font-family: var(--font-family-ui);
+  font-size: 0.875rem;
+}
+
+.atlas-river__bar > * {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+/* The page's buttons take their size from around them. */
+.atlas-river__zoom {
+  display: flex;
+  align-items: stretch;
+  font-size: 1.125rem;
+}
+
+.atlas-river__bar button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  color: var(--color-fg);
+  cursor: pointer;
+}
+
+.atlas-river__zoom button {
+  border: 0;
+  background: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .atlas-river__bar button:hover {
+    background: var(--ash-panel-strong);
+  }
+}
+
+.atlas-river__zoom output {
+  display: grid;
+  place-items: center;
+  min-width: 3.5rem;
+  border-inline: 1px solid var(--color-border);
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.atlas-river-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+}
+
+.atlas-river__key {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 2px;
+  background: var(--atlas-river-1);
+}
+
+.atlas-river__key--notebooks {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--atlas-river-1) 0 1.5px,
+    color-mix(in oklab, var(--atlas-river-1) 38%, var(--color-bg)) 1.5px 4.25px
+  );
+}
+
+@media (max-width: 64rem) {
+  .atlas-river-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .atlas-river__bar {
+    right: 0.5rem;
+    bottom: 0.5rem;
+  }
+
+  .atlas-river__bar button {
+    min-width: 2.5rem;
+  }
+}
+}
