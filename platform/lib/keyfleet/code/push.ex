@@ -54,6 +54,21 @@ defmodule Keyfleet.Code.Push do
       prepare build(sort: [pushed_at: :desc], limit: 10)
     end
 
+    # The fleet's pushes to every project's repository from just past
+    # `before_at` and `before_id`, newest first, `limit` at most.
+    read :pushed_before do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before_at, :utc_datetime_usec, allow_nil?: false
+      argument :before_id, :uuid
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
+      filter expr(fleet_id == ^arg(:fleet_id))
+
+      prepare {Keyfleet.Preparations.NewestFirst,
+               sort: [pushed_at: :desc, id: :asc], before: [:before_at, :before_id]}
+
+      prepare build(select: [:id, :fleet_id, :project, :token_id, :ref, :head, :pushed_at])
+    end
+
     # The pushes `ids` names in one project's repository: who sent the
     # commits each one first brought (`Keyfleet.Code.Commit`).
     read :of_ids do
@@ -99,7 +114,7 @@ defmodule Keyfleet.Code.Push do
   end
 
   policies do
-    policy action([:recent, :of_ids]) do
+    policy action([:recent, :of_ids, :pushed_before]) do
       authorize_if {Keyfleet.Access.Check, read: :code, scope: :fleet_id}
     end
 

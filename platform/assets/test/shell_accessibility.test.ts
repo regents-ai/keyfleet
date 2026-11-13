@@ -32,6 +32,7 @@ vi.mock("../js/hooks/home_hero", () => ({HexField: {}, NextKeyCard: {}}))
 vi.mock("../js/hooks/key_card", () => ({KeyCardTurn: {}}))
 vi.mock("../js/hooks/places_chart", () => ({PlacesChart: {}}))
 vi.mock("../js/hooks/theme_switch", () => ({ThemeSwitch: {}}))
+vi.mock("../js/hooks/worldline", () => ({Worldline: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(

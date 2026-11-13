@@ -559,6 +559,15 @@ defmodule KeyfleetWeb.PollsLive do
     |> read(fleet_id, poll_id, :unreadable)
   end
 
+  # The Worldline shows no polls page, but hears the fleet's polls start
+  # (`KeyfleetWeb.WorldlineLive`), as only its members do.
+  def read_polls(socket, :worldline, %{"fleet_id" => fleet_id}) do
+    socket
+    |> listen(heard(socket, fleet_id, nil))
+    |> stop_clock()
+    |> assign(polls: nil, poll_form: nil, polls_notice: nil)
+  end
+
   def read_polls(socket, _route_id, _params) do
     socket
     |> listen([])

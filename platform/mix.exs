@@ -258,8 +258,9 @@ defmodule Keyfleet.MixProject do
         # one, lib/keyfleet/left_messages.ex -> left_messages/left_message.ex,
         # which every domain has for each record it lists; its agent tool sits
         # on the Account record and calls its action from a function, so they
-        # add no more.
-        "xref graph --label compile-connected --fail-above 130",
+        # add no more. The Worldline adds one: the Backup record's access check,
+        # as a fleet's readers read when its notebooks changed.
+        "xref graph --label compile-connected --fail-above 131",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -53,6 +53,7 @@ import {TokenMenu} from "./hooks/token_menu"
 import {ValueCard} from "./hooks/value_card"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {WorkspaceGraph} from "./hooks/workspace_graph"
+import {Worldline} from "./hooks/worldline"
 import {mountMotion} from "./motion"
 import {installVisitLog} from "./visit_log"
 import {syncTheme} from "./theme"
@@ -338,6 +339,7 @@ const hooks = {
   ValueCard,
   VerifiedConnections,
   WorkspaceGraph,
+  Worldline,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
 

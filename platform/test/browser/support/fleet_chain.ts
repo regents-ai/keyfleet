@@ -134,3 +134,10 @@ export const landStep = (hash: string, transaction: SentTransaction, succeeded: 
 /** Sells the fleet's next key to `owner`, who says `body` in the Public room; returns the key. */
 export const sayInPublic = (fleet: string, owner: string, body: string) =>
   Number(call("say!", [fleet, owner, body]))
+
+/**
+ * Gives a deployed fleet a fortnight of history: `owner`, sold a key, talks
+ * in its rooms, works in its workspace, pushes its code and starts polls,
+ * and the fleet opens and closes proposals. Returns the key.
+ */
+export const writeHistory = (fleet: string, owner: string) => Number(call("history!", [fleet, owner]))

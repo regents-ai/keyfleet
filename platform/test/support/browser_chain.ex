@@ -30,6 +30,8 @@ defmodule Keyfleet.BrowserChain do
   site's record has a key marked present once `present!/2` logs it.
   """
 
+  import Ecto.Query, only: [from: 2]
+
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
   alias Keyfleet.Actors.System
@@ -43,8 +45,10 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.GoalIdeas
+  alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
+  alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
@@ -529,6 +533,242 @@ defmodule Keyfleet.BrowserChain do
 
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
   def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
+
+  @doc """
+  Gives the fleet a fortnight behind it, for its Worldline, the same every
+  time: `owner`, sold a Key, talks in bursts in five of the fleet's rooms,
+  adds work to the workspace and takes it up, pushes the fleet's code and
+  starts polls, and the fleet opens four proposals, three of them closed
+  since. Each event has a time of its own, the last a quarter of an hour ago.
+  Returns the Key it all happens as.
+  """
+  def history!(fleet_id, owner) do
+    Rooms.bootstrap_rooms!([fleet_id])
+    key = sell!(fleet_id, owner)
+    unless Graph.get_cursor!(fleet_id, actor: @system), do: WorkspaceFixtures.open_log(fleet_id)
+
+    :rand.seed(:exsss, {7, 11, 13})
+    last = DateTime.add(DateTime.utc_now(), -15, :minute)
+
+    # Each step hands on the tasks still open, the newest first.
+    _open =
+      (talk() ++ work() ++ code() ++ polls() ++ proposals())
+      |> Enum.map(fn {ago, what} -> {DateTime.add(last, -ago), what} end)
+      |> Enum.sort_by(&elem(&1, 0), DateTime)
+      |> Enum.reduce([], fn {at, what}, tasks ->
+        happen!(fleet_id, %{key: key, owner: owner, at: at}, what, tasks)
+      end)
+
+    reread()
+    key
+  end
+
+  @day 86_400
+  @rooms ~w(general people coding business voting)
+  @lines [
+    "Morning. Picking up the hull survey today.",
+    "Pushed the survey script, it reads the new sensors too.",
+    "Can someone check the rotor readings from last night?",
+    "Notes are in the workspace.",
+    "Running the notebook again with the cleaned data.",
+    "Looks good to me.",
+    "I'll take the second half of the plates.",
+    "Found a gap in the readings around noon.",
+    "The vote closes tomorrow, have a look before then.",
+    "Thanks, merged.",
+    "Back in an hour.",
+    "The plates need another pass.",
+    "Agreed.",
+    "Who has the latest numbers?",
+    "Shared the chart in the notebook.",
+    "That matches what I saw on the second rig."
+  ]
+  @items ~w(task task task goal note)
+  @titles [
+    "Survey the hull",
+    "Map the plates",
+    "Check the rotor readings",
+    "Draft the brief",
+    "Compare the two rigs",
+    "Write up the findings",
+    "Clean the sensor data",
+    "Plan the next sprint",
+    "Review the budget",
+    "Test the new script"
+  ]
+
+  # Each history is a list of `{seconds before the last event, what happens}`.
+  # Two or three conversations a day, each of three to a dozen posts a minute
+  # or two apart.
+  defp talk do
+    for day <- 0..13, _talk <- 1..(1 + :rand.uniform(2)), reduce: [] do
+      events ->
+        slug = Enum.random(@rooms)
+        start = day * @day + 3600 + :rand.uniform(@day - 3600)
+
+        for(
+          n <- 0..(1 + :rand.uniform(10)),
+          do: {start - n * (40 + :rand.uniform(140)), {:post, slug, Enum.random(@lines)}}
+        ) ++ events
+    end
+  end
+
+  # A dozen sittings in the workspace, each adding two to five items, then
+  # taking up the newest task and finishing one.
+  defp work do
+    for _sitting <- 1..12, reduce: [] do
+      events ->
+        start = 7200 + :rand.uniform(14 * @day - 7200)
+
+        items =
+          for n <- 0..(1 + :rand.uniform(3)),
+              do: {start - n * (120 + :rand.uniform(600)), {:work, Enum.random(@items)}}
+
+        [{start - 3000, :join}, {start - 3600, :done} | items] ++ events
+    end
+  end
+
+  # Nine sittings of one to four pushes, a few minutes apart.
+  defp code do
+    for _sitting <- 1..9, reduce: [] do
+      events ->
+        start = 3600 + :rand.uniform(14 * @day - 3600)
+
+        for(n <- 0..(:rand.uniform(4) - 1), do: {start - n * (300 + :rand.uniform(600)), :push}) ++
+          events
+    end
+  end
+
+  defp polls,
+    do: [
+      {11 * @day + 5000, {:poll, "Which rig next?"}},
+      {6 * @day + 31_000, {:poll, "Move the check-in to mornings?"}},
+      {2 * @day + 12_000, {:poll, "Ship the survey this week?"}}
+    ]
+
+  # Each open for three days: all but the newest have closed.
+  defp proposals, do: for(days <- [12.3, 8.6, 4.2, 1.1], do: {round(days * @day), :propose})
+
+  defp happen!(fleet_id, %{key: key, owner: owner, at: at}, {:post, slug, body}, tasks) do
+    room = Rooms.get_room!(fleet_id, slug, actor: holder(owner))
+
+    # Written as the room's store keeps a post, so it keeps the time it was
+    # said; posting through the room stamps it now.
+    Repo.insert_all(
+      "messages",
+      [
+        %{
+          id: Ecto.UUID.dump!(Ash.UUID.generate()),
+          seq: Rooms.Sequence.next!(room.id),
+          fleet_id: fleet_id,
+          room_id: Ecto.UUID.dump!(room.id),
+          kind: "post",
+          in_key_thread: false,
+          author_kind: "human",
+          author_wallet: owner,
+          as_key: key,
+          body: body,
+          body_digest: Base.encode16(:crypto.hash(:sha256, body), case: :lower),
+          idempotency_key: Ash.UUID.generate(),
+          inserted_at: DateTime.to_naive(at)
+        }
+      ],
+      prefix: "keyfleet_app"
+    )
+
+    tasks
+  end
+
+  defp happen!(fleet_id, %{key: key, at: at}, {:work, type}, tasks) do
+    id =
+      logged!(fleet_id, at, fn ->
+        WorkspaceFixtures.create(fleet_id, type, %{"title" => Enum.random(@titles)}, by: key)
+      end)
+
+    if type == "task", do: [id | tasks], else: tasks
+  end
+
+  defp happen!(_fleet_id, _when, step, []) when step in [:join, :done], do: []
+
+  defp happen!(fleet_id, %{key: key, at: at}, :join, [task | _] = tasks) do
+    logged!(fleet_id, at, fn -> WorkspaceFixtures.join(fleet_id, task, by: key) end)
+    tasks
+  end
+
+  defp happen!(fleet_id, %{key: key, at: at}, :done, [task | rest]) do
+    logged!(fleet_id, at, fn ->
+      WorkspaceFixtures.edit(fleet_id, task, %{"progress" => "done"}, by: key)
+    end)
+
+    rest
+  end
+
+  defp happen!(fleet_id, %{key: key, owner: owner, at: at}, :push, tasks) do
+    head =
+      Base.encode16(:crypto.hash(:sha, "#{fleet_id}/#{DateTime.to_iso8601(at)}"), case: :lower)
+
+    push!(fleet_id, key, owner, head)
+
+    # The gateway stamps a push now; the history moves it back to its own time.
+    Repo.update_all(
+      from(push in "code_pushes", where: push.fleet_id == ^fleet_id and push.head == ^head),
+      [set: [pushed_at: DateTime.to_naive(at)]],
+      prefix: "keyfleet_app"
+    )
+
+    tasks
+  end
+
+  defp happen!(fleet_id, %{owner: owner, at: at}, {:poll, question}, tasks) do
+    poll =
+      Polls.start_poll!(
+        %{fleet_id: fleet_id, question: question, choices: ["Yes", "No"], minutes: 60},
+        actor: holder(owner)
+      )
+
+    # Starting a poll stamps it now; the history moves it back to its own
+    # time, closing an hour later.
+    Repo.update_all(
+      from(row in "polls", where: row.id == ^Ecto.UUID.dump!(poll.id)),
+      [
+        set: [
+          inserted_at: DateTime.to_naive(at),
+          closes_at: DateTime.to_naive(DateTime.add(at, 60, :minute))
+        ]
+      ],
+      prefix: "keyfleet_app"
+    )
+
+    tasks
+  end
+
+  defp happen!(fleet_id, %{at: at}, :propose, tasks) do
+    opened_at = DateTime.truncate(at, :second)
+
+    ProposalHelpers.proposal!(fleet_id, Proposals.highest_number!(fleet_id) + 1, %{
+      opened_at: opened_at,
+      closes_at: DateTime.add(opened_at, 3 * @day)
+    })
+
+    tasks
+  end
+
+  # A change to the workspace, logged at `at`: the log stamps its events now,
+  # so they are moved back to their own time.
+  defp logged!(fleet_id, at, change) do
+    %{applied_seq: before} = Graph.get_cursor!(fleet_id, actor: @system)
+    result = change.()
+
+    Repo.update_all(
+      from(event in "graph_events", where: event.fleet_id == ^fleet_id and event.seq > ^before),
+      [set: [timestamp: DateTime.to_iso8601(at)]],
+      prefix: "keyfleet_app"
+    )
+
+    result
+  end
+
+  defp holder(owner), do: %Human{human_account_id: 1, wallet_addresses: [owner]}
 
   defp speak!(fleet_id, owner, body) do
     Rooms.bootstrap_rooms!([fleet_id])
