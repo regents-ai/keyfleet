@@ -9065,3 +9065,49 @@ navigation, from a first reply of 18.8 KB. Ten seconds of zooming in and
 out between the fleet and an hour: 599 frames, median 16.7 ms, 99th
 percentile 16.8 ms, two over 20 ms. The CSS is 57,046 of 61,440 bytes
 gzipped (the field adds 506); the field's code loads in chunks of its own.
+
+## 2026-11-13 — Atlas: the River
+
+- `?view=river` (`KeyfleetWeb.AtlasLive.River`, `assets/js/atlas/river/`,
+  the `AtlasRiver` hook) draws the fleet's work as a stream: time left to
+  right, each project a band as thick as its changes in each bucket, the
+  busiest in the middle and quieter ones outward, twelve shown and the rest
+  in one More band that opens. Zooming goes from a year of weeks to days to
+  hours; past that the band under the pointer, or the one chosen, or the one
+  under Shift and the wheel, opens into lanes by kind, the lanes into marks
+  and the marks into cards, each opening its own page. Notebooks are hatched
+  inside every band and round on the lanes and cards, where workspace items
+  are square.
+- The band outlines are monotone curves through the swarm counts (Steffen),
+  worked out in the vgpu shader from the counts on the GPU, so they never dip
+  below zero; cards are DOM, at the deepest level only and only on screen.
+  Motion is under 300 ms and interruptible, none under reduced motion.
+- One event, `atlas_river`, answers what the river asks for from the
+  existing `Keyfleet.Atlas` reads (`River.answer/3`): each project's counts
+  with its notebooks' share, one project's counts by kind, and one project's
+  things in one hour. The data layer and Heat are unchanged; `river/time.ts`
+  copies Heat's time helpers so either picture can go on its own.
+- Keyboard: Tab reaches the picture; the arrows move between buckets (never
+  past now) and between bands or lanes; + and − zoom; Enter looks closer,
+  then gives focus to the first card of the lane's hour, bringing it in when
+  it is off screen, and opens it. Tab and Shift+Tab step through the cards;
+  Escape goes back to the picture, then lets the band go, and closes nothing
+  else on the page.
+- At scale (one fleet-year of 4,989 changes and 492 notebooks a day): the
+  first picture is drawn 269 to 287 ms after navigation; ten seconds of
+  zooming from the year to the cards and back draw 601 frames, median 16.7
+  and worst 16.8 ms, none over 20 ms, the frame's own work 1.3 ms at p99. The
+  GPU path allocates nothing a frame; the labels around it allocate about
+  130 bytes a frame, mostly the time marks' positions, as Heat's do. Minified,
+  the CSS grows 649 bytes gzipped (57,189 of 61,440) and app.js 69 bytes; the
+  river is its own chunk, 12.1 KB gzipped, loaded when shown.
+- The compile-connected count stays at 137: the River adds no edge.
+
+Check (`make check` on partition `_kf_s3`, PORT unset): compile with warnings
+as errors, unused locks, hex audit, format, credo strict, sobelow, xref at 137
+of 137, pytest 243, full suite 1,425 (19 properties, 1,406 tests, 19
+excluded), codegen, usage rules, route handoff, typecheck, 454 unit tests,
+browser suite 125, devices 70, required fixes, CLI, SIWA and contracts (547
+passed, 6 skipped) pass; the size budgets pass. The browser suites do not
+visit the Atlas, so the River's pictures, keyboard walk and timings were taken
+by hand at full scale; the accessibility rules were not run over its states.
