@@ -808,7 +808,7 @@
     {
       "name": "treasury_show",
       "title": "Treasury",
-      "description": "Read a fleet's treasury: balances, Key rewards held apart, the daily allocation, money history, permissions, contract links and how fresh it is. No sign-in; changes nothing.",
+      "description": "Read a fleet's treasury: balances, Key rewards held apart, the daily allocation, money history, permissions, contract links, how fresh it is and what the fleet has used of the site this month. No sign-in; changes nothing.",
       "input_schema": {
         "type": "object",
         "properties": {

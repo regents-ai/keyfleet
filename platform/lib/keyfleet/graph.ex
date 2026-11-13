@@ -245,6 +245,33 @@ defmodule Keyfleet.Graph do
   end
 
   @doc """
+  How large the fleet's workspace record stood at `before`, counted in one
+  query of the events its log had taken by then (the `:taken_before` read of
+  events): `bytes`, those events as a reader receives them, and `items`, the
+  items made by then. The changes of a deleted project are no longer in the
+  record, so they are not counted. Only the server counts it.
+  """
+  @spec record_size(String.t(), DateTime.t()) :: %{
+          bytes: non_neg_integer(),
+          items: non_neg_integer()
+        }
+  def record_size(fleet_id, before) do
+    require Ash.Expr
+
+    system = [actor: %Keyfleet.Actors.System{}]
+
+    Keyfleet.Graph.Event
+    |> Ash.Query.for_read(:taken_before, %{fleet_id: fleet_id, before: before}, system)
+    |> Ash.aggregate!(
+      [
+        {:bytes, :sum, field: :byte_size, default: 0},
+        {:items, :count, query: [filter: Ash.Expr.expr(type == "object.created")]}
+      ],
+      system
+    )
+  end
+
+  @doc """
   Runs `read` in one read-only snapshot of the workspace's read tables and
   answers `{:ok, result}`: Postgres fixes a repeatable-read snapshot at the
   transaction's first query, so everything `read` reads comes from one

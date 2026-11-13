@@ -108,6 +108,8 @@ defmodule KeyfleetWeb.TreasuryLive do
         </ol>
       </section>
 
+      <.usage :if={@page.usage} usage={@page.usage} />
+
       <section id="treasury-rules" class="proposals-panel" aria-labelledby="treasury-rules-title">
         <h2 id="treasury-rules-title">Contracts</h2>
         <div :if={@page.manager_address} class="proposals-address">
@@ -134,6 +136,57 @@ defmodule KeyfleetWeb.TreasuryLive do
     </article>
     """
   end
+
+  attr :usage, :map, required: true, doc: "the figures of the fleet's usage this month"
+
+  # What the fleet has used of the site this month, as last counted: how large
+  # its workspace is and what its chat has taken. It only measures.
+  defp usage(assigns) do
+    ~H"""
+    <section id="treasury-usage" class="proposals-panel" aria-labelledby="treasury-usage-title">
+      <h2 id="treasury-usage-title">Usage</h2>
+      <dl class="proposals-facts treasury-usage">
+        <div>
+          <dt>Workspace</dt>
+          <dd>
+            <Regent.Primitives.figure
+              id="treasury-usage-workspace"
+              value={size(@usage.workspace_bytes)}
+            />
+            <span id="treasury-usage-items" class="proposals-detail">
+              {counted(@usage.workspace_items, "item")}
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>Chat</dt>
+          <dd>
+            <Regent.Primitives.figure id="treasury-usage-chat" value={size(@usage.chat_bytes)} />
+            <span id="treasury-usage-posts" class="proposals-detail">
+              {counted(@usage.chat_posts, "post")}
+            </span>
+          </dd>
+        </div>
+      </dl>
+      <p class="proposals-detail">
+        {Calendar.strftime(@usage.month, "%B %Y")} so far, counted every hour.
+      </p>
+    </section>
+    """
+  end
+
+  @kb 1024
+  @mb 1024 * 1024
+  @gb 1024 * 1024 * 1024
+
+  # A size the way a person reads it.
+  defp size(bytes) when bytes < @kb, do: "#{bytes} B"
+  defp size(bytes) when bytes < @mb, do: "#{Float.round(bytes / @kb, 1)} KB"
+  defp size(bytes) when bytes < @gb, do: "#{Float.round(bytes / @mb, 1)} MB"
+  defp size(bytes), do: "#{Float.round(bytes / @gb, 1)} GB"
+
+  defp counted(1, word), do: "1 #{word}"
+  defp counted(count, word), do: "#{grouped(count)} #{word}s"
 
   attr :page, :map, required: true
 

@@ -355,6 +355,20 @@ defmodule Keyfleet.Graph.Event do
       filter expr(fleet_id == ^arg(:fleet_id) and event_id in ^arg(:event_ids))
     end
 
+    # Every event the fleet's log took before `before`, by the log's own
+    # clock, for counting how large its workspace record stood then
+    # (`Keyfleet.Graph.record_size/2`).
+    read :taken_before do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before, :utc_datetime_usec, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment("(?::timestamptz) < ?", timestamp, ^arg(:before))
+             )
+    end
+
     # Every change that touched one project, for its deletion.
     read :of_project do
       public? false
@@ -394,7 +408,7 @@ defmodule Keyfleet.Graph.Event do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:record, :with_event_ids, :of_project, :forget]) do
+    policy action([:record, :with_event_ids, :taken_before, :of_project, :forget]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

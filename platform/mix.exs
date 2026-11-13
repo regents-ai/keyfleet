@@ -259,8 +259,10 @@ defmodule Keyfleet.MixProject do
         # which every domain has for each record it lists; its agent tool sits
         # on the Account record and calls its action from a function, so they
         # add no more. The Worldline adds one: the Backup record's access check,
-        # as a fleet's readers read when its notebooks changed.
-        "xref graph --label compile-connected --fail-above 131",
+        # as a fleet's readers read when its notebooks changed. Monthly usage adds
+        # one, lib/keyfleet/usage.ex -> usage/month.ex, the Month record with its
+        # domain; its policies use only built-in checks.
+        "xref graph --label compile-connected --fail-above 132",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -87,6 +87,14 @@ defmodule Keyfleet.Rooms.Message do
         concurrently: true
       )
 
+      # The fleet's posts in its rooms and on its Keys' walls by when they
+      # were written, counted month by month (`:written_between`).
+      index(["fleet_id", "inserted_at"],
+        name: "messages_posts_written_index",
+        where: "kind = 'post'",
+        concurrently: true
+      )
+
       # Each room's naming lines, counted to tell its posts from its lines.
       index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
 
@@ -506,6 +514,22 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(sort: [inserted_at: :desc, id: :asc])
     end
 
+    # The posts written in the fleet's rooms and on its Keys' walls from
+    # `from` until before `to`, for counting a month's chat
+    # (`Keyfleet.Rooms.posts_written/3`). The lines naming a room are not
+    # posts. Read through `messages_posts_written_index`.
+    read :written_between do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :from, :utc_datetime_usec, allow_nil?: false
+      argument :to, :utc_datetime_usec, allow_nil?: false
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and inserted_at >= ^arg(:from) and
+                 inserted_at < ^arg(:to)
+             )
+    end
+
     read :in_room do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -818,6 +842,11 @@ defmodule Keyfleet.Rooms.Message do
 
     # The hourly counts behind a person's posting limit are the server's own reads.
     policy action([:page_posts_last_hour, :keyless_posts_last_hour]) do
+      authorize_if actor_attribute_equals(:role, :system)
+    end
+
+    # So is the month's count of the fleet's chat.
+    policy action(:written_between) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
