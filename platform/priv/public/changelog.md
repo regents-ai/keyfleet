@@ -2,6 +2,18 @@
 
 Changes to Keyfleet, newest first.
 
+## 13 November 2026
+
+- **Worldline.** A fleet has a new tab that draws its whole history as one picture: a
+  line running to now, with trails around it for the workspace, the code, the notebooks
+  and each room, and bright points for proposals and polls. Every mark opens what it
+  stands for, and List shows the same as plain links.
+- **Graph.** The workspace's Graph is now a canvas with no edges. Drag to move, scroll or
+  pinch to zoom, and press a card to light everything it came from and everything made
+  from it. Arrange it by Time, by the hour or the day, by Author or by Activity.
+- **Notebooks.** A project's notebooks open on the same canvas, each beside the tasks
+  that use it. List still shows them as rows.
+
 ## 12 November 2026
 
 - **Overview.** Six cards under the top of the homepage show what a fleet has, from its

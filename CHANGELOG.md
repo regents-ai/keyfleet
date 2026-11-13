@@ -8449,3 +8449,31 @@ passed, `npm run test:devices` 62 passed, the chain walks on Chromium 109
 passed (103 before and the 6 new), none failed; `make check-required-fixes`
 (ash-template `446a7c46`), `check-cli`, `check-siwa-latest` and
 `check-contracts` (547 passed, 6 skipped) pass.
+
+## 2026-11-13 — Tree canvas for the Graph and notebooks, and the fleet Worldline
+
+Sean, 12 Nov: the workspace Graph and the notebooks view become an infinite
+canvas built on the Key map's camera (the thiings-grid port), arranged in
+slices by creation time (hourly or daily), by author or by recent activity,
+always as a tree; and a Worldline view takes in workspace changes, code pushes,
+notebook copies, room posts, polls and proposals around one line through time.
+
+- The Key map's camera moved to `platform/assets/js/camera.ts`, shared by the
+  Key map and the new `TreeCanvas` hook (`hooks/tree_canvas/` layout, stage,
+  renderer, shader). The old column drawing in `KeyfleetWeb.WorkspaceGraph`,
+  the `WorkspaceGraph` hook and their styles are deleted. Items read their
+  creation time from their stored created record; no migration. The Graph
+  keeps its 120 items and 600 links. Notebooks link to the tasks that name
+  them; the hub keeps no made-from link between notebooks.
+- `KeyfleetWeb.WorldlinePage` reads a fleet's events newest first, a page at a
+  time, each source under its own policy (Keys' threads and direct messages
+  are never read); `WorldlineLive` is a new fleet tab, readable signed out as
+  far as the fleet's other pages are; drawn with vgpu and animejs, with a List
+  of the same events as links. Notebook runs keep no history and are left out.
+- `KeyMapShowcaseLive` answers `keymap_pictures`, which it had crashed on.
+- Compile-connected budget 130 to 131: the notebook Backup record's access
+  check, so that only workspace readers read notebook copies.
+- The agents' contract and surfaces are unchanged.
+
+Check: see the release note in coordination/keyfleet.md for this release's
+counts.
