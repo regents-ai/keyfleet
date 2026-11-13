@@ -831,6 +831,13 @@ defmodule KeyfleetWeb.ProposalsLive do
           Key sales waiting to become REGENT:
           <.amount id="proposals-waiting-amount" value={@treasury.waiting} count />
         </p>
+        <p
+          :if={@treasury.waiting_since.convert}
+          id="proposals-waiting-since"
+          class="proposals-detail"
+        >
+          Waiting since {at(@treasury.waiting_since.convert)}.
+        </p>
         <p class="proposals-detail">
           <Regent.Primitives.last_read
             id="proposals-read"
@@ -909,6 +916,13 @@ defmodule KeyfleetWeb.ProposalsLive do
           10% of every Key sale is set aside for REGENT staking. Anyone can send it.
         </Regent.Primitives.tip>
       </h3>
+      <p
+        :if={@actor && @treasury.read? && @treasury.waiting_since.send_share}
+        id="proposals-share-since"
+        class="proposals-detail"
+      >
+        Owed since {at(@treasury.waiting_since.send_share)}.
+      </p>
       <.live_component
         :if={@actor}
         module={WalletPanel}
@@ -1039,7 +1053,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         >
           {if DateTime.after?(@treasury.next_run_at, @treasury.as_of),
             do: "Next release: #{at(@treasury.next_run_at)}.",
-            else: "Next release: open now."}
+            else: "Next release: open since #{at(@treasury.next_run_at)}."}
         </p>
         <table
           :if={split(panel)[:assets] not in [nil, []]}
@@ -1087,10 +1101,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp split(panel), do: WalletPanel.figures(panel)
 
   # A slice whose time has come stays open until someone releases it, so its
-  # time is shown only while it is still ahead: as the chain's own clock has it
-  # for the preview, and as of the treasury's reading for the figures above it.
+  # time is shown as ahead, or as open since then: as the chain's own clock has
+  # it for the preview, and as of the treasury's reading for the figures above it.
   defp opens(%{blocked: %{"run_split" => {:opens_at, opens_at}}}), do: at(opens_at)
-  defp opens(_figures), do: "Open now"
+  defp opens(%{opens_at: opens_at}), do: "Open since #{at(opens_at)}"
 
   # The slice's figures, cut as the balances above them are.
   defp slice_amount(%{usdc?: false, known?: true, symbol: symbol, decimals: decimals}, atoms)

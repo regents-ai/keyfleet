@@ -9,7 +9,8 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
   (`Keyfleet.Notebooks.Changes.QueueRoster`). The hub makes the notebook as
   this site's provisioner, tagged `keyfleet/fleet-understanding`: a run that
   made it and stopped before unlocking it finds it again by that tag, so a
-  fleet never gets two.
+  fleet never gets two. A hub that does not answer is waited for first
+  (`Keyfleet.Notebooks.HubClient.wait_while_away/2`).
   """
   use Oban.Worker,
     queue: :notebook_hubs,
@@ -55,7 +56,7 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
   @tips "\n\n    ## Tips\n\n    - Your Key's scratchpad notebook works best kept append-only: add new cells at the bottom and never delete it. A copy is backed up every day."
 
   @impl Oban.Worker
-  def perform(%Oban.Job{id: job_id, args: %{"fleet_id" => fleet_id}}) do
+  def perform(%Oban.Job{id: job_id, args: %{"fleet_id" => fleet_id}} = job) do
     with true <- Notebooks.hub?(fleet_id) || {:cancel, :no_hub},
          {:ok, space} when is_binary(space) <- Notebooks.space(fleet_id, "understanding"),
          {:ok, notebook_id} <- page(fleet_id, space, job_id) do
@@ -70,7 +71,7 @@ defmodule Keyfleet.Notebooks.UnderstandingPage do
       :ok
     else
       {:ok, nil} -> {:cancel, :no_space}
-      other -> other
+      other -> HubClient.wait_while_away(other, job)
     end
   end
 

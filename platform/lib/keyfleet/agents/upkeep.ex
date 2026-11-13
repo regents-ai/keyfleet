@@ -3,7 +3,8 @@ defmodule Keyfleet.Agents.Upkeep do
   What an agent's scheduled run needs from one fleet, worked out from the chain
   reader's records and never from anything the agent says about itself: when
   each Key it can mark stops being present, the proposals its person's Keys or
-  its own haven't decided, and how many marks its wallet's ETH would pay for.
+  its own haven't decided, the fleet's money that has waited too long for
+  anyone to move it, and how many marks its wallet's ETH would pay for.
 
   `setup/4` reads the same figures as the five states an agent's setup ends in,
   and `person_agents/2` the same states for the agents a signed-in person has
@@ -13,8 +14,10 @@ defmodule Keyfleet.Agents.Upkeep do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Agents
   alias Keyfleet.Agents.CheckInStatus
+  alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
+  alias Keyfleet.Treasury
   alias Keyfleet.WalletSteps.Reads
 
   # `KeyfleetPresence.WINDOW`.
@@ -27,10 +30,11 @@ defmodule Keyfleet.Agents.Upkeep do
   @tip_wei 1_000_000
 
   @doc """
-  `%{presence: %{marking_due, keys}, proposals_awaiting: [...], gas: gas}` for
-  `actor` in the fleet. `read_gas?` says whether to ask the chain for the
-  wallet's ETH; `gas` is nil when it wasn't asked, when the agent has no Key
-  to mark, or when the chain doesn't answer.
+  `%{presence: %{marking_due, keys}, proposals_awaiting: [...], money_waiting:
+  [...], gas: gas}` for `actor` in the fleet. `money_waiting` is
+  `Keyfleet.Treasury.late_steps/1`. `read_gas?` says whether to ask the chain
+  for the wallet's ETH; `gas` is nil when it wasn't asked, when the agent has
+  no Key to mark, or when the chain doesn't answer.
   """
   def read(actor, fleet_id, read_gas?) do
     now = DateTime.utc_now()
@@ -40,6 +44,7 @@ defmodule Keyfleet.Agents.Upkeep do
     %{
       presence: presence(fleet_id, markable, now),
       proposals_awaiting: awaiting(fleet_id, Enum.map(keys, & &1.token_id), now),
+      money_waiting: fleet_id |> Fleets.get_fleet!() |> Treasury.late_steps(),
       gas: if(read_gas? and markable != [], do: gas(actor.wallet_address, length(markable)))
     }
   end
