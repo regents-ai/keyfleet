@@ -4,7 +4,8 @@ import {prepareFleet, sayInPublic, sellKey} from "./support/fleet_chain"
 
 // A fleet page's layout: the hall's columns scroll inside the fleet's box and
 // never run past its edge, the way in sits in the bar above the tabs, and it
-// is a filled Tangerine button with Charcoal words in both themes.
+// is the shared main button: a Charcoal plate with Platinum words in light, a
+// Platinum plate with Charcoal words in dark.
 const fleet = "fleet_tech_classic"
 
 test.beforeAll(() => {
@@ -148,8 +149,13 @@ test("a channel list with every room in view shows no \"…\"", async ({page}) =
   expect(list).toEqual({hidden: 0, more: "0"})
 })
 
+const plates = {
+  light: {fill: "rgb(22, 22, 22)", ink: "rgb(229, 227, 210)"},
+  dark: {fill: "rgb(229, 227, 210)", ink: "rgb(22, 22, 22)"},
+}
+
 for (const scheme of ["light", "dark"] as const) {
-  test(`the fleet's "Buy Key" is filled Tangerine with Charcoal words in ${scheme}, the Key on offer beside it`, async ({page, baseURL}) => {
+  test(`the fleet's "Buy Key" is the main button's plate in ${scheme}, the Key on offer beside it`, async ({page, baseURL}) => {
     // The theme the visitor chose, as the switch writes it.
     await page.context().addCookies([{name: "regent_theme", value: scheme, url: baseURL!}])
     await openFleet(page)
@@ -162,7 +168,7 @@ for (const scheme of ["light", "dark"] as const) {
       fill: getComputedStyle(element, "::before").backgroundColor,
       ink: getComputedStyle(element).color,
     }))
-    expect(paint).toEqual({fill: "rgb(255, 91, 25)", ink: "rgb(22, 22, 22)"})
+    expect(paint).toEqual(plates[scheme])
   })
 }
 

@@ -4,7 +4,7 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 // The light and dark switch (Shell.theme_toggle/1). It is a real switch named
 // Light theme, on for the light theme, and a page shows exactly one: a row of the
 // account menu signed in; signed out, in the header of the homepage and the app's
-// pages, and in the footer of a reading page. A press, Space or Enter turns the
+// pages, the reading pages among them. A press, Space or Enter turns the
 // page's theme exactly once; the choice holds over a reload and a live page
 // change; opening the menu moves nothing and turning the switch never changes the
 // menu's size; nothing scrolls sideways, at 320 wide included.
@@ -50,9 +50,9 @@ for (const width of [1280, 390, 320]) {
   test.describe(`${width}px wide`, () => {
     test.use({viewport: {width, height: 900}})
 
-    // A reading page (its footer), an app page and the homepage (their header).
+    // A reading page, an app page and the homepage.
     for (const [path, ready] of [
-      ["/docs", ".legal-page"],
+      ["/docs", "#app-shell[data-behavior-ready=true]"],
       ["/account", "#app-shell[data-behavior-ready=true]"],
       ["/", "[data-phx-main].phx-connected"],
     ] as const) {

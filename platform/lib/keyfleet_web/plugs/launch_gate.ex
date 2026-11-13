@@ -4,11 +4,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   early-access page and public NFT metadata. This plug runs in the endpoint before
   anything is served, and it is the one place that says what stays reachable:
 
-    * `/early` and its form, the Privacy Policy (`/privacy`) and the Terms of Use
-      (`/terms`), as pages or as Markdown;
-    * `/healthz`, `/robots.txt`, `/sitemap.xml` (which then lists only those
-      three pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
-      the keys the fleets' notebook hubs check this site's passes with;
+    * `/early` and its form, and the reading pages: the Agents page (`/agents`)
+      and each agent's page under it, the developer documentation (`/docs`), the
+      Changelog (`/changelog`), About (`/about`), the Privacy Policy (`/privacy`)
+      and the Terms of Use (`/terms`), as pages or as Markdown;
+    * `/healthz`, `/robots.txt`, `/sitemap.xml` (which then lists only `/early`
+      and those pages, the agents' own pages aside), `/.well-known/security.txt`
+      and `/.well-known/hub-jwks.json`, the keys the fleets' notebook hubs check
+      this site's passes with;
     * the collection and Key metadata at `/metadata/collection.json` and
       `/metadata/keys/:token_id`, for GET and HEAD requests;
     * `/agents.md`, the public availability guide, for GET and HEAD requests;
@@ -23,7 +26,8 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
   directory and the contract. Signing out closes with the rest of sign-in.
 
   A LiveView already open in a browser moves over its socket, which no plug
-  sees; `KeyfleetWeb.Live.LaunchGateHook` sends it to `/early` too.
+  sees; `KeyfleetWeb.Live.LaunchGateHook` sends it to `/early` too, and keeps
+  the same reading pages open.
 
   With the switch on, every request passes except `/early`: the early-access
   page and its form have done their job, so they send visitors to the
@@ -35,7 +39,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   alias KeyfleetWeb.{ContentSecurityPolicy, Refusal}
 
-  @open_pages ~w(/early /privacy /terms)
+  @open_pages ~w(/early /agents /docs /changelog /about /privacy /terms)
   @open_files ~w(/healthz /robots.txt /sitemap.xml /.well-known/security.txt /.well-known/hub-jwks.json)
   @static_folders ~w(assets fonts images)
   @contract "api-contract.openapiv3.yaml"
@@ -94,6 +98,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
        when method in ["GET", "HEAD"],
        do: true
 
+  defp open?(%Plug.Conn{path_info: ["agents", _agent]}), do: true
   defp open?(%Plug.Conn{path_info: [folder | _rest]}) when folder in @static_folders, do: true
 
   defp open?(%Plug.Conn{path_info: [file]}),

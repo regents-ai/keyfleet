@@ -15,7 +15,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     :ok
   end
 
-  test "only the early-access page, the legal pages and the operational files and NFT metadata stay open" do
+  test "only the early-access page, the reading pages, the operational files and NFT metadata stay open" do
     answers =
       for route <- routes(), conn = request(route), do: {route.verb, route.path, answer(conn)}
 
@@ -30,10 +30,15 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/.well-known/hub-jwks.json"},
              {:get, "/metadata/collection.json"},
              {:get, "/metadata/keys/:token_id"},
-             {:get, "/privacy"},
-             {:get, "/terms"},
              {:get, "/early"},
-             {:post, "/early"}
+             {:post, "/early"},
+             {:get, "/about"},
+             {:get, "/docs"},
+             {:get, "/changelog"},
+             {:get, "/agents"},
+             {:get, "/agents/:agent"},
+             {:get, "/privacy"},
+             {:get, "/terms"}
            ]
 
     # Every page a browser opens is sent to the early-access page, and every
@@ -41,9 +46,9 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     assert for({:get, path, :to_early} <- answers, do: path) ==
              ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /admin/messages) ++
                ~w(/app /agent /start) ++
-               ~w(/help /skill/:part /agent/git-remote-siwa /share/:file /share/projects/:fleet_id/:file /docs /agents /agents/:agent /changelog /fleets/:file /fleets/:fleet_id/rooms) ++
+               ~w(/help /skill/:part /agent/git-remote-siwa /share/:file /share/projects/:fleet_id/:file /fleets/:file /fleets/:fleet_id/rooms) ++
                ~w(/oauth/authorize /oauth/connections / /fleets/:fleet_id/notebooks/open /account) ++
-               ~w(/account/agents /account/points /account/wallets /account/connections /about /pair /opportunities) ++
+               ~w(/account/agents /account/points /account/wallets /account/connections /pair /opportunities) ++
                for(
                  fleet <-
                    ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),
@@ -109,6 +114,9 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     page |> recycle() |> post("/early", %{"_csrf_token" => token, "email" => ""})
   end
 
+  # An agent's page stays open, so the walk asks for one that is there.
+  defp request(%{verb: :get, path: "/agents/:agent"}), do: get(build_conn(), "/agents/dots")
+
   defp request(route) do
     Phoenix.ConnTest.dispatch(build_conn(), @endpoint, route.verb, concrete_path(route.path), %{})
   end
@@ -121,7 +129,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
   defp answer(_conn), do: :open
 
   # Placeholders stand in for path parameters; the gate answers before any
-  # controller or LiveView reads them.
+  # controller or LiveView reads them, on every route it closes.
   defp concrete_path(path) do
     String.replace(path, ~r{/[:*][^/]+}, "/gate-coverage")
   end

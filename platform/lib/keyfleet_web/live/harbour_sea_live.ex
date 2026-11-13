@@ -109,34 +109,34 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     end
   end
 
-  # The launch gate and the shell's sign-in (`KeyfleetWeb.Live.Session`): a
-  # connection is refused as the shell's is, and every event, notice and read
-  # after it checks the sign-in again first. Both hooks also watch navigation,
-  # which this LiveView never has and LiveView refuses to a LiveView the router
-  # did not mount, so the sign-in is taken as if routed and the watch on
-  # navigation is taken off again.
+  # The shell's sign-in (`KeyfleetWeb.Live.Session`): a connection is refused as
+  # the shell's is, and every event, notice and read after it checks the sign-in
+  # again first. The hook also watches navigation, which this LiveView never
+  # has and LiveView refuses to a LiveView the router did not mount, so the
+  # sign-in is taken as if routed and the watch on navigation is taken off again.
   defp admit(params, session, socket) do
-    if connected?(socket) and not LaunchGate.app_surfaces_enabled?() do
-      {:halt, redirect(socket, to: ~p"/early")}
-    else
-      case Session.on_mount(:load_human, params, session, %{socket | router: Router}) do
-        {:cont, socket} ->
-          {:cont, %{detach_hook(socket, :session_authority_params, :handle_params) | router: nil}}
+    case Session.on_mount(:load_human, params, session, %{socket | router: Router}) do
+      {:cont, socket} ->
+        {:cont, %{detach_hook(socket, :session_authority_params, :handle_params) | router: nil}}
 
-        {:halt, socket} ->
-          {:halt, %{socket | router: nil}}
-      end
+      {:halt, socket} ->
+        {:halt, %{socket | router: nil}}
     end
   end
 
   # The page on show, by its address. A new address closes the card; a new
-  # fleet brings its ships.
+  # fleet brings its ships. While the site is closed only its reading pages
+  # open (`KeyfleetWeb.Plugs.LaunchGate`), and the city behind them stays empty.
   @impl true
   def handle_event("show_page", %{"path" => path}, socket) when is_binary(path) do
-    socket =
-      if path == socket.assigns.path, do: socket, else: assign(socket, path: path, agent: nil)
+    if LaunchGate.app_surfaces_enabled?() do
+      socket =
+        if path == socket.assigns.path, do: socket, else: assign(socket, path: path, agent: nil)
 
-    {:noreply, kept(socket, fn -> show(socket, shown(path)) end)}
+      {:noreply, kept(socket, fn -> show(socket, shown(path)) end)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("show_agent", %{"id" => id}, socket) when is_binary(id) do

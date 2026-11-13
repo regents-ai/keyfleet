@@ -170,7 +170,7 @@ export const GRIDS: Record<string, (cards: Element[]) => JSAnimation> = {
 
 // The first cards of a list cascade in; later ones start below the fold and
 // are simply there.
-export const CASCADE = 12
+const CASCADE = 12
 
 /**
  * Calls `arrive` once, the first time `el` scrolls into view. One already in
@@ -204,8 +204,7 @@ type CascadeHook = {el: HTMLElement; scope?: Scope}
 
 /**
  * A list of cards on a live page that settles in as `data-variant` names in
- * `GRIDS`, once, the first time it scrolls into view (`onFirstSight`). Pages
- * the server draws once cascade their `data-cascade` lists from `motion.ts`.
+ * `GRIDS`, once, the first time it scrolls into view (`onFirstSight`).
  */
 export const MotionCascade: Hook = {
   mounted(this: CascadeHook) {

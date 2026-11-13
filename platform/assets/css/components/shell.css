@@ -270,7 +270,7 @@ span.account-chip {
   }
 }
 
-#shell-sidebar [aria-current="page"],
+#shell-sidebar [aria-current],
 #shell-sidebar [aria-pressed="true"] {
   background: var(--ash-panel-strong);
   color: var(--color-fg);
@@ -466,7 +466,7 @@ span.account-chip {
 
 /* The frame itself owns the ruled edges; there is no decorative page mat. */
 #shell-sidebar ul { padding: var(--space-1); }
-#shell-sidebar [aria-current="page"] { border-inline-start: 3px solid currentColor; font-weight: 600; }
+#shell-sidebar [aria-current] { border-inline-start: 3px solid currentColor; font-weight: 600; }
 .shell-brand__name { font-family: var(--font-family-title); font-weight: 400; }
 #shell-header { flex-wrap: wrap; }
 #shell-header > a:not(.shell-brand) { align-self: center; padding: var(--space-1); font-size: .75rem; }

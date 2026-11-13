@@ -6,7 +6,6 @@
 @import "./tokens/root.css";
 @import "./components/shell.css";
 @import "./components/theme_switch.css";
-@import "./components/buttons.css";
 @import "./components/sticky_actions.css";
 @import "./components/key_map.css";
 @import "./components/tree_canvas.css";
@@ -34,6 +33,7 @@
 @import "./components/value_cards.css";
 @import "./pages/home.css";
 @import "./pages/legal.css";
+@import "./pages/reading.css";
 @import "./pages/early.css";
 @import "./pages/account.css";
 @import "./pages/fleet.css";

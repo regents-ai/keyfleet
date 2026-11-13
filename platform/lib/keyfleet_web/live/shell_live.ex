@@ -73,7 +73,7 @@ defmodule KeyfleetWeb.ShellLive do
   @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     {:ok,
      socket
      |> follow_mutes()
@@ -91,6 +91,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:worldline, [])
      |> assign(
        route_spec: nil,
+       client_key: Map.fetch!(session, "client_key"),
        shell_instance: System.unique_integer([:positive, :monotonic]),
        get_key: get_key?(),
        load_failed?: false,
@@ -224,11 +225,13 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # A fleet's page is asked for at the fleet's address, and read by its id.
-  # The page at the address, as the router matched it. Of `params`, the page
-  # list reads only the parts of the address its route names.
+  # The page at the address, as the router matched it: each part of the path
+  # unescaped, as the router reads it. Of `params`, the page list reads only the
+  # parts of the address its route names.
   defp route_spec(uri, params) do
     %URI{host: host, path: path} = URI.parse(uri)
-    %{route: route} = Phoenix.Router.route_info(KeyfleetWeb.Router, "GET", path, host)
+    segments = for segment <- String.split(path, "/"), segment != "", do: URI.decode(segment)
+    %{route: route} = Phoenix.Router.route_info(KeyfleetWeb.Router, "GET", segments, host)
     RouteCatalog.fetch!(route, params)
   end
 
@@ -753,8 +756,11 @@ defmodule KeyfleetWeb.ShellLive do
       </:content>
       <:content :if={!@load_failed?}>
         <Reading.page
-          :if={@route_spec.route_id in [:about, :opportunities]}
+          :if={@route_spec.route_id in Reading.pages()}
           path={@route_spec.destination}
+          account={current_account(@access_context)}
+          lease={@session_lease}
+          client_key={@client_key}
         />
 
         <ProjectLive.page

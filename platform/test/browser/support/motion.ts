@@ -1,13 +1,13 @@
 import type {Page} from "@playwright/test"
 
 // From the first paint the page records every inline transform or opacity any
-// element takes, every number split into pieces to roll and whether the
-// headline moved, so a test can ask what moved and whether it ended clean.
+// element takes and every number split into pieces to roll, so a test can ask
+// what moved and whether it ended clean.
 // The shell's page-change motion, the page arriving, is recorded apart, and so
 // is each place a tab row's mark takes: it rests on a transform of its own.
-// Each time a number or the headline splits, it records whether every piece
-// sits in a box clipped by its class (`.split-clip`) rather than by a style of
-// its own, which a policy refusing style attributes would refuse.
+// Each time a number splits, it records whether every piece sits in a box
+// clipped by its class (`.split-clip`) rather than by a style of its own,
+// which a policy refusing style attributes would refuse.
 function recordMotion() {
   const moves = new Map<Element, string[]>()
   const rolled = new Set<string>()
@@ -22,11 +22,7 @@ function recordMotion() {
     const pieces = [...added].filter(node => node instanceof Element && node.matches(piece)) as Element[]
     if (pieces.length > 0) clipped.set(id, (clipped.get(id) ?? true) && pieces.every(clippedByClass))
   }
-  // A page the server draws once splits its headline before this starts
-  // watching, so the pieces are read as they stand.
   const watch = () => {
-    const headline = document.querySelector("main h1")
-    if (headline) noteSplit("headline", headline.childNodes)
     new MutationObserver(records => {
       for (const record of records) {
         const el = record.target as Element
@@ -36,7 +32,6 @@ function recordMotion() {
             rolled.add(id)
             noteSplit(id, record.addedNodes)
           }
-          if (el.closest("main h1")) noteSplit("headline", record.addedNodes)
           continue
         }
         const style = el.getAttribute("style") ?? ""
@@ -49,7 +44,6 @@ function recordMotion() {
           inkSpots.add(style)
           continue
         }
-        if (el.closest("main h1")) rolled.add("headline")
         moves.set(el, [...(moves.get(el) ?? []), style])
       }
     }).observe(document.documentElement, {
@@ -84,8 +78,8 @@ export const anythingMoved = (page: Page) =>
 
 export const rolled = (page: Page, id: string) => page.evaluate(id => (window as unknown as Recorded).__rolled.has(id), id)
 
-// Whether the number with this id, or "headline", split into pieces that each
-// sat in a box clipped by class; undefined if it never split.
+// Whether the number with this id split into pieces that each sat in a box
+// clipped by class; undefined if it never split.
 export const clippedByClass = (page: Page, id: string) =>
   page.evaluate(id => (window as unknown as Recorded).__clipped.get(id), id)
 

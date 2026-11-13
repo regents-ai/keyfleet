@@ -1142,11 +1142,11 @@
 .fleet-bar__nav,
 .fleet-channels {
   mask-image: linear-gradient(
-    to right,
-    transparent,
+    to right in oklch,
+    #00000000,
     #000 var(--fleet-fade-start),
     #000 calc(100% - var(--fleet-fade-end)),
-    transparent
+    #00000000
   );
 }
 
@@ -1178,7 +1178,7 @@
       inset-block-end: -0.75rem;
       margin-block: -1.5rem -0.75rem;
       padding-block: 0.75rem 0.25rem;
-      background: linear-gradient(transparent, var(--color-surface) 60%);
+      background: linear-gradient(in oklch, oklch(from var(--color-surface) l c h / 0), var(--color-surface) 60%);
       color: var(--color-fg-muted);
       line-height: 1;
       text-align: center;
@@ -1191,11 +1191,11 @@
 
   .fleet-entry__cards {
     mask-image: linear-gradient(
-      to right,
-      transparent,
+      to right in oklch,
+      #00000000,
       #000 var(--fleet-fade-start),
       #000 calc(100% - var(--fleet-fade-end)),
-      transparent
+      #00000000
     );
     animation: fleet-row-fade linear both;
     animation-timeline: scroll(self inline);

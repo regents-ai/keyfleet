@@ -127,15 +127,6 @@
     }
   }
 
-  /* While the sale is closed the button reads as off: the inert grey fill and
-     muted ink a disabled button has, set through the colours the button
-     paints with. It stays focusable, so its preview and its reason are too. */
-  .rl-buy__button[aria-disabled="true"] {
-    --color-accent: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
-    --color-fg-on-accent: var(--color-fg-muted);
-    cursor: default;
-  }
-
   /* The hex field: the stylesheet's still drawing of the tiles, and the GPU's
      over it once its first frame has landed. The field fades out toward its
      edges, and in the hero away from the headline, so the words always sit on
@@ -151,8 +142,8 @@
       url("/images/home/hex.svg") 50% 50% / var(--rl-cell) calc(var(--rl-cell) * 1.7320508) repeat,
       radial-gradient(
         ellipse calc(var(--rl-fade-width) * 100%) calc(var(--rl-fade-height) * 100%)
-          at calc(var(--rl-fade-x) * 100%) calc(var(--rl-fade-y) * 100%),
-        #000 calc(var(--rl-fade-from) * 100%), transparent calc(var(--rl-fade-to) * 100%)
+          at calc(var(--rl-fade-x) * 100%) calc(var(--rl-fade-y) * 100%) in oklch,
+        #000 calc(var(--rl-fade-from) * 100%), #00000000 calc(var(--rl-fade-to) * 100%)
       );
     mask-composite: intersect;
   }
@@ -224,14 +215,6 @@
     .rl-facts > div + div { padding-inline-start: 0; border-inline-start: 0; border-block-start: 1px solid var(--rl-line); }
     .rl-facts dd { text-align: end; }
   }
-}
-
-/* Outside the layer, because the button's edge ink is drawn by an unlayered
-   rule: while the sale is closed the edge takes the same inert grey as the
-   fill, in both themes. */
-:root .rl-buy .rl-buy__button[aria-disabled="true"]::after {
-  --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
-  --rg-button-cut-ink: transparent;
 }
 
 /* Outside the layer, because the header's own rules are unlayered. Here the

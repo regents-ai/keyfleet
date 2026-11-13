@@ -160,8 +160,7 @@ type RefusalHook = {el: HTMLElement; scope?: Scope; said?: string}
 /**
  * A message a live page shows when it refuses something. It shakes once when
  * it appears and again whenever it says something new, while `data-refused`
- * is on it. A shake still playing when the message goes stops with it. Pages
- * the server draws once shake their alerts from `motion.ts`.
+ * is on it. A shake still playing when the message goes stops with it.
  */
 export const MotionRefusal: Hook = {
   mounted(this: RefusalHook) {

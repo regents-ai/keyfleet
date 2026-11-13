@@ -2,48 +2,17 @@ defmodule KeyfleetWeb.LeftMessagesPagesTest do
   # The pages around a message left for the site's team:
   # - /agents carries the Agent Message window for its topic, with a
   #   paste-ready text for each way an agent connects, and the form only for a
-  #   signed-in person (test/browser/agent_message.spec.ts leaves one through it);
+  #   signed-in person (test/browser/agent_message.spec.ts leaves one through it),
+  #   and the form leaves a message as the account signed in;
   # - /admin/messages shows the team every message, newest first, and is the
-  #   not-found page for anyone who is not one of the site's admins;
-  # - a live page places the same window with its own account, session lease
-  #   and client key (`LivePage` here, as no Keyfleet page carries one yet),
-  #   and its form leaves a message as the account signed in.
+  #   not-found page for anyone who is not one of the site's admins.
   use KeyfleetWeb.ConnCase, async: false
 
   alias Keyfleet.{Accounts, LeftMessages}
-  alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Human, System}
   alias KeyfleetWeb.Components.AgentMessage
 
   @dialog "agents-message"
-
-  # A live page with the window, as a live page places it.
-  defmodule LivePage do
-    use KeyfleetWeb, :live_view
-
-    alias Keyfleet.AccessContext
-    alias KeyfleetWeb.Components.AgentMessage
-
-    on_mount {KeyfleetWeb.Live.Session, :load_human}
-
-    def mount(_params, _session, socket), do: {:ok, assign(socket, client_key: "live-page")}
-
-    def render(assigns) do
-      ~H"""
-      <AgentMessage.button id="page-message-button" dialog="page-message" />
-      <AgentMessage.dialog
-        id="page-message"
-        topic="page"
-        account={account(@access_context)}
-        lease={@session_lease}
-        client_key={@client_key}
-      />
-      """
-    end
-
-    defp account(%AccessContext{principal: {:human, account}}), do: account
-    defp account(_signed_out), do: nil
-  end
 
   test "/agents offers the Agent Message texts to everyone, and the form only to a signed-in person" do
     signed_out = page(build_conn(), "/agents")
@@ -91,38 +60,29 @@ defmodule KeyfleetWeb.LeftMessagesPagesTest do
     assert LazyHTML.text(page) =~ "Second"
   end
 
-  test "a live page's window leaves a message as the account signed in, and has no form signed out" do
-    {:ok, signed_out, _html} = live_isolated(build_conn(), LivePage)
-    refute has_element?(signed_out, "#page-message-person-form")
-    assert has_element?(signed_out, "#page-message .agent-message__text", "messages leave page")
+  test "the Agents page's form leaves a message as the account signed in, and is not there signed out" do
+    form = "##{@dialog}-person-form"
+
+    {:ok, signed_out, _html} = live(build_conn(), "/agents")
+    refute has_element?(signed_out, form)
+    assert has_element?(signed_out, "##{@dialog} .agent-message__text", "messages leave agents")
 
     {conn, account} = signed_in()
-    session = get_session(conn)
-
-    # Drawn for this sign-in, as the router's live session would draw it.
-    rendered = %{
-      "render_topic" => SessionAuthority.topic(session["session_lineage"]),
-      "render_route" => "/"
-    }
-
-    {:ok, view, _html} =
-      conn |> connects_with(session) |> live_isolated(LivePage, session: rendered)
-
-    form = "#page-message-person-form"
+    {:ok, view, _html} = live(conn, "/agents")
     assert has_element?(view, form)
 
     view
-    |> form(form, message: %{body: "From a live page", reply_to: "me@example.com"})
+    |> form(form, message: %{body: "From the Agents page", reply_to: "me@example.com"})
     |> render_submit()
 
-    assert has_element?(view, "#page-message-person-receipt")
+    assert has_element?(view, "##{@dialog}-person-receipt")
 
     put_admins([account.privy_user_id])
     admin = %RegentAgents.Person{privy_user_id: account.privy_user_id, role: :admin}
     assert %{results: [left | _]} = LeftMessages.list_left_messages!(actor: admin)
 
     assert {left.topic, left.body, left.reply_to, left.human_account_id} ==
-             {"page", "From a live page", "me@example.com", account.id}
+             {"agents", "From the Agents page", "me@example.com", account.id}
   end
 
   defp leave(account, topic, body),

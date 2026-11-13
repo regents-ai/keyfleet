@@ -1,6 +1,7 @@
 defmodule KeyfleetWeb.RouteCatalogTest do
   use ExUnit.Case, async: true
 
+  alias KeyfleetWeb.Components.Reading
   alias KeyfleetWeb.{RouteCatalog, Router}
   alias KeyfleetWeb.RouteCatalog.RouteTarget
 
@@ -34,7 +35,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
            "/account/connections",
            "/about",
            "/pair",
-           "/opportunities"
+           "/opportunities",
+           "/docs",
+           "/changelog",
+           "/agents",
+           "/agents/:agent",
+           "/privacy",
+           "/terms"
          ] ++
            for(
              fleet <-
@@ -168,7 +175,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   end
 
   test "the product sidebar links Classic, then Account, on every product route" do
-    for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
+    for entry <- RouteCatalog.entries(), entry.live_action not in [:home | Reading.pages()] do
       assert RouteCatalog.fetch!(entry.path_pattern, sample_params(entry)).sidebar_model ==
                %RouteCatalog.SidebarModel{
                  id: :product,
@@ -177,6 +184,28 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                    %RouteTarget{route_id: :account, label: "Account", path: "/account"}
                  ]
                }
+    end
+  end
+
+  test "every reading page lists the reading pages beside it" do
+    for entry <- RouteCatalog.entries(), entry.live_action in Reading.pages() do
+      sidebar = RouteCatalog.fetch!(entry.path_pattern, sample_params(entry)).sidebar_model
+
+      assert sidebar.id == :reading
+
+      assert Enum.map(sidebar.targets, & &1.path) ==
+               ~w(/agents /docs /changelog /about /opportunities /privacy /terms)
+    end
+  end
+
+  test "an agent's page is one the agent guides have" do
+    assert RouteCatalog.fetch!("/agents/:agent", %{"agent" => "dots"}).destination ==
+             "/agents/dots"
+
+    for agent <- ["no-such-agent", "Dots", "dots.md", ""] do
+      assert_raise KeyfleetWeb.NotFoundError, fn ->
+        RouteCatalog.fetch!("/agents/:agent", %{"agent" => agent})
+      end
     end
   end
 
@@ -209,10 +238,11 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 94
+    assert length(decoded["routes"]) == 100
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) ==
              ~w(home account account_agents points wallets connections about pair opportunities) ++
+               ~w(docs changelog agents agent privacy terms) ++
                List.flatten(
                  List.duplicate(
                    ~w(fleet workspace workspace_item code_commit code_history code_files project proposals proposal treasury polls poll search worldline keys dms dm),
@@ -313,6 +343,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       {:repository, _type} -> {"repository", "fibonacci_syndicate"}
       {:commit, _type} -> {"commit", String.duplicate("a", 40)}
       {:project, _type} -> {"project", "virtual-cell"}
+      {:agent, _type} -> {"agent", "dots"}
     end)
   end
 end

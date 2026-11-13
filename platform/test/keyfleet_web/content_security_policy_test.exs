@@ -20,33 +20,28 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
     assert policy(conn) == ContentSecurityPolicy.sign_in()
   end
 
-  test "every page with the account button carries the sign-in policy" do
-    for path <- ~w(/ /account /about /opportunities /syndicate/1) do
+  # The reading pages are in the app shell, with its account button.
+  test "every page with the account button carries the sign-in policy and the default referrer" do
+    for path <-
+          ~w(/ /account /about /opportunities /docs /changelog /agents /agents/dots /privacy /terms /syndicate/1) do
       conn = get(build_conn(), path)
 
       assert conn.status == 200, "#{path} answered #{conn.status}"
       assert policy(conn) == ContentSecurityPolicy.sign_in(), "#{path} has another policy"
+
+      assert get_resp_header(conn, "referrer-policy") == ["strict-origin-when-cross-origin"],
+             path
     end
   end
 
-  test "reading pages and the fleet directory's Markdown carry the reading policy" do
-    for path <- ~w(/docs /privacy /terms /fleets.md) do
-      conn = get(build_conn(), path)
-
-      assert conn.status == 200, "#{path} answered #{conn.status}"
-      assert policy(conn) == ContentSecurityPolicy.reading(), "#{path} has another policy"
+  test "Markdown, the fleet directory's and a reading page's, carries the reading policy" do
+    for conn <- [
+          get(build_conn(), "/fleets.md"),
+          build_conn() |> put_req_header("accept", "text/markdown") |> get("/docs")
+        ] do
+      assert conn.status == 200, "#{conn.request_path} answered #{conn.status}"
+      assert policy(conn) == ContentSecurityPolicy.reading(), "#{conn.request_path}"
     end
-  end
-
-  test "reading pages send no referrer, and pages that can start sign-in keep the default" do
-    for path <- ~w(/docs /privacy /terms) do
-      conn = get(build_conn(), path)
-      assert get_resp_header(conn, "referrer-policy") == ["no-referrer"], path
-    end
-
-    assert get_resp_header(get(build_conn(), "/"), "referrer-policy") == [
-             "strict-origin-when-cross-origin"
-           ]
   end
 
   test "the reading policy names no other site but ENS pictures, and sign-in adds Privy's sources and Key cards" do

@@ -1595,7 +1595,6 @@ features:
       - platform/lib/keyfleet_web/controllers/agent_message_controller.ex
       - platform/lib/keyfleet_web/components/agent_message.ex
       - platform/lib/keyfleet_web/components/agent_message/form.ex
-      - platform/lib/keyfleet_web/live/agent_message_live.ex
       - platform/lib/keyfleet_web/live/admin_messages_live.ex
       - platform/lib/keyfleet_web/plugs/signed_agent.ex
       - platform/lib/keyfleet_web/router.ex

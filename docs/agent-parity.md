@@ -22,7 +22,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 
 - **Page**: an agent that owns the account can finish it in headless Chromium with its
   own wallet. Every signed-in page row waits on K1. While the site is closed
-  (`KEYFLEET_APP_SURFACES=off`) every surface but `/early` answers "not open yet".
+  (`KEYFLEET_APP_SURFACES=off`) every surface but `/early` and the reading pages
+  (`/agents`, `/docs`, `/changelog`, `/about`, `/privacy`, `/terms`) answers "not open yet".
 - **WebMCP**: the tool in `platform/priv/tool_manifest.json`. A signed tool takes only
   its input; the agent's browser host (`regents browser`) signs it with the agent's own
   SIWA key, and it acts for the agent's paired person. The wallet tools (`keys_claim`, `proposals_vote` and the rest)

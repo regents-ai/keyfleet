@@ -32,13 +32,6 @@
 
 .buy-key__why { min-block-size: 1.5em; margin: 0; color: var(--color-fg-muted); font-size: .875rem; }
 
-/* While the sale is closed the button's edge takes the same inert grey as its
-   fill, in both themes. */
-:root .buy-key [aria-disabled="true"]::after {
-  --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
-  --rg-button-cut-ink: transparent;
-}
-
 /* Close goes nowhere, so it carries no chevron. */
 .buy-key .buy-key__close::after { content: none; }
 

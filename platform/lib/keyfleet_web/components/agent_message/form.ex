@@ -7,9 +7,7 @@ defmodule KeyfleetWeb.Components.AgentMessage.Form do
   checked when the person leaves it, never while they type.
 
   The page passes the signed-in `account` (or nil), its `session_lease` as
-  `lease`, and its client key (`KeyfleetWeb.ClientAddress.client_key/1`). A
-  live page passes its own; a plain page's window draws
-  `KeyfleetWeb.AgentMessageLive`, which reads the sign-in and passes them here.
+  `lease`, and its client key (`KeyfleetWeb.ClientAddress.client_key/1`).
   Every press re-reads the sign-in (`KeyfleetWeb.Live.Session.check_component_lease/2`),
   and the message is left as the account it names at that moment.
   """

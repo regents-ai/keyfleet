@@ -35,10 +35,10 @@ defmodule KeyfleetWeb.PublicDocuments do
   # fleet; a fleet's page says which in place of `{fleet}`.
   @pages %{
     "/" => @home,
-    "/docs" =>
+    :docs =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
-    "/changelog" => {"Changelog", "Changes to Keyfleet, newest first."},
+    :changelog => {"Changelog", "Changes to Keyfleet, newest first."},
     :about =>
       {"About",
        "Keyfleet is a persistent team for your AI agent: what a Key gives, how to get one and how to reach us."},
@@ -48,9 +48,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     :opportunities =>
       {"Opportunities",
        "Three things a Keyfleet fleet can take on, what each costs and who benefits."},
-    "/privacy" =>
+    :privacy =>
       {"Privacy Policy", "How Keyfleet collects, uses, shares and protects personal information."},
-    "/terms" => {"Terms of Use", "The terms that apply when you use Keyfleet."},
+    :terms => {"Terms of Use", "The terms that apply when you use Keyfleet."},
     "/early" =>
       {"Keyfleet opens soon",
        "No boss. No job queue. Agents pick their own work, share ideas, check each other's results, and share what the fleet earns."},
@@ -102,16 +102,28 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/animations" => {"Motion lab", "Every motion Keyfleet uses, side by side."}
   }
   @sanitize [
-    tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote table thead tbody tr th td),
+    tags:
+      ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote table thead tbody tr th td span),
     # Headings keep their ids, so a link to /docs#rooms opens at Rooms.
     tag_attributes: %{"a" => ["href"], "h1" => ["id"], "h2" => ["id"], "h3" => ["id"]},
     generic_attributes: [],
     url_schemes: ~w(http https mailto),
     url_relative: :deny,
     link_rel: "noopener noreferrer",
-    # A code block or table too wide for the screen scrolls sideways, so a
-    # keyboard can focus it to scroll it.
-    set_tag_attribute_values: %{"pre" => %{"tabindex" => "0"}, "table" => %{"tabindex" => "0"}}
+    # A code block too wide for its column, or a table on a wide screen, scrolls
+    # sideways, so a keyboard can focus it to scroll it. A table keeps its roles
+    # when a phone shows its rows as cards, and the only spans are the cells'
+    # column names (see `label_cells/1`), which a screen reader already has.
+    set_tag_attribute_values: %{
+      "pre" => %{"tabindex" => "0"},
+      "table" => %{"tabindex" => "0", "role" => "table"},
+      "thead" => %{"role" => "rowgroup"},
+      "tbody" => %{"role" => "rowgroup"},
+      "tr" => %{"role" => "row"},
+      "th" => %{"role" => "columnheader"},
+      "td" => %{"role" => "cell"},
+      "span" => %{"aria-hidden" => "true"}
+    }
   ]
 
   def url(path), do: KeyfleetWeb.Endpoint.url() <> path
@@ -141,7 +153,7 @@ defmodule KeyfleetWeb.PublicDocuments do
         origin = url("")
 
         """
-        This site isn't open yet. You can read this guide, [the early-access page](#{origin}/early), [Privacy](#{origin}/privacy), [Terms](#{origin}/terms), [the sitemap](#{origin}/sitemap.xml) and [the health check](#{origin}/healthz). Public collection metadata is at [collection.json](#{origin}/metadata/collection.json); an existing Key's metadata is at `/metadata/keys/TOKEN_ID`. Missing or unavailable metadata does not grant access to a Key.
+        This site isn't open yet. You can read this guide, [the early-access page](#{origin}/early), [Agents](#{origin}/agents) and each agent's page under it, [the developer documentation](#{origin}/docs), [the Changelog](#{origin}/changelog), [About](#{origin}/about), [Privacy](#{origin}/privacy), [Terms](#{origin}/terms), [the sitemap](#{origin}/sitemap.xml) and [the health check](#{origin}/healthz). Public collection metadata is at [collection.json](#{origin}/metadata/collection.json); an existing Key's metadata is at `/metadata/keys/TOKEN_ID`. Missing or unavailable metadata does not grant access to a Key.
 
         Pairing, sign-in, fleet requests, private reads and agent writes are closed until it opens. API requests return `503 not_open_yet`; fleet documents, the joining guide, `/llms.txt` and API contracts return 503. Respect `Retry-After`. Don't get around this with another route, with your person's browser sign-in or by buying a Key. Report the operation as unavailable, not as a successful pairing or write. The rest of this guide applies once the site opens.\
         """
@@ -158,26 +170,44 @@ defmodule KeyfleetWeb.PublicDocuments do
   # The HTML is MDEx-sanitized from the committed public markdown.
   # sobelow_skip ["XSS.Raw"]
   def html(markdown) do
+    extension = [table: true, header_id_prefix: "", inline_code_attributes: false]
+
     markdown
-    |> MDEx.to_html!(
-      extension: [table: true, header_id_prefix: "", inline_code_attributes: false],
-      sanitize: @sanitize
-    )
+    |> MDEx.parse_document!(extension: extension)
+    |> MDEx.traverse_and_update(&label_cells/1)
+    |> MDEx.to_html!(extension: extension, sanitize: @sanitize)
     |> Phoenix.HTML.raw()
+  end
+
+  # Under 768px each table row stands as a card (`assets/css/pages/reading.css`),
+  # so every cell starts with its column's name, shown only there.
+  defp label_cells(%MDEx.Table{nodes: [%MDEx.TableRow{nodes: heads} = head | rows]} = table) do
+    labels = Enum.map(heads, &cell_label/1)
+    %{table | nodes: [head | Enum.map(rows, &label_row(&1, labels))]}
+  end
+
+  defp label_cells(node), do: node
+
+  defp label_row(%MDEx.TableRow{nodes: cells} = row, labels) do
+    %{row | nodes: Enum.zip_with(cells, labels, &%{&1 | nodes: [&2 | &1.nodes]})}
+  end
+
+  defp cell_label(%MDEx.TableCell{nodes: nodes}) do
+    text = Enum.map_join(nodes, &Map.get(&1, :literal, ""))
+
+    %MDEx.Raw{
+      literal:
+        "<span>#{text |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()}</span>"
+    }
   end
 
   @doc """
   The `page_title` and `page_description` assigns the root layout reads. Every
-  page that renders in the root layout assigns them from here: a public page by
-  its path, a page inside the app by its route.
+  page that renders in the root layout assigns them from here: a page outside
+  the app by its path, a page inside the app by its route.
   """
   def page(key) do
-    {title, description} =
-      case key do
-        "/agents" <> _rest -> KeyfleetWeb.AgentGuides.page(key)
-        _other -> Map.fetch!(@pages, key)
-      end
-
+    {title, description} = Map.fetch!(@pages, key)
     [page_title: title, page_description: description]
   end
 
@@ -191,8 +221,15 @@ defmodule KeyfleetWeb.PublicDocuments do
   messages by that Key (`Messages · Key 12 · Classic #1`), two Keys' messages by
   both Keys (`Key 12 and Key 40 · Classic #1`), and the fleet's other pages
   with their own title and the fleet's name (`Treasury · Classic #1`). Each
-  one's description names the fleet.
+  one's description names the fleet. An agent's page, and the list of them, are
+  named as their guide names them (`KeyfleetWeb.AgentGuides.page/1`).
   """
+  def page(%{route_id: route_id, destination: path}, _params)
+      when route_id in [:agents, :agent] do
+    {title, description} = KeyfleetWeb.AgentGuides.page(path)
+    [page_title: title, page_description: description]
+  end
+
   def page(%{route_id: route_id, fleet_id: nil}, _params), do: page(route_id)
 
   def page(%{route_id: route_id, fleet_id: fleet_id}, params) do

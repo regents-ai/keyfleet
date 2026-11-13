@@ -10,7 +10,7 @@
 .key-card {
   display: grid;
   place-items: center;
-  background: radial-gradient(ellipse 60% 55% at 50% 48%, rgb(35 37 42), rgb(27 28 33));
+  background: radial-gradient(ellipse 60% 55% at 50% 48% in oklch, rgb(35 37 42), rgb(27 28 33));
   perspective: 900px;
 }
 
@@ -20,8 +20,8 @@
   overflow: hidden;
   transform-style: preserve-3d;
   mask-image:
-    linear-gradient(to right, transparent, #000 7%, #000 93%, transparent),
-    linear-gradient(transparent, #000 3%, #000 96%, transparent);
+    linear-gradient(to right in oklch, #00000000, #000 7%, #000 93%, #00000000),
+    linear-gradient(in oklch, #00000000, #000 3%, #000 96%, #00000000);
   mask-composite: intersect;
 }
 
@@ -37,7 +37,7 @@
   inset: 0 auto auto 0;
   width: 200%;
   height: 200%;
-  background: radial-gradient(closest-side, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0));
+  background: radial-gradient(closest-side in oklch, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0));
   mix-blend-mode: overlay;
   opacity: 0;
   pointer-events: none;

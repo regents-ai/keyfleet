@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {anythingMoved, clippedByClass, forget, leftovers, moved, rolled, watchMotion} from "./support/motion"
+import {anythingMoved, forget, leftovers, moved, watchMotion} from "./support/motion"
 
 // Keyfleet's motion plays only for pointer presses and for readers who haven't
 // asked for less motion, and every piece hands its element back to the
@@ -22,56 +22,6 @@ const refuseConnection = (page: Page) =>
   page.evaluate(() => window.dispatchEvent(new CustomEvent("ash:identity-state", {detail: {error: "failed"}})))
 
 const REFUSAL = "#account-verified-connections-notice"
-
-// Serves the page under its own policy with style attributes refused outright,
-// and collects whatever the browser refuses.
-async function refuseStyleAttributes(page: Page, path: string) {
-  await page.route(path, async route => {
-    const response = await route.fetch()
-    const headers = response.headers()
-    const policy = headers["content-security-policy"]
-    expect(policy).toMatch(/style-src-attr [^;]+/)
-    headers["content-security-policy"] = policy.replace(/style-src-attr [^;]+/, "style-src-attr 'none'")
-    await route.fulfill({response, headers})
-  })
-  const refusals: string[] = []
-  page.on("console", message => {
-    if (message.text().includes("Refused to")) refusals.push(message.text())
-  })
-  return refusals
-}
-
-test("a page's headline rises in and is left exactly as the server drew it", async ({page, request}) => {
-  const served = await (await request.get("/docs")).text()
-  await watchMotion(page)
-  await page.goto("/docs")
-
-  await expect.poll(() => rolled(page, "headline")).toBe(true)
-  await expect
-    .poll(() =>
-      page.evaluate(
-        html =>
-          new DOMParser().parseFromString(html, "text/html").querySelector("main h1")!.innerHTML ===
-          document.querySelector("main h1")!.innerHTML,
-        served,
-      ),
-    )
-    .toBe(true)
-})
-
-test("a headline's words rise each in a box clipped by class, so a policy refusing style attributes refuses nothing", async ({
-  page,
-}) => {
-  const refusals = await refuseStyleAttributes(page, "**/docs")
-  await watchMotion(page)
-  await page.goto("/docs")
-
-  await expect.poll(() => rolled(page, "headline")).toBe(true)
-  expect(await clippedByClass(page, "headline")).toBe(true)
-  await expect.poll(() => page.locator("main h1 .split-clip").count()).toBe(0)
-  await page.waitForLoadState("networkidle")
-  expect(refusals).toEqual([])
-})
 
 test("a refusal shakes once as it appears, and refusals again and again end at rest", async ({page}) => {
   await openConnections(page)
@@ -105,9 +55,5 @@ test("a reader who asked for less motion sees refusals and cards without movemen
   await expect(page.locator(".phx-connected").first()).toBeAttached()
   await page.waitForTimeout(600)
   expect(await anythingMoved(page), "the homepage").toBe(false)
-
-  await page.goto("/docs")
-  await page.waitForTimeout(600)
-  expect(await anythingMoved(page), "a page's headline").toBe(false)
   await context.close()
 })

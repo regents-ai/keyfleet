@@ -1,21 +1,16 @@
 /**
  * The standard motion on every page: a squish when something is pressed, a
- * shake when the answer is no, panels that slide or pop open, and on pages the
- * server draws once, the headline rising in word by word and the cards
- * settling into place the first time they scroll into view. The version of
- * each is named in `KeyfleetWeb.Motion` and every version that was tried is
- * kept in the template's motion lab at /animations.
- *
- * A live page draws its own parts again whenever it changes, so only what the
- * server drew once moves as the page opens; live parts move from their hooks.
+ * shake when the answer is no, and panels that slide or pop open. The version
+ * of each is named in `KeyfleetWeb.Motion` and every version that was tried is
+ * kept in the template's motion lab at /animations. Every page this runs on is
+ * live and draws its own parts again whenever it changes, so the parts that
+ * move as a page opens move from their hooks.
  *
  * Nothing here waits for, stops or repeats a press: a wallet button reaches
  * the wallet the moment it is pressed, and the motion plays alongside.
  */
-import {splitText} from "animejs"
-import {deny, nope, squish} from "./hooks/motion/press"
-import {CASCADE, GRIDS, HEADLINES, onFirstSight} from "./hooks/motion/reveals"
-import {CLIPPED_WORD, byPointer, lastInputByPointer, still, watchInput} from "./hooks/motion/shared"
+import {nope, squish} from "./hooks/motion/press"
+import {byPointer, lastInputByPointer, still, watchInput} from "./hooks/motion/shared"
 import {backdrop, drawer, list, menu, settle, sheet, unlist} from "./hooks/motion/slides"
 
 // A menu's summary is its button; other summaries open disclosures in the
@@ -24,24 +19,10 @@ import {backdrop, drawer, list, menu, settle, sheet, unlist} from "./hooks/motio
 const PRESSABLE =
   ":is(button, .rg-button, [role='button'], summary:has(~ [data-panel='menu'])):not([role='switch'], [data-press])"
 
-const live = (el: Element) => el.closest("[data-phx-session]") !== null
-
 export function mountMotion(doc: Document) {
   watchInput(doc)
   doc.addEventListener("click", press)
   doc.addEventListener("toggle", toggle, true)
-
-  const main = doc.querySelector("main")
-  if (main === null || live(main) || still(main)) return
-
-  const headline = main.querySelector<HTMLElement>("h1")
-  if (headline !== null) rise(headline)
-
-  for (const list of main.querySelectorAll<HTMLElement>("[data-cascade]"))
-    onFirstSight(list, () => GRIDS.cascade([...list.children].slice(0, CASCADE)))
-
-  // A form the server sent back refused says why, and the reason shakes once.
-  for (const reason of main.querySelectorAll("[role='alert']")) deny(reason)
 }
 
 // By the time a press reaches the document, the page has already acted on
@@ -107,9 +88,3 @@ function close(target: HTMLElement) {
 
 const detailsPanel = (target: HTMLElement) =>
   target instanceof HTMLDetailsElement ? target.querySelector<HTMLElement>(":scope > [data-panel]") : null
-
-// The words are joined back into plain text once they have risen.
-function rise(headline: HTMLElement) {
-  const split = splitText(headline, {words: CLIPPED_WORD})
-  HEADLINES.rise(split).then(() => split.revert())
-}

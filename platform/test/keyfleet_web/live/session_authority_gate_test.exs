@@ -24,13 +24,16 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
     # The visit code is random, belongs to no account and is already in the
     # page's own meta tag; the arrival is only a source name such as "chatgpt",
     # and gpc only whether the browser sent Global Privacy Control
-    # (KeyfleetWeb.VisitLog).
+    # (KeyfleetWeb.VisitLog). The client key is a keyed hash of the address
+    # the request came from, which names no address
+    # (KeyfleetWeb.ClientAddress.client_key/1).
     assert session == %{
              "render_topic" => SessionAuthority.topic(lineage),
              "render_route" => "/syndicate/1",
              "visit" => nil,
              "arrival" => nil,
-             "gpc" => false
+             "gpc" => false,
+             "client_key" => KeyfleetWeb.ClientAddress.client_key({{127, 0, 0, 1}, :peer})
            }
 
     refute markup =~ lineage
@@ -45,14 +48,14 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
     assert session["render_topic"] == cookie_topic
   end
 
-  test "CANONICAL_AUTHORITY_ROW: an anonymous render signs only its route, visit, arrival and privacy signal" do
+  test "CANONICAL_AUTHORITY_ROW: an anonymous render signs only its route, visit, arrival, privacy signal and client key" do
     assert %{session: %{"render_route" => "/syndicate/1"} = session} =
              build_conn()
              |> get("/syndicate/1")
              |> html_response(200)
              |> static_session!()
 
-    assert Map.keys(session) == ["arrival", "gpc", "render_route", "visit"]
+    assert Map.keys(session) == ["arrival", "client_key", "gpc", "render_route", "visit"]
   end
 
   # A LiveView outside the product shell, so what this characterizes is the
