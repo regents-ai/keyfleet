@@ -9290,3 +9290,11 @@ excluded), run with PORT unset; typecheck and 443 unit tests pass; browser
 suite 125, devices 70 and the chain suite 126 in Chromium, on port 4593;
 required fixes, the command checks, SIWA latest and the contracts (547 tests,
 6 skipped, bytecode) pass. WebKit is not run on the Mac.
+
+## 2026-11-13: regents-cli 1.10.27
+
+The guides, install lines, the tool manifest's `cli.release` and the Makefile's
+checker pin name the newest release, its tag commit (2f7eee7e) and its wheel
+(SHA256 c9e28ef0…). `make check-cli` passes Keyfleet's commands against that
+commit, so the guides' wording stands. Found by the release check: 1.10.27 was
+published while this release was being checked.
