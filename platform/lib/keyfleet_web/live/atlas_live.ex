@@ -6,8 +6,9 @@ defmodule KeyfleetWeb.AtlasLive do
   whole swarm down to one thing, read from `KeyfleetWeb.AtlasPage`. Only the
   fleet's members read it, as they read its workspace; anyone else is told so.
 
-  The address holds everything the page shows: `?view=` the picture (only
-  `heat` is built: `KeyfleetWeb.AtlasLive.Heat` and `assets/js/atlas/heat/`),
+  The address holds everything the page shows: `?view=` the picture (`heat`,
+  `KeyfleetWeb.AtlasLive.Heat` and `assets/js/atlas/heat/`; `river`,
+  `KeyfleetWeb.AtlasLive.River` and `assets/js/atlas/river/`),
   `?show=list` the List, the same work as text and links, `?window=` the day,
   week, month or year shown (a year unless named), `?at=` a day it holds
   (today unless named), and `?kind=` `graph` or `notebooks` for one of them.
@@ -26,10 +27,11 @@ defmodule KeyfleetWeb.AtlasLive do
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
 
   alias KeyfleetWeb.AtlasLive.Heat
+  alias KeyfleetWeb.AtlasLive.River
   alias KeyfleetWeb.{AtlasPage, PageRead, ShellLive}
 
   # The pictures built so far, the first one shown unless another is named.
-  @views [:heat]
+  @views [:heat, :river]
   @kinds %{"graph" => :graph, "notebooks" => :notebook}
   @list_read 20
   @most_read 10
@@ -76,7 +78,7 @@ defmodule KeyfleetWeb.AtlasLive do
 
     atlas = %{
       fleet_id: fleet_id,
-      view: hd(@views),
+      view: view(params["view"]),
       show: if(params["show"] == "list", do: :list, else: :picture),
       window: window,
       at: at,
@@ -111,6 +113,9 @@ defmodule KeyfleetWeb.AtlasLive do
 
   def read(socket, _route_id, _params),
     do: socket |> assign(:atlas, nil) |> stream(:atlas_things, [], reset: true)
+
+  defp view("river"), do: :river
+  defp view(_word), do: hd(@views)
 
   defp window(word) when word in ~w(day week month), do: String.to_existing_atom(word)
   defp window(_word), do: :year
@@ -176,6 +181,7 @@ defmodule KeyfleetWeb.AtlasLive do
   What the picture asks for as the reader moves, answered as its reply:
   `atlas_cells`, each project's counts in each bucket of a span over a
   stretch; and `atlas_cards`, the things changed in one hour, newest first.
+  The river asks `atlas_river` for its own reads (`River.answer/3`).
   Once the view rests on another window, `atlas_window` names it in the
   address in place of the one there, so the window chosen at the top and the
   strip of its most active things follow the picture. The List's
@@ -216,6 +222,17 @@ defmodule KeyfleetWeb.AtlasLive do
       )
 
     {:reply, %{things: Enum.map(things, &card/1)}, socket}
+  end
+
+  def handle_event(
+        "atlas_river",
+        params,
+        %{assigns: %{atlas: %{state: :read, show: :picture, view: :river} = atlas}} = socket
+      ) do
+    case River.answer(params, atlas, ShellLive.reads_as(socket, atlas.fleet_id)) do
+      nil -> {:noreply, socket}
+      reply -> {:reply, reply, socket}
+    end
   end
 
   def handle_event(
@@ -332,6 +349,7 @@ defmodule KeyfleetWeb.AtlasLive do
     params =
       %{
         "fleet_id" => fleet_id,
+        "view" => Atom.to_string(atlas.view),
         "window" => Atom.to_string(atlas.window),
         "at" => atlas.at |> DateTime.to_date() |> Date.to_iso8601(),
         "kind" => kind_word(atlas.source)
@@ -402,6 +420,13 @@ defmodule KeyfleetWeb.AtlasLive do
               Heat
             </.link>
             <.link
+              id="atlas-show-river"
+              patch={moved(@atlas, show: :picture, view: :river)}
+              aria-current={if @atlas.show == :picture and @atlas.view == :river, do: "page"}
+            >
+              River
+            </.link>
+            <.link
               id="atlas-show-list"
               patch={moved(@atlas, show: :list)}
               aria-current={if @atlas.show == :list, do: "page"}
@@ -443,6 +468,11 @@ defmodule KeyfleetWeb.AtlasLive do
 
         <Heat.picture
           :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :heat}
+          atlas={@atlas}
+        />
+
+        <River.picture
+          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :river}
           atlas={@atlas}
         />
 

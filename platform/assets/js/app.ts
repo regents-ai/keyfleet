@@ -31,6 +31,7 @@ import {installVitals} from "./vitals"
 import {installLaunchSteps} from "./launch_steps"
 import {spreadReconnect} from "./reconnect"
 import {AccountWallets} from "./hooks/account_wallets"
+import {AtlasRiver} from "./hooks/atlas_river"
 import {AtlasHeat} from "./hooks/atlas_heat"
 import {Countdown} from "./hooks/countdown"
 import {FleetTabs} from "./hooks/fleet_tabs"
@@ -313,6 +314,7 @@ const hooks = {
   ...labHooks,
   ...colocatedHooks,
   AccountWallets,
+  AtlasRiver,
   AtlasHeat,
   Countdown,
   FleetTabs,
