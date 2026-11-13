@@ -8857,3 +8857,48 @@ helper's 14). The site's accessibility rules over every Atlas state, light and
 dark, at 1280 and 390, find nothing in the Atlas; they find one serious
 finding in every fleet page's setup panel (`label-content-name-mismatch` on
 the agent picker, `Regent.Account` in regent_ui), which is not this change's.
+
+## 2026-11-13 — Atlas field: the whole fleet on one canvas, down to one thing
+
+- A second Atlas picture, `?view=field`, beside Heat and the List
+  (`KeyfleetWeb.AtlasLive.Field`, `assets/js/atlas/field/`,
+  `assets/js/hooks/atlas_field.ts`, `assets/css/pages/atlas_field.css`). Each
+  project is a cluster on one endless canvas, the busiest in the middle;
+  inside it, a patch for each kind of work, where the window's hours wind
+  outward in a square spiral from its first hour to its newest. Nothing moves
+  once placed: a new project joins after the ones shown.
+- Zooming is continuous, in four steps the zoom control names. Fleet: each
+  cluster a halo, bigger and brighter the more it worked today and yesterday
+  (or over a past window). Project: each kind's hours as blocks of work, by
+  day for a year and by hour otherwise. Hours: a point for each thing,
+  square for an item and round for a notebook. Items: cards that open each
+  thing's own page, in the smallest grid that holds an hour's things. Glows,
+  blocks and points are three vgpu instanced layers, redrawn only when
+  something moved; names, rings and cards are page elements from pools, only
+  for what is on screen. A ring pulses where work happened in the last hour
+  and stays still under reduced motion; a card changed in the last hour has
+  a ring on its mark.
+- Wheel and pinch zoom about the pointer, dragging moves, and a press looks
+  closer; hovering tells a cluster's or an hour's changes and things. With
+  the keyboard, the arrows move a ring between clusters, or between hours in
+  one; Enter opens a cluster on its busiest kind's newest work, then looks
+  closer, then moves to the first card; plus and minus zoom about the ring;
+  Tab and Shift+Tab step through the cards in reading order, Enter opens one,
+  and Escape goes back to the field. Moves glide under 300 ms with anime.js,
+  interruptible, and jump at once after a key or under reduced motion.
+- The page sends the projects, kinds and window; the field asks
+  (`atlas_field_cells`, `atlas_field_things`) for the counts and things on
+  screen through `AtlasPage.swarm` and `AtlasPage.newest`, so a fleet's year
+  never reaches the browser at once. The window control, kind filter, Active
+  strip (choosing a thing brings its card to the middle), List and live
+  updates are the Atlas page's own; the address keeps `view=field` through
+  them.
+- The compile-connected budget is 137 (was 133): the Atlas domain's four
+  links. The field adds none.
+
+At scale (a local fleet year of 4,989 changes and 492 notebooks a day from
+`scripts/atlas_seed.exs`): the first picture is drawn 213 to 228 ms after
+navigation, from a first reply of 18.8 KB. Ten seconds of zooming in and
+out between the fleet and an hour: 599 frames, median 16.7 ms, 99th
+percentile 16.8 ms, two over 20 ms. The CSS is 57,046 of 61,440 bytes
+gzipped (the field adds 506); the field's code loads in chunks of its own.

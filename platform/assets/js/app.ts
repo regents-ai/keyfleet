@@ -32,6 +32,7 @@ import {installLaunchSteps} from "./launch_steps"
 import {spreadReconnect} from "./reconnect"
 import {AccountWallets} from "./hooks/account_wallets"
 import {AtlasHeat} from "./hooks/atlas_heat"
+import {AtlasField} from "./hooks/atlas_field"
 import {Countdown} from "./hooks/countdown"
 import {FleetTabs} from "./hooks/fleet_tabs"
 import {FleetPreview} from "./hooks/fleet_preview"
@@ -314,6 +315,7 @@ const hooks = {
   ...colocatedHooks,
   AccountWallets,
   AtlasHeat,
+  AtlasField,
   Countdown,
   FleetTabs,
   FleetPreview,
