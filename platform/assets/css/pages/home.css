@@ -217,14 +217,6 @@
   }
 }
 
-/* Outside the layer, because the button's edge ink is drawn by an unlayered
-   rule: while the sale is closed the edge takes the same inert grey as the
-   fill, in both themes. */
-:root .rl-buy .rl-buy__button[aria-disabled="true"]::after {
-  --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
-  --rg-button-cut-ink: transparent;
-}
-
 /* Outside the layer, because the header's own rules are unlayered. Here the
    header sits in the page rather than the app's grid, so the brand only fills
    the bar's height once it lets go of the shared full height: its mark and
