@@ -54,7 +54,15 @@ them to the hub. That part is built separately, in `platform/`.
     thumbnail cleanup to its own hourly loop, and skips reading a notebook's
     thumbnail record when no image is over a day old;
   - `notebook-machines.patch`, which lets the hub's super admin list every
-    notebook machine the hub still holds a record of (below).
+    notebook machine the hub still holds a record of (below);
+  - `python-check.patch`, which stops a notebook whose `pyproject.toml` rules
+    out the hub's Python before uv changes anything, and keeps uv on the
+    image's Python (below);
+  - `run-failure.patch`, which writes on a failed run's record where it
+    stopped, with the last lines of that step's output, secrets removed, for
+    editors (below);
+  - `run-page-status.patch`, which names a run's status on its saved page
+    (`X-Marimohub-Run-Status`), so Keyfleet knows which kept pages are good.
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -79,7 +87,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-7130fe0`, about 440 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-1a4de6a`, about 430 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -94,14 +102,17 @@ notebook-hub/local/run.sh            # after the images are built
 
 What runs:
 
-- The hub image, with dev sign-in (no real sign-in) and notebooks saved to a
-  folder.
+- The hub image, with notebooks saved to a folder and Keyfleet's sign-in: each
+  request carries a pass signed the way Keyfleet signs them, with a key made
+  for this run, whose public half `local/jwks-server.mjs` serves. Integrations
+  are on here only so a run can be given a value to plant.
 - A stand-in for Fly's machine service, `local/fake-fly-api.mjs`, which starts
   each "machine" as a Docker container. Those containers sit on a network that
   only carries IPv6 addresses, as Fly's private network does.
 
-What it checks, in 13 steps:
+What it checks, in 21 steps:
 
+- The super admin makes a project with two editors and a viewer in it.
 - A session starts on a new machine.
 - The hub reaches the notebook through the relay.
 - A cell runs as the ordinary user, and the helper password is nowhere it can
@@ -110,6 +121,14 @@ What it checks, in 13 steps:
   ends.
 - The machine is gone afterwards.
 - A second hub name sees only its own machines.
+- Three runs fail where they should: one whose `pyproject.toml` asks for
+  Python below 3.13 stops at `dependencies`, one whose cell raises and one that
+  prints planted secrets stop at `export`. The editor who wrote the notebooks
+  and started the runs reads each `failure` with its excerpt; the other editor
+  and the viewer read it without, in the run and in the listing. The raw logs
+  hold every planted value, and no run answer, listing, stored run record or
+  hub output holds any of them. It prints each `failure` as each of the three
+  reads it.
 
 It uses a free local port (4791) and removes everything it started. Hub and
 stand-in logs are kept in `notebook-hub/.work/local/`.
@@ -128,7 +147,8 @@ What the local proof cannot show, because it needs real Fly:
 - That Fly deletes a machine whose lifetime ran out (`auto_destroy`).
 - Real Tigris storage, and how long a 3 GB image takes to start the first
   time.
-- Real sign-in through Keyfleet's server.
+- Sign-in from Keyfleet's server itself: the proof signs its passes the way
+  Keyfleet does, but not from Keyfleet.
 
 ## Before anything goes on Fly: founder approval
 
@@ -177,7 +197,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-7130fe0` as `registry.fly.io/kf-nb-<fleet>:626ec14-7130fe0`
+   - tag `keyfleet/notebook-hub:626ec14-1a4de6a` as `registry.fly.io/kf-nb-<fleet>:626ec14-1a4de6a`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -316,10 +336,36 @@ its listed ID.
   and keeps its own copy to count each fleet's notebook hours. A machine that
   belongs to no session or run is not listed. Each read fetches every run the
   hub still keeps, one stored record each.
+- **A notebook's Python must allow 3.13 (`python-check.patch`).** Before
+  `uv sync` installs a notebook's `pyproject.toml` (only one that lists
+  dependencies is installed), the hub checks its `requires-python` against
+  the image's Python. One that rules it out (for
+  example `<3.13`) stops the session or run at `dependencies` with
+  "pyproject.toml asks for Python <spec>; notebooks here run 3.13". At the pin,
+  uv instead replaced the image's environment with another Python and no
+  marimo, and the export then failed with exit 2 and no page. uv is also told
+  to use the image's Python, so a `.python-version` file cannot swap it. A
+  PEP 723 header's own `requires-python` is not checked: its pins install on
+  top of the image's environment and never replace it. When the notebook's
+  folder has a `uv.lock`, `uv sync` installs the locked versions.
+- **A failed run says where it stopped (`run-failure.patch`).** The run record
+  gets `failure`: `stage` (`start`, `dependencies`, `export`, `save` or
+  `timeout`), `exit_status` when the step had one, `message` (the run error's
+  own sentence) and `excerpt`: the last 20 lines of that step's output, at
+  most 2,000 bytes, with secrets removed before it is stored. Removal takes
+  out every value the hub put into the run's environment that is 6 or more
+  characters long, plain, URL-encoded and base64-encoded, then masks anything
+  shaped like a credential, then cuts to size, writing `[removed]` in place of
+  each. Everyone who can read the run reads `stage`, `exit_status` and
+  `message`; only the member who started the run (for a scheduled run, its
+  job's creator) and the notebook's author read `excerpt`, whatever other
+  editors there are. The excerpt is never logged. The raw logs stay as they
+  were, for editors only.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes
   one, so every hub runs with them off and needs no `MARIMOHUB_SECRETS_KEK`.
   With them on and no key, each hub warned "integration secret sources: none"
   at every start (27 Oct 2026). Turning them on later means opening the routes
-  in the gateway and giving each hub its own key.
+  in the gateway and giving each hub its own key. The local proof turns them on
+  only to give its runs a value to plant.

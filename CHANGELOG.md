@@ -8881,3 +8881,59 @@ the shared test database records a migration from another branch that this
 one does not carry; typecheck and 443 unit tests pass; browser suite 125,
 devices 70; required fixes, the command checks, SIWA latest and the contracts
 (547 tests, bytecode) pass.
+## 2026-11-13 — Failed notebook runs say where they stopped; the last good page stays
+
+- A failed or timed-out background run answers `failure`: the `stage` it
+  stopped at (`start`, `dependencies`, `export`, `save` or `timeout`), its
+  `exit_status` when that step had one, the hub's `message`, and, only for
+  the member who started the run (for a scheduled run, its job's creator) and
+  the notebook's author, `excerpt`: the last 20 lines of that step's output,
+  at most 2,000 bytes. Every other member who reads the run, editor or not,
+  gets `failure` without it. Before it is stored, every value the hub
+  put into the run that is 6 characters or longer is removed, plain,
+  URL-encoded and base64-encoded, then anything shaped like a credential, each
+  written `[removed]`. The excerpt is never logged, and the site answers
+  `failure` unchanged. A run's raw logs stay closed at the gateway. Hub patch
+  `run-failure.patch`.
+- A notebook whose `pyproject.toml` lists dependencies and rules out Python
+  3.13 stops at `dependencies` with "pyproject.toml asks for Python <spec>;
+  notebooks here run 3.13", where uv used to replace the image's environment
+  with another Python and no marimo, so the export failed with exit 2 and no
+  page. uv also keeps the image's Python whatever a `.python-version` says.
+  Hub patch `python-check.patch`. The Docs page and the notebooks skill say how
+  a notebook's packages install: `pyproject.toml` first, at its `uv.lock`'s
+  versions when there is one, then PEP 723 pins, with the host's own marimo.
+- `last_succeeded`, on a run read and now on each listed notebook, is the
+  notebook's newest kept page of a run that succeeded, read from Keyfleet's
+  own copies, so no number of later failed runs hides it. The hub names a
+  run's status on its page (`run-page-status.patch`) and each kept copy
+  records whether its run succeeded. The look through a job's 20 newest runs
+  is gone.
+- Copies kept before this change are marked once from each fleet's hub
+  (`Keyfleet.Notebooks.MarkSucceeded`, one job per fleet on the
+  `notebook_hubs` queue, queued by `backfill/0`): a copy of a run the hub
+  names succeeded becomes succeeded, and nothing else changes or is deleted.
+  A copy of a run the hub no longer holds (it keeps runs 30 days) stays not
+  succeeded, so a notebook whose last good run is older than that shows
+  `last_succeeded` as `null` until its next good run; the copy's page still
+  opens at its address. `HubClient` reads a notebook's jobs and a job's runs.
+- The hub image is `626ec14-1a4de6a`, in the five fleet files. The local proof
+  signs in as Keyfleet does and runs three failing notebooks, one printing
+  planted secrets: the editor who started them reads each excerpt, another
+  editor and a viewer read none.
+
+Release the five hubs first, then the site: a site ahead of its hub records
+every kept page as not succeeded and answers `failure` as `null`. Then, with
+the owner's go, since it writes to the production database, run once
+`bin/keyfleet rpc 'Keyfleet.Notebooks.MarkSucceeded.backfill()'`.
+
+Check: format, compile with warnings as errors, credo strict, sobelow, xref
+(133 of 133), codegen and route handoff pass; graph host 243; full suite 1,404
+(18 properties, 1,386 tests, 19 excluded), run on port 4593, where the
+development address check, which reads the port, passes on its own without
+one; typecheck and 431 unit tests pass; browser suite 125, devices 70;
+required fixes, commands, the sign-in library pins and contracts (547 tests,
+6 skipped) pass; the notebook hub check passes (compute-fly 73 tests, the
+runner helper's 14); the hub image builds with its tests run inside it
+(core's jobs, launch and schema 372, the API's job routes 124, the client's
+schema drift 1); the local proof passes its 21 steps.

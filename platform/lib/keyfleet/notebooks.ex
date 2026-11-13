@@ -44,7 +44,7 @@ defmodule Keyfleet.Notebooks do
     resource Keyfleet.Notebooks.SavedOutput do
       define :keep_saved_output,
         action: :keep,
-        args: [:fleet_id, :notebook_id, :source_id, :saved_at, :page]
+        args: [:fleet_id, :notebook_id, :source_id, :saved_at, :page, :succeeded]
 
       define :saved_output,
         action: :at,
@@ -52,6 +52,13 @@ defmodule Keyfleet.Notebooks do
         not_found_error?: false
 
       define :saved_outputs, action: :of_sources, args: [:fleet_id, :source_ids]
+
+      define :last_succeeded_outputs,
+        action: :last_succeeded,
+        args: [:fleet_id, :notebook_ids]
+
+      define :unmarked_run_outputs, action: :unmarked_runs, args: [:fleet_id]
+      define :mark_succeeded, action: :mark_succeeded
       define :remove_saved_output, action: :remove
     end
 
@@ -179,6 +186,13 @@ defmodule Keyfleet.Notebooks do
       {:error, _reason} -> :error
     end
   end
+
+  @doc """
+  Whether a hub's saved page is a background run's that succeeded, from the
+  run's status in its `X-Marimohub-Run-Status`. A version's page names none.
+  """
+  def run_succeeded?(%Req.Response{} = response),
+    do: Req.Response.get_header(response, "x-marimohub-run-status") == ["succeeded"]
 
   @doc "The path of one notebook on its fleet's notebook host, where it opens to edit."
   def notebook_path(project_id, notebook_id),
