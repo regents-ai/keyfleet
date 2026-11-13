@@ -101,7 +101,9 @@
   background: var(--worldline-tone);
 }
 
-.worldline-legend li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"])::before {
+/* A planet's swatch, in the legend and beside its events, is a stroke of its orbit. */
+.worldline-legend li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"])::before,
+li:is([data-trail="workspace"], [data-trail="code"], [data-trail="notebooks"]) .worldline-event__what::before {
   width: 1rem;
   height: 3px;
   border-radius: 0;

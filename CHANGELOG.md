@@ -8671,8 +8671,10 @@ event and every page read added another.
   select `seq`; without it a post's place reached the socket as
   `#Ash.NotLoaded` and closed it.
 - Colour: Workspace draws in `--palette-cornflower` (the literal `#4D79E4` is
-  gone), its shades `color-mix(in oklab, …)`; the legend's Chat swatch blends
-  in oklch. The style check reports 51 breaks, none in the Worldline.
+  gone), its shades `color-mix(in oklab, …)`, and only draws: in the legend
+  and beside a planet's events in the list it is a stroke of its orbit, not a
+  dot. The legend's Chat swatch blends in oklch. The style check reports 51
+  breaks, none in the Worldline.
 
 Check: format, compile with warnings as errors, credo strict, xref (131 of
 131), codegen, route handoff and usage rules pass; full suite 1,389 (18
