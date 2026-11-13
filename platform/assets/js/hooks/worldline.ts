@@ -1160,6 +1160,8 @@ export const Worldline: Hook = {
                 link.click()
                 break
               case "Escape":
+                // The picture's own: no open panel elsewhere on the page closes with it.
+                event.stopPropagation()
                 choose(undefined, "key")
                 break
               default:

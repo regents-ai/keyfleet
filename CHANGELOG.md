@@ -9421,3 +9421,10 @@ failure the account menu's right edge a pixel past 1280 (a rounding flake:
 the spec passes three runs of three after), devices on port 4596 70; required
 fixes, commands and contracts (547 tests, 6 skipped) pass. The pin check
 fails as on main: regents-cli 1.10.27 is out and the pins name 1.10.26.
+
+## 2026-11-13: Escape on the Worldline stays in the picture; guide 3.32.0
+
+Escape on the focused Worldline lets go of the chosen event and no longer also
+closes an open section elsewhere on the page (which scrolled the picture out of
+view), the same rule the Atlas's Heat cards follow. The served guide is 3.32.0:
+the release's check-in line with `money_waiting` added from the alerts branch.
