@@ -9325,3 +9325,33 @@ pixel; with Buy pressed the moment the approval landed, the window updated
 jumped straight to a whole tick; a later re-render and a reconnect drew
 nothing; under reduced motion it never drew; the drawn tick ends pixel for
 pixel as the still one. WebKit is not run on the Mac.
+
+## 2026-11-13: "You’re in" lands like a stamp
+
+- In the Buy Key window, "You’re in" used to just appear. It now lands like a
+  stamp as a Key bought there lands: it drops in from larger, turning straight
+  as it settles, in 240ms. It only grows, turns and fades in, so nothing
+  around it moves. Only a purchase landing while the window is open does it:
+  a page drawn again as its connection comes back, or the window opened
+  again, shows no stamp, and with reduced motion the words are simply there.
+- While the words land they pass under Approve and Buy, which stay on top, so
+  a press anywhere on either button reaches it. Buy stays pressable as before.
+- The motion kit (`assets/js/hooks/motion/moments.ts`) has the piece: `stamp`
+  and the `MotionStamp` hook, the motion lab's thunk moved out of
+  `motion_lab.ts`. The lab's "Work marked done" card lands its stamp with the
+  kit's `stamp`; its card no longer dips as the stamp lands, since the kit's
+  thunk moves only what it stamps.
+
+Check: compile with warnings as errors, format, typecheck and the 486 unit
+tests pass. In headless Chromium at 1280 and 390 wide, light and dark, read
+from each painted frame, the words were mid-stamp in the first frame that
+showed them and at rest after 14, once; Buy, the words under them, "Set up
+your agent", the title and the facts kept their boxes to the hundredth of a
+pixel and the window neither scrolled nor grew. In the 12 or 13 frames where
+the stamp passed under Buy, and the 8 under "Set up your agent", every one of
+33 points across each button took its press (without the buttons on top, up
+to 15% of Buy's points landed on the words). A window update 6ms into the
+landing did not interrupt it; another Buy press, a reconnect and opening the
+window again stamped nothing; under reduced motion nothing moved. The lab's
+card stayed still while its stamp landed and its tick drew. WebKit is not run
+on the Mac.

@@ -315,9 +315,10 @@ defmodule KeyfleetWeb.Components.BuyKey do
         </span>
         <%!-- Under the buttons, so nothing a person is about to press moves.
         Focus moves to its button as it appears, which scrolls the window to
-        it, and the button is described by the words above it. --%>
+        it, and the button is described by the words above it. "You’re in"
+        lands like a stamp as the purchase does. --%>
         <div :if={bought?(panel)} id={"#{@id}-in"} class="buy-key__in" role="status">
-          <strong id={"#{@id}-in-title"}>You’re in</strong>
+          <strong id={"#{@id}-in-title"} phx-hook="MotionStamp">You’re in</strong>
           <span id={"#{@id}-in-note"}>Your Key is in your wallet. Next, set up your agent.</span>
           <Regent.Primitives.button
             id={"#{@id}-setup"}

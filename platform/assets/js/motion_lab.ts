@@ -17,7 +17,7 @@ import {
   type TextSplitter,
 } from "animejs"
 import type {Hook} from "./hook_composition"
-import {LAYOUTS, ROLLS, countHook, drawTick, listHook} from "./hooks/motion/moments"
+import {LAYOUTS, ROLLS, countHook, drawTick, listHook, stamp} from "./hooks/motion/moments"
 import {nope, squish} from "./hooks/motion/press"
 import {GRIDS, HEADLINES, TABS, onFirstSight, tabsHook} from "./hooks/motion/reveals"
 import {BASE, CLIPPED_WORD, EASE_IN_OUT, EASE_OUT, FAST, SLOW, byPointer, play, still} from "./hooks/motion/shared"
@@ -400,21 +400,21 @@ const LAB_TABS = {
   },
 }
 
-// How the stamp lands once the server has marked the work done. Each returns
-// when the tick starts drawing.
-const STAMPS: Record<string, (card: HTMLElement, stamp: HTMLElement) => number> = {
-  thunk: (card, stamp) => {
-    play(stamp, {scale: {from: 2.4}, rotate: {from: -24}, opacity: {from: 0}, duration: 240, ease: "in(3)"})
-    play(card, {y: [0, 5, -1, 0], delay: 220, duration: 260, ease: "out(2)"})
+// How the stamp lands once the server has marked the work done: the kit's
+// thunk, and the others that were tried. Each returns when the tick starts
+// drawing.
+const STAMPS: Record<string, (card: HTMLElement, mark: HTMLElement) => number> = {
+  thunk: (_card, mark) => {
+    stamp(mark)
     return 260
   },
-  ink: (_card, stamp) => {
-    play(stamp, {scale: {from: 1.15}, opacity: {from: 0}, duration: BASE, ease: EASE_OUT})
+  ink: (_card, mark) => {
+    play(mark, {scale: {from: 1.15}, opacity: {from: 0}, duration: BASE, ease: EASE_OUT})
     return 120
   },
-  party: (card, stamp) => {
-    play(stamp, {scale: {from: 0}, rotate: {from: 40}, ease: spring({bounce: 0.5, duration: 420})})
-    const [x, y] = centre(stamp)
+  party: (card, mark) => {
+    play(mark, {scale: {from: 0}, rotate: {from: 40}, ease: spring({bounce: 0.5, duration: 420})})
+    const [x, y] = centre(mark)
     const stitches = spawn(card, 8, "stitch", x, y)
     for (const stitch of stitches) stitch.textContent = "+"
     animate(stitches, {
@@ -443,9 +443,9 @@ const LabStamp: Hook = {
 
     this.scope = scope.add(() => {
       scope.add("stamp", () => {
-        const stamp = this.el.querySelector<HTMLElement>("[data-stamp]")!
-        const inkAt = STAMPS[this.el.dataset.variant ?? ""](this.el, stamp)
-        drawTick(stamp.querySelector<SVGGeometryElement>("[data-tick]")!, inkAt)
+        const mark = this.el.querySelector<HTMLElement>("[data-stamp]")!
+        const inkAt = STAMPS[this.el.dataset.variant ?? ""](this.el, mark)
+        drawTick(mark.querySelector<SVGGeometryElement>("[data-tick]")!, inkAt)
       })
 
       return () => sweepAll(this.el)

@@ -17,7 +17,7 @@ import {
   type Scope,
   type TextSplitter,
 } from "animejs"
-import {BASE, CLIPPED_CHAR, EASE_OUT, SLOW, still, watched} from "./shared"
+import {BASE, CLIPPED_CHAR, EASE_OUT, SLOW, play, still, watched} from "./shared"
 import {deny} from "./press"
 import type {Hook} from "../../hook_composition"
 
@@ -197,6 +197,16 @@ export function drawTick(tick: SVGGeometryElement, delay = 0) {
   return animate(line, {draw: ["0 0", "0 1"], delay, duration: SLOW, ease: EASE_OUT})
 }
 
+/**
+ * Words or a mark landing like a stamp on work just done: it drops onto the
+ * page, turning straight as it lands. It only grows, turns and fades in, so
+ * nothing around it moves. It starts at well over twice its size, so a
+ * button it passes over must sit on top of it (as Approve and Buy do in the
+ * Buy Key window), and every press still reaches the button.
+ */
+export const stamp = (el: Element) =>
+  play(el, {scale: {from: 2.4}, rotate: {from: -24}, opacity: {from: 0}, duration: 240, ease: "in(3)"})
+
 type TickHook = {el: HTMLElement; scope?: Scope; done?: boolean}
 
 const done = (el: HTMLElement) => el.dataset.done !== undefined
@@ -223,6 +233,27 @@ export const MotionTick: Hook = {
   },
 
   destroyed(this: TickHook) {
+    this.scope?.revert()
+  },
+}
+
+type StampHook = {el: HTMLElement; scope?: Scope}
+
+/**
+ * Words that land like a stamp when the work they announce is done while the
+ * reader watches, such as "You’re in" once a Key bought here lands. On a page
+ * that opens on the result they are simply there.
+ */
+export const MotionStamp: Hook = {
+  mounted(this: StampHook) {
+    const scope = createScope({root: this.el})
+
+    this.scope = scope.add(() => {
+      if (watched(this.el) && !still(this.el)) stamp(this.el)
+    })
+  },
+
+  destroyed(this: StampHook) {
     this.scope?.revert()
   },
 }

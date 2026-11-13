@@ -24,7 +24,7 @@ vi.mock("../js/account_menu", () => ({
   installAccountMenu: vi.fn(),
 }))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
-vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}, MotionTick: {}}))
+vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}, MotionStamp: {}, MotionTick: {}}))
 vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, MotionTabs: {}, ShellViews: {}}))
 vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
 vi.mock("../js/hooks/harbour_sea", () => ({HarbourSea: {}}))
