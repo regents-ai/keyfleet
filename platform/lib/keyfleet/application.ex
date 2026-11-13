@@ -7,6 +7,7 @@ defmodule Keyfleet.Application do
 
   @impl true
   def start(_type, _args) do
+    :ok = KeyfleetWeb.LiveCrashes.attach()
     :ok = RegentHttp.ErrorSaving.attach()
     :ok = KeyfleetWeb.VisitLog.Events.attach()
     # The Claude connector stays off until its one switch turns it on

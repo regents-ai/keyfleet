@@ -51,6 +51,7 @@ defmodule KeyfleetWeb.ShellLive do
   }
 
   alias KeyfleetWeb.Components.{AgentSetup, BuyKey, Reading, SetupList}
+  alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
@@ -73,7 +74,7 @@ defmodule KeyfleetWeb.ShellLive do
   @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(_params, %{"client_key" => client_key}, socket) do
     {:ok,
      socket
      |> follow_mutes()
@@ -91,7 +92,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:worldline, [])
      |> assign(
        route_spec: nil,
-       client_key: Map.fetch!(session, "client_key"),
+       client_key: client_key,
        shell_instance: System.unique_integer([:positive, :monotonic]),
        get_key: get_key?(),
        load_failed?: false,
@@ -155,6 +156,9 @@ defmodule KeyfleetWeb.ShellLive do
      )
      |> follow_agents(current_account(socket.assigns.access_context))}
   end
+
+  # A page drawn before its token carried the client key loads once more.
+  def mount(_params, session, socket), do: {:ok, Session.render_again(socket, session)}
 
   # A page that couldn't be loaded may have started listening to what it was
   # loading before the read failed, so the next page is a whole new load.

@@ -34,6 +34,15 @@ defmodule KeyfleetWeb.Live.Session do
     })
   end
 
+  @doc """
+  One full request for the page, for a connected page whose signed token lacks
+  what `render_context/1` puts in it: the request renders it again with a whole
+  token. The session is matched, never fetched with a raising call, so it can
+  never become the text of an exception and reach the log.
+  """
+  def render_again(socket, session),
+    do: redirect(socket, to: Map.get(session, "render_route", @public_root))
+
   def on_mount(:load_human, _params, session, socket) do
     socket = assign(socket, session_lease: nil, signed_out_reason: :signed_out)
 

@@ -8848,3 +8848,36 @@ move about a twentieth as far as at full pace (0.048, 0.048, 0.059); a mark's
 link stays within 0.6 px of the mark while it flies; 601 frames over 10
 seconds average 16.7 ms, none over 20 ms; for a reader who asks for less
 motion two frames a second apart are identical.
+
+## 2026-11-13 — An open page without its client key loads again, and a failing page keeps the session out of the log
+
+- A connected page whose signed token lacks the client key (a tab drawn before
+  12 Nov's release put the key in the token) now takes one full request for the
+  same page instead of failing, as ash-template v238 does
+  (`KeyfleetWeb.Live.Session.render_again/2`). `KeyfleetWeb.ShellLive`, the one
+  page that reads the key, now reads it by matching, so the session is never
+  part of an error's text. What a sign-in check decides is unchanged. Sentinel
+  saw the crash on /classic/1/worldline at 05:45Z.
+- A live page that fails no longer writes the browser's session into the log.
+  Elixir's report of the page's end printed the message that joined it: the
+  page's signed tokens, the form token, and the socket's decoded cookie session
+  with the sign-in's lineage and live socket id. A callback that matched none
+  of its heads also printed its arguments: a mount's session, or the socket with
+  every assign the page holds. `KeyfleetWeb.LiveCrashes`, a `:logger` primary
+  filter added at start, replaces the join with `{Phoenix.Channel, :join}` and
+  each stack line's arguments with their count. The line still names the page,
+  the exception and where it was raised.
+- Tests: `KeyfleetWeb.PageTokenTest` (a token without the client key asks for
+  the page again) and `KeyfleetWeb.LiveCrashesTest` (a page that raises as it
+  connects, one whose mount matches none of its heads, and one whose press
+  matches none, each carrying marker values: none appears in the captured log or
+  in the saved error). Each fails on the code before this change.
+
+Check: format, compile with warnings as errors, credo strict, sobelow, hex
+audit, xref (133 of 133), graph host's 243, codegen, usage rules and route
+handoff pass; full suite 1,405 of 1,406 (18 properties, 1,388 tests, 19
+excluded): the one failure is the health test's newest-migration case, because
+the shared test database records a migration from another branch that this
+one does not carry; typecheck and 443 unit tests pass; browser suite 125,
+devices 70; required fixes, the command checks, SIWA latest and the contracts
+(547 tests, bytecode) pass.
