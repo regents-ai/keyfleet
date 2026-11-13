@@ -9561,3 +9561,39 @@ audit, format, credo strict, sobelow, xref, graph host 243, full suite 1,454
 and 486 unit tests, browser suite 125 of 125, devices 70 of 70, required
 fixes, commands, the pin check and contracts (547 tests, 6 skipped). Firefox
 was not run; WebKit is not run on the Mac.
+
+## 2026-11-13: The Key profile walks pass twenty rounds in one go
+
+Run many times over in one go (`--repeat-each`), the Key profile walks failed
+from the seventh round, though each passed alone. Keys sold in earlier rounds
+stay with the same account, and the member list shows a holder's first fifty
+Keys, so the Key a walk had just sold had no card to open. The phone walk's
+limit of 60 Tab presses ran out on that account's growing list of Keys, and
+the walk where someone else writes to a Key left that visitor's browser open
+every round.
+
+The walks that open a Key from the member list now open its first card,
+whichever Key that is. The phone walk goes once round the window's stops to
+reach the box to write in, however many there are. The other visitor's
+browser closes when its walk ends. The site is unchanged.
+
+The Buy Key walk presses Buy with the mouse and leaves it resting there, so it
+was checked for the profile walk's hazard. In ten rounds the "About paying"
+tip's "i" rose into place about 350 pixels left of the resting mouse and the
+tip never opened, so that walk stays as it is.
+
+Check (partition `_kf_s3`): the Key profile walks 20 times over in one go in
+Chromium, 160 of 160; before, 48 of 48 for six rounds, then three walks
+failing every round. Chain walks in Chromium on port 4593, by themselves: 123
+of 126 in the first run, with the machine's load average between 80 and 103
+on 16 cores. The Graph canvas walk failed at both widths (a pressed card not
+marked within 5 seconds) and so did the homepage Approve and Buy walk (out of
+its 30 seconds), files this change does not touch. The second run, 126 of
+126. `make check`, PORT unset: compile with warnings as errors, unused locks,
+hex audit, format, credo strict, sobelow, xref, graph host 243, full suite
+1,454 (20 properties, 1,434 tests, 19 excluded), codegen, route handoff,
+typecheck and 486 unit tests, browser suite 125 of 125, devices 70 of 70,
+required fixes and commands pass. The pin check fails: regents-cli 1.10.28
+came out today and the pins still name 1.10.27, on main as here. Contracts,
+run on their own after it, 547 tests, 6 skipped. Firefox isn't installed
+here, so its run of these walks didn't happen; WebKit is not run on the Mac.
