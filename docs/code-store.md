@@ -31,10 +31,7 @@ depends on the store.
   deleted). The store's `DELETE /api/v1/repos/<owner>/<repository>` takes
   only a `delete` pass, which only Keyfleet's own key signs; it answers 204,
   also for a repository already gone, so a failed run is made again a minute
-  later. That call is on the store's `kf-delete-repo` branch and not yet
-  released: until it is, the store answers 404, a deletion's run gives up
-  after its 20 tries, and the repository stays in the store, out of
-  everyone's reach. Release the store first.
+  later.
 - Each change sent is recorded under its project, the key and the wallet
   that sent it, and the project's Code shows the latest ten (key, branch and
   time; never the commit message).

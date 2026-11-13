@@ -261,8 +261,10 @@ defmodule Keyfleet.MixProject do
         # add no more. The Worldline adds one: the Backup record's access check,
         # as a fleet's readers read when its notebooks changed. Monthly usage adds
         # one, lib/keyfleet/usage.ex -> usage/month.ex, the Month record with its
-        # domain; its policies use only built-in checks.
-        "xref graph --label compile-connected --fail-above 132",
+        # domain; its policies use only built-in checks. Notebook hours add one,
+        # lib/keyfleet/usage.ex -> usage/machine.ex, the Machine record with its
+        # domain, the same way.
+        "xref graph --label compile-connected --fail-above 133",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

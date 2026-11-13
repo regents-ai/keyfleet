@@ -9,8 +9,9 @@ defmodule Keyfleet.UsageTest do
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Usage
-  alias Keyfleet.Usage.Count
+  alias Keyfleet.Usage.{Count, ReadHub}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
+  alias KeyfleetWeb.SignedAgentHelpers
 
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
@@ -107,15 +108,167 @@ defmodule Keyfleet.UsageTest do
     assert Usage.this_month(@fleet).chat_posts == 1
   end
 
+  test "a month's notebook hours are the time each machine ran in it, by UTC" do
+    record!([
+      # Across the turn of the month: an hour in each.
+      machine("sess-turn", :session, ~U[2026-10-31 23:00:00Z], ~U[2026-11-01 01:00:00Z]),
+      # Ended as November began: all of it in October.
+      machine("run_edge", :run, ~U[2026-10-31 23:30:00Z], ~U[2026-11-01 00:00:00Z]),
+      machine("run_short", :run, ~U[2026-11-10 10:00:00Z], ~U[2026-11-10 10:30:00Z]),
+      # Still running when last read, after two hours.
+      machine("sess-open", :session, ~U[2026-11-20 08:00:00Z], nil,
+        seen_at: ~U[2026-11-20 10:00:00Z]
+      ),
+      machine("sess-dec", :session, ~U[2026-12-01 00:00:00Z], ~U[2026-12-01 00:10:00Z]),
+      machine("sess-other", :session, ~U[2026-11-05 09:00:00Z], ~U[2026-11-05 10:00:00Z],
+        fleet_id: @other_fleet
+      )
+    ])
+
+    assert notebooks!(@fleet, @november) == 3600 + 1800 + 7200
+    assert notebooks!(@fleet, @october) == 3600 + 1800
+    assert notebooks!(@other_fleet, @november) == 3600
+  end
+
+  describe "the hourly hub read" do
+    setup do
+      %{hub: hub!(@fleet)}
+    end
+
+    test "counts this month's notebook hours from the machines the hub lists, the same each time",
+         %{hub: hub} do
+      from = DateTime.new!(this_month(), ~T[00:00:00])
+
+      listed(hub, [
+        listing("sess-a", "session", DateTime.add(from, 3600), DateTime.add(from, 5400)),
+        listing("run_b", "run", DateTime.add(from, 7200), DateTime.add(from, 7290)),
+        # Started last month: only its time this month counts here.
+        listing("sess-c", "session", DateTime.add(from, -1800), DateTime.add(from, 1800))
+      ])
+
+      assert perform_job(Count, %{}) == :ok
+      assert_enqueued(worker: ReadHub, args: %{fleet_id: @fleet})
+      refute_enqueued(worker: ReadHub, args: %{fleet_id: @other_fleet})
+
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+
+      assert Usage.this_month(@fleet).notebook_seconds == 1800 + 90 + 1800
+
+      assert [
+               %{id: "run_b", kind: :run},
+               %{id: "sess-a", kind: :session},
+               %{id: "sess-c", kind: :session, ended_at: %DateTime{}}
+             ] = machines(@fleet)
+
+      # Last month ended before its hub was first read, and the other fleet
+      # has no hub: neither has a figure.
+      assert Usage.month_usage!(@fleet, last_month()).notebook_seconds == nil
+      assert Usage.this_month(@other_fleet).notebook_seconds == nil
+    end
+
+    test "a machine still running counts until the last read that saw it, and stops there when its end is never seen",
+         %{hub: hub} do
+      started = lately()
+      count!(@fleet, this_month())
+
+      listed(hub, [listing("sess-open", "session", started, nil)])
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+      [%{seen_at: first_seen}] = machines(@fleet)
+
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+      [%{ended_at: nil, seen_at: last_seen}] = machines(@fleet)
+      assert DateTime.after?(last_seen, first_seen)
+      assert Usage.this_month(@fleet).notebook_seconds == ran(started, last_seen)
+
+      # The hub drops its record before a read sees it end.
+      listed(hub, [])
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+
+      assert [%{ended_at: nil, seen_at: ^last_seen}] = machines(@fleet)
+      assert Usage.this_month(@fleet).notebook_seconds == ran(started, last_seen)
+    end
+
+    test "a machine seen running and then ended counts until its end", %{hub: hub} do
+      started = lately()
+      ended = DateTime.add(started, 300)
+      count!(@fleet, this_month())
+
+      listed(hub, [listing("run_c", "run", started, nil)])
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+
+      listed(hub, [listing("run_c", "run", started, ended)])
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+
+      assert [%{ended_at: ^ended}] = machines(@fleet)
+      assert Usage.this_month(@fleet).notebook_seconds == ran(started, ended)
+    end
+
+    test "last month is counted again once it has a figure", %{hub: hub} do
+      last_start = DateTime.new!(last_month(), ~T[00:00:00])
+      assert perform_job(Count, %{}) == :ok
+
+      # Counted while last month was under way.
+      Usage.count_notebooks!(Usage.month_usage!(@fleet, last_month()), actor: @system)
+
+      listed(hub, [
+        listing("run_d", "run", DateTime.add(last_start, 60), DateTime.add(last_start, 660))
+      ])
+
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+
+      assert Usage.month_usage!(@fleet, last_month()).notebook_seconds == 600
+      assert Usage.this_month(@fleet).notebook_seconds == 0
+    end
+
+    test "a hub that lists no machines counts no hours" do
+      count!(@fleet, this_month())
+
+      assert perform_job(ReadHub, %{fleet_id: @fleet}) == :ok
+      assert Usage.this_month(@fleet).notebook_seconds == 0
+    end
+
+    test "a hub that cannot be read leaves the figures as they were", %{hub: hub} do
+      count!(@fleet, this_month())
+      listed(hub, :down)
+
+      assert {:error, {:hub, _address, {:status, 503}}} =
+               perform_job(ReadHub, %{fleet_id: @fleet})
+
+      assert Usage.this_month(@fleet).notebook_seconds == nil
+      assert machines(@fleet) == []
+    end
+  end
+
   test "anyone reads a fleet's usage, and only the server counts it" do
     count!(@fleet, @november)
     person = %Keyfleet.Actors.Human{human_account_id: 1, wallet_addresses: [@wallet]}
 
-    assert %{fleet_id: @fleet, month: @november} = Usage.month_usage!(@fleet, @november)
+    assert %{fleet_id: @fleet, month: @november} = usage = Usage.month_usage!(@fleet, @november)
 
     for actor <- [nil, person] do
       assert {:error, %Ash.Error.Forbidden{}} =
                Usage.count_month(@fleet, @november, actor: actor)
+
+      assert {:error, %Ash.Error.Forbidden{}} = Usage.count_notebooks(usage, actor: actor)
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Usage.Machine
+               |> Ash.Changeset.for_create(
+                 :record,
+                 machine("sess-x", :session, ~U[2026-11-02 00:00:00Z], ~U[2026-11-02 01:00:00Z]),
+                 actor: actor
+               )
+               |> Ash.create()
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Usage.Machine
+               |> Ash.Query.for_read(
+                 :during,
+                 %{fleet_id: @fleet, from: ~U[2026-11-01 00:00:00Z], to: DateTime.utc_now()},
+                 actor: actor
+               )
+               |> Ash.read()
 
       assert {:error, %Ash.Error.Forbidden{}} =
                Event
@@ -138,6 +291,101 @@ defmodule Keyfleet.UsageTest do
   end
 
   defp count!(fleet_id, month), do: Usage.count_month!(fleet_id, month, actor: @system)
+
+  # The month's notebook hours, in seconds, counted from the machines recorded.
+  defp notebooks!(fleet_id, month),
+    do:
+      fleet_id
+      |> count!(month)
+      |> Usage.count_notebooks!(actor: @system)
+      |> Map.fetch!(:notebook_seconds)
+
+  defp this_month, do: Date.beginning_of_month(Date.utc_today())
+  defp last_month, do: Date.shift(this_month(), month: -1)
+
+  # Ten minutes ago, or the month's start when that is later, so a machine
+  # started then runs in this month alone.
+  defp lately,
+    do:
+      Enum.max(
+        [DateTime.add(DateTime.utc_now(), -600), DateTime.new!(this_month(), ~T[00:00:00])],
+        DateTime
+      )
+
+  # A machine as a hub read records it, last seen at its end unless
+  # `:seen_at` says otherwise.
+  defp machine(id, kind, started_at, ended_at, opts \\ []),
+    do: %{
+      fleet_id: Keyword.get(opts, :fleet_id, @fleet),
+      id: id,
+      kind: kind,
+      started_at: started_at,
+      ended_at: ended_at,
+      seen_at: Keyword.get(opts, :seen_at, ended_at)
+    }
+
+  defp record!(machines), do: Usage.record_machines!(machines, actor: @system)
+
+  # The fleet's machines as recorded, by id.
+  defp machines(fleet_id) do
+    Usage.Machine
+    |> Ash.Query.for_read(
+      :during,
+      %{fleet_id: fleet_id, from: ~U[2000-01-01 00:00:00Z], to: ~U[2100-01-01 00:00:00Z]},
+      actor: @system
+    )
+    |> Ash.Query.sort(:id)
+    |> Ash.read!()
+  end
+
+  # Whole seconds from `started_at` until `until`, as the count rounds them.
+  defp ran(started_at, until),
+    do: round(DateTime.diff(until, started_at, :microsecond) / 1_000_000)
+
+  # A fleet's hub answering its machine list with what `listed/2` last put
+  # there, or refusing it while `:down`.
+  defp hub!(fleet_id) do
+    {:ok, hub} = Agent.start_link(fn -> [] end)
+
+    address =
+      SignedAgentHelpers.serve!(:hub, fn
+        %Plug.Conn{method: "GET", request_path: "/api/v1/admin/machines"} = conn, _opts ->
+          case Agent.get(hub, & &1) do
+            :down ->
+              Plug.Conn.send_resp(conn, 503, "")
+
+            items ->
+              conn
+              |> Plug.Conn.put_resp_content_type("application/json")
+              |> Plug.Conn.send_resp(
+                200,
+                Jason.encode!(%{success: true, data: %{items: items, next_cursor: nil}})
+              )
+          end
+      end)
+
+    notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+    on_exit(fn -> Application.put_env(:keyfleet, :notebooks, notebooks) end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(notebooks, :fleets, %{fleet_id => address})
+    )
+
+    hub
+  end
+
+  defp listed(hub, items), do: Agent.update(hub, fn _ -> items end)
+
+  # A machine as the hub lists it.
+  defp listing(id, kind, started_at, ended_at),
+    do: %{
+      id: id,
+      kind: kind,
+      started_at: DateTime.to_iso8601(started_at),
+      ended_at: ended_at && DateTime.to_iso8601(ended_at)
+    }
 
   # Every month counted, by fleet and month, with its figures.
   defp figures do

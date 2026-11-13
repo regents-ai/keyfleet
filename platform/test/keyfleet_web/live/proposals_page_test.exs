@@ -489,21 +489,28 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                &text(view, &1)
              ) == ["1.5 MB", "1 item", "2.0 KB", "1,234 posts"]
 
-      assert {200, %{usage: usage}, nil} =
-               KeyfleetWeb.AgentTools.Public.Answer.answer(
-                 :treasury,
-                 %{"fleet_id" => @fleet},
-                 nil,
-                 nil
-               )
+      # Its notebook hours show once its hub has been read.
+      refute has_element?(view, "#treasury-usage-notebooks")
+      assert %{notebook_seconds: nil} = treasury_usage()
+
+      for {seconds, shown} <- [{45_000, "12.5 hours"}, {4_500_000, "1,250 hours"}] do
+        Keyfleet.Repo.query!(
+          "UPDATE keyfleet_app.fleet_usage SET notebook_seconds = $1 WHERE fleet_id = $2",
+          [seconds, @fleet]
+        )
+
+        {:ok, view, _html} = open(conn, @treasury_page)
+        assert text(view, "#treasury-usage-notebooks") == shown
+      end
 
       assert %{
                month: ^month,
                workspace_bytes: 1_572_864,
                workspace_items: 1,
                chat_posts: 1_234,
-               chat_bytes: 2048
-             } = usage
+               chat_bytes: 2048,
+               notebook_seconds: 4_500_000
+             } = treasury_usage()
     end
 
     # The contract holds any uint256, which is shown to its last whole digit
@@ -1749,6 +1756,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> text()
+  end
+
+  # The usage an agent reads on the Treasury page.
+  defp treasury_usage do
+    {200, %{usage: usage}, nil} =
+      KeyfleetWeb.AgentTools.Public.Answer.answer(:treasury, %{"fleet_id" => @fleet}, nil, nil)
+
+    usage
   end
 
   # Whether each of `buttons` sends `step` when pressed, and nothing stops a

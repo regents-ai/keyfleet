@@ -52,7 +52,9 @@ them to the hub. That part is built separately, in `platform/`.
     lease whenever a loop is refused it;
   - `notebook-prune-hourly.patch`, which moves each notebook's upload and
     thumbnail cleanup to its own hourly loop, and skips reading a notebook's
-    thumbnail record when no image is over a day old.
+    thumbnail record when no image is over a day old;
+  - `notebook-machines.patch`, which lets the hub's super admin list every
+    notebook machine the hub still holds a record of (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -77,7 +79,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-24dafab`, about 440 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-7130fe0`, about 440 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -175,7 +177,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-24dafab` as `registry.fly.io/kf-nb-<fleet>:626ec14-24dafab`
+   - tag `keyfleet/notebook-hub:626ec14-7130fe0` as `registry.fly.io/kf-nb-<fleet>:626ec14-7130fe0`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -303,6 +305,17 @@ its listed ID.
   the other error lines carry `error.storage`: the HTTP status, the store's
   request ids and how many tries were made. A support ticket to the store needs
   those ids (Classic #1 saves refused with "Unknown", 27 Oct 2026).
+- **The hub lists its notebook machines (`notebook-machines.patch`).**
+  `GET /api/v1/admin/machines`, for the hub's super admin signed in (Keyfleet's
+  provisioner), lists every session that was given a machine and every job run
+  that started one, each with `kind` (`session` or `run`), `id`, `started_at`
+  and `ended_at`. A session ends when the hub has confirmed its machine
+  destroyed, a run when it finishes (its machine is destroyed straight after);
+  `ended_at` is null until then. The hub keeps an ended session's record for
+  about a day and a run's for 30 days, so Keyfleet reads the list every hour
+  and keeps its own copy to count each fleet's notebook hours. A machine that
+  belongs to no session or run is not listed. Each read fetches every run the
+  hub still keeps, one stored record each.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes
