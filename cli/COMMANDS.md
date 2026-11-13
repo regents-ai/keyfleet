@@ -2767,9 +2767,11 @@ answer the 10 newest pushes, each with its commit's address
   `listNotebooks`
 - **Inputs:** `<fleet>` and `<project>`. It sends no body.
 - **Answer:** `{"notebooks": [{"notebook_id", "title", "locked", "scratchpad_key",
-  "last_run"}]}`, where `locked` is false when the notebook's creator lets every member
-  edit it, `scratchpad_key` is the Key whose notebook it is in the Append-only scratchpad
-  (or `null`), and `last_run` is `{"run_id", "status", "result_url"}` or `null`.
+  "last_run", "last_succeeded"}]}`, where `locked` is false when the notebook's creator
+  lets every member edit it, `scratchpad_key` is the Key whose notebook it is in the
+  Append-only scratchpad (or `null`), `last_run` is `{"run_id", "status",
+  "result_url"}` or `null`, and `last_succeeded` is the notebook's last good page,
+  `{"run_id", "result_url"}`, or `null`.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found` (the fleet has no notebooks); 503 `notebooks_catching_up`,
   `notebooks_setting_up` or `notebooks_unavailable`; 404 `project_unknown` (no such
@@ -2786,6 +2788,7 @@ Projects.open(fleet, project)             no such project -> 404 project_unknown
 Runs.list(fleet, subject, project's space)
        each notebook's newest run in the agent's own "Agent runs" job
        result_url for each run whose page Keyfleet has kept
+       last_succeeded = each notebook's newest kept page of a run that succeeded
 answer the notebooks, newest first
 ```
 
@@ -2810,7 +2813,7 @@ answer the notebooks, newest first
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>` (the notebook's id, `nb-` and 16
   characters, as `notebooks list` answers it) and `--idempotency-key KEY`, up to 128
   visible ASCII characters you choose. The body is `{"idempotency_key"}`.
-- **Answer:** `{"notebook_id", "run_id", "status", "result_url", "source",
+- **Answer:** `{"notebook_id", "run_id", "status", "result_url", "failure", "source",
   "code_current", "last_succeeded"}`, with `status` `queued`, `result_url` `null` and
   `source` what the run runs from, as `notebooks result` describes it.
 - **Refusals:** 403 `notebooks_not_holder`, `notebooks_agent_profile` or
@@ -2867,16 +2870,22 @@ answer the run, waiting to start
   → `readNotebookResult`
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>` and `<run>` (the `run_id` that
   `notebooks run` answered). It sends no body.
-- **Answer:** `{"notebook_id", "run_id", "status", "result_url", "source",
+- **Answer:** `{"notebook_id", "run_id", "status", "result_url", "failure", "source",
   "code_current", "last_succeeded"}`. `source` is what a run started with `notebooks run`
   ran from, `{"started_at", "code_sha256", "files", "files_complete"}`: the sha256 of the
   notebook's saved code just before it started, and the files at the top of the notebook
   then, each `{"path", "kind", "size"}`, with `files_complete` saying whether those were
   all of them; `null` for a run started on the notebook host. Once the run has finished,
   `code_current` says whether the notebook's saved code is still that code, else `null`.
-  While the run hasn't succeeded, `last_succeeded` is the newest run of the same job that
-  did, `{"run_id", "result_url"}`, so a failed or waiting run never hides the last good
-  result; `null` when there is none or this run succeeded.
+  While the run hasn't succeeded, `last_succeeded` is the notebook's last good page,
+  `{"run_id", "result_url"}`, the newest page Keyfleet keeps of a run of the notebook that
+  succeeded, so no number of failed or waiting runs hides it; `null` when there is none or
+  this run succeeded. A failed or timed-out run answers `failure`, `{"stage",
+  "exit_status", "message", "excerpt"}`: the step it stopped at (`start`,
+  `dependencies`, `export`, `save` or `timeout`), the exit status when that step has
+  one, the notebook host's sentence, and, when the notebook host lets the agent edit the
+  notebook, the last 20 lines of that step's output with secrets removed; `null` for any
+  other run.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found` or `notebook_run_not_found` (no such notebook or run); 503
   `notebooks_catching_up`, `notebooks_setting_up` or `notebooks_unavailable`; 404
@@ -2895,14 +2904,16 @@ Runs.read(fleet, subject, project's space, notebook, run)
        finished with a page -> keep the page, answer its address as result_url
 source = the run's recorded source, if any
 finished and recorded -> code_current = the saved code's sha256 is source's
-not succeeded -> last_succeeded = the newest succeeded run of its job's 20 newest
+failed or timed out -> failure as the hub answers it to the agent
+not succeeded -> last_succeeded = the notebook's newest kept page of a run that succeeded
 answer the run as it stands
 ```
 
 - **Server needs:** the fleet's notebook hub and its kept pages; the keys, shards and
   pairings as recorded; the `notebook_run_sources` table.
 - **History:** 2026-10-16 added. 2026-10-26: in its project's address. 2026-10-28:
-  answers `source`, `code_current` and `last_succeeded`.
+  answers `source`, `code_current` and `last_succeeded`. 2026-11-13: answers `failure`;
+  `last_succeeded` is the notebook's last good kept page, however many runs came after it.
 
 ## regents keyfleet notebooks create <fleet> <project>
 

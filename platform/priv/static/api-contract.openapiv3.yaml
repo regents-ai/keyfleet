@@ -8543,7 +8543,7 @@ components:
     NotebookRun:
       type: object
       additionalProperties: false
-      required: [notebook_id, run_id, status, result_url, source, code_current, last_succeeded]
+      required: [notebook_id, run_id, status, result_url, failure, source, code_current, last_succeeded]
       properties:
         notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
         run_id: {type: string, pattern: '^run_[0-9A-HJKMNP-TV-Z]{26}$'}
@@ -8554,6 +8554,11 @@ components:
           type: [string, "null"]
           format: uri
           description: "The saved result's address once the run has finished with a page: https://<fleet's notebook host>/results/<notebook id>/<run id>/<saved at>; otherwise null"
+        failure:
+          description: Where a failed or timed-out run stopped, as the notebook host recorded it; null for any other run
+          oneOf:
+            - {$ref: "#/components/schemas/NotebookRunFailure"}
+            - {type: "null"}
         source:
           description: The code and files a run started through this site ran from, recorded just before it started; null for a run started on the notebook host
           oneOf:
@@ -8563,15 +8568,30 @@ components:
           type: [boolean, "null"]
           description: Once the run has finished, whether the notebook's saved code is still the code it ran from; null before then or without a source
         last_succeeded:
-          description: While the run hasn't succeeded, the newest run of the same job that did, so a failed or waiting run never hides the last good result; null when there is none or this run succeeded
+          description: While the run hasn't succeeded, the notebook's last good page, so no number of failed or waiting runs hides it; null when this run succeeded or Keyfleet keeps no page of a run of the notebook that succeeded
           oneOf:
-            - type: object
-              additionalProperties: false
-              required: [run_id, result_url]
-              properties:
-                run_id: {type: string, pattern: '^run_[0-9A-HJKMNP-TV-Z]{26}$'}
-                result_url: {type: [string, "null"], format: uri}
+            - {$ref: "#/components/schemas/NotebookLastSucceeded"}
             - {type: "null"}
+    NotebookLastSucceeded:
+      type: object
+      additionalProperties: false
+      description: The newest page Keyfleet keeps of a run of the notebook that succeeded, by any member
+      required: [run_id, result_url]
+      properties:
+        run_id: {type: string, pattern: '^run_[0-9A-HJKMNP-TV-Z]{26}$'}
+        result_url: {type: string, format: uri, description: "The kept page's address: https://<fleet's notebook host>/results/<notebook id>/<run id>/<saved at>"}
+    NotebookRunFailure:
+      type: object
+      additionalProperties: false
+      required: [stage, message]
+      properties:
+        stage:
+          type: string
+          enum: [start, dependencies, export, save, timeout]
+          description: "The step the run stopped at: start (its sandbox didn't start), dependencies (the notebook's packages didn't install), export (the notebook ran and stopped with an error), save (its page wasn't saved) or timeout (it ran out of time)"
+        exit_status: {type: integer, description: "The notebook's exit status, when the step it stopped at has one"}
+        message: {type: string, description: "The notebook host's sentence for the failure"}
+        excerpt: {type: string, description: "The last 20 lines, at most 2,000 bytes, of that step's output, with values the run was given and anything shaped like a secret replaced by [removed]; only for members the notebook host lets edit the notebook"}
     NotebookRunSource:
       type: object
       additionalProperties: false
@@ -8602,7 +8622,7 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [notebook_id, title, description, created_at, locked, scratchpad_key, notebook_url, last_run]
+            required: [notebook_id, title, description, created_at, locked, scratchpad_key, notebook_url, last_run, last_succeeded]
             properties:
               notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
               title: {type: string, description: "The notebook's title, as a member wrote it"}
@@ -8627,6 +8647,11 @@ components:
                         description: "The saved result's address once the run's page has been kept: https://<fleet's notebook host>/results/<notebook id>/<run id>/<saved at>; otherwise null. Reading the run keeps its page."
                   - {type: "null"}
                 description: The last background run an agent started in the notebook, or null when no agent has started one there
+              last_succeeded:
+                description: The notebook's last good page, or null when Keyfleet keeps no page of a run of the notebook that succeeded
+                oneOf:
+                  - {$ref: "#/components/schemas/NotebookLastSucceeded"}
+                  - {type: "null"}
     NotebookLockRequest:
       type: object
       additionalProperties: false

@@ -3,7 +3,10 @@ defmodule Keyfleet.Notebooks.SavedOutput do
   Keyfleet's own copy of one saved notebook page, kept under its address
   (`Keyfleet.Notebooks.result_url/4`): the fleet, the notebook, the version
   or background run that made the page, and when the hub made it, in
-  milliseconds since 1970.
+  milliseconds since 1970. `succeeded` is whether the page is a background
+  run's that succeeded, as the hub named the run when it answered the page
+  (`Keyfleet.Notebooks.run_succeeded?/1`), so a notebook's last good page is
+  read from the copies alone (`:last_succeeded`).
 
   A hub keeps only a notebook's newest versions and recent runs, replaces a
   version's page when the same code runs again, and drops everything when a
@@ -24,7 +27,7 @@ defmodule Keyfleet.Notebooks.SavedOutput do
 
   actions do
     create :keep do
-      accept [:fleet_id, :notebook_id, :source_id, :saved_at, :page]
+      accept [:fleet_id, :notebook_id, :source_id, :saved_at, :page, :succeeded]
       upsert? true
       upsert_identity :unique_address
       upsert_fields []
@@ -54,6 +57,23 @@ defmodule Keyfleet.Notebooks.SavedOutput do
       filter expr(fleet_id == ^arg(:fleet_id) and source_id in ^arg(:source_ids))
       prepare build(select: [:notebook_id, :source_id, :saved_at])
     end
+
+    # The newest copy of each of `notebook_ids`' pages from a run that
+    # succeeded, without its page.
+    read :last_succeeded do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :notebook_ids, {:array, :string}, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and notebook_id in ^arg(:notebook_ids) and succeeded
+             )
+
+      prepare build(
+                select: [:notebook_id, :source_id, :saved_at],
+                distinct: [:notebook_id],
+                distinct_sort: [saved_at: :desc]
+              )
+    end
   end
 
   policies do
@@ -73,6 +93,7 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     attribute :source_id, :string, allow_nil?: false
     attribute :saved_at, :integer, allow_nil?: false, constraints: [min: 1]
     attribute :page, :binary, allow_nil?: false
+    attribute :succeeded, :boolean, allow_nil?: false, default: false
     create_timestamp :inserted_at
   end
 end

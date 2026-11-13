@@ -17,14 +17,20 @@ defmodule Keyfleet.Notebooks.Runs do
   keeps no page: it answers each one's newest run in the agent's own "Agent
   runs" with `result_url` once that run's page has been kept.
 
+  A run answers the hub's `failure` as the hub gave it to the agent: where a
+  failed or timed-out run stopped, and, when the hub lets the agent edit the
+  notebook, the last lines of that step's output with secrets removed.
+
   A run started here records what it ran from (`Keyfleet.Notebooks.RunSource`):
   the sha256 of the notebook's saved code just before it started, and the
   entries at the top of its files. Reading the run answers that `source`;
   once the run has finished, `code_current`, whether the notebook's saved
   code is still that code; and while the run hasn't succeeded,
-  `last_succeeded`, the newest run of the same job that did, with its saved
-  result's address once Keyfleet keeps it, so a pending or failed run never
-  hides the last good result.
+  `last_succeeded`. Listing the notebooks answers each one's
+  `last_succeeded` too: the newest kept page of a run of the notebook that
+  succeeded, read from Keyfleet's copies alone
+  (`Keyfleet.Notebooks.SavedOutput`), so no number of later failed or
+  waiting runs hides the last good result.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
   once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
@@ -46,17 +52,14 @@ defmodule Keyfleet.Notebooks.Runs do
   # A finished run has made its page, unless it was cancelled or skipped.
   @with_page ~w(succeeded failed timed_out)
   @finished ["cancelled" | @with_page]
-  # How many of a job's newest runs are looked through for the last that
-  # succeeded.
-  @recent_runs 20
   # A listing asks after this many notebooks' runs at once.
   @lookups 4
 
   @doc """
   The fleet's 50 newest notebooks, newest first, as `subject`: each with its
   title, description and when it was added, as the Docs place lists them;
-  its address (`Keyfleet.Notebooks.notebook_url/3`); and `subject`'s newest
-  run there, or nil when they have started none.
+  its address (`Keyfleet.Notebooks.notebook_url/3`); `subject`'s newest
+  run there, or nil when they have started none; and its last good page.
   """
   def list(fleet_id, subject, project_id) do
     with {:ok, %{"items" => notebooks}} <-
@@ -66,11 +69,16 @@ defmodule Keyfleet.Notebooks.Runs do
            )
            |> answer(200),
          {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks),
-         {:ok, result_urls} <- result_urls(fleet_id, runs) do
+         {:ok, result_urls} <- result_urls(fleet_id, runs),
+         {:ok, good} <- last_good_pages(fleet_id, Enum.map(notebooks, & &1["id"])) do
       locks = Notebooks.locks(fleet_id)
 
       {:ok,
-       Enum.zip_with(notebooks, runs, &listing(&1, &2, fleet_id, project_id, result_urls, locks))}
+       Enum.zip_with(
+         notebooks,
+         runs,
+         &listing(&1, &2, fleet_id, project_id, result_urls, good, locks)
+       )}
     end
   end
 
@@ -114,7 +122,7 @@ defmodule Keyfleet.Notebooks.Runs do
          {:ok, result_url} <- result_url(fleet_id, subject, notebook_id, run_id, run, run_path),
          {:ok, source} <- source(fleet_id, run_id),
          {:ok, current} <- code_current(fleet_id, subject, project_id, notebook_id, source, run),
-         {:ok, last} <- last_succeeded(fleet_id, subject, notebook_id, run_path, run) do
+         {:ok, last} <- last_succeeded(fleet_id, notebook_id, run) do
       {:ok,
        notebook_id
        |> view(run, result_url)
@@ -234,8 +242,34 @@ defmodule Keyfleet.Notebooks.Runs do
     end
   end
 
+  # The newest kept page of each of `notebook_ids`' runs that succeeded, by
+  # notebook, as `%{run_id, result_url}`. A failed read is saved with the
+  # site's errors.
+  defp last_good_pages(fleet_id, notebook_ids) do
+    case Notebooks.last_succeeded_outputs(fleet_id, notebook_ids, actor: %System{}) do
+      {:ok, kept} ->
+        {:ok,
+         Map.new(kept, fn copy ->
+           {copy.notebook_id,
+            %{
+              run_id: copy.source_id,
+              result_url:
+                Notebooks.result_url(fleet_id, copy.notebook_id, copy.source_id, copy.saved_at)
+            }}
+         end)}
+
+      {:error, error} ->
+        RecordsDownError.report(
+          "The last good pages of #{fleet_id}'s notebooks could not be read: " <>
+            inspect(error.__struct__)
+        )
+
+        {:error, :unavailable}
+    end
+  end
+
   # A notebook with nothing kept of it is locked and nobody's scratchpad.
-  defp listing(notebook, run, fleet_id, project_id, result_urls, locks) do
+  defp listing(notebook, run, fleet_id, project_id, result_urls, good, locks) do
     lock = Map.get(locks, notebook["id"], %{locked: true, key: nil})
 
     %{
@@ -253,7 +287,8 @@ defmodule Keyfleet.Notebooks.Runs do
             status: run["status"],
             result_url: result_urls[{notebook["id"], run["run_id"]}]
           }
-        end
+        end,
+      last_succeeded: good[notebook["id"]]
     }
   end
 
@@ -329,25 +364,11 @@ defmodule Keyfleet.Notebooks.Runs do
   defp code_current(_fleet_id, _subject, _project_id, _notebook_id, _source, _run),
     do: {:ok, nil}
 
-  # The newest run of the same job that succeeded, beside a run that hasn't:
-  # its id and its saved result's address once Keyfleet keeps it.
-  defp last_succeeded(_fleet_id, _subject, _notebook_id, _run_path, %{"status" => "succeeded"}),
-    do: {:ok, nil}
+  # The notebook's last good page, beside a run that hasn't succeeded.
+  defp last_succeeded(_fleet_id, _notebook_id, %{"status" => "succeeded"}), do: {:ok, nil}
 
-  defp last_succeeded(fleet_id, subject, notebook_id, run_path, _run) do
-    with {:ok, %{"items" => runs}} <-
-           fleet_id
-           |> request(subject, :get, Path.dirname(run_path), params: [limit: @recent_runs])
-           |> answer(200) do
-      runs |> Enum.find(&(&1["status"] == "succeeded")) |> succeeded(fleet_id, notebook_id)
-    end
-  end
-
-  defp succeeded(nil, _fleet_id, _notebook_id), do: {:ok, nil}
-
-  defp succeeded(%{"run_id" => run_id}, fleet_id, notebook_id) do
-    with {:ok, kept} <- result_urls(fleet_id, [%{"run_id" => run_id}]),
-         do: {:ok, %{run_id: run_id, result_url: kept[{notebook_id, run_id}]}}
+  defp last_succeeded(fleet_id, notebook_id, _run) do
+    with {:ok, good} <- last_good_pages(fleet_id, [notebook_id]), do: {:ok, good[notebook_id]}
   end
 
   defp sha256(code), do: :sha256 |> :crypto.hash(code) |> Base.encode16(case: :lower)
@@ -390,7 +411,13 @@ defmodule Keyfleet.Notebooks.Runs do
          [captured_at] <- Req.Response.get_header(response, "x-marimohub-captured-at"),
          {:ok, saved_at} <- Notebooks.saved_at(captured_at),
          {:ok, _kept} <-
-           Notebooks.keep_saved_output(fleet_id, notebook_id, run_id, saved_at, page,
+           Notebooks.keep_saved_output(
+             fleet_id,
+             notebook_id,
+             run_id,
+             saved_at,
+             page,
+             Notebooks.run_succeeded?(response),
              actor: %System{}
            ) do
       Notebooks.result_url(fleet_id, notebook_id, run_id, saved_at)
@@ -410,7 +437,8 @@ defmodule Keyfleet.Notebooks.Runs do
       notebook_id: notebook_id,
       run_id: run["run_id"],
       status: run["status"],
-      result_url: result_url
+      result_url: result_url,
+      failure: run["failure"]
     }
   end
 

@@ -354,7 +354,9 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     version = "ver_" <> String.duplicate("0", 26)
 
     for notebook <- ["nb-0000000000000001", "nb-0000000000000002"] do
-      Notebooks.keep_saved_output!(@fleet, notebook, version, 1, "<p>saved</p>", actor: %System{})
+      Notebooks.keep_saved_output!(@fleet, notebook, version, 1, "<p>saved</p>", false,
+        actor: %System{}
+      )
     end
 
     kept =

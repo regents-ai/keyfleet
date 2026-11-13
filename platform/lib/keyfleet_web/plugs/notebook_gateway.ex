@@ -1061,18 +1061,21 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         end
     end)
     |> case do
-      {:reading, conn, parts, _size} -> send_kept(conn, fleet_id, address, parts)
-      {:streaming, conn} -> conn
+      {:reading, conn, parts, _size} ->
+        send_kept(conn, fleet_id, address, parts, Notebooks.run_succeeded?(response))
+
+      {:streaming, conn} ->
+        conn
     end
   end
 
   # The page is a notebook's own saved page, sent as members wrote it on purpose:
   # `stream_back/3` has already put it in a sandbox of its own (`sandbox_saved_page/1`).
   # sobelow_skip ["XSS.SendResp"]
-  defp send_kept(conn, fleet_id, {notebook_id, source_id, saved_at}, parts) do
+  defp send_kept(conn, fleet_id, {notebook_id, source_id, saved_at}, parts, succeeded) do
     page = IO.iodata_to_binary(parts)
 
-    case Notebooks.keep_saved_output(fleet_id, notebook_id, source_id, saved_at, page,
+    case Notebooks.keep_saved_output(fleet_id, notebook_id, source_id, saved_at, page, succeeded,
            actor: %Keyfleet.Actors.System{}
          ) do
       {:ok, _kept} ->
