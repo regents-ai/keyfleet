@@ -458,6 +458,54 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert cells(view, regent) == ["9,750.77 REGENT", "<0.01 REGENT"]
     end
 
+    test "anyone sees what the fleet has used this month once it is counted, and agents read the same",
+         %{conn: conn} do
+      month = Date.beginning_of_month(Date.utc_today())
+      {:ok, view, _html} = open(conn, @treasury_page)
+      refute has_element?(view, "#treasury-usage")
+
+      # The figures as a count would leave them, written here so the page's
+      # every unit shows.
+      Keyfleet.Repo.insert_all(
+        "fleet_usage",
+        [
+          %{
+            fleet_id: @fleet,
+            month: month,
+            workspace_bytes: 1_572_864,
+            workspace_items: 1,
+            chat_posts: 1_234,
+            chat_bytes: 2048,
+            counted_at: DateTime.utc_now()
+          }
+        ],
+        prefix: "keyfleet_app"
+      )
+
+      {:ok, view, _html} = open(conn, @treasury_page)
+
+      assert Enum.map(
+               ~w(#treasury-usage-workspace #treasury-usage-items #treasury-usage-chat #treasury-usage-posts),
+               &text(view, &1)
+             ) == ["1.5 MB", "1 item", "2.0 KB", "1,234 posts"]
+
+      assert {200, %{usage: usage}, nil} =
+               KeyfleetWeb.AgentTools.Public.Answer.answer(
+                 :treasury,
+                 %{"fleet_id" => @fleet},
+                 nil,
+                 nil
+               )
+
+      assert %{
+               month: ^month,
+               workspace_bytes: 1_572_864,
+               workspace_items: 1,
+               chat_posts: 1_234,
+               chat_bytes: 2048
+             } = usage
+    end
+
     # The contract holds any uint256, which is shown to its last whole digit
     # and four decimal places.
     test "the largest amount the contract can hold is shown whole", %{conn: conn} do

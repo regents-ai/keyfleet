@@ -209,6 +209,7 @@ defmodule Keyfleet.ReleaseTest do
              "error_tracker_errors",
              "error_tracker_meta",
              "error_tracker_occurrences",
+             "fleet_usage",
              "fleets",
              "graph_cursors",
              "graph_events",

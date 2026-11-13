@@ -142,7 +142,8 @@ defmodule Keyfleet.SharedReading do
           "history and advances (Keyfleet.Treasury.Reading, Event and AssetDetails read " <>
           "policies), the votes carried out (Keyfleet.Proposals.Proposal and Execution), the " <>
           "fleet's record, its chain cursor and the Keys sold (Keyfleet.Keys.KeyAttachment), " <>
-          "which the chain shows anyone; if any of these tightens, this kind changes with it",
+          "which the chain shows anyone, and its usage this month (Keyfleet.Usage.Month read " <>
+          "policy); if any of these tightens, this kind changes with it",
       keys: 5,
       # Not yet measured: the latest history, the open advances and five votes carried out.
       bytes: 65_536,

@@ -181,16 +181,19 @@ answer matches with their urls, has_more, and the next cursor, or null
 - **Route:** `GET /api/v1/fleets/{fleet_id}/treasury` → `readTreasury`
 - **Inputs:** `<fleet>`, from `fleets list`.
 - **Answer:** `fleet_id`, `chain_id`, `catching_up`, `deployed`, `treasury`, manager
-  and explorer addresses, `balance_meaning`, `permissions` and `proposals_url`.
+  and explorer addresses, `balance_meaning`, `permissions`, `proposals_url` and
+  `usage`, the fleet's use of the site this month as last counted (null before its
+  first count).
 - **Refusals:** 404 `fleet_unknown`; 503 `treasury_unavailable` or `not_open_yet`.
 - **Server:** read the existing public treasury projection for an open fleet;
   return its figures and freshness without resolving wallet authority.
-- **Server needs:** the existing fleet and treasury read tables.
+- **Server needs:** the existing fleet and treasury read tables, and `fleet_usage`.
 - **Example:** `regents keyfleet treasury get regents_club --json`
 - **History:** 2026-10-15 described against the existing HTTP/WebMCP read. Available
   in the CLI only after its owner adopts this manifest and releases it; check
   `regents keyfleet treasury --help`. Until then, the public HTTP read is
   `curl --fail-with-body https://keyfleet.ai/api/v1/fleets/regents_club/treasury`.
+  2026-11-13 the answer adds `usage`.
 
 ## regents keyfleet workspace pulse <fleet>
 

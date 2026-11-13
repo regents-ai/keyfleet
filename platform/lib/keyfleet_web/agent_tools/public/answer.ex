@@ -133,7 +133,8 @@ defmodule KeyfleetWeb.AgentTools.Public.Answer do
       balance_meaning:
         "held is in the treasury; backed is held separately in the rewards contract",
       permissions: Keyfleet.Authority.treasury_rows(),
-      proposals_url: ProposalsPage.list_path(fleet_id)
+      proposals_url: ProposalsPage.list_path(fleet_id),
+      usage: page.usage
     }
   end
 

@@ -25,6 +25,9 @@ Changes to Keyfleet, newest first.
 - **Buttons.** The main button on every page is now a dark plate with light words in the
   light theme and a light plate with dark words in the dark theme, so the next step always
   stands out. Fades and soft edges blend more evenly.
+- **Usage.** A fleet's Treasury page shows what it has used of the site this month: how
+  large its workspace is, and how many posts its rooms and Key walls have taken. It is
+  counted every hour.
 
 ## 12 November 2026
 

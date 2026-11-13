@@ -8621,3 +8621,42 @@ properties, 1,366 tests, 19 excluded); typecheck, 436 unit tests and 3
 budgets pass; browser suite 125, devices 70, chain suite in Chromium 117
 (three failed once together when the test server's held database was lost
 and passed when run again); required fixes pass.
+
+## 2026-11-13 — Each fleet's monthly usage, on its Treasury page
+
+Sean wants real figures before any ceiling is chosen. This only measures: it
+limits, warns and stops nothing, and shows no money.
+
+- `Keyfleet.Usage.Month` (table `fleet_usage`, one row a fleet and calendar
+  month in UTC) keeps four figures, each counted from the records that hold
+  it: `workspace_bytes` and `workspace_items`, how large the fleet's workspace
+  record stood at the month's end (now, for the month under way), summed from
+  `graph_events.byte_size` and counted from its `object.created` events by the
+  log's own clock (`Keyfleet.Graph.record_size/2`); and `chat_posts` and
+  `chat_bytes`, the posts written that month in its rooms and on its Keys'
+  walls and the bytes of their words (`Keyfleet.Rooms.posts_written/3`).
+  Direct messages and room namings are not counted. Each is one aggregate
+  query over a new server-only read (`:taken_before` on graph events,
+  `:written_between` on messages); no row is loaded.
+- `Keyfleet.Usage.Count`, an hourly Oban cron job at minute 13, counts every
+  catalog fleet's month under way and the month before, so a month's last hour
+  is never missed and a missed run is made up. Counting is an upsert on the
+  fleet and month, so a run again gives the same figures. Anyone reads the
+  rows; only the server counts them.
+- Not measured, since no record here knows them: notebook machine hours (the
+  hubs keep no ended sessions) and code stored (the code store has no size
+  read and no push records its size). Each needs a change outside this
+  repository.
+- The Treasury page has a Usage panel (Workspace, Chat) once a month is
+  counted; `GET /api/v1/fleets/{fleet_id}/treasury` and `treasury_show` carry
+  the same figures as `usage`, and the contract, `cli/COMMANDS.md` and the tool
+  manifest say so.
+- Migrations add the table and, concurrently, `messages_posts_written_index`
+  (`fleet_id, inserted_at` where `kind = 'post'`); nothing that exists
+  changes. The compile-connected budget is 132: the Month record with its
+  domain adds one.
+
+Check: format, compile with warnings as errors, credo strict, xref (132 of
+132), codegen, route handoff and the served contract pass; full suite 1,390
+(18 properties, 1,372 tests, 19 excluded); typecheck and 436 unit tests pass;
+browser suite 125, devices 70; required fixes pass.

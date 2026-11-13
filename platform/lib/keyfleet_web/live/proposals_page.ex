@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   `treasury_page/1` is the fleet's Treasury page: how many of its Keys have a
   vote now, its shared money once it is on chain (the latest reading of its
   treasury, its daily split, the advances still out and its latest money in
-  and out), the votes carried out lately, and its sales so far.
+  and out), the votes carried out lately, its sales so far and what it has
+  used of the site this month (`Keyfleet.Usage`).
   `detail/3` is one proposal with its votes, fifty to a page, each Key's
   latest vote and the Keys counted that have not voted, its calls in
   plain words and exactly as carrying it out sends them, and where it stands as the vote contract says at the latest
@@ -66,6 +67,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   @carried 5
   # The most USDC the REGENT buyer turns in one piece (its `PIECE_USDC`).
   @piece_usdc 250_000_000
+  # What the Treasury page shows of a month's usage (`Keyfleet.Usage.Month`).
+  @usage [:month, :workspace_bytes, :workspace_items, :chat_posts, :chat_bytes, :counted_at]
 
   @doc """
   The fleet's Treasury page: indexed balances, money history and contract details.
@@ -84,8 +87,16 @@ defmodule KeyfleetWeb.ProposalsPage do
         |> Proposals.latest_carried_out(@carried)
         |> Enum.map(&summary(&1, fleet, assets)),
       progress: reading.deployed? && Chain.progress(fleet.id),
-      manager_address: fleet.manager_address
+      manager_address: fleet.manager_address,
+      usage: usage(fleet.id)
     })
+  end
+
+  # The fleet's usage this month as last counted, its figures alone, or nil
+  # before its first count.
+  defp usage(fleet_id) do
+    with %{} = month <- Keyfleet.Usage.this_month(fleet_id),
+         do: Map.take(month, @usage)
   end
 
   @doc "The path of the fleet's Treasury page."

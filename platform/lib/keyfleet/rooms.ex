@@ -734,6 +734,33 @@ defmodule Keyfleet.Rooms do
 
   defp taken_on?(_error, _field), do: false
 
+  @doc """
+  The posts written in the fleet's rooms and on its Keys' walls from `from`
+  until before `to`, counted in one query (the `:written_between` read of
+  messages): `posts`, how many, and `bytes`, their words as stored. Direct
+  messages are not among them. Only the server counts them.
+  """
+  @spec posts_written(String.t(), DateTime.t(), DateTime.t()) :: %{
+          posts: non_neg_integer(),
+          bytes: non_neg_integer()
+        }
+  def posts_written(fleet_id, from, to) do
+    require Ash.Expr
+
+    system = [actor: %Keyfleet.Actors.System{}]
+
+    Keyfleet.Rooms.Message
+    |> Ash.Query.for_read(:written_between, %{fleet_id: fleet_id, from: from, to: to}, system)
+    |> Ash.aggregate!(
+      [
+        {:posts, :count, []},
+        {:bytes, :sum,
+         expr: Ash.Expr.expr(fragment("octet_length(?)", body)), expr_type: :integer, default: 0}
+      ],
+      system
+    )
+  end
+
   @doc "How many rooms agents have created in the fleet, counted by the server for its limit."
   def count_created_rooms!(fleet_id) do
     # The limit counts every created room, not only the ones the asker may read.
