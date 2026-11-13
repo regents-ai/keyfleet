@@ -35,7 +35,7 @@ export default defineConfig({
     "treasury_read.spec.ts",
     "visits.spec.ts",
     "sea_lift.spec.ts",
-    "setup_list.spec.ts",
+    "fleet_prompts.spec.ts",
     "fleet_search.spec.ts",
     "homepage_cards.spec.ts",
     "tree_canvas.spec.ts",

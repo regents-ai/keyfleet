@@ -4,8 +4,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   key's random draw or ending a wait for it that ran out, claiming what a
   key has earned, claiming a Regents Club key waiting for its Pass's holder,
   claiming for every key a wallet holds or holds a shard of at once, marking
-  keys present, issuing, renewing and ending shards, and turning agent
-  voting on or off.
+  keys present, every key or only the idle ones, issuing, renewing and ending
+  shards, and turning agent voting on or off.
   `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
   Pages and requests name a fleet's Keys by number; every step names them by
@@ -208,13 +208,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
          {:ok, presence} <-
            Reads.each(if(token_id, do: [token_id], else: keys), &presence(reads, fleet, &1)) do
       ready = for %{token_id: key, mature?: true} <- presence, key in keys, do: key
-      onchain = Enum.map(ready, &Fleet.onchain_token_id(fleet, &1))
 
-      steps = [
-        Review.step("present", fleet.votes_address, Call.encode("present(uint256[])", [onchain]))
-      ]
-
-      {:ok, steps,
+      {:ok, [present_step(fleet, ready)],
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
          ready: ready,
@@ -222,6 +217,25 @@ defmodule Keyfleet.WalletSteps.KeySteps do
        }, unread}
     else
       _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # Marking present only the signer's idle Keys: those it holds that are old
+  # enough and not present at the latest block, so none is renewed. A fleet's
+  # page offers it while its holder's Keys are idle. A Key the signer holds a
+  # shard of is its holder's to mark. With none idle the press is certain to
+  # fail.
+  def steps(:present_idle, %{fleet: fleet, signer: signer}) do
+    with {:ok, reads} <- Reads.at_head(),
+         {candidates, unread} = present_candidates(reads, fleet, signer, nil),
+         {:ok, holders} <- Reads.each(candidates, &Reads.holder(reads, fleet, &1)),
+         held = for({key, ^signer} <- Enum.zip(candidates, holders), do: key),
+         {:ok, presence} <- Reads.each(held, &presence(reads, fleet, &1)) do
+      idle = for %{token_id: key, until: nil, mature?: true} <- presence, do: key
+      figures = %{keys: idle, blocked: idle_blocked(held, idle, unread)}
+      {:ok, [present_step(fleet, idle)], figures, unread}
+    else
+      _unread -> {:problem, :unread, %{keys: []}}
     end
   end
 
@@ -344,6 +358,16 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp present_blocked([], _ready, nil, nil), do: %{"present" => :no_keys}
   defp present_blocked(_keys, [], _token_id, nil), do: %{"present" => :too_new}
   defp present_blocked(_keys, _ready, _token_id, nil), do: %{}
+
+  defp idle_blocked(_held, _idle, :unread), do: %{}
+  defp idle_blocked([], _idle, nil), do: %{"present" => :no_keys}
+  defp idle_blocked(_held, [], nil), do: %{"present" => :none_idle}
+  defp idle_blocked(_held, _idle, nil), do: %{}
+
+  defp present_step(fleet, keys) do
+    call = Call.encode("present(uint256[])", [onchain(fleet, keys)])
+    Review.step("present", fleet.votes_address, call)
+  end
 
   # The next Key, at its price, bought from the fleet's manager, which takes
   # the USDC. How many Keys are sold, the next one's price and when the

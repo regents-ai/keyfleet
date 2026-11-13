@@ -169,6 +169,7 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:sales_not_open), do: "Sales aren’t open yet"
   def blocked(:sold_out), do: "Sold out"
   def blocked(:too_new), do: "Too new: Keys wait 2 days"
+  def blocked(:none_idle), do: "No idle Keys"
   def blocked(:clear_first), do: "Clear lapsed Keys first"
   def blocked(:nothing_owed), do: "Nothing owed"
   def blocked(:nothing_queued), do: "Nothing waiting to turn into REGENT"

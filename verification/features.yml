@@ -1122,28 +1122,29 @@ features:
       - The walk's headless Chromium has no WebGPU, so it proves the stills, not the drawing; the six moving pictures were seen drawing by hand in headless Chromium on the Mac's GPU at 390 and 1280.
       - WebKit is not run on the Mac; Safari and real phones are checked on keyfleet.ai after release.
 
-  - id: fleet-setup-list
+  - id: fleet-pair-present
     what: >-
       A Buy that lands in the Buy Key window shows "You're in" under the
       buttons with Set up your agent, which closes the window and opens the
       fleet's page; Buy turns secondary and stays pressable for another Key.
-      On a fleet's page a signed-in person who holds a Key there sees one
-      setup list above every view: Pair (the pairing box, whose message sends
-      the agent to this fleet), Shard (one press giving the agent paired last
-      a 30-day shard of every Key held here), Daily run and Present, each
-      ticked from the records alone, with a line on whether the Keys count in
-      votes and until when. Present is done when every Key held here is
-      present or waits for its automatic start, the same reading as the
-      Marked dot (agent-setup-dots). Only the first step not done is open.
-      The list reads again when the person's agents, the fleet's Keys or a
-      step sent from it change, leaves once all four are done, and comes back
-      when the Keys lapse.
+      On a fleet's page a signed-in person who holds a Key there sees, under
+      the tabs and above every view, Pair while no agent of theirs is paired
+      and Mark present while some of their Keys are idle, side by side when
+      both show. Pair reads "Pair your agent to participate in workspaces"
+      and opens the pairing box in place, whose message sends the agent to
+      this fleet; the button and the box go once an agent is paired. Mark
+      present says how many of the person's Keys are idle, by the rule the
+      Keys tab's Idle reads (not present, and not waiting for its automatic
+      start), and one press from the person's wallet marks every idle Key
+      that wallet holds present, renewing none; it goes once the chain reader
+      records them. A signed-out visitor and a person holding no Key here see
+      neither. Giving an agent a shard stays on the Key's page.
     who: person
     level: ordinary
     paths:
-      - platform/lib/keyfleet_web/components/setup_list.ex
-      - platform/assets/css/components/setup_list.css
-      - platform/lib/keyfleet/agents/upkeep.ex
+      - platform/lib/keyfleet_web/components/fleet_prompts.ex
+      - platform/assets/css/components/fleet_prompts.css
+      - platform/lib/keyfleet/wallet_steps/key_steps.ex
       - platform/lib/keyfleet_web/components/buy_key.ex
       - platform/assets/css/components/buy_key.css
       - platform/lib/keyfleet_web/live/fleet_live.ex
@@ -1152,11 +1153,12 @@ features:
       - route: GET /:fleet/:number
       - live: KeyfleetWeb.ShellLive
     proofs:
-      - platform/test/keyfleet/agents/upkeep_test.exs
+      - platform/test/keyfleet/wallet_steps_test.exs
       - platform/test/keyfleet_web/live/fleet_page_test.exs
-      - platform/test/browser/setup_list.spec.ts
+      - platform/test/browser/fleet_prompts.spec.ts
     gaps:
-      - A check-in and a Key marked present tell no open page, so Daily run and Present tick only when the page is next read or another notice comes; the browser walk reads the page again for those two.
+      - A Key whose 48 hours run out while the page is open tells no page, so Mark present comes back when the page is next read.
+      - One press marks the idle Keys of the wallet it is sent from; idle Keys in another of the person's wallets are counted beside the button and need a press from that wallet.
       - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
 
   - id: agent-setup-dots

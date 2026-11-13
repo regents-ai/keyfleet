@@ -990,74 +990,130 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
-  describe "the setup list" do
+  describe "Pair and Mark present" do
     setup do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       :ok
     end
 
-    test "a holder with no agent sees Pair open, and the steps after it closed", %{conn: conn} do
+    test "a holder with no agent and idle Keys sees both, with how many are idle", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
 
-      refute has_element?(view, "#fleet-setup[hidden]")
-      assert text(view, "#fleet-setup-votes") == "0 of 150 Keys count in votes."
-      assert open_step(view) == "fleet-setup-pair"
-      assert has_element?(view, "#fleet-setup-pair .setup-list__body #fleet-setup-pairing")
-      refute has_element?(view, "#fleet-setup li[data-done]")
+      assert has_element?(view, "#fleet-prompts-pair")
+
+      assert has_element?(
+               view,
+               "#fleet-prompts-present [data-onchain-step=present]#fleet-prompts-mark"
+             )
+
+      assert text(view, "#fleet-prompts-idle") == "150"
     end
 
-    test "someone who holds none of the fleet's Keys has no setup list" do
+    test "pressing Pair opens the pairing box in place, and pressing again closes it", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+      refute has_element?(view, "#fleet-prompts-pairing")
+
+      view |> element("#fleet-prompts-pair") |> render_click()
+      assert has_element?(view, ~s(#fleet-prompts-pair[aria-expanded="true"]))
+      assert has_element?(view, "#fleet-prompts #fleet-prompts-pairing")
+
+      view |> element("#fleet-prompts-pair") |> render_click()
+      assert has_element?(view, ~s(#fleet-prompts-pair[aria-expanded="false"]))
+      refute has_element?(view, "#fleet-prompts-pairing")
+    end
+
+    test "a visitor signed out sees neither" do
+      {:ok, view, _html} = live(build_conn(), @path)
+
+      refute has_element?(view, "#fleet-prompts")
+    end
+
+    test "someone who holds none of the fleet's Keys sees neither" do
       did = "did:privy:fleet-page:stranger"
       account = Accounts.register_verified!(did, @stranger, [@stranger], actor: %Actors.System{})
       conn = init_test_session(build_conn(), %{human_account_id: account.id})
       {:ok, view, _html} = live(conn, @path)
 
-      refute has_element?(view, "#fleet-setup:not([hidden])")
-      refute has_element?(view, "#fleet-setup li")
+      refute has_element?(view, "#fleet-prompts-pair")
+      refute has_element?(view, "#fleet-prompts-mark")
     end
 
-    # The list reads again on each notice, opens the next step not done, and
-    # leaves once all four are. The page passes each notice on to the list,
-    # which draws after the render that follows. The agent's check-in tells
-    # the page itself; the chain reader's notices are sent here by hand.
-    test "each step closes as its records arrive, and the list goes once all four are done" do
+    # Keys present now, or waiting for their automatic start, are not idle;
+    # one whose 48 hours ran out and one that changed hands are.
+    test "a holder with an agent sees no Pair, and Mark present only for idle Keys" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      now = DateTime.utc_now(:second)
+      ProposalHelpers.scheduled!(@fleet, 1, DateTime.add(now, 3_600))
+      ProposalHelpers.presence!(@fleet, 2, DateTime.add(now, -49 * 3_600))
+      ProposalHelpers.presence!(@fleet, 3, nil)
+      for token_id <- 4..@issued, do: ProposalHelpers.presence!(@fleet, token_id, now)
+
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+
+      refute has_element?(view, "#fleet-prompts-pair")
+      assert has_element?(view, "#fleet-prompts-mark")
+      assert text(view, "#fleet-prompts-idle") == "2"
+    end
+
+    test "a holder with an agent and no idle Keys sees neither" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      now = DateTime.utc_now(:second)
+      ProposalHelpers.scheduled!(@fleet, 1, DateTime.add(now, 3_600))
+      for token_id <- 2..@issued, do: ProposalHelpers.presence!(@fleet, token_id, now)
+
+      {:ok, view, _html} = live(conn, @path)
+
+      assert has_element?(view, "#fleet-prompts")
+      refute has_element?(view, "#fleet-prompts-pair")
+      refute has_element?(view, "#fleet-prompts-mark")
+    end
+
+    # The chain reader's notices are sent here by hand; the page passes each
+    # on, and the buttons draw after the render that follows.
+    test "Mark present goes once the person's idle Keys are marked present" do
       agent = PairingHelpers.agent_for!(owner())
       conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
       {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+      assert has_element?(view, "#fleet-prompts-mark")
 
-      assert has_element?(view, "#fleet-setup-pair[data-done]")
-      assert open_step(view) == "fleet-setup-shard"
-      assert has_element?(view, "#fleet-setup-shard-button", "Give Test agent a shard")
-
-      ChainHelpers.issue_shard!(@fleet, 1, agent.wallet_address)
-      send(view.pid, {:keys_changed, @fleet, [1]})
-      render(view)
-      assert open_step(view) == "fleet-setup-run"
-
-      {:ok, _check_in} =
-        Keyfleet.Agents.check_in(agent, @fleet, %{"kind" => "scheduled", "every_minutes" => 1440})
-
-      render(view)
-      assert open_step(view) == "fleet-setup-present"
-
-      # Key 1 counts in votes now; Key 2 waits for its automatic start, which
-      # needs no mark either.
       now = DateTime.utc_now(:second)
-      ProposalHelpers.presence!(@fleet, 1, now)
-      ProposalHelpers.scheduled!(@fleet, 2, DateTime.add(now, 3_600))
-      for token_id <- 3..@issued, do: ProposalHelpers.presence!(@fleet, token_id, now)
+      for token_id <- 1..@issued, do: ProposalHelpers.presence!(@fleet, token_id, now)
 
-      # Keys the person doesn't hold leave the list as it was.
+      # Keys the person doesn't hold leave the button as it was.
       send(view.pid, {:keys_present, @fleet, [@issued + 1]})
       render(view)
-      assert open_step(view) == "fleet-setup-present"
+      assert has_element?(view, "#fleet-prompts-mark")
 
-      send(view.pid, {:keys_present, @fleet, [1 | Enum.to_list(3..@issued)]})
+      send(view.pid, {:keys_present, @fleet, Enum.to_list(1..@issued)})
+      render(view)
+      refute has_element?(view, "#fleet-prompts-mark")
+    end
+
+    # The person is the one the pairing names (`PairingHelpers.pair!/2`).
+    test "Pair and its box go once an agent is paired" do
+      did = "did:privy:test-" <> @owner
+      account = Accounts.register_verified!(did, @owner, [@owner], actor: %Actors.System{})
+      conn = init_test_session(build_conn(), %{human_account_id: account.id})
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+      view |> element("#fleet-prompts-pair") |> render_click()
+      assert has_element?(view, "#fleet-prompts-pairing")
+
+      PairingHelpers.agent_for!(owner())
+      send(view.pid, :agents_changed)
       render(view)
 
-      assert has_element?(view, "#fleet-setup[hidden]")
-      refute has_element?(view, "#fleet-setup li")
+      refute has_element?(view, "#fleet-prompts-pair")
+      refute has_element?(view, "#fleet-prompts-pairing")
     end
   end
 
@@ -2511,18 +2567,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(~s(#fleet-feed-list > li[data-kind="moved"]))
     |> LazyHTML.attribute("id")
-  end
-
-  # The setup list's open step, by id: the one step marked current, and the
-  # only one showing what to do.
-  defp open_step(view) do
-    list = view |> render() |> LazyHTML.from_fragment()
-    current = LazyHTML.query(list, ~s(#fleet-setup li[aria-current="step"]))
-
-    assert [open] = LazyHTML.attribute(current, "id")
-    assert Enum.count(LazyHTML.query(list, "#fleet-setup .setup-list__body")) == 1
-    assert Enum.count(LazyHTML.query(list, "##{open} > .setup-list__body")) == 1
-    open
   end
 
   # The page commands a button runs when pressed.

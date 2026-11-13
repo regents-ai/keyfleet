@@ -70,8 +70,8 @@ defmodule Keyfleet.CheckInsTest do
              Agents.check_in(actor, @fleet, %{"kind" => "scheduled", "every_minutes" => 10})
   end
 
-  # A daily run's check-in ticks its person's setup list on every page they
-  # have open, and is heard on no one else's. A repeat too soon to be written,
+  # A daily run's check-in reaches every page its person has open, where
+  # their agents' states read again, and is heard on no one else's. A repeat too soon to be written,
   # and a conversation's check-in, tell nobody.
   test "a scheduled check-in tells its own person's pages and no one else's", %{actor: actor} do
     {other, _profile} = agent("c", "Able")

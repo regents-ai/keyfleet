@@ -540,6 +540,49 @@ defmodule Keyfleet.WalletStepsTest do
 
       assert build!(:present).figures.blocked == %{"present" => :no_keys}
     end
+
+    # Key 1 is present, Key 2 idle, Key 3 waits for its automatic start, Key 4
+    # idle; Key 7 is idle but only sharded to the signer, so its holder marks it.
+    test "the idle Keys the signer holds, and only those, marked in one press",
+         %{fleet: fleet} do
+      ProposalHelpers.keys_sold!(@fleet, [1, 2, 3, 4], @signer)
+      ProposalHelpers.keys_sold!(@fleet, [7], @other)
+      ChainHelpers.issue_shard!(@fleet, 7, @signer)
+
+      holding =
+        [owner(fleet, 7, @other)] ++ Enum.map(1..4, &owner(fleet, &1, @signer))
+
+      ChainViews.put!(
+        holding ++
+          presence(fleet, 1, @now + 3_600) ++
+          presence(fleet, 2, nil) ++
+          presence(fleet, 3, nil, @now + 60) ++
+          presence(fleet, 4, nil) ++ presence(fleet, 7, nil)
+      )
+
+      built = build!(:present_idle)
+      assert built.figures == %{keys: [2, 4], blocked: %{}}
+      assert steps(built)["present"].to == fleet.votes_address
+
+      assert steps(built)["present"].data ==
+               BuilderCode.append(Call.encode("present(uint256[])", [ids([2, 4])]))
+
+      # With none idle the press is certain to fail.
+      ChainViews.put!(
+        holding ++
+          presence(fleet, 1, @now + 3_600) ++
+          presence(fleet, 2, @now + 60) ++
+          presence(fleet, 3, nil, @now + 60) ++
+          presence(fleet, 4, @now + 60) ++ presence(fleet, 7, nil)
+      )
+
+      assert build!(:present_idle).figures.blocked == %{"present" => :none_idle}
+    end
+
+    test "a wallet with no keys has no idle ones to mark" do
+      ChainViews.put!([])
+      assert build!(:present_idle).figures.blocked == %{"present" => :no_keys}
+    end
   end
 
   describe "a wallet's Keys the chain doesn't bring up to date" do
@@ -566,6 +609,7 @@ defmodule Keyfleet.WalletStepsTest do
 
       for {flow, arguments, step, call} <- [
             {:present, [], "present", Call.encode("present(uint256[])", [[]])},
+            {:present_idle, [], "present", Call.encode("present(uint256[])", [[]])},
             {:ballot, [proposal: 4], "yes",
              Call.encode("castBallot(uint256,uint256[],uint8)", [4, [], 1])},
             {:claim_all, [], "claim-#{@usdc}",

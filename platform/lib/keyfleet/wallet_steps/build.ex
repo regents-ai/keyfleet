@@ -51,6 +51,7 @@ defmodule Keyfleet.WalletSteps.Build do
     claim_all: KeySteps,
     club_claim: KeySteps,
     present: KeySteps,
+    present_idle: KeySteps,
     issue_shard: KeySteps,
     end_shard: KeySteps,
     agent_voting: KeySteps,
