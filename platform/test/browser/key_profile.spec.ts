@@ -39,8 +39,11 @@ test.describe("a key's profile", () => {
     const errors = await signIn(page)
     await openFleet(page, "?view=members")
 
+    // Opened from the keyboard, as by a person who goes on with Tab and Escape.
+    // A mouse left resting over the window opens any tip whose "i" the
+    // scrolling carries under it, and Escape closes that tip before the window.
     const link = page.locator(`#fleet-members-card-${key}`)
-    await link.click()
+    await link.press("Enter")
     await expect(page).toHaveURL(new RegExp(`[?&]key=${key}$`))
     await expect(profile(page)).toBeVisible()
     await expect(page.locator("#key-profile-title")).toHaveText(`Key ${key}`)

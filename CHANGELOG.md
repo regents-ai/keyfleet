@@ -9521,3 +9521,43 @@ landing did not interrupt it; another Buy press, a reconnect and opening the
 window again stamped nothing; under reduced motion nothing moved. The lab's
 card stayed still while its stamp landed and its tick drew. WebKit is not run
 on the Mac.
+
+## 2026-11-13: The Key profile walk opens it from the keyboard
+
+Now and then the chain walks failed at the Key profile's first walk: after
+Tabbing through the window, Escape left it open. The walk opened the window by
+clicking the Key's card, which left the mouse resting where the card had been,
+over the window. Each Tab scrolls the window's content under that mouse, and
+when the "i" beside Traits or Claim passes under it, its tip opens, as it does
+for any mouse resting on it. Once the "i" scrolls on, the tip closes itself
+0.12 seconds later, the pause that lets a mouse cross onto its words. The walk
+pressed Escape a few milliseconds after its last Tab; landing inside that
+pause, Escape closed the tip, by then usually scrolled out of sight, and the
+window stayed. It needed the Key's card to sit in the column of the "i", as
+Key 6's does in a full run, and the timing to line up, so it passed when run
+alone.
+
+The walk now opens the window from the keyboard, as a person who goes on with
+Tab and Escape does, so no mouse rests over it. The site is unchanged, and so
+is the page's rule that Escape first closes an open section. A person meets
+this only with a mouse resting over the window while Tab scrolls it, pressing
+Escape within 0.12 seconds of a tip's "i" leaving the mouse: the first Escape
+closes that tip and a second closes the window. The tips come from the shared
+design system, so a change there starts in the design system.
+
+Check (partition `_kf_s3`): with Key 6's card where the full run puts it, the
+walk's steps after a click left the window open after Escape in 12 of 40
+rounds (4 of 20 in an earlier run); opened from the keyboard, 0 of 40. The
+Key profile walks file in 20 separate runs, each from fresh fleets, 160 of
+160. Run 20 times over in one go (`--repeat-each 20`) it passes the first six
+rounds, 48 of 48, then fails from the seventh, at walks this change does not
+touch as well: Keys sold to one account pile up across rounds, the member list
+shows a holder's first 50 Keys so the newest has no card to open, and the
+phone walk's 60 Tab presses run out on that account's list of Keys. Chain
+walks in Chromium on port 4593, 126 of 126, by itself. `make check`, every
+stage, PORT unset, passes: compile with warnings as errors, unused locks, hex
+audit, format, credo strict, sobelow, xref, graph host 243, full suite 1,454
+(20 properties, 1,434 tests, 19 excluded), codegen, route handoff, typecheck
+and 486 unit tests, browser suite 125 of 125, devices 70 of 70, required
+fixes, commands, the pin check and contracts (547 tests, 6 skipped). Firefox
+was not run; WebKit is not run on the Mac.
