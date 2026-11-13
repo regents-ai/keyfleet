@@ -59,6 +59,8 @@ defmodule Keyfleet.Atlas.Swarm do
         dynamic([t, a], ^on and field(t, ^field) == field(a, ^field))
       end)
 
+    # Sums over buckets, with each Key counted once across the rows summed, are
+    # no record Ash could read, so this action's answer is one statement of its own.
     cells =
       from(t in subquery(totals),
         left_join: a in subquery(actors),

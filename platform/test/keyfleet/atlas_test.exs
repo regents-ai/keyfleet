@@ -388,6 +388,7 @@ defmodule Keyfleet.AtlasTest do
   ## What the Atlas holds
 
   defp stored_things(fleet) do
+    # Every row as stored, held to the recount, not a page of a read.
     from(t in "atlas_things",
       where: t.fleet_id == ^fleet,
       select: %{

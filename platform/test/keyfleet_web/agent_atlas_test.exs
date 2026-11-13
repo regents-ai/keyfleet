@@ -7,9 +7,9 @@ defmodule KeyfleetWeb.AgentAtlasTest do
   import Phoenix.ConnTest
   import Plug.Conn
 
-  alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, PairingHelpers}
   alias Keyfleet.Actors.System
   alias Keyfleet.Atlas.Count
+  alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, PairingHelpers}
   alias KeyfleetWeb.{Endpoint, SignedAgentHelpers, WorkspacePage}
 
   @endpoint KeyfleetWeb.Endpoint

@@ -27,6 +27,7 @@ defmodule Keyfleet.Atlas.Named do
   defp ids(things), do: things |> Enum.map(& &1.thing) |> Enum.uniq()
 
   defp names(:title, fleet_id, items, notebooks) do
+    # The Atlas read these titles belong to was allowed as the workspace is.
     titles =
       if items == [],
         do: %{},
@@ -43,6 +44,7 @@ defmodule Keyfleet.Atlas.Named do
 
   defp notebooks(_fleet_id, []), do: []
 
+  # The Atlas read these notebooks belong to was allowed as the workspace is.
   defp notebooks(fleet_id, ids),
     do: Atlas.notebooks_with_ids!(fleet_id, ids, authorize?: false)
 end

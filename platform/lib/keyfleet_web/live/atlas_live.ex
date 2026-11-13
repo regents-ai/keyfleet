@@ -25,8 +25,8 @@ defmodule KeyfleetWeb.AtlasLive do
   import Phoenix.LiveView,
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
 
-  alias KeyfleetWeb.{AtlasPage, PageRead, ShellLive}
   alias KeyfleetWeb.AtlasLive.Heat
+  alias KeyfleetWeb.{AtlasPage, PageRead, ShellLive}
 
   # The pictures built so far, the first one shown unless another is named.
   @views [:heat]

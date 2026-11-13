@@ -62,9 +62,7 @@ defmodule Keyfleet.Atlas.Fill do
         %{counted_seq: counted, applied_seq: applied} = cursor when counted < applied ->
           events = Graph.changes_after!(fleet_id, counted, actor: @system)
           Count.count_graph(fleet_id, Enum.map(events, &logged/1), types(fleet_id, events))
-
-          to = if length(events) < @batch, do: applied, else: List.last(events).seq
-          Graph.mark_counted!(cursor, %{counted_seq: to}, actor: @system)
+          Graph.mark_counted!(cursor, %{counted_seq: counted_to(events, applied)}, actor: @system)
           :counted
 
         _counted_or_gone ->
@@ -72,6 +70,10 @@ defmodule Keyfleet.Atlas.Fill do
       end
     end)
   end
+
+  # Past the batch, or to the end of the copied log once the batch was its last.
+  defp counted_to(events, applied) when length(events) < @batch, do: applied
+  defp counted_to(events, _applied), do: List.last(events).seq
 
   # A copied event as the log gave it.
   defp logged(event) do

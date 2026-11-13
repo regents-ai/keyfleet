@@ -886,9 +886,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   def check_body(path, params) do
-    if Regex.match?(@message_path, path),
-      do: check_message_body(params),
-      else: check_op_body(path, params)
+    cond do
+      Regex.match?(@message_path, path) -> check_message_body(params)
+      op = atlas_op(path) -> check_fields(Map.fetch!(@atlas_bodies, op), params)
+      true -> check_op_body(path, params)
+    end
   end
 
   defp check_op_body(path, params) do
@@ -898,7 +900,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
-      op = atlas_op(path) -> check_fields(Map.fetch!(@atlas_bodies, op), params)
       op = key_op(path) -> check_key_body(op, params)
       poll_write?(path) -> check_poll_body(path, params)
       true -> path |> room_op() |> check_room_body(params)
