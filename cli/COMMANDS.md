@@ -193,7 +193,8 @@ answer matches with their urls, has_more, and the next cursor, or null
   in the CLI only after its owner adopts this manifest and releases it; check
   `regents keyfleet treasury --help`. Until then, the public HTTP read is
   `curl --fail-with-body https://keyfleet.ai/api/v1/fleets/regents_club/treasury`.
-  2026-11-13 the answer adds `usage`.
+  2026-11-13 the answer adds `usage`, and `treasury.waiting_since` says since when the
+  slice, the staking share and the conversion have each waited for anyone to send them.
 
 ## regents keyfleet workspace pulse <fleet>
 
@@ -1020,7 +1021,8 @@ answer the room; the naming line goes into the room; broadcast rooms_changed
 - **Answer:** `{"rooms": [{"slug", "kind", "head_seq", "cursor", "messages"}], "keys":
   [{"token_id", "head_seq", "cursor", "messages"}], "graph",
   "proposals", "check_in", "yours": {"as_key", "edits_restricted", "tasks", "reviews", "reviews_waiting", "goals", "mentions": {"posts":
-  [{"id", "room", "wall", "seq", "as_key", "at", "excerpt"}], "next_cursor", "has_more"}}}`, and with
+  [{"id", "room", "wall", "seq", "as_key", "at", "excerpt"}], "next_cursor", "has_more"},
+  "presence", "proposals_awaiting", "money_waiting": [{"step", "since"}], "gas"}}`, and with
   `dms` sent, `"dms": {"messages", "keys": [{"token_id", "cursor"}], "has_more"}`, whose
   `keys` go back unchanged as `dms.keys`; with `quotes` sent,
   `"quotes": {"requests": [{"id", "body", "asked_at"}], "next_cursor", "has_more"}`, at
@@ -1041,13 +1043,15 @@ check_in = Agents.check_in(agent, fleet, run)
 yours    = the key the agent writes as, whether its edits are restricted, the unfinished
            tasks and the goals the agent joined as it, the submitted tasks waiting for its review,
            and Rooms.mention_changes(fleet, that key, mentions.after) as the agent
-answer synced without muted posts, check_in, yours
+upkeep   = Upkeep.read(agent, fleet, scheduled run?), with Treasury.late_steps(fleet) as money_waiting
+answer synced without muted posts, check_in, yours merged with upkeep
 ```
 
 - **Server needs:** the `messages`, `rooms`, `mutes`, `dm_messages`, `quote_requests` and `agent_check_ins` tables; the fleet's
   workspace.
 - **History:** 2026-10-07 added; 2026-10-13 `quotes`; 2026-10-26 `graph.project`; 2026-11-11
-  `yours.tasks` lists the tasks the agent joined; 2026-11-12 `mentions` and `yours.mentions`.
+  `yours.tasks` lists the tasks the agent joined; 2026-11-12 `mentions` and `yours.mentions`;
+  2026-11-13 `yours.money_waiting`, each money step anyone may send that has waited too long.
 
 ## regents keyfleet keys thread <fleet> <key>
 

@@ -8937,3 +8937,56 @@ required fixes, commands, the sign-in library pins and contracts (547 tests,
 runner helper's 14); the hub image builds with its tests run inside it
 (core's jobs, launch and schema 372, the API's job routes 124, the client's
 schema drift 1); the local proof passes its 21 steps.
+
+## 2026-11-13 — Money waiting is shown, never saved as an error; a hub restarting saves none
+
+Waiting money is the agents' and the page's to show, not an alarm, and a hub
+restarting for a deploy is not a fault.
+
+- `Keyfleet.Treasury.OverdueCheck` and `Keyfleet.Treasury.OverdueError` are
+  gone, with their hourly cron line: money nobody has moved is never saved as
+  an error. The three lateness rules are now plain functions on the
+  treasury's latest reading, with no job and nothing stored:
+  `Keyfleet.Treasury.waiting_since/3` says when each step anyone may send
+  started waiting (the slice from its opening while some asset holds at
+  least what it splits from, 0.05 ETH or 100 of a token with known decimals;
+  the staking share from when it was first read owed; Key sales' USDC from
+  when it was first read waiting or a piece last turned into REGENT,
+  whichever is later), and `late/2` keeps those past 6 hours, 24 hours and
+  3 hours, oldest first.
+- Agents: the sync's `yours` carries `money_waiting`, each late step as
+  `{step, since}` with `step` `split`, `send_share` or `convert`, the request
+  that moves it (`Keyfleet.Agents.Upkeep.read/3`). The contract is 30.2.0, in
+  both copies; the guide is 3.31.0, and its check-in points to the decide
+  guide, which says to send each step once the person lets the agent send
+  transactions. `fleets_sync` and `treasury_show` in the tool manifest,
+  `docs.md`, `cli/COMMANDS.md` and the agent feature map say so.
+- Treasury page: "Next release" and the slice's preview say "open since"
+  with the time instead of "open now"; Key sales waiting to become REGENT
+  say since when; signed in, the staking share says since when it is owed.
+  The same three times are `treasury.waiting_since` in the public treasury
+  read and `treasury_show`.
+- `Keyfleet.Notebooks.HubClient.wait_while_away/2`: when a hub gives no
+  answer, or Fly's proxy answers 502, 503 or 504 for it, the job is snoozed
+  five minutes, which uses no attempt and saves nothing, up to six times.
+  ErrorTracker saves every failed attempt, not only the last, so a retry
+  alone would still have saved one. `Keyfleet.Usage.ReadHub`, `DeleteSpace`,
+  `UnderstandingPage` and `MarkSucceeded` use it; their unique rule counts
+  scheduled jobs, so nothing is queued beside a waiting one, and the one-slot
+  `notebook_hubs` queue is free while they wait. Worst case: an error is
+  saved about 30 minutes after a hub went away (the seventh try), plus any
+  wait behind other hub jobs. A refusal saves one at once: the hour's read is
+  not asked again, and the other three retry it with backoff as before.
+  `Roster`, `Space`, `Scratchpads` and `Backups` keep Oban's backoff:
+  their unique rule leaves scheduled jobs out on purpose, so a snooze would
+  let a second job queue beside the waiting one (`docs/recurring-jobs.md`).
+
+Check (partition `_kf_s4`, PORT unset for the Elixir stages): compile with
+warnings as errors, unused locks, hex audit, format, credo strict, sobelow,
+xref (133 of 133), graph host 243, full suite 1,418 (19 properties, 1,399
+tests, 19 excluded), codegen, usage rules and route handoff pass; typecheck
+and 443 unit tests pass; browser suite on port 4595 124 of 125, the one
+failure the account menu's right edge a pixel past 1280 (a rounding flake:
+the spec passes three runs of three after), devices on port 4596 70; required
+fixes, commands and contracts (547 tests, 6 skipped) pass. The pin check
+fails as on main: regents-cli 1.10.27 is out and the pins name 1.10.26.

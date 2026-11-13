@@ -542,7 +542,9 @@ defmodule KeyfleetWeb.ProposalsPage do
           }
         ),
       split_rate: "#{units(reading.daily_split_bps, 2)}%",
-      next_run_at: reading.next_run_at
+      next_run_at: reading.next_run_at,
+      waiting_since:
+        Treasury.waiting_since(reading, assets.details, Treasury.last_piece_turned_at(fleet.id))
     }
   end
 

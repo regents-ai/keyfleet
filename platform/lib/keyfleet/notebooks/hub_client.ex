@@ -2,7 +2,8 @@ defmodule Keyfleet.Notebooks.HubClient do
   @moduledoc """
   What this site asks of a fleet's hub, as the hub's provisioner
   (`kf_provisioner_<fleet id>`, the one super admin each hub names). Every
-  call is made once: the job that makes it retries the whole job.
+  call is made once: the job that makes it retries the whole job, waiting
+  first while the hub does not answer (`wait_while_away/2`).
 
   Each answer is `{:ok, data}` or `{:error, {:hub, address, reason}}`, naming
   the hub's address and the request's error, `{:status, status}` or
@@ -13,8 +14,38 @@ defmodule Keyfleet.Notebooks.HubClient do
   alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.Pass
 
+  # A hub restarts on every hub deploy. A job that found it away asks again
+  # this many seconds later, at most this many times.
+  @away_wait 5 * 60
+  @away_waits 6
+
+  # The answers Fly's proxy gives in place of a hub that does not answer it.
+  @proxy_unanswered [502, 503, 504]
+
   @doc "The hub user this site manages the fleet's hub as."
   def provisioner(fleet_id), do: "kf_provisioner_#{fleet_id}"
+
+  @doc """
+  What a job that asked the hub ends with, given what it got (`result`).
+  While the hub gives no answer, neither its own nor through Fly's proxy
+  (502, 503 or 504), the job is snoozed for #{@away_wait} seconds, which
+  uses no attempt and saves no error, up to #{@away_waits} times
+  (`meta["snoozed"]`), so a hub restarting for a deploy goes unremarked.
+  After that, and for anything else, the job ends with `result` as it is:
+  a hub that answered with a refusal fails the attempt at once, and is
+  saved with the site's errors like any failed job.
+  """
+  def wait_while_away({:error, {:hub, _address, reason}} = error, %Oban.Job{meta: meta}) do
+    if away?(reason) and Map.get(meta, "snoozed", 0) < @away_waits,
+      do: {:snooze, @away_wait},
+      else: error
+  end
+
+  def wait_while_away(result, %Oban.Job{}), do: result
+
+  defp away?({:status, status}), do: status in @proxy_unanswered
+  defp away?(:unexpected_page), do: false
+  defp away?(_no_answer), do: true
 
   @doc "Every project in the hub, each with its `owner` and `tags`."
   def projects(fleet_id), do: fleet_id |> request(:get, "/api/v1/projects") |> page()

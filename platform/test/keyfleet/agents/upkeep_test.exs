@@ -10,7 +10,9 @@ defmodule Keyfleet.Agents.UpkeepTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.PairingHelpers
+  alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
+  alias Keyfleet.Treasury
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
@@ -107,6 +109,38 @@ defmodule Keyfleet.Agents.UpkeepTest do
              agents: [%{marked: false}]
            } = Upkeep.person_setup(person, @fleet)
   end
+
+  # Money nobody has moved is the agents' to move, never an error the site saves.
+  test "money waiting too long reaches the agent's check-in, oldest first, and saves no error" do
+    errors = saved_errors()
+    agent = pair!()
+    assert Upkeep.read(agent, @fleet, false).money_waiting == []
+
+    now = DateTime.utc_now()
+    ago = &DateTime.add(now, -&1, :hour)
+
+    ProposalHelpers.treasury_reading!(
+      @fleet,
+      [%{asset: Treasury.native(), held: 10 ** 18, backed: 0}],
+      block_time: now,
+      next_run_at: DateTime.truncate(ago.(7), :second),
+      protocol_share_owed: Decimal.new(1),
+      protocol_share_owed_since: ago.(25),
+      conversion_waiting: Decimal.new(1),
+      conversion_waiting_since: ago.(4)
+    )
+
+    assert Upkeep.read(agent, @fleet, false).money_waiting == [
+             %{step: :send_share, since: ago.(25)},
+             %{step: :split, since: DateTime.truncate(ago.(7), :second)},
+             %{step: :convert, since: ago.(4)}
+           ]
+
+    assert saved_errors() == errors
+  end
+
+  # Errors other suites left saved are counted before and set aside.
+  defp saved_errors, do: Repo.aggregate(ErrorTracker.Occurrence, :count)
 
   defp done(person), do: Upkeep.person_setup(person, @fleet).done
 

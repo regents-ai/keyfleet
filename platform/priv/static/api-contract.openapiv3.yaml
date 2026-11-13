@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 30.1.0
+  version: 30.2.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -185,7 +185,7 @@ paths:
   /api/v1/fleets/{fleet_id}/treasury:
     get:
       operationId: readTreasury
-      description: Public indexed balances, separate rewards, history and permissions; inspect catching_up and treasury.as_of. Atomic amounts are decimal strings. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Buy REGENT starts with, at most "250", or "" when nothing waits. treasury.advances lists each advance still out, oldest first, each with id, operator, amount and outstanding as the page words them, and typed, all that is still out in whole tokens, the amount a return of all of it takes. usage is what the fleet has used of the site this month (UTC), counted every hour, or null before its first count, with month (its first day), workspace_bytes and workspace_items (how large its workspace record is), chat_posts and chat_bytes (the posts written this month in its rooms and on its Keys' walls, and the size of their words; direct messages are not counted), notebook_seconds (how long its notebook machines ran this month, sessions and background runs alike, as of its hub's last hourly read; null until its hub is read this month, and for a fleet without notebooks) and counted_at. No transaction is submitted.
+      description: Public indexed balances, separate rewards, history and permissions; inspect catching_up and treasury.as_of. Atomic amounts are decimal strings. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Buy REGENT starts with, at most "250", or "" when nothing waits. treasury.waiting_since has split, send_share and convert, when each step anyone may send started waiting, or null when it has nothing to move. treasury.advances lists each advance still out, oldest first, each with id, operator, amount and outstanding as the page words them, and typed, all that is still out in whole tokens, the amount a return of all of it takes. usage is what the fleet has used of the site this month (UTC), counted every hour, or null before its first count, with month (its first day), workspace_bytes and workspace_items (how large its workspace record is), chat_posts and chat_bytes (the posts written this month in its rooms and on its Keys' walls, and the size of their words; direct messages are not counted), notebook_seconds (how long its notebook machines ran this month, sessions and background runs alike, as of its hub's last hourly read; null until its hub is read this month, and for a fleet without notebooks) and counted_at. No transaction is submitted.
       security: []
       parameters:
         - {name: fleet_id, in: path, required: true, schema: {type: string}}
@@ -9396,7 +9396,7 @@ components:
         yours:
           type: object
           additionalProperties: false
-          required: [as_key, edits_restricted, tasks, reviews, reviews_waiting, goals, posted_after_you, mentions, presence, proposals_awaiting, gas]
+          required: [as_key, edits_restricted, tasks, reviews, reviews_waiting, goals, posted_after_you, mentions, presence, proposals_awaiting, money_waiting, gas]
           description: >-
             What the caller has here. A caller that neither owns one of the fleet's Keys nor holds
             a shard of one gets a null as_key, edits_restricted false and no tasks, reviews, goals,
@@ -9552,6 +9552,23 @@ components:
                     description: >-
                       Those of them present when it opened. They already count, so staying silent works
                       against a Yes; any other works against it only by voting No.
+            money_waiting:
+              type: array
+              maxItems: 3
+              description: >-
+                The fleet's money anyone may move that has waited too long at the treasury's latest
+                reading, oldest first, each with the step that moves it: split (the Daily Treasury
+                Slice to Keys, open more than 6 hours with something to share), send_share (the
+                share owed to REGENT staking, owed more than a day) or convert (USDC from Key sales,
+                more than 3 hours with no piece turned into REGENT). Anyone may send each; it moves
+                no one's own money.
+              items:
+                type: object
+                additionalProperties: false
+                required: [step, since]
+                properties:
+                  step: {type: string, enum: [split, send_share, convert]}
+                  since: {type: string, format: date-time, description: When it started waiting}
             gas: {$ref: "#/components/schemas/WalletGas"}
     ProposalChanges:
       type: object

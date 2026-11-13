@@ -30,6 +30,10 @@ defmodule Keyfleet.Treasury do
     :split_allocated,
     :regent_bought
   ]
+  # How long each step anyone may send can wait before it is late, in seconds.
+  @late_after %{split: 6 * 3600, send_share: 24 * 3600, convert: 3 * 3600}
+  # The least ETH the treasury splits from, as the treasury fixes it.
+  @eth_floor 50_000_000_000_000_000
 
   resources do
     resource Keyfleet.Treasury.Reading do
@@ -142,6 +146,60 @@ defmodule Keyfleet.Treasury do
   end
 
   @doc """
+  The fleet's money steps anyone may send that have waited too long at its
+  latest reading, by the chain's clock then (`late/2` of `waiting_since/3`),
+  and none before the first reading.
+  """
+  def late_steps(fleet) do
+    case get_reading!(fleet.id) do
+      nil ->
+        []
+
+      reading ->
+        reading
+        |> waiting_since(assets(fleet).details, last_piece_turned_at(fleet.id))
+        |> late(reading.block_time)
+    end
+  end
+
+  @doc """
+  When each money step anyone may send started waiting at `reading`, by the
+  token `details` of `assets/1` and when the fleet's last piece of USDC turned
+  into REGENT (`turned_at`, nil when none has), nil for a step with nothing
+  waiting:
+
+    * `split`, the Daily Treasury Slice to Keys: since it opened
+      (`next_run_at`, at or before the reading), while the treasury holds at
+      least what it splits from of some asset (0.05 ETH, or 100 of a token
+      that has said its decimals), below which a release shares nothing;
+    * `send_share`: since the protocol share was first read owed to REGENT
+      staking;
+    * `convert`, USDC from Key sales: since it was first read waiting or a
+      piece of it last turned into REGENT, whichever is later.
+  """
+  def waiting_since(reading, details, turned_at) do
+    %{
+      split: if(open?(reading) and splits_any?(reading, details), do: reading.next_run_at),
+      send_share: reading.protocol_share_owed_since,
+      convert: converting_since(reading.conversion_waiting_since, turned_at)
+    }
+  end
+
+  @doc """
+  The steps of `waiting` (`waiting_since/3`) that have waited too long by
+  `now`, oldest first, each as `%{step: step, since: since}`: `split` more
+  than 6 hours, `send_share` more than 24 and `convert` more than 3.
+  """
+  def late(waiting, now) do
+    waiting
+    |> Enum.filter(fn {step, since} ->
+      since != nil and DateTime.diff(now, since) > Map.fetch!(@late_after, step)
+    end)
+    |> Enum.sort_by(&elem(&1, 1), DateTime)
+    |> Enum.map(fn {step, since} -> %{step: step, since: since} end)
+  end
+
+  @doc """
   When the fleet's latest piece of USDC from Key sales turned into REGENT was
   recorded, or nil when none has.
   """
@@ -149,6 +207,32 @@ defmodule Keyfleet.Treasury do
     case latest_events!(fleet_id, [:regent_bought], 1) do
       [bought] -> bought.observed_at
       [] -> nil
+    end
+  end
+
+  defp converting_since(nil, _turned_at), do: nil
+  defp converting_since(waiting_since, nil), do: waiting_since
+
+  defp converting_since(waiting_since, turned_at),
+    do: Enum.max([waiting_since, turned_at], DateTime)
+
+  defp open?(%{next_run_at: nil}), do: false
+  defp open?(reading), do: not DateTime.after?(reading.next_run_at, reading.block_time)
+
+  defp splits_any?(reading, details) do
+    Enum.any?(reading.assets, fn %{asset: asset, held: held} ->
+      floor = split_floor(asset, details)
+      floor != nil and held >= floor
+    end)
+  end
+
+  # A token that has not said its decimals has no floor known here.
+  defp split_floor(@native, _details), do: @eth_floor
+
+  defp split_floor(asset, details) do
+    case details[asset] do
+      {_symbol, decimals} when is_integer(decimals) -> 100 * 10 ** decimals
+      _unknown -> nil
     end
   end
 

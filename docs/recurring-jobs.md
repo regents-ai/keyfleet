@@ -8,9 +8,9 @@ emails; SQL on `keyfleet_app.oban_jobs`; and the running app's `rpc`.
 
 The site sends no transaction of its own. The treasury's daily split, the
 REGENT staking share, turning USDC from Key sales into REGENT, and draws asked
-again are buttons anyone presses on the fleet's Treasury tab; no job runs them.
-`Keyfleet.Treasury.OverdueCheck` saves an error when the first three wait too
-long (see "Money nobody has moved" below).
+again are buttons anyone presses on the fleet's Treasury tab; no job runs them,
+and money waiting for a press is never saved as an error (see "Money nobody
+has moved" below).
 
 ## The jobs
 
@@ -24,7 +24,8 @@ long (see "Money nobody has moved" below).
 | `Keyfleet.Notebooks.Space` | queued when a project starts, and by Roster | makes one project's space in the fleet's hub | notebook_hubs | saved error, 20 tries |
 | `Keyfleet.Code.Setup` | queued when a project starts, and by an ask for a repository not made yet | makes one project's repository in the code store | code_store | saved error, 20 tries a minute apart; the next ask starts it again |
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
-| `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
+| `Keyfleet.Usage.Count` | :13 past every hour | counts each fleet's usage this month and last, then queues a hub read for each fleet with a notebook hub | default | saved error, 1 try; the next hour counts again |
+| `Keyfleet.Usage.ReadHub` | queued by Count, per fleet | reads the machines the fleet's notebook hub lists and counts its notebook hours | notebook_hubs | A hub that does not answer: no error, asked again every five minutes, six times; still away, or a refusal: saved error, 1 try; the next hour reads again (see "A hub that does not answer") |
 | `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Accelerant #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.Keys.PresenceTimer` | :07 past every hour | marks presence for the Keys whose shard the timer wallet holds once any has 24 hours or less left; saves an error for a failed send, a Key under 12 hours, low ETH or a shard ending within 30 days | chain | saved error, 1 try; the next hour reads again |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
@@ -41,33 +42,53 @@ look at `/admin/errors` after any email, and resolve what is fixed.
 A job that is stuck without failing raises nothing. Fleet pages then say the
 record is catching up; the SQL below shows when each job last ran.
 
+## A hub that does not answer
+
+A fleet's notebook hub restarts on every hub deploy. `Keyfleet.Usage.ReadHub`,
+`Keyfleet.Notebooks.DeleteSpace`, `Keyfleet.Notebooks.UnderstandingPage` and
+`Keyfleet.Notebooks.MarkSucceeded` wait for it
+(`Keyfleet.Notebooks.HubClient.wait_while_away/2`): when the hub gives no
+answer, or Fly's proxy answers 502, 503 or 504 for it, the job is snoozed for
+five minutes, which uses no attempt and saves nothing, up to six times. Only
+a hub still away after the seventh try, about 30 minutes after the first,
+saves an error, and a hub that answers with a refusal saves one at once. A
+waiting job is `scheduled`, which each of these jobs' unique rule counts, so
+no second job for the same thing (the next hour's read, say) is queued
+beside it. After the six waits the jobs with more than one attempt fail and
+retry as before, saving each failure.
+
+`Keyfleet.Notebooks.Roster`, `Space`, `Scratchpads` and `Backups` do not wait
+this way: their unique rule counts only `available` and `retryable` jobs on
+purpose, so a snoozed one would let the next queueing (Reconcile's Roster
+every ten minutes, and the Space jobs each Roster run queues) add another
+beside it. They retry with Oban's backoff, the first retry about 17 seconds
+later, and their first failed attempt during a hub restart is saved.
+
 ## Money nobody has moved
 
 Three money jobs run only when someone presses them. Anyone may press each,
 from the fleet's Treasury tab (`/<type>/<number>/treasury`, such as
 `/classic/1/treasury`) or as an agent (the `treasury_release`, `treasury_send_share` and
-`treasury_buy_regent` browser tools).
+`treasury_buy_regent` browser tools). Money waiting for a press is not saved
+as an error. The Treasury tab shows since when each has waited, and every
+agent's check-in lists those waiting too long (`yours.money_waiting`, from
+`Keyfleet.Treasury.late_steps/1`): the slice due more than 6 hours with
+something to share, the staking share owed more than 24 hours, and USDC
+waiting more than 3 hours with no piece turned into REGENT.
 
-| Job | Contract call | Saved as late when |
-| --- | --- | --- |
-| Daily Treasury Slice to Keys | treasury `runDailySplit()` | due (`nextRunAt`) for more than 6 hours |
-| Send to REGENT staking | manager `sendProtocolShare()` | something owed for more than 24 hours |
-| Buy REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press | USDC waiting more than 3 hours with no piece turned for that fleet |
+| Job | Contract call |
+| --- | --- |
+| Daily Treasury Slice to Keys | treasury `runDailySplit()` |
+| Send to REGENT staking | manager `sendProtocolShare()` |
+| Buy REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press |
 
-`Keyfleet.Treasury.OverdueCheck` reads each deployed fleet's latest balance
-reading every hour. Each kind is one error at `/admin/errors` listing every
-fleet it holds for and since when, so Sentinel emails once per kind; while
-the money still waits, each hour adds an occurrence. A fleet is looked at
-from its first balance reading after it is recorded on the site.
-
-Classic #1 (manager `0xc73D8774Dfc51bc11207DC04B0ff5117C30458B6`, predicted)
-is covered this way once it is recorded. After a sell-out its manager holds
-about 36,036 USDC to turn into REGENT: about 145 presses of Buy REGENT,
-one each 15 minutes at the earliest, over about 36 hours. A press is refused
-when a full piece would move REGENT's price by more than 1%; a smaller amount
-typed in the field may still work. Then one press of Send to REGENT staking
-sends the 4,004.05 USDC owed. The conversion alert stays quiet while pieces
-keep turning at least every 3 hours.
+After a sell-out Classic #1's manager
+(`0xc73D8774Dfc51bc11207DC04B0ff5117C30458B6`, predicted) holds about 36,036
+USDC to turn into REGENT: about 145 presses of Buy REGENT, one each 15
+minutes at the earliest, over about 36 hours. A press is refused when a full
+piece would move REGENT's price by more than 1%; a smaller amount typed in
+the field may still work. Then one press of Send to REGENT staking sends the
+4,004.05 USDC owed.
 
 ## Keys past the deck
 

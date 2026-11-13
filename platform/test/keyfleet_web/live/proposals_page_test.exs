@@ -674,13 +674,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(conn, @treasury_page)
 
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 0)],
-        conversion_waiting: Decimal.new(72_576_000)
+        conversion_waiting: Decimal.new(72_576_000),
+        conversion_waiting_since: DateTime.add(DateTime.utc_now(), -4, :hour)
       )
 
       FleetProposals.read(@fleet)
 
       assert shows?(fn -> has_element?(view, "#proposals-waiting") end)
       assert text(view, "#proposals-waiting") == "Key sales waiting to become REGENT: 72.576 USDC"
+      assert has_element?(view, "#proposals-waiting-since")
     end
 
     test "a burst of notices is answered by one read of each fleet, for every open page", %{
@@ -790,7 +792,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     # Costly failure: a release already due reads as a time gone by, and an
     # agent takes it for one missed (Grok Bot, 19 October 2026).
-    test "a treasury release that is due reads as open now", %{conn: conn} do
+    test "a treasury release that is due reads as open since its time", %{conn: conn} do
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 100_000_000)],
         block_time: ~U[2026-09-21 12:05:00Z],
         daily_split_bps: 75,
@@ -798,7 +800,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
 
       {:ok, view, _html} = open(conn, @treasury_page)
-      assert text(view, "#proposals-split-next") == "Next release: open now."
+
+      assert text(view, "#proposals-split-next") ==
+               "Next release: open since 21 September 2026 at 12:00 UTC."
     end
 
     test "the treasury says what it doesn't know yet", %{conn: conn} do
@@ -830,6 +834,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "1% of eligible balances, shared equally across Keys sold at least 2 days ago."
 
       refute has_element?(view, "#proposals-split-next")
+      refute has_element?(view, "#proposals-waiting-since")
       assert length(lines(view, "#proposals-history li")) == 20
       assert has_element?(view, "#proposals-history-more", "Earlier ones aren’t shown.")
     end
@@ -1138,11 +1143,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposals-run-split-why", "Opens 7 Oct, 13:00 UTC")
 
       # Once it is due, anyone may run it.
-      ChainViews.put!(views.(now() - 60), balances: %{@treasury => 10 ** 17})
+      due = now() - 60
+      ChainViews.put!(views.(due), balances: %{@treasury => 10 ** 17})
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
       active!(view, "#proposals-split-action", @holder)
 
-      assert text(view, "#proposals-split-opens") == "Open now"
+      assert text(view, "#proposals-split-opens") ==
+               Calendar.strftime(DateTime.from_unix!(due), "Open since %-d %B %Y at %H:%M UTC")
+
       assert pressable?(view, "run_split", ["#proposals-run-split"])
 
       assert_push_event(view, "onchain-steps:review", %{
@@ -1247,9 +1255,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert pressable?(view, "approve", ["#proposals-return-1-approve"])
     end
 
-    test "sending Regents its share says what is owed, and waits for something owed", %{
-      conn: conn
-    } do
+    test "sending Regents its share says what is owed and since when, and waits for something owed",
+         %{conn: conn} do
       ChainViews.put!(list_views(owed: 0))
 
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
@@ -1257,12 +1264,19 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(view, "#proposals-send-share[disabled]")
       assert has_element?(view, "#proposals-send-share-why", "Nothing owed")
+      refute has_element?(view, "#proposals-share-since")
+
+      ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 0)],
+        protocol_share_owed: Decimal.new(2_500_000),
+        protocol_share_owed_since: DateTime.add(DateTime.utc_now(), -2, :day)
+      )
 
       ChainViews.put!(list_views(owed: 2_500_000))
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
       active!(view, "#proposals-regents-share", @holder)
 
       assert text(view, "#proposals-regents-share-line") == "Owed: 2.5 USDC."
+      assert has_element?(view, "#proposals-share-since")
       assert pressable?(view, "send_share", ["#proposals-send-share"])
 
       assert_push_event(view, "onchain-steps:review", %{

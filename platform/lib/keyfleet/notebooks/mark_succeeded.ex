@@ -13,7 +13,9 @@ defmodule Keyfleet.Notebooks.MarkSucceeded do
   with such copies, in the fleet's projects, waits its turn with the other
   hub calls (the `notebook_hubs` queue runs one job), and a fleet's job is
   queued again only once the last has run. One that stops part way is run
-  again from the start: marking a copy twice changes nothing.
+  again from the start: marking a copy twice changes nothing. A hub that
+  does not answer is waited for first
+  (`Keyfleet.Notebooks.HubClient.wait_while_away/2`).
   """
   use Oban.Worker,
     queue: :notebook_hubs,
@@ -37,10 +39,10 @@ defmodule Keyfleet.Notebooks.MarkSucceeded do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
+  def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}} = job) do
     with true <- Notebooks.hub?(fleet_id) || {:cancel, :no_hub},
          {:ok, unmarked} <- Notebooks.unmarked_run_outputs(fleet_id, actor: %System{}),
-         do: mark(fleet_id, unmarked)
+         do: fleet_id |> mark(unmarked) |> HubClient.wait_while_away(job)
   end
 
   defp mark(_fleet_id, []), do: :ok

@@ -14,8 +14,7 @@ defmodule Keyfleet.Chain.TreasuryReader do
   share owed to REGENT staking and the USDC from Key sales waiting to turn
   into REGENT. Each of those last two keeps the block time it was first read
   above nothing, carried from the reading kept, until a reading finds it at
-  nothing (`Keyfleet.Treasury.OverdueCheck` alerts on both). A reading that
-  fails in any part keeps
+  nothing. A reading that fails in any part keeps
   nothing and is tried again at the next one. A reading of a later block
   than the one kept replaces it and is announced as `{:balances_changed,
   fleet_id}` on `Keyfleet.Proposals.topic/1`.

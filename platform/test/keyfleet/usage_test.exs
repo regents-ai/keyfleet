@@ -131,8 +131,9 @@ defmodule Keyfleet.UsageTest do
   end
 
   describe "the hourly hub read" do
+    # Errors other suites left saved are not this test's.
     setup do
-      %{hub: hub!(@fleet)}
+      %{hub: hub!(@fleet), errors: saved_errors()}
     end
 
     test "counts this month's notebook hours from the machines the hub lists, the same each time",
@@ -228,15 +229,65 @@ defmodule Keyfleet.UsageTest do
       assert Usage.this_month(@fleet).notebook_seconds == 0
     end
 
-    test "a hub that cannot be read leaves the figures as they were", %{hub: hub} do
+    test "a hub briefly away saves no error, holds the fleet's one read, and is read once it answers",
+         %{hub: hub, errors: errors} do
+      count!(@fleet, this_month())
+      started = lately()
+      listed(hub, :down)
+      Oban.insert!(ReadHub.new(%{fleet_id: @fleet}))
+
+      assert %{snoozed: 1, failure: 0, discard: 0} = Oban.drain_queue(queue: :notebook_hubs)
+      assert saved_errors() == errors
+      assert Usage.this_month(@fleet).notebook_seconds == nil
+
+      # The next hour's read is not queued beside the one waiting.
+      assert %Oban.Job{conflict?: true} = Oban.insert!(ReadHub.new(%{fleet_id: @fleet}))
+      assert [%Oban.Job{state: "scheduled"}] = all_enqueued(worker: ReadHub)
+
+      listed(hub, [listing("sess-back", "session", started, DateTime.add(started, 60))])
+
+      assert %{success: 1, snoozed: 0} =
+               Oban.drain_queue(queue: :notebook_hubs, with_scheduled: true)
+
+      assert Usage.this_month(@fleet).notebook_seconds == 60
+      assert saved_errors() == errors
+    end
+
+    test "a hub that gives no answer at all waits the same way", %{errors: errors} do
+      notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+
+      Application.put_env(
+        :keyfleet,
+        :notebooks,
+        Keyword.put(notebooks, :fleets, %{@fleet => "http://127.0.0.1:1"})
+      )
+
+      assert {:snooze, _seconds} = perform_job(ReadHub, %{fleet_id: @fleet})
+      assert saved_errors() == errors
+    end
+
+    test "a hub still away after its waits saves one error and leaves the figures as they were",
+         %{hub: hub, errors: errors} do
       count!(@fleet, this_month())
       listed(hub, :down)
+      Oban.insert!(ReadHub.new(%{fleet_id: @fleet}))
 
-      assert {:error, {:hub, _address, {:status, 503}}} =
-               perform_job(ReadHub, %{fleet_id: @fleet})
+      assert %{snoozed: 6, discard: 1, success: 0} =
+               Oban.drain_queue(queue: :notebook_hubs, with_scheduled: true, with_recursion: true)
 
+      assert saved_errors() == errors + 1
       assert Usage.this_month(@fleet).notebook_seconds == nil
       assert machines(@fleet) == []
+    end
+
+    test "a hub that refuses the read ends it at once with one error", %{hub: hub, errors: errors} do
+      listed(hub, {:refuses, 404})
+      Oban.insert!(ReadHub.new(%{fleet_id: @fleet}))
+
+      assert %{discard: 1, snoozed: 0} =
+               Oban.drain_queue(queue: :notebook_hubs, with_scheduled: true, with_recursion: true)
+
+      assert saved_errors() == errors + 1
     end
   end
 
@@ -342,8 +393,12 @@ defmodule Keyfleet.UsageTest do
   defp ran(started_at, until),
     do: round(DateTime.diff(until, started_at, :microsecond) / 1_000_000)
 
+  # The failed attempts saved with the site's errors.
+  defp saved_errors, do: Repo.aggregate(ErrorTracker.Occurrence, :count)
+
   # A fleet's hub answering its machine list with what `listed/2` last put
-  # there, or refusing it while `:down`.
+  # there: away (Fly's proxy answering 503 for it) while `:down`, and
+  # answering `status` while `{:refuses, status}`.
   defp hub!(fleet_id) do
     {:ok, hub} = Agent.start_link(fn -> [] end)
 
@@ -353,6 +408,9 @@ defmodule Keyfleet.UsageTest do
           case Agent.get(hub, & &1) do
             :down ->
               Plug.Conn.send_resp(conn, 503, "")
+
+            {:refuses, status} ->
+              Plug.Conn.send_resp(conn, status, "")
 
             items ->
               conn

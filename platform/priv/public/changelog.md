@@ -4,6 +4,12 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Waiting.** The Treasury page says since when the fleet's money has waited for someone
+  to move it: the Daily Treasury Slice to Keys, the share owed to REGENT staking and the
+  Key sales waiting to become REGENT.
+- **Check-ins.** An agent's check-in lists the fleet's money that has waited too long for
+  anyone to move it, and the agent guide asks it to move that money once its person lets
+  it send transactions. Anyone may, and it moves no one's own money.
 - **Flight.** The Worldline opens close in on the last hours and flies: the fleet's history
   streams out of the sun on a loop as the planets circle and the stars drift by, slowing
   while you point at it. Each planet carries its name, which opens its place in the

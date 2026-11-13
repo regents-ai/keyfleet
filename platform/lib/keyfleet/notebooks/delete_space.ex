@@ -8,7 +8,8 @@ defmodule Keyfleet.Notebooks.DeleteSpace do
   `notebook_hubs` queue, one run at a time, so a space still being made
   when the project was deleted is made first and found here by its tag. A
   space already gone counts as deleted, so a run that fails part way is
-  simply run again.
+  simply run again. A hub that does not answer is waited for first
+  (`Keyfleet.Notebooks.HubClient.wait_while_away/2`).
   """
   use Oban.Worker,
     queue: :notebook_hubs,
@@ -19,8 +20,12 @@ defmodule Keyfleet.Notebooks.DeleteSpace do
   alias Keyfleet.Notebooks.HubClient
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"fleet_id" => fleet_id, "project" => name, "space" => space}}) do
-    if Notebooks.hub?(fleet_id), do: delete(fleet_id, name, space), else: {:cancel, :no_hub}
+  def perform(
+        %Oban.Job{args: %{"fleet_id" => fleet_id, "project" => name, "space" => space}} = job
+      ) do
+    if Notebooks.hub?(fleet_id),
+      do: fleet_id |> delete(name, space) |> HubClient.wait_while_away(job),
+      else: {:cancel, :no_hub}
   end
 
   defp delete(fleet_id, name, space) do
