@@ -9,11 +9,14 @@
 }
 
 .worldline-panel {
-  /* The picture's colours, as its shader and the legend take them. */
+  /* The picture's colours, as its shader and the legend take them. The three
+     large trails are blues around the gold line, each its own depth of the
+     palette's one blue: Powder Blue by night, deep teal by day, and Powder
+     Blue folded into Charcoal at two strengths. */
   --worldline-line: var(--color-warning);
-  --worldline-workspace: var(--color-fg);
-  --worldline-code: var(--color-success);
-  --worldline-notebooks: var(--color-fg-muted);
+  --worldline-workspace: var(--color-info);
+  --worldline-code: color-mix(in oklab, var(--palette-powder-blue) 55%, var(--palette-charcoal));
+  --worldline-notebooks: color-mix(in oklab, var(--palette-powder-blue) 78%, var(--palette-charcoal));
   --worldline-chat: var(--color-info);
   --worldline-opened: var(--ash-accent-warm);
   --worldline-closed: var(--color-fg);
