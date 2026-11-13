@@ -531,11 +531,11 @@
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(
-    to bottom,
-    transparent 0 calc(0.643rem - 1px),
+    to bottom in oklch,
+    oklch(from var(--color-border) l c h / 0) 0 calc(0.643rem - 1px),
     var(--color-border) calc(0.643rem - 1px) 0.643rem
   );
-  mask-image: radial-gradient(ellipse 24% 120% at var(--still-at) 100%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 24% 120% at var(--still-at) 100% in oklch, #000 30%, #00000000 100%);
 }
 
 .workspace-places-chart canvas {

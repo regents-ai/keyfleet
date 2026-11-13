@@ -8579,3 +8579,45 @@ Check: format, compile with warnings as errors, credo strict, xref (131 of
 131), codegen and route handoff pass; full suite 1,383 (18 properties, 1,365
 tests, 19 excluded); typecheck, 425 unit tests and 3 budgets pass; browser
 suite 125, devices 70, chain suite in Chromium 113.
+
+## 2026-11-13 — Design system 929cb9a3: main buttons as plates, gradients in oklch
+
+The design system moves from `dfd18f87` to `929cb9a3` (`@design_system_ref` in
+`platform/mix.exs`, the `regent_ui` line in `platform/mix.lock`), with the
+rollouts that come with it.
+
+- Main buttons take the shared plate: Charcoal (#161616) with Platinum words
+  in light, Platinum (#E5E3D2) with Charcoal words and Tangerine marks on hover
+  and focus in dark. Keyfleet's own Tangerine fill
+  (`assets/css/components/buttons.css`) is gone: Tangerine stands about 2.4:1
+  on the light page, under the 3:1 every main button now needs. Measured in
+  Chromium at 390 and 1280: words on plate 14:1 in both themes, plate on page
+  16.4–18.1:1 light and 14.3–15.2:1 dark; inside windows 11.0–11.5:1 words and
+  11.7–14.3:1 plate. The home Buy button's own disabled colours are gone too;
+  it takes the shared disabled look.
+- Kept: Sean's 19 Oct ask for clear, primary-colour main buttons that still
+  move (the shared plate's edge marks grow on hover and focus), and the site
+  staying in the light theme until a visitor picks another. The token menu's
+  Buy on Uniswap and View Chart links keep their Tangerine words on the
+  panel.
+- Keyfleet's 20 gradients outside the Worldline (home 1, key card 4, tree
+  canvas 1, fleet 3, workspace graph 8, proposals 1, workspace 2) blend in
+  oklch; each clear stop is its neighbour colour at zero opacity (`#00000000`
+  beside `#000`, `oklch(from … l c h / 0)` beside a token). Old and new drawn
+  side by side differ by at most 1/255. No Keyfleet gradient runs between
+  far-apart hues, so none takes a neutral stop. The six in `worldline.css`
+  stay with the Worldline rebuild.
+- Not taken: the Cornflower token, the Cells meter and the particle switch.
+- The shared style check (`bash assets/vendor/regent_ui/style-check.sh` from
+  `platform/`) reports 65 breaks: 51 older ones left for the page-by-page
+  audit and 14 in `worldline.css`. The pin adds none outside the Worldline.
+  Keyfleet's `Makefile` has no `check-style` target yet.
+- `test/browser/fleet_layout.spec.ts` checks the fleet's Buy Key against the
+  plate in each theme.
+
+Check: format, compile with warnings as errors, credo strict, xref (131 of
+131), codegen, route handoff and usage rules pass; full suite 1,384 (18
+properties, 1,366 tests, 19 excluded); typecheck, 436 unit tests and 3
+budgets pass; browser suite 125, devices 70, chain suite in Chromium 117
+(three failed once together when the test server's held database was lost
+and passed when run again); required fixes pass.

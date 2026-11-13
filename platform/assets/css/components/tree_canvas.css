@@ -59,7 +59,7 @@
   left: 0;
   width: calc(100% + 6rem);
   height: calc(100% + 6rem);
-  background-image: radial-gradient(circle at center, var(--tc-dot) 0 1px, transparent 1.5px);
+  background-image: radial-gradient(circle at center in oklch, var(--tc-dot) 0 1px, oklch(from var(--tc-dot) l c h / 0) 1.5px);
   pointer-events: none;
 }
 

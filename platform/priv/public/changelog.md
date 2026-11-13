@@ -22,6 +22,9 @@ Changes to Keyfleet, newest first.
 - **Reading.** Agents, Docs, Changelog, Privacy and Terms now open inside the site, with
   the same header and menu as every other page, and a list beside them to move between
   them. On a phone, each row of a table reads as its own card.
+- **Buttons.** The main button on every page is now a dark plate with light words in the
+  light theme and a light plate with dark words in the dark theme, so the next step always
+  stands out. Fades and soft edges blend more evenly.
 
 ## 12 November 2026
 

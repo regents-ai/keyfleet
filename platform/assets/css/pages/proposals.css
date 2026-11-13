@@ -336,7 +336,7 @@
   grid-column: 1 / -1;
   height: 0.375rem;
   background: linear-gradient(
-    to right,
+    to right in oklch,
     var(--color-success) 0 var(--yes),
     var(--ash-accent-warm) var(--yes) calc(var(--yes) + var(--no)),
     var(--color-border) calc(var(--yes) + var(--no))

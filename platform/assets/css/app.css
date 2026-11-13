@@ -6,7 +6,6 @@
 @import "./tokens/root.css";
 @import "./components/shell.css";
 @import "./components/theme_switch.css";
-@import "./components/buttons.css";
 @import "./components/sticky_actions.css";
 @import "./components/key_map.css";
 @import "./components/tree_canvas.css";
