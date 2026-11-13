@@ -1,0 +1,129 @@
+diff --git a/packages/core/src/services/runtime/SandboxProvisioner.ts b/packages/core/src/services/runtime/SandboxProvisioner.ts
+index bc4e35c1..22b13c26 100644
+--- a/packages/core/src/services/runtime/SandboxProvisioner.ts
++++ b/packages/core/src/services/runtime/SandboxProvisioner.ts
+@@ -159,6 +159,9 @@ function logSlowSetup(
+ 	);
+ }
+ 
++const PYTHON_VERSION_MISMATCH =
++	/^pyproject\.toml asks for Python ([0-9.,<>=!~* ]{1,64}); notebooks here run (\d{1,2}\.\d{1,3})$/m;
++
+ function pythonEnvironmentSetupFailure(
+ 	result: ExecResult,
+ 	failedStep?: string,
+@@ -170,8 +173,11 @@ function pythonEnvironmentSetupFailure(
+ 		);
+ 	}
+ 	const output = `${result.stdout}\n${result.stderr}`;
++	const mismatch = PYTHON_VERSION_MISMATCH.exec(output);
+ 	let reason = 'uv exited unsuccessfully';
+-	if (/permission denied/i.test(output)) {
++	if (mismatch) {
++		reason = `pyproject.toml asks for Python ${mismatch[1]}; notebooks here run ${mismatch[2]}`;
++	} else if (/permission denied/i.test(output)) {
+ 		reason = 'the sandbox image does not allow replacing its Python environment';
+ 	} else if (/TOMLDecodeError/i.test(output)) {
+ 		reason = 'pyproject.toml could not be parsed';
+diff --git a/packages/core/src/services/runtime/marimoLaunch.test.ts b/packages/core/src/services/runtime/marimoLaunch.test.ts
+index f7ee4107..f66716a1 100644
+--- a/packages/core/src/services/runtime/marimoLaunch.test.ts
++++ b/packages/core/src/services/runtime/marimoLaunch.test.ts
+@@ -1,3 +1,7 @@
++import { spawnSync } from 'node:child_process';
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
+ import { describe, expect, it } from 'vitest';
+ import { buildMarimoLaunch, MARIMO_LAUNCH_STRATEGIES } from './marimoLaunch';
+ import type { MarimoLaunchParams } from './marimoLaunch';
+@@ -177,9 +181,71 @@ describe('buildMarimoLaunch', () => {
+ 		}
+ 	});
+ 
++	// Runs the real layer with this machine's python3 (needs tomllib and
++	// packaging, as the sandbox image's Python has) and a uv that only records.
++	describe('the pyproject layer keeps the image Python', () => {
++		const [{ command }] = buildMarimoLaunch(BASE).setup;
++
++		function runLayer(requiresPython: string | undefined, dependencies: string[]) {
++			const dir = mkdtempSync(join(tmpdir(), 'pyproject-layer-'));
++			try {
++				mkdirSync(join(dir, 'bin'));
++				writeFileSync(
++					join(dir, 'bin', 'uv'),
++					`#!/bin/sh\necho "$@" >> '${join(dir, 'uv.calls')}'\n`,
++					{
++						mode: 0o755,
++					},
++				);
++				writeFileSync(
++					join(dir, 'pyproject.toml'),
++					[
++						'[project]',
++						'name = "notebook"',
++						'version = "0.1.0"',
++						...(requiresPython ? [`requires-python = "${requiresPython}"`] : []),
++						`dependencies = ${JSON.stringify(dependencies)}`,
++					].join('\n'),
++				);
++				const result = spawnSync('sh', ['-c', command], {
++					cwd: dir,
++					env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
++				});
++				const calls = existsSync(join(dir, 'uv.calls'))
++					? readFileSync(join(dir, 'uv.calls'), 'utf8').trim().split('\n')
++					: [];
++				return { status: result.status, uv: calls };
++			} finally {
++				rmSync(dir, { recursive: true, force: true });
++			}
++		}
++
++		it('stops before uv when requires-python excludes the running Python', () => {
++			expect(runLayer('<3', ['humanize'])).toEqual({ status: 3, uv: [] });
++		});
++
++		it('syncs pinned to the running Python when requires-python allows it or is absent', () => {
++			const sync = [
++				'sync --inexact --no-install-package marimo --no-compile-bytecode --python python3',
++			];
++			expect(runLayer('>=3', ['humanize'])).toEqual({ status: 0, uv: sync });
++			expect(runLayer(undefined, ['humanize'])).toEqual({ status: 0, uv: sync });
++		});
++
++		it('leaves a project without dependencies on the image environment', () => {
++			expect(runLayer('<3', [])).toEqual({ status: 0, uv: [] });
++		});
++
++		it('stops on a requires-python it cannot read', () => {
++			const { status, uv } = runLayer('not a version', ['humanize']);
++			expect(status).not.toBe(0);
++			expect(uv).toEqual([]);
++		});
++	});
++
+ 	it('reserves exit code 2 for no dependencies and propagates TOML parse failures', () => {
+ 		const [{ command: pyproject }] = buildMarimoLaunch(BASE).setup;
+-		expect(pyproject).toContain('import pathlib,sys,tomllib');
++		expect(pyproject).toContain('import pathlib,platform,sys,tomllib');
+ 		expect(pyproject).not.toContain("find_spec('tomllib')");
+ 		expect(pyproject).toContain('else 2');
+ 		expect(pyproject).toContain('elif [ "$status" -eq 2 ]');
+diff --git a/packages/core/src/services/runtime/marimoLaunch.ts b/packages/core/src/services/runtime/marimoLaunch.ts
+index 7553284a..1905bed0 100644
+--- a/packages/core/src/services/runtime/marimoLaunch.ts
++++ b/packages/core/src/services/runtime/marimoLaunch.ts
+@@ -131,7 +131,11 @@ function launchCommand(p: MarimoLaunchParams, sandbox = false): string {
+ // The image must NOT set UV_COMPILE_BYTECODE (it would
+ // conflict with --no-compile-bytecode). A failure is fatal: the provisioner
+ // reports it as PYTHON_ENV_SETUP_FAILED before starting the kernel.
+-const PYPROJECT_LAYER_SETUP = `{ status=0; python3 -c "import pathlib,sys,tomllib;path=pathlib.Path('pyproject.toml');data=tomllib.loads(path.read_text()) if path.exists() else {};sys.exit(0 if data.get('project',{}).get('dependencies') else 2)" || status=$?; if [ "$status" -eq 0 ]; then uv sync --inexact --no-install-package marimo --no-compile-bytecode; elif [ "$status" -eq 2 ]; then if ! grep -q '^\\[project\\]' pyproject.toml 2>/dev/null; then rm -f pyproject.toml && uv init --bare --no-package --vcs none --name notebook --description "Built in marimohub"; fi; else exit "$status"; fi; }`;
++// The sync keeps the image's Python: a requires-python that excludes it stops
++// setup with exit 3 and one stderr line naming both, and `--python python3`
++// stops a `.python-version` file from swapping the interpreter. Either would
++// otherwise make uv replace the image environment and drop marimo.
++const PYPROJECT_LAYER_SETUP = `{ status=0; python3 -c "import pathlib,platform,sys,tomllib;path=pathlib.Path('pyproject.toml');project=tomllib.loads(path.read_text()).get('project',{}) if path.exists() else {};wanted=project.get('requires-python') if project.get('dependencies') else None;fits=wanted is None or __import__('packaging.specifiers',fromlist=['SpecifierSet']).SpecifierSet(wanted).contains(platform.python_version());fits or print(f'pyproject.toml asks for Python {wanted.strip()}; notebooks here run {sys.version_info.major}.{sys.version_info.minor}',file=sys.stderr);sys.exit(3 if not fits else 0 if project.get('dependencies') else 2)" || status=$?; if [ "$status" -eq 0 ]; then uv sync --inexact --no-install-package marimo --no-compile-bytecode --python python3; elif [ "$status" -eq 2 ]; then if ! grep -q '^\\[project\\]' pyproject.toml 2>/dev/null; then rm -f pyproject.toml && uv init --bare --no-package --vcs none --name notebook --description "Built in marimohub"; fi; else exit "$status"; fi; }`;
+ 
+ // The env the kernel's `uv run --no-sync` will use — uv resolves the project
+ // env as UV_PROJECT_ENVIRONMENT, else `.venv` in the project dir. Deliberately

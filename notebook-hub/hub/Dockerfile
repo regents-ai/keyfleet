@@ -6,7 +6,8 @@
 # --- build stage: marimohub at the pin, plus compute-fly as a workspace package ---
 FROM node:24.22.1-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 ENV CI=true
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+# python3 with packaging runs the pyproject check in python-check.patch's tests.
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates python3 python3-packaging \
  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 # Both come from marimohub/pin.env (scripts/build-images.sh passes them).
@@ -61,6 +62,20 @@ RUN git apply /tmp/notebook-prune-hourly.patch
 # count each fleet's notebook hours.
 COPY marimohub/notebook-machines.patch /tmp/notebook-machines.patch
 RUN git apply /tmp/notebook-machines.patch
+# A pyproject.toml whose requires-python leaves out the image's Python stops setup
+# with a reason naming both, and uv sync stays on the image's Python, so neither it
+# nor a .python-version file can replace the environment that holds marimo.
+COPY marimohub/python-check.patch /tmp/python-check.patch
+RUN git apply /tmp/python-check.patch
+# A failed or timed-out run records where it stopped: the stage, the exit status and
+# the error sentence for anyone who reads the run, and the last lines of that stage's
+# output, with secrets removed, only for those who may edit the notebook.
+COPY marimohub/run-failure.patch /tmp/run-failure.patch
+RUN git apply /tmp/run-failure.patch
+# A run's page and logs name how the run ended, so Keyfleet's copy of the page
+# records whether it came from a run that succeeded.
+COPY marimohub/run-page-status.patch /tmp/run-page-status.patch
+RUN git apply /tmp/run-page-status.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
@@ -79,6 +94,12 @@ RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
 # The app pool tests, with the app-pool-sweep.patch add, and the notebook-machines.patch
 # route tests with the API description it adds the route to.
 RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts src/routes/admin.machines.test.ts src/openapi.spec.test.ts
+# The python-check.patch pyproject tests, the run-failure.patch redaction, run
+# record, access and generated-description tests, and the run-page-status.patch
+# route test.
+RUN cd packages/core && pnpm exec vp test run src/services/runtime/marimoLaunch.test.ts src/services/jobs/ src/schema.test.ts src/specs/internal-schemas.spec.test.ts
+RUN cd packages/api && pnpm exec vp test run src/routes/jobs.test.ts src/mcp/jobs.test.ts
+RUN cd packages/client && pnpm exec vp test run src/schema.drift.test.ts
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---

@@ -1,0 +1,1068 @@
+diff --git a/internal/schemas/bucket.yml b/internal/schemas/bucket.yml
+index a0887864..17b5aa4d 100644
+--- a/internal/schemas/bucket.yml
++++ b/internal/schemas/bucket.yml
+@@ -4382,6 +4382,29 @@ components:
+             - code
+             - message
+           additionalProperties: {}
++        failure:
++          type: object
++          properties:
++            stage:
++              type: string
++              enum:
++                - start
++                - dependencies
++                - export
++                - save
++                - timeout
++            exit_status:
++              type: integer
++              minimum: -9007199254740991
++              maximum: 9007199254740991
++            message:
++              type: string
++            excerpt:
++              type: string
++          required:
++            - stage
++            - message
++          additionalProperties: {}
+         output:
+           type: object
+           properties:
+diff --git a/packages/api/openapi.yaml b/packages/api/openapi.yaml
+index 00ba8fbf..5f328e5a 100644
+--- a/packages/api/openapi.yaml
++++ b/packages/api/openapi.yaml
+@@ -4078,6 +4078,34 @@ components:
+             - message
+           description: Sanitized failure detail, present on failed, timed-out, or skipped
+             runs.
++        failure:
++          type: object
++          properties:
++            stage:
++              type: string
++              enum:
++                - start
++                - dependencies
++                - export
++                - save
++                - timeout
++                - unknown
++              description: 'Known values: start, dependencies, export, save, timeout.
++                Unrecognized values normalize to unknown.'
++              example: export
++            exit_status:
++              type: integer
++            message:
++              type: string
++            excerpt:
++              type: string
++              description: The last lines of the stage's output, with secrets removed. Present
++                only for callers who may edit the notebook.
++          required:
++            - stage
++            - message
++          description: 'Where a failed or timed-out run stopped: the stage, the exit
++            status when there is one, and the error sentence.'
+         output:
+           type: object
+           properties:
+diff --git a/packages/api/src/jobs/operations.ts b/packages/api/src/jobs/operations.ts
+index 5e2f5869..6e3bcc07 100644
+--- a/packages/api/src/jobs/operations.ts
++++ b/packages/api/src/jobs/operations.ts
+@@ -21,7 +21,12 @@ import type { ApiDeps, JobsConfig } from '../context';
+ import { idempotentOperation } from '../idempotency';
+ import { appendAudit } from '../log';
+ import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor, MAX_PAGE_SIZE } from '../pagination';
+-import { assertProjectRole, loadAuthorizedNotebook, loadVisibleProject } from '../shared';
++import {
++	assertProjectRole,
++	authorizationService,
++	loadAuthorizedNotebook,
++	loadVisibleProject,
++} from '../shared';
+ import type { CreateJobBody, TriggerRunBody, UpdateJobBody } from './schemas';
+ 
+ export function requireJobs(deps: ApiDeps): JobsConfig {
+@@ -55,6 +60,19 @@ export async function authorizeJobNotebook(
+ 
+ export type AuthorizedNotebook = Awaited<ReturnType<typeof authorizeJobNotebook>>;
+ 
++/** Whether the caller may write the notebook: the right that reads a run's logs and failure excerpt. */
++export async function canEditJobNotebook(
++	deps: ApiDeps,
++	target: AuthorizedNotebook,
++): Promise<boolean> {
++	const decision = await authorizationService(deps).authorize(target.user, 'notebook.write', {
++		kind: 'project',
++		project: target.project,
++		notebookLabels: target.notebook.meta.security_labels ?? null,
++	});
++	return decision.allowed;
++}
++
+ export async function listNotebookJobs(
+ 	deps: ApiDeps,
+ 	pid: ProjectId,
+diff --git a/packages/api/src/jobs/schemas.ts b/packages/api/src/jobs/schemas.ts
+index 950ee15e..fed24026 100644
+--- a/packages/api/src/jobs/schemas.ts
++++ b/packages/api/src/jobs/schemas.ts
+@@ -12,6 +12,7 @@ import {
+ 	MAX_JOB_RETRIES,
+ 	MAX_JOB_RETRY_BACKOFF_SECONDS,
+ 	MIN_JOB_TIMEOUT_SECONDS,
++	RUN_FAILURE_STAGES,
+ 	RUN_STATUSES,
+ 	RUN_TRIGGERS,
+ 	RunId,
+@@ -171,6 +172,21 @@ export const JobRunResponseSchema = z
+ 		error: RunErrorSchema.optional().openapi({
+ 			description: 'Sanitized failure detail, present on failed, timed-out, or skipped runs.',
+ 		}),
++		failure: z
++			.object({
++				stage: extensibleResponseEnum(RUN_FAILURE_STAGES, 'export'),
++				exit_status: z.number().int().optional(),
++				message: z.string(),
++				excerpt: z.string().optional().openapi({
++					description:
++						"The last lines of the stage's output, with secrets removed. Present only for callers who may edit the notebook.",
++				}),
++			})
++			.optional()
++			.openapi({
++				description:
++					'Where a failed or timed-out run stopped: the stage, the exit status when there is one, and the error sentence.',
++			}),
+ 		output: z
+ 			.object({
+ 				html_bytes: z.number().int().nonnegative(),
+diff --git a/packages/api/src/mcp/jobRuns.ts b/packages/api/src/mcp/jobRuns.ts
+index 669cab59..98690721 100644
+--- a/packages/api/src/mcp/jobRuns.ts
++++ b/packages/api/src/mcp/jobRuns.ts
+@@ -5,9 +5,8 @@ import { toPublicJobRun, withAbortSignal, withDeadline } from '@marimo-hub/core'
+ import type { JobDefinition, JobRun, RunId } from '@marimo-hub/core';
+ import { isTerminalRunStatus } from '@marimo-hub/core/jobs';
+ import type { ApiDeps } from '../context';
+-import { authorizeJobNotebook, loadJobRun } from '../jobs/operations';
++import { authorizeJobNotebook, canEditJobNotebook, loadJobRun } from '../jobs/operations';
+ import type { AuthorizedNotebook } from '../jobs/operations';
+-import { authorizationService } from '../shared';
+ import type { StartRequestContext } from './server';
+ 
+ export type JobToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+@@ -99,6 +98,7 @@ function runResult(
+ 	run: JobRun,
+ 	waitExpired: boolean,
+ 	appBaseUrl: string,
++	editor: boolean,
+ 	artifacts: { html: boolean; logs: boolean },
+ ) {
+ 	const completed = isTerminalRunStatus(run.status);
+@@ -106,7 +106,7 @@ function runResult(
+ 	const notebookPath = `/projects/${run.project_id}/notebooks/${run.notebook_id}`;
+ 	const statusUrl = `${base}/api/v1${notebookPath}/jobs/${run.job_id}/runs/${run.run_id}`;
+ 	return {
+-		run: toPublicJobRun(run),
++		run: toPublicJobRun(run, { editor }),
+ 		completed,
+ 		wait_expired: waitExpired && !completed,
+ 		links: {
+@@ -189,22 +189,12 @@ export async function observeJobRun({
+ 			signal,
+ 		});
+ 	}
+-	const logs =
+-		run.output?.logs_bytes !== undefined &&
+-		(
+-			await withAbortSignal(
+-				authorizationService(deps).authorize(authorized.user, 'notebook.write', {
+-					kind: 'project',
+-					project: authorized.project,
+-					notebookLabels: authorized.notebook.meta.security_labels ?? null,
+-				}),
+-				signal,
+-			)
+-		).allowed;
++	const editor = await withAbortSignal(canEditJobNotebook(deps, authorized), signal);
++	const logs = run.output?.logs_bytes !== undefined && editor;
+ 	// Zero bytes can mean either an empty HTML file or a run that only captured logs.
+ 	const html =
+ 		run.output !== undefined &&
+ 		(run.output.html_bytes > 0 ||
+ 			(await withAbortSignal(deps.services.jobRuns.readHtml(run), signal)) !== null);
+-	return runResult(run, waitExpired, request.appBaseUrl, { html, logs });
++	return runResult(run, waitExpired, request.appBaseUrl, editor, { html, logs });
+ }
+diff --git a/packages/api/src/mcp/jobs.test.ts b/packages/api/src/mcp/jobs.test.ts
+index a659c04d..020bac4c 100644
+--- a/packages/api/src/mcp/jobs.test.ts
++++ b/packages/api/src/mcp/jobs.test.ts
+@@ -458,6 +458,24 @@ describe('MCP run execution and authorization', () => {
+ 		}
+ 	});
+ 
++	it('gives a failed run’s excerpt to editors and its summary alone to viewers', async () => {
++		const queued = await enqueue();
++		const error = { code: 'NOTEBOOK_FAILED', message: 'cells failed' };
++		await deps.services.jobRuns.transition(queued, 'fail', () => ({
++			error,
++			failure: { stage: 'export', exit_status: 1, message: error.message, excerpt: 'tail' },
++		}));
++		const summary = { stage: 'export', exit_status: 1, message: error.message };
++		const ownerRead = await call('get_job_run', { run_id: queued.run_id });
++		expect(ownerRead.structuredContent?.run).toMatchObject({
++			failure: { ...summary, excerpt: 'tail' },
++		});
++		client = await connectMcpClient(deps, VIEWER, requestContext);
++		const viewerRead = await call('get_job_run', { run_id: queued.run_id });
++		expect(viewerRead.structuredContent?.run).toMatchObject({ failure: summary });
++		expect(viewerRead.structuredContent?.run).not.toHaveProperty('failure.excerpt');
++	});
++
+ 	it('enforces token grants and hides inaccessible projects', async () => {
+ 		const restricted: AuthenticatedPrincipal = {
+ 			...USER,
+diff --git a/packages/api/src/routes/jobs.test.ts b/packages/api/src/routes/jobs.test.ts
+index 4d83d5b2..a18d8c7c 100644
+--- a/packages/api/src/routes/jobs.test.ts
++++ b/packages/api/src/routes/jobs.test.ts
+@@ -408,6 +408,33 @@ describe('Job routes', () => {
+ 		expect(await logs.text()).toBe('line 1');
+ 	});
+ 
++	it('shows a failed run’s excerpt only to callers who may edit the notebook', async () => {
++		const job = await createJob();
++		const queued = await expectOk<any>(await request('POST', `${base()}/${job.id}/runs`), 201);
++		const run = await services.jobRuns.getRun(pid, nid as never, job.id, queued.run_id);
++		const error = { code: 'NOTEBOOK_FAILED', message: 'cells failed' };
++		await services.jobRuns.transition(run, 'fail', () => ({
++			error,
++			failure: { stage: 'export', exit_status: 1, message: error.message, excerpt: 'tail' },
++		}));
++		const runPath = `${base()}/${job.id}/runs/${queued.run_id}`;
++		const summary = { stage: 'export', exit_status: 1, message: error.message };
++
++		for (const who of [request, as(EDITOR)]) {
++			expect((await expectOk<any>(await who('GET', runPath))).failure).toEqual({
++				...summary,
++				excerpt: 'tail',
++			});
++			const [listed] = await expectPage<any>(await who('GET', `${base()}/${job.id}/runs`));
++			expect(listed.failure).toEqual({ ...summary, excerpt: 'tail' });
++		}
++
++		const viewer = as(VIEWER);
++		expect((await expectOk<any>(await viewer('GET', runPath))).failure).toEqual(summary);
++		const [listed] = await expectPage<any>(await viewer('GET', `${base()}/${job.id}/runs`));
++		expect(listed.failure).toEqual(summary);
++	});
++
+ 	it('404s a run under a different job', async () => {
+ 		const a = await createJob({ name: 'a' });
+ 		const b = await createJob({ name: 'b' });
+diff --git a/packages/api/src/routes/jobs.ts b/packages/api/src/routes/jobs.ts
+index 660417bf..d79b8cf1 100644
+--- a/packages/api/src/routes/jobs.ts
++++ b/packages/api/src/routes/jobs.ts
+@@ -21,6 +21,7 @@ import {
+ import {
+ 	requireJobs,
+ 	authorizeJobNotebook,
++	canEditJobNotebook,
+ 	listNotebookJobs,
+ 	loadJobRun,
+ 	createNotebookJob,
+@@ -429,6 +430,7 @@ app.openapi(triggerRun, async (c) => {
+ 					method: c.req.method,
+ 					path: c.req.path,
+ 				}),
++				{ editor: true },
+ 			),
+ 	);
+ 	return c.json({ success: true, data }, 201);
+@@ -437,7 +439,8 @@ app.openapi(triggerRun, async (c) => {
+ app.openapi(listRuns, async (c) => {
+ 	const deps = c.get('deps');
+ 	const { pid, nid, jid } = c.req.valid('param');
+-	const { job } = await loadAuthorizedJob(c, pid, nid, jid);
++	const { job, ...target } = await loadAuthorizedJob(c, pid, nid, jid);
++	const viewer = { editor: await canEditJobNotebook(deps, target) };
+ 	const query = c.req.valid('query');
+ 	const cursor = decodeCursor(query.cursor);
+ 	let afterRunId: RunId | undefined;
+@@ -451,7 +454,7 @@ app.openapi(listRuns, async (c) => {
+ 		{
+ 			success: true,
+ 			data: {
+-				items: page.items.map(toPublicJobRun),
++				items: page.items.map((run) => toPublicJobRun(run, viewer)),
+ 				next_cursor: page.nextRunId ? encodeCursor(page.nextRunId, page.nextRunId) : null,
+ 			},
+ 		},
+@@ -462,9 +465,10 @@ app.openapi(listRuns, async (c) => {
+ app.openapi(getRun, async (c) => {
+ 	const deps = c.get('deps');
+ 	const { pid, nid, jid, rid } = c.req.valid('param');
+-	const { job } = await loadAuthorizedJob(c, pid, nid, jid);
++	const { job, ...target } = await loadAuthorizedJob(c, pid, nid, jid);
+ 	const run = await loadJobRun(deps, job, rid);
+-	return c.json({ success: true, data: toPublicJobRun(run) }, 200);
++	const viewer = { editor: await canEditJobNotebook(deps, target) };
++	return c.json({ success: true, data: toPublicJobRun(run, viewer) }, 200);
+ });
+ 
+ app.openapi(cancelRun, async (c) => {
+@@ -502,7 +506,7 @@ app.openapi(cancelRun, async (c) => {
+ 			() => appendJobRunFinishEvent(deps.services.events, run),
+ 		);
+ 	}
+-	return c.json({ success: true, data: toPublicJobRun(run) }, 200);
++	return c.json({ success: true, data: toPublicJobRun(run, { editor: true }) }, 200);
+ });
+ 
+ app.openapi(getRunHtml, async (c) => {
+diff --git a/packages/client/src/schema.ts b/packages/client/src/schema.ts
+index 5b46d99f..874ee375 100644
+--- a/packages/client/src/schema.ts
++++ b/packages/client/src/schema.ts
+@@ -4159,6 +4159,19 @@ export interface components {
+ 				code: string;
+ 				message: string;
+ 			};
++			/** @description Where a failed or timed-out run stopped: the stage, the exit status when there is one, and the error sentence. */
++			failure?: {
++				/**
++				 * @description Known values: start, dependencies, export, save, timeout. Unrecognized values normalize to unknown.
++				 * @example export
++				 * @enum {string}
++				 */
++				stage: 'start' | 'dependencies' | 'export' | 'save' | 'timeout' | 'unknown';
++				exit_status?: number;
++				message: string;
++				/** @description The last lines of the stage's output, with secrets removed. Present only for callers who may edit the notebook. */
++				excerpt?: string;
++			};
+ 			/** @description Captured write-once artifacts, present after execution. */
+ 			output?: {
+ 				html_bytes: number;
+diff --git a/packages/core/src/errors.ts b/packages/core/src/errors.ts
+index a549da6d..965d764f 100644
+--- a/packages/core/src/errors.ts
++++ b/packages/core/src/errors.ts
+@@ -194,9 +194,15 @@ export class UnavailableError extends DomainError {
+ export class PythonEnvironmentSetupError extends DomainError {
+ 	readonly code = 'PYTHON_ENV_SETUP_FAILED';
+ 	readonly status = 503;
+-	constructor(message = 'Failed to prepare the notebook Python environment') {
++	/**
++	 * The setup step's raw output. Unredacted: only a job run's failure summary
++	 * reads it, and redacts it before storing. Never logged or returned.
++	 */
++	readonly output?: string;
++	constructor(message = 'Failed to prepare the notebook Python environment', output?: string) {
+ 		super(message);
+ 		this.name = 'PythonEnvironmentSetupError';
++		this.output = output;
+ 	}
+ }
+ 
+diff --git a/packages/core/src/schema.test.ts b/packages/core/src/schema.test.ts
+index 5ef68c9e..23b642cf 100644
+--- a/packages/core/src/schema.test.ts
++++ b/packages/core/src/schema.test.ts
+@@ -372,9 +372,11 @@ describe('job schema evolution', () => {
+ 		expect(parsed.error).toMatchObject({ future_error: true });
+ 		expect(parsed.output).toMatchObject({ future_output: true });
+ 		expect(parsed.compute_resources).toMatchObject({ future_resource: true });
+-		expect(toPublicJobRun(parsed).error).not.toHaveProperty('future_error');
+-		expect(toPublicJobRun(parsed).output).not.toHaveProperty('future_output');
+-		expect(toPublicJobRun(parsed).compute_resources).not.toHaveProperty('future_resource');
++		expect(toPublicJobRun(parsed, { editor: true }).error).not.toHaveProperty('future_error');
++		expect(toPublicJobRun(parsed, { editor: true }).output).not.toHaveProperty('future_output');
++		expect(toPublicJobRun(parsed, { editor: true }).compute_resources).not.toHaveProperty(
++			'future_resource',
++		);
+ 	});
+ });
+ 
+diff --git a/packages/core/src/schema.ts b/packages/core/src/schema.ts
+index e486368f..ff80b295 100644
+--- a/packages/core/src/schema.ts
++++ b/packages/core/src/schema.ts
+@@ -1132,6 +1132,22 @@ export const RunErrorSchema = z.looseObject({ code: z.string(), message: z.strin
+ 
+ export type RunError = z.infer<typeof RunErrorSchema>;
+ 
++export const RUN_FAILURE_STAGES = ['start', 'dependencies', 'export', 'save', 'timeout'] as const;
++
++/**
++ * Where a failed or timed-out run stopped, written at the moment it failed.
++ * `message` is the run error's own sentence; `excerpt` is the tail of that
++ * stage's output, redacted before it is stored and shown to editors only.
++ */
++export const RunFailureSchema = z.looseObject({
++	stage: z.enum(RUN_FAILURE_STAGES),
++	exit_status: z.number().int().optional(),
++	message: z.string(),
++	excerpt: z.string().optional(),
++});
++
++export type RunFailure = z.infer<typeof RunFailureSchema>;
++
+ export const JobRunSchema = z.looseObject({
+ 	schema_version: z.literal(CURRENT_JOB_RUN_VERSION),
+ 	run_id: RunIdSchema,
+@@ -1167,6 +1183,7 @@ export const JobRunSchema = z.looseObject({
+ 	exit_code: z.number().int().optional(),
+ 	/** Sanitized like a session's `error`; never carries secret material. */
+ 	error: RunErrorSchema.optional(),
++	failure: RunFailureSchema.optional(),
+ 	output: z
+ 		.looseObject({
+ 			html_bytes: z.number().int().nonnegative(),
+@@ -1312,11 +1329,13 @@ export type PublicJobRun = Pick<
+ 	| 'deadline_at'
+ 	| 'exit_code'
+ 	| 'error'
++	| 'failure'
+ 	| 'output'
+ 	| 'cancelled_by'
+ >;
+ 
+-export function toPublicJobRun(run: JobRun): PublicJobRun {
++/** `editor`: the caller may write the notebook, the right that reads run logs and the failure excerpt. */
++export function toPublicJobRun(run: JobRun, viewer: { editor: boolean }): PublicJobRun {
+ 	return {
+ 		run_id: run.run_id,
+ 		job_id: run.job_id,
+@@ -1353,6 +1372,20 @@ export function toPublicJobRun(run: JobRun): PublicJobRun {
+ 		...(run.error !== undefined
+ 			? { error: { code: run.error.code, message: run.error.message } }
+ 			: {}),
++		...(run.failure !== undefined
++			? {
++					failure: {
++						stage: run.failure.stage,
++						...(run.failure.exit_status !== undefined
++							? { exit_status: run.failure.exit_status }
++							: {}),
++						message: run.failure.message,
++						...(viewer.editor && run.failure.excerpt !== undefined
++							? { excerpt: run.failure.excerpt }
++							: {}),
++					},
++				}
++			: {}),
+ 		...(run.output !== undefined
+ 			? {
+ 					output: {
+diff --git a/packages/core/src/services/jobs/JobRunner.test.ts b/packages/core/src/services/jobs/JobRunner.test.ts
+index 84e14cc3..ed468fad 100644
+--- a/packages/core/src/services/jobs/JobRunner.test.ts
++++ b/packages/core/src/services/jobs/JobRunner.test.ts
+@@ -320,6 +320,50 @@ describe('JobRunner', () => {
+ 		expect(sandbox.calls.destroy).toBe(1);
+ 	});
+ 
++	it('records where a failed export stopped, its exit status and a redacted excerpt', async () => {
++		const secret = 'planted-secret-0042';
++		const sandbox = makeJobSandbox({
++			exitCode: 1,
++			html: '<html>partial</html>',
++			stderr: `Traceback (most recent call last):\nValueError: ${secret}`,
++		});
++		const run = await runner(sandbox, {
++			resolveSessionEnv: async () => ({ vars: { API_TOKEN: secret } }),
++		}).execute(await enqueue());
++		expect(run.failure).toMatchObject({
++			stage: 'export',
++			exit_status: 1,
++			message: run.error!.message,
++		});
++		expect(run.failure!.excerpt).toContain('ValueError');
++		expect(JSON.stringify(run.failure)).not.toContain(secret);
++	});
++
++	it('records a setup failure at the dependencies stage with its redacted output', async () => {
++		const secret = 'planted-secret-0042';
++		const sandbox = makeJobSandbox({ html: '<html/>' });
++		const baseExec = sandbox.instance.exec.bind(sandbox.instance);
++		sandbox.instance.exec = async (cmd, options) => {
++			if (!cmd.includes('__MARIMOHUB_SETUP__')) return baseExec(cmd, options);
++			return {
++				success: false,
++				stdout: '',
++				stderr: `\n__MARIMOHUB_SETUP__ step pyproject 1\nfetching with ${secret}\nerror: No solution found`,
++				error: { code: 'COMMAND_FAILED' },
++			};
++		};
++		const run = await runner(sandbox, {
++			resolveSessionEnv: async () => ({ vars: { API_TOKEN: secret } }),
++		}).execute(await enqueue());
++		expect(run.status).toBe('failed');
++		expect(run.failure).toMatchObject({ stage: 'dependencies', message: run.error!.message });
++		expect(run.failure).not.toHaveProperty('exit_status');
++		expect(run.failure!.excerpt).toContain('No solution found');
++		expect(run.failure!.excerpt).not.toContain('__MARIMOHUB_SETUP__');
++		expect(JSON.stringify(run)).not.toContain(secret);
++		expect(sandbox.jobCommands).toHaveLength(0);
++	});
++
+ 	it('marks a timeout exit as timed_out', async () => {
+ 		const sandbox = makeJobSandbox({ exitCode: 124, timedOut: true });
+ 		const run = await runner(sandbox).execute(await enqueue());
+@@ -327,6 +371,7 @@ describe('JobRunner', () => {
+ 			status: 'timed_out',
+ 			exit_code: 124,
+ 			error: { code: 'RUN_TIMED_OUT' },
++			failure: { stage: 'timeout', exit_status: 124 },
+ 		});
+ 		expect(sandbox.calls.destroy).toBe(1);
+ 	});
+@@ -356,6 +401,7 @@ describe('JobRunner', () => {
+ 			code: 'SERVICE_UNAVAILABLE',
+ 			message: 'Sandbox compute backend is not available',
+ 		});
++		expect(run.failure).toEqual({ stage: 'start', message: run.error!.message });
+ 		expect(calls.destroy).toBe(1);
+ 		expect(await env.bucket.head(paths.jobRunMarker(pid, run.run_id))).not.toBeNull();
+ 	});
+@@ -393,6 +439,7 @@ describe('JobRunner', () => {
+ 		const run = await runner(sandbox).execute(queued);
+ 		expect(run.status).toBe('failed');
+ 		expect(run.error?.code).toBe('NOT_FOUND');
++		expect(run.failure).toEqual({ stage: 'start', message: run.error!.message });
+ 		expect(sandbox.calls.exec).toHaveLength(0);
+ 	});
+ 
+@@ -524,6 +571,7 @@ describe('JobRunner unhappy paths', () => {
+ 				status: 'timed_out',
+ 				deadline_at: expect.any(String),
+ 				error: { code: 'RUN_TIMED_OUT' },
++				failure: { stage: 'timeout' },
+ 			});
+ 			expect(sandbox.calls.exec).toHaveLength(0);
+ 		} finally {
+@@ -597,7 +645,11 @@ describe('JobRunner unhappy paths', () => {
+ 		const sandbox = makeJobSandbox({ html: '<html/>' });
+ 		vi.spyOn(env.jobRuns, 'putOutputs').mockRejectedValueOnce(new Error('bucket down'));
+ 		const run = await runner(sandbox).execute(await enqueue());
+-		expect(run).toMatchObject({ status: 'failed', error: { code: 'RUN_FAILED' } });
++		expect(run).toMatchObject({
++			status: 'failed',
++			error: { code: 'RUN_FAILED' },
++			failure: { stage: 'save' },
++		});
+ 		expect(sandbox.calls.destroy).toBe(1);
+ 	});
+ 
+diff --git a/packages/core/src/services/jobs/JobRunner.ts b/packages/core/src/services/jobs/JobRunner.ts
+index 158c3a81..94b7b78c 100644
+--- a/packages/core/src/services/jobs/JobRunner.ts
++++ b/packages/core/src/services/jobs/JobRunner.ts
+@@ -3,7 +3,12 @@ import { noopMetrics } from '../../ports/metrics';
+ import type { Metrics } from '../../ports/metrics';
+ import { withDeadline } from '../../async';
+ import { Millis } from '../../duration';
+-import { DomainError, NotFoundError, UnavailableError } from '../../errors';
++import {
++	DomainError,
++	NotFoundError,
++	PythonEnvironmentSetupError,
++	UnavailableError,
++} from '../../errors';
+ import { createSandboxId } from '../../ids';
+ import { logEvent } from '../../logs';
+ import { logOperationalError } from '../../operationalLog';
+@@ -34,6 +39,7 @@ import { listFileSizes, readCappedFile } from '../runtime/sandboxFiles';
+ import { shellQuote } from '../runtime/shell';
+ import type { JobsService } from './JobsService';
+ import type { JobRunService } from './JobRunService';
++import { failureExcerpt, injectedValues, runFailure } from './runFailure';
+ 
+ /** Where the export lands inside the sandbox working dir; never persisted to the workspace. */
+ export const JOB_OUTPUT_FILE = '__marimo__/job_output.html';
+@@ -258,10 +264,12 @@ export class JobRunner {
+ 			context = await beforeDeadline(this.loadContext(queued));
+ 		} catch (err) {
+ 			const overran = err instanceof RunDeadlineError;
++			const error = overran ? timeoutError(queued.timeout_seconds) : toRunError(err);
+ 			const { run } = await runs.transition(queued, overran ? 'timeout' : 'fail', () => ({
+ 				finished_at: new Date().toISOString(),
+ 				deadline_at: deadline,
+-				error: overran ? timeoutError(queued.timeout_seconds) : toRunError(err),
++				error,
++				failure: runFailure(overran ? 'timeout' : 'start', error),
+ 			}));
+ 			logOperationalError('job_run_context_failed', { operation: 'job.run.load', ...fields }, err);
+ 			return run;
+@@ -299,10 +307,19 @@ export class JobRunner {
+ 				);
+ 			}
+ 		};
++		// What a failure summary is redacted against, and where the run stopped.
++		let injected: readonly string[] = [];
++		let stage: 'start' | 'export' | 'save' = 'start';
+ 		try {
+-			const preparing = this.provisionOptions(context, sandboxId).then((options) =>
+-				this.provisioner.prepare(options),
+-			);
++			const preparing = this.provisionOptions(context, sandboxId).then((options) => {
++				void options.sessionEnv?.then(
++					(env) => {
++						injected = injectedValues(env);
++					},
++					() => {},
++				);
++				return this.provisioner.prepare(options);
++			});
+ 			let prepared: PreparedSandbox;
+ 			try {
+ 				prepared = await beforeDeadline(preparing);
+@@ -319,9 +336,11 @@ export class JobRunner {
+ 			if (!started.transitioned) throw new RunCancelledError();
+ 			context.run = started.run;
+ 
++			stage = 'export';
+ 			const { outcome, exitCode, html, logs } = await stopwatch.time('exec', () =>
+ 				beforeDeadline(this.runExport(prepared, context.run)),
+ 			);
++			stage = 'save';
+ 			const output = await stopwatch.time('capture', () =>
+ 				beforeDeadline(
+ 					runs.putOutputs(context.run, {
+@@ -334,7 +353,17 @@ export class JobRunner {
+ 				await runs.transition(context.run, outcome.event, () => ({
+ 					finished_at: new Date().toISOString(),
+ 					...(exitCode !== undefined ? { exit_code: exitCode } : {}),
+-					...(outcome.error ? { error: outcome.error } : {}),
++					...(outcome.error
++						? {
++								error: outcome.error,
++								failure: runFailure(
++									outcome.event === 'timeout' ? 'timeout' : 'export',
++									outcome.error,
++									exitCode,
++									failureExcerpt(logs, injected),
++								),
++							}
++						: {}),
+ 					output,
+ 				}))
+ 			).run;
+@@ -348,10 +377,22 @@ export class JobRunner {
+ 				if (!overran) {
+ 					logOperationalError('job_run_failed', { operation: 'job.run.execute', ...fields }, err);
+ 				}
++				const error = overran ? timeoutError(context.run.timeout_seconds) : toRunError(err);
++				const failure = overran
++					? runFailure('timeout', error)
++					: err instanceof PythonEnvironmentSetupError
++						? runFailure(
++								'dependencies',
++								error,
++								undefined,
++								err.output === undefined ? undefined : failureExcerpt(err.output, injected),
++							)
++						: runFailure(stage, error);
+ 				const failed = await runs
+ 					.transition(context.run, overran ? 'timeout' : 'fail', () => ({
+ 						finished_at: new Date().toISOString(),
+-						error: overran ? timeoutError(context.run.timeout_seconds) : toRunError(err),
++						error,
++						failure,
+ 					}))
+ 					.catch(() => null);
+ 				if (failed) final = failed.run;
+diff --git a/packages/core/src/services/jobs/JobScheduler.test.ts b/packages/core/src/services/jobs/JobScheduler.test.ts
+index 52c05af3..2ee3df55 100644
+--- a/packages/core/src/services/jobs/JobScheduler.test.ts
++++ b/packages/core/src/services/jobs/JobScheduler.test.ts
+@@ -524,7 +524,11 @@ describe('JobScheduler', () => {
+ 		expect((await s.tick()).timedOut).toBe(1);
+ 		expect(compute.destroyed).toEqual([SB]);
+ 		const stored = await env.jobRuns.getRun(pid, nid, job.id, run.run_id);
+-		expect(stored).toMatchObject({ status: 'timed_out', error: { code: 'RUN_TIMED_OUT' } });
++		expect(stored).toMatchObject({
++			status: 'timed_out',
++			error: { code: 'RUN_TIMED_OUT' },
++			failure: { stage: 'timeout' },
++		});
+ 		expect(await env.jobRuns.listActive()).toEqual([]);
+ 	});
+ 
+diff --git a/packages/core/src/services/jobs/JobScheduler.ts b/packages/core/src/services/jobs/JobScheduler.ts
+index a5c231b5..ae137a07 100644
+--- a/packages/core/src/services/jobs/JobScheduler.ts
++++ b/packages/core/src/services/jobs/JobScheduler.ts
+@@ -20,6 +20,7 @@ import { occurrenceKey, parseCron, previousOccurrence } from './cron';
+ import { indexedJobs } from './JobsService';
+ import type { JobsService } from './JobsService';
+ import type { JobRunService } from './JobRunService';
++import { runFailure } from './runFailure';
+ import { isActiveRunStatus, isTerminalRunStatus } from './runState';
+ 
+ export interface JobSchedulerConfig {
+@@ -468,17 +469,17 @@ export class JobScheduler {
+ 				);
+ 			}
+ 		}
+-		const { run: reclaimed, transitioned } = await this.deps.runs.transition(
+-			run,
+-			'timeout',
+-			() => ({
++		const { run: reclaimed, transitioned } = await this.deps.runs.transition(run, 'timeout', () => {
++			const error = {
++				code: 'RUN_TIMED_OUT',
++				message: `The run exceeded its ${run.timeout_seconds}s timeout and was reclaimed`,
++			};
++			return {
+ 				finished_at: new Date(now).toISOString(),
+-				error: {
+-					code: 'RUN_TIMED_OUT',
+-					message: `The run exceeded its ${run.timeout_seconds}s timeout and was reclaimed`,
+-				},
+-			}),
+-		);
++				error,
++				failure: runFailure('timeout', error),
++			};
++		});
+ 		if (transitioned) {
+ 			const local = this.executing.get(run.run_id);
+ 			if (local) {
+diff --git a/packages/core/src/services/jobs/runFailure.test.ts b/packages/core/src/services/jobs/runFailure.test.ts
+new file mode 100644
+index 00000000..62f7324d
+--- /dev/null
++++ b/packages/core/src/services/jobs/runFailure.test.ts
+@@ -0,0 +1,158 @@
++import { describe, expect, it } from 'vitest';
++import {
++	FAILURE_EXCERPT_BYTES,
++	FAILURE_EXCERPT_LINES,
++	failureExcerpt,
++	injectedValues,
++	redactOutput,
++} from './runFailure';
++
++const INJECTED = 'hunter2-planted-Value';
++const base64Of = (value: string) => btoa(value);
++
++describe('redactOutput', () => {
++	const cases: { name: string; line: string; secret: string; injected?: string[] }[] = [
++		{
++			name: 'an injected value',
++			line: `token is ${INJECTED} ok`,
++			secret: INJECTED,
++			injected: [INJECTED],
++		},
++		{
++			name: 'an injected value, URL-encoded',
++			line: `GET /cb?v=${encodeURIComponent('p@ss w/rd:42!')}`,
++			secret: encodeURIComponent('p@ss w/rd:42!'),
++			injected: ['p@ss w/rd:42!'],
++		},
++		{
++			name: 'an injected value, form-encoded',
++			line: `body=${new URLSearchParams({ v: 'p@ss w/rd:42!' }).toString().slice(2)}`,
++			secret: 'p%40ss+w%2Frd%3A42%21',
++			injected: ['p@ss w/rd:42!'],
++		},
++		{
++			name: 'an injected value, base64-encoded on its own',
++			line: `blob ${base64Of(INJECTED)}`,
++			secret: base64Of(INJECTED).replace(/=+$/, ''),
++			injected: [INJECTED],
++		},
++		...[1, 2].map((offset) => ({
++			name: `an injected value, base64-encoded after ${offset} other byte(s)`,
++			line: `Basic ${base64Of(`${'u'.repeat(offset - 1)}:${INJECTED}`)}`,
++			secret: base64Of(`${'u'.repeat(offset - 1)}:${INJECTED}`).slice(4, -4),
++			injected: [INJECTED],
++		})),
++		{
++			name: 'an Authorization header',
++			line: 'Authorization: Basic dXNlcjpwYXNz',
++			secret: 'dXNlcjpwYXNz',
++		},
++		{ name: 'a Bearer token', line: 'sent Bearer abc.DEF-123_xyz', secret: 'abc.DEF-123_xyz' },
++		{
++			name: 'credentials in a URL',
++			line: 'cloning https://deploy:s3cr3t-pw@git.example.com/repo.git',
++			secret: 's3cr3t-pw',
++		},
++		{
++			name: 'a JWT',
++			line: 'jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJl',
++			secret: 'eyJzdWIiOiIxMjM0In0',
++		},
++		{ name: 'an sk- key', line: 'OPENAI sk-proj-AbCdEf0123456789', secret: 'AbCdEf0123456789' },
++		{
++			name: 'a ghp_ token',
++			line: 'ghp_aBcDeFgHiJkLmNoPqRsTuV0123456789',
++			secret: 'aBcDeFgHiJkLmNoP',
++		},
++		{
++			name: 'a github_pat_ token',
++			line: 'github_pat_11ABCDEFG0123456789_abcdefghijk',
++			secret: '11ABCDEFG0123456789',
++		},
++		{ name: 'a Slack token', line: 'xoxb-1234567890-abcdefghij', secret: '1234567890-abcdefghij' },
++		{ name: 'an AWS key id', line: 'key AKIAIOSFODNN7EXAMPLE used', secret: 'IOSFODNN7EXAMPLE' },
++		{ name: 'a Fly token', line: 'FlyV1 fm2_lJPECAAAAAAAAMk,fm2_abc', secret: 'lJPECAAAAAAAAMk' },
++		{ name: 'a key= pair', line: 'api_key=plainvalue123 next', secret: 'plainvalue123' },
++		{ name: 'a quoted password pair', line: `{'password': 'two words'}`, secret: 'two words' },
++		{ name: 'a token: pair', line: 'access_token: tok_live_x', secret: 'tok_live_x' },
++		{
++			name: 'a 40-character hex string',
++			line: 'commit 0123456789abcdef0123456789abcdef01234567 done',
++			secret: '0123456789abcdef0123456789abcdef01234567',
++		},
++		{
++			name: 'a base64 run',
++			line: 'blob QmFzZTY0U2VjcmV0VmFsdWVUaGF0SXNMb25nRW5vdWdo',
++			secret: 'QmFzZTY0U2VjcmV0VmFsdWVUaGF0SXNMb25nRW5vdWdo',
++		},
++		{
++			name: 'a PEM block',
++			line: '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY-----',
++			secret: 'MIIEvQIBADANBg',
++		},
++	];
++
++	it.each(cases)('removes $name', ({ line, secret, injected = [] }) => {
++		const redacted = redactOutput(`before\n${line}\nafter`, injected);
++		expect(redacted).not.toContain(secret);
++		expect(redacted.startsWith('before\n')).toBe(true);
++		expect(redacted.endsWith('\nafter')).toBe(true);
++	});
++
++	it('removes everything after a PEM block that was cut off before its end', () => {
++		const redacted = redactOutput(
++			'before\n-----BEGIN RSA PRIVATE KEY-----\nMIIEvQIBADANBg\nQUFB',
++			[],
++		);
++		expect(redacted.startsWith('before\n')).toBe(true);
++		expect(redacted).not.toContain('MIIEvQIBADANBg');
++		expect(redacted).not.toContain('QUFB');
++	});
++
++	it('keeps ordinary output, paths and tracebacks', () => {
++		const output = [
++			'Traceback (most recent call last):',
++			'  File "/opt/marimohub/venv/lib/python3.13/site-packages/marimo/_ast/cell.py", line 5',
++			'ZeroDivisionError: division by zero',
++			'Resolved 2 packages in 202ms',
++		].join('\n');
++		expect(redactOutput(output, ['short', INJECTED])).toBe(output);
++	});
++
++	it('leaves injected values shorter than six characters alone', () => {
++		expect(redactOutput('value abc12 here', ['abc12'])).toBe('value abc12 here');
++	});
++});
++
++describe('failureExcerpt', () => {
++	it('keeps the last lines within the byte cap', () => {
++		const output = Array.from({ length: 50 }, (_, i) => `line ${i}`).join('\n');
++		const lines = failureExcerpt(`${output}\n\n`, [])!.split('\n');
++		expect(lines).toHaveLength(FAILURE_EXCERPT_LINES);
++		expect(lines.at(-1)).toBe('line 49');
++
++		const wide = Array.from({ length: 5 }, () => 'é'.repeat(800)).join('\n');
++		const capped = failureExcerpt(wide, [])!;
++		expect(new TextEncoder().encode(capped).byteLength).toBeLessThanOrEqual(FAILURE_EXCERPT_BYTES);
++		expect(wide.endsWith(capped)).toBe(true);
++	});
++
++	it('redacts before cutting, so a secret straddling the cut leaves nothing behind', () => {
++		// Cut first, the excerpt would open with the value's last five characters.
++		const output = `${INJECTED}${'x'.repeat(FAILURE_EXCERPT_BYTES - 5)}`;
++		expect(failureExcerpt(output, [INJECTED])).not.toContain(INJECTED.slice(-5));
++	});
++
++	it('is absent when the stage printed nothing', () => {
++		expect(failureExcerpt(' \n\n', [])).toBeUndefined();
++	});
++});
++
++describe('injectedValues', () => {
++	it('takes every variable and default the run was given', () => {
++		expect(
++			injectedValues({ vars: { A: 'one-value' }, defaults: { B: 'two-value' }, files: [] }).sort(),
++		).toEqual(['one-value', 'two-value']);
++		expect(injectedValues(undefined)).toEqual([]);
++	});
++});
+diff --git a/packages/core/src/services/jobs/runFailure.ts b/packages/core/src/services/jobs/runFailure.ts
+new file mode 100644
+index 00000000..20bd1954
+--- /dev/null
++++ b/packages/core/src/services/jobs/runFailure.ts
+@@ -0,0 +1,125 @@
++import type { RunError, RunFailure } from '../../schema';
++import { utf8Tail } from '../../text';
++import type { SessionEnv } from '../runtime/sandboxEnvironment';
++
++export const FAILURE_EXCERPT_LINES = 20;
++export const FAILURE_EXCERPT_BYTES = 2000;
++
++const REMOVED = '[removed]';
++/** Shorter injected values are too likely to be ordinary words to remove everywhere. */
++const MIN_INJECTED_LENGTH = 6;
++
++/** A pair's value: quoted as a whole, or up to the next separator. */
++const PAIR_VALUE = String.raw`(?:"[^"\n]*"|'[^'\n]*'|[^\s"',;&]+)`;
++
++/** Credential shapes, masked in this order after the injected values are gone. */
++const CREDENTIAL_PATTERNS: readonly [RegExp, string][] = [
++	[/-----BEGIN [A-Z0-9 ]{1,64}-----[\s\S]*?(?:-----END [A-Z0-9 ]{1,64}-----|$)/g, REMOVED],
++	[/\b([a-z][a-z0-9+.-]{0,31}:\/\/)[^\s/?#@:]*(?::[^\s@]*)?@/gi, `$1${REMOVED}@`],
++	[
++		/\b(authorization["']?\s*[:=]\s*["']?(?:(?:bearer|basic|token|digest|negotiate)\s+)?)[^\s"',;]+/gi,
++		`$1${REMOVED}`,
++	],
++	[/\b(bearer\s+)[^\s"',;]+/gi, `$1${REMOVED}`],
++	[/eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g, REMOVED],
++	[/\b(FlyV1\s+)[^\s"']+/g, `$1${REMOVED}`],
++	[
++		/(?<![A-Za-z0-9])(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,}|xox[a-z]-[A-Za-z0-9-]{8,}|(?:AKIA|ASIA)[0-9A-Z]{16}|fm2_[A-Za-z0-9+/=_-]{8,})/g,
++		REMOVED,
++	],
++	[
++		new RegExp(
++			String.raw`\b([A-Za-z0-9_.-]{0,64}(?:key|token|secret|password|passwd|pwd)["']?\s*[:=]\s*)${PAIR_VALUE}`,
++			'gi',
++		),
++		`$1${REMOVED}`,
++	],
++	[/[0-9a-fA-F]{32,}/g, REMOVED],
++];
++
++const BASE64_RUN = /[A-Za-z0-9+/_-]{32,}={0,2}/g;
++
++/** Mixed case, or letters with digits outside a path: lowercase paths and names survive. */
++function maskBase64Run(run: string): string {
++	const mixedCase = /[A-Z]/.test(run) && /[a-z]/.test(run);
++	const alphanumeric = /[0-9]/.test(run) && /[A-Za-z]/.test(run) && !run.includes('/');
++	return mixedCase || alphanumeric ? REMOVED : run;
++}
++
++function base64(bytes: Uint8Array): string {
++	let binary = '';
++	for (const byte of bytes) binary += String.fromCharCode(byte);
++	return btoa(binary).replace(/=+$/, '');
++}
++
++/**
++ * The base64 text of `value` at each of the three alignments it can take inside
++ * a larger encoded string, cut to the characters that depend on `value` alone.
++ */
++function base64Forms(value: string): string[] {
++	const bytes = new TextEncoder().encode(value);
++	return [0, 1, 2].flatMap((offset) => {
++		const aligned = new Uint8Array(offset + bytes.length);
++		aligned.set(bytes, offset);
++		const encoded = base64(aligned).slice(
++			Math.ceil((offset * 4) / 3),
++			Math.floor((aligned.length * 4) / 3),
++		);
++		return [encoded, encoded.replaceAll('+', '-').replaceAll('/', '_')];
++	});
++}
++
++function injectedForms(value: string): string[] {
++	const uri = encodeURIComponent(value);
++	return [
++		value,
++		uri,
++		uri.replaceAll(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase()),
++		new URLSearchParams({ v: value }).toString().slice(2),
++		...base64Forms(value),
++	];
++}
++
++/** Every value the hub put into the run's environment. */
++export function injectedValues(env: SessionEnv | undefined): string[] {
++	return [...Object.values(env?.vars ?? {}), ...Object.values(env?.defaults ?? {})];
++}
++
++/**
++ * Remove secrets from a stage's output: first every injected value (plain,
++ * URL-encoded and base64-encoded), then anything shaped like a credential.
++ */
++export function redactOutput(output: string, injected: readonly string[]): string {
++	const forms = [
++		...new Set(
++			injected.filter((value) => value.length >= MIN_INJECTED_LENGTH).flatMap(injectedForms),
++		),
++	].sort((a, b) => b.length - a.length);
++	let text = output;
++	for (const form of forms) text = text.replaceAll(form, REMOVED);
++	for (const [pattern, replacement] of CREDENTIAL_PATTERNS) {
++		text = text.replaceAll(pattern, replacement);
++	}
++	return text.replaceAll(BASE64_RUN, maskBase64Run);
++}
++
++/** The redacted last lines of a stage's output, capped; undefined when it printed nothing. */
++export function failureExcerpt(output: string, injected: readonly string[]): string | undefined {
++	const lines = redactOutput(output, injected).trimEnd().split(/\r?\n/);
++	const excerpt = utf8Tail(lines.slice(-FAILURE_EXCERPT_LINES).join('\n'), FAILURE_EXCERPT_BYTES);
++	return excerpt.trim() ? excerpt : undefined;
++}
++
++export function runFailure(
++	stage: RunFailure['stage'],
++	error: RunError,
++	exitStatus?: number,
++	excerpt?: string,
++): RunFailure {
++	return {
++		stage,
++		...(exitStatus !== undefined ? { exit_status: exitStatus } : {}),
++		message: error.message,
++		...(excerpt !== undefined ? { excerpt } : {}),
++	};
++}
+diff --git a/packages/core/src/services/runtime/SandboxProvisioner.ts b/packages/core/src/services/runtime/SandboxProvisioner.ts
+index 22b13c26..a8e69926 100644
+--- a/packages/core/src/services/runtime/SandboxProvisioner.ts
++++ b/packages/core/src/services/runtime/SandboxProvisioner.ts
+@@ -166,13 +166,18 @@ function pythonEnvironmentSetupFailure(
+ 	result: ExecResult,
+ 	failedStep?: string,
+ ): PythonEnvironmentSetupError {
++	const output = `${result.stdout}\n${result.stderr}`
++		.split(/\r?\n/)
++		.filter((line) => !line.startsWith(SETUP_MARKER))
++		.join('\n')
++		.trim();
+ 	const startupScript = /^startup_script_(\d+)$/.exec(failedStep ?? '');
+ 	if (startupScript) {
+ 		return new PythonEnvironmentSetupError(
+ 			`Startup script ${startupScript[1]} failed. Check the script before restarting the workload.`,
++			output,
+ 		);
+ 	}
+-	const output = `${result.stdout}\n${result.stderr}`;
+ 	const mismatch = PYTHON_VERSION_MISMATCH.exec(output);
+ 	let reason = 'uv exited unsuccessfully';
+ 	if (mismatch) {
+@@ -190,6 +195,7 @@ function pythonEnvironmentSetupFailure(
+ 	}
+ 	return new PythonEnvironmentSetupError(
+ 		`Failed to prepare the notebook Python environment: ${reason}`,
++		output,
+ 	);
+ }
+ 

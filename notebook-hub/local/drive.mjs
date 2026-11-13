@@ -1,13 +1,19 @@
-// Drives one notebook session through the local hub and checks each step.
-// Started by local/run.sh, which sets every variable read below.
-import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+// Drives one notebook session, then three failing runs, through the local hub
+// and checks each step. Every request carries a pass signed as Keyfleet signs
+// them. Started by local/run.sh, which sets every variable read below.
+import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash, createPrivateKey, randomBytes, randomUUID, sign } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { HUB_URL, DATA_DIR, NET6, APP, HUB_IMAGE, FLY_TOKEN, HELPER_SECRET } = process.env;
+const { PASS_KEY, PASS_ISSUER, PASS_AUDIENCE } = process.env;
 const MARKER = 'kf-relay-ok-42';
 const LABEL = 'keyfleet.local-fly';
+// The hub's super admin makes the project; an editor and a viewer are its members.
+const PROVISIONER = 'kf_provisioner_local';
+const EDITOR = 'kf_local_editor';
+const VIEWER = 'kf_local_viewer';
 
 const NOTEBOOK = `import marimo
 
@@ -41,6 +47,148 @@ if __name__ == "__main__":
     app.run()
 `;
 
+// A notebook whose pyproject.toml rules out the hub's Python.
+const PYPROJECT = `[project]
+name = "capped"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+dependencies = ["humanize"]
+`;
+
+const PLAIN = `import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    "ready"
+    return
+
+
+if __name__ == "__main__":
+    app.run()
+`;
+
+const RAISES = `import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    1 / 0
+    return
+
+
+if __name__ == "__main__":
+    app.run()
+`;
+
+/**
+ * Values made for this run only, each one a notebook prints before it fails: the
+ * value the hub injects, written plainly, base64-encoded and URL-encoded, and
+ * credential shapes written into the notebook itself. `secret` is the part that
+ * must never be stored or shown.
+ */
+function plantedValues() {
+	const token = (bytes) => randomBytes(bytes).toString('base64url');
+	const env = `kf plant/${randomBytes(6).toString('hex')}+${token(6)}`;
+	const pw = token(12);
+	const jwtPart = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+	const jwt = `${jwtPart({ alg: 'HS256', typ: 'JWT' })}.${jwtPart({ sub: token(12) })}.${token(32)}`;
+	const bearer = token(24);
+	const sk = `sk-${token(24)}`;
+	const hex = randomBytes(20).toString('hex');
+	return {
+		env,
+		lines: {
+			bearer: `Authorization: Bearer ${bearer}`,
+			url: `https://kfuser:${pw}@example.invalid/data`,
+			jwt,
+			sk,
+			hex,
+		},
+		secrets: [
+			{ label: 'injected value', secret: env },
+			{ label: 'injected value, base64', secret: Buffer.from(env).toString('base64') },
+			{ label: 'injected value, URL-encoded', secret: encodeURIComponent(env) },
+			{ label: 'Bearer header', secret: bearer },
+			{ label: 'URL with user:pass', secret: `kfuser:${pw}` },
+			{ label: 'JWT', secret: jwt },
+			{ label: 'sk- key', secret: sk },
+			{ label: '40-hex string', secret: hex },
+		],
+	};
+}
+
+function plantingNotebook({ lines }) {
+	return `import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import base64
+    import os
+    import sys
+    import urllib.parse
+
+    value = os.environ["KF_PLANTED"]
+    lines = [
+        value,
+        base64.b64encode(value.encode()).decode(),
+        urllib.parse.quote(value, safe=""),
+        "${lines.bearer}",
+        "${lines.url}",
+        "${lines.jwt}",
+        "${lines.sk}",
+        "${lines.hex}",
+    ]
+    for number, line in enumerate(lines, 1):
+        print(f"planted {number}: {line}", file=sys.__stderr__, flush=True)
+    raise RuntimeError("stopped after printing")
+    return
+
+
+if __name__ == "__main__":
+    app.run()
+`;
+}
+
+/** The labels of the planted values `text` holds, whole or by their first or last 12 characters. */
+function leaks(text, secrets) {
+	const parts = (secret) =>
+		secret.length > 12 ? [secret, secret.slice(0, 12), secret.slice(-12)] : [secret];
+	return secrets
+		.filter(({ secret }) => parts(secret).some((part) => text.includes(part)))
+		.map(({ label }) => label);
+}
+
+const signingJwk = JSON.parse(readFileSync(PASS_KEY, 'utf8')).keys[0];
+const signingKey = createPrivateKey({ key: signingJwk, format: 'jwk' });
+const kid = createHash('sha256')
+	.update(JSON.stringify({ crv: signingJwk.crv, kty: signingJwk.kty, x: signingJwk.x, y: signingJwk.y }))
+	.digest('base64url');
+
+/** The pass header for `subject`, signed as Keyfleet.Notebooks.Pass signs it. */
+function as(subject) {
+	const now = Math.floor(Date.now() / 1000);
+	const part = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+	const claims = {
+		iss: PASS_ISSUER,
+		aud: PASS_AUDIENCE,
+		sub: subject,
+		email: `${subject}@identity.keyfleet.invalid`,
+		iat: now,
+		exp: now + 300,
+	};
+	const body = `${part({ alg: 'ES256', kid, typ: 'JWT' })}.${part(claims)}`;
+	const signature = sign('sha256', Buffer.from(body), { key: signingKey, dsaEncoding: 'ieee-p1363' });
+	return { 'X-Keyfleet-Assertion': `${body}.${signature.toString('base64url')}` };
+}
+
 let step = 0;
 function ok(message) {
 	console.log(`  ${String(++step).padStart(2)}. ${message}`);
@@ -49,10 +197,13 @@ function check(condition, message) {
 	if (!condition) throw new Error(`check failed: ${message}`);
 }
 
-async function api(method, path, body) {
+async function api(subject, method, path, body) {
 	const response = await fetch(`${HUB_URL}/api/v1${path}`, {
 		method,
-		headers: body === undefined ? {} : { 'content-type': 'application/json' },
+		headers: {
+			...as(subject),
+			...(body === undefined ? {} : { 'content-type': 'application/json' }),
+		},
 		body: body === undefined ? undefined : JSON.stringify(body),
 	});
 	const json = await response.json();
@@ -111,13 +262,15 @@ function withBundle(script) {
 }
 
 async function runCells(sandboxUrl) {
-	const page = await (await fetch(sandboxUrl)).text();
+	const page = await (await fetch(sandboxUrl, { headers: as(EDITOR) })).text();
 	const serverToken = page.match(/<marimo-server-token[^>]*data-token="([^"]*)"/)?.[1];
 	check(serverToken !== undefined, 'the marimo page came back through the hub');
 	ok('marimo page loaded through the hub proxy');
 
 	const sessionId = randomUUID();
-	const socket = new WebSocket(`${sandboxUrl.replace(/^http/, 'ws')}ws?session_id=${sessionId}`);
+	const socket = new WebSocket(`${sandboxUrl.replace(/^http/, 'ws')}ws?session_id=${sessionId}`, {
+		headers: as(EDITOR),
+	});
 	const outputs = [];
 	let resolveReady;
 	let resolveDone;
@@ -140,6 +293,7 @@ async function runCells(sandboxUrl) {
 	const instantiate = await fetch(`${sandboxUrl}api/kernel/instantiate`, {
 		method: 'POST',
 		headers: {
+			...as(EDITOR),
 			'content-type': 'application/json',
 			'Marimo-Session-Id': sessionId,
 			'Marimo-Server-Token': serverToken,
@@ -158,8 +312,22 @@ async function main() {
 	check(network.EnableIPv4 === false && network.EnableIPv6 === true, 'private network is IPv6-only');
 	ok(`private network ${NET6} is IPv6-only (${network.IPAM.Config.map((c) => c.Subnet).join(', ')})`);
 
-	const project = await api('POST', '/projects', { name: 'Local proof', description: 'compute-fly' });
-	const notebook = await api('POST', `/projects/${project.id}/notebooks`, {
+	const project = await api(PROVISIONER, 'POST', '/projects', {
+		name: 'Local proof',
+		description: 'compute-fly',
+	});
+	for (const [subject, role] of [
+		[EDITOR, 'editor'],
+		[VIEWER, 'viewer'],
+	]) {
+		await api(PROVISIONER, 'POST', `/projects/${project.id}/members`, {
+			email: `${subject}@identity.keyfleet.invalid`,
+			role,
+		});
+	}
+	ok(`${PROVISIONER} made the project, with ${EDITOR} as an editor and ${VIEWER} as a viewer`);
+
+	const notebook = await api(EDITOR, 'POST', `/projects/${project.id}/notebooks`, {
 		title: 'Relay proof',
 		description: 'Runs one cell on a runner machine',
 		code: NOTEBOOK,
@@ -167,7 +335,7 @@ async function main() {
 	ok(`notebook created (${notebook.id})`);
 
 	const started = Date.now();
-	const session = await api('POST', `/projects/${project.id}/notebooks/${notebook.id}/sessions`, {});
+	const session = await api(EDITOR, 'POST', `/projects/${project.id}/notebooks/${notebook.id}/sessions`, {});
 	check(session.status === 'running', `session is running (got ${session.status})`);
 	const record = JSON.parse(
 		readFileSync(join(DATA_DIR, '_system/sessions', project.id, `${session.session_id}.json`), 'utf8'),
@@ -236,7 +404,7 @@ async function main() {
 	check(written.includes(MARKER), 'marimo session snapshot holds the cell output');
 	ok('marimo wrote the cell output into its session snapshot in the runner');
 
-	await api('DELETE', `/projects/${project.id}/notebooks/${notebook.id}/sessions/${session.session_id}`);
+	await api(EDITOR, 'DELETE', `/projects/${project.id}/notebooks/${notebook.id}/sessions/${session.session_id}`);
 	ok('session deleted');
 
 	const notebookRoot = join(DATA_DIR, 'projects', project.id, 'notebooks', notebook.id);
@@ -252,7 +420,145 @@ async function main() {
 	}
 	check(runnerContainers(sandboxId).length === 0, 'runner machine removed');
 	ok(`runner machine ${machineId} is gone`);
+
+	await failedRuns(project);
 	console.log('Local end-to-end run succeeded.');
+}
+
+/** A run of `notebookId` in a job of its own, started by the editor and read until it has finished. */
+async function finishedRun(projectId, notebookId) {
+	const notebookPath = `/projects/${projectId}/notebooks/${notebookId}`;
+	const job = await api(EDITOR, 'POST', `${notebookPath}/jobs`, { name: 'Failure proof' });
+	const jobPath = `${notebookPath}/jobs/${job.id}`;
+	const queued = await api(EDITOR, 'POST', `${jobPath}/runs`, {});
+	const runPath = `${jobPath}/runs/${queued.run_id}`;
+	for (let attempt = 0; attempt < 180; attempt++) {
+		const run = await api(EDITOR, 'GET', runPath);
+		if (['succeeded', 'failed', 'timed_out', 'cancelled'].includes(run.status)) {
+			return { jobPath, runPath, run };
+		}
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
+	throw new Error(`run ${queued.run_id} did not finish in 180 s`);
+}
+
+/** The hub container's own output, both streams. */
+function hubOutput() {
+	const logs = spawnSync('docker', ['logs', 'kf-nb-local-hub'], {
+		encoding: 'utf8',
+		maxBuffer: 64 * 1024 * 1024,
+	});
+	return `${logs.stdout}${logs.stderr}`;
+}
+
+async function failedRuns(project) {
+	const planted = plantedValues();
+	await api(PROVISIONER, 'POST', `/projects/${project.id}/integrations`, {
+		kind: 'custom_env',
+		name: 'planted',
+		config: { vars: { KF_PLANTED: planted.env } },
+	});
+	ok('the project puts KF_PLANTED, a value made for this run, into its runs');
+
+	const notebooks = {};
+	for (const [name, description, code] of [
+		['Python cap', 'Asks for a Python the hub does not run', PLAIN],
+		['Cell raises', 'Its one cell raises', RAISES],
+		['Planted values', 'Prints the planted values, then raises', plantingNotebook(planted)],
+	]) {
+		notebooks[name] = await api(EDITOR, 'POST', `/projects/${project.id}/notebooks`, {
+			title: name,
+			description,
+			code,
+		});
+	}
+	const upload = await fetch(
+		`${HUB_URL}/api/v1/projects/${project.id}/notebooks/${notebooks['Python cap'].id}/workspace/files?path=pyproject.toml&create=false`,
+		{
+			method: 'PUT',
+			headers: { ...as(EDITOR), 'content-type': 'application/octet-stream' },
+			body: PYPROJECT,
+		},
+	);
+	check(upload.ok, `pyproject.toml upload returned ${upload.status}`);
+	ok('three notebooks: one asks for Python <3.13, one raises, one prints the planted values and raises');
+
+	const expected = { 'Python cap': 'dependencies', 'Cell raises': 'export', 'Planted values': 'export' };
+	const answers = [];
+	for (const [name, notebook] of Object.entries(notebooks)) {
+		const { jobPath, runPath, run } = await finishedRun(project.id, notebook.id);
+		check(run.status === 'failed', `${name}: run failed (got ${run.status})`);
+		const editor = await api(EDITOR, 'GET', runPath);
+		const viewer = await api(VIEWER, 'GET', runPath);
+		const listedBy = async (subject) =>
+			(await api(subject, 'GET', `${jobPath}/runs?limit=10`)).items.find(
+				(item) => item.run_id === run.run_id,
+			);
+		const editorListed = await listedBy(EDITOR);
+		const viewerListed = await listedBy(VIEWER);
+		check(
+			editor.failure?.stage === expected[name],
+			`${name}: stopped at ${expected[name]} (got ${editor.failure?.stage})`,
+		);
+		check(
+			typeof editor.failure.excerpt === 'string' && editor.failure.excerpt.length > 0,
+			`${name}: the editor reads an excerpt`,
+		);
+		const { excerpt: _excerpt, ...summary } = editor.failure;
+		check(
+			JSON.stringify(viewer.failure) === JSON.stringify(summary),
+			`${name}: the viewer reads the same failure without the excerpt`,
+		);
+		check(
+			JSON.stringify(editorListed.failure) === JSON.stringify(editor.failure) &&
+				JSON.stringify(viewerListed.failure) === JSON.stringify(viewer.failure),
+			`${name}: each one's listing answers the same failure`,
+		);
+		const records = findFile(DATA_DIR, 'run.json').filter((path) => path.includes(run.run_id));
+		check(records.length === 1, `${name}: one stored run record (found ${records.length})`);
+		answers.push({
+			name,
+			runPath,
+			editor,
+			viewer,
+			editorListed,
+			viewerListed,
+			record: readFileSync(records[0], 'utf8'),
+		});
+		ok(`${name}: run ${run.run_id} failed at ${editor.failure.stage}; only the editor reads its excerpt`);
+	}
+
+	// The raw logs hold every planted value, so the checks below look for something there.
+	const plantedRun = answers.find(({ name }) => name === 'Planted values');
+	const logs = await fetch(`${HUB_URL}/api/v1${plantedRun.runPath}/logs`, { headers: as(EDITOR) });
+	check(logs.ok, `the editor reads the run's logs (got ${logs.status})`);
+	const missing = planted.secrets.length - leaks(await logs.text(), planted.secrets).length;
+	check(missing === 0, `the raw logs hold every planted value (${missing} missing)`);
+	const viewerLogs = await fetch(`${HUB_URL}/api/v1${plantedRun.runPath}/logs`, {
+		headers: as(VIEWER),
+	});
+	check(viewerLogs.status === 403, `the viewer is refused the logs (got ${viewerLogs.status})`);
+	ok(`the raw logs hold all ${planted.secrets.length} planted values; the viewer is refused them`);
+
+	// Named, never quoted: a value found here is a secret.
+	const places = answers.flatMap(({ name, editor, viewer, editorListed, viewerListed, record }) => [
+		[`${name}, editor's run`, JSON.stringify(editor)],
+		[`${name}, viewer's run`, JSON.stringify(viewer)],
+		[`${name}, editor's listing`, JSON.stringify(editorListed)],
+		[`${name}, viewer's listing`, JSON.stringify(viewerListed)],
+		[`${name}, stored run record`, record],
+	]);
+	places.push(["the hub's output", hubOutput()]);
+	const found = places.flatMap(([place, text]) =>
+		leaks(text, planted.secrets).map((label) => `${label} in ${place}`),
+	);
+	check(found.length === 0, `planted values got through: ${found.join('; ')}`);
+	ok(`no planted value is in any run answer, listing, stored run record or the hub's output`);
+
+	for (const { name, editor, viewer } of answers) {
+		console.log(`      ${name}, editor: ${JSON.stringify(editor.failure)}`);
+		console.log(`      ${name}, viewer: ${JSON.stringify(viewer.failure)}`);
+	}
 }
 
 main().catch((error) => {
