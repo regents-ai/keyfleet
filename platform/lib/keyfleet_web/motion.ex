@@ -6,8 +6,10 @@ defmodule KeyfleetWeb.Motion do
   names its version from here in `data-variant`.
 
   Every Regent site shares these versions. A part the product has no place
-  for yet (a note that peels, a stamp that thunks) keeps its version here and
-  in the lab, so a page that gains one moves the same way as every other site.
+  for yet (a note that peels) keeps its version here and in the lab, so a
+  page that gains one moves the same way as every other site. The stamp's
+  thunk is the kit's `stamp`, which "You’re in" in the Buy Key window lands
+  with.
   """
 
   @standard %{

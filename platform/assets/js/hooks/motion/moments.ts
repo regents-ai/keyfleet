@@ -1,10 +1,12 @@
 /**
  * Motion for things the server decides: a list that changes, such as a stack
- * of notes, and a figure that moves. The page renders every result first;
- * these islands only animate from the old picture to the new one.
+ * of notes, a figure that moves, and work that is done. The page renders
+ * every result first; these islands only animate from the old picture to the
+ * new one.
  */
 import {
   animate,
+  createDrawable,
   createLayout,
   createScope,
   spring,
@@ -15,7 +17,7 @@ import {
   type Scope,
   type TextSplitter,
 } from "animejs"
-import {BASE, CLIPPED_CHAR, SLOW, still} from "./shared"
+import {BASE, CLIPPED_CHAR, EASE_OUT, SLOW, play, still, watched} from "./shared"
 import {deny} from "./press"
 import type {Hook} from "../../hook_composition"
 
@@ -182,6 +184,76 @@ export const MotionRefusal: Hook = {
   },
 
   destroyed(this: RefusalHook) {
+    this.scope?.revert()
+  },
+}
+
+/**
+ * A done step's tick drawing in: only its stroke changes, from the start of
+ * the line to its end, so nothing around it moves.
+ */
+export function drawTick(tick: SVGGeometryElement, delay = 0) {
+  const [line] = createDrawable(tick)
+  return animate(line, {draw: ["0 0", "0 1"], delay, duration: SLOW, ease: EASE_OUT})
+}
+
+/**
+ * Words or a mark landing like a stamp on work just done: it drops onto the
+ * page, turning straight as it lands. It only grows, turns and fades in, so
+ * nothing around it moves. It starts at well over twice its size, so a
+ * button it passes over must sit on top of it (as Approve and Buy do in the
+ * Buy Key window), and every press still reaches the button.
+ */
+export const stamp = (el: Element) =>
+  play(el, {scale: {from: 2.4}, rotate: {from: -24}, opacity: {from: 0}, duration: 240, ease: "in(3)"})
+
+type TickHook = {el: HTMLElement; scope?: Scope; done?: boolean}
+
+const done = (el: HTMLElement) => el.dataset.done !== undefined
+
+/**
+ * A step's mark, which shows a tick while `data-done` is on it. The tick
+ * draws in when the step is done while the reader watches; a step already
+ * done when the page opens, or when its connection comes back, shows it drawn.
+ */
+export const MotionTick: Hook = {
+  mounted(this: TickHook) {
+    const scope = createScope({root: this.el})
+    this.done = done(this.el)
+
+    this.scope = scope.add(() => {
+      scope.add("draw", () => drawTick(this.el.querySelector<SVGGeometryElement>("svg path")!))
+    })
+  },
+
+  updated(this: TickHook) {
+    const now = done(this.el)
+    if (now && !this.done && watched(this.el) && !still(this.el)) this.scope?.methods.draw()
+    this.done = now
+  },
+
+  destroyed(this: TickHook) {
+    this.scope?.revert()
+  },
+}
+
+type StampHook = {el: HTMLElement; scope?: Scope}
+
+/**
+ * Words that land like a stamp when the work they announce is done while the
+ * reader watches, such as "You’re in" once a Key bought here lands. On a page
+ * that opens on the result they are simply there.
+ */
+export const MotionStamp: Hook = {
+  mounted(this: StampHook) {
+    const scope = createScope({root: this.el})
+
+    this.scope = scope.add(() => {
+      if (watched(this.el) && !still(this.el)) stamp(this.el)
+    })
+  },
+
+  destroyed(this: StampHook) {
     this.scope?.revert()
   },
 }

@@ -277,8 +277,22 @@ defmodule KeyfleetWeb.Components.BuyKey do
           disabled={WalletPanel.blocked(panel, "approve") != nil or approve_done?(panel)}
           aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
         >
-          <span class="fleet-step-mark" aria-hidden="true">
-            <Regent.Icons.icon :if={approve_done?(panel)} name="check" />
+          <%!-- The tick draws in as an approval sent from here lands. The
+          page leaves its line alone once it shows, so an update that lands
+          while it draws (the panel reading the chain again) lets it finish. --%>
+          <span
+            id={"#{@id}-approve-mark"}
+            class="fleet-step-mark"
+            phx-hook="MotionTick"
+            data-done={approve_done?(panel)}
+            aria-hidden="true"
+          >
+            <Regent.Icons.icon
+              :if={approve_done?(panel)}
+              id={"#{@id}-approve-tick"}
+              name="check"
+              phx-update="ignore"
+            />
             <span :if={not approve_done?(panel)}>1</span>
           </span>
           <span data-press-label>
@@ -301,9 +315,10 @@ defmodule KeyfleetWeb.Components.BuyKey do
         </span>
         <%!-- Under the buttons, so nothing a person is about to press moves.
         Focus moves to its button as it appears, which scrolls the window to
-        it, and the button is described by the words above it. --%>
+        it, and the button is described by the words above it. "You’re in"
+        lands like a stamp as the purchase does. --%>
         <div :if={bought?(panel)} id={"#{@id}-in"} class="buy-key__in" role="status">
-          <strong id={"#{@id}-in-title"}>You’re in</strong>
+          <strong id={"#{@id}-in-title"} phx-hook="MotionStamp">You’re in</strong>
           <span id={"#{@id}-in-note"}>Your Key is in your wallet. Next, set up your agent.</span>
           <Regent.Primitives.button
             id={"#{@id}-setup"}

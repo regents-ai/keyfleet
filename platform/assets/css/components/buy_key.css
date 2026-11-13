@@ -54,7 +54,13 @@
 
 /* Once a Key bought here lands: what happened, and the one next step. */
 .buy-key__in { display: grid; flex: 1 1 100%; justify-items: start; gap: var(--space-1); }
-.buy-key__in strong { font-size: 1.125rem; }
+/* The stamp grows and turns about the words' left end, where they rest against
+   the window's edge, so the edge never cuts them. */
+.buy-key__in strong { font-size: 1.125rem; transform-origin: 0 50%; }
+/* "You’re in" lands like a stamp, from larger than it rests, so it passes
+   under Approve and Buy above it: they stay on top, and every press reaches
+   its button. */
+.buy-key .wallet-panel-buttons > .rg-button { z-index: 1; }
 .buy-key__in > span { color: var(--color-fg-muted); font-size: .875rem; }
 /* Focus scrolls the window to "Set up your agent" as the box appears; the
    window's own padding stays below it, so the whole box is in view. */

@@ -50,7 +50,7 @@ import {LocalTime} from "./hooks/local_time"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
 import {MenuAgents} from "./hooks/menu_agents"
-import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
+import {MotionCount, MotionList, MotionRefusal, MotionStamp, MotionTick} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {ThemeSwitch} from "./hooks/theme_switch"
 import {TokenMenu} from "./hooks/token_menu"
@@ -336,7 +336,9 @@ const hooks = {
   MotionCount,
   MotionList,
   MotionRefusal,
+  MotionStamp,
   MotionTabs,
+  MotionTick,
   NextKeyCard,
   OnchainSteps,
   PlacesChart,
