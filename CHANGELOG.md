@@ -9298,3 +9298,74 @@ checker pin name the newest release, its tag commit (2f7eee7e) and its wheel
 (SHA256 c9e28ef0…). `make check-cli` passes Keyfleet's commands against that
 commit, so the guides' wording stands. Found by the release check: 1.10.27 was
 published while this release was being checked.
+## 2026-11-13 — The Worldline's planets spin faster; every event keeps its place
+
+Sean saw the Worldline's events run backwards as it flew, as if time were sped
+up. He asked for the planets to spin faster around the line instead, each
+event keeping its place on its line and moving only as real time passes or new
+events arrive, without lengthening the line.
+
+- Flight: while the picture follows now, only `flown`, how far the orbits have
+  run on, moves on each frame: `SPIN`, a twentieth of a day each second at
+  full pace, whatever the zoom, so Workspace circles the line every 20
+  seconds, Code every minute and Notebooks every 140 seconds. Each helix turns
+  about the line with its planet, and each bead turns with its helix at its
+  own time (`markAngle` in `assets/js/worldline/scene.ts`, the same sum in
+  the marks' shader), so picking still finds a mark where it is drawn. An
+  event's place along the line is always its own time; the line, its length
+  and its time scale never change with the flight. The stars drift by the
+  pace as before. With the mouse on the picture or a finger down the pace
+  eases to a twentieth; for a reader who asks for less motion there is no
+  flight.
+- Streaming is gone: `streamed`, the loop and where it begins, `BREAK`,
+  `GROW`, `emerging`, `streamedAt`, the copies coming round, the glide of
+  every event back to its own time, the shader's `flight` and `cycle`
+  uniforms, and their tests.
+- Stopping: moving through time (the wheel, Shift and a drag, the arrow keys,
+  a zoom away from now) eases the pace to nothing over 350 ms and the orbits
+  hold where they stand, so no bead jumps; nothing glides back, since every
+  event already stands at its own time. Now flies on from where they stood.
+  Older pages are read whenever they are needed and move nothing drawn.
+- Renderer: the paths and the marks read one shared uniform buffer (vgpu's
+  `uniforms`), set once a frame instead of once for each of six draws, and
+  each frame's values are filled into the same arrays and drawn by the same
+  calls, so the renderer's own code allocates nothing as it draws.
+- The caption and the public changelog say what the flight does now.
+- Tests: the scene tests check that a mark's place on the line does not depend
+  on the flight, that a bead turns about the line by as far as its orbit has
+  run on, that the line and helices keep their length and scale while turning,
+  that beads stay on their helices, and that picking and the planets at now
+  hold while flying. The loop's tests are removed. The browser walk's flight
+  checks pass unchanged.
+
+Check: compile with warnings as errors, unused deps, hex audit, format, credo
+strict, sobelow, xref (133 of 133), graph host 243, codegen, usage rules and
+route handoff pass; full suite 1,408 (18 properties, 1,390 tests, 19
+excluded) without a port set; typecheck and 443 unit tests pass; the three
+size budgets pass on the minified build (script 68.31 KiB, 0.36 KiB smaller
+than main; stylesheet 54.09 KiB, unchanged); browser suite 125, devices 70
+and the Chromium Worldline walk 15 pass on port 4593; required fixes,
+commands and contracts (547 tests, 6 skipped) pass. The sign-in library check
+fails on files this change leaves as main has them: regents-cli 1.10.27 is
+out, and the Makefile, the public install lines and the tool manifest still
+name 1.10.26.
+
+Measured in Chromium on a seeded fleet with events on all three planets,
+signed in as a member, at 24% (66.6 hours across), over 10 seconds (600
+frames) at full pace: no event's place on the line moved more than 0.044 px,
+which is what 10 real seconds are at that zoom, and the sun did not move;
+Workspace turned 179.7°, Code 59.9° and Notebooks 25.7°, as their 20, 60
+and 140 second turns give. A bead itself still moves on screen as it circles
+its line, up to 110 px three-quarters on and 17 px side on. With the mouse on
+the picture the turns were 9.03°, 3.01° and 1.29°, 5.0% of full. Frames took
+16.7 ms (median), at most 17.8 ms, none over 25 ms. A bead's link stood on
+the bead and its lit pixels within 1.6 px, and opened its task; a stop from
+the keyboard, the wheel or a Shift drag took no step larger than flight's and
+held still; Now flew on from where the orbits stood; a drag turned the
+picture while it flew on and Reset turned it home; an older page read while
+moving back kept all 164 marks already sent and moved nothing. For a reader
+who asks for less motion nothing moved, and once the picture stood no frame
+was drawn for the next 1.5 seconds. In a frame,
+the renderer's own code allocated nothing; vgpu 0.6.0's uniform packing,
+bind-group lookup and frame encoding allocated about 29 KB, and the hook's
+scene sums (projections, labels, heads) about 23 KB.

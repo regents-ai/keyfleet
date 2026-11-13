@@ -11,8 +11,9 @@ defmodule KeyfleetWeb.WorldlineLive do
   linked to its place in the workspace (`WorkspacePage.place_path/3`), each
   event of theirs a bead on its planet's path, each room a dithered line of
   a pixel for each post, and everything fleet-wide a point on the line
-  itself. While it shows now, the picture flies: the fleet's history streams
-  back from the sun on a loop, slowing while the reader points at it. The page
+  itself. While it shows now, the picture flies: the planets circle the line
+  far faster than real time, each event turning with its planet's path at
+  its own time, slowing while the reader points at it. The page
   sends it the newest events once it is live, older ones as the reader moves
   back to them, and new ones a moment after they happen. `?show=list` shows
   the same events as links, newest first, with "Older" for the page before.
@@ -536,9 +537,9 @@ defmodule KeyfleetWeb.WorldlineLive do
       <span class="worldline-help__touch">
         Swipe sideways to move through time, pinch to zoom, and twist two fingers to turn it.
       </span>
-      Workspace orbits once a day, Code every three days and Notebooks once a week.
+      One turn is a day for Workspace, three for Code and a week for Notebooks.
       <span class="worldline-help__flight">
-        At now, the fleet's history streams out of the sun on a loop, slowing while you point at it or touch it; moving through time stops it, and Now starts it again.
+        At now the planets spin faster than that, slowing while you point at or touch the picture; moving through time stops them, and Now starts them again.
       </span>
       <span class="visually-hidden">
         Arrow keys move through time, Alt and the arrow keys turn it, plus and minus zoom, End goes back to now, and Enter opens the event shown.

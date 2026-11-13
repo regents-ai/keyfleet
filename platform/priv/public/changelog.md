@@ -4,6 +4,10 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Spin.** The Worldline's flight now spins the planets faster around the line instead of
+  streaming the history past. Each event keeps its place at its own time and turns with its
+  planet, moving along the line only as real time passes. Moving through time stops the
+  spin where it stands, and Now starts it again.
 - **Atlas.** A fleet has a new tab that shows all its work over time, workspace items and
   notebooks together, one row per project, the busiest first. Scroll or pinch to zoom from
   a year of weeks down to days and hours, and into one hour's items and notebooks, each of

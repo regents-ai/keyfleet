@@ -19,19 +19,20 @@
  * the middle of the picture.
  *
  * The picture flies. The orbits run on ahead of now by `flown` seconds, so
- * the planets turn and their helices stream back from the sun, and every
- * event streams back with its path by `streamed` seconds, riding it, never
- * sliding along it. History is a loop: an event streamed back past the oldest
- * one, less a break, comes round again out of the sun, so the stream never
- * runs out. While nothing has streamed, every event stands at its own time.
+ * each planet circles the line faster than real time and its whole helix
+ * turns about the line with it. An event never moves along the line: its
+ * bead keeps its place at its own time and turns with its helix, and the
+ * line, its length and its time scale are the same however far the picture
+ * has flown. Only real time moves things along the line: the sun moves on
+ * and new events arrive at theirs.
  *
  * Every place is a pure function of time, the flight, the orbits' constants
- * and the camera. All the events loaded decide is where the loop begins, and
- * that is read afresh only while nothing has streamed, so pages read later
- * extend the same helices without moving anything. The shader draws the same
- * sums (`shader.ts`) and picking reads them here, so a mark is found exactly
- * where it is drawn. The camera is vgpu's orbit rig, and its matrices place
- * everything both here and on the GPU.
+ * and the camera; the events loaded decide nothing about where anything
+ * stands, so pages read later extend the same helices without moving
+ * anything. The shader draws the same sums (`shader.ts`) and picking reads
+ * them here, so a mark is found exactly where it is drawn. The camera is
+ * vgpu's orbit rig, and its matrices place everything both here and on the
+ * GPU.
  *
  * Times are seconds from the anchor, the moment the page was first read; the
  * orbits turn by the absolute time, so they stand the same whenever it was.
@@ -156,20 +157,6 @@ export type Frame = {
   readonly camera: Camera
   /** Seconds the orbits have run on ahead of now as the picture flies. */
   readonly flown: number
-  /**
-   * Seconds every event has streamed back from its own time, from 0 up to
-   * the loop's length, now less `loop`; and where the loop begins, in seconds
-   * from the anchor: the oldest event less `BREAK`.
-   */
-  readonly streamed: number
-  readonly loop: number
-  /**
-   * How far the events nearest the sun grow in out of it, 0..1, as copies
-   * coming round do: none while the flight has yet to carry every event
-   * clear of the sun, and fully after, so that a copy coming round meets its
-   * own event as it was.
-   */
-  readonly emerging: number
 }
 
 export type Vec3 = readonly [number, number, number]
@@ -356,33 +343,6 @@ export function helixAt(planet: Planet, rel: number, frame: Frame, at: Lens): Ve
   return point(frame.mid + rel, planet.radius, angle, frame, at)
 }
 
-/**
- * The empty stretch of the loop between the newest event and the oldest
- * coming round again, and how long a copy coming round takes to grow in out
- * of the sun, or an event nearing the loop's end to shrink away, in seconds.
- */
-export const BREAK = 4 * 3600
-export const GROW = BREAK / 2
-
-/**
- * When the event at `t` is drawn as the picture flies, in seconds from the
- * anchor, and how fully, 0..1: `streamed` seconds back from its own time, or,
- * streamed back past where the loop begins, come round again a loop's length
- * later, nearer the sun. A copy coming round grows in out of the sun, an
- * event near the sun grows in the same way as far as `emerging`, and an event
- * nearing the loop's end shrinks away, so none of them ever pops.
- */
-export function streamedAt(t: number, frame: Frame): {readonly t: number; readonly full: number} {
-  const length = frame.now - frame.loop
-  const back = t - frame.streamed
-  const again = back < frame.loop
-  const shown = again ? back + length : back
-  const age = frame.now - shown
-  const grown = smoothstep(0, GROW, age)
-  const fading = 1 - smoothstep(length - GROW, length, age)
-  return {t: shown, full: again ? grown : fading * (1 - frame.emerging * (1 - grown))}
-}
-
 /** An event where it is drawn. */
 export type Mark = {
   readonly event: WorldEvent
@@ -494,27 +454,32 @@ export function place(events: readonly WorldEvent[], anchor: number): Mark[] {
     })
 }
 
-/** A mark as the picture shows it, with when it is drawn and how fully, 0..1, as `streamedAt` has it. */
-export type Spot = Seen & {readonly t: number; readonly full: number}
+/**
+ * How far around the line a mark stands, in radians: a planet's bead where
+ * its helix is at the mark's own time, `flown` seconds on, so it turns with
+ * its helix as the picture flies; anything else where it always stands.
+ */
+export function markAngle(mark: Mark, frame: Frame): number {
+  if (mark.lane < 1 || mark.lane > 3) return mark.angle
+  return orbitAngle(PLANETS[mark.lane - 1], mark.t + frame.flown, frame.anchor)
+}
 
 /**
- * Where a mark stands in the picture: on its path at the time it is drawn
- * (`streamedAt`), a planet's bead where its helix is then, and a post across
- * its room's line by its row.
+ * Where a mark stands in the picture: on its path at its own time, a
+ * planet's bead where its helix is then (`markAngle`), and a post across its
+ * room's line by its row.
  */
-export function markAt(mark: Mark, frame: Frame, at: Lens): Spot {
-  const {t, full} = streamedAt(mark.t, frame)
-  const planet = PLANETS[mark.lane - 1]
-  const angle = mark.lane >= 1 && mark.lane <= 3 ? orbitAngle(planet, t + frame.flown, frame.anchor) : mark.angle
-  const here = project(point(t, mark.radius, angle, frame, at), frame, at)
-  if (mark.across === 0) return {...here, t, full}
+export function markAt(mark: Mark, frame: Frame, at: Lens): Seen {
+  const angle = markAngle(mark, frame)
+  const here = project(point(mark.t, mark.radius, angle, frame, at), frame, at)
+  if (mark.across === 0) return here
   // Square to the way the room's line runs on the screen there.
-  const ahead = project(point(t + 0.05 * at.unit, mark.radius, angle, frame, at), frame, at)
+  const ahead = project(point(mark.t + 0.05 * at.unit, mark.radius, angle, frame, at), frame, at)
   const dx = ahead.x - here.x
   const dy = ahead.y - here.y
   const length = Math.hypot(dx, dy)
   const [nx, ny] = length < 1e-6 ? [0, 1] : [-dy / length, dx / length]
-  return {x: here.x + nx * mark.across, y: here.y + ny * mark.across, depth: here.depth, t, full}
+  return {x: here.x + nx * mark.across, y: here.y + ny * mark.across, depth: here.depth}
 }
 
 /** How near two marks' distances from the pointer may be, in CSS pixels, to count as a tie. */
@@ -525,8 +490,7 @@ const CROWD = 4
 /**
  * The mark nearest (x, y) within `within` CSS pixels, by its index, with how
  * many others stand with it there; on a tie, the one nearer the camera.
- * Marks not yet shown (drawn later than `shown`), faded out, or all but
- * grown in or shrunk away at either end of the loop, are passed over.
+ * Marks not yet shown (later than `shown`) or faded out are passed over.
  */
 export function nearest(
   marks: readonly Mark[],
@@ -538,7 +502,7 @@ export function nearest(
   shown = Infinity,
 ): {readonly index: number; readonly crowd: number} | undefined {
   const seen = marks.map(mark => markAt(mark, frame, at))
-  const showing = (i: number) => seen[i].t <= shown && clear(seen[i].depth, at) >= 0.2 && seen[i].full >= 0.2
+  const showing = (i: number) => marks[i].t <= shown && clear(seen[i].depth, at) >= 0.2
   let best = -1
   let bestDistance = within
   let bestDepth = Infinity
@@ -625,7 +589,9 @@ export function magnify(depth: number): number {
 // what is left, so subtracting the middle's time loses nothing, however far
 // back the picture looks.
 const SPLIT = 4096
-const high = (t: number) => Math.floor(t / SPLIT) * SPLIT
+
+/** The whole stretches of a time, its first part as the GPU takes it. */
+export const high = (t: number) => Math.floor(t / SPLIT) * SPLIT
 
 /** A time as the GPU takes it. */
 export const split = (t: number): [number, number] => [high(t), t - high(t)]

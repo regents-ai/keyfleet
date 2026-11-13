@@ -30,15 +30,15 @@
  * the keyboard, the planet stands out as a mark does, and a press on it that
  * drags turns the picture instead. Now only names the sun.
  *
- * While it follows now, the picture flies: the planets orbit, their helices
- * and every event on them stream back from the sun, each event riding its
- * path, and the stars drift by the same way, the nearer faster. Once the
- * stream has carried the oldest event past, history comes round again out of
- * the sun, so it never runs out (`streamedAt` in the scene). With the mouse
- * on the picture, or a finger down, the flight eases to a twentieth of its
- * pace. Moved through time, the picture stops flying and every event glides
- * back to its own time; Now flies on again, and Reset returns to the view it
- * opens on.
+ * While it follows now, the picture flies: the planets circle the line far
+ * faster than real time, each helix turning about the line with its planet
+ * and each bead on it keeping its place at its own time, and the stars drift
+ * by, the nearer faster. Only real time moves anything along the line: the
+ * sun moves on and new events arrive at theirs. With the mouse on the
+ * picture, or a finger down, the flight eases to a twentieth of its pace.
+ * Moved through time, the picture eases to a stop and the orbits hold where
+ * they stand, so no bead jumps; Now flies on again from there, and Reset
+ * returns to the view it opens on.
  *
  * The picture is drawn only with WebGPU. Without it the line and the sun the
  * page drew stay, with a note that the List has every event. For a reader who
@@ -49,11 +49,9 @@
  * by the page: the first reveal (a timeline: the line and helices draw out
  * to the sun, passing each event in turn, then the planets come out onto
  * their orbits), the flight's pace, the glides of Now, Reset and the zoom
- * buttons, every event's glide back to its own time with those nearest the
- * sun growing back in, the mark in focus, the
- * planet pointed at, an arrival's flare and word, and a change of filter. A
- * move asked for from the keyboard happens at once. The shimmer runs by the
- * clock.
+ * buttons, the mark in focus, the planet pointed at, an arrival's flare and
+ * word, and a change of filter. A move asked for from the keyboard happens
+ * at once. The shimmer runs by the clock.
  */
 import {animate, createScope, createTimeline, type AnimationParams, type JSAnimation} from "animejs"
 
@@ -63,10 +61,8 @@ import {showingTheme, watchTheme} from "../theme"
 import {tone} from "../theme_tone"
 import type {Scene, Tones, WorldlineRenderer} from "../worldline/renderer"
 import {
-  BREAK,
   CHANGE,
   DAY,
-  GROW,
   HOME,
   MAX_EVENTS,
   OPENING,
@@ -151,8 +147,12 @@ const REVEAL = 1100
 const ORBITING = 520
 /** How long a new event's word shows over the sun, in milliseconds. */
 const NEWS = 2600
-/** Seconds the picture's width of time, or the whole loop if that is shorter, takes to stream past at full pace. */
-const FLIGHT = 20
+/**
+ * Seconds the orbits run on in a second of flight at full pace, whatever the
+ * zoom: Workspace circles the line every 20 seconds, Code every minute and
+ * Notebooks every 140 seconds.
+ */
+const SPIN = DAY / 20
 /** The flight's pace while the mouse is on the picture or a finger is down, of full; and how long it takes to ease to a new pace, in milliseconds. */
 const CRUISE = 0.05
 const PACING = 350
@@ -234,13 +234,10 @@ export const Worldline: Hook = {
     let clock = 0
     let ticked: number | undefined
     let strained = false
-    // How far the picture has flown: the orbits' seconds on, the events'
-    // seconds back round the loop and where the loop begins (`Frame`); how
+    // How far the picture has flown: the orbits' seconds on (`Frame`); how
     // far each layer of stars has drifted round; and whether the mouse is on
     // the picture or a finger is down on it.
     let flown = 0
-    let streamed = 0
-    let loop = -BREAK
     const drift = DRIFT.map(() => 0)
     let hovering = false
     let touching = false
@@ -268,9 +265,8 @@ export const Worldline: Hook = {
 
     // What anime.js moves: the reveal, the planets coming out onto their
     // orbits, the mark in focus, the planet pointed at, an arrival, a change
-    // of filter, a glide back to the sun, a zoom, a turn back home, the
-    // flight's pace, the events' glide back to their own times and how far
-    // those nearest the sun grow in out of it (`Frame`).
+    // of filter, a glide back to the sun, a zoom, a turn back home and the
+    // flight's pace.
     const motion = {
       revealed: 1e12,
       orbiting: 1,
@@ -283,23 +279,15 @@ export const Worldline: Hook = {
       zoom: 0,
       turn: 0,
       pace: 0,
-      landing: 0,
-      emerging: 0,
     }
     // Which heads flare for what just arrived: the sun, then each planet.
     let flaring = [0, 0, 0, 0]
     let homing: {from: number; animation: JSAnimation} | undefined
     let zooming: {from: number; to: number; animation: JSAnimation} | undefined
     let turning: {from: Camera; animation: JSAnimation} | undefined
-    // The pace the flight is easing to, and the events gliding back to their
-    // own times: from how far they had streamed, by how far, the shorter way
-    // round. The loop grows on with now meanwhile, so the glide stops short
-    // of its end, and the last of the way is taken as it finishes. Then the
-    // events nearest the sun growing back in.
+    // The pace the flight is easing to.
     let aim = 0
     let pacing: JSAnimation | undefined
-    let landing: {from: number; by: number; animation: JSAnimation} | undefined
-    let settling: JSAnimation | undefined
     // While the filter changes: the events that leave and those that arrive.
     let changing: {leaving: Set<string>; arriving: Set<string>; animation: JSAnimation} | undefined
     let focus: number | undefined
@@ -333,9 +321,6 @@ export const Worldline: Hook = {
       anchor,
       camera: {yaw, pitch},
       flown,
-      streamed,
-      loop,
-      emerging: motion.emerging,
     })
     const look = () => {
       const shown = frame()
@@ -362,92 +347,20 @@ export const Worldline: Hook = {
         }),
       )
 
-    // Where the loop begins: the oldest event loaded, less a break.
-    const begins = () => (oldest() ?? now()) - BREAK
-
-    // The picture flies on to where the events have streamed `to` seconds
-    // back, the orbits turning on as far. Each time round the loop, and
-    // whenever nothing has streamed, it begins afresh at the oldest event
-    // loaded; every event stands at its own time then, so nothing moves.
-    const travel = (to: number) => {
-      const length = now() - loop
-      flown += to - streamed
-      streamed = to >= length ? to - length : to
-      if (streamed === 0 || streamed < to) loop = begins()
-    }
-
-    // Every event back at its own time, the way round the loop it was going.
-    const landed = (round: boolean) => {
-      flown += (round ? now() - loop : 0) - streamed
-      streamed = 0
-      loop = begins()
-    }
-
-    // The events nearest the sun grow in out of it from here on, as copies
-    // coming round do. Once the flight has carried every event clear of the
-    // sun, so none of them shows the change.
-    const emerge = () => {
-      settling?.cancel()
-      settling = undefined
-      motion.emerging = 1
-    }
-
-    // The events nearest the sun grow back in, alongside a glide or at once.
-    const settle = (glides: boolean) => {
-      settling?.cancel()
-      settling = undefined
-      if (glides) settling = run({emerging: 0, duration: HOMING, ease: EASE_OUT})
-      else motion.emerging = 0
-    }
-
-    // Every event glides back to its own time, the shorter way round the
-    // loop, and those nearest the sun grow back in: going back, as they
-    // glide; going on round, once the copies have met their own events. At
-    // once from the keyboard or for a reader who asked for less motion. The
-    // flight stops meanwhile.
-    const land = (glides: boolean) => {
-      if (streamed === 0 || (landing !== undefined && glides)) return
-      landing?.animation.cancel()
-      const round = streamed > (now() - loop) / 2
-      if (!glides || still(root)) {
-        landing = undefined
-        landed(round)
-        settle(false)
-        nudge()
-        return
-      }
-      motion.landing = 0
-      landing = {
-        from: streamed,
-        by: (round ? now() - loop : 0) - streamed,
-        animation: run({landing: [0, 1], duration: HOMING, ease: EASE_OUT}, () => {
-          landing = undefined
-          landed(round)
-          if (round) settle(true)
-        }),
-      }
-      if (!round) settle(true)
-    }
-
-    // A reader who takes the picture away from now has the events at their
-    // own times.
-    const leave = (glides: boolean) => {
-      if (!following) land(glides)
-    }
-
     // The flight's pace: full while the picture follows now, a twentieth
     // while the mouse is on it or a finger is down, and none while the reader
-    // has it elsewhere in time, while the events glide back, before it has
-    // opened, or for a reader who asked for less motion. A pace is eased
-    // into, and none is at once.
+    // has it elsewhere in time, before it has opened, or for a reader who
+    // asked for less motion. Every change of pace is eased into, so taken
+    // away from now the orbits slow to a stop and hold where they stand, and
+    // no bead ever jumps.
     const steer = () => {
       const opened = loaded && motion.revealed >= 1e12
-      const want = !opened || !following || landing || still(root) ? 0 : hovering || touching ? CRUISE : 1
+      const want = !opened || !following || still(root) ? 0 : hovering || touching ? CRUISE : 1
       if (want === aim) return
       aim = want
       pacing?.cancel()
       pacing = undefined
-      if (want === 0) motion.pace = 0
+      if (still(root)) motion.pace = want
       else pacing = run({pace: want, duration: PACING, ease: EASE_IN_OUT})
     }
 
@@ -476,7 +389,6 @@ export const Worldline: Hook = {
       mid += seconds
       following = false
       hold()
-      leave(true)
     }
 
     // Moves through time as far as a drag of (dx, dy) runs along the line on
@@ -505,7 +417,6 @@ export const Worldline: Hook = {
       span = next
       following = false
       hold()
-      leave(true)
     }
 
     const stop = (each: {animation: JSAnimation} | undefined) => each?.animation.cancel()
@@ -619,11 +530,9 @@ export const Worldline: Hook = {
     }
 
     // The mark in focus stays the same event when others arrive around it.
-    // While every event stands at its own time, the loop begins afresh.
     const relayout = () => {
       const kept = focus === undefined ? undefined : marks[focus].event.id
       marks = place([...events.values()], anchor)
-      if (streamed === 0) loop = begins()
       if (kept !== undefined) {
         const index = marks.findIndex(mark => mark.event.id === kept)
         focus = index < 0 ? undefined : index
@@ -719,7 +628,7 @@ export const Worldline: Hook = {
     // The link stands on the mark in focus, its words to whichever side has
     // room, the heads' names beside them, and a new event's word over the
     // sun, each frame, so they ride along as the picture flies. A mark turned
-    // or streamed out of sight is let go.
+    // out of sight is let go.
     const placeLabels = (shown: Frame, at: Lens) => {
       const sun = project(point(shown.now, 0, 0, shown, at), shown, at)
       news.style.transform = `translate(${sun.x.toFixed(1)}px, ${sun.y.toFixed(1)}px)`
@@ -727,7 +636,7 @@ export const Worldline: Hook = {
       if (focus === undefined) return
       const spot = markAt(marks[focus], shown, at)
       const outside = spot.x < 0 || spot.x > width || spot.y < 0 || spot.y > height
-      if (outside || clear(spot.depth, at) < 0.2 || spot.full < 0.2) {
+      if (outside || clear(spot.depth, at) < 0.2) {
         choose(undefined, "pointer")
         return
       }
@@ -738,11 +647,11 @@ export const Worldline: Hook = {
 
     // Older events are read a page at a time while fewer than a picture's
     // width of them stand ready past where the drawn history begins, so they
-    // are there before the reader moves back to them; and only while every
-    // event stands at its own time, so the loop begins afresh with them.
+    // are there before the reader moves back to them. Each event stands at
+    // its own time, so those read later move nothing already drawn.
     const readOlder = () => {
       const first = oldest()
-      if (!older || asking || streamed !== 0 || first === undefined || events.size >= MAX_EVENTS) return
+      if (!older || asking || first === undefined || events.size >= MAX_EVENTS) return
       if (first < current.shown.mid + current.drawn.line.from - span) return
       asking = true
       this.pushEvent<Older>("worldline_older", {}, reply => {
@@ -859,24 +768,19 @@ export const Worldline: Hook = {
     this.handleEvent<Page>("worldline:page", page)
     this.handleEvent<{events: WorldEvent[]}>("worldline:heard", heard)
 
-    // One frame: the clock runs on, the picture flies on at its pace (a
-    // picture's width of time, or the whole loop, every `FLIGHT` seconds at
-    // full) and the stars drift with it, or the events glide back to their
-    // own times; a move or a turn let go glides on or springs back, a glide
-    // to the sun, a zoom or a turn home closes in, and the sun follows now.
-    // True while anything still moves.
+    // One frame: the clock runs on, the orbits run on at the flight's pace
+    // (`SPIN` at full) and the stars drift with them; a move or a turn let go
+    // glides on or springs back, a glide to the sun, a zoom or a turn home
+    // closes in, and the sun follows now. True while anything still moves.
     const advance = (time: number) => {
       const dt = ticked === undefined ? 0 : Math.min(50, time - ticked)
       ticked = time
       const moving = !still(root) && !strained
       if (moving) clock += dt / 1000
       steer()
-      if (landing) {
-        travel(landing.from + landing.by * motion.landing)
-      } else if (moving && motion.pace > 0) {
+      if (moving && motion.pace > 0) {
         const seconds = (motion.pace * dt) / 1000
-        travel(streamed + (seconds * Math.min(span, now() - loop)) / FLIGHT)
-        if (streamed >= GROW && motion.emerging < 1) emerge()
+        flown += seconds * SPIN
         for (let i = 0; i < drift.length; i++) drift[i] = (drift[i] + seconds * DRIFT[i]) % (2 * Math.PI)
       }
       if (zooming) {
@@ -1263,7 +1167,6 @@ export const Worldline: Hook = {
             }
             event.preventDefault()
             if (event.key !== "End") takeOver()
-            leave(false)
             if (event.key !== "Escape" && event.key !== "Enter") chooseMiddle()
             island.nudge()
           },

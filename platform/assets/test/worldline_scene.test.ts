@@ -1,11 +1,9 @@
 import {describe, expect, it} from "vitest"
 
 import {
-  BREAK,
   DAY,
   DISTANCE,
   FORM,
-  GROW,
   HEADS,
   HOME,
   OPENING,
@@ -19,6 +17,7 @@ import {
   helixAt,
   lens,
   magnify,
+  markAngle,
   markAt,
   nearest,
   orbitAngle,
@@ -27,7 +26,6 @@ import {
   place,
   point,
   project,
-  streamedAt,
   tips,
   type Box,
   type Camera,
@@ -43,7 +41,7 @@ const ANCHOR = Date.UTC(2026, 10, 12, 9, 30)
 const NOW = 40
 
 // The picture as it opens: following now, the sun 0.4 of the span right of
-// the middle, not yet flown, its loop beginning well before every event here.
+// the middle, not yet flown.
 const opening = (camera: Camera = HOME, span = OPENING, anchor = ANCHOR): Frame => ({
   width: 1280,
   height: 560,
@@ -53,9 +51,6 @@ const opening = (camera: Camera = HOME, span = OPENING, anchor = ANCHOR): Frame 
   anchor,
   camera,
   flown: 0,
-  streamed: 0,
-  loop: NOW - 30 * DAY,
-  emerging: 0,
 })
 
 const event = (id: string, seconds: number, trail: string, kind: string, place: number | null = null): WorldEvent => ({
@@ -230,105 +225,103 @@ describe("the flight", () => {
     event("n", -5 * DAY, "notebooks", "backup"),
   ]
   const marks = place(events, ANCHOR)
-  const oldest = marks.find(mark => mark.event.id === "n")!
-  // The loop begins a break before the oldest event.
-  const loop = oldest.t - BREAK
-  const length = NOW - loop
-  // Flown `streamed` seconds round the loop, the orbits as far on and some.
-  const flying = (streamed: number, emerging = 1): Frame => ({
-    ...opening(),
-    flown: 9 * 3600 + streamed,
-    streamed,
-    loop,
-    emerging,
+  const beads = marks.filter(mark => mark.lane >= 1 && mark.lane <= 3)
+  // The orbits run on `flown` seconds; nothing else about the frame changes.
+  const flying = (flown: number): Frame => ({...opening(), flown})
+  const FLOWN = [0, 1234, 9 * 3600, 2 * DAY, 400 * DAY]
+
+  it("keeps every event at its own time on the line, however far the picture has flown", () => {
+    for (const mark of marks) {
+      const still = flying(0)
+      const at = lens(still)
+      const along = point(mark.t, mark.radius, markAngle(mark, still), still, at)[0]
+      for (const flown of FLOWN) {
+        const frame = flying(flown)
+        const seen = lens(frame)
+        const spot = point(mark.t, mark.radius, markAngle(mark, frame), frame, seen)
+        // Along the line it stands at its own time, and the flight moves it
+        // only around the line, at its radius.
+        expect(spot[0]).toBe(along)
+        expect(Math.hypot(spot[1], spot[2])).toBeCloseTo(mark.radius, 12)
+        if (mark.across === 0) expect(markAt(mark, frame, seen)).toEqual(project(spot, frame, seen))
+      }
+      // What is not a planet's bead does not move at all.
+      if (mark.lane === 0 || mark.lane === 4) {
+        for (const flown of FLOWN) expect(markAt(mark, flying(flown), at)).toEqual(markAt(mark, still, at))
+      }
+    }
   })
 
-  it("keeps each bead on its planet's helix wherever the flight has carried it", () => {
-    for (const streamed of [0, 1234, 3 * 3600, BREAK + 600, 2 * DAY, length - 60]) {
-      const frame = flying(streamed)
+  it("turns each planet's bead about the line as far as its orbit has run on", () => {
+    for (const mark of beads) {
+      const {period} = PLANETS[mark.lane - 1]
+      const at = lens(flying(0))
+      for (const flown of FLOWN) {
+        const turned = markAngle(mark, flying(flown)) - markAngle(mark, flying(0))
+        const orbit = (2 * Math.PI * flown) / period
+        expect(Math.cos(turned)).toBeCloseTo(Math.cos(orbit), 6)
+        expect(Math.sin(turned)).toBeCloseTo(Math.sin(orbit), 6)
+      }
+      const before = markAt(mark, flying(0), at)
+      const after = markAt(mark, flying(3 * 3600), at)
+      expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(1)
+    }
+  })
+
+  it("draws the same line and helices, as long and to the same scale, turning only the helices", () => {
+    const still = paths(flying(0), lens(flying(0)))
+    for (const flown of FLOWN) {
+      const frame = flying(flown)
+      const drawn = paths(frame, lens(frame))
+      expect(drawn.line).toEqual(still.line)
+      drawn.orbits.forEach(({phase, ...run}, i) => {
+        const {phase: begun, ...ran} = still.orbits[i]
+        expect(run).toEqual(ran)
+        const turns = phase - begun - flown / PLANETS[i].period
+        expect(Math.abs(turns - Math.round(turns))).toBeLessThan(1e-6)
+      })
+    }
+  })
+
+  it("keeps each bead on its planet's helix, however far the picture has flown", () => {
+    for (const flown of FLOWN) {
+      const frame = flying(flown)
       const at = lens(frame)
-      for (const mark of marks.filter(each => each.lane >= 1 && each.lane <= 3)) {
+      for (const mark of beads) {
         const bead = markAt(mark, frame, at)
-        const onHelix = project(helixAt(PLANETS[mark.lane - 1], bead.t - frame.mid, frame, at), frame, at)
+        const onHelix = project(helixAt(PLANETS[mark.lane - 1], mark.t - frame.mid, frame, at), frame, at)
         expect(bead.x).toBeCloseTo(onHelix.x, 6)
         expect(bead.y).toBeCloseTo(onHelix.y, 6)
       }
     }
   })
 
-  it("streams every event back with its path, so none slides along it", () => {
-    const step = 1800
-    const before = flying(3 * 3600)
-    const after = flying(3 * 3600 + step)
-    const at = lens(before)
-    // Each event is drawn as much earlier as the flight went on...
-    for (const mark of marks) expect(streamedAt(mark.t, after).t).toBeCloseTo(streamedAt(mark.t, before).t - step, 9)
-    // ...and each helix moved back by as much, without turning.
-    PLANETS.forEach(planet => {
-      for (const rel of [-DAY, -4321, 0, NOW - before.mid]) {
-        const was = helixAt(planet, rel, before, at)
-        const is = helixAt(planet, rel - step, after, at)
-        expect(is[0]).toBeCloseTo(was[0] - step / at.unit, 9)
-        expect(is[1]).toBeCloseTo(was[1], 6)
-        expect(is[2]).toBeCloseTo(was[2], 6)
-      }
-    })
-  })
-
-  it("comes round the loop with nothing popping", () => {
-    // The oldest event shrinks away at the loop's end and its copy grows in
-    // out of the sun.
-    const crossing = oldest.t - loop
-    expect(streamedAt(oldest.t, flying(crossing - 1)).full).toBeLessThan(1e-3)
-    const copy = streamedAt(oldest.t, flying(crossing + 1))
-    expect(copy.t).toBeCloseTo(NOW - 1, 6)
-    expect(copy.full).toBeLessThan(1e-3)
-    // A whole loop on, every event stands as it began, the newest too.
-    for (const mark of marks) {
-      const round = streamedAt(mark.t, flying(length))
-      const begun = streamedAt(mark.t, flying(0))
-      expect(round.t).toBeCloseTo(begun.t, 6)
-      expect(round.full).toBeCloseTo(begun.full, 9)
-    }
-  })
-
-  it("stands every event full at its own time while nothing has streamed", () => {
-    for (const mark of marks) expect(streamedAt(mark.t, flying(0, 0))).toEqual({t: mark.t, full: 1})
-  })
-
-  it("finds each mark where the flight has carried it, passing over one still growing in", () => {
-    const frame = flying(3 * 3600)
-    const at = lens(frame)
-    marks.forEach((mark, index) => {
-      const spot = markAt(mark, frame, at)
-      if (spot.x < 0 || spot.x > frame.width || clear(spot.depth, at) < 0.2) return
-      expect(nearest(marks, frame, at, spot.x, spot.y, 24)?.index).toBe(index)
-    })
-    const crossing = oldest.t - loop
-    const index = marks.indexOf(oldest)
-    const emerging = flying(crossing + 60)
-    const grown = flying(crossing + GROW)
-    for (const [frame, found] of [
-      [emerging, false],
-      [grown, true],
-    ] as const) {
-      const spot = markAt(oldest, frame, lens(frame))
-      expect(nearest(marks, frame, lens(frame), spot.x, spot.y, 4)?.index === index).toBe(found)
+  it("finds each mark where it is drawn while flying", () => {
+    for (const flown of [3 * 3600, 2 * DAY]) {
+      const frame = flying(flown)
+      const at = lens(frame)
+      marks.forEach((mark, index) => {
+        const spot = markAt(mark, frame, at)
+        if (spot.x < 0 || spot.x > frame.width || clear(spot.depth, at) < 0.2) return
+        expect(nearest(marks, frame, at, spot.x, spot.y, 24)?.index).toBe(index)
+      })
     }
   })
 
   it("puts each planet at now where its helix ends, however far it has flown", () => {
-    const frame = flying(2 * DAY)
-    const at = lens(frame)
-    const packed = heads(frame, at)
-    const {orbits} = paths(frame, at)
-    for (let i = 0; i < HEADS; i++) {
-      const [, , radius, angle, , , , , form, , lane] = packed.slice(i * 12, i * 12 + 12)
-      if (form === FORM.sun) continue
-      const head = point(frame.now, radius, angle, frame, at)
-      const end = helixAt(PLANETS[lane - 1], orbits[lane - 1].to, frame, at)
-      expect(head[1]).toBeCloseTo(end[1], 5)
-      expect(head[2]).toBeCloseTo(end[2], 5)
+    for (const flown of FLOWN) {
+      const frame = flying(flown)
+      const at = lens(frame)
+      const packed = heads(frame, at)
+      const {orbits} = paths(frame, at)
+      for (let i = 0; i < HEADS; i++) {
+        const [, , radius, angle, , , , , form, , lane] = packed.slice(i * 12, i * 12 + 12)
+        if (form === FORM.sun) continue
+        const head = point(frame.now, radius, angle, frame, at)
+        const end = helixAt(PLANETS[lane - 1], orbits[lane - 1].to, frame, at)
+        expect(head[1]).toBeCloseTo(end[1], 5)
+        expect(head[2]).toBeCloseTo(end[2], 5)
+      }
     }
   })
 })

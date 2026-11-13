@@ -9,14 +9,25 @@
  * The paths are worked out on the GPU from time alone, so they take no
  * buffers; the events are instances of one buffer that reaches the GPU only
  * when they change, so thousands of them cost one write when they arrive and
- * nothing after. Each frame sends only the camera, how far the picture has
- * flown and the four heads.
+ * nothing after. Each frame sends only the camera, how far the orbits stand
+ * and the four heads, filled into the same arrays every time.
  */
 import {prepareShader} from "@vgpu/wgsl/prepare"
-import {draw, effect, frame as render, geometry, init, sampler, surface, target} from "vgpu"
+import {
+  draw,
+  effect,
+  frame as render,
+  geometry,
+  init,
+  sampler,
+  surface,
+  target,
+  uniforms,
+  type Frame as Encoding,
+  type FramePass,
+} from "vgpu"
 
 import {
-  GROW,
   HEADS,
   MARK_FLOATS,
   MAX_EVENTS,
@@ -24,7 +35,7 @@ import {
   RING_PIECES,
   SEGMENTS,
   TONES,
-  split,
+  high,
   type Frame,
   type Lens,
   type Orbit,
@@ -106,7 +117,6 @@ export async function createWorldlineRenderer(
   // Device pixels per CSS pixel, which the island may have capped below the
   // screen's own.
   let scale = 1
-  let markCount = 0
   let stars = 0
   let bloom = 0
 
@@ -142,10 +152,11 @@ export async function createWorldlineRenderer(
       label: "worldline.heads",
       buffers: instances(new Float32Array(HEADS * MARK_FLOATS)),
     })
-    const params = {
+    // One buffer that every draw of the paths and the marks reads.
+    const params = uniforms(gpu, {
       size: [size[0], size[1], 1, 1],
       time: four(),
-      viewProjection: new Array(16).fill(0),
+      viewProjection: new Float32Array(16),
       forward: four(),
       line: four(),
       orbits: PLANETS.map(four),
@@ -156,11 +167,9 @@ export async function createWorldlineRenderer(
       mood: four(),
       pulse: four(),
       entrance: [1, 1, 0, 0],
-      flight: four(),
-      cycle: [0, 1, GROW, 0],
       ground: four(),
       tones: TONES.map(() => [1, 1, 1, 1]),
-    }
+    })
     const pathsShader = prepareShader(pathsWgsl, "worldline-paths.wgsl")
     const marksShader = prepareShader(marksWgsl, "worldline-marks.wgsl")
     const paths = (side: number, label: string) =>
@@ -225,13 +234,60 @@ export async function createWorldlineRenderer(
       scale = width / Math.max(1, canvas.clientWidth)
     })
 
-    const set = (values: Partial<typeof params>) => {
-      for (const each of draws) each.set({params: values})
+    // What each frame sets, filled into the same arrays every time, and the
+    // frame drawn by the same calls, so drawing a frame allocates nothing of
+    // its own.
+    const live = {
+      size: four(),
+      time: four(),
+      viewProjection: new Float32Array(16),
+      forward: four(),
+      line: four(),
+      orbits: PLANETS.map(four),
+      pieces: four(),
+      focus: four(),
+      flare: four(),
+      lift: four(),
+      pulse: four(),
+      entrance: four(),
     }
-    // The flight, filled in place each frame.
-    const flight = four()
-    const cycle = [0, 1, GROW, 0]
-    const drift = four()
+    const heavens = {size: four(), right: four(), up: four(), forward: four(), drift: four()}
+    const skyUpdate = {sky: heavens}
+    const put = (into: number[], a: number, b: number, c: number, d: number) => {
+      into[0] = a
+      into[1] = b
+      into[2] = c
+      into[3] = d
+    }
+    // How many instances each draw takes this frame: each planet's helix,
+    // then its circle in the plane of the present; the line; the events.
+    const turns = {instances: 0}
+    const lineRun = {instances: 0}
+    const events = {instances: 0}
+    const tips = {instances: HEADS}
+    const clear = [0, 0, 0, 0] as const
+    const intoPicture = {target: picture, clear}
+    const intoGlow = {target: glow, clear}
+    const intoAcross = {target: across, clear}
+    const intoStage = {target: stage, clear}
+    const drawPicture = (pass: FramePass) => {
+      if (stars > 0) pass.draw(sky)
+      pass.draw(farPaths, turns)
+      if (events.instances > 0) pass.draw(farMarks, events)
+      if (lineRun.instances > 0) pass.draw(line, lineRun)
+      pass.draw(nearPaths, turns)
+      if (events.instances > 0) pass.draw(nearMarks, events)
+      pass.draw(headMarks, tips)
+    }
+    const paint = (current: Encoding) => {
+      current.pass(intoPicture, drawPicture)
+      if (bloom > 0) {
+        current.pass(intoGlow, bright)
+        current.pass(intoAcross, blurAcross)
+        current.pass(intoGlow, blurDown)
+      }
+      current.pass(intoStage, composite)
+    }
 
     return {
       resize(width, height) {
@@ -243,7 +299,7 @@ export async function createWorldlineRenderer(
         blurDown.set({blur: {step: [0, SPREAD * glow.texelSize[1], 0, 0]}})
       },
       tones(tones) {
-        set({
+        params.set({
           mood: [tones.glow, tones.far, 0, 0],
           ground: [...tones.ground, 1],
           tones: tones.palette.map(rgb => [...rgb, 1]),
@@ -254,68 +310,43 @@ export async function createWorldlineRenderer(
         composite.set({composite: {strength: [tones.bloom, 0, 0, 0]}})
       },
       load(packed) {
-        markCount = packed.length / MARK_FLOATS
+        events.instances = packed.length / MARK_FLOATS
         quads.write(packed)
       },
       present(scene) {
         const {frame, lens: at, paths: drawn} = scene
-        const [hi, lo] = split(frame.mid)
-        const length = frame.now - frame.loop
-        ;[flight[0], flight[1]] = split(frame.mid + frame.streamed)
-        ;[flight[2], flight[3]] = split(frame.mid + frame.streamed - length)
-        cycle[0] = frame.loop - frame.mid
-        cycle[1] = length
-        cycle[3] = frame.emerging
-        set({
-          size: [frame.width, frame.height, scale, at.aspect],
-          time: [hi, lo, at.unit, 0],
-          viewProjection: [...at.viewProjection],
-          forward: [...at.forward, 0],
-          line: [drawn.line.from, drawn.line.to, drawn.line.step, drawn.line.pieces],
-          orbits: drawn.orbits.map(orbit => [orbit.from, orbit.to, orbit.step, orbit.phase]),
-          pieces: [...drawn.orbits.map(orbit => orbit.pieces), frame.now - frame.mid],
-          focus: [scene.revealed - frame.mid, scene.arrivedFrom - frame.mid, scene.focus, scene.emphasis],
-          flare: [...scene.flare],
-          lift: [...scene.lift],
-          pulse: [scene.clock, scene.shimmer, 0, 0],
-          entrance: [scene.orbiting, scene.change, 0, 0],
-          flight,
-          cycle,
-        })
+        const hi = high(frame.mid)
+        put(live.size, frame.width, frame.height, scale, at.aspect)
+        put(live.time, hi, frame.mid - hi, at.unit, 0)
+        live.viewProjection.set(at.viewProjection)
+        put(live.forward, at.forward[0], at.forward[1], at.forward[2], 0)
+        put(live.line, drawn.line.from, drawn.line.to, drawn.line.step, drawn.line.pieces)
+        let helices = 0
+        for (let i = 0; i < PLANETS.length; i++) {
+          const orbit = drawn.orbits[i]
+          put(live.orbits[i], orbit.from, orbit.to, orbit.step, orbit.phase)
+          live.pieces[i] = orbit.pieces
+          helices += orbit.pieces
+        }
+        live.pieces[3] = frame.now - frame.mid
+        put(live.focus, scene.revealed - frame.mid, scene.arrivedFrom - frame.mid, scene.focus, scene.emphasis)
+        put(live.flare, scene.flare[0], scene.flare[1], scene.flare[2], scene.flare[3])
+        put(live.lift, scene.lift[0], scene.lift[1], scene.lift[2], scene.lift[3])
+        put(live.pulse, scene.clock, scene.shimmer, 0, 0)
+        put(live.entrance, scene.orbiting, scene.change, 0, 0)
+        params.set(live)
         if (stars > 0) {
-          for (let i = 0; i < scene.drift.length; i++) drift[i] = scene.drift[i]
-          sky.set({
-            sky: {
-              size: [frame.width, frame.height, scale, at.focal],
-              right: [...at.right, 0],
-              up: [...at.up, 0],
-              forward: [...at.forward, 0],
-              drift,
-            },
-          })
+          put(heavens.size, frame.width, frame.height, scale, at.focal)
+          put(heavens.right, at.right[0], at.right[1], at.right[2], 0)
+          put(heavens.up, at.up[0], at.up[1], at.up[2], 0)
+          put(heavens.forward, at.forward[0], at.forward[1], at.forward[2], 0)
+          put(heavens.drift, scene.drift[0], scene.drift[1], scene.drift[2], 0)
+          sky.set(skyUpdate)
         }
         tops.write(scene.heads)
-        const helices = drawn.orbits.reduce((sum, orbit) => sum + orbit.pieces, 0)
-        // Each planet's helix, then its circle in the plane of the present.
-        const turns = helices + PLANETS.length * RING_PIECES
-        const clear = [0, 0, 0, 0] as const
-        render(gpu, current => {
-          current.pass({target: picture, clear}, pass => {
-            if (stars > 0) pass.draw(sky)
-            pass.draw(farPaths, {instances: turns})
-            if (markCount > 0) pass.draw(farMarks, {instances: markCount})
-            if (drawn.line.pieces > 0) pass.draw(line, {instances: drawn.line.pieces})
-            pass.draw(nearPaths, {instances: turns})
-            if (markCount > 0) pass.draw(nearMarks, {instances: markCount})
-            pass.draw(headMarks, {instances: HEADS})
-          })
-          if (bloom > 0) {
-            current.pass({target: glow, clear}, pass => pass.draw(bright))
-            current.pass({target: across, clear}, pass => pass.draw(blurAcross))
-            current.pass({target: glow, clear}, pass => pass.draw(blurDown))
-          }
-          current.pass({target: stage, clear}, pass => pass.draw(composite))
-        })
+        turns.instances = helices + PLANETS.length * RING_PIECES
+        lineRun.instances = drawn.line.pieces
+        render(gpu, paint)
       },
       settled() {
         return gpu.settled()

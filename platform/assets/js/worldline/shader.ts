@@ -62,14 +62,6 @@ struct Params {
   // How far the planets have come out onto their orbits, and how far a
   // change of filter has gone, 0..1.
   entrance: vec4f,
-  // As the events stream back (\`streamedAt\` in scene.ts): the middle's time
-  // plus how far they have streamed, in two parts, and the same a loop's
-  // length earlier, for a copy come round again.
-  flight: vec4f,
-  // Where the loop begins, in seconds from the middle, its length, how long
-  // a copy takes to grow in or an event to shrink away, in seconds, and how
-  // far the events nearest the sun grow in as copies do, 0..1.
-  cycle: vec4f,
   ground: vec4f,
   tones: array<vec4f, ${TONES.length}>,
 }
@@ -318,8 +310,8 @@ fn on(path: u32, ring: bool, u: f32) -> vec3f {
  * and takes a ring, and so does what just arrived while its head flares,
  * and a planet whose link is pointed at or has the keyboard.
  * While the filter changes, the marks that no longer match shrink away and
- * the ones that now do come in. As the picture flies, every event streams
- * back along its path and comes round again out of the sun.
+ * the ones that now do come in. Every mark stands at its own time; as the
+ * picture flies, a planet's bead turns about the line with its helix.
  */
 export const marksWgsl = /* wgsl */ `
 ${shared}
@@ -352,26 +344,13 @@ struct Mark {
   @location(1) b: vec4f,
   @location(2) c: vec4f,
 ) -> Mark {
-  // When it happened, from the middle, and when it is drawn: streamed back
-  // as the picture flies, or come round again past where the loop begins,
-  // growing in out of the sun or shrinking away at the loop's end. A head
+  // When it happened, from the middle, where it always stands; a head
   // stands at now.
-  let real = (a.x - params.time.x) + (a.y - params.time.y);
+  let rel = (a.x - params.time.x) + (a.y - params.time.y);
   let lane = u32(c.z + 0.5);
   let head = SIDE > 1.5;
-  var rel = real;
-  var full = 1.0;
-  if (!head) {
-    let back = (a.x - params.flight.x) + (a.y - params.flight.y);
-    let again = back < params.cycle.x;
-    rel = select(back, (a.x - params.flight.z) + (a.y - params.flight.w), again);
-    let age = params.pieces.w - rel;
-    let grown = smoothstep(0.0, params.cycle.z, age);
-    let fading = 1.0 - smoothstep(params.cycle.y - params.cycle.z, params.cycle.y, age);
-    full = select(fading * mix(1.0, grown, params.cycle.w), grown, again);
-  }
-  // A planet's bead stands on its helix where it is drawn, as \`on\` places
-  // the helix in the paths' shader.
+  // A planet's bead stands on its helix at its own time, as \`on\` places
+  // the helix in the paths' shader, and \`markAngle\` in scene.ts.
   var angle = a.w;
   if (!head && lane >= 1u && lane <= 3u) {
     let orbit = planet(lane - 1u);
@@ -402,7 +381,7 @@ struct Mark {
 
   let flare = params.flare[select(0u, lane, lane >= 1u && lane <= 3u)];
   let focused = select(0.0, params.focus.w, params.focus.z >= 0.0 && abs(b.z - params.focus.z) < 0.5);
-  let arrived = select(0.0, flare, !head && real >= params.focus.y);
+  let arrived = select(0.0, flare, !head && rel >= params.focus.y);
   let flaring = select(0.0, flare, head);
   let lifted = select(0.0, params.lift[min(lane, 3u)], head);
   let lit = max(max(focused, arrived), lifted);
@@ -421,7 +400,7 @@ struct Mark {
   if (form != ${FORM.pixel}u) {
     grow = perspective(here.z) * select(1.0, fullness(near), a.z > 0.0);
   }
-  let radius = b.y * 0.5 * scale * grow * full * (0.5 + 0.5 * stays) * (1.0 + 0.8 * focused + 0.8 * arrived + 0.45 * flaring + 0.3 * lifted);
+  let radius = b.y * 0.5 * scale * grow * (0.5 + 0.5 * stays) * (1.0 + 0.8 * focused + 0.8 * arrived + 0.45 * flaring + 0.3 * lifted);
   var room = radius + 4.0 * scale;
   if (form == ${FORM.pixel}u) {
     room = radius + 0.75 * scale;
@@ -432,7 +411,7 @@ struct Mark {
   } else if (form == ${FORM.sun}u) {
     room = radius + 32.0 * scale * (1.0 + flaring);
   }
-  room = (room + 9.0 * scale * lit) * shown * select(1.0, 0.0, stays <= 0.0 || full <= 0.0);
+  room = (room + 9.0 * scale * lit) * shown * select(1.0, 0.0, stays <= 0.0);
   let corner = vec2f(select(-1.0, 1.0, (vertex & 1u) == 1u), select(-1.0, 1.0, (vertex & 2u) == 2u));
   // A tick stands square to the line; everything else square to the screen.
   var shift = corner * room / scale;
@@ -440,7 +419,7 @@ struct Mark {
     shift = (along * corner.x + square * corner.y) * room / scale;
   }
 
-  var strength = b.w * clear(here.z) * stays * full;
+  var strength = b.w * clear(here.z) * stays;
   if (!head) {
     strength = strength * cue(near);
   }
@@ -508,10 +487,10 @@ struct Mark {
  * The stars, a full-screen effect drawn first: far beyond everything, so
  * they turn with the camera and stay put as the picture moves through time.
  * They lie in three layers, and as the picture flies each drifts round the
- * upright axis the way the events stream, the nearer faster. Each layer cuts
- * the sky into cells by which way the camera looks, a whole number of them
- * round it, so a drift all the way round meets itself; some cells hold a
- * star, placed and lit by a hash of the cell.
+ * upright axis, the nearer faster. Each layer cuts the sky into cells by
+ * which way the camera looks, a whole number of them round it, so a drift
+ * all the way round meets itself; some cells hold a star, placed and lit by
+ * a hash of the cell.
  */
 export const starsWgsl = /* wgsl */ `
 struct Sky {
