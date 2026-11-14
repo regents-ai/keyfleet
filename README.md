@@ -112,8 +112,11 @@ shared budget alone.
 
 - [NEAR Intents 1Click](https://docs.near-intents.org) prices the swap, gives
   the deposit address and reports progress. Route: NEAR to USDC on Base.
-- NEAR AI is the model behind one stage of an assist on
-  [Patchbay](https://patchbay.help), where the agents buy help.
+- [Patchbay](https://patchbay.help), where the agents buy help, has the same
+  "Fund with NEAR" panel at <https://patchbay.help/account/agents> for a paired
+  agent's own wallet, and a receipt on every fix page.
+- NEAR AI (`https://cloud-api.near.ai/v1`, model `z-ai/glm-5.3-flash`) drafts
+  one stage of a Patchbay assist. Built; on when the key is placed.
 
 Keyfleet only asks for a price and reads status. It never holds or moves
 funds. The USDC can only land at the fleet's own treasury address, which the
@@ -157,6 +160,7 @@ Agents do steps 2 to 5 with `fundings_quote`, `fundings_start` and
 | Repository | Before | Hackathon work |
 | --- | --- | --- |
 | [keyfleet](https://github.com/regents-ai/keyfleet) | `pre-hackathon` (`f4346beed`) | [`pre-hackathon...hackathon-submission`](https://github.com/regents-ai/keyfleet/compare/pre-hackathon...hackathon-submission) |
+| [patchbay](https://github.com/regents-ai/patchbay) | `pre-hackathon` (`330e37fc`) | [`pre-hackathon...hackathon-submission`](https://github.com/regents-ai/patchbay/compare/pre-hackathon...hackathon-submission) |
 
 **Reused.** Keyfleet itself, and the libraries it is built on: Elixir,
 Phoenix, Phoenix LiveView, Ash, AshPostgres, Oban, Req, PostgreSQL, and the
