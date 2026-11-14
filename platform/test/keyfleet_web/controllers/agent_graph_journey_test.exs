@@ -224,6 +224,206 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert String.ends_with?(actors["patch.applied"], "/agent:" <> bea.address)
   end
 
+  # Costly failure: an agent reasoning over an investigation is handed part of
+  # it, items read at different moments, or links to work it never asked for,
+  # and concludes from a picture the workspace never showed.
+  test "a member reads an investigation back as one packet: every item named, the links among them and what they cite",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+    create = fn id, type, data -> make!(c, ann, id, type, data)["id"] end
+    link = fn id, source, target, type -> link!(c, ann, id, source, target, type) end
+    hash = String.duplicate("ab12", 10)
+    digest = "sha256:" <> String.duplicate("e", 64)
+
+    notebook =
+      Keyfleet.Notebooks.notebook_url(@fleet, "proj-0123456789abcdef", "nb-0123456789abcdef")
+
+    saved =
+      Keyfleet.Notebooks.result_url(
+        @fleet,
+        "nb-0123456789abcdef",
+        "ver_" <> String.duplicate("A", 26),
+        1_731_600_000_000
+      )
+
+    goal =
+      create.("g", "goal", %{title: "Faster reads", outcome: "Which cache halves read time?"})
+
+    lru =
+      create.("t-lru", "task", %{
+        title: "Try an LRU cache",
+        commit_ref: "https://code.example/lab/commit/" <> hash,
+        notebook_ref: notebook
+      })
+
+    lfu =
+      create.("t-lfu", "task", %{
+        title: "Try an LFU cache",
+        commit_ref: "https://code.example/lab/tree/main"
+      })
+
+    timing = %{title: "LRU timing", source_uri: "https://example.com/lru.csv", digest: digest}
+    supports = create.("e-lru", "evidence", timing)
+
+    contradicts =
+      create.("e-lfu", "evidence", %{
+        title: "LFU timing",
+        source_uri: "https://example.com/lfu.csv"
+      })
+
+    finding = create.("f", "finding", %{title: "LFU wins", statement: "LFU halves read time."})
+    note = create.("n", "note", %{title: "Conclusion", body: "LRU wins; LFU does not."})
+    aside = create.("x", "note", %{title: "Aside", body: "Not part of it."})
+
+    link.("l-1", lru, goal, "implements")
+    link.("l-2", lfu, goal, "implements")
+    link.("l-3", supports, finding, "supports")
+    link.("l-4", contradicts, finding, "contradicts")
+    link.("l-5", note, lru, "references")
+    link.("l-6", note, lfu, "references")
+    link.("l-7", aside, goal, "references")
+
+    submitted =
+      graph(c, ann, "submit", %{
+        as_key: 1,
+        command_id: "s-1",
+        id: lru,
+        expected_version: 1,
+        result_ref: saved,
+        evidence: [supports]
+      })
+
+    assert submitted.status == 200
+
+    ids = [note, lru, goal, supports, finding, contradicts, lfu]
+    read = graph(c, bea, "packet", %{project: "general", ids: ids})
+    assert read.status == 200
+    packet = read.body
+    assert ContractSchema.errors(packet, "WorkspacePacket") == []
+
+    assert %{
+             "format" => "keyfleet.investigation.v1",
+             "fleet_id" => @fleet,
+             "project" => "general",
+             "complete_for_selection" => true
+           } = packet
+
+    # Each item is as its own read answers it, at the same place in the log.
+    assert Enum.map(packet["objects"], & &1["id"]) == Enum.sort(ids)
+
+    for object <- packet["objects"] do
+      item = graph(c, bea, "get", %{id: object["id"], fields: "owner_key"}).body
+      assert item["watermark"] == packet["watermark"]
+      assert Map.delete(object, "owner_key") == item["object"]
+      assert object["owner_key"] == item["owner_key"]
+    end
+
+    # Only the links between the items named, the aside's left out.
+    assert Enum.map(packet["relations"], & &1["id"]) ==
+             Enum.sort(Enum.map(packet["relations"], & &1["id"]))
+
+    assert packet["relations"]
+           |> Enum.map(&{&1["source"], &1["type"], &1["target"]})
+           |> Enum.sort() ==
+             Enum.sort([
+               {lru, "implements", goal},
+               {lfu, "implements", goal},
+               {supports, "supports", finding},
+               {contradicts, "contradicts", finding},
+               {note, "references", lru},
+               {note, "references", lfu},
+               {lru, "produces", supports}
+             ])
+
+    reference = fn from, field, uri, extra ->
+      Map.merge(
+        %{
+          "from" => from,
+          "field" => field,
+          "uri" => uri,
+          "digest" => nil,
+          "commit" => nil,
+          "saved_output" => nil
+        },
+        extra
+      )
+    end
+
+    assert Enum.sort_by(packet["references"], &{&1["from"], &1["field"]}) ==
+             Enum.sort_by(
+               [
+                 reference.(lru, "commit_ref", "https://code.example/lab/commit/" <> hash, %{
+                   "commit" => hash
+                 }),
+                 reference.(lru, "notebook_ref", notebook, %{}),
+                 reference.(lru, "result_ref", saved, %{
+                   "saved_output" => %{
+                     "notebook" => "nb-0123456789abcdef",
+                     "source" => "ver_" <> String.duplicate("A", 26),
+                     "saved_at" => 1_731_600_000_000
+                   }
+                 }),
+                 reference.(lfu, "commit_ref", "https://code.example/lab/tree/main", %{}),
+                 reference.(supports, "source_uri", "https://example.com/lru.csv", %{
+                   "digest" => digest
+                 }),
+                 reference.(contradicts, "source_uri", "https://example.com/lfu.csv", %{})
+               ],
+               &{&1["from"], &1["field"]}
+             )
+
+    # Nobody outside the fleet's members reads one.
+    stranger = join(c, "Cal")
+    refused = graph(c, stranger, "packet", %{project: "general", ids: ids})
+    assert {refused.status, refused.body["error"]["code"]} == {403, "workspace_members_only"}
+
+    # An id that names no item of the project, or an archived one, refuses the
+    # whole packet, naming none of them.
+    archived =
+      graph(c, ann, "archive", %{as_key: 1, command_id: "a-1", id: aside, expected_version: 1})
+
+    assert archived.status == 200
+
+    started =
+      send_signed(c, bea, "POST", "/api/v1/agent/fleets/#{@fleet}/projects/start", %{
+        as_key: 2,
+        name: "lab",
+        title: "Lab"
+      })
+
+    assert started.status == 200
+
+    elsewhere =
+      make!(c, bea, "o", "note", %{title: "Elsewhere", body: "In the lab."}, 2, "lab")["id"]
+
+    for stray <- ["note#999999", aside, elsewhere] do
+      missing = graph(c, bea, "packet", %{project: "general", ids: [goal, stray]})
+      assert missing.status == 404
+      assert %{"code" => "not_found", "details" => details} = missing.body["error"]
+      assert details == %{}
+    end
+
+    # A packet past its budget is refused with its size, never cut to fit.
+    whole = graph(c, bea, "packet", %{project: "general", ids: ids}).body
+    large = graph(c, bea, "packet", %{project: "general", ids: ids, max_bytes: 1024})
+    assert large.status == 422
+    assert ContractSchema.errors(large.body, "PacketTooLargeError") == []
+    assert %{"bytes" => bytes, "max_bytes" => 1024} = large.body["error"]["details"]
+    assert bytes == byte_size(Jason.encode!(whole))
+
+    for {body, code} <- [
+          {%{project: "general", ids: []}, "invalid_request"},
+          {%{project: "general", ids: [goal, goal]}, "invalid_request"},
+          {%{project: "general", ids: Enum.map(1..21, &"note##{&1}")}, "invalid_request"},
+          {%{project: "general", ids: [goal], max_bytes: 100}, "out_of_range"},
+          {%{project: "general", ids: [goal], max_bytes: 262_145}, "out_of_range"}
+        ] do
+      bad = graph(c, bea, "packet", body)
+      assert {bad.status, bad.body["error"]["code"]} == {422, code}, inspect(body)
+    end
+  end
+
   test "the board lists the newest goals as the Project place does, and what members pinned, to members only",
        c do
     start_graph(c)
@@ -1120,6 +1320,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert written.body["watermark"] >= written.body["head_seq"]
     assert ContractSchema.errors(written.body, "WorkspaceWrite") == []
     written.body["result"]
+  end
+
+  defp make!(c, agent, command_id, type, data, as_key \\ 1, project \\ "general") do
+    body = %{as_key: as_key, command_id: command_id, project: project, type: type, data: data}
+    write!(c, agent, "create", body)
+  end
+
+  defp link!(c, agent, command_id, source, target, type) do
+    body = %{as_key: 1, command_id: command_id, source: source, target: target, type: type}
+    assert graph(c, agent, "link", body).status == 200
   end
 
   defp sync(c, agent) do

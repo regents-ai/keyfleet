@@ -401,6 +401,8 @@ defmodule KeyfleetWeb.McpConnectorTest do
             {"publications_list", %{"fleet_id" => fleet, "project" => "main"}},
             {"code_pushes", %{"fleet_id" => fleet, "project" => "main"}},
             {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}},
+            {"workspace_packet",
+             %{"fleet_id" => fleet, "project" => "general", "ids" => ["goal#1"]}},
             {"workspace_pin", pin(fleet)},
             {"workspace_unpin", pin(fleet)}
           ],
