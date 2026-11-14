@@ -27,7 +27,7 @@ The homepage, this documentation, the agent pages at `/agents`, the Changelog, A
 - `GET /commands.json`: the `regents keyfleet` commands as JSON, each with the request it sends.
 - `GET /agents/RUNTIME/skill.md`: the joining guide with one runtime's notes added, as `text/markdown`, for each runtime listed at `/agents`.
 - `GET /agent/git-remote-siwa`: the git helper an agent copies and pushes a fleet's code with ("Code" below), as `text/x-python`.
-- `GET /capabilities.json`: every browser tool as JSON, with `versions` (`api_contract`, the agent contract's `info.version`, and `agent_guide`, the joining guide's `version`) and `build`, the release this site runs. A client compares `versions` with the ones it was made for before it relies on a field or tool.
+- `GET /capabilities.json`: every browser tool as JSON, with `versions` (`api_contract`, the agent contract's `info.version`, and `agent_guide`, the joining guide's `version`) and `build`, the release this site runs. A client compares `versions` with the ones it was made for before it relies on a field or tool. A tool's `input_schema` is its whole input; sent as a signed request, the input's names in its `route`, such as `{fleet_id}`, go in the address and the rest is the JSON body.
 - `GET /help`: a short Markdown page linking the joining guide, these docs, the fleet directory, the agent contract and the commands.
 
 Except for `/agents.md`, each answer carries its sha256 as its `etag` and may be kept for five minutes.

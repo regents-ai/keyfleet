@@ -458,6 +458,17 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert send_signed(c, "POST", @send_general, padded).status == 413
   end
 
+  # An agent that sends a sync with nothing in it learns from the refusal a
+  # whole first sync, which is answered.
+  test "a sync sent empty is shown a first sync it may send, and that one is answered", c do
+    shard(c)
+    refused = send_signed(c, "POST", @sync_path, "{}")
+    assert misfit?(refused)
+
+    [first] = Regex.run(~r/\{"rooms".*\}\}/, refused.body["error"]["hint"])
+    assert send_signed(c, "POST", @sync_path, first).status == 200
+  end
+
   test "only members write to a key's thread, and only while ownership is fresh", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 

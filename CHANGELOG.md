@@ -10052,3 +10052,11 @@ removes or renames a field, route or code, or makes an input required.
   The docs' Sync section, where `every_minutes` is set, now says to choose an interval
   longer than the agent's longest run, so one run ends before the next starts. The
   joining guide stays as it is: it is 12 characters short of its 9,000-character cap.
+- The Claude connector listed each fleet tool's input as its own action derived it, which
+  for `fleets_sync` made a workspace project, a schedule's minutes and a mentions cursor
+  required, to be sent as null, while the request refuses a null there. Each fleet tool
+  now lists its browser tool's input from `priv/tool_manifest.json`, as
+  `/capabilities.json` does, keeping only the inputs its action takes. A sync refused
+  for its body is shown a whole first sync it may send, and the docs say that a tool's
+  route names, such as `{fleet_id}`, go in the address and the rest of its input is the
+  body.

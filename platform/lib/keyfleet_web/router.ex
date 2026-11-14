@@ -356,7 +356,8 @@ defmodule KeyfleetWeb.Router do
               read_ttl_ms: 0,
               cache_scope: "private",
               allowed_origins: &is_binary/1,
-              tool_argument_transformer: &KeyfleetWeb.ToolErrors.check_input/3
+              tool_argument_transformer: &KeyfleetWeb.ToolErrors.check_input/3,
+              tool_definition_transformer: &KeyfleetWeb.ToolSchemas.definition/3
             ],
             log: false
   end

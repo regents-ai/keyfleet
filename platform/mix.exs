@@ -265,8 +265,10 @@ defmodule Keyfleet.MixProject do
         # domain; its policies use only built-in checks. Notebook hours add one,
         # lib/keyfleet/usage.ex -> usage/machine.ex, the Machine record with its
         # domain, the same way. The Atlas adds four: lib/keyfleet/atlas.ex to its
-        # three records, and the Thing record to Keyfleet.Access.Check.
-        "xref graph --label compile-connected --fail-above 137",
+        # three records, and the Thing record to Keyfleet.Access.Check. The
+        # connector listing each fleet tool's browser input adds one: the router
+        # hands AshAi `KeyfleetWeb.ToolSchemas.definition/3` as it compiles.
+        "xref graph --label compile-connected --fail-above 138",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

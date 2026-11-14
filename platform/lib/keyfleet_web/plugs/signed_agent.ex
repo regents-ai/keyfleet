@@ -1716,7 +1716,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       {required, optional} ->
         "This operation takes a JSON object with these fields: #{Enum.join(required, ", ")}; " <>
           "and only these besides, each optional: #{Enum.join(optional, ", ")}."
-    end <> " Check each field's kind and range against the docs, then send it again."
+    end <>
+      least(path) <> " Check each field's kind and range against the docs, then send it again."
+  end
+
+  # A sync's body has a shape for each field, so a refused one is shown the
+  # least it may send: its first sync, naming no rooms.
+  defp least(path) do
+    if Regex.match?(@sync_path, path),
+      do:
+        ~s( A first sync naming no rooms sends {"rooms":[],"graph":{"after_seq":0},) <>
+          ~s("proposals":{"after_seq":0},"run":{"kind":"session"}}.),
+      else: ""
   end
 
   defp fields(@join_path), do: {~w(name declared_harness), []}
