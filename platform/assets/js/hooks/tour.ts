@@ -30,7 +30,7 @@ import {animate, createScope, type JSAnimation, type Scope} from "animejs"
 
 import {createCanvasIsland} from "../canvas_island"
 import {watchTheme} from "../theme"
-import {cardSpot, grow, holeAround, mixBox, mixSpot, noHole, pieces, type Box, type Spot} from "../tour/place"
+import {cardSpot, grow, holeAround, mixBox, mixSpot, noHole, pieces, underFoot, type Box, type Spot} from "../tour/place"
 import type {TourPicture, TourRenderer} from "../tour/renderer"
 import {BASE, EASE_IN_OUT, EASE_OUT, FAST, SLOW, byPointer, lastInputByPointer, play, rest, still} from "./motion/shared"
 import {backdrop} from "./motion/slides"
@@ -147,6 +147,7 @@ export function createTour(root: HTMLElement): TourController {
   let windows: MutationObserver | undefined
 
   const view = () => ({w: layer.clientWidth, h: layer.clientHeight})
+  const cardSize = () => ({w: spot.offsetWidth, h: spot.offsetHeight})
 
   // Where the hole and the card belong for the step on show, as the page stands now.
   const aim = (): Frame => {
@@ -156,8 +157,7 @@ export function createTour(root: HTMLElement): TourController {
     const clear = [...document.querySelectorAll(KEEP_CLEAR)]
       .filter(control => control.getClientRects().length > 0)
       .map(boxOf)
-    const place = cardSpot(part ? hole : undefined, {w: spot.offsetWidth, h: spot.offsetHeight}, size, phone.matches, clear)
-    return {hole, card: place}
+    return {hole, card: cardSpot(part ? hole : undefined, cardSize(), size, phone.matches, clear)}
   }
 
   const put = (piece: HTMLElement, box: Box) => {
@@ -301,6 +301,11 @@ export function createTour(root: HTMLElement): TourController {
 
     const part = partFor(step)
     part?.scrollIntoView({block: "nearest", inline: "nearest"})
+    // A phone's card docks along the screen's foot: a part it would lie over
+    // is brought up to the middle of the screen.
+    if (part && phone.matches && underFoot(holeAround(boxOf(part)), cardSize(), view())) {
+      part.scrollIntoView({block: "center", inline: "nearest"})
+    }
     observe(part)
 
     moving?.cancel()

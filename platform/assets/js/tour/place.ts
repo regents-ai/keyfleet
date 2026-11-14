@@ -119,13 +119,19 @@ export function cardSpot(hole: Box | undefined, card: Size, view: Size, docked: 
   )
 }
 
+/** Whether a card docked along the screen's foot would lie over the hole's ring. */
+export const underFoot = (hole: Box, card: Size, view: Size) => hole.y + hole.h + EDGE > view.h - card.h - MARGIN
+
 // The first place on the screen that keeps off the ring and the controls; then
+// the first that keeps off the controls, since they must stay in reach; then
 // the first that keeps off the ring; then the first there is.
 function choose(spots: Spot[], card: Size, view: Size, ring: Box | undefined, clear: Box[]): Spot {
   const box = (spot: Spot) => ({...spot, ...card})
   const offRing = (spot: Spot) => inside(spot, card, view) && !(ring && overlaps(box(spot), ring))
+  const offControls = (spot: Spot) => inside(spot, card, view) && !clear.some(control => overlaps(box(spot), control))
   return (
-    spots.find(spot => offRing(spot) && !clear.some(control => overlaps(box(spot), control))) ??
+    spots.find(spot => offRing(spot) && offControls(spot)) ??
+    spots.find(offControls) ??
     spots.find(offRing) ??
     spots[0]
   )
