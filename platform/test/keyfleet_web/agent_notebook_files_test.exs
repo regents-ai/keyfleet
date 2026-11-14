@@ -579,6 +579,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       helper = Enum.find(answer["source"]["files"], &(&1["path"] == "/helper.py"))
       assert helper["revision"] == nil
       assert %{"entry_current" => true, "bundle_current" => nil} = answer
+
+      # A revision missing still leaves a file added or removed seen, where the
+      # list without it holds every file.
+      Agent.update(c.files, &Map.put(&1, "data/more.csv", "c\n3"))
+      assert %{"bundle_current" => false} = read_unrevised.()
+
+      Agent.update(c.files, &Map.drop(&1, ["data/more.csv", "data/rows.csv"]))
+      assert %{"bundle_current" => false} = read_unrevised.()
     end
   end
 

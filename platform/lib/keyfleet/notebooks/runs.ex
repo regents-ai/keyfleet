@@ -377,24 +377,31 @@ defmodule Keyfleet.Notebooks.Runs do
 
   # Whether the files a run ran from are the notebook's files now, by path
   # and revision (a file's revision changes whenever its bytes do): false
-  # when a file whose revision both sides know differs, or when both sides
-  # are whole and differ; true when both are whole and the same; otherwise
-  # nil. A side is whole when it holds every file, each with a revision.
-  # Recorded files come back from the database with string keys.
+  # when a difference is seen; true when both sides are whole, holding every
+  # file each with a revision, and none is seen; otherwise nil. Recorded
+  # files come back from the database with string keys.
   defp same_files(source, now) do
     ran = Map.new(source.files, &{&1["path"], &1["revision"]})
     kept = Map.new(now.files, &{&1.path, &1.revision})
 
     cond do
-      revised?(ran, kept) -> false
-      whole?(ran, source.files_complete) and whole?(kept, now.complete) -> ran == kept
+      differs?(ran, kept, now.complete) or differs?(kept, ran, source.files_complete) -> false
+      whole?(ran, source.files_complete) and whole?(kept, now.complete) -> true
       true -> nil
     end
   end
 
-  defp revised?(ran, kept) do
-    Enum.any?(ran, fn {path, revision} ->
-      revision != nil and Map.get(kept, path) not in [nil, revision]
+  # Whether a file on one side is seen to be otherwise on the other: listed
+  # there at another revision, or missing from it while it holds every file.
+  defp differs?(side, other, other_complete) do
+    Enum.any?(side, fn {path, revision} ->
+      case Map.fetch(other, path) do
+        {:ok, other_revision} ->
+          nil not in [revision, other_revision] and revision != other_revision
+
+        :error ->
+          other_complete
+      end
     end)
   end
 
