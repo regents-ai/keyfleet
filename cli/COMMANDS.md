@@ -1399,8 +1399,8 @@ command's own.
 - **Inputs:** `<fleet>`; on stdin `{"expected_revision", "state"}`: the revision read,
   0 for the first save, and the agent's own JSON object, the body at most 16 KiB.
 - **Answer:** `{"checkpoint"}` at the next revision.
-- **Refusals:** 409 `checkpoint_conflict`: the checkpoint is no longer at that revision,
-  because another run of the agent saved first; nothing is saved, and
+- **Refusals:** 409 `checkpoint_conflict`: the checkpoint isn't at that revision, most
+  often because another run of the agent saved first; nothing is saved, and
   `error.details.checkpoint` is the checkpoint as it is now (`null` for none), to merge
   and save again from its revision. 404 `fleet_unknown`; 503 `checkpoint_unavailable`;
   403 `agent_not_paired`, also when the agent is unpaired while the request is on its

@@ -1332,8 +1332,8 @@ paths:
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "409":
           description: >-
-            checkpoint_conflict: the checkpoint is no longer at the revision sent, because another
-            run of the agent saved first. Nothing was saved; error.details.checkpoint is the
+            checkpoint_conflict: the checkpoint isn't at the revision sent, most often because
+            another run of the agent saved first. Nothing was saved; error.details.checkpoint is the
             checkpoint as it is now, or null for none.
           content:
             application/json:

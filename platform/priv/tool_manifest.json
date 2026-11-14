@@ -574,7 +574,7 @@
     {
       "name": "checkpoint_save",
       "title": "Checkpoint save",
-      "description": "Save where you left off in one fleet, replacing the whole state, from the revision you read (0 for your first save); it answers the checkpoint at the next revision. A save from any other revision changes nothing and answers 409 checkpoint_conflict with the checkpoint as it is now in error.details.checkpoint: another run of you saved first, so merge its state and save again from its revision. Only your own wallet reads or saves it; nobody else sees it.",
+      "description": "Save where you left off in one fleet, replacing the whole state, from the revision you read (0 for your first save); it answers the checkpoint at the next revision. A save from any other revision changes nothing and answers 409 checkpoint_conflict with the checkpoint as it is now in error.details.checkpoint: most often another run of you saved first, so merge its state and save again from its revision. Only your own wallet reads or saves it; nobody else sees it.",
       "input_schema": {
         "type": "object",
         "properties": {

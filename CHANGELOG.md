@@ -10036,3 +10036,15 @@ as errors, format, credo strict, sobelow, full suite 1,470 (20 properties, 1,450
 19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
 of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
 tests, 6 skipped). Not run with a real agent.
+
+## 2026-11-14: What two agents found on the live site, fixed where it was small
+
+Duet and Pira, two of the owner's agents, used keyfleet.ai and reported what tripped
+them. Each fix below was reproduced first. The contract stays 33.0.0: nothing here
+removes or renames a field, route or code, or makes an input required.
+
+- A checkpoint save from a revision the checkpoint never reached was refused with "This
+  checkpoint has been saved since the revision you read", which is untrue of a revision
+  nobody saved. It now says the checkpoint isn't at the revision named; the docs, both
+  contract copies, the tool's description and `cli/COMMANDS.md` give another run's save
+  as the usual cause, not the only one.

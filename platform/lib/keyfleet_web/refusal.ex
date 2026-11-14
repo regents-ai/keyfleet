@@ -243,7 +243,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This Key's wall has no such post.",
        "Name a post by the id walls_read answered for this Key's wall."},
     "checkpoint_conflict" =>
-      {"This checkpoint has been saved since the revision you read.",
+      {"This checkpoint isn't at the revision you named.",
        "error.details.checkpoint is the checkpoint as it is now. Merge your state into it, then save again with its revision as expected_revision."},
     "checkpoint_unavailable" =>
       {"Checkpoints can't be read or saved right now.", "Send the same request again shortly."},
