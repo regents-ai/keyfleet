@@ -74,9 +74,7 @@ end
 
 now = DateTime.utc_now()
 year_start = Atlas.Span.start(:year, now)
-hour = DateTime.add(Atlas.Span.start(:hour, now), -26, :hour)
 busiest = Projects.general()
-tile = fn hours -> Atlas.Span.start(:day, DateTime.add(now, -hours, :hour)) end
 
 reads = [
   {"Picture rows, all work", fn -> AtlasPage.rows(fleet, nil, read_as) end},
@@ -85,13 +83,15 @@ reads = [
    fn -> AtlasPage.most_active(fleet, :year, now, [limit: 8] ++ read_as) end},
   {"Active strip, a day",
    fn -> AtlasPage.most_active(fleet, :day, now, [limit: 8] ++ read_as) end},
-  {"Weeks, a year's tile",
-   fn -> AtlasPage.cells(fleet, :week, tile.(52 * 168), now, nil, read_as) end},
-  {"Days, eight weeks' tile",
-   fn -> AtlasPage.cells(fleet, :day, tile.(56 * 24), now, nil, read_as) end},
-  {"Hours, three days' tile",
-   fn -> AtlasPage.cells(fleet, :hour, tile.(72), now, nil, read_as) end},
-  {"Cards of an hour", fn -> AtlasPage.newest(fleet, :hour, hour, [limit: 200] ++ read_as) end},
+  {"Blocks, the year by project and kind",
+   fn ->
+     {from, to} = AtlasPage.window(:year, now)
+     AtlasPage.swarm(fleet, :year, from, to, %{by: [:project, :kind]}, read_as)
+   end},
+  {"Blocks, a kind's things, the year",
+   fn ->
+     AtlasPage.most_active(fleet, :year, now, [limit: 100, project: busiest, kind: "task"] ++ read_as)
+   end},
   {"List totals, the year", fn -> AtlasPage.totals(fleet, :year, now, nil, read_as) end},
   {"List projects, the year", fn -> AtlasPage.projects(fleet, :year, now, nil, read_as) end},
   {"List latest, the year",

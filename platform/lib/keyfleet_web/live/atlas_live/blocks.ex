@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.AtlasLive.Blocks do
   @moduledoc """
-  The Atlas as blocks (`?view=blocks`): a treemap of the window shown, where
+  The Atlas as blocks, shown unless the List is named: a treemap of the window shown, where
   each project is a block as big as the work it holds in the window and
   coloured by how recently it was worked on, with a corner on a block changed
   today. Choosing a block, or zooming into it, opens it in place: a block for
@@ -177,7 +177,7 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
   def handle_event(
         "atlas_blocks_fleet",
         _params,
-        %{assigns: %{atlas: %{state: :read, show: :picture, view: :blocks} = atlas}} = socket
+        %{assigns: %{atlas: %{state: :read, show: :picture} = atlas}} = socket
       ) do
     read_as = ShellLive.reads_as(socket, atlas.fleet_id)
     {from, to} = AtlasPage.window(atlas.window, atlas.at)
@@ -231,7 +231,7 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
   def handle_event(
         "atlas_blocks_things",
         %{"project" => project, "kind" => kind, "after" => cursor},
-        %{assigns: %{atlas: %{state: :read, show: :picture, view: :blocks} = atlas}} = socket
+        %{assigns: %{atlas: %{state: :read, show: :picture} = atlas}} = socket
       )
       when is_binary(project) and is_binary(kind) and (is_binary(cursor) or is_nil(cursor)) do
     %{things: things, after: next} =

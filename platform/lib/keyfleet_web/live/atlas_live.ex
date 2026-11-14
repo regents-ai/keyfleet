@@ -6,19 +6,15 @@ defmodule KeyfleetWeb.AtlasLive do
   whole swarm down to one thing, read from `KeyfleetWeb.AtlasPage`. Only the
   fleet's members read it, as they read its workspace; anyone else is told so.
 
-  The address holds everything the page shows: `?view=` the picture (`heat`,
-  `KeyfleetWeb.AtlasLive.Heat` and `assets/js/atlas/heat/`, shown unless
-  another is named; `field`, `KeyfleetWeb.AtlasLive.Field` and
-  `assets/js/atlas/field/`; `river`, `KeyfleetWeb.AtlasLive.River` and
-  `assets/js/atlas/river/`; or `blocks`, `KeyfleetWeb.AtlasLive.Blocks` and
-  `assets/js/atlas/blocks/`),
-  `?show=list` the List, the same work as text and links, `?window=` the day,
-  week, month or year shown (a year unless named), `?at=` a day it holds
+  The address holds everything the page shows: the Blocks
+  (`KeyfleetWeb.AtlasLive.Blocks` and `assets/js/atlas/blocks/`) unless
+  `?show=list` names the List, the same work as text and links; `?window=` the
+  day, week, month or year shown (a year unless named), `?at=` a day it holds
   (today unless named), and `?kind=` `graph` or `notebooks` for one of them.
 
-  The picture is drawn in the browser, which asks the page for the counts and
-  things on screen as the reader moves (`handle_event/3`) and for the most
-  active things of the window in view, listed beside it. The List reads the
+  The Blocks are drawn in the browser, which asks the page for the counts and
+  things on screen as the reader opens them (`Blocks.handle_event/3`), beside
+  the most active things of the window shown. The List reads the
   window's totals, each project's share, the most active things and the
   latest, a page at a time. New work reaches both a moment after it is
   counted (`heard/2`), at most once a moment however much arrives.
@@ -27,29 +23,23 @@ defmodule KeyfleetWeb.AtlasLive do
   use KeyfleetWeb, :html
 
   import Phoenix.LiveView,
-    only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
+    only: [connected?: 1, push_event: 3, stream: 3, stream: 4]
 
-  alias KeyfleetWeb.AtlasLive.{Blocks, Field, Heat, River}
+  alias KeyfleetWeb.AtlasLive.Blocks
   alias KeyfleetWeb.{AtlasPage, PageRead, ShellLive}
 
-  # The pictures built so far, the first one shown unless another is named.
-  @views [:heat, :field, :river, :blocks]
   @kinds %{"graph" => :graph, "notebooks" => :notebook}
   @list_read 20
   @most_read 10
   @active_read 8
-  @card_read 200
-  @spans ~w(hour day week month year)
-  @windows ~w(day week month year)
 
   @doc """
-  The Atlas with `opts` (`:view`, `:show`, `:window`, `:at` a `Date`, and
-  `:kind`), each left out of the address when it is the one shown unless named.
+  The Atlas with `opts` (`:show`, `:window`, `:at` a `Date`, and `:kind`),
+  each left out of the address when it is the one shown unless named.
   """
   def atlas_path(fleet_id, opts \\ []) do
     query =
       for {name, value} <- [
-            view: opts[:view] != hd(@views) && opts[:view],
             show: opts[:show] == :list && "list",
             window: opts[:window] not in [nil, :year] && opts[:window],
             kind: kind_word(opts[:kind]),
@@ -80,7 +70,6 @@ defmodule KeyfleetWeb.AtlasLive do
 
     atlas = %{
       fleet_id: fleet_id,
-      view: view(params["view"]),
       show: if(params["show"] == "list", do: :list, else: :picture),
       window: window,
       at: at,
@@ -115,11 +104,6 @@ defmodule KeyfleetWeb.AtlasLive do
 
   def read(socket, _route_id, _params),
     do: socket |> assign(:atlas, nil) |> stream(:atlas_things, [], reset: true)
-
-  defp view("field"), do: :field
-  defp view("river"), do: :river
-  defp view("blocks"), do: :blocks
-  defp view(_word), do: hd(@views)
 
   defp window(word) when word in ~w(day week month), do: String.to_existing_atom(word)
   defp window(_word), do: :year
@@ -182,75 +166,10 @@ defmodule KeyfleetWeb.AtlasLive do
   end
 
   @doc """
-  What the picture asks for as the reader moves, answered as its reply:
-  `atlas_cells`, each project's counts in each bucket of a span over a
-  stretch; and `atlas_cards`, the things changed in one hour, newest first.
-  The river asks `atlas_river` for its own reads (`River.answer/3`).
-  Once the view rests on another window, `atlas_window` names it in the
-  address in place of the one there, so the window chosen at the top and the
-  strip of its most active things follow the picture. The List's
-  `atlas_older` adds the next page of the latest things under those on show.
+  What the page is asked as the reader moves: the List's `atlas_older` adds
+  the next page of the latest things under those on show, and the Blocks'
+  `atlas_blocks_` events are answered by `Blocks.handle_event/3`.
   """
-  def handle_event(
-        "atlas_cells",
-        %{"span" => span, "from" => from, "to" => to},
-        %{assigns: %{atlas: %{state: :read, show: :picture} = atlas}} = socket
-      )
-      when span in @spans and is_integer(from) and is_integer(to) do
-    cells =
-      AtlasPage.cells(
-        atlas.fleet_id,
-        String.to_existing_atom(span),
-        DateTime.from_unix!(from),
-        DateTime.from_unix!(to),
-        atlas.source,
-        ShellLive.reads_as(socket, atlas.fleet_id)
-      )
-
-    {:reply, %{cells: Enum.map(cells, &cell/1)}, socket}
-  end
-
-  def handle_event(
-        "atlas_cards",
-        %{"at" => at},
-        %{assigns: %{atlas: %{state: :read, show: :picture} = atlas}} = socket
-      )
-      when is_integer(at) do
-    %{things: things} =
-      AtlasPage.newest(
-        atlas.fleet_id,
-        :hour,
-        DateTime.from_unix!(at),
-        [limit: @card_read, source: atlas.source] ++
-          ShellLive.reads_as(socket, atlas.fleet_id)
-      )
-
-    {:reply, %{things: Enum.map(things, &card/1)}, socket}
-  end
-
-  def handle_event(
-        "atlas_river",
-        params,
-        %{assigns: %{atlas: %{state: :read, show: :picture, view: :river} = atlas}} = socket
-      ) do
-    case River.answer(params, atlas, ShellLive.reads_as(socket, atlas.fleet_id)) do
-      nil -> {:noreply, socket}
-      reply -> {:reply, reply, socket}
-    end
-  end
-
-  def handle_event(
-        "atlas_window",
-        %{"span" => span, "at" => at},
-        %{assigns: %{atlas: %{state: :read, show: :picture} = atlas}} = socket
-      )
-      when span in @windows and is_integer(at) do
-    day = at |> DateTime.from_unix!() |> DateTime.to_date()
-    to = moved(atlas, window: String.to_existing_atom(span), at: day)
-
-    {:noreply, push_patch(socket, to: to, replace: true)}
-  end
-
   def handle_event(
         "atlas_older",
         _params,
@@ -272,32 +191,10 @@ defmodule KeyfleetWeb.AtlasLive do
      |> stream(:atlas_things, things)}
   end
 
-  def handle_event("atlas_field_" <> _ = event, params, socket),
-    do: Field.handle_event(event, params, socket)
-
   def handle_event("atlas_blocks_" <> _ = event, params, socket),
     do: Blocks.handle_event(event, params, socket)
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
-
-  # A project's counts in one bucket, as the picture takes them: the bucket's
-  # start in seconds, the project, and its changes, things and Keys.
-  defp cell(cell),
-    do: [DateTime.to_unix(cell.at), cell.project, cell.changes, cell.things, cell.actors]
-
-  defp card(thing) do
-    %{
-      id: thing.id,
-      what: thing.what,
-      project: thing.project,
-      title: thing.title,
-      who: thing.who,
-      at: DateTime.to_unix(thing.at, :millisecond),
-      changes: thing.changes,
-      path: thing.path,
-      live: thing.live?
-    }
-  end
 
   @doc """
   The fleet's Atlas has counted more: it is read again a moment later, once
@@ -359,7 +256,6 @@ defmodule KeyfleetWeb.AtlasLive do
     params =
       %{
         "fleet_id" => fleet_id,
-        "view" => Atom.to_string(atlas.view),
         "window" => Atom.to_string(atlas.window),
         "at" => atlas.at |> DateTime.to_date() |> Date.to_iso8601(),
         "kind" => kind_word(atlas.source)
@@ -423,30 +319,9 @@ defmodule KeyfleetWeb.AtlasLive do
           <h2 id="atlas-title">Atlas</h2>
           <nav id="atlas-show" class="fleet-keys-switch" aria-label="Show the Atlas as">
             <.link
-              id="atlas-show-heat"
-              patch={moved(@atlas, show: :picture, view: :heat)}
-              aria-current={if @atlas.show == :picture and @atlas.view == :heat, do: "page"}
-            >
-              Heat
-            </.link>
-            <.link
-              id="atlas-show-field"
-              patch={moved(@atlas, show: :picture, view: :field)}
-              aria-current={if @atlas.show == :picture and @atlas.view == :field, do: "page"}
-            >
-              Field
-            </.link>
-            <.link
-              id="atlas-show-river"
-              patch={moved(@atlas, show: :picture, view: :river)}
-              aria-current={if @atlas.show == :picture and @atlas.view == :river, do: "page"}
-            >
-              River
-            </.link>
-            <.link
               id="atlas-show-blocks"
-              patch={moved(@atlas, show: :picture, view: :blocks)}
-              aria-current={if @atlas.show == :picture and @atlas.view == :blocks, do: "page"}
+              patch={moved(@atlas, show: :picture)}
+              aria-current={if @atlas.show == :picture, do: "page"}
             >
               Blocks
             </.link>
@@ -490,23 +365,8 @@ defmodule KeyfleetWeb.AtlasLive do
           title="The Atlas couldn’t be loaded. Refresh the page to try again."
         />
 
-        <Heat.picture
-          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :heat}
-          atlas={@atlas}
-        />
-
-        <Field.picture
-          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :field}
-          atlas={@atlas}
-        />
-
-        <River.picture
-          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :river}
-          atlas={@atlas}
-        />
-
         <Blocks.picture
-          :if={@atlas.state == :read and @atlas.show == :picture and @atlas.view == :blocks}
+          :if={@atlas.state == :read and @atlas.show == :picture}
           atlas={@atlas}
         />
 
@@ -645,7 +505,6 @@ defmodule KeyfleetWeb.AtlasLive do
   @doc "The address of the Atlas shown, with `changes` made to it, as `atlas_path/2` takes them."
   def moved(atlas, changes) do
     current = [
-      view: atlas.view,
       show: atlas.show,
       window: atlas.window,
       kind: atlas.source,

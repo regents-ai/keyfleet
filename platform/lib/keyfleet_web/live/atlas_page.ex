@@ -16,10 +16,9 @@ defmodule KeyfleetWeb.AtlasPage do
 
     * `rows/3`: the fleet's projects with any work counted, busiest first,
       each `%{project:, title:, changes:}`.
-    * `cells/6`: for each bucket of a span from `from` up to `to`, each
-      project's `%{at:, project:, changes:, things:, actors:}`.
-    * `swarm/6`: the same for any `Keyfleet.Atlas` swarm's `:source`,
-      `:project` and `:by`.
+    * `swarm/6`: for each bucket of a span from `from` up to `to`, the
+      changes, things and Keys of `Keyfleet.Atlas`'s swarm, of any `:source`
+      and `:project`, split `:by` project or kind.
     * `totals/4` and `projects/4`: one window's changes, things changed and
       Keys at work, for the whole fleet and for each project.
     * `most_active/4` and `newest/4`: a page of one window's things
@@ -94,13 +93,6 @@ defmodule KeyfleetWeb.AtlasPage do
     for %{project: project} = count <- counts,
         title = titles[project],
         do: Map.put(count, :title, title)
-  end
-
-  @doc "Each project's changes, things and Keys in each bucket of `span` from `from` up to `to`."
-  def cells(fleet_id, span, from, to, source, read_as) do
-    fleet_id
-    |> Atlas.swarm!(span, from, to, %{source: source, by: [:project]}, read_as)
-    |> Enum.map(&Map.delete(&1, :kind))
   end
 
   @doc "The swarm's buckets of `span` from `from` up to `to`, of `filter`'s `:source`, `:project` and `:by`."

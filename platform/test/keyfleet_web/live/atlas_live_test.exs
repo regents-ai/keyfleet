@@ -1,9 +1,7 @@
 defmodule KeyfleetWeb.Live.AtlasLiveTest do
-  # A fleet's Atlas: its members' picture takes the rows once the page is
-  # live, then the counts and things it asks for as it moves, and names the
-  # window it rests on in the address; the List reads the same window as
-  # links, a page at a time; new work reaches an open page. Anyone else reads
-  # nothing.
+  # A fleet's Atlas: its members' Blocks take the rows and the strip once the
+  # page is live; the List reads the same window as links, a page at a time;
+  # new work reaches an open page. Anyone else reads nothing.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest, except: [build_conn: 0, init_test_session: 2]
@@ -60,50 +58,23 @@ defmodule KeyfleetWeb.Live.AtlasLiveTest do
     %{busiest: busiest, member: signed_in("did:privy:atlas-member", @wallet)}
   end
 
-  test "a member's picture takes its rows and strip, then what it asks for as it moves",
+  test "a member's Atlas opens on the Blocks, with its rows and strip",
        %{busiest: busiest, member: member} do
     {:ok, view, _html} = live(member, @week)
 
     assert has_element?(view, "#fleet-tab-atlas[aria-current=page]")
     assert has_element?(view, "#atlas-window-week[aria-current=page]")
+    assert has_element?(view, "#atlas-show-blocks[aria-current=page]")
 
-    assert [["general", "General", 26], ["lab", "Lab", 3]] =
+    assert [["general", "General"], ["lab", "Lab"]] =
              view
-             |> element("#atlas-heat")
+             |> element("#atlas-blocks")
              |> render()
              |> attribute("data-rows")
              |> Jason.decode!()
 
     # The strip holds the window's most active, the busiest first.
     assert has_element?(view, "#atlas-active-things > li:first-child#atlas-active-#{id(busiest)}")
-
-    from = DateTime.to_unix(~U[2026-09-21 00:00:00Z])
-
-    render_hook(view, "atlas_cells", %{"span" => "day", "from" => from, "to" => from + 7 * 86_400})
-
-    assert_reply(view, %{
-      cells: [
-        [at, "general", 26, 24, 3],
-        [at, "lab", 3, 3, 1]
-      ]
-    })
-
-    assert at == DateTime.to_unix(~U[2026-09-22 00:00:00Z])
-
-    render_hook(view, "atlas_cards", %{"at" => DateTime.to_unix(~U[2026-09-22 12:00:00Z])})
-    assert_reply(view, %{things: [newest | _] = things})
-    assert length(things) == 27
-    assert %{what: "Task", who: "Key 19", title: "Busiest", live: true} = newest
-    assert newest.path == WorkspacePage.item_path(@fleet, busiest)
-
-    # The view came to rest on a day: the address names it in place.
-    render_hook(view, "atlas_window", %{
-      "span" => "day",
-      "at" => DateTime.to_unix(~U[2026-09-22 15:00:00Z])
-    })
-
-    assert_patch(view, "#{@path}?window=day&at=2026-09-22")
-    assert has_element?(view, "#atlas-window-day[aria-current=page]")
   end
 
   test "the List reads the window's totals, projects, most active and latest, a page at a time",
@@ -152,7 +123,7 @@ defmodule KeyfleetWeb.Live.AtlasLiveTest do
     for conn <- [SessionAuthorityHelpers.build_conn(), stranger] do
       {:ok, view, _html} = live(conn, @week)
       assert has_element?(view, "#atlas-members-only")
-      refute has_element?(view, "#atlas-heat")
+      refute has_element?(view, "#atlas-blocks")
     end
   end
 

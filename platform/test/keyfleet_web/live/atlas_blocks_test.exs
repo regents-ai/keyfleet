@@ -1,5 +1,5 @@
 defmodule KeyfleetWeb.Live.AtlasBlocksTest do
-  # The Atlas as blocks (`?view=blocks`): a member's blocks take the projects,
+  # The Atlas as blocks, what it opens on: a member's blocks take the projects,
   # the kinds and the window, then the window's counts by project and kind and
   # a kind's things as they ask for them; moving through time keeps the
   # blocks. Anyone else reads nothing.
@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.Live.AtlasBlocksTest do
   @path "/classic/1/atlas"
   @wallet "0x" <> String.duplicate("b2", 20)
   # The fixtures' log starts at noon on Tuesday 22 September 2026.
-  @blocks "#{@path}?view=blocks&window=week&at=2026-09-22"
+  @blocks "#{@path}?window=week&at=2026-09-22"
 
   setup do
     owner = Sandbox.start_owner!(Repo, shared: true)
@@ -63,8 +63,7 @@ defmodule KeyfleetWeb.Live.AtlasBlocksTest do
     {:ok, view, _html} = live(member, @blocks)
 
     assert has_element?(view, "#atlas-show-blocks[aria-current=page]")
-    refute has_element?(view, "#atlas-show-heat[aria-current=page]")
-    refute has_element?(view, "#atlas-heat")
+    refute has_element?(view, "#atlas-show-list[aria-current=page]")
 
     blocks = view |> element("#atlas-blocks") |> render()
     assert Enum.sort(data(blocks, "data-rows")) == [["general", "General"], ["lab", "Lab"]]
@@ -132,12 +131,12 @@ defmodule KeyfleetWeb.Live.AtlasBlocksTest do
     {:ok, view, _html} = live(member, @blocks)
 
     for link <-
-          ~w(#atlas-blocks-earlier #atlas-blocks-later #atlas-window-day #atlas-kind-notebooks #atlas-show-list) do
-      assert view |> element(link) |> render() |> attribute("href") =~ "view=blocks"
+          ~w(#atlas-blocks-earlier #atlas-blocks-later #atlas-window-day #atlas-kind-notebooks) do
+      refute view |> element(link) |> render() |> attribute("href") =~ "show="
     end
 
     view |> element("#atlas-blocks-earlier") |> render_click()
-    assert_patch(view, "#{@path}?view=blocks&window=week&at=2026-09-20")
+    assert_patch(view, "#{@path}?window=week&at=2026-09-20")
 
     assert has_element?(
              view,
