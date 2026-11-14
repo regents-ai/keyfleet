@@ -1,0 +1,812 @@
+diff --git a/packages/api/openapi.yaml b/packages/api/openapi.yaml
+index b29b30ab..c1c82918 100644
+--- a/packages/api/openapi.yaml
++++ b/packages/api/openapi.yaml
+@@ -9195,7 +9195,17 @@ paths:
+           in: query
+       responses:
+         '200':
+-          description: Raw workspace file bytes
++          description: Raw workspace file bytes, with the stored ETag they were read at
++          headers:
++            ETag:
++              schema:
++                type: string
++                description: Strong validator (the resource version). Echo as `If-Match` to
++                  guard a write.
++                example: '"2025-03-05T14:00:00Z"'
++              required: true
++              description: Strong validator (the resource version). Echo as `If-Match` to
++                guard a write.
+           content:
+             '*/*':
+               schema:
+@@ -9277,6 +9287,8 @@ paths:
+       tags:
+         - Notebooks
+       summary: Create or overwrite a workspace file
++      description: With If-Match, the file is written only while its stored ETag still
++        equals it; otherwise 412 answers with the current ETag.
+       parameters:
+         - schema:
+             type: string
+@@ -9306,6 +9318,12 @@ paths:
+           required: false
+           name: create
+           in: query
++        - schema:
++            type: string
++            example: '"2025-03-05T14:00:00Z"'
++          required: false
++          name: if-match
++          in: header
+       requestBody:
+         required: true
+         content:
+@@ -9315,7 +9333,17 @@ paths:
+               format: binary
+       responses:
+         '200':
+-          description: Workspace file saved
++          description: Workspace file saved, with the ETag this write stored
++          headers:
++            ETag:
++              schema:
++                type: string
++                description: Strong validator (the resource version). Echo as `If-Match` to
++                  guard a write.
++                example: '"2025-03-05T14:00:00Z"'
++              required: true
++              description: Strong validator (the resource version). Echo as `If-Match` to
++                guard a write.
+           content:
+             application/json:
+               schema:
+@@ -9360,6 +9388,12 @@ paths:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
++        '412':
++          description: Precondition failed (If-Match did not match the current version)
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/ErrorResponse'
+         '413':
+           description: Request body too large
+           content:
+diff --git a/packages/api/src/routes/notebooks.test.ts b/packages/api/src/routes/notebooks.test.ts
+index a7fdd1cd..8ca4519f 100644
+--- a/packages/api/src/routes/notebooks.test.ts
++++ b/packages/api/src/routes/notebooks.test.ts
+@@ -1438,6 +1438,108 @@ describe('Notebook routes', () => {
+ 			);
+ 		});
+ 
++		describe('writes over a read ETag', () => {
++			async function notebookWith(path: string) {
++				const created = await expectOk<any>(
++					await request('POST', nb(''), { title: 'NB', description: 'D', code: 'print(1)' }),
++					201,
++				);
++				const url = `/api/v1${nb(`/${created.id}/workspace`)}/files?path=${encodeURIComponent(path)}`;
++				if (path === '/data.txt') {
++					await expectOk(await app.request(`${url}&create=true`, { method: 'PUT', body: 'first' }));
++				}
++				const read = await app.request(url);
++				expect(read.status).toBe(200);
++				return { id: created.id as NotebookId, url, etag: read.headers.get('etag') ?? '' };
++			}
++			const versionCount = async (id: NotebookId) =>
++				(await expectPage(await request('GET', nb(`/${id}/versions`)))).length;
++
++			it.each(['/data.txt', '/notebook.py', '/pyproject.toml'])(
++				'writes %s only while its ETag is the one read',
++				async (path) => {
++					const { id, url, etag } = await notebookWith(path);
++					expect(etag).toMatch(/^"[^"]+"$/);
++
++					const saved = await app.request(url, {
++						method: 'PUT',
++						headers: { 'if-match': etag },
++						body: 'second',
++					});
++					await expectOk(saved);
++					const next = saved.headers.get('etag');
++					expect(next).toMatch(/^"[^"]+"$/);
++					expect(next).not.toBe(etag);
++					const after = await app.request(url);
++					expect(after.headers.get('etag')).toBe(next);
++					expect(await after.text()).toBe('second');
++					const versions = await versionCount(id);
++
++					const stale = await app.request(url, {
++						method: 'PUT',
++						headers: { 'if-match': etag },
++						body: 'third',
++					});
++					expect(stale.headers.get('etag')).toBe(next);
++					await expectError(stale, 412, 'PRECONDITION_FAILED');
++					const kept = await app.request(url);
++					expect(await kept.text()).toBe('second');
++					expect(kept.headers.get('etag')).toBe(next);
++					expect(await versionCount(id)).toBe(versions);
++				},
++			);
++
++			it.each(['/data.txt', '/notebook.py', '/pyproject.toml'])(
++				'lands exactly one of two %s writes over the same ETag on two replicas',
++				async (path) => {
++					const { id, url, etag } = await notebookWith(path);
++					const versions = await versionCount(id);
++					const other = createTestApi({ bucket });
++					const answers = await Promise.all(
++						[app, other.app].map(async (replica, index) =>
++							replica.request(url, {
++								method: 'PUT',
++								headers: { 'if-match': etag },
++								body: `writer ${index}`,
++							}),
++						),
++					);
++					expect(answers.map((answer) => answer.status).sort((a, b) => a - b)).toEqual([200, 412]);
++					const winner = answers.findIndex((answer) => answer.status === 200);
++					const stored = await app.request(url);
++					expect(await stored.text()).toBe(`writer ${winner}`);
++					expect(stored.headers.get('etag')).toBe(answers[winner].headers.get('etag'));
++					expect(answers[1 - winner].headers.get('etag')).toBe(stored.headers.get('etag'));
++					expect(await versionCount(id)).toBe(versions + (path === '/data.txt' ? 0 : 1));
++				},
++			);
++
++			it('refuses an ETag for a file that is gone, and with create', async () => {
++				const { id, url, etag } = await notebookWith('/data.txt');
++				await expectError(
++					await app.request(`${url}&create=true`, {
++						method: 'PUT',
++						headers: { 'if-match': etag },
++						body: 'x',
++					}),
++					400,
++					'BAD_REQUEST',
++				);
++				await expectOk(
++					await request(
++						'DELETE',
++						nb(`/${id}/workspace/entries?path=${encodeURIComponent('/data.txt')}`),
++					),
++				);
++				await expectError(
++					await app.request(url, { method: 'PUT', headers: { 'if-match': etag }, body: 'x' }),
++					404,
++					'NOT_FOUND',
++				);
++				await expectError(await app.request(url), 404, 'NOT_FOUND');
++			});
++		});
++
+ 		it('rejects ambiguous, control-character, and malformed workspace inputs', async () => {
+ 			const created = await expectOk<any>(
+ 				await request('POST', nb(''), { title: 'NB', description: 'D', code: 'print(1)' }),
+diff --git a/packages/api/src/routes/notebooks.ts b/packages/api/src/routes/notebooks.ts
+index 92f81897..bf5d3fe0 100644
+--- a/packages/api/src/routes/notebooks.ts
++++ b/packages/api/src/routes/notebooks.ts
+@@ -22,6 +22,7 @@ import {
+ 	toPublicSource,
+ 	toPublicVersion,
+ 	VersionId,
++	WorkspaceFileChangedError,
+ } from '@marimo-hub/core';
+ import type { SessionService, WorkspaceFileItem, WorkspaceMutationOptions } from '@marimo-hub/core';
+ import {
+@@ -835,7 +836,8 @@ const readWorkspaceFile = createRoute({
+ 	responses: {
+ 		200: {
+ 			content: { '*/*': { schema: WorkspaceFileBinary } },
+-			description: 'Raw workspace file bytes',
++			headers: EtagResponseHeader,
++			description: 'Raw workspace file bytes, with the stored ETag they were read at',
+ 		},
+ 		...commonErrors(),
+ 		...errorResponses(400, 404, 429),
+@@ -849,21 +851,27 @@ const writeWorkspaceFile = createRoute({
+ 	'x-cli-hidden': true,
+ 	tags: ['Notebooks'],
+ 	summary: 'Create or overwrite a workspace file',
++	description:
++		'With If-Match, the file is written only while its stored ETag still equals it; otherwise 412 answers with the current ETag.',
+ 	request: {
+ 		params: NotebookIdParam,
+ 		query: WorkspaceFileQuery,
++		headers: IfMatchHeader,
+ 		body: {
+ 			required: true,
+ 			content: { 'application/octet-stream': { schema: WorkspaceFileBinary } },
+ 		},
+ 	},
+ 	responses: {
+-		200: jsonContent(
+-			z.object({ success: z.literal(true), data: WorkspaceItemSchema }),
+-			'Workspace file saved',
+-		),
++		200: {
++			...jsonContent(
++				z.object({ success: z.literal(true), data: WorkspaceItemSchema }),
++				'Workspace file saved, with the ETag this write stored',
++			),
++			headers: EtagResponseHeader,
++		},
+ 		...commonErrors(),
+-		...errorResponses(400, 403, 404, 409, 413, 429),
++		...errorResponses(400, 403, 404, 409, 412, 413, 429),
+ 	},
+ });
+ 
+@@ -1240,6 +1248,7 @@ app.get('/projects/:pid/notebooks/:nid/workspace/files', async (c) => {
+ 			'content-disposition': objectContentDisposition(file.item.name, false),
+ 			'content-type': safeObjectContentType(file.item.mimeType ?? '', false),
+ 			'x-content-type-options': 'nosniff',
++			...(file.item.etag ? { etag: etagFor(file.item.etag) } : {}),
+ 		},
+ 	});
+ });
+@@ -1264,16 +1273,25 @@ app.put('/projects/:pid/notebooks/:nid/workspace/files', async (c) => {
+ 		);
+ 	}
+ 	const bytes = new Uint8Array(await c.req.raw.arrayBuffer());
+-	const item = await deps.services.notebooks.workspace.write(
+-		pid,
+-		nid,
+-		path,
+-		bytes,
+-		user.id,
+-		create === 'true',
+-		options,
+-	);
+-	return c.json({ success: true, data: toWorkspaceItem(item) }, 200);
++	try {
++		const item = await deps.services.notebooks.workspace.write(
++			pid,
++			nid,
++			path,
++			bytes,
++			user.id,
++			create === 'true',
++			options,
++			ifMatchToken(c),
++		);
++		if (item.etag) c.header('ETag', etagFor(item.etag));
++		return c.json({ success: true, data: toWorkspaceItem(item) }, 200);
++	} catch (error) {
++		if (error instanceof WorkspaceFileChangedError && error.etag) {
++			c.header('ETag', etagFor(error.etag));
++		}
++		throw error;
++	}
+ });
+ 
+ function syncUrl(c: Context<HonoEnv>, pid: string, nid: string) {
+diff --git a/packages/client/src/schema.ts b/packages/client/src/schema.ts
+index 731e0af2..afd8897d 100644
+--- a/packages/client/src/schema.ts
++++ b/packages/client/src/schema.ts
+@@ -563,7 +563,10 @@ export interface paths {
+ 		};
+ 		/** Read raw workspace file content */
+ 		get: operations['notebooks.workspace.files.read'];
+-		/** Create or overwrite a workspace file */
++		/**
++		 * Create or overwrite a workspace file
++		 * @description With If-Match, the file is written only while its stored ETag still equals it; otherwise 412 answers with the current ETag.
++		 */
+ 		put: operations['notebooks.workspace.files.write'];
+ 		post?: never;
+ 		delete?: never;
+@@ -8445,9 +8448,11 @@ export interface operations {
+ 		};
+ 		requestBody?: never;
+ 		responses: {
+-			/** @description Raw workspace file bytes */
++			/** @description Raw workspace file bytes, with the stored ETag they were read at */
+ 			200: {
+ 				headers: {
++					/** @description Strong validator (the resource version). Echo as `If-Match` to guard a write. */
++					ETag: string;
+ 					[name: string]: unknown;
+ 				};
+ 				content: {
+@@ -8547,7 +8552,9 @@ export interface operations {
+ 				path: string;
+ 				create?: 'true' | 'false';
+ 			};
+-			header?: never;
++			header?: {
++				'if-match'?: string;
++			};
+ 			path: {
+ 				pid: string;
+ 				nid: string;
+@@ -8560,9 +8567,11 @@ export interface operations {
+ 			};
+ 		};
+ 		responses: {
+-			/** @description Workspace file saved */
++			/** @description Workspace file saved, with the ETag this write stored */
+ 			200: {
+ 				headers: {
++					/** @description Strong validator (the resource version). Echo as `If-Match` to guard a write. */
++					ETag: string;
+ 					[name: string]: unknown;
+ 				};
+ 				content: {
+@@ -8618,6 +8627,15 @@ export interface operations {
+ 					'application/json': components['schemas']['ErrorResponse'];
+ 				};
+ 			};
++			/** @description Precondition failed (If-Match did not match the current version) */
++			412: {
++				headers: {
++					[name: string]: unknown;
++				};
++				content: {
++					'application/json': components['schemas']['ErrorResponse'];
++				};
++			};
+ 			/** @description Request body too large */
+ 			413: {
+ 				headers: {
+diff --git a/packages/core/src/errors.ts b/packages/core/src/errors.ts
+index 965d764f..b5862b64 100644
+--- a/packages/core/src/errors.ts
++++ b/packages/core/src/errors.ts
+@@ -63,6 +63,17 @@ export class PreconditionFailedError extends DomainError {
+ 	}
+ }
+ 
++/** A workspace file write did not land: the file no longer has the ETag it was read at. */
++export class WorkspaceFileChangedError extends PreconditionFailedError {
++	/** The file's current ETag; undefined once the file is gone. */
++	readonly etag?: string;
++	constructor(path: string, etag: string | undefined) {
++		super(`Workspace file ${path} changed since it was read`);
++		this.name = 'WorkspaceFileChangedError';
++		this.etag = etag;
++	}
++}
++
+ export class NotFoundError extends DomainError {
+ 	readonly code = 'NOT_FOUND';
+ 	readonly status = 404;
+diff --git a/packages/core/src/services/content/NotebookService.test.ts b/packages/core/src/services/content/NotebookService.test.ts
+index ed13ea92..4358622f 100644
+--- a/packages/core/src/services/content/NotebookService.test.ts
++++ b/packages/core/src/services/content/NotebookService.test.ts
+@@ -7,6 +7,7 @@ import {
+ 	NotFoundError,
+ 	PreconditionFailedError,
+ 	ValidationError,
++	WorkspaceFileChangedError,
+ } from '../../errors';
+ import { createJobId, createNotebookId, createRunId, createVersionId } from '../../ids';
+ import type { NotebookId, ProjectId } from '../../ids';
+@@ -824,6 +825,72 @@ describe('NotebookService', () => {
+ 		});
+ 	});
+ 
++	describe('workspace writes over an ETag', () => {
++		it.each(['notebook.py', 'pyproject.toml', 'data.txt'])(
++			'refuses a stale %s write when a writer without the lease lands at its commit',
++			async (path) => {
++				const created = await notebooks.createNotebook(
++					projectId,
++					{ title: 'NB', description: '', code: 'old code', deps: 'old deps' },
++					ACTOR,
++				);
++				if (path === 'data.txt') {
++					await notebooks.workspace.write(projectId, created.id, path, enc('old data'), ACTOR);
++				}
++				const read = await notebooks.workspace.read(projectId, created.id, path);
++				const key = paths.project(projectId).notebook(created.id).workspaceFile(path);
++				const landed = new Map([
++					['notebook.py', 'session code'],
++					['pyproject.toml', 'session deps'],
++				]).get(path);
++				// The session save and the workspace mirror write these keys without the lease.
++				const intrude = () =>
++					path === 'data.txt'
++						? bucket.put(key, 'mirrored data')
++						: notebooks.commitSession(
++								projectId,
++								created.id,
++								path === 'notebook.py'
++									? { code: 'session code' }
++									: { code: 'old code', deps: 'session deps' },
++								ACTOR,
++							);
++				const put = bucket.put.bind(bucket);
++				let intruded = false;
++				vi.spyOn(bucket, 'put').mockImplementation(async (...args) => {
++					if (!intruded && args[0] === key && args[2]?.onlyIfEtagMatches !== undefined) {
++						intruded = true;
++						await intrude();
++					}
++					return put(...args);
++				});
++				const versions = (await notebooks.listVersions(projectId, created.id)).length;
++
++				const write = notebooks.workspace.write(
++					projectId,
++					created.id,
++					path,
++					enc('stale edit'),
++					ACTOR,
++					false,
++					{},
++					read.item.etag,
++				);
++				await expect(write).rejects.toBeInstanceOf(WorkspaceFileChangedError);
++				expect(intruded).toBe(true);
++				const current = await notebooks.workspace.read(projectId, created.id, path);
++				await expect(write).rejects.toMatchObject({ etag: current.item.etag });
++				expect(new TextDecoder().decode(current.bytes)).toBe(landed ?? 'mirrored data');
++				expect((await notebooks.listVersions(projectId, created.id)).length).toBe(
++					versions + (landed === undefined ? 0 : 1),
++				);
++				if (path === 'notebook.py') {
++					expect(await notebooks.getNotebookContent(projectId, created.id)).toBe('session code');
++				}
++			},
++		);
++	});
++
+ 	describe('updateNotebook', () => {
+ 		it('projects the latest metadata when catalog updates finish out of order', async () => {
+ 			const created = await notebooks.createNotebook(
+diff --git a/packages/core/src/services/content/NotebookService.ts b/packages/core/src/services/content/NotebookService.ts
+index 6dac0719..fc9b1008 100644
+--- a/packages/core/src/services/content/NotebookService.ts
++++ b/packages/core/src/services/content/NotebookService.ts
+@@ -8,7 +8,7 @@ import { previewKey, PreviewRecordSchema } from './notebookPreviews';
+ import type { GitProviderHosts } from '../../integrations/gitRepo';
+ import { ThumbnailService } from './ThumbnailService';
+ import { all } from 'better-all';
+-import type { Bucket } from '../../ports/bucket';
++import type { Bucket, BucketObject } from '../../ports/bucket';
+ import { mapWithConcurrency } from '../../concurrency';
+ import { BUCKET_SCAN_CONCURRENCY, NOTEBOOK_META_CACHE_MAX_ENTRIES } from '../../constants';
+ import { Millis } from '../../duration';
+@@ -186,8 +186,16 @@ export class NotebookService {
+ 			bucket,
+ 			{
+ 				getNotebook: (projectId, notebookId) => this.getNotebook(projectId, notebookId),
+-				saveSourceFile: (projectId, notebookId, path, content, actor, assertWritable) =>
+-					this.saveWorkspaceSourceFile(projectId, notebookId, path, content, actor, assertWritable),
++				saveSourceFile: (projectId, notebookId, path, content, actor, assertWritable, ifMatch) =>
++					this.saveWorkspaceSourceFile(
++						projectId,
++						notebookId,
++						path,
++						content,
++						actor,
++						assertWritable,
++						ifMatch,
++					),
+ 			},
+ 			workspaceLimits,
+ 		);
+@@ -205,7 +213,8 @@ export class NotebookService {
+ 		content: string,
+ 		actor: UserId,
+ 		assertWritable: () => Promise<void>,
+-	): Promise<void> {
++		ifMatch: string | undefined,
++	): Promise<BucketObject | null> {
+ 		const detail = await this.getNotebook(projectId, notebookId);
+ 		const nb = paths.project(projectId).notebook(notebookId);
+ 		const [code, deps] = await Promise.all([
+@@ -216,7 +225,7 @@ export class NotebookService {
+ 				? content
+ 				: this.bucket.get(nb.deps).then((object) => (object ? object.text() : '')),
+ 		]);
+-		await this.updateNotebookFrom(
++		const { committed } = await this.updateNotebookFrom(
+ 			detail,
+ 			projectId,
+ 			notebookId,
+@@ -224,7 +233,9 @@ export class NotebookService {
+ 			actor,
+ 			detail.meta.updated_at,
+ 			assertWritable,
++			{ key: nb.workspaceFile(path), ifMatch },
+ 		);
++		return committed;
+ 	}
+ 
+ 	async listNotebooks(
+@@ -790,15 +801,17 @@ export class NotebookService {
+ 		expectedVersion?: string,
+ 	): Promise<NotebookMeta> {
+ 		const update = async (assertWritable?: () => Promise<void>) =>
+-			this.updateNotebookFrom(
+-				await this.getNotebook(projectId, notebookId),
+-				projectId,
+-				notebookId,
+-				input,
+-				actor,
+-				expectedVersion,
+-				assertWritable,
+-			);
++			(
++				await this.updateNotebookFrom(
++					await this.getNotebook(projectId, notebookId),
++					projectId,
++					notebookId,
++					input,
++					actor,
++					expectedVersion,
++					assertWritable,
++				)
++			).meta;
+ 		// Blob writes must share the read lease so content matches its update token.
+ 		if (input.code === undefined && input.deps === undefined && input.readme === undefined)
+ 			return update();
+@@ -824,7 +837,8 @@ export class NotebookService {
+ 		actor: UserId,
+ 		expectedVersion?: string,
+ 		assertWritable?: () => Promise<void>,
+-	): Promise<NotebookMeta> {
++		sourceFile?: { key: string; ifMatch: string | undefined },
++	): Promise<{ meta: NotebookMeta; committed: BucketObject | null }> {
+ 		const { meta: existing, source } = detail;
+ 		// Preserve stale If-Match precedence for remote-source content updates; the CAS
+ 		// callback repeats the authoritative check against the latest metadata.
+@@ -879,6 +893,7 @@ export class NotebookService {
+ 			input.code === undefined &&
+ 			input.deps !== undefined &&
+ 			input.deps !== (await this.resolveDeps(nb.deps, undefined));
++		let committed: BucketObject | null = null;
+ 		if ((input.code !== undefined || depsChanged) && source.type === 'local') {
+ 			const code = input.code ?? (await this.getContentForSource(projectId, notebookId, source));
+ 			const versionId = createVersionId();
+@@ -899,15 +914,29 @@ export class NotebookService {
+ 			const newSource = localSource(versionId, source.entry_notebook);
+ 
+ 			const ver = nb.version(versionId);
++			const writes: [key: string, value: string][] = [
++				[nb.workspaceFile(workspaceSourcePolicy(source).entryNotebook), code],
++				[nb.source, JSON.stringify(newSource)],
++				[nb.deps, deps],
++				[ver.code, code],
++				[ver.deps, deps],
++				[ver.meta, JSON.stringify(version)],
++			];
+ 			await assertWritable?.();
+-			await Promise.all([
+-				this.bucket.put(nb.workspaceFile(workspaceSourcePolicy(source).entryNotebook), code),
+-				this.bucket.put(nb.source, JSON.stringify(newSource)),
+-				this.bucket.put(nb.deps, deps),
+-				this.bucket.put(ver.code, code),
+-				this.bucket.put(ver.deps, deps),
+-				this.bucket.put(ver.meta, JSON.stringify(version)),
+-			]);
++			// A workspace edit's own file commits first, and only over the ETag its
++			// editor read when one is given: a stale edit stores none of the version.
++			const first = writes.find(([key]) => key === sourceFile?.key);
++			if (first) {
++				committed = await this.bucket.put(
++					...first,
++					sourceFile?.ifMatch === undefined ? {} : { onlyIfEtagMatches: sourceFile.ifMatch },
++				);
++			}
++			await Promise.all(
++				writes
++					.filter((write) => write !== first)
++					.map(([key, value]) => this.bucket.put(key, value)),
++			);
+ 
+ 			// Prune old versions after the new one is written. This is best-effort
+ 			// and non-fatal: the save has already committed the new version above,
+@@ -924,7 +953,7 @@ export class NotebookService {
+ 			(entry) => loadNotebookCatalogPatch(this.bucket, projectId, notebookId, entry),
+ 		);
+ 
+-		return updated;
++		return { meta: updated, committed };
+ 	}
+ 
+ 	/**
+diff --git a/packages/core/src/services/content/NotebookWorkspaceService.ts b/packages/core/src/services/content/NotebookWorkspaceService.ts
+index 7610584d..d30873ca 100644
+--- a/packages/core/src/services/content/NotebookWorkspaceService.ts
++++ b/packages/core/src/services/content/NotebookWorkspaceService.ts
+@@ -20,6 +20,7 @@ import {
+ 	NotFoundError,
+ 	PreconditionFailedError,
+ 	ResourceExhaustedError,
++	WorkspaceFileChangedError,
+ } from '../../errors';
+ import { VersionId } from '../../ids';
+ import type { NotebookId, ProjectId, UserId } from '../../ids';
+@@ -54,6 +55,8 @@ export interface WorkspaceFileItem {
+ 	size?: number;
+ 	modifiedAt?: number;
+ 	mimeType?: string;
++	/** A file's stored ETag, which a write's If-Match names. */
++	etag?: string;
+ }
+ 
+ export interface WorkspaceListResult {
+@@ -63,6 +66,11 @@ export interface WorkspaceListResult {
+ 
+ interface WorkspaceServiceOwner {
+ 	getNotebook(projectId: ProjectId, notebookId: NotebookId): Promise<NotebookDetail>;
++	/**
++	 * Save a source file as a new version. The file itself commits first, only
++	 * over `ifMatch` when one is given, and the answer is the object that write
++	 * stored (null when nothing was written).
++	 */
+ 	saveSourceFile(
+ 		projectId: ProjectId,
+ 		notebookId: NotebookId,
+@@ -70,7 +78,8 @@ interface WorkspaceServiceOwner {
+ 		content: string,
+ 		actor: UserId,
+ 		assertWritable: () => Promise<void>,
+-	): Promise<void>;
++		ifMatch: string | undefined,
++	): Promise<BucketObject | null>;
+ }
+ 
+ export interface WorkspaceMutationOptions {
+@@ -123,6 +132,7 @@ function fileItem(path: string, object: BucketObject): WorkspaceFileItem {
+ 		size: object.size,
+ 		modifiedAt: object.uploaded.getTime(),
+ 		mimeType: workspaceMimeType(path),
++		etag: object.etag,
+ 	};
+ }
+ 
+@@ -236,14 +246,13 @@ export class NotebookWorkspaceService {
+ 		if (!context.prefix) throw new NotFoundError('Workspace file not found');
+ 		const relative = normalizeWorkspacePathInput(path);
+ 		const key = `${context.prefix}${relative}`;
+-		const head = await this.bucket.head(key);
+-		if (!head || key.endsWith('/')) throw new NotFoundError(`Workspace file ${relative} not found`);
+-		if (head.size > this.limits.maxFileBytes) {
++		// One read, so the bytes and the ETag answered are the same stored object.
++		const body = key.endsWith('/') ? null : await this.bucket.get(key);
++		if (!body) throw new NotFoundError(`Workspace file ${relative} not found`);
++		if (body.size > this.limits.maxFileBytes) {
+ 			throw new ResourceExhaustedError(`Workspace file exceeds ${this.limits.maxFileBytes} bytes`);
+ 		}
+-		const body = await this.bucket.get(key);
+-		if (!body) throw new NotFoundError(`Workspace file ${relative} not found`);
+-		return { item: fileItem(relative, head), bytes: await body.bytes() };
++		return { item: fileItem(relative, body), bytes: await body.bytes() };
+ 	}
+ 
+ 	async search(
+@@ -298,12 +307,22 @@ export class NotebookWorkspaceService {
+ 		actor: UserId,
+ 		createOnly = false,
+ 		options: WorkspaceMutationOptions = {},
++		ifMatch?: string,
+ 	): Promise<WorkspaceFileItem> {
++		if (createOnly && ifMatch !== undefined) {
++			throw new BadRequestError('A create-only write cannot also name an ETag to match');
++		}
+ 		return this.withMutation(projectId, notebookId, options, (lease) =>
+-			this.writeUnlocked(projectId, notebookId, path, bytes, actor, createOnly, lease),
++			this.writeUnlocked(projectId, notebookId, path, bytes, actor, createOnly, lease, ifMatch),
+ 		);
+ 	}
+ 
++	/**
++	 * With `ifMatch`, the write lands only while the file's ETag still equals it,
++	 * enforced by the store's conditional put at the write that commits it (for
++	 * source files, inside `saveSourceFile`), so a writer that holds no lease
++	 * cannot slip in between. The answer carries that write's own ETag.
++	 */
+ 	private async writeUnlocked(
+ 		projectId: ProjectId,
+ 		notebookId: NotebookId,
+@@ -312,6 +331,7 @@ export class NotebookWorkspaceService {
+ 		actor: UserId,
+ 		createOnly: boolean,
+ 		lease: MutationLease,
++		ifMatch: string | undefined,
+ 	): Promise<WorkspaceFileItem> {
+ 		const context = await this.mutableContext(projectId, notebookId, 'write', path);
+ 		const relative = normalizeWorkspacePathInput(path);
+@@ -323,6 +343,12 @@ export class NotebookWorkspaceService {
+ 		if ((!existing && (await this.exists(context.prefix, relative))) || (createOnly && existing)) {
+ 			throw new ConflictError(`Workspace entry ${relative} already exists`);
+ 		}
++		if (ifMatch !== undefined && !existing) {
++			throw new NotFoundError(`Workspace file ${relative} not found`);
++		}
++		if (ifMatch !== undefined && existing?.etag !== ifMatch) {
++			throw new WorkspaceFileChangedError(relative, existing?.etag);
++		}
+ 		await this.assertParentDirectories(context.prefix, relative);
+ 		await this.assertCapacity(
+ 			context.prefix,
+@@ -330,32 +356,35 @@ export class NotebookWorkspaceService {
+ 			bytes.byteLength - (existing?.size ?? 0),
+ 		);
+ 
+-		if (
++		const sourceFile =
+ 			relative === workspaceSourcePolicy(context.detail.source).entryNotebook ||
+-			relative === 'pyproject.toml'
+-		) {
+-			await this.owner.saveSourceFile(
+-				projectId,
+-				notebookId,
+-				relative,
+-				assertTextSource(relative, bytes),
+-				actor,
+-				lease.heartbeat,
+-			);
+-		} else {
+-			try {
+-				await this.bucket.put(key, bytes, {
+-					httpMetadata: { contentType: workspaceMimeType(relative) },
+-					...(createOnly ? { onlyIfNotExists: true } : {}),
+-				});
+-			} catch (error) {
+-				if (error instanceof PreconditionFailedError) {
+-					throw new ConflictError(`Workspace entry ${relative} already exists`);
+-				}
+-				throw error;
++			relative === 'pyproject.toml';
++		try {
++			if (sourceFile) {
++				const saved = await this.owner.saveSourceFile(
++					projectId,
++					notebookId,
++					relative,
++					assertTextSource(relative, bytes),
++					actor,
++					lease.heartbeat,
++					ifMatch,
++				);
++				return saved ? fileItem(relative, saved) : await this.statIn(context.prefix, relative);
+ 			}
++			const written = await this.bucket.put(key, bytes, {
++				httpMetadata: { contentType: workspaceMimeType(relative) },
++				...(createOnly ? { onlyIfNotExists: true } : {}),
++				...(ifMatch === undefined ? {} : { onlyIfEtagMatches: ifMatch }),
++			});
++			return fileItem(relative, written);
++		} catch (error) {
++			if (!(error instanceof PreconditionFailedError)) throw error;
++			if (createOnly && !sourceFile) {
++				throw new ConflictError(`Workspace entry ${relative} already exists`);
++			}
++			throw new WorkspaceFileChangedError(relative, (await this.bucket.head(key))?.etag);
+ 		}
+-		return this.statIn(context.prefix, relative);
+ 	}
+ 	private uploads(projectId: ProjectId, notebookId: NotebookId) {
+ 		return new ResumableUploads(
+diff --git a/packages/core/src/testing/workspaceFixtures.ts b/packages/core/src/testing/workspaceFixtures.ts
+index cd95573c..55f7c7cc 100644
+--- a/packages/core/src/testing/workspaceFixtures.ts
++++ b/packages/core/src/testing/workspaceFixtures.ts
+@@ -42,11 +42,12 @@ export function makeWorkspaceService(
+ 		bucket,
+ 		{
+ 			getNotebook: async () => owner.detail,
+-			saveSourceFile: async (projectId, notebookId, path, content, actor) => {
++			saveSourceFile: async (projectId, notebookId, path, content, actor, _assert, ifMatch) => {
+ 				owner.saved.push({ projectId, notebookId, path, content, actor });
+-				await bucket.put(
++				return bucket.put(
+ 					paths.project(projectId).notebook(notebookId).workspaceFile(path),
+ 					content,
++					ifMatch === undefined ? {} : { onlyIfEtagMatches: ifMatch },
+ 				);
+ 			},
+ 		},

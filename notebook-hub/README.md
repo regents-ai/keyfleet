@@ -64,7 +64,10 @@ them to the hub. That part is built separately, in `platform/`.
   - `run-page-status.patch`, which names a run's status on its saved page
     (`X-Marimohub-Run-Status`), so Keyfleet knows which kept pages are good;
   - `notebooks-updated-after.patch`, which lets a project's notebook list ask
-    for only the notebooks updated after a time (below).
+    for only the notebooks updated after a time (below);
+  - `workspace-revision.patch`, which answers a notebook file read with the
+    file's stored ETag and writes a file sent with `If-Match` only while it
+    still has that ETag (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -89,7 +92,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-146cfd5`, about 430 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-b48b9a4`, about 430 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -199,7 +202,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-146cfd5` as `registry.fly.io/kf-nb-<fleet>:626ec14-146cfd5`
+   - tag `keyfleet/notebook-hub:626ec14-b48b9a4` as `registry.fly.io/kf-nb-<fleet>:626ec14-b48b9a4`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -371,6 +374,22 @@ its listed ID.
   last one rather than the whole project. The hub does not record when a
   notebook last ran (`last_run_at` stays null at the pin), so runs are not
   asked for.
+- **A file write names the revision it read (`workspace-revision.patch`).**
+  `GET /api/v1/projects/{pid}/notebooks/{nid}/workspace/files` answers the
+  file's bytes and its stored ETag (`ETag`) from one read of the store. A
+  `PUT` to the same path with `If-Match` writes only while the file's ETag
+  still equals it; otherwise it answers 412 `PRECONDITION_FAILED` with the
+  file's current ETag, and nothing is written. A file that is gone answers
+  404, and `create=true` with `If-Match` answers 400. A successful write
+  answers the ETag it stored. The check is the store's own conditional write
+  at the write that commits the file: for `notebook.py` and `pyproject.toml`,
+  that file is written first inside the new version's save, before anything
+  else of the version, so a session saving its edits, or the workspace being
+  mirrored back from a machine, cannot slip between the check and the write.
+  At the pin, the read's `ETag` was a weak hash of the bytes added by the
+  server and the write ignored `If-Match`. Keyfleet sends `If-Match` on every
+  overwrite; the hub's own file browser does not, and its writes behave as
+  before.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes
