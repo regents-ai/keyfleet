@@ -10036,3 +10036,35 @@ as errors, format, credo strict, sobelow, full suite 1,470 (20 properties, 1,450
 19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
 of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
 tests, 6 skipped). Not run with a real agent.
+
+## 2026-11-14 — Fund with NEAR on the Treasury view
+
+- A fleet's Treasury view has a Funding panel. A Key holder of the fleet names an amount
+  of USDC (at most 1,000) and their NEAR account for refunds, sees the price in NEAR from
+  the NEAR Intents 1Click service, and on "Fund with NEAR" gets the exact NEAR to send,
+  the deposit address with a copy button and the deadline. They send NEAR from their own
+  wallet; the site only asks for prices and reads status, and never holds or moves funds.
+- The USDC always lands at the fleet's own treasury address on Base, read from the
+  fleet's recorded deployment. No form field or request names the recipient.
+- Each funding is one record (`Keyfleet.Fundings.Funding`, table `fundings`, migration
+  `20261114193057_near_fundings`, additive): who started it, the USDC asked, the
+  recipient, the refund account, the quote as answered, the deposit address, the state
+  and the NEAR and Base transactions. Its status is read when a member opens the page and
+  on Refresh; there is no automatic checking. States read Waiting, Processing, Arrived,
+  Refunded and Failed. An arrived funding shows a receipt: amount, where it landed, the
+  NEAR and Base transactions as links, the time, and "Not checked" for the quote's
+  signature, which v0.1 does not verify.
+- Anyone who can see the Treasury view sees the fundings and their receipts. Pricing,
+  starting and refreshing one is for the fleet's members (`Keyfleet.Access`, new part
+  `fundings`: read by anyone, written by members), so `fleets_doctor` answers
+  `may.fundings` too.
+- The 1Click client is `RegentNearIntents` (`platform/lib/regent_near_intents.ex`), a
+  stand-in with the frozen shape of the shared `near_intents` package, selected by
+  `config :keyfleet, Keyfleet.Fundings, client: RegentNearIntents`; tests name
+  `Keyfleet.Fundings.StubClient`, which answers from the saved dry quote. When the shared
+  package is pinned, that one file goes.
+
+Check (partition `_kf_s3`): compile with warnings as errors, format, and the new tests
+(`near_funding_test.exs`, `regent_near_intents_test.exs`, 10 of 10). Nothing has called
+the real service: the client is tested against the saved dry quote and a made-up status
+answer only.

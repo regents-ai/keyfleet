@@ -62,6 +62,11 @@ config :keyfleet, Keyfleet.Lighthouse,
 
 config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.StubClient
 
+# Fundings paid in NEAR are priced and read by a stub that answers from the
+# saved quote; the 1Click client itself is answered by `Req.Test`.
+config :keyfleet, Keyfleet.Fundings, client: Keyfleet.Fundings.StubClient
+config :keyfleet, RegentNearIntents, req_options: [plug: {Req.Test, RegentNearIntents}]
+
 # Tests name the node they read sent steps through: `Keyfleet.TestChainNode`,
 # or a lab chain's anvil (`Keyfleet.AnvilLab`).
 config :keyfleet, :chain_nodes, %{}

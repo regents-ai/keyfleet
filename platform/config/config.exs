@@ -130,6 +130,10 @@ config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interva
 # (`Keyfleet.ChainRefresh`).
 config :keyfleet, Keyfleet.ChainRefresh, readers: [Keyfleet.Chain.Watch]
 
+# Who prices a funding paid in NEAR and reads how it stands: the NEAR
+# Intents 1Click service (`Keyfleet.Fundings`).
+config :keyfleet, Keyfleet.Fundings, client: RegentNearIntents
+
 # The chain a fleet's wallet buttons send on, by the chain id its deployment
 # records: its name in the page's words, and the public node a wallet adds
 # it with when the wallet doesn't know it yet. The site's own node never
@@ -194,7 +198,8 @@ config :keyfleet,
     Keyfleet.LeftMessages,
     Keyfleet.Usage,
     Keyfleet.Atlas,
-    KeyfleetWeb.AgentTools
+    KeyfleetWeb.AgentTools,
+    Keyfleet.Fundings
   ],
   generators: [timestamp_type: :utc_datetime]
 

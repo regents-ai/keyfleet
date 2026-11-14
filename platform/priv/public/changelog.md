@@ -4,6 +4,12 @@ Changes to Keyfleet, newest first.
 
 ## 14 November 2026
 
+- **Funding.** A fleet's Key holders can fund its treasury with NEAR from the Treasury
+  page. Name an amount of USDC and your NEAR account for refunds, see the price, then
+  press Fund with NEAR to get the exact NEAR to send and the address to send it to. You
+  send it from your own wallet; Keyfleet never holds or moves funds. The USDC always lands
+  in the fleet's own treasury on Base, and each funding shows its status and, once it
+  arrives, a receipt with both transactions.
 - **Notebook runs.** A finished run now says separately whether the notebook's code is
   unchanged and whether every one of its files is. Before, a run could read as current
   while a helper file beside the code had changed since.

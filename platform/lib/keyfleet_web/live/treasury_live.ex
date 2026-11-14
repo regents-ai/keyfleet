@@ -57,6 +57,14 @@ defmodule KeyfleetWeb.TreasuryLive do
         resting?={@resting?}
       />
 
+      <.live_component
+        :if={@page.treasury}
+        module={KeyfleetWeb.NearFundingPanel}
+        id="treasury-funding"
+        fleet_id={@page.fleet_id}
+        actor={@actor}
+      />
+
       <%!-- A fleet not yet on chain has no treasury to show. --%>
       <section :if={!@page.treasury} id="treasury-not-live" class="proposals-panel">
         <Regent.Primitives.empty_state

@@ -60,7 +60,9 @@ defmodule Keyfleet.Access do
     # The fleet's workspace, but for what its activity shows anyone.
     workspace: %{read: :member, write: :member},
     # The fleet's polls, their questions, choices, notes and results.
-    polls: %{read: :member, write: :member}
+    polls: %{read: :member, write: :member},
+    # Fundings of the treasury paid in NEAR, with their receipts.
+    fundings: %{read: :public, write: :member}
   }
 
   # What is written by the same act as another component is written by the
