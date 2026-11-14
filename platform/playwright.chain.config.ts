@@ -14,8 +14,9 @@ import {defineConfig, devices} from "@playwright/test"
 // with its bar, a new owner's Pair and Mark present from the purchase until
 // both are done, Block and Delete conversation asking first in a direct message, the
 // homepage's value cards opening Classic's pages, the workspace's Graph canvas
-// panning, zooming, rearranging and lighting a line, and a fleet's Worldline
-// read signed out, in Chromium.
+// panning, zooming, rearranging and lighting a line, a fleet's Worldline
+// read signed out, and the fleet page's guided tour beside Buy Key, in
+// Chromium.
 // They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
 // over Erlang distribution, so the server runs as a named node on the loopback
 // address, with a secret cookie and a fixed distribution port instead of epmd.
@@ -35,23 +36,31 @@ const baseURL = `https://localhost:${port}`
 process.env.KEYFLEET_BROWSER_COOKIE ??= randomBytes(24).toString("hex")
 process.env.KEYFLEET_BROWSER_DIST_PORT = String(Number(port) + 20_000)
 
+const tourSeen = [
+  {name: "keyfleet:tour:visitor", value: "seen"},
+  {name: "keyfleet:tour:holder", value: "seen"},
+]
+
 const env = `MIX_ENV=test MIX_TEST_PARTITION=${partition}`
 const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BROWSER_DIST_PORT} -kernel inet_dist_use_interface {127,0,0,1}`
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "fleet_prompts.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts", "homepage_cards.spec.ts", "tree_canvas.spec.ts", "worldline.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "fleet_layout.spec.ts", "wallet_buttons.spec.ts", "wallet_keys.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts", "account_agents.spec.ts", "key_card.spec.ts", "workspace_motion.spec.ts", "group_flow.spec.ts", "treasury_read.spec.ts", "visits.spec.ts", "sea_lift.spec.ts", "fleet_prompts.spec.ts", "fleet_search.spec.ts", "dm_confirm.spec.ts", "homepage_cards.spec.ts", "tree_canvas.spec.ts", "worldline.spec.ts", "fleet_tour.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
   retries: 0,
   reporter: "line",
-  // The server's certificate is one it made for itself.
+  // The server's certificate is one it made for itself. Every walk starts
+  // with the fleet page's guided tours seen, so neither opens over what it
+  // presses; fleet_tour.spec.ts starts with nothing kept.
   use: {
     baseURL,
     ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    storageState: {cookies: [], origins: [{origin: baseURL, localStorage: tourSeen}]},
   },
   webServer: {
     command: [

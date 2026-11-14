@@ -40,6 +40,7 @@ export default defineConfig({
     "homepage_cards.spec.ts",
     "tree_canvas.spec.ts",
     "worldline.spec.ts",
+    "fleet_tour.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
@@ -47,12 +48,26 @@ export default defineConfig({
   retries: 0,
   reporter: "line",
   globalTeardown: "./test/browser/support/remove_browser_account.ts",
-  // The server's certificate is one it made for itself.
+  // The server's certificate is one it made for itself. Every walk starts
+  // with the fleet page's guided tours seen, so neither opens over what it
+  // presses.
   use: {
     baseURL,
     ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: baseURL,
+          localStorage: [
+            {name: "keyfleet:tour:visitor", value: "seen"},
+            {name: "keyfleet:tour:holder", value: "seen"},
+          ],
+        },
+      ],
+    },
   },
   // The database is created and brought up to date first, as the chain config
   // does, then the four fleets are put in the catalog for the fleet pages. They
