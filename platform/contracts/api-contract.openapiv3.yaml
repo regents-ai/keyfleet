@@ -7766,7 +7766,7 @@ components:
         fleet_id: {type: string}
         kind:
           type: string
-          enum: [fleet, room, workspace, workspace_item, project, commit, code_files, repository, proposals, proposal, treasury, polls, poll, key, dms, dm, notebook, notebook_result]
+          enum: [fleet, room, workspace, workspace_item, project, commit, code_files, repository, proposals, proposal, treasury, polls, poll, atlas, key, dms, dm, notebook, notebook_result]
         names:
           type: object
           description: >-

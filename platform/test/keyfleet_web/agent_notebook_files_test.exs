@@ -539,6 +539,35 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert read["content"] == "import marimo"
   end
 
+  # Costly failure: an agent handed the Atlas's or the workspace's link to a
+  # notebook, which opens it through this site, is told the address names
+  # nothing and picks the ids out by hand.
+  test "a link that opens a notebook here reads as that notebook, or as its saved page", c do
+    site = String.replace_prefix(KeyfleetWeb.Endpoint.url(), "http://", "https://")
+    open = &"#{site}/fleets/#{&1}/notebooks/open?#{URI.encode_query(to: &2)}"
+    resolve = &post!(c, c.first, "/api/v1/agent/links/resolve", %{"url" => &1})
+
+    link = json_response(resolve.(open.(@fleet, Notebooks.notebook_path(@space, @notebook))), 200)
+    assert ContractSchema.errors(link, "Link") == []
+
+    assert %{"kind" => "notebook", "read" => %{"tool" => "notebooks_files", "input" => input}} =
+             link
+
+    assert input == %{"fleet_id" => @fleet, "project" => "general", "notebook_id" => @notebook}
+
+    run_id = "run_" <> String.duplicate("0", 26)
+    saved = Notebooks.result_path(@notebook, run_id, 1_763_000_000_000)
+
+    assert %{"kind" => "notebook_result", "names" => names} =
+             json_response(resolve.(open.(@fleet, saved)), 200)
+
+    assert %{"notebook_id" => @notebook, "run_id" => ^run_id} = names
+
+    for unknown <- [open.(@fleet, "/"), open.("fleet_tech_classic", saved)] do
+      assert json_response(resolve.(unknown), 422)["error"]["code"] == "link_unknown"
+    end
+  end
+
   describe "a finished run's files" do
     setup c do
       Agent.update(c.files, fn kept ->

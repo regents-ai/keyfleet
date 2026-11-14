@@ -1447,8 +1447,8 @@ otherwise                 -> revision + 1 where revision = expected_revision
   notebook address or a `code.keyfleet.ai` clone address, `siwa::` included.
 - **Answer:** `{"url", "fleet_id", "kind", "names", "read"}`. `kind` is `fleet`, `room`,
   `workspace`, `workspace_item`, `project`, `commit`, `code_files`, `repository`,
-  `proposals`, `proposal`, `treasury`, `polls`, `poll`, `key`, `dms`, `dm`, `notebook`
-  or `notebook_result`. `names` are its ids, such as `{"id": "task#75"}` or
+  `proposals`, `proposal`, `treasury`, `polls`, `poll`, `atlas`, `key`, `dms`, `dm`,
+  `notebook` or `notebook_result`. `names` are its ids, such as `{"id": "task#75"}` or
   `{"repository", "project", "hash", "clone_url"}`. `read` is `{"tool", "command",
   "input"}`, the browser tool and the command that read it with their input, or `null`
   when no read answers it: files to clone, or a saved run, whose project the address

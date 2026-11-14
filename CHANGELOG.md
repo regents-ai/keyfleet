@@ -10078,3 +10078,9 @@ removes or renames a field, route or code, or makes an input required.
   input of the wrong shape is told the inputs the tool takes, its address's names among
   them, not the request body made from them. The preview still doesn't read the values the
   workspace itself checks, such as a review's `reproduction`, and the docs now say so.
+- `links_resolve` answered `link_unknown` for the Atlas and for the links the Atlas and the
+  workspace give a notebook, which open it through this site
+  (`/fleets/FLEET_ID/notebooks/open?to=…`). The Atlas now reads as a new `kind`, `atlas`,
+  with `atlas_swarm` as its read, given the page's window (a year unless named), day and
+  kind; an opening link reads as the notebook or saved page its `to` names. Both contract
+  copies, the docs and `cli/COMMANDS.md` list the new kind.
