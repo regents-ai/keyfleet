@@ -1,0 +1,340 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "fleet_id",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "purpose",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "assist_url",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "price_usdc",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "state",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "proposed_by_key",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "decided_by_key",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "decided_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "refusal_code",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "refusal_reason",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "receipt_url",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "payment_tx",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "bought_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "worked",
+      "type": "boolean"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "result_note",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "evidence_url",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "checked_by_key",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "checked_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "inserted_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "purchases_budget_id_fkey",
+        "on_delete": null,
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "budgets"
+      },
+      "scale": null,
+      "size": null,
+      "source": "budget_id",
+      "type": "uuid"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "price_usdc"
+      ],
+      "base_filter": null,
+      "check": "price_usdc > 0",
+      "name": "purchases_price_positive"
+    },
+    {
+      "attribute": [
+        "state"
+      ],
+      "base_filter": null,
+      "check": "state IN ('proposed', 'approved', 'refused', 'bought', 'worked', 'failed')",
+      "name": "purchases_state"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "budget_id",
+        "inserted_at"
+      ],
+      "fields": [
+        {
+          "type": "atom",
+          "value": "budget_id"
+        },
+        {
+          "type": "atom",
+          "value": "inserted_at"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": null,
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": false,
+      "using": null,
+      "where": null
+    }
+  ],
+  "custom_statements": [],
+  "has_create_action": true,
+  "hash": "F0C479D762D1842006EFACCA95025272E36116A1118BFA671E8DDEE14FCE20A5",
+  "identities": [],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.Keyfleet.Repo",
+  "schema": null,
+  "table": "purchases",
+  "temporal": null
+}

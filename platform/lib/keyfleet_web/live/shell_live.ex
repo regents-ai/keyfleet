@@ -29,6 +29,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias KeyfleetWeb.{
     AccountLive,
     AtlasLive,
+    BudgetPanel,
     CodePassword,
     DmsLive,
     FleetLive,
@@ -114,6 +115,7 @@ defmodule KeyfleetWeb.ShellLive do
        slices: %Read{},
        pair_start: nil,
        project_page: nil,
+       project_budget: nil,
        agents_topic: nil,
        points: %Read{},
        points_bonus: %Read{},
@@ -442,6 +444,13 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp press(event, params, socket) when event in @atlas_events,
     do: AtlasLive.handle_event(event, params, socket)
+
+  # A member opens a budget on the project's page as the Key it is in the
+  # fleet as (`KeyfleetWeb.BudgetPanel`).
+  defp press("budget_open", params, %{assigns: %{project_budget: %{} = panel}} = socket),
+    do:
+      {:noreply,
+       assign(socket, :project_budget, BudgetPanel.open(panel, human_actor(socket), params))}
 
   # The Treasury's refresh, once every 30 seconds for each person: by
   # account when signed in, by visit when not.
@@ -794,6 +803,7 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :project}
           project={@project_page}
           workspace?={reads_workspace?(@fleet_class)}
+          budget={@project_budget}
         />
 
         <PairLive.page
@@ -1006,12 +1016,14 @@ defmodule KeyfleetWeb.ShellLive do
 
     assign(socket,
       project_page: project,
+      project_budget: BudgetPanel.read(human_actor(socket), fleet_id, name),
       page_title: project.title <> " · " <> project.fleet_name,
       page_description: project.description || socket.assigns.page_description
     )
   end
 
-  defp load_project(socket, _route_spec, _params), do: assign(socket, :project_page, nil)
+  defp load_project(socket, _route_spec, _params),
+    do: assign(socket, project_page: nil, project_budget: nil)
 
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key

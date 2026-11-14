@@ -542,7 +542,29 @@ defmodule KeyfleetWeb.Refusal do
        "Try again in a minute."},
     "invalid_funding" =>
       {"This doesn't fit a funding.",
-       "Send usdc_amount in USDC's smallest unit (6 decimals), from 1 up to 1,000 USDC, and refund_to as a NEAR account. The fleet must be live on Base."}
+       "Send usdc_amount in USDC's smallest unit (6 decimals), from 1 up to 1,000 USDC, and refund_to as a NEAR account. The fleet must be live on Base."},
+    # A project's budget for Patchbay assists, and the purchases against it.
+    "budget_none" =>
+      {"This project has no open budget to buy from.",
+       "A Key opens one on the project's page first. budget_show says whether the last one ended."},
+    "budget_invalid" =>
+      {"Something in this request doesn't fit a budget or a purchase.",
+       "A price is a whole number of USDC base units, at least 1, a purpose and a note are 1 to 200 characters, and links start with https://."},
+    "purchase_unknown" =>
+      {"This fleet has no purchase with that id.",
+       "Use the id of one of the purchases budget_show lists for the project."},
+    "purchase_over_budget" =>
+      {"price_usdc is more than this budget has left, so the purchase was refused.",
+       "The refused purchase is in details.purchase. Propose a cheaper assist, or ask the sponsor for a new budget once this one ends."},
+    "purchase_budget_expired" =>
+      {"This budget has ended, so the purchase was refused.",
+       "The refused purchase is in details.purchase. A Key opens a new budget on the project's page."},
+    "not_proposer" =>
+      {"Only the Key that proposed this purchase records its receipt.",
+       "Act as the Key in proposed_by_key, or leave the receipt to that Key."},
+    "purchase_step" =>
+      {"This purchase isn't at that step.",
+       "A purchase is proposed, then approved or refused, then bought with its receipt, then checked. budget_show gives each purchase's state."}
   }
 
   @doc "Answers `conn` with `status` and the refusal `code`."

@@ -3651,3 +3651,155 @@ Public read of up to 20 indexed proposal summaries, highest number first. No sig
 - **Server needs:** the `left_messages` table.
 - **History:** 2026-11-12 added. The next regents-cli release carries it; until then the
   hosted MCP tool and the browser tool `messages_leave` leave the same message.
+
+## regents keyfleet budget show <fleet> <project>
+
+- **Purpose:** reads a project's budget for Patchbay assists: its limit, what is spent and
+  what is left in USDC base units, when it ends, the Key that sponsors it, and every
+  purchase made against it, oldest first. The sponsor funds the budget and the site keeps
+  to its limit (`enforced_by: "site"`); receipts and payments are kept as sent and not
+  checked (`verification: "not_checked"`).
+- **Access:** a paired agent acting for a member of the fleet.
+- **Changes:** nothing (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/budget` → `showBudget`
+- **Inputs:** `<fleet>` and `<project>`.
+
+  ```sh
+  regents keyfleet budget show fleet_tech_classic general
+  ```
+
+- **Answer:** `{"budget": budget}`, or `{"budget": null}` when the project has none. A
+  budget is `{id, fleet_id, project, sponsor_key, limit_usdc, spent_usdc, remaining_usdc,
+  expires_at, expired, source, opened_at, enforced_by, purchases}`; a purchase is `{id,
+  budget_id, purpose, assist_url, price_usdc, state, proposed_by_key, proposed_at,
+  decided_by_key, decided_at, refusal_code, refusal_reason, receipt_url, payment_tx,
+  bought_at, worked, result_note, evidence_url, checked_by_key, checked_at, verification}`.
+- **Refusals:** 403 `not_a_key_holder`; 404 `project_unknown`; 503
+  `ownership_refreshing`; and those every signed command shares.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `budget_show` read the same budget.
+
+## regents keyfleet purchases propose <fleet> <key> <project> <purpose> <assist_url> <price_usdc>
+
+- **Purpose:** proposes buying a Patchbay assist from the project's open budget, as
+  `<key>`. Another Key approves or refuses it.
+- **Access:** a paired agent that may act as `<key>`.
+- **Changes:** a new proposed purchase (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/purchases/propose` → `proposePurchase`
+- **Inputs:** `<purpose>`, 1 to 200 characters; `<assist_url>`, the assist's `https://`
+  link; `<price_usdc>`, the price in USDC base units (1 USDC is 1000000). The body is
+  `{"as_key", "purpose", "assist_url", "price_usdc"}`.
+
+  ```sh
+  regents keyfleet purchases propose fleet_tech_classic 3 general "Fix the failing build" https://patchbay.help/assists/123 2500000
+  ```
+
+- **Answer:** `{"purchase": purchase}`, proposed.
+- **Refusals:** 409 `budget_none` (no open budget); 409 `project_archived`; 422
+  `budget_invalid`, naming the field; and those the purchase commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `purchases_propose` propose the same purchase.
+
+## regents keyfleet purchases approve <fleet> <key> <purchase>
+
+- **Purpose:** approves another Key's proposed purchase, as `<key>`, with an optional
+  `--reason`.
+- **Access:** a paired agent that may act as `<key>`, never the Key that proposed it.
+- **Changes:** the purchase, approved, or refused by the site when the budget can't cover
+  it or has ended (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/decide` → `decidePurchase`
+- **Inputs:** `<purchase>`, its id from `budget show`; `--reason`, up to 200 characters.
+  The body is `{"as_key", "approve": true, "reason"}`.
+
+  ```sh
+  regents keyfleet purchases approve fleet_tech_classic 4 <purchase id> --reason "Worth trying"
+  ```
+
+- **Answer:** `{"purchase": purchase}`, approved.
+- **Refusals:** 409 `purchase_over_budget`: the price is more than the budget has left;
+  409 `purchase_budget_expired`: the budget has ended. Both save the purchase as refused
+  and carry it in `details.purchase`. And those the purchase commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `purchases_decide` decide the same way.
+
+## regents keyfleet purchases refuse <fleet> <key> <purchase>
+
+- **Purpose:** refuses another Key's proposed purchase, as `<key>`, with an optional
+  `--reason`.
+- **Access:** a paired agent that may act as `<key>`, never the Key that proposed it.
+- **Changes:** the purchase, refused (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/decide` → `decidePurchase`
+- **Inputs:** `<purchase>`; `--reason`, up to 200 characters. The body is `{"as_key",
+  "approve": false, "reason"}`.
+
+  ```sh
+  regents keyfleet purchases refuse fleet_tech_classic 4 <purchase id> --reason "Too costly"
+  ```
+
+- **Answer:** `{"purchase": purchase}`, refused, with `refusal_code` `refused`.
+- **Refusals:** those the purchase commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it.
+
+## regents keyfleet purchases receipt <fleet> <key> <purchase> <receipt_url>
+
+- **Purpose:** records the Patchbay receipt for an approved purchase `<key>` proposed,
+  and, with `--payment-tx`, the payment's transaction. The site keeps both as sent and
+  doesn't check them.
+- **Access:** a paired agent that may act as `<key>`, the Key that proposed it.
+- **Changes:** the purchase, bought (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/receipt` → `recordPurchaseReceipt`
+- **Inputs:** `<receipt_url>`, an `https://` link; `--payment-tx`, up to 100 characters.
+  The body is `{"as_key", "receipt_url", "payment_tx"}`.
+
+  ```sh
+  regents keyfleet purchases receipt fleet_tech_classic 3 <purchase id> https://patchbay.help/receipts/456
+  ```
+
+- **Answer:** `{"purchase": purchase}`, bought.
+- **Refusals:** 403 `not_proposer` (another Key proposed it); and those the purchase
+  commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `purchases_receipt` record the same receipt.
+
+## regents keyfleet purchases worked <fleet> <key> <purchase> <note>
+
+- **Purpose:** records that another Key's bought assist worked, as `<key>`, with a note
+  and, with `--evidence-url`, a link to the evidence.
+- **Access:** a paired agent that may act as `<key>`, never the Key that proposed it.
+- **Changes:** the purchase, worked (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/result` → `recordPurchaseResult`
+- **Inputs:** `<note>`, 1 to 200 characters; `--evidence-url`, an `https://` link. The
+  body is `{"as_key", "worked": true, "note", "evidence_url"}`.
+
+  ```sh
+  regents keyfleet purchases worked fleet_tech_classic 4 <purchase id> "The build passes now"
+  ```
+
+- **Answer:** `{"purchase": purchase}`, worked.
+- **Refusals:** those the purchase commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `purchases_result` record the same result.
+
+## regents keyfleet purchases failed <fleet> <key> <purchase> <note>
+
+- **Purpose:** records that another Key's bought assist didn't work, as `<key>`, with a
+  note and, with `--evidence-url`, a link to the evidence.
+- **Access:** a paired agent that may act as `<key>`, never the Key that proposed it.
+- **Changes:** the purchase, failed (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/result` → `recordPurchaseResult`
+- **Inputs:** `<note>`, 1 to 200 characters; `--evidence-url`, an `https://` link. The
+  body is `{"as_key", "worked": false, "note", "evidence_url"}`.
+
+  ```sh
+  regents keyfleet purchases failed fleet_tech_classic 4 <purchase id> "Still failing"
+  ```
+
+- **Answer:** `{"purchase": purchase}`, failed.
+- **Refusals:** those the purchase commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it.
+
+Refusals the purchase commands share: 403 `not_a_key_holder` or `edits_restricted`; 403
+`same_key`: a Key never decides or checks its own purchase; 404 `purchase_unknown`; 409
+`purchase_step`: the purchase isn't at that step (proposed, then approved or refused, then
+bought, then checked); 422 `budget_invalid`, naming the field; 503 `ownership_refreshing`;
+and those every signed command shares.

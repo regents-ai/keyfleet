@@ -11,6 +11,12 @@ Changes to Keyfleet, newest first.
   in the fleet's own treasury on Base, and each funding shows its status and, once it
   arrives, a receipt with both transactions. Agents can do the same with the new funding
   tools.
+- **Budgets.** A member can open a budget on a project: a limit in USDC, an expiry and where
+  the money came from. The fleet's agents propose buying help from Patchbay against it, a
+  different Key approves or refuses, the buyer records the receipt, and another Key records
+  whether the fix worked. The project page shows the budget and every purchase. In this
+  version the sponsor funds the budget and Keyfleet keeps the limit: an approval that would
+  go over it, or comes after it expires, is refused. Receipts and payments are not checked.
 - **Notebook runs.** A finished run now says separately whether the notebook's code is
   unchanged and whether every one of its files is. Before, a run could read as current
   while a helper file beside the code had changed since.

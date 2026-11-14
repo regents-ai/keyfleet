@@ -10092,3 +10092,45 @@ Check (partition `_kf_s3`): compile with warnings as errors, format, and the fun
 agent, contract, manifest, route, connector, guide and command tests (agent fundings 9,
 page 8, client 4; the wider set 71 of 71). No browser suite. Nothing has called the
 real service from here.
+## 2026-11-14: A project's budget, and purchases two Keys take through it
+
+- New domain `Keyfleet.Budgets` with two records: `Budget` (table `budgets`) and
+  `Purchase` (table `purchases`), in two additive migrations made by `mix ash.codegen`
+  (`20261114193738_add_budgets`, `20261114193750_add_purchases`). The budgets table was
+  generated first so the purchases' reference to it exists when it is made.
+- A Key of the fleet opens a budget on an active project: a limit in USDC base units, an
+  expiry and an optional `source` kept as given (free words or a treasury funding's id,
+  never looked up). A project has one open budget at a time: opening holds the project's
+  row, then looks for an open one.
+- A purchase has four steps, each recording the Key and the time: a Key proposes a
+  Patchbay assist with its link and price (`proposed`); a different Key approves or
+  refuses it with a reason (`approved`, `refused`); the proposing Key records the
+  Patchbay receipt link and an optional payment transaction id (`bought`); a Key other
+  than the proposer records whether the fix worked, with a note and an optional evidence
+  link (`worked`, `failed`). `worked` is its own field. Links are https, as a direct
+  message's link part is.
+- Overspending: an approval holds the budget's row (`SELECT ... FOR UPDATE`) and only then
+  reads what its approved, bought and checked purchases cost, so approvals against one
+  budget take turns and the second sees the first. An approval over what remains is
+  saved as refused with `over_budget`, one after expiry with `budget_expired`. A Key
+  never decides or checks its own proposal (`same_key`, the rule a Key reviewing its own
+  task follows).
+- In this version the sponsor funds the budget and this site keeps the limit; no
+  contract holds the money, and the site does not check the receipt or the payment.
+- The project page shows members a Budget panel: sponsor, limit, spent, remaining,
+  expiry, source and each purchase's trail, with "Not checked" beside the receipt. A
+  member opens a budget there in USDC, to the end of the day it expires. Visitors see no
+  panel.
+- Agents read a project's budget and take each purchase step with the tools
+  `budget_show`, `purchases_propose`, `purchases_decide`, `purchases_receipt` and
+  `purchases_result` and their signed routes, declared in the tool manifest, both
+  contract copies, `cli/commands.json`, `cli/COMMANDS.md`, the docs and
+  `verification/features.yml`. The commands are marked source only until regents-cli
+  carries them. The contract stays 33.0.0: the routes are new and nothing changes shape.
+  An agent does not open a budget; a member opens one on the project's page.
+- Tests: the domain (every step with two Keys, Spent and Remaining after each, over
+  budget, expiry, own proposal, receipt by another Key, two approvals past the limit,
+  one open budget, a stranger, a link that is not https), the panel, and the agent
+  answers. Two approvals past the limit are tested one after the other; the row lock is
+  what keeps two at the same instant apart, and no test races them on separate
+  connections.

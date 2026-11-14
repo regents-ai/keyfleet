@@ -265,8 +265,11 @@ defmodule Keyfleet.MixProject do
         # domain; its policies use only built-in checks. Notebook hours add one,
         # lib/keyfleet/usage.ex -> usage/machine.ex, the Machine record with its
         # domain, the same way. The Atlas adds four: lib/keyfleet/atlas.ex to its
-        # three records, and the Thing record to Keyfleet.Access.Check.
-        "xref graph --label compile-connected --fail-above 137",
+        # three records, and the Thing record to Keyfleet.Access.Check. Fundings
+        # and Budgets add fourteen the same way: each domain to its records,
+        # the records to their checks and action modules, and each one's agent
+        # tools to agent_tools/run.ex.
+        "xref graph --label compile-connected --fail-above 151",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

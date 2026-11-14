@@ -199,7 +199,8 @@ config :keyfleet,
     Keyfleet.Usage,
     Keyfleet.Atlas,
     KeyfleetWeb.AgentTools,
-    Keyfleet.Fundings
+    Keyfleet.Fundings,
+    Keyfleet.Budgets
   ],
   generators: [timestamp_type: :utc_datetime]
 

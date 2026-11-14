@@ -109,6 +109,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @copy ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
   @copies_path ~r"\A#{@in_project}/notebooks/copies\z"
   @copy_restore_path ~r"\A#{@in_project}/notebooks/copies/#{@copy}/restore\z"
+  # A project's budget for Patchbay assists, and each purchase against it
+  # named by its id.
+  @purchase ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  @budget_path ~r"\A#{@in_project}/budget\z"
+  @budget_write_path ~r"\A(?:#{@in_project}/purchases/propose|/api/v1/agent/fleets/#{@fleet}/purchases/#{@purchase}/(?:decide|receipt|result))\z"
 
   # A poll is named by its id as the API answers it.
   @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -317,6 +322,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     # A pin is its person's, as on the page, so it names no Key or command.
     "pin" => {%{"project" => :text, "place" => :pin_place, "target" => :pin_target}, %{}},
     "unpin" => {%{"project" => :text, "place" => :pin_place, "target" => :pin_target}, %{}}
+  }
+  # What each budget write's body holds, as a Key; the budget itself checks
+  # each line's length and each link.
+  @budget_bodies %{
+    "purchases/propose" =>
+      {%{"as_key" => :key, "purpose" => :text, "assist_url" => :text, "price_usdc" => :usdc}, %{}},
+    "decide" => {%{"as_key" => :key, "approve" => :flag}, %{"reason" => :maybe_text}},
+    "receipt" => {%{"as_key" => :key, "receipt_url" => :text}, %{"payment_tx" => :maybe_text}},
+    "result" =>
+      {%{"as_key" => :key, "worked" => :flag, "note" => :text}, %{"evidence_url" => :maybe_text}}
   }
   # What each Atlas read's body may hold, every field of it optional; the read
   # itself checks each word it names.
@@ -779,7 +794,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @copies_path,
           @run_path,
           @projects_path,
-          @funding_path
+          @funding_path,
+          @budget_path
         ],
         &Regex.match?(&1, path)
       )
@@ -832,7 +848,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @code_history_path,
         @dm_changes_path,
         @funding_quote_path,
-        @funding_start_path
+        @funding_start_path,
+        @budget_write_path
         | @poll_post_paths
       ],
       &Regex.match?(&1, path)
@@ -922,6 +939,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@message_path, path) -> check_message_body(params)
       op = atlas_op(path) -> check_fields(Map.fetch!(@atlas_bodies, op), params)
+      op = budget_op(path) -> check_fields(Map.fetch!(@budget_bodies, op), params)
       true -> check_op_body(path, params)
     end
   end
@@ -1286,6 +1304,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
+  # A budget write, by the last words of its address.
+  defp budget_op(path) do
+    if Regex.match?(@budget_write_path, path),
+      do: Enum.find(Map.keys(@budget_bodies), &String.ends_with?(path, "/" <> &1))
+  end
+
   # One project's changes or one object's, never both.
   defp check_graph_body("changes", %{"project" => _, "object" => _}), do: :invalid
   defp check_graph_body(op, params), do: check_fields(Map.fetch!(@graph_bodies, op), params)
@@ -1314,6 +1338,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp shaped?(:object, value), do: is_map(value)
   defp shaped?(:texts, value), do: is_list(value) and Enum.all?(value, &is_binary/1)
   defp shaped?(:flag, value), do: is_boolean(value)
+  defp shaped?(:maybe_text, value), do: is_binary(value) or is_nil(value)
   defp shaped?(:pin_place, value), do: value in ~w(docs code)
   defp shaped?(:pin_target, value), do: is_binary(value)
 
@@ -1326,12 +1351,21 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp shaped?(:get_parts, _value), do: false
 
   defp shaped?(kind, value)
-       when kind in [:key, :version, :seq, :graph_page, :change_budget, :most_active, :atlas_page],
+       when kind in [
+              :key,
+              :version,
+              :seq,
+              :graph_page,
+              :change_budget,
+              :most_active,
+              :atlas_page,
+              :usdc
+            ],
        do: is_integer(value)
 
   defp shaped?(nil, _value), do: false
 
-  defp in_bounds?(kind, value) when kind in [:key, :version], do: value in 1..@max_seq
+  defp in_bounds?(kind, value) when kind in [:key, :version, :usdc], do: value in 1..@max_seq
   defp in_bounds?(:seq, value), do: value in 0..@max_seq
   defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
   defp in_bounds?(:change_budget, value), do: value in @min_change_budget..@max_change_budget
@@ -1757,6 +1791,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
       op = atlas_op(path) ->
         spec_fields(Map.fetch!(@atlas_bodies, op))
+
+      op = budget_op(path) ->
+        spec_fields(Map.fetch!(@budget_bodies, op))
 
       op = dm_op(path) ->
         dm_fields(op)
