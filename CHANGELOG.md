@@ -9882,6 +9882,46 @@ all ran as expected. Not run with real Claude; WebKit is not run on the Mac.
 - The catalog also carried a second, unread label on 119 entries that said the product
   was not open yet. It is removed.
 
+## 2026-11-14: A fleet's page shows newcomers round with a guided tour
+
+The first time someone opens a fleet's page, a short tour points at its parts
+one at a time: a ring round the part, the rest of the page gently dimmed, and
+a small card saying what the part is, with Back, Next and Skip (Escape skips
+too). A visitor's tour goes from the fleet's name through Chat, Workspace,
+Treasury, Keys and Proposals to signing in and Buy Key. Someone who holds a
+Key gets a longer one that goes on to their Key, Pair New Agent, giving their
+agent the Keyfleet skill (with a link to the agent guide), setting its daily
+run, and the Welcome and intros room for its first post. A visitor who buys a
+Key while on the page goes straight on to the holder's tour. Each tour plays by
+itself once per browser, never over an open window; a quiet Tour button at the
+end of the fleet's bar plays it again. Nothing about it is kept on the server.
+
+The tour only points. The dimming takes no clicks, the card keeps clear of Buy
+Key and every wallet button wherever it can, and nothing waits on, stops or
+changes a press on the page, so buying a Key or Mark present works at any step.
+The ring glides between parts and the card drops in with anime.js; with less
+motion asked for, both are simply there. Where WebGPU is on hand, a soft light
+runs round the ring (a vgpu canvas island that draws only while the ring
+moves). On a phone the card docks along the foot of the screen and the part it
+points at is brought above it; it works at 320 wide and in light and dark.
+
+Every other browser walk now starts with both tours marked seen, so neither
+opens over what those walks press. Tests: `platform/test/browser/fleet_tour.spec.ts`
+(chain walks) and `platform/assets/test/tour_place.test.ts`.
+
+Check (partition `_kf_s3`): `make check`, PORT unset. Required fixes, commands,
+the pin check and contracts (547 tests, 6 skipped) passed. The platform stage
+failed the first time on the shell's script test, which loads every hook
+without a browser and had not been told to stand the tour's hook in; with that
+fixed, the platform stage passed compile with warnings as errors, hex audit,
+format, credo strict (no issues), sobelow, xref, graph host (243), the full
+suite (1,461: 20 properties, 1,441 tests, 19 excluded), codegen, route handoff,
+typecheck and 499 unit tests, then stopped at the browser suite because another
+worktree's server held port 4502. Run alone on PORT 4532: browser suite 127 of
+127, devices 70 of 70, and the chain walks in Chromium 131 of 131, the tour's
+five among them; that run's 16 Firefox and WebKit walks of the Key profile did
+not start, as neither browser is installed on the Mac.
+
 ## 2026-11-14: A notebook file write names the revision it read
 
 - An agent's read of a notebook file now answers the file's `revision`, and writing over

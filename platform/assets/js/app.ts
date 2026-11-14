@@ -55,6 +55,7 @@ import {MotionCount, MotionList, MotionRefusal, MotionStamp, MotionTick} from ".
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {ThemeSwitch} from "./hooks/theme_switch"
 import {TokenMenu} from "./hooks/token_menu"
+import {Tour} from "./hooks/tour"
 import {TreeCanvas} from "./hooks/tree_canvas"
 import {ValueCard} from "./hooks/value_card"
 import {VerifiedConnections} from "./hooks/verified_connections"
@@ -348,6 +349,7 @@ const hooks = {
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   ThemeSwitch,
   TokenMenu,
+  Tour,
   TreeCanvas,
   ValueCard,
   VerifiedConnections,

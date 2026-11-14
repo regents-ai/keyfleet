@@ -1,9 +1,10 @@
 defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
-  has sold and how many agents are here, Pair New Agent for a signed-in
-  person, one way in, and one row of six tabs: Chat, Workspace, Treasury,
-  Keys, Proposals and Worldline.
+  has sold and how many agents are here, Tour (the guided tour,
+  `KeyfleetWeb.Components.Tour`), Pair New Agent for a signed-in person, one
+  way in, and one row of six tabs: Chat, Workspace, Treasury, Keys, Proposals
+  and Worldline.
 
   The way in, above the tabs, is whichever applies first: the reader's own
   Keys to enter as, the Regents Club Pass a Club Key comes with, the Key on
@@ -94,6 +95,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.Components.Shell
+  alias KeyfleetWeb.Components.Tour
   alias KeyfleetWeb.FeedLines
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
@@ -316,8 +318,9 @@ defmodule KeyfleetWeb.FleetLive do
             />
           </form>
 
-          <div :if={@account} class="fleet-bar__actions">
-            <Shell.pair_button id="fleet-pair" />
+          <div class="fleet-bar__actions">
+            <Tour.start_button />
+            <Shell.pair_button :if={@account} id="fleet-pair" />
           </div>
 
           <.entry
@@ -458,6 +461,8 @@ defmodule KeyfleetWeb.FleetLive do
             profile_open?={@profile != nil}
           />
         </div>
+
+        <Tour.tour holder={@fleet.held != nil} main={@view == :hall} />
       </div>
 
       <KeyProfileLive.dialog
