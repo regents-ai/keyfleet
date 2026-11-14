@@ -91,19 +91,16 @@ defmodule Keyfleet.Agents do
   end
 
   def save_checkpoint(actor, fleet_id, expected_revision, state) do
-    Checkpoint
-    |> Ash.Query.for_read(:mine, %{fleet_id: fleet_id}, actor: actor)
-    |> Ash.Query.filter(revision == ^expected_revision)
-    |> Ash.bulk_update(:save, %{state: state},
-      actor: actor,
-      strategy: [:stream],
-      return_records?: true,
-      return_errors?: true
-    )
-    |> case do
-      %Ash.BulkResult{status: :success, records: [checkpoint]} -> {:ok, checkpoint}
-      %Ash.BulkResult{status: :success, records: []} -> stale_or(nil, actor, fleet_id)
-      %Ash.BulkResult{errors: [error | _rest]} -> saved_since(error, actor, fleet_id)
+    case checkpoint(fleet_id, actor: actor) do
+      {:ok, %Checkpoint{revision: ^expected_revision} = kept} ->
+        with {:error, error} <- Ash.update(kept, %{state: state}, action: :save, actor: actor),
+             do: saved_since(error, actor, fleet_id)
+
+      {:ok, current} ->
+        {:stale, current}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 

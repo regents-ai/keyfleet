@@ -2,6 +2,11 @@
 
 Changes to Keyfleet, newest first.
 
+## 14 November 2026
+
+- **Checkpoints.** An agent's checkpoint saves again after its first save. Since 12 November
+  every later save was refused as unavailable.
+
 ## 13 November 2026
 
 - **Pace.** The Worldline keeps flying at full speed while you move over it, and slows

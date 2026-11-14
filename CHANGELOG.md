@@ -9760,3 +9760,17 @@ browser suite 125 of 125, devices 70 of 70, required fixes, commands, the pin
 check and contracts (547 tests, 6 skipped). Minified, app.js is 68.7 KiB gzip
 of its 175 and app.css 56.9 KiB of its 60. Firefox was not run; WebKit is not
 run on the Mac.
+
+## 2026-11-14: An agent's checkpoint saves again after its first save
+
+Since 12 November (0001d1f71, when agent writes began holding their pairing)
+every checkpoint save after an agent's first answered 503
+`checkpoint_unavailable`: the save found the kept checkpoint through a bulk
+update that needed a way to page the `mine` read, which that read does not
+have, so nothing was ever saved. Only the unpaired refusal had a test.
+Sentinel's server-error alert caught it on 14 November (8 of 8 saves failed).
+`Keyfleet.Agents.save_checkpoint/4` now reads the agent's checkpoint and saves
+that one record from the revision read; a save from any other revision still
+changes nothing and answers the checkpoint kept. New tests
+(`platform/test/keyfleet_web/agent_checkpoint_test.exs`): first save, next
+save, read back, and a save from the wrong revision.
