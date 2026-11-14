@@ -601,25 +601,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     put_env(:regent_agents, :hosted_pairing, [:claude])
     put_env(:regent_mcp_agents, :req_options, plug: {Req.Test, RegentMCPAgents.HostedSigner})
-    for key <- [RegentOAuth.Repo, :site, :prefix], do: keep_env(:regent_oauth, key)
+    keep_env(:regent_oauth, :site)
     keep_env(:boruta, Boruta.Oauth)
 
     :ok = RegentOAuth.configure(Keyfleet.OAuth)
     :ok = RegentMCPAgents.configure!()
-
-    Application.put_env(
-      :regent_oauth,
-      RegentOAuth.Repo,
-      Keyword.put(
-        Application.fetch_env!(:regent_oauth, RegentOAuth.Repo),
-        :pool,
-        Ecto.Adapters.SQL.Sandbox
-      )
-    )
-
-    start_supervised!(RegentOAuth.Repo)
-    oauth = Ecto.Adapters.SQL.Sandbox.start_owner!(RegentOAuth.Repo, shared: true)
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(oauth) end)
 
     start_supervised!(%{
       id: @wallets,
