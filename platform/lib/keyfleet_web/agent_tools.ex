@@ -33,6 +33,7 @@ defmodule KeyfleetWeb.AgentTools do
     resource KeyfleetWeb.AgentTools.Publications
     resource KeyfleetWeb.AgentTools.Code
     resource KeyfleetWeb.AgentTools.Notebooks
+    resource KeyfleetWeb.AgentTools.Budgets
   end
 
   # Each tool keeps its browser tool's name and words. A read changes nothing;
@@ -53,6 +54,7 @@ defmodule KeyfleetWeb.AgentTools do
   @publications KeyfleetWeb.AgentTools.Publications
   @code KeyfleetWeb.AgentTools.Code
   @notebooks KeyfleetWeb.AgentTools.Notebooks
+  @budgets KeyfleetWeb.AgentTools.Budgets
   @tools [
     workspace_show: {@workspace, :show, "Item", :read},
     workspace_board: {@workspace, :board, "Board", :read},
@@ -144,7 +146,12 @@ defmodule KeyfleetWeb.AgentTools do
     notebooks_write_file: {@notebooks, :write_file, "Write file", :repeatable},
     notebooks_lock: {@notebooks, :lock, "Lock", :repeatable},
     notebooks_copies: {@notebooks, :copies, "Daily copies", :read},
-    notebooks_restore: {@notebooks, :restore, "Restore", :once}
+    notebooks_restore: {@notebooks, :restore, "Restore", :once},
+    budget_show: {@budgets, :show, "Budget", :read},
+    purchases_propose: {@budgets, :propose, "Propose", :once},
+    purchases_decide: {@budgets, :decide, "Decide", :once},
+    purchases_receipt: {@budgets, :receipt, "Receipt", :once},
+    purchases_result: {@budgets, :result, "Result", :once}
   ]
 
   tools do

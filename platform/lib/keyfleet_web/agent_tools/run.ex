@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.AgentTools.Run do
 
   alias KeyfleetWeb.AgentTools.{
     Account,
+    Budgets,
     Code,
     Dms,
     Fleets,
@@ -40,6 +41,7 @@ defmodule KeyfleetWeb.AgentTools.Run do
   end
 
   defp answer(Account), do: Account.Answer
+  defp answer(Budgets), do: Budgets.Answer
   defp answer(Code), do: Code.Answer
   defp answer(Dms), do: Dms.Answer
   defp answer(Fleets), do: Fleets.Answer

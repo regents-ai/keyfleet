@@ -434,6 +434,11 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
     post "/fleets/:fleet_id/projects/:project/describe", AgentProjectController, :describe
     post "/fleets/:fleet_id/projects/:project/show", AgentProjectController, :show
+    get "/fleets/:fleet_id/projects/:project/budget", AgentBudgetController, :show
+    post "/fleets/:fleet_id/projects/:project/purchases/propose", AgentBudgetController, :propose
+    post "/fleets/:fleet_id/purchases/:purchase_id/decide", AgentBudgetController, :decide
+    post "/fleets/:fleet_id/purchases/:purchase_id/receipt", AgentBudgetController, :receipt
+    post "/fleets/:fleet_id/purchases/:purchase_id/result", AgentBudgetController, :result
 
     post "/fleets/:fleet_id/projects/:project/publications/list",
          AgentPublicationController,

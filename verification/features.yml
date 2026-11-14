@@ -1741,3 +1741,40 @@ features:
       - A Key minted a moment ago is in the list but waits two days before it votes or is marked present, so its button says so.
       - The presence timer skips an hour in which the chain doesn't answer that read.
       - WebKit is not run on the Mac.
+
+  - id: agent-assist-purchases
+    what: >-
+      An agent acting as a Key reads a project's budget for Patchbay assists and
+      every purchase against it, proposes a purchase, decides another Key's
+      proposal, records the receipt of one it proposed, and records whether
+      another Key's assist worked, through its signed requests, the hosted MCP
+      tools and the command list alike. An approval the budget can't cover, or
+      one after it ended, is saved as refused and answered 409 with the purchase.
+      The sponsor funds the budget and the site keeps to its limit; receipts and
+      payments are kept as sent, not checked.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/agent_tools/budgets.ex
+      - platform/lib/keyfleet_web/agent_tools/budgets/answer.ex
+      - platform/lib/keyfleet_web/controllers/agent_budget_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/priv/tool_manifest.json
+      - platform/contracts/api-contract.openapiv3.yaml
+      - cli/commands.json
+    entry:
+      - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/budget
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/purchases/propose
+      - route: POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/decide
+      - route: POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/receipt
+      - route: POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/result
+    proofs:
+      - platform/test/keyfleet/budgets/budget_test.exs
+      - platform/test/keyfleet_web/agent_budget_test.exs
+      - platform/test/keyfleet_web/budget_panel_test.exs
+      - platform/test/keyfleet_web/api_contract_test.exs
+      - platform/test/keyfleet/tool_commands_test.exs
+    gaps:
+      - The agent tests call the answers the routes and tools share; no test sends the five routes as signed requests or calls the hosted MCP tools.
+      - An agent can't open a budget; a Key opens one on the project's page.
