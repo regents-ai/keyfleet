@@ -84,18 +84,20 @@ const clamp = (value: number, low: number, high: number) => Math.min(Math.max(va
 /**
  * Where the card goes: beside the hole on a wide screen, below it first; along
  * the screen's foot on a phone (`docked`), or along its top when the hole is
- * down there. A step with no hole has its card in the middle of the screen, or
- * along the foot on a phone. The card keeps off the hole and its ring, and off
- * every box in `clear` (the controls that must stay in reach while the tour
- * shows, such as Buy Key), wherever there is room for that.
+ * down there. A step with no hole has its card in the middle of the screen,
+ * or at the middle of its foot, or along the foot on a phone. The card keeps
+ * off the hole and its ring, and off every box in `clear` (the controls that
+ * must stay in reach while the tour shows, such as Buy Key), wherever there is
+ * room for that.
  */
 export function cardSpot(hole: Box | undefined, card: Size, view: Size, docked: boolean, clear: Box[] = []): Spot {
   const ring = hole && {x: hole.x - EDGE, y: hole.y - EDGE, w: hole.w + 2 * EDGE, h: hole.h + 2 * EDGE}
   const foot = {x: MARGIN, y: view.h - card.h - MARGIN}
   const head = {x: MARGIN, y: MARGIN}
+  const middle = (view.w - card.w) / 2
 
   if (docked) return choose(ring ? [foot, head] : [foot], card, view, ring, clear)
-  if (!ring) return choose([{x: (view.w - card.w) / 2, y: (view.h - card.h) / 2}, foot], card, view, ring, clear)
+  if (!ring) return choose([{x: middle, y: (view.h - card.h) / 2}, {x: middle, y: foot.y}], card, view, ring, clear)
 
   const alongX = clamp(ring.x, MARGIN, view.w - card.w - MARGIN)
   const alongY = clamp(ring.y, MARGIN, view.h - card.h - MARGIN)

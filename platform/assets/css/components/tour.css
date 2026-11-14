@@ -24,6 +24,14 @@ body[data-sea-lifted] .tour {
   inset: 0;
 }
 
+/* Only the script moves the pieces and the card, so none of them takes the
+   brief transition the site gives every change when less motion is asked
+   for: the ring is where its part is on the frame it gets there. */
+.tour__piece,
+.tour__spot {
+  transition-property: none;
+}
+
 .tour__piece {
   position: absolute;
   top: 0;
