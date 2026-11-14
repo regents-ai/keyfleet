@@ -51,6 +51,7 @@ defmodule Keyfleet.Graph.Workspace do
     domain: Keyfleet.Graph,
     authorizers: [Ash.Policy.Authorizer]
 
+  alias Keyfleet.Graph.Validations.DistinctIds
   alias Keyfleet.Graph.Validations.FreshOwnership
   alias Keyfleet.Graph.Validations.KnownFleet
   alias Keyfleet.Graph.Validations.WriteAllowance
@@ -108,6 +109,25 @@ defmodule Keyfleet.Graph.Workspace do
       argument :archived, :boolean, allow_nil?: false, default: false
       validate KnownFleet
       run {Read, read: :graph}
+    end
+
+    action :packet, :map do
+      description "A chosen few of one project's objects, whole, with the links among them and the code, notebook, result and evidence they cite."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      argument :ids, {:array, :string},
+        allow_nil?: false,
+        constraints: [min_length: 1, max_length: 20, items: @text]
+
+      argument :max_bytes, :integer,
+        allow_nil?: false,
+        default: 64 * 1024,
+        constraints: [min: 1024, max: 256 * 1024]
+
+      validate KnownFleet
+      validate DistinctIds
+      run {Read, read: :packet}
     end
 
     action :create, :map do
@@ -264,7 +284,7 @@ defmodule Keyfleet.Graph.Workspace do
   end
 
   policies do
-    policy action([:get, :changes, :graph]) do
+    policy action([:get, :changes, :graph, :packet]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 

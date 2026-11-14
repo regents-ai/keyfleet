@@ -582,6 +582,25 @@ defmodule Keyfleet.Graph.Object do
       prepare build(select: [:fleet_id, :id, :type, :sys], load: [:title])
     end
 
+    # A chosen few of one project's objects, archived ones left out, each
+    # whole, with its review and the Key it belongs to, for a packet of them
+    # (`Keyfleet.Graph.Workspace`).
+    read :selected do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      argument :ids, {:array, :string},
+        allow_nil?: false,
+        constraints: [items: @text, max_length: 20]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and id in ^arg(:ids) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(load: [:review, :owner_key])
+    end
+
     # The fleet's objects whose words match a search, in any of their text
     # fields, a page at a time (`Keyfleet.Search`), each at the time it last
     # changed. Words are matched as English, through the objects' search
@@ -651,6 +670,7 @@ defmodule Keyfleet.Graph.Object do
     policy action([
              :in_fleet,
              :titled,
+             :selected,
              :cards,
              :graph,
              :tallied,

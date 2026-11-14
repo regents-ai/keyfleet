@@ -226,6 +226,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "object" => "goal#1",
        "max_bytes" => 1024
      }},
+    {"POST", @graph <> "packet", [],
+     %{"project" => "general", "ids" => ["goal#1"], "max_bytes" => 1024}},
     {"POST", @graph <> "create", [],
      %{
        "as_key" => 1,
@@ -367,7 +369,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
            ] ++
              for(
                op <-
-                 ~w(get changes create patch link unlink archive join leave submit review fork),
+                 ~w(get changes packet create patch link unlink archive join leave submit review fork),
                do: {@graph <> op, Keyfleet.Graph.Workspace, String.to_atom(op)}
              )
 

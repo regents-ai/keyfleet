@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
   A fleet's workspace as an agent reads it: one item as its page shows it
   (`show`), what the workspace's pages keep at hand (`board`), its items and
   links as the Graph view draws them (`view`), its changes after a place in
-  its log (`changes`), its Atlas, the swarm's work in one window and a page
+  its log (`changes`), a packet of chosen items read together (`packet`), its Atlas, the swarm's work in one window and a page
   of the things changed in it (`atlas`, `atlas_things`,
   `KeyfleetWeb.AgentTools.Workspace.Atlas`), and pinning or unpinning a
   project's notebook or code on its board (`pin`, `unpin`). Each answers what
@@ -83,6 +83,24 @@ defmodule KeyfleetWeb.AgentTools.Workspace do
 
       argument :limit, :integer, allow_nil?: false, default: 100, constraints: [min: 1, max: 500]
       run {Read, read: :changes}
+    end
+
+    action :packet, :map do
+      description "A chosen 1 to 20 of one project's items whole, with the links among them and the code, notebook, result and evidence addresses they store, from one read."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      argument :ids, {:array, :string},
+        allow_nil?: false,
+        constraints: [min_length: 1, max_length: 20, items: @text]
+
+      argument :max_bytes, :integer,
+        allow_nil?: false,
+        default: 64 * 1024,
+        constraints: [min: 1024, max: 256 * 1024]
+
+      validate Keyfleet.Graph.Validations.DistinctIds
+      run {Read, read: :packet}
     end
 
     action :atlas, :map do

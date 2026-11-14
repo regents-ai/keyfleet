@@ -556,6 +556,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/view", AgentGraphController, :view
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes
+    post "/fleets/:fleet_id/graph/packet", AgentGraphController, :packet
     post "/fleets/:fleet_id/graph/create", AgentGraphController, :create
     post "/fleets/:fleet_id/graph/patch", AgentGraphController, :patch
     post "/fleets/:fleet_id/graph/link", AgentGraphController, :link
