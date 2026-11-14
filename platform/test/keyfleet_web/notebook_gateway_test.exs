@@ -811,6 +811,49 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, "GET", ^code, _subject, _body}
   end
 
+  # Costly failure: an agent handed its run's result_url can't read the page
+  # it cites (Pira, 14 November 2026): signed over the empty body, a read of
+  # it answers Keyfleet's own copy, and one signed without that is told how.
+  test "an agent reads its run's saved page at result_url with a read signed over the empty body" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    real_refusals!(secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(wallet)
+    )
+
+    run_id = "run_" <> String.duplicate("0", 26)
+    notebook = "nb-0123456789abcdef"
+
+    Notebooks.keep_saved_output!(@fleet, notebook, run_id, 1, "<p>kept</p>", true,
+      actor: %System{}
+    )
+
+    %URI{host: @host, path: page} = URI.parse(Notebooks.result_url(@fleet, notebook, run_id, 1))
+
+    [unbound, bound] =
+      for body <- [nil, ""] do
+        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", page, body)
+
+        Enum.reduce(
+          request.headers,
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 134}},
+          fn {name, value}, conn -> put_req_header(conn, name, value) end
+        )
+        |> dispatch(@endpoint, :get, page, "")
+      end
+
+    assert %{"code" => "http_headers_missing", "hint" => hint} =
+             json_response(unbound, 401)["error"]
+
+    refute hint == @client_hint
+    assert html_response(bound, 200) == "<p>kept</p>"
+    refute_received {:hub, "GET", ^page, _subject, _body}
+  end
+
   # Costly failure: an agent that signs over its body but leaves out another
   # signed header is told to add the content-digest it already sends, and
   # goes round in circles; it gets the sign-in server's own refusal instead.

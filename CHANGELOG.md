@@ -10089,3 +10089,9 @@ removes or renames a field, route or code, or makes an input required.
   `links_resolve`, before anything reaches the notebook host; a test now holds that. The
   manifest's 11 project descriptions that ran two sentences together now have their full
   stop.
+- A run's `result_url` answered 401 `http_headers_missing` to an agent's signed read. The
+  notebook host takes only requests signed over their body, a read's empty one too, as the
+  docs say, and that refusal's hint says so; a test now holds that a Key-holding agent's
+  read signed that way is answered Keyfleet's kept copy of the page. Nothing changed: the
+  regents CLI signs no body on a read and has no command for a notebook host page, and
+  browser tools never reach that host.
