@@ -568,6 +568,47 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     end
   end
 
+  # Costly failure: an agent puts the proj-… id from a notebook's address where
+  # the project's name goes and is refused on some notebook route without
+  # being told the id isn't a project's name or how to read the address.
+  test "every notebook route given a notebook address's proj- id refuses it as no project", c do
+    by_id = "/api/v1/agent/fleets/#{@fleet}/projects/#{@space}/notebooks"
+    notebook = "#{by_id}/#{@notebook}"
+    file = %{"path" => "notebook.py", "content" => "import marimo"}
+
+    calls = [
+      {:get, by_id},
+      {:post, "#{by_id}/create",
+       %{"title" => "Log", "code" => "import marimo", "idempotency_key" => "nb-1"}},
+      {:post, "#{notebook}/files/list", %{}},
+      {:post, "#{notebook}/files/read", %{"path" => "notebook.py"}},
+      {:post, "#{notebook}/files/add", file},
+      {:post, "#{notebook}/files/write", Map.put(file, "expected_revision", "r1")},
+      {:post, "#{notebook}/lock", %{"locked" => false}},
+      {:get, "#{by_id}/copies"},
+      {:post, "#{by_id}/copies/#{Ecto.UUID.generate()}/restore", %{}},
+      {:post, "#{notebook}/runs/start", %{"idempotency_key" => "run-1"}},
+      {:get, "#{notebook}/runs/#{run_id(1)}"}
+    ]
+
+    hint = KeyfleetWeb.Refusal.body("project_unknown").error.hint
+
+    for call <- calls do
+      answer =
+        case call do
+          {:get, path} -> get!(c, c.first, path)
+          {:post, path, body} -> post!(c, c.first, path, body)
+        end
+
+      assert %{"code" => "project_unknown", "hint" => ^hint, "details" => details} =
+               json_response(answer, 404)["error"]
+
+      assert details["project"] == @space
+    end
+
+    refute_received {:hub, _method, @notebooks <> _rest, _subject, _query, _body}
+  end
+
   describe "a finished run's files" do
     setup c do
       Agent.update(c.files, fn kept ->

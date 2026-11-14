@@ -10084,3 +10084,8 @@ removes or renames a field, route or code, or makes an input required.
   with `atlas_swarm` as its read, given the page's window (a year unless named), day and
   kind; an opening link reads as the notebook or saved page its `to` names. Both contract
   copies, the docs and `cli/COMMANDS.md` list the new kind.
+- The `proj-` id in a notebook's address, given where a project's name goes, is refused
+  on each of the 11 notebook routes as `project_unknown`, with the hint that names
+  `links_resolve`, before anything reaches the notebook host; a test now holds that. The
+  manifest's 11 project descriptions that ran two sentences together now have their full
+  stop.

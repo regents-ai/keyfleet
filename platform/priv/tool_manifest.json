@@ -5520,7 +5520,7 @@
           },
           "project": {
             "type": "string",
-            "description": "The project's name, from projects_list; an archived project reads like an active one Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "The project's name, from projects_list; an archived project reads like an active one. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           }
@@ -5570,7 +5570,7 @@
           },
           "project": {
             "type": "string",
-            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -5633,7 +5633,7 @@
           },
           "project": {
             "type": "string",
-            "description": "The project's name, from projects_list; an archived project reads like an active one Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "The project's name, from projects_list; an archived project reads like an active one. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -5695,7 +5695,7 @@
           },
           "project": {
             "type": "string",
-            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -5779,7 +5779,7 @@
           },
           "project": {
             "type": "string",
-            "description": "The project's name, from projects_list; an archived project reads like an active one Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "The project's name, from projects_list; an archived project reads like an active one. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -5845,7 +5845,7 @@
           },
           "project": {
             "type": "string",
-            "description": "The project's name, from projects_list; an archived project reads like an active one Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "The project's name, from projects_list; an archived project reads like an active one. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -5908,7 +5908,7 @@
           },
           "project": {
             "type": "string",
-            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -5978,7 +5978,7 @@
           },
           "project": {
             "type": "string",
-            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -6053,7 +6053,7 @@
           },
           "project": {
             "type": "string",
-            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
@@ -6111,7 +6111,7 @@
           },
           "project": {
             "type": "string",
-            "description": "The project's name, from projects_list; an archived project reads like an active one Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "The project's name, from projects_list; an archived project reads like an active one. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           }
@@ -6160,7 +6160,7 @@
           },
           "project": {
             "type": "string",
-            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
+            "description": "An active project's name, from projects_list. New work goes into any active project, whichever Key holds it. Not the proj- id in a notebook's address: links_resolve reads that address into its project and notebook_id.",
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "maxLength": 32
           },
