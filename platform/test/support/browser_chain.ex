@@ -494,8 +494,12 @@ defmodule Keyfleet.BrowserChain do
   @doc """
   Gives the fleet's workspace a small tree of work, opening its log first
   when no other walk has: a goal from Key 3; two tasks on it, from Keys 4 and
-  5; a finding the first task produced; a copy of that task from Key 6; and
-  a note from Key 7 that nothing links to. Returns their ids as JSON.
+  5; a finding the first task produced; a copy of that task from Key 6; a
+  note from Key 7 that nothing links to; and around them the first task's
+  review from Key 5, evidence for the finding from Key 6 and a dead end
+  against it from Key 7, a second goal from Key 3 and a task on it from Key
+  7 that rests on the first task, and a note from Key 5 on the first goal.
+  Returns the first six's ids as JSON.
   """
   def tree!(fleet_id) do
     unless Keyfleet.Graph.get_cursor!(fleet_id, actor: @system),
@@ -516,6 +520,25 @@ defmodule Keyfleet.BrowserChain do
     WorkspaceFixtures.link(fleet_id, other, goal, "implements", by: 5)
     WorkspaceFixtures.link(fleet_id, task, finding, "produces", by: 4)
     WorkspaceFixtures.link(fleet_id, fork, task, "forks", by: 6)
+
+    WorkspaceFixtures.submit(fleet_id, task, "https://example.com/soundings", by: 4)
+    WorkspaceFixtures.review(fleet_id, task, "accept", by: 5)
+
+    log =
+      WorkspaceFixtures.create(fleet_id, "evidence", %{"title" => "Echo sounder log"}, by: 6)
+
+    WorkspaceFixtures.link(fleet_id, log, finding, "supports", by: 6)
+
+    snag =
+      WorkspaceFixtures.create(fleet_id, "dead_end", %{"title" => "Lead line snagged"}, by: 7)
+
+    WorkspaceFixtures.link(fleet_id, snag, finding, "contradicts", by: 7)
+    lights = WorkspaceFixtures.create(fleet_id, "goal", %{"title" => "Light the channel"}, by: 3)
+    buoys = WorkspaceFixtures.create(fleet_id, "task", %{"title" => "Fit the buoys"}, by: 7)
+    WorkspaceFixtures.link(fleet_id, buoys, lights, "implements", by: 7)
+    WorkspaceFixtures.link(fleet_id, buoys, task, "depends_on", by: 7)
+    pilot = WorkspaceFixtures.create(fleet_id, "note", %{"title" => "Pilot's notes"}, by: 5)
+    WorkspaceFixtures.link(fleet_id, pilot, goal, "references", by: 5)
 
     Jason.encode!(%{
       goal: goal,
