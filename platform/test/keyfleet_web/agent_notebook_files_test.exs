@@ -751,14 +751,6 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     json(conn, 201, %{success: true, data: run})
   end
 
-  defp all_runs(files),
-    do: Agent.get(files, &Enum.flat_map(&1["jobs"], fn job -> job["runs"] end))
-
-  defp run_answer(conn, nil),
-    do: json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
-
-  defp run_answer(conn, run), do: json(conn, 200, %{success: true, data: run})
-
   defp hub_answer(
          %Plug.Conn{method: "GET", request_path: @jobs <> "/" <> runs} = conn,
          files,
@@ -966,6 +958,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
   defp with_run(%{"id" => job_id} = job, job_id, run), do: %{job | "runs" => [run | job["runs"]]}
   defp with_run(job, _job_id, _run), do: job
+
+  defp all_runs(files),
+    do: Agent.get(files, &Enum.flat_map(&1["jobs"], fn job -> job["runs"] end))
+
+  defp run_answer(conn, nil),
+    do: json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
+
+  defp run_answer(conn, run), do: json(conn, 200, %{success: true, data: run})
 
   defp item(path, content),
     do: %{
