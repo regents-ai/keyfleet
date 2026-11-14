@@ -180,6 +180,37 @@ defmodule Keyfleet.Code do
   end
 
   @doc """
+  The file at `path` in the commit `hash`, whole: `{:ok, bytes}` for text
+  (`text?/1`), `{:too_large, size}` past `file_max_bytes` with its size in
+  bytes, `:not_text`, `:not_found` while the commit has no file at `path` (no
+  such commit, a folder, a path that can't name a place in the code and no
+  repository yet included), or `{:error, error}` when the store can't be read.
+  The folder holding it tells a file from a folder and gives its size.
+  """
+  def commit_file(repository, hash, path) do
+    if code_path?(path), do: file_in(repository, hash, path), else: :not_found
+  end
+
+  defp file_in(repository, hash, path) do
+    {above, [name]} = path |> String.split("/") |> Enum.split(-1)
+
+    with {:ok, read} <- file(repository, path, hash),
+         {:ok, entries} <- folder(repository, Enum.join(above, "/"), hash) do
+      entries
+      |> Enum.find(&(&1.name == name and not &1.folder?))
+      |> whole(read)
+    end
+  end
+
+  # What was read at a path, by the entry the folder holding it has there.
+  defp whole(nil, _read), do: :not_found
+  defp whole(%{size: size}, :too_large), do: {:too_large, size}
+  defp whole(_file, bytes), do: if(text?(bytes), do: {:ok, bytes}, else: :not_text)
+
+  @doc "Whether a file's `bytes` are text: UTF-8 with no NUL byte."
+  def text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
+
+  @doc """
   One page of the repository's history, newest first, from the commit `from`
   (a full hash) or the default branch for nil: `{:ok, %{commits:, head:,
   more?:}}` (`NodeClient.commits/3`), nothing while the fleet has no

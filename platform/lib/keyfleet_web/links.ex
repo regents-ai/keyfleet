@@ -115,10 +115,21 @@ defmodule KeyfleetWeb.Links do
     end
   end
 
+  # A path at a commit reads as that file, whole (`code_file` refuses one
+  # that names a folder); the top folder, or the code as it stands now, is
+  # the repository's to clone.
   defp fleet_page(fleet_id, ["code", repository, "files"], query) do
     with {:ok, project} <- project_of(fleet_id, repository) do
-      names = %{path: Map.get(query, "path", ""), at: query["at"]}
-      link(fleet_id, "code_files", code(repository, project, names), nil)
+      names = code(repository, project, %{path: Map.get(query, "path", ""), at: query["at"]})
+
+      case names do
+        %{path: path, at: at} when path != "" and is_binary(at) ->
+          file = %{commit: at, path: path}
+          link(fleet_id, "code_files", names, {"code_file", "code file"}, file)
+
+        _folder_or_now ->
+          link(fleet_id, "code_files", names, nil)
+      end
     end
   end
 

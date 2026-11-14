@@ -1467,13 +1467,11 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp file(repository, path, at) do
     case Code.file(repository, path, at) do
       {:ok, :too_large} -> {:file, :too_large}
-      {:ok, bytes} -> {:file, if(text?(bytes), do: bytes, else: :not_text)}
+      {:ok, bytes} -> {:file, if(Code.text?(bytes), do: bytes, else: :not_text)}
       :not_found -> raise NotFoundError
       {:error, error} -> unreadable_code(repository, error)
     end
   end
-
-  defp text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
 
   defp unreadable_code(repository, error) do
     Logger.warning("The repository #{repository} could not be read: #{reason(error)}")

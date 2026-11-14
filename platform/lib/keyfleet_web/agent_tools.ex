@@ -136,6 +136,7 @@ defmodule KeyfleetWeb.AgentTools do
     code_pushes: {@code, :pushes, "Pushes", :read},
     code_commits: {@code, :commits, "History", :read},
     code_commit: {@code, :commit, "Commit", :read},
+    code_file: {@code, :file, "Code file", :read},
     notebooks_list: {@notebooks, :list, "Notebooks", :read},
     notebooks_run: {@notebooks, :run, "Run", :repeatable},
     notebooks_result: {@notebooks, :result, "Run result", :read},

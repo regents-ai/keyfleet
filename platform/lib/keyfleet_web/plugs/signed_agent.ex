@@ -92,6 +92,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
   @code_history_path ~r"\A#{@in_project}/code/commits\z"
   @code_commit_path ~r"\A#{@in_project}/code/commits/(?:[0-9a-f]{40}|[0-9a-f]{64})\z"
+  @code_file_path ~r"\A#{@in_project}/code/file\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
@@ -173,6 +174,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@activity_path, {[], ~w(cursor)}},
     {@search_path, {~w(query), ~w(cursor limit)}},
     {@code_history_path, {[], ~w(from page)}},
+    {@code_file_path, {~w(commit path), []}},
     {@posting_key_path, {~w(token_id), []}},
     {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
@@ -836,6 +838,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @atlas_path,
         @dm_path,
         @code_history_path,
+        @code_file_path,
         @dm_changes_path
         | @poll_post_paths
       ],
@@ -1022,7 +1025,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         notebook_lock: @notebook_lock_path,
         receipts: @receipts_path,
         checkpoint_save: @checkpoint_save_path,
-        code_history: @code_history_path
+        code_history: @code_history_path,
+        code_file: @code_file_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -1164,6 +1168,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         is_integer(page)
     )
   end
+
+  # A file is read at one commit, by its full hash, and its path of up to
+  # 1,024 characters; a path that names no file is the controller's to refuse.
+  defp check_fleet_body(:code_file, %{"commit" => hash, "path" => path} = params),
+    do:
+      admit(
+        map_size(params) == 2 and is_binary(hash) and
+          Regex.match?(~r/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/, hash) and is_binary(path) and
+          length(String.codepoints(path)) in 1..1024
+      )
+
+  defp check_fleet_body(:code_file, _params), do: :invalid
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do

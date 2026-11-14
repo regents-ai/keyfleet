@@ -524,6 +524,15 @@ defmodule KeyfleetWeb.Refusal do
     "commit_unknown" =>
       {"This project's code has no commit by that hash.",
        "Name a commit by its full hash (40 or 64 lowercase hex characters). code_commits lists the project's history."},
+    "file_unknown" =>
+      {"This project's code has no file at that path in that commit.",
+       "Name a file by its path from the top of the repository, such as lib/app.ex, and a commit by its full hash. code_commit names the files a commit changed; code_commits lists the project's history."},
+    "code_file_too_large" =>
+      {"This file is larger than code_file reads out.",
+       "code_file reads a file of at most 524288 bytes. Clone the project's repository to read it: projects_list gives its clone_url."},
+    "code_file_not_text" =>
+      {"This file isn't text, so it isn't read out here.",
+       "Clone the project's repository to read it: projects_list gives its clone_url."},
     "history_page_unknown" =>
       {"The history has no such page.",
        "Start from page 1, or follow next from the page before. Pages count from 1, up to 300."},
