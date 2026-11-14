@@ -2,10 +2,11 @@ defmodule Keyfleet.Notebooks.RunSource do
   @moduledoc """
   What a background run started through this site ran from, recorded when it
   started (`Keyfleet.Notebooks.Runs.start/5`): the sha256 of the notebook's
-  saved code as Keyfleet read it just before asking for the run, and the
-  entries at the top of the notebook's files then, so a result read later
-  says which code and files made it and whether the notebook has changed
-  since. A run started on the notebook host itself has none.
+  saved code as Keyfleet read it just before asking for the run, and every
+  file of the notebook then with its revision
+  (`Keyfleet.Notebooks.Files.manifest/4`), so a result read later says which
+  code and files made it and whether the notebook has changed since. A run
+  started on the notebook host itself has none.
 
   The first record of a run stays: starting it again with the same
   idempotency key answers the same run, which ran from the same code.
@@ -54,8 +55,8 @@ defmodule Keyfleet.Notebooks.RunSource do
     attribute :notebook_id, :string, allow_nil?: false
     attribute :code_sha256, :string, allow_nil?: false
 
-    # Each entry at the top of the notebook's files, `{path, kind, size}`, and
-    # whether those were all of them.
+    # Each file of the notebook at any depth, `{path, size, revision}`, and
+    # whether those were all of them: completeness, not freshness.
     attribute :files, {:array, :map}, allow_nil?: false, default: []
     attribute :files_complete, :boolean, allow_nil?: false
 

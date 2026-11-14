@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 32.0.0
+  version: 33.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -8802,7 +8802,7 @@ components:
     NotebookRun:
       type: object
       additionalProperties: false
-      required: [notebook_id, run_id, status, result_url, failure, source, code_current, last_succeeded]
+      required: [notebook_id, run_id, status, result_url, failure, source, entry_current, bundle_current, last_succeeded]
       properties:
         notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
         run_id: {type: string, pattern: '^run_[0-9A-HJKMNP-TV-Z]{26}$'}
@@ -8823,9 +8823,12 @@ components:
           oneOf:
             - {$ref: "#/components/schemas/NotebookRunSource"}
             - {type: "null"}
-        code_current:
+        entry_current:
           type: [boolean, "null"]
-          description: Once the run has finished, whether the notebook's saved code is still the code it ran from; null before then or without a source
+          description: Once the run has finished, whether the notebook's entry file (its saved code, usually notebook.py) is still the code it ran from. It says nothing about the notebook's other files; bundle_current does. Null before then or without a source
+        bundle_current:
+          type: [boolean, "null"]
+          description: "Once the run has finished, whether every file the run ran from is still as it was: true only when source.files is complete, every file in it and every file now has a revision, and the notebook now has exactly those files at those revisions with the same entry code; false when a difference is seen (the entry code changed, a file's revision changed, or, with both sides whole, a file was added or removed); null when that can't be told (files_complete false, a revision missing, or not all of the notebook's files could be listed now). Null before the run has finished or without a source. Files in a __marimo__ folder are never compared"
         last_succeeded:
           description: While the run hasn't succeeded, the notebook's last good page, so no number of failed or waiting runs hides it; null when this run succeeded or Keyfleet keeps no page of a run of the notebook that succeeded
           oneOf:
@@ -8860,16 +8863,16 @@ components:
         code_sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: "sha256 of the notebook's saved code as read just before the run started"}
         files:
           type: array
-          description: The entries at the top of the notebook's files then
+          description: "Every file of the notebook then, at any depth, with no folders, leaving out files in a __marimo__ folder: marimo writes those itself when a notebook runs or is open (saved pages, session caches), so they are not what the run ran from"
           items:
             type: object
             additionalProperties: false
-            required: [path, kind, size]
+            required: [path, size, revision]
             properties:
               path: {type: string}
-              kind: {type: string}
               size: {type: [integer, "null"], minimum: 0}
-        files_complete: {type: boolean, description: "Whether files holds every entry at the top; false when the notebook had more than one page of them"}
+              revision: {type: [string, "null"], description: "The file's revision then, the same revision a file read answers; it changes whenever the file's bytes do. Null when the notebook host named none"}
+        files_complete: {type: boolean, description: "Snapshot completeness, not freshness: whether files holds every file of the notebook as it was when the run started. False when the notebook had more than 500 files, counting its __marimo__ folders. Whether those files are still current is bundle_current"}
     NotebookList:
       type: object
       additionalProperties: false

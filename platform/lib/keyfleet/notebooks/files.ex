@@ -41,6 +41,8 @@ defmodule Keyfleet.Notebooks.Files do
   @read_max_bytes 1024 * 1024
   # A listing names at most this many entries a page.
   @page 200
+  # What a run ran from is read in one page of the hub's largest.
+  @manifest_page 500
   # Connecting to the hub failed in these ways, so it was never asked.
   @unreached [:econnrefused, :nxdomain, :ehostunreach, :enetunreach]
   # The hub's strong ETag for a stored file; its quoted value is the revision.
@@ -94,6 +96,45 @@ defmodule Keyfleet.Notebooks.Files do
       {:ok, %{entries: Enum.map(items, &entry/1), cursor: next, has_more: next != nil}}
     end
   end
+
+  @doc """
+  Every file of `notebook_id`, at any depth, as `subject`, each as `%{path,
+  size, revision}` with the revision a read of it answers (nil when the hub
+  names none), read in one page of at most #{@manifest_page} files; and
+  `complete`, whether that page held every file. Files in a `__marimo__`
+  folder at any depth are left out: marimo writes them itself when a
+  notebook runs or is open (saved pages, session caches), so they are not
+  what a run ran from.
+  """
+  def manifest(fleet_id, subject, project_id, notebook_id) do
+    with {:ok, %{"items" => items} = page} <-
+           fleet_id
+           |> request(
+             subject,
+             :get,
+             notebook_path(project_id, notebook_id) <> "/workspace/entries",
+             params: [recursive: true, limit: @manifest_page]
+           )
+           |> answer(200) do
+      files =
+        for %{"path" => path} = item <- items, not marimo_owned?(path) do
+          %{path: path, size: item["size"], revision: listed_revision(item["etag"])}
+        end
+
+      {:ok, %{files: files, complete: page["cursor"] == nil}}
+    end
+  end
+
+  defp marimo_owned?(path), do: "__marimo__" in String.split(path, "/")
+
+  defp listed_revision(etag) when is_binary(etag) do
+    case Regex.run(@etag, etag) do
+      [_etag, revision] -> revision
+      nil -> nil
+    end
+  end
+
+  defp listed_revision(_none), do: nil
 
   @doc """
   The text of the file at `path` in `notebook_id`, as `subject`, with its

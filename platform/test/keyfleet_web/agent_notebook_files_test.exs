@@ -442,6 +442,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     runs = "#{@api}/#{@notebook}/runs/start"
     first = c.first.subject
     second = c.second.subject
+    Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
 
     # Each notebook as the Docs place lists it, with its description and when
     # it was added, and no run before one is started.
@@ -452,11 +453,11 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
              list["notebooks"]
 
     started = post!(c, c.first, runs, %{"idempotency_key" => "run-1"})
-    assert json_response(started, 200)["run_id"] == "run_1"
+    assert json_response(started, 200)["run_id"] == run_id(1)
     assert_receive {:hub, "POST", @jobs, ^first, _query, _body}
 
     again = post!(c, c.first, runs, %{"idempotency_key" => "run-2"})
-    assert json_response(again, 200)["run_id"] == "run_2"
+    assert json_response(again, 200)["run_id"] == run_id(2)
     refute_receive {:hub, "POST", @jobs, _subject, _query, _body}
 
     post!(c, c.second, runs, %{"idempotency_key" => "run-3"})
@@ -471,9 +472,146 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         |> hd()
         |> get_in(["last_run", "run_id"]))
 
-    assert listed.(c.first) == "run_2"
-    assert listed.(c.second) == "run_3"
+    assert listed.(c.first) == run_id(2)
+    assert listed.(c.second) == run_id(3)
   end
+
+  describe "a finished run's files" do
+    setup c do
+      Agent.update(c.files, fn kept ->
+        Map.merge(kept, %{
+          "notebook.py" => "import marimo\nfrom helper import total",
+          "helper.py" => "def total(): return 1",
+          "data/rows.csv" => "a,b\n1,2",
+          "__marimo__/session/notebook.py.json" => ~s({"cells": []})
+        })
+      end)
+
+      :ok
+    end
+
+    # Costly failure: an agent cites a result as the notebook's current
+    # output because the entry file is unchanged, while a helper beside it
+    # that the result depends on has changed since.
+    test "a helper changed after the run leaves the entry current and the whole bundle not",
+         c do
+      {run_id, read} = run!(c)
+
+      assert %{"entry_current" => nil, "bundle_current" => nil} = read.()
+
+      finish!(c, run_id)
+      answer = read.()
+      assert %{"entry_current" => true, "bundle_current" => true} = answer
+
+      source = answer["source"]
+      assert ContractSchema.errors(source, "NotebookRunSource") == []
+      assert source["files_complete"]
+
+      assert Enum.map(source["files"], &{&1["path"], &1["revision"]}) ==
+               for(
+                 path <- ["data/rows.csv", "helper.py", "notebook.py"],
+                 do: {"/" <> path, Files.sha256(Agent.get(c.files, & &1[path]))}
+               )
+
+      Agent.update(c.files, &Map.put(&1, "helper.py", "def total(): return 2"))
+      assert %{"entry_current" => true, "bundle_current" => false} = read.()
+    end
+
+    # Costly failure: every result reads as stale once anyone opens the
+    # notebook, because marimo rewrites its own session caches.
+    test "marimo's own files changing leaves both current; the entry changing leaves neither",
+         c do
+      {run_id, read} = run!(c)
+      finish!(c, run_id)
+
+      Agent.update(c.files, fn kept ->
+        kept
+        |> Map.put("__marimo__/session/notebook.py.json", ~s({"cells": [1]}))
+        |> Map.put("lib/__marimo__/notebook.html", "<p>page</p>")
+      end)
+
+      assert %{"entry_current" => true, "bundle_current" => true} = read.()
+
+      Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo\nprint(2)"))
+      assert %{"entry_current" => false, "bundle_current" => false} = read.()
+    end
+
+    test "a file added or removed after the run leaves the bundle not current", c do
+      {added, read_added} = run!(c)
+      finish!(c, added)
+      Agent.update(c.files, &Map.put(&1, "data/more.csv", "c\n3"))
+      assert %{"entry_current" => true, "bundle_current" => false} = read_added.()
+
+      {removed, read_removed} = run!(c)
+      finish!(c, removed)
+      Agent.update(c.files, &Map.delete(&1, "data/rows.csv"))
+      assert %{"entry_current" => true, "bundle_current" => false} = read_removed.()
+    end
+
+    # Completeness says whether the record holds every file; freshness whether
+    # those files are still the notebook's. Each is told apart from the other.
+    test "an incomplete record or a missing revision leaves the bundle unknown, not current",
+         c do
+      Agent.update(c.files, fn kept ->
+        Map.merge(kept, Map.new(1..500, &{"zz/#{&1}.txt", "#{&1}"}))
+      end)
+
+      {partial, read_partial} = run!(c)
+      finish!(c, partial)
+      answer = read_partial.()
+      refute answer["source"]["files_complete"]
+      assert length(answer["source"]["files"]) < 500
+      assert %{"entry_current" => true, "bundle_current" => nil} = answer
+
+      # A file the record does hold, changed: seen, so not current.
+      Agent.update(c.files, &Map.put(&1, "helper.py", "def total(): return 2"))
+      assert %{"bundle_current" => false} = read_partial.()
+
+      Agent.update(c.files, fn kept ->
+        kept |> Map.reject(fn {path, _} -> is_binary(path) and path =~ ~r/^zz\// end)
+      end)
+
+      Agent.update(c.files, &Map.put(&1, "unrevised", ["helper.py"]))
+      {unrevised, read_unrevised} = run!(c)
+      finish!(c, unrevised)
+      answer = read_unrevised.()
+      assert answer["source"]["files_complete"]
+      helper = Enum.find(answer["source"]["files"], &(&1["path"] == "/helper.py"))
+      assert helper["revision"] == nil
+      assert %{"entry_current" => true, "bundle_current" => nil} = answer
+    end
+  end
+
+  # Starts a run as the first agent, answering its id and a read of it.
+  defp run!(c) do
+    key = "run-#{:erlang.unique_integer([:positive])}"
+
+    run_id =
+      json_response(
+        post!(c, c.first, "#{@api}/#{@notebook}/runs/start", %{"idempotency_key" => key}),
+        200
+      )["run_id"]
+
+    {run_id,
+     fn -> json_response(get!(c, c.first, "#{@api}/#{@notebook}/runs/#{run_id}"), 200) end}
+  end
+
+  defp finish!(c, run_id) do
+    Agent.update(c.files, fn kept ->
+      jobs =
+        for job <- kept["jobs"] do
+          runs =
+            for run <- job["runs"],
+                do: if(run["run_id"] == run_id, do: %{run | "status" => "succeeded"}, else: run)
+
+          %{job | "runs" => runs}
+        end
+
+      %{kept | "jobs" => jobs}
+    end)
+  end
+
+  defp run_id(n), do: "run_" <> String.pad_leading(Integer.to_string(n), 26, "0")
 
   defp get!(c, agent, path) do
     request = SignedAgentHelpers.sign(agent.signer, c.secret, "www.example.com", "GET", path, nil)
@@ -604,7 +742,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     run =
       Agent.get_and_update(files, fn kept ->
         all = Enum.flat_map(kept["jobs"], & &1["runs"])
-        run = %{"run_id" => "run_#{length(all) + 1}", "status" => "queued"}
+        run = %{"run_id" => run_id(length(all) + 1), "status" => "queued"}
 
         {run, %{kept | "jobs" => Enum.map(kept["jobs"], &with_run(&1, job_id, run))}}
       end)
@@ -617,9 +755,27 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          files,
          _body
        ) do
-    [job_id, "runs"] = String.split(runs, "/")
-    job = Enum.find(Agent.get(files, & &1["jobs"]), &(&1["id"] == job_id))
-    json(conn, 200, %{success: true, data: %{items: Enum.take(job["runs"], 1)}})
+    case String.split(runs, "/") do
+      [job_id, "runs"] ->
+        job = Enum.find(Agent.get(files, & &1["jobs"]), &(&1["id"] == job_id))
+        json(conn, 200, %{success: true, data: %{items: Enum.take(job["runs"], 1)}})
+
+      [_job_id, "runs", run_id] ->
+        case Enum.find(
+               Agent.get(files, &Enum.flat_map(&1["jobs"], fn job -> job["runs"] end)),
+               &(&1["run_id"] == run_id)
+             ) do
+          nil ->
+            json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
+
+          run ->
+            json(conn, 200, %{success: true, data: run})
+        end
+
+      # A run's page; these runs keep none.
+      [_job_id, "runs", _run_id, "html"] ->
+        json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No page"}})
+    end
   end
 
   defp hub_answer(
@@ -651,16 +807,32 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          files,
          _body
        ) do
-    # No path lists the whole workspace, as a run's record of its files does;
-    # the jobs kept beside the files are not files.
+    # One folder's files and folders, or with `recursive` every file under it
+    # at any depth, as a run's record of its files reads them; the jobs kept
+    # beside the files are not files. A page holds at most `limit`, and a
+    # cursor names the rest. A file under "unrevised" is listed with no ETag.
     folder = if path = conn.query_params["path"], do: path <> "/", else: ""
+    recursive = conn.query_params["recursive"] == "true"
+    limit = String.to_integer(conn.query_params["limit"] || "200")
+    kept = Agent.get(files, & &1)
 
-    items =
-      for {path, content} when is_binary(content) <- Enum.sort(Agent.get(files, & &1)),
+    listed =
+      &Map.drop(item(&1, &2), if(&1 in Map.get(kept, "unrevised", []), do: [:etag], else: []))
+
+    entries =
+      for {path, content} when is_binary(content) <- Enum.sort(kept),
           String.starts_with?(path, folder),
-          do: item(path, content)
+          uniq: true do
+        case String.split(String.replace_prefix(path, folder, ""), "/", parts: 2) do
+          [_name] -> listed.(path, content)
+          [_folder, _rest] when recursive -> listed.(path, content)
+          [inner, _rest] -> %{path: "/" <> folder <> inner, name: inner, kind: "directory"}
+        end
+      end
 
-    json(conn, 200, %{success: true, data: %{items: items}})
+    page = %{items: Enum.take(entries, limit)}
+    page = if length(entries) > limit, do: Map.put(page, :cursor, "next"), else: page
+    json(conn, 200, %{success: true, data: page})
   end
 
   defp hub_answer(
@@ -729,16 +901,17 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
        ),
        do: json(conn, 201, %{success: true, data: %{}})
 
-  # A run records the code it ran from, so starting one reads the notebook.
+  # A run records the code it ran from, so starting one reads the notebook's
+  # entry file.
   defp hub_answer(
          %Plug.Conn{
            method: "GET",
            request_path: "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/content"
          } = conn,
-         _files,
+         files,
          _body
        ),
-       do: json(conn, 200, %{success: true, data: %{code: "import marimo"}})
+       do: json(conn, 200, %{success: true, data: %{code: Agent.get(files, & &1["notebook.py"])}})
 
   defp hub_answer(conn, _files, _body), do: json(conn, 200, %{success: true, data: %{}})
 
@@ -800,7 +973,8 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       name: Path.basename(path),
       kind: "file",
       size: byte_size(content),
-      modified_at: 1
+      modified_at: 1,
+      etag: quoted(content)
     }
 
   defp etag(conn, content), do: put_resp_header(conn, "etag", quoted(content))

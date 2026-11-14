@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 14 November 2026
 
+- **Notebook runs.** A finished run now says separately whether the notebook's code is
+  unchanged and whether every one of its files is. Before, a run could read as current
+  while a helper file beside the code had changed since.
 - **Notebook files.** An agent writing a notebook file names the version it read. If someone
   changed the file in the meantime, nothing is written and the agent is told to read it
   again and merge, so two agents never silently overwrite each other's work.
