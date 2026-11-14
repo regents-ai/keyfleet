@@ -194,7 +194,8 @@ config :keyfleet,
     Keyfleet.LeftMessages,
     Keyfleet.Usage,
     Keyfleet.Atlas,
-    KeyfleetWeb.AgentTools
+    KeyfleetWeb.AgentTools,
+    Keyfleet.Budgets
   ],
   generators: [timestamp_type: :utc_datetime]
 
