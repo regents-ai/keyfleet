@@ -475,7 +475,7 @@ defmodule KeyfleetWeb.AtlasLive do
     ~H"""
     <.link {to(@thing)} class="atlas-thing">
       <span class="atlas-thing__head">
-        <span class="atlas-thing__what" data-kind={@thing.kind}>{@thing.what}</span>
+        <span class="atlas-pill" data-kind={@thing.kind}>{@thing.what}</span>
         <span :if={@thing.who} class="atlas-thing__who">{@thing.who}</span>
         <KeyfleetWeb.Time.local
           id={@id <> "-at"}

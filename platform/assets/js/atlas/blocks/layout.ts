@@ -24,6 +24,16 @@ export const PAD = 4
 export const SHOW_FROM = 0.55
 export const SHOW_AT = 0.85
 
+/** The most room between neighbouring tiles, and the roundest a tile's corners get, in CSS pixels on screen. */
+export const GAP = 4
+export const RADIUS = 8
+
+/** The room a tile whose shorter side is `side` CSS pixels on screen keeps from its neighbours: less for a small tile, so it never vanishes into its gaps. */
+export const gutter = (side: number) => Math.min(GAP, Math.max(0, side) * 0.15)
+
+/** How round the corners of a tile whose shorter side is `side` are: at most a fifth of what is left of it, so a small tile stays a block and never a blob. */
+export const corner = (side: number) => Math.min(RADIUS, Math.max(0, side - gutter(side)) * 0.2)
+
 // How unlike a square a row of areas summing to `sum`, from `min` to `max`,
 // is at its worst once laid along a side of length `side`.
 const worst = (sum: number, min: number, max: number, side: number) => {

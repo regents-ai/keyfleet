@@ -1,15 +1,19 @@
 import {describe, expect, it} from "vitest"
 
 import {
+  GAP,
   HEAD,
   KEEP,
   PAD,
+  RADIUS,
   SHOW_AT,
   SHOW_FROM,
   aspect,
   between,
+  corner,
   cut,
   fills,
+  gutter,
   inner,
   ordered,
   place,
@@ -177,5 +181,38 @@ describe("easing between layouts", () => {
     expect(between(from, to, 0.5, out)).toEqual({x: 5, y: 10, w: 20, h: 10})
     expect(between(from, to, 1, out)).toBe(out)
     expect(out).toEqual(to)
+  })
+})
+
+describe("a tile's gaps and corners", () => {
+  // Every size a tile is drawn at on screen, from a sliver to the whole stage.
+  const sides = Array.from({length: 400}, (_, index) => index * 0.25).concat([120, 540, 4000])
+
+  it("keeps the full gap and the full corner once a tile is big enough", () => {
+    for (const side of [GAP / 0.15, 60, 540, 4000]) expect(gutter(side)).toBe(GAP)
+    for (const side of [60, 540, 4000]) expect(corner(side)).toBe(RADIUS)
+  })
+
+  it("narrows both on a small tile, so it never vanishes into its gaps or turns round", () => {
+    for (const side of sides) {
+      const gap = gutter(side)
+      const round = corner(side)
+      expect(gap).toBeGreaterThanOrEqual(0)
+      expect(gap).toBeLessThanOrEqual(Math.min(GAP, side * 0.15) + 1e-9)
+      // What is left once the gap is taken stays most of the tile.
+      expect(side - gap).toBeGreaterThanOrEqual(side * 0.85 - 1e-9)
+      // The corners take at most a fifth of what is left, so the sides stay straight.
+      expect(round).toBeLessThanOrEqual((side - gap) * 0.2 + 1e-9)
+      expect(round).toBeLessThanOrEqual(RADIUS)
+    }
+    expect(gutter(0)).toBe(0)
+    expect(corner(0)).toBe(0)
+  })
+
+  it("never shrinks as a tile grows", () => {
+    for (let index = 1; index < sides.length; index++) {
+      expect(gutter(sides[index])).toBeGreaterThanOrEqual(gutter(sides[index - 1]))
+      expect(corner(sides[index])).toBeGreaterThanOrEqual(corner(sides[index - 1]))
+    }
   })
 })

@@ -2,12 +2,13 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
   @moduledoc """
   The Atlas as blocks, shown unless the List is named: a treemap of the window shown, where
   each project is a block as big as the work it holds in the window and
-  coloured by how recently it was worked on, with a corner on a block changed
+  tinted by how recently it was worked on, with a dot on a block changed
   today. Choosing a block, or zooming into it, opens it in place: a block for
   each kind of work, then a block for each thing, as big as its changes, the
   quieter ones gathered into one more block that opens the same way, then
-  the thing itself, linking to its page. A path above the picture goes back
-  up. The browser draws it (`assets/js/hooks/atlas_blocks.ts` and
+  the thing itself, linking to its page. One bar above the picture moves
+  through time, holds the path back up and the zoom, and keys the colours;
+  a card beside the block pointed at says what it holds. The browser draws it (`assets/js/hooks/atlas_blocks.ts` and
   `assets/js/atlas/blocks/`) and asks for the window's counts and each kind's
   things as the reader opens them (`handle_event/3`); the strip beside it
   lists the most active things of the window, and choosing one opens the
@@ -54,23 +55,54 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
         data-to={DateTime.to_unix(@finish)}
         data-kind={@atlas.source || "all"}
       >
-        <nav class="atlas-list__window" aria-label="Move through time">
-          <.link
-            id="atlas-blocks-earlier"
-            patch={
-              AtlasLive.moved(@atlas, at: @start |> DateTime.add(-1, :day) |> DateTime.to_date())
-            }
+        <div class="atlas-blocks__bar">
+          <nav class="atlas-list__window" aria-label="Move through time">
+            <.link
+              id="atlas-blocks-earlier"
+              patch={
+                AtlasLive.moved(@atlas, at: @start |> DateTime.add(-1, :day) |> DateTime.to_date())
+              }
+            >
+              Earlier
+            </.link>
+            <h3 id="atlas-blocks-window">{AtlasLive.window_label(@atlas.window, @start)}</h3>
+            <.link
+              id="atlas-blocks-later"
+              patch={AtlasLive.moved(@atlas, at: DateTime.to_date(@finish))}
+            >
+              Later
+            </.link>
+          </nav>
+          <nav
+            id="atlas-blocks-trail"
+            class="atlas-blocks__trail"
+            aria-label="Path"
+            phx-update="ignore"
           >
-            Earlier
-          </.link>
-          <h3 id="atlas-blocks-window">{AtlasLive.window_label(@atlas.window, @start)}</h3>
-          <.link
-            id="atlas-blocks-later"
-            patch={AtlasLive.moved(@atlas, at: DateTime.to_date(@finish))}
+            <ol data-blocks-trail></ol>
+          </nav>
+          <div
+            id="atlas-blocks-zoom"
+            class="atlas-blocks__zoom"
+            role="group"
+            aria-label="Zoom"
+            phx-update="ignore"
           >
-            Later
-          </.link>
-        </nav>
+            <button type="button" aria-label="Zoom out" data-blocks-zoom="out">−</button>
+            <output aria-label="Showing" data-blocks-level></output>
+            <button type="button" aria-label="Zoom in" data-blocks-zoom="in">+</button>
+          </div>
+          <p class="atlas-legend">
+            <span>Older</span>
+            <span class="atlas-blocks__ramp" aria-hidden="true"></span>
+            <span>Newer</span>
+            <span class="atlas-blocks__key" data-key="today" aria-hidden="true"></span>
+            <span>Today</span>
+            <span class="atlas-blocks__key" data-key="more" aria-hidden="true"></span>
+            <span>More</span>
+            <span class="atlas-legend__zone">UTC</span>
+          </p>
+        </div>
         <div
           id="atlas-blocks-stage"
           class="atlas-blocks__stage"
@@ -81,9 +113,6 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
           aria-describedby="atlas-help"
           data-blocks-stage
         >
-          <nav class="atlas-blocks__trail" aria-label="Path">
-            <ol data-blocks-trail></ol>
-          </nav>
           <div class="atlas-blocks__surface" data-blocks-surface>
             <canvas class="atlas-blocks__canvas" data-blocks-canvas aria-hidden="true"></canvas>
             <div class="atlas-blocks__names" data-blocks-names></div>
@@ -95,15 +124,24 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
               <.link patch={AtlasLive.moved(@atlas, show: :list)}>List</.link>
               has all of it.
             </p>
-            <p class="atlas-blocks__tip" data-blocks-tip aria-hidden="true" hidden></p>
-          </div>
-          <div class="atlas-blocks__zoom" role="group" aria-label="Zoom">
-            <button type="button" aria-label="Zoom out" data-blocks-zoom="out">−</button>
-            <output aria-label="Showing" data-blocks-level></output>
-            <button type="button" aria-label="Zoom in" data-blocks-zoom="in">+</button>
+            <div class="atlas-blocks__card" data-blocks-card hidden>
+              <span class="atlas-pill" data-card-kind></span>
+              <button type="button" class="atlas-blocks__close" aria-label="Close" data-card-close>
+                <span aria-hidden="true">×</span>
+              </button>
+              <strong data-card-title></strong>
+              <span data-card-counts></span>
+              <span class="atlas-blocks__when" data-card-when></span>
+            </div>
           </div>
           <p class="visually-hidden" role="status" data-blocks-said></p>
         </div>
+        <p id="atlas-help" class="atlas-help">
+          Scroll to zoom, drag to move, choose a block to open it.
+          <span class="visually-hidden">
+            Arrow keys move between blocks, Enter opens the block chosen, Escape puts the card away or goes back up, and plus and minus zoom.
+          </span>
+        </p>
       </div>
 
       <aside
@@ -132,8 +170,10 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
             >
               <span class="atlas-active__title">{thing.title}</span>
               <span class="atlas-active__meta">
-                <span data-kind={thing.kind}>{thing.what}</span>
-                · {AtlasLive.changes(thing.changes)}<span :if={thing.actors > 1}> · {thing.actors} Keys</span>
+                <span class="atlas-pill" data-kind={thing.kind}>{thing.what}</span>
+                <span>
+                  {AtlasLive.changes(thing.changes)}<span :if={thing.actors > 1}> · {thing.actors} Keys</span>
+                </span>
               </span>
             </button>
           </li>
@@ -142,25 +182,6 @@ defmodule KeyfleetWeb.AtlasLive.Blocks do
           Nothing changed in this window.
         </p>
       </aside>
-    </div>
-
-    <div :if={@atlas.active == nil or @atlas.rows != []} class="atlas-blocks-foot">
-      <p id="atlas-help" class="atlas-help">
-        Scroll or pinch to zoom from the whole fleet down to single items, drag to move, and choose a block to open it.
-        <span class="visually-hidden">
-          Arrow keys move between blocks, Enter opens the block chosen, Escape goes back up, and plus and minus zoom.
-        </span>
-      </p>
-      <p class="atlas-legend">
-        <span>Older</span>
-        <span class="atlas-blocks__ramp" aria-hidden="true"></span>
-        <span>Newer</span>
-        <span class="atlas-blocks__key" data-key="today" aria-hidden="true"></span>
-        <span>Today</span>
-        <span class="atlas-blocks__key" data-key="more" aria-hidden="true"></span>
-        <span>More</span>
-        <span class="atlas-legend__zone">Times in UTC</span>
-      </p>
     </div>
     """
   end

@@ -21,19 +21,19 @@ type Rgb = readonly [number, number, number]
 /** As many tiles as one picture draws: every project and kind, and the things of the kinds opened. */
 export const MAX_TILES = 16_384
 
-/** Floats a tile takes: its rect, then how recent it is, its parent's fill and its number. */
+/** Floats a tile takes: its rect, then how recent it is, its parent's fill, and its number with its marks. */
 export const TILE_FLOATS = 7
 
 // The shader's `Params`, as eleven vec4s.
 const PARAMS = 44
 
 export type BlocksRenderer = IslandRenderer & {
-  /** The scale from the oldest work to the newest, the rest of a kind, the stage around each tile, the page's text and background, and the ring. */
-  tones(low: Rgb, middle: Rgb, high: Rgb, rest: Rgb, ground: Rgb, fg: Rgb, bg: Rgb, ring: Rgb): void
+  /** The scale from the oldest work to the newest, the rest of a kind, the ground between the tiles, a lit tile's hairline, the ring and the dot of a tile changed today. */
+  tones(low: Rgb, middle: Rgb, high: Rgb, rest: Rgb, ground: Rgb, line: Rgb, ring: Rgb, accent: Rgb): void
   /** The tiles: the first `count` of `data`. */
   tiles(data: Float32Array<ArrayBuffer>, count: number): void
-  /** The point at the middle of the stage, from the layout's base, the zoom, and the chosen tile's number (-1 for none). */
-  view(x: number, y: number, zoom: number, pick: number): void
+  /** The point at the middle of the stage, from the layout's base, the zoom, the ringed tile's number and the numbers of the tiles lit, first and last (-1 for none). */
+  view(x: number, y: number, zoom: number, ring: number, litFrom: number, litTo: number): void
 }
 
 export async function createBlocksRenderer(
@@ -49,6 +49,8 @@ export async function createBlocksRenderer(
   params[7] = -1
   params[8] = SHOW_FROM
   params[9] = SHOW_AT
+  params[10] = -1
+  params[11] = -1
 
   const gpu = await init()
   let disposed = false
@@ -109,25 +111,27 @@ export async function createBlocksRenderer(
     const record = (current: Frame) => current.pass(stage, body)
 
     return {
-      tones(low, middle, high, rest, ground, fg, bg, ring) {
+      tones(low, middle, high, rest, ground, line, ring, accent) {
         params.set(low, 12)
         params.set(middle, 16)
         params.set(high, 20)
         params.set(rest, 24)
         params.set(ground, 28)
-        params.set(fg, 32)
-        params.set(bg, 36)
-        params.set(ring, 40)
+        params.set(line, 32)
+        params.set(ring, 36)
+        params.set(accent, 40)
       },
       tiles(data, count) {
         call.instances = Math.min(count, MAX_TILES)
         if (call.instances > 0) quad.write(data.subarray(0, call.instances * TILE_FLOATS))
       },
-      view(x, y, zoom, pick) {
+      view(x, y, zoom, ring, litFrom, litTo) {
         params[4] = x
         params[5] = y
         params[6] = zoom
-        params[7] = pick
+        params[7] = ring
+        params[10] = litFrom
+        params[11] = litTo
       },
       resize(nextWidth, nextHeight) {
         stage.resize([nextWidth, nextHeight])

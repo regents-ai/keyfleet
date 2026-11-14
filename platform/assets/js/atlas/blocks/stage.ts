@@ -1,7 +1,7 @@
 /**
  * The Atlas as blocks: a treemap of the window shown. Each project is a block
- * as big as the work it holds in the window, coloured along the page's scale
- * by how recently it was worked on, with a corner on a block changed today.
+ * as big as the work it holds in the window, tinted along the page's scale
+ * by how recently it was worked on, with a dot on a block changed today.
  * Zooming into a block, or choosing it, opens it in place: it grows to fill
  * the stage while a block for each kind of work fades in inside it, then a
  * block for each thing, as big as its changes, the quieter ones gathered
@@ -25,10 +25,15 @@
  * about the ring. Choosing a thing in the strip beside the picture opens the
  * blocks down to it.
  *
+ * The block pointed at, or ringed, stands out while the others quieten, and
+ * a card beside it, never over it, says what it holds; the card's close
+ * button or Escape puts it away until another block is chosen.
+ *
  * The blocks are drawn on the GPU (`./renderer`) and only redrawn when
- * something moved; their names are the page's own, only for blocks big
- * enough to hold one, from a pool. Moves run under 300 ms with anime.js, and
- * at once after a key press or for a reader who asked for less motion.
+ * something moved; their names are the page's own, from a pool, shown only
+ * where every word fits (measured, never cut short). Moves run under 300 ms
+ * with anime.js, and at once after a key press or for a reader who asked for
+ * less motion.
  */
 import {animate, type JSAnimation} from "animejs"
 
@@ -53,10 +58,7 @@ export type BlocksStage = {
   destroy(): void
 }
 
-type Rgb = readonly [number, number, number]
 type Type = "fleet" | "project" | "kind" | "rest" | "thing"
-// A name in the page's ink or background, or on a plate of the background where neither reads.
-type Ink = "fg" | "bg" | "plate"
 type Thing = {
   readonly id: string
   readonly title: string
@@ -80,7 +82,11 @@ type Name = {
   y: number
   w: number
   h: number
-  lines: number
+  // How wide its words, the space between them, and its two small lines are, in CSS pixels.
+  words: number[]
+  space: number
+  countWidth: number
+  detailWidth: number
 }
 type Tile = {
   readonly key: string
@@ -108,12 +114,13 @@ type Tile = {
   from: Rect
   to: Rect
   at: Rect
-  // The zoom that fills the stage with it, and its place among the tiles drawn.
+  // The zoom that fills the stage with it, and its place among the tiles
+  // drawn, and the last place of the tiles inside it.
   fill: number
   slot: number
-  // Its place along the scale (-1 for the rest of a kind), and the ink its name is set in.
+  end: number
+  // Its place along the scale (-1 for the rest of a kind).
   value: number
-  ink: Ink
   label: Name | undefined
 }
 type FleetReply = {
@@ -134,13 +141,18 @@ const RETRY = 15_000
 // The pages of things kept, the least lately seen let go first.
 const KEEP_PAGES = 48
 const STEP = 2
-// The names on screen at once, and the room a name needs, in CSS pixels.
+// The names on screen at once, and the room a name keeps around its words
+// and the height of each line, in CSS pixels (as atlas_blocks.css sets them).
 const MAX_NAMES = 160
-const NAME_WIDTH = 56
-const NAME_HEIGHT = 20
+const NAME_SIDE = 8
+const NAME_TOP = 6
 const LINE = 16
-// The contrast a name's small text needs on its block.
-const READS = 4.5
+// The room the dot of a block changed today takes from its name's lines.
+const DOT = 12
+// The room between a card and its block, in CSS pixels.
+const CARD_GAP = 8
+// The narrowest line a word too long for it is broken across, in CSS pixels.
+const BREAKS = 160
 // The rest of a kind, among its things.
 const REST = "+"
 
@@ -165,10 +177,26 @@ const plural = (count: number, one: string, many: string) => `${numbers.format(c
 const dayOf = new Intl.DateTimeFormat("en-GB", {day: "numeric", month: "short", timeZone: "UTC"})
 const clockOf = new Intl.DateTimeFormat("en-GB", {hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC"})
 
-const linear = (channel: number) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
-const luminance = (red: number, green: number, blue: number) =>
-  0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
-const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+// How many lines words this wide, a space apart, take in a line `room` wide.
+// A word wider than the line is broken across as many as it needs only on a
+// line of at least `BREAKS` (a link or a long name with no spaces, on a block
+// open in full); on a narrower one it does not fit (Infinity).
+function rows(words: readonly number[], space: number, room: number) {
+  let lines = 1
+  let line = 0
+  for (const word of words) {
+    if (line > 0 && line + space + word <= room) {
+      line += space + word
+      continue
+    }
+    if (line > 0) lines += 1
+    if (word > room && room < BREAKS) return Infinity
+    const across = Math.max(1, Math.ceil(word / room))
+    lines += across - 1
+    line = word - (across - 1) * room
+  }
+  return lines
+}
 
 const blank = (): Rect => ({x: 0, y: 0, w: 0, h: 0})
 
@@ -198,8 +226,8 @@ function tile(type: Type, parent: Tile | undefined, key: string, project: string
     at: blank(),
     fill: 1,
     slot: -1,
+    end: -1,
     value: 0,
-    ink: "fg",
     label: undefined,
   }
 }
@@ -210,7 +238,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   const surface = root.querySelector<HTMLElement>("[data-blocks-surface]")!
   const namesBox = root.querySelector<HTMLElement>("[data-blocks-names]")!
   const empty = root.querySelector<HTMLElement>("[data-blocks-empty]")!
-  const tip = root.querySelector<HTMLElement>("[data-blocks-tip]")!
+  const card = root.querySelector<HTMLElement>("[data-blocks-card]")!
   const level = root.querySelector<HTMLOutputElement>("[data-blocks-level]")!
   const said = root.querySelector<HTMLElement>("[data-blocks-said]")!
   const events = new AbortController()
@@ -240,6 +268,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   let cursor: Tile | undefined
   let hover: Tile | undefined
   let hovering = false
+  let pointerY = 0
   let keyed = false
   let pinned: {id: string; holder: Tile} | undefined
   let opening: Tile | undefined
@@ -256,15 +285,10 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   let baseY = 0
   let dirty = true
 
-  // The scale and inks, as the page states them.
-  let ramp: [Rgb, Rgb, Rgb] = [
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0],
-  ]
-  let restTone: Rgb = [0, 0, 0]
-  let fgLight = 0
-  let bgLight = 1
+  // The fonts names are set in, as the page states them, for measuring.
+  const measure = document.createElement("canvas").getContext("2d")!
+  let titleFont = ""
+  let smallFont = ""
 
   let island: {renderer(): BlocksRenderer | undefined; nudge(): void} | undefined
 
@@ -306,27 +330,15 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
 
   // ——— Colour ——————————————————————————————————————————————————————————
 
-  // One channel of the colour at `value` along the scale, as the shader mixes it.
-  function channel(value: number, index: number) {
-    if (value < 0) return restTone[index]
-    const [low, middle, high] = ramp
-    return value < 0.5
-      ? low[index] + (middle[index] - low[index]) * value * 2
-      : middle[index] + (high[index] - middle[index]) * (value * 2 - 1)
-  }
-
-  // A tile's place along the scale, and the ink that reads on it.
+  // A tile's place along the scale: the rest of a kind has none. Every tint
+  // is light enough under the page's ink (atlas.css), so names need no other.
   function colour(t: Tile) {
     if (t.type === "rest") {
       t.value = -1
-    } else {
-      const last = t.type === "thing" ? t.last : Math.min(now, t.last + bucket)
-      t.value = recency(last, from, until())
+      return
     }
-    const light = luminance(channel(t.value, 0), channel(t.value, 1), channel(t.value, 2))
-    const onFg = contrast(light, fgLight)
-    const onBg = contrast(light, bgLight)
-    t.ink = Math.max(onFg, onBg) < READS ? "plate" : onBg > onFg ? "bg" : "fg"
+    const last = t.type === "thing" ? t.last : Math.min(now, t.last + bucket)
+    t.value = recency(last, from, until())
   }
 
   function recolour(t: Tile) {
@@ -639,20 +651,34 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
       data[at + 3] = h
       data[at + 4] = child.value
       data[at + 5] = t === fleet ? 0 : t.fill
-      data[at + 6] = count * 2 + (child.today ? 1 : 0)
+      data[at + 6] = count * 4 + (child.today ? 1 : 0) + (child.children.length > 0 ? 2 : 0)
       child.slot = count
       count += 1
       write(child)
+      child.end = count - 1
     }
   }
 
-  // The tile the ring is on: the one under the pointer, or the keyboard's.
-  const ringed = () => (hovering ? hover : keyed && document.activeElement === stage ? cursor : undefined)
+  // The tile the ring is on: the keyboard's, while the picture has focus.
+  const ringed = () => (keyed && document.activeElement === stage ? cursor : undefined)
+  // The tile that stands out, with all inside it: the one under the pointer, or the ringed.
+  const lit = () => (hovering ? hover : ringed())
 
   function paint() {
+    const shown = lit()
+    placeCard(shown)
     const renderer = island?.renderer()
     if (!renderer) return
-    renderer.view(camera.x - baseX, camera.y - baseY, camera.zoom, ringed()?.slot ?? -1)
+    const ring = ringed()
+    const on = shown && shown.slot >= 0
+    renderer.view(
+      camera.x - baseX,
+      camera.y - baseY,
+      camera.zoom,
+      ring?.slot ?? -1,
+      on ? shown.slot : -1,
+      on ? shown.end : -1,
+    )
     island!.nudge()
   }
 
@@ -713,6 +739,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   function makeName(): Name {
     const el = document.createElement("div")
     el.className = "atlas-blocks__name"
+    el.hidden = true
     const link = el.appendChild(document.createElement("a"))
     // A drag that starts on a name moves the picture rather than carrying the link off,
     // and the names are reached from the picture, not by Tab.
@@ -721,15 +748,42 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     const count = el.appendChild(document.createElement("small"))
     const detail = el.appendChild(document.createElement("small"))
     namesBox.append(el)
-    return {el, link, count, detail, tile: undefined, pass: 0, version: -1, x: NaN, y: NaN, w: NaN, h: NaN, lines: 0}
+    return {
+      el,
+      link,
+      count,
+      detail,
+      tile: undefined,
+      pass: 0,
+      version: -1,
+      x: NaN,
+      y: NaN,
+      w: NaN,
+      h: NaN,
+      words: [],
+      space: 0,
+      countWidth: 0,
+      detailWidth: 0,
+    }
+  }
+
+  // How wide a line of text is in a font, a pixel to spare for the page's own setting of it.
+  function widthOf(text: string, font: string) {
+    measure.font = font
+    return Math.ceil(measure.measureText(text).width) + 1
   }
 
   function fill(name: Name, t: Tile) {
     name.version = version
-    name.el.dataset.ink = t.ink
+    name.el.toggleAttribute("data-today", t.today)
     name.link.textContent = t.name
     name.count.textContent = t.type === "thing" ? counts(t) : plural(t.changes, "change", "changes")
     name.detail.textContent = when(t)
+    name.words = t.name.split(/\s+/).filter(Boolean).map(word => widthOf(word, titleFont))
+    name.space = widthOf(" ", titleFont) - 1
+    name.countWidth = widthOf(name.count.textContent, smallFont)
+    name.detailWidth = name.detail.textContent ? widthOf(name.detail.textContent, smallFont) : 0
+    name.w = NaN
     if (t.type === "thing") {
       const thing = t.thing!
       name.link.href = thing.path
@@ -747,6 +801,23 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     }
   }
 
+  // How a name fits a box `across` by `down`: its own lines, then its count
+  // and when on a line each while there is room, or not at all (0) when its
+  // own words do not fit whole.
+  function fits(label: Name, t: Tile, across: number, down: number, opened: boolean) {
+    const room = across - 2 * NAME_SIDE - (t.today ? DOT : 0)
+    if (room <= 0 || label.words.length === 0) return 0
+    const own = rows(label.words, label.space, room)
+    const space = opened ? 1 : Math.floor((down - NAME_TOP) / LINE)
+    if (own > space) return 0
+    let lines = own
+    if (lines < space && label.countWidth <= room) {
+      lines += 1
+      if (lines < space && label.detailWidth > 0 && label.detailWidth <= room) lines += 1
+    }
+    return lines - own + 1
+  }
+
   // A tile's name, in its band once its children show, or in its top left,
   // in the part of either on screen.
   function name(t: Tile, zoom: number, opened: boolean) {
@@ -756,7 +827,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     const top = Math.round(Math.max(y, 0))
     const across = Math.round(Math.min(x + t.at.w * zoom, width) - left)
     const down = Math.round(Math.min(y + (opened ? (HEAD * zoom) / t.fill : t.at.h * zoom), height) - top)
-    if (across < NAME_WIDTH || down < NAME_HEIGHT) return
+    if (across < 2 * NAME_SIDE + 16 || down < NAME_TOP + LINE) return
     let label = t.label
     if (!label) {
       if (live.length >= MAX_NAMES) return
@@ -764,7 +835,6 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
       label.tile = t
       label.version = -1
       t.label = label
-      label.el.hidden = false
       live.push(label)
     }
     if (label.version !== version) fill(label, t)
@@ -779,12 +849,11 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
       label.el.style.height = `${down}px`
       label.w = across
       label.h = down
-      const lines = opened ? 1 : clamp(Math.floor((down - 6) / LINE), 1, 3)
-      if (lines !== label.lines) {
-        label.lines = lines
-        label.count.hidden = lines < 2
-        label.detail.hidden = lines < 3
-      }
+      // 0: hidden; 1: its own words; 2: and its count; 3: and when.
+      const shows = fits(label, t, across, down, opened)
+      label.el.hidden = shows === 0
+      label.count.hidden = shows < 2
+      label.detail.hidden = shows < 3
     }
   }
 
@@ -814,6 +883,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
       label.el.hidden = true
       label.tile!.label = undefined
       label.tile = undefined
+      label.version = -1
       label.x = label.y = label.w = label.h = NaN
       live[index] = live[live.length - 1]
       live.pop()
@@ -913,7 +983,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     const [x, y] = local(clientX, clientY)
     const hit = tileAt(x, y)
     if (!hit) return
-    hideTip()
+    leave()
     cursor = hit
     open(hit, !instant())
   }
@@ -974,33 +1044,41 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   }
 
   // Back up a level: from a thing filling the stage to the things around it,
-  // or from the tile in view to its parent's.
+  // or from the tile in view to its parent's. A tile holding only one other
+  // is filled by it as it opens, so the way up passes it by.
   function up() {
     if (cursor && framed(cursor)) {
       open(focus, false)
       return
     }
     if (focus === fleet) return
-    const left = focus
-    open(left.parent!, false)
+    let left = focus
+    let target = left.parent!
+    while (target !== fleet && target.children.length === 1) {
+      left = target
+      target = target.parent!
+    }
+    open(target, false)
     cursor = left
     say(left)
   }
 
   function keydown(event: KeyboardEvent) {
     if (event.altKey || event.ctrlKey || event.metaKey) return
-    if (event.target instanceof Element && event.target.closest(".atlas-blocks__name")) {
+    if (event.target instanceof Element && event.target.closest(".atlas-blocks__name, [data-blocks-card]")) {
       if (event.key !== "Escape") return
       event.preventDefault()
       event.stopPropagation()
+      if (!card.hidden) closeCard()
       stage.focus({preventScroll: true})
       return
     }
     if (event.target !== stage) return
     if (event.key === "Escape") {
-      // Escape only ever goes back up inside the picture.
+      // Escape only ever puts the card away or goes back up inside the picture.
       event.preventDefault()
       event.stopPropagation()
+      if (!card.hidden) return closeCard()
     }
     keyed = true
     stop()
@@ -1039,50 +1117,94 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
 
   // ——— The pointer ——————————————————————————————————————————————————————
 
-  const tipTitle = tip.appendChild(document.createElement("strong"))
-  const tipCounts = tip.appendChild(document.createElement("span"))
-  const tipWhen = tip.appendChild(document.createElement("span"))
-  let tipFor: Tile | undefined
-  let tipVersion = -1
+  // ——— The card ————————————————————————————————————————————————————————
 
-  function showTip(t: Tile, x: number, y: number) {
-    if (t !== tipFor || tipVersion !== version) {
-      tipFor = t
-      tipVersion = version
-      tipTitle.textContent = t.name
-      tipCounts.textContent = counts(t)
-      tipWhen.textContent = when(t)
-      tipWhen.hidden = tipWhen.textContent === ""
+  const cardKind = card.querySelector<HTMLElement>("[data-card-kind]")!
+  const cardTitle = card.querySelector<HTMLElement>("[data-card-title]")!
+  const cardCounts = card.querySelector<HTMLElement>("[data-card-counts]")!
+  const cardWhen = card.querySelector<HTMLElement>("[data-card-when]")!
+  let cardFor: Tile | undefined
+  let cardVersion = -1
+  // The tile whose card was put away, until another is chosen.
+  let closed: Tile | undefined
+
+  function writeCard(t: Tile) {
+    cardFor = t
+    cardVersion = version
+    cardKind.textContent =
+      t.type === "project" ? "Project" : t.type === "kind" ? "Kind" : t.type === "rest" ? kindName(t.kind) : t.thing!.what
+    cardTitle.textContent = t.name
+    cardCounts.textContent = counts(t)
+    if (t.type === "thing") {
+      const thing = t.thing!
+      cardWhen.textContent = [...(thing.who ? [thing.who] : []), `${dayOf.format(thing.at)}, ${clockOf.format(thing.at)}`].join(" · ")
+    } else {
+      cardWhen.textContent = when(t)
     }
-    tip.hidden = false
-    const w = tip.offsetWidth
-    const h = tip.offsetHeight
-    const left = clamp(x + 14 + w > width ? x - 14 - w : x + 14, 0, Math.max(0, width - w))
-    const top = clamp(y + 14, 0, Math.max(0, height - h - 4))
-    tip.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`
+    cardWhen.hidden = cardWhen.textContent === ""
   }
 
-  const hideTip = () => {
-    if (!tip.hidden) tip.hidden = true
-    if (hovering) {
-      hovering = false
-      paint()
-    }
+  // The card for the tile that stands out, beside it on whichever side has
+  // the room (right, left, below, above), level with the pointer or the
+  // tile's top; with no side that holds it, there is none, so it never
+  // covers its tile.
+  function placeCard(t: Tile | undefined) {
+    if (t !== closed) closed = undefined
+    if (!t || t === closed || t.slot < 0) return void (card.hidden = true)
+    if (t !== cardFor || cardVersion !== version) writeCard(t)
+    card.hidden = false
+    const w = card.offsetWidth
+    const h = card.offsetHeight
+    const zoom = camera.zoom
+    const x0 = screenX(t.at.x)
+    const y0 = screenY(t.at.y)
+    const x1 = x0 + t.at.w * zoom
+    const y1 = y0 + t.at.h * zoom
+    const level = clamp((hovering ? pointerY - 16 : Math.max(y0, 0)), 0, Math.max(0, height - h))
+    const across = clamp(Math.max(x0, 0), 0, Math.max(0, width - w))
+    const spots: [number, number, boolean][] = [
+      [x1 + CARD_GAP, level, x1 + CARD_GAP + w <= width],
+      [x0 - CARD_GAP - w, level, x0 - CARD_GAP - w >= 0],
+      [across, y1 + CARD_GAP, y1 + CARD_GAP + h <= height],
+      [across, y0 - CARD_GAP - h, y0 - CARD_GAP - h >= 0],
+    ]
+    const spot = spots.find(([, , room]) => room)
+    if (!spot) return void (card.hidden = true)
+    card.style.transform = `translate3d(${Math.round(spot[0])}px, ${Math.round(spot[1])}px, 0)`
+  }
+
+  function closeCard() {
+    closed = cardFor
+    card.hidden = true
+  }
+
+  // The pointer left the blocks: nothing stands out but the ring.
+  const leave = () => {
+    if (!hovering) return
+    hovering = false
+    paint()
   }
 
   function pointermove(event: PointerEvent) {
-    if (event.pointerType === "touch" || surface.hasAttribute("data-dragging")) return hideTip()
+    if (event.target instanceof Element && card.contains(event.target)) return
+    if (event.pointerType === "touch" || surface.hasAttribute("data-dragging")) return leave()
     const [x, y] = local(event.clientX, event.clientY)
     const hit = tileAt(x, y)
-    if (!hit) return hideTip()
+    if (!hit) return leave()
     hover = hit
     hovering = true
-    showTip(hit, x, y)
+    pointerY = y
     paint()
   }
 
   function clicked(event: MouseEvent) {
     const target = event.target instanceof Element ? event.target : null
+    if (target?.closest("[data-card-close]")) {
+      const focused = card.contains(document.activeElement)
+      closeCard()
+      if (focused) stage.focus({preventScroll: true})
+      return
+    }
     const zoom = target?.closest<HTMLElement>("[data-blocks-zoom]")
     if (zoom) {
       const factor = zoom.dataset.blocksZoom === "in" ? STEP : 1 / STEP
@@ -1142,13 +1264,15 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   root.addEventListener("click", clicked, listen)
   root.addEventListener("atlas:focus", focusThing, listen)
   surface.addEventListener("pointermove", pointermove, listen)
-  surface.addEventListener("pointerleave", hideTip, listen)
+  surface.addEventListener("pointerleave", leave, listen)
+  // The card is read and pressed where it stands, and never starts a drag.
+  card.addEventListener("pointerdown", event => event.stopPropagation(), listen)
   surface.addEventListener("pointerdown", interrupt, {...listen, capture: true})
   surface.addEventListener(
     "wheel",
     () => {
       stop()
-      hideTip()
+      leave()
     },
     {...listen, passive: true, capture: true},
   )
@@ -1268,23 +1392,36 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     },
   })
 
-  // The scale, the rest of a kind, the stage and the inks, as the page states them now.
+  // The scale, the rest of a kind, the ground, the hairline, the ring and the
+  // dot of today, as the page states them now, and the fonts of the names.
   function retone() {
-    const low = tone(surface, "--atlas-heat-1")
-    const middle = tone(surface, "--atlas-heat-2")
-    const high = tone(surface, "--atlas-heat-3")
-    const fg = tone(surface, "--color-fg")
-    const bg = tone(surface, "--color-bg")
-    ramp = [low, middle, high]
-    restTone = tone(surface, "--ash-panel-strong")
-    fgLight = luminance(...fg)
-    bgLight = luminance(...bg)
-    island?.renderer()?.tones(low, middle, high, restTone, bg, fg, bg, tone(surface, "--color-focus"))
+    island
+      ?.renderer()
+      ?.tones(
+        tone(surface, "--atlas-tone-1"),
+        tone(surface, "--atlas-tone-2"),
+        tone(surface, "--atlas-tone-3"),
+        tone(surface, "--atlas-rest"),
+        tone(surface, "--atlas-ground"),
+        tone(surface, "--atlas-line"),
+        tone(surface, "--color-focus"),
+        tone(surface, "--atlas-today"),
+      )
+    const probe = spare.pop() ?? makeName()
+    titleFont = getComputedStyle(probe.link).font
+    smallFont = getComputedStyle(probe.count).font
+    spare.push(probe)
     version += 1
     recolour(fleet)
     dirty = true
     render()
   }
+
+  // Names are measured again once the page's own fonts arrive.
+  void document.fonts.ready.then(() => {
+    if (events.signal.aborted) return
+    retone()
+  })
 
   retone()
   controller.mount()
