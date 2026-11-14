@@ -598,18 +598,19 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
   defp finish!(c, run_id) do
     Agent.update(c.files, fn kept ->
-      jobs =
-        for job <- kept["jobs"] do
-          runs =
-            for run <- job["runs"],
-                do: if(run["run_id"] == run_id, do: %{run | "status" => "succeeded"}, else: run)
-
-          %{job | "runs" => runs}
-        end
-
-      %{kept | "jobs" => jobs}
+      %{
+        kept
+        | "jobs" =>
+            Enum.map(
+              kept["jobs"],
+              &%{&1 | "runs" => Enum.map(&1["runs"], fn run -> finished(run, run_id) end)}
+            )
+      }
     end)
   end
+
+  defp finished(%{"run_id" => run_id} = run, run_id), do: %{run | "status" => "succeeded"}
+  defp finished(run, _run_id), do: run
 
   defp run_id(n), do: "run_" <> String.pad_leading(Integer.to_string(n), 26, "0")
 
@@ -750,6 +751,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     json(conn, 201, %{success: true, data: run})
   end
 
+  defp all_runs(files),
+    do: Agent.get(files, &Enum.flat_map(&1["jobs"], fn job -> job["runs"] end))
+
+  defp run_answer(conn, nil),
+    do: json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
+
+  defp run_answer(conn, run), do: json(conn, 200, %{success: true, data: run})
+
   defp hub_answer(
          %Plug.Conn{method: "GET", request_path: @jobs <> "/" <> runs} = conn,
          files,
@@ -761,16 +770,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         json(conn, 200, %{success: true, data: %{items: Enum.take(job["runs"], 1)}})
 
       [_job_id, "runs", run_id] ->
-        case Enum.find(
-               Agent.get(files, &Enum.flat_map(&1["jobs"], fn job -> job["runs"] end)),
-               &(&1["run_id"] == run_id)
-             ) do
-          nil ->
-            json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
-
-          run ->
-            json(conn, 200, %{success: true, data: run})
-        end
+        run_answer(conn, Enum.find(all_runs(files), &(&1["run_id"] == run_id)))
 
       # A run's page; these runs keep none.
       [_job_id, "runs", _run_id, "html"] ->
