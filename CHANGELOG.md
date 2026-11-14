@@ -9956,3 +9956,49 @@ The first run found the joining walk's stand-in hub answering a file add without
 ETag; it now answers one as the real hub does, and the rerun of the platform stage
 passed. Not run against two hub machines sharing one bucket; the hub's own two-replica
 test covers that on its in-memory store. Not run with a real agent.
+
+## 2026-11-14: A finished run says whether every file it ran from is still current
+
+- A notebook run no longer answers `code_current`. `entry_current` says the same thing,
+  whether the notebook's saved code (its entry file) is still the code the run ran from,
+  under a name that says it covers that file alone. The new `bundle_current` says
+  whether every file is still as it was: `true` only when the run's record holds every
+  file, each with a revision, and the notebook now has exactly those files at those
+  revisions; `false` when a difference is seen (the code changed, a file listed then and
+  now has another revision, or a file was added or removed where the list without it
+  holds every file); `null` when it can't be told. Both are `null` until the run has
+  finished. Before, a helper changed beside an unchanged `notebook.py` still read as
+  current.
+- `source.files` now lists every file of the notebook at any depth as `{path, size,
+  revision}`, with the revision a read of the file answers, in place of the entries at
+  its top with `kind`. Files in a `__marimo__` folder at any depth are left out: marimo
+  writes them itself whenever a notebook runs or is open, and the hub's own proposals
+  leave them out for the same reason. The record is one page of the hub's largest, 500
+  files; past that `files_complete` is `false`. `files_complete` now says completeness
+  alone, never freshness. No storage change: each revision sits in the existing list.
+  Runs recorded before this change keep what they stored and never read `true`.
+- The hub change is one new patch, `notebook-hub/marimohub/workspace-listing.patch`: a
+  workspace listing can ask for every file at any depth (`recursive=true`), and each file
+  names the same ETag its read answers. Hub image `626ec14-5a00d7a` in every fleet's
+  config. The hub's own tests pass in the prepared workspace (API 2,449 passed, 1
+  skipped; core workspace 43), with a new test that the listed ETag equals the read ETag
+  at depth and changes with the file. The local end-to-end run gains that step on the
+  real image, but neither the image build nor that run was done: the disk was below the
+  workspace's 50 GiB floor.
+- API contract 32.0.0 -> 33.0.0 in both copies, the breaking change dated in the docs;
+  the command descriptors, `cli/COMMANDS.md`, the agent guides, the feature map and the
+  verification list follow. The test stand-in hub lists every file with ETags and pages,
+  and reads and finishes runs. New tests: a helper changed while the entry isn't, marimo's
+  own files changing, the entry changing, a file added or removed, an incomplete record,
+  a missing revision, and a run still in progress.
+- Release order: the hub image first, then the site. Without the new hub the record is
+  the top level only with no revisions, so `bundle_current` reads `null`. regents-cli
+  needs to read `entry_current` and `bundle_current` in place of `code_current`.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with warnings
+as errors, format, credo strict, sobelow, full suite 1,468 (20 properties, 1,448 tests,
+19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
+of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
+tests, 6 skipped). An earlier run found the stand-in hub's answers split by two helpers,
+a warning that fails the warnings-as-errors run; they moved, and the rerun passed. Not
+run with a real hub or a real agent.
