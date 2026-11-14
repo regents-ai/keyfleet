@@ -1563,7 +1563,7 @@
     },
     {
       "command": "links resolve <url>",
-      "description": "Turn a pasted Keyfleet address (a task's page, a room, a Key, a proposal, a poll, a commit, a clone address, a notebook or a saved run) into what it names and the command to run next with its input. It reads only the address; 422 link_unknown for one that isn't Keyfleet's.",
+      "description": "Turn a pasted Keyfleet address (a task's page, a room, a Key, a proposal, a poll, a commit, a clone address, a notebook or a saved run) into what it names and the command to run next with its input. It reads only the address; 422 link_unknown for one that isn't Keyfleet's. For a notebook's address it answers the project's name the notebooks commands take, never the address's proj- id, which is the notebook host's own.",
       "operation_id": "resolveLink",
       "method": "POST",
       "path": "/api/v1/agent/links/resolve",
@@ -3303,7 +3303,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           }
         ]
       },
@@ -3330,7 +3330,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3374,7 +3374,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3415,7 +3415,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           }
         ],
         "stdin_fields": [
@@ -3480,7 +3480,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3535,7 +3535,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3576,7 +3576,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3625,7 +3625,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3680,7 +3680,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3717,7 +3717,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "notebook",
@@ -3754,7 +3754,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           }
         ]
       },
@@ -3781,7 +3781,7 @@
             "type": "string",
             "in": "path",
             "field": "project",
-            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           },
           {
             "name": "copy",

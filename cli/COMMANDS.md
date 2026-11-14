@@ -1452,7 +1452,10 @@ otherwise                 -> revision + 1 where revision = expected_revision
   `{"repository", "project", "hash", "clone_url"}`. `read` is `{"tool", "command",
   "input"}`, the browser tool and the command that read it with their input, or `null`
   when no read answers it: files to clone, or a saved run, whose project the address
-  doesn't name. A Key's profile opened over its fleet's page (`?key=72`) reads as that Key. A notebook's project is named only to the fleet's members.
+  doesn't name. A Key's profile opened over its fleet's page (`?key=72`) reads as that Key.
+  For a notebook's address, `names.project` is the project's name the `notebooks` commands
+  take, never the address's `proj-` id, which is the notebook host's own; it is named only
+  to the fleet's members.
 - **Refusals:** 422 `link_unknown`: the address isn't Keyfleet's. And those every signed
   command shares.
 
@@ -2844,7 +2847,10 @@ answer the 10 newest pushes, each with its commit's address
 - **Changes:** nothing (read).
 - **Route:** `GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks` →
   `listNotebooks`
-- **Inputs:** `<fleet>` and `<project>`. It sends no body.
+- **Inputs:** `<fleet>` and `<project>`. It sends no body. In every `notebooks` command
+  `<project>` is the project's name, never the `proj-` id in a notebook's address, which
+  is the notebook host's own: `links resolve` reads an address into its project and
+  notebook.
 - **Answer:** `{"notebooks": [{"notebook_id", "title", "locked", "scratchpad_key",
   "last_run", "last_succeeded"}]}`, where `locked` is false when the notebook's creator
   lets every member edit it, `scratchpad_key` is the Key whose notebook it is in the

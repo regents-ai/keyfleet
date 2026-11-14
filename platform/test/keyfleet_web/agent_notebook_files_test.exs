@@ -18,19 +18,28 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   alias Keyfleet.Actors.System
   alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, Notebooks, PairingHelpers, Projects}
   alias Keyfleet.Notebooks.Files
+  alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
   @notebook "nb-0123456789abcdef"
   @api "/api/v1/agent/fleets/#{@fleet}/projects/general/notebooks"
-  @workspace "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/workspace/"
-  @jobs "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/jobs"
+  @space "proj-0123456789abcdef"
+  @notebooks "/api/v1/projects/#{@space}/notebooks"
+  @workspace "#{@notebooks}/#{@notebook}/workspace/"
+  @jobs "#{@notebooks}/#{@notebook}/jobs"
   @add "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/add"
   @write "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write"
 
   setup do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
+    # A task is read in the workspace's own snapshot, which the sandbox holds.
+    owner =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
+        shared: true,
+        isolation: "REPEATABLE READ"
+      )
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
 
     Fleets.bootstrap_catalog!()
@@ -60,7 +69,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     @fleet
     |> Projects.project!(Projects.general(), actor: %System{})
-    |> Projects.record_space!("proj-fleet", actor: %System{})
+    |> Projects.record_space!(@space, actor: %System{})
 
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
@@ -89,14 +98,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert json_response(created, 200) == %{
              "notebook_id" => @notebook,
              "title" => "Classic #1 pilot log",
-             "notebook_url" => Notebooks.notebook_url(@fleet, "proj-fleet", @notebook)
+             "notebook_url" => Notebooks.notebook_url(@fleet, @space, @notebook)
            }
 
     assert last_did(c.first) == :notebook
 
     first = c.first.subject
 
-    assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
+    assert_receive {:hub, "POST", @notebooks, ^first, _query, body}
     assert %{"description" => "", "tags" => []} = Jason.decode!(body)
 
     files = "#{@api}/#{@notebook}/files/"
@@ -377,8 +386,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       Keyword.put(Notebooks.config(), :fleets, %{@fleet => "http://localhost:#{port}"})
     )
 
-    added =
-      Files.write(@fleet, nil, c.first.subject, "proj-fleet", @notebook, "log/a.md", "x", :add)
+    added = Files.write(@fleet, nil, c.first.subject, @space, @notebook, "log/a.md", "x", :add)
 
     assert added == {:error, :unavailable}
   end
@@ -417,7 +425,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
            )
 
     first = c.first.subject
-    assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
+    assert_receive {:hub, "POST", @notebooks, ^first, _query, body}
     assert Jason.decode!(body)["tags"] == ["goal-19"]
 
     for goal <- ["goal-19", "task#3", "goal#0", 19] do
@@ -431,8 +439,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
       assert refused.status in 400..499
 
-      refute_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", _subject, _query,
-                      _body}
+      refute_receive {:hub, "POST", @notebooks, _subject, _query, _body}
     end
   end
 
@@ -474,6 +481,33 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     assert listed.(c.first) == run_id(2)
     assert listed.(c.second) == run_id(3)
+  end
+
+  # Costly failure: an agent handed a task's notebook address takes its proj-…
+  # part, the notebook host's own id, for the project, and every read of the
+  # notebook is refused. links_resolve names the project and notebook they take.
+  test "a task's notebook address reads as the project and notebook a file read takes", c do
+    Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
+    [%{"notebook_url" => url}] = json_response(get!(c, c.first, @api), 200)["notebooks"]
+
+    Workspace.open_log(@fleet)
+    task = Workspace.create(@fleet, "task", %{"title" => "Count boats", "notebook_ref" => url})
+    shown = post!(c, c.first, "/api/v1/agent/fleets/#{@fleet}/graph/get", %{"id" => task})
+    cited = json_response(shown, 200)["object"]["data"]["notebook_ref"]
+    assert cited == url
+
+    link = json_response(post!(c, c.first, "/api/v1/agent/links/resolve", %{"url" => cited}), 200)
+    assert ContractSchema.errors(link, "Link") == []
+
+    assert %{"kind" => "notebook", "read" => %{"tool" => "notebooks_files", "input" => input}} =
+             link
+
+    %{"project" => project, "notebook_id" => notebook} = input
+    assert {project, notebook} == {"general", @notebook}
+
+    files = "/api/v1/agent/fleets/#{@fleet}/projects/#{project}/notebooks/#{notebook}/files/"
+    read = json_response(post!(c, c.first, files <> "read", %{"path" => "notebook.py"}), 200)
+    assert read["content"] == "import marimo"
   end
 
   describe "a finished run's files" do
@@ -793,7 +827,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   end
 
   defp hub_answer(
-         %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,
+         %Plug.Conn{method: "GET", request_path: @notebooks} = conn,
          _files,
          _body
        ),
@@ -808,7 +842,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          })
 
   defp hub_answer(
-         %Plug.Conn{method: "POST", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,
+         %Plug.Conn{method: "POST", request_path: @notebooks} = conn,
          _files,
          body
        ) do
@@ -909,7 +943,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   end
 
   defp hub_answer(
-         %Plug.Conn{method: "POST", request_path: "/api/v1/projects/proj-fleet/members"} = conn,
+         %Plug.Conn{method: "POST", request_path: "/api/v1/projects/#{@space}/members"} = conn,
          _files,
          _body
        ),
@@ -918,10 +952,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   # A run records the code it ran from, so starting one reads the notebook's
   # entry file.
   defp hub_answer(
-         %Plug.Conn{
-           method: "GET",
-           request_path: "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/content"
-         } = conn,
+         %Plug.Conn{method: "GET", request_path: "#{@notebooks}/#{@notebook}/content"} = conn,
          files,
          _body
        ),

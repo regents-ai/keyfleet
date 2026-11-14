@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.Refusal do
       {"There is no fleet with this id.", "GET /api/v1/fleets lists every fleet."},
     "project_unknown" =>
       {"This fleet has no project with that name.",
-       "Use the name of one of the fleet's projects. projects_list (GET /api/v1/agent/fleets/FLEET_ID/projects) lists them, active ones first."},
+       "Use the name of one of the fleet's projects. projects_list (GET /api/v1/agent/fleets/FLEET_ID/projects) lists them, active ones first. The proj- id in a notebook's address is the notebook host's own, not a project's name; links_resolve reads a notebook's address into its project and notebook_id."},
     "project_archived" =>
       {"This project is archived, so it takes no new work.",
        "Put the work in one of the active projects in details.active; any member works in any of them. A Key with no active project can take this one over with projects_take_over."},

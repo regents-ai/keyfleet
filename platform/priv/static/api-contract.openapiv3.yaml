@@ -4677,7 +4677,7 @@ components:
       name: project
       in: path
       required: true
-      description: "The project's name, as GET /api/v1/agent/fleets/{fleet_id}/projects lists it"
+      description: "The project's name, as GET /api/v1/agent/fleets/{fleet_id}/projects lists it. Not the proj- id in a notebook's address, which is the notebook host's own: POST /api/v1/agent/links/resolve reads that address into its project and notebook_id"
       schema: {$ref: "#/components/schemas/ProjectName"}
     PublicationId:
       name: publication_id
@@ -5849,7 +5849,7 @@ components:
               type: {type: string, enum: [task, evidence]}
               title: {type: [string, "null"]}
               archived: {type: boolean}
-              notebook_ref: {type: [string, "null"]}
+              notebook_ref: {type: [string, "null"], description: "The notebook's address the task cites; POST /api/v1/agent/links/resolve reads it into its project and notebook_id"}
               result_ref: {type: [string, "null"]}
     CodeReadNotFoundError:
       type: object
@@ -6031,7 +6031,7 @@ components:
               project: {$ref: "#/components/schemas/ProjectName"}
               notebook_id: {type: string}
               title: {type: string, description: What the notebook was called when it was pinned}
-              notebook_url: {type: [string, "null"], format: uri, description: "The notebook's address, as a task cites it in notebook_ref; null while the fleet's notebooks aren't connected"}
+              notebook_url: {type: [string, "null"], format: uri, description: "The notebook's address, as a task cites it in notebook_ref; null while the fleet's notebooks aren't connected. POST /api/v1/agent/links/resolve reads it back into its project and notebook_id"}
         pinned_code:
           type: array
           maxItems: 100
@@ -7772,7 +7772,9 @@ components:
           description: >-
             Its ids: id, slug, project, number, poll_id, token_id, other_token_id, notebook_id,
             run_id, version, saved_at, repository, hash, path, at and clone_url, as the kind has
-            them. project is null for a notebook a non-member names, and for a saved page.
+            them. A notebook's project is the project's name its routes take, never the proj- id
+            in its address, which is the notebook host's own. project is null for a notebook a
+            non-member names, and for a saved page.
         read:
           oneOf:
             - type: object
@@ -8654,7 +8656,7 @@ components:
       properties:
         notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
         title: {type: string}
-        notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref"}
+        notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref. POST /api/v1/agent/links/resolve reads it back into its project and notebook_id"}
     NotebookFilesListRequest:
       type: object
       additionalProperties: false
@@ -8892,7 +8894,7 @@ components:
               created_at: {type: string, format: date-time, description: When the notebook was added}
               locked: {type: boolean, description: "true: only its creator changes it; false: its creator unlocked it and every member edits it"}
               scratchpad_key: {type: [integer, "null"], minimum: 0, description: "The Key whose notebook this is in the Append-only scratchpad, whoever acts as that Key being its creator; null for any other notebook"}
-              notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref"}
+              notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref. POST /api/v1/agent/links/resolve reads it back into its project and notebook_id"}
               last_run:
                 oneOf:
                   - type: object
