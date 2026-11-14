@@ -29,11 +29,15 @@ defmodule Keyfleet.Budgets.Steps do
 
     with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within) do
       Ash.transact([Budget, Purchase], fn ->
-        with {:ok, _command} <- KeyActor.held_command(actor, fleet_id, key, nil, within),
-             {:ok, saved} <- step(Keyword.fetch!(opts, :step), key, input.arguments),
-             do: saved
+        held_step(actor, key, within, Keyword.fetch!(opts, :step), input.arguments)
       end)
     end
+  end
+
+  defp held_step(actor, key, within, step, %{fleet_id: fleet_id} = arguments) do
+    with {:ok, _command} <- KeyActor.held_command(actor, fleet_id, key, nil, within),
+         {:ok, saved} <- step(step, key, arguments),
+         do: saved
   end
 
   defp step(:open, key, %{fleet_id: fleet_id, project: project} = arguments) do
