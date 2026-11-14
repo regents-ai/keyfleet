@@ -67,7 +67,8 @@ defmodule KeyfleetWeb.Live.NearFundingTest do
     |> element("#treasury-funding-form")
     |> render_submit(%{"amount" => "5", "refund_to" => "alice.near", "recipient" => @elsewhere})
 
-    assert has_element?(view, "#treasury-funding-quote-near", "1.651313840569386417635746 NEAR")
+    # The price reads to four decimals, rounded up; the copy button gives it exactly.
+    assert has_element?(view, "#treasury-funding-quote-near", "1.6514 NEAR")
     view |> element("#treasury-funding-fund") |> render_click()
 
     assert [funding] = Fundings.list_fundings!(@fleet)
@@ -79,6 +80,12 @@ defmodule KeyfleetWeb.Live.NearFundingTest do
 
     assert has_element?(view, "#treasury-funding-#{funding.id}-state", "Waiting")
     assert has_element?(view, "#treasury-funding-#{funding.id}-deposit", "deposit-stub-1")
+    assert has_element?(view, "#treasury-funding-#{funding.id}-near", "1.6514 NEAR")
+
+    assert has_element?(
+             view,
+             ~s(#treasury-funding-#{funding.id}-near-copy[data-copy-text="1.651313840569386417635746"])
+           )
   end
 
   test "a funding's recipient is never an input" do
