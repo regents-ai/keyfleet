@@ -896,6 +896,38 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answered -- documented == []
   end
 
+  # A preview is given a tool's input, so it answers in the tool's terms: the
+  # Key a direct message is sent as by its number, and an input that doesn't
+  # fit by the inputs the tool takes, its address's names among them.
+  test "a preview names a message's Key by its number, and a misfit input by the tool's inputs",
+       c do
+    preview = "/api/v1/agent/preview"
+
+    dm = %{
+      "fleet_id" => @fleet,
+      "token_id" => "2",
+      "other_token_id" => "1",
+      "body" => "Hull survey notes",
+      "idempotency_key" => "dm-1"
+    }
+
+    previewed =
+      &answer(c, c.signer, "POST", preview, @address, %{"tool" => "dms_send", "input" => &1}, 200).body
+
+    assert %{"as_key" => 2, "refusals" => []} = previewed.(dm)
+
+    assert [%{"code" => "invalid_request", "hint" => hint}] =
+             previewed.(Map.delete(dm, "body"))["refusals"]
+
+    told =
+      ~r/: ([a-z0-9_, ]+)[;.]/
+      |> Regex.scan(hint, capture: :all_but_first)
+      |> Enum.flat_map(&String.split(hd(&1), ", "))
+
+    tool = Enum.find(Keyfleet.Capabilities.tools(), &(&1["name"] == "dms_send"))
+    assert Enum.sort(told) == Enum.sort(Map.keys(tool["input_schema"]["properties"]))
+  end
+
   # Costly failure: an agent sending a body the docs didn't foresee gets an
   # answer no doc describes, or a refusal with no next step, and is stuck.
   property "RF-HINT: any body sent to a signed route here gets a documented answer, and a refusal a hint",

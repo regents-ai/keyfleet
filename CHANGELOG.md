@@ -10073,3 +10073,8 @@ removes or renames a field, route or code, or makes an input required.
   `head_seq`, the last message the Key may see, 0 before the first), and a sync's rooms,
   walls, workspace changes (at `watermark`) and proposals (at `head_seq`) do the same. A
   sync's quote requests and direct messages still keep a cursor past their last one.
+- A write preview of a direct message answered `as_key` as the string its address holds,
+  where the contract and every other answer give a number; it is the number now. An
+  input of the wrong shape is told the inputs the tool takes, its address's names among
+  them, not the request body made from them. The preview still doesn't read the values the
+  workspace itself checks, such as a review's `reproduction`, and the docs now say so.

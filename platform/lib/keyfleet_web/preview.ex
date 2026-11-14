@@ -6,8 +6,9 @@ defmodule KeyfleetWeb.Preview do
   operation's limit, and each refusal already certain from the request and
   the agent's standing. Nothing is written, checked in or held, and a
   preview approves nothing: the write itself is still checked whole when it
-  is sent, by rules a preview doesn't read, such as a task's version or a
-  post limit.
+  is sent, by rules a preview doesn't read, such as a task's version, the
+  values the workspace takes in an item's fields (the graph host's own
+  check) or a post limit.
 
   Each write tool's `audience` is the manifest's (`priv/tool_manifest.json`):
   `anyone`, `members` (the fleet's Keys), `conversation` (the two Keys of a
@@ -53,7 +54,7 @@ defmodule KeyfleetWeb.Preview do
          as_key: as_key,
          for_person: for_person?(as_key, standing),
          audience: audience(tool["audience"], input, actor),
-         refusals: refusals(method, path, body) ++ key_refusals(as_key, input, standing),
+         refusals: refusals(method, path, body, tool) ++ key_refusals(as_key, input, standing),
          missing: if(standing, do: standing.missing, else: [])
        }}
     end
@@ -81,11 +82,18 @@ defmodule KeyfleetWeb.Preview do
   end
 
   # The Key the write names: the one it says, the Key a direct message is
-  # sent as, or else the Key the agent acts as in the fleet.
+  # sent as (its address's decimal number), or else the Key the agent acts as
+  # in the fleet.
   defp as_key(_route, %{"as_key" => key}, _standing), do: key
 
-  defp as_key("/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/" <> _rest, input, _standing),
-    do: input["token_id"]
+  defp as_key("/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/" <> _rest, input, _standing) do
+    with token_id when is_binary(token_id) <- input["token_id"],
+         {key, ""} <- Integer.parse(token_id) do
+      key
+    else
+      _not_a_key -> nil
+    end
+  end
 
   defp as_key(_route, _input, %{key: %{token_id: token_id}}), do: token_id
   defp as_key(_route, _input, _standing), do: nil
@@ -125,7 +133,7 @@ defmodule KeyfleetWeb.Preview do
 
   # What the request itself would be refused for: an address no operation
   # answers, a body of the wrong shape or out of range, or one too large.
-  defp refusals(method, path, body) do
+  defp refusals(method, path, body, tool) do
     limit = SignedAgent.body_limit(path)
 
     cond do
@@ -137,14 +145,41 @@ defmodule KeyfleetWeb.Preview do
         [Refusal.body("request_too_large", hint).error]
 
       true ->
-        shape(SignedAgent.check_body(path, body), path)
+        shape(SignedAgent.check_body(path, body), tool)
     end
   end
 
-  defp shape(:ok, _path), do: []
-  defp shape(:out_of_range, _path), do: [Refusal.body("out_of_range").error]
-  defp shape(:too_many_keys, _path), do: [Refusal.body("out_of_range").error]
-  defp shape(_invalid, path), do: [Refusal.body("invalid_request", SignedAgent.takes(path)).error]
+  defp shape(:ok, _tool), do: []
+  defp shape(:out_of_range, _tool), do: [Refusal.body("out_of_range").error]
+  defp shape(:too_many_keys, _tool), do: [Refusal.body("out_of_range").error]
+  defp shape(_invalid, tool), do: [Refusal.body("invalid_request", takes(tool)).error]
+
+  # A preview is given the tool's input, so an input of the wrong shape is
+  # told the inputs the tool takes, its address's names among them, not the
+  # body its request makes from them.
+  defp takes(%{"name" => name, "input_schema" => %{"properties" => properties} = schema}) do
+    required = schema["required"]
+    optional = properties |> Map.keys() |> Kernel.--(required) |> Enum.sort()
+
+    inputs =
+      case {required, optional} do
+        {[], []} ->
+          "no input"
+
+        {required, []} ->
+          "exactly these inputs: #{Enum.join(required, ", ")}"
+
+        {[], optional} ->
+          "only these inputs, each optional: #{Enum.join(optional, ", ")}"
+
+        {required, optional} ->
+          "these inputs: #{Enum.join(required, ", ")}; and only these besides, " <>
+            "each optional: #{Enum.join(optional, ", ")}"
+      end
+
+    "#{name} takes #{inputs}. Check each input's kind and range against the tool's " <>
+      "input_schema, then preview it again."
+  end
 
   # A Key the input names that the agent doesn't act as.
   defp key_refusals(key, %{"as_key" => key}, %{keys: keys}) do
