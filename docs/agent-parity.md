@@ -130,6 +130,7 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Notebooks: list, create, files, run, results | notebook hub (one-time sign-in from the page) | `notebooks_list`, `notebooks_create`, `notebooks_files`, `notebooks_read_file`, `notebooks_add_file`, `notebooks_write_file`, `notebooks_run`, `notebooks_result` | the same eight | the same eight | `notebooks list`, `notebooks create`, `notebooks files …`, `notebooks run`, `notebooks result` | no | — |
 | Notebooks: lock or unlock, restore a copy | workspace page | `notebooks_lock`, `notebooks_copies`, `notebooks_restore` | the same three | the same three | `notebooks lock`, `notebooks unlock`, `notebooks copies`, `notebooks restore` | no | — |
 | Code: pushes, history, one commit | `/code/:repo/commits` | `code_pushes`, `code_commits`, `code_commit` | the same three | the same three | `code pushes`; `code commits`, `code commit` | no | K13 |
+| Code: one file at a commit, whole | `/code/:repo/files?path=…&at=…` | `code_file` | the same | the same | `code file` (next regents-cli release) | no | — |
 | Code: read files, clone, push | `/code/:repo/files`, git password | n/a (git) | — | — | git with `git-remote-siwa` (signs with the agent's key) | no | — |
 
 ## Votes

@@ -10119,3 +10119,30 @@ removes or renames a field, route or code, or makes an input required.
   competing attempts, evidence on each with one contradicting, and a conclusion linked to
   both, checked against each item's own read, with the stranger, unknown, archived,
   other-project, over-budget and bad-input refusals.
+
+## 2026-11-14: An agent reads one file of a project's code whole at a commit
+
+- New read, `code_file`: `POST /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/code/file`
+  with `{"commit", "path"}`, the same tool at the Claude connector's address and in the
+  browser tool manifest, and `regents keyfleet code file FLEET PROJECT HASH PATH` (marked
+  source only until the next CLI pin). A commit's read cuts each file's patch at 64 KiB;
+  this reads the file itself. It answers `commit`, `commit_url`, `path`, `content`, `size`
+  in bytes and the `sha256` of its bytes.
+- The code store is asked for the file at the commit as the files page asks it
+  (`Code.file/3` with the commit), and for the folder holding it, which tells a file from a
+  folder and gives a file's size. A file is read up to the files page's own limit, 524,288
+  bytes; a larger one answers 422 `code_file_too_large`, its hint naming the limit and the
+  file's size, and one that isn't text 422 `code_file_not_text`, by the files page's rule
+  (`Code.text?/1`, which the page now shares). A path with no file at that commit, a
+  folder, a path that can't name a place in the code or a commit the code doesn't have
+  answers 404 `file_unknown`.
+- It is open to exactly whom a commit's read is open: the code's own read rule
+  (`Keyfleet.Access`, the code read by a member), refused 403 `code_not_holder`, or 503
+  `ownership_refreshing` while Key ownership is being read.
+- `links_resolve` reads a file's page at a commit (`/code/REPOSITORY/files?path=…&at=…`)
+  as `code_file`.
+- Both contract copies gain the route and its schemas. The contract stays 33.0.0: the
+  change only adds. The manifest holds 137 tools.
+- A new journey test reads a file whose patch a commit's read cut short whole, with its
+  size and sha256, and the too-large, not-text, unknown-path, unknown-commit, folder,
+  body and non-member refusals.

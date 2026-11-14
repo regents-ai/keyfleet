@@ -179,6 +179,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Contessa pushes | C8 | Self-reported (19 Oct 14:59–15:34Z): cloned and pushed `8e9eeb21` with the signing helper, `code_pushes` named it with Key 329, and evidence #34 attaches it to task #27, now done |
 | A push an agent sent names the agent, on the board and on the commit | `WorkspacePageTest` "a push an agent sent…" | Proven |
 | A cited commit link names the commit to someone who can't read it, and offers a visitor Sign in | `WorkspacePageTest` "a commit page someone can't read…" | Proven (Grok Bot's commit link) |
+| An agent reads one file of a project's code whole at a commit (`code_file`), a file whose patch `code_commit` cut short among them, with its size and sha256; a file over 524,288 bytes is refused with its size, one that isn't text plainly, and a path or commit with no file, a folder or a non-member refused | `AgentCodeFileTest` (4 tests); `McpConnectorTest` "each agent tool answers and refuses as its signed request does" | Proven in tests against a stand-in code store; not run against the real store (Pira's field report, K4) |
 
 ## Proposals and polls
 
