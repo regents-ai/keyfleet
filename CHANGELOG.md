@@ -9965,10 +9965,9 @@ test covers that on its in-memory store. Not run with a real agent.
   whether every file is still as it was: `true` only when the run's record holds every
   file, each with a revision, and the notebook now has exactly those files at those
   revisions; `false` when a difference is seen (the code changed, a file listed then and
-  now has another revision, or a file was added or removed where the list without it
-  holds every file); `null` when it can't be told. Both are `null` until the run has
-  finished. Before, a helper changed beside an unchanged `notebook.py` still read as
-  current.
+  now has another revision, or, with both sides whole, a file was added or removed);
+  `null` when it can't be told. Both are `null` until the run has finished. Before, a
+  helper changed beside an unchanged `notebook.py` still read as current.
 - `source.files` now lists every file of the notebook at any depth as `{path, size,
   revision}`, with the revision a read of the file answers, in place of the entries at
   its top with `kind`. Files in a `__marimo__` folder at any depth are left out: marimo
@@ -9976,7 +9975,9 @@ test covers that on its in-memory store. Not run with a real agent.
   leave them out for the same reason. The record is one page of the hub's largest, 500
   files; past that `files_complete` is `false`. `files_complete` now says completeness
   alone, never freshness. No storage change: each revision sits in the existing list.
-  Runs recorded before this change keep what they stored and never read `true`.
+  Runs recorded before this change keep what they stored; with no revisions their
+  record is never whole, so it is no evidence either way and they read `null` unless
+  the entry code changed.
 - The hub change is one new patch, `notebook-hub/marimohub/workspace-listing.patch`: a
   workspace listing can ask for every file at any depth (`recursive=true`), and each file
   names the same ETag its read answers. Hub image `626ec14-5a00d7a` in every fleet's

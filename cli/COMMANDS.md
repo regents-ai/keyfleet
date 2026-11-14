@@ -2968,10 +2968,10 @@ answer the run, waiting to start
   other files. `bundle_current` says whether every file is still as it was: `true` only
   when `files_complete` is `true`, every file then and now has a revision, and the
   notebook now has exactly those files at those revisions; `false` when a difference is
-  seen (the code changed, a file listed then and now has another revision, or a file was
-  added or removed where the list without it holds every file); `null` when it can't be
-  told. Both are `null` until the run has finished. Only `bundle_current` `true` means
-  the result is of the notebook's current files.
+  seen (the code changed, a file listed then and now has another revision, or, with both
+  sides whole, a file was added or removed); `null` when it can't be told. Both are
+  `null` until the run has finished. Only `bundle_current` `true` means the result is of
+  the notebook's current files.
   While the run hasn't succeeded, `last_succeeded` is the notebook's last good page,
   `{"run_id", "result_url"}`, the newest page Keyfleet keeps of a run of the notebook that
   succeeded, so no number of failed or waiting runs hides it; `null` when there is none or
@@ -3001,9 +3001,8 @@ source = the run's recorded source, if any
 finished and recorded -> entry_current = the saved code's sha256 is source's
                           bundle_current = list every file with its revision again, then
                             false when the code changed, a file both sides name has
-                            another revision, or a file is missing from a side that
-                            holds every file; true when both sides are whole and
-                            the same; else null
+                            another revision, or both sides are whole and differ;
+                            true when both are whole and the same; else null
 failed or timed out -> failure as the hub answers it to the agent
 not succeeded -> last_succeeded = the notebook's newest kept page of a run that succeeded
 answer the run as it stands

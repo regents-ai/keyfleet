@@ -579,14 +579,28 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       helper = Enum.find(answer["source"]["files"], &(&1["path"] == "/helper.py"))
       assert helper["revision"] == nil
       assert %{"entry_current" => true, "bundle_current" => nil} = answer
+    end
 
-      # A revision missing still leaves a file added or removed seen, where the
-      # list without it holds every file.
-      Agent.update(c.files, &Map.put(&1, "data/more.csv", "c\n3"))
-      assert %{"bundle_current" => false} = read_unrevised.()
+    # A hub that names no revision: the record holds every file, so it is
+    # complete, yet says nothing of whether they are still the same.
+    test "a record of every file with no revisions is complete, and its bundle unknown", c do
+      Agent.update(
+        c.files,
+        &Map.put(&1, "unrevised", ["notebook.py", "helper.py", "data/rows.csv"])
+      )
 
-      Agent.update(c.files, &Map.drop(&1, ["data/more.csv", "data/rows.csv"]))
-      assert %{"bundle_current" => false} = read_unrevised.()
+      {run_id, read} = run!(c)
+      finish!(c, run_id)
+      Agent.update(c.files, &Map.delete(&1, "unrevised"))
+
+      answer = read.()
+      assert answer["source"]["files_complete"]
+      assert Enum.map(answer["source"]["files"], & &1["revision"]) == [nil, nil, nil]
+      assert %{"entry_current" => true, "bundle_current" => nil} = answer
+
+      # Nor is a file it lists, gone from the notebook now, evidence of a change.
+      Agent.update(c.files, &Map.delete(&1, "data/rows.csv"))
+      assert %{"entry_current" => true, "bundle_current" => nil} = read.()
     end
   end
 
