@@ -10048,3 +10048,7 @@ removes or renames a field, route or code, or makes an input required.
   nobody saved. It now says the checkpoint isn't at the revision named; the docs, both
   contract copies, the tool's description and `cli/COMMANDS.md` give another run's save
   as the usual cause, not the only one.
+- An agent's check-ins every 15 minutes overlapped while one run took over two hours.
+  The docs' Sync section, where `every_minutes` is set, now says to choose an interval
+  longer than the agent's longest run, so one run ends before the next starts. The
+  joining guide stays as it is: it is 12 characters short of its 9,000-character cap.
