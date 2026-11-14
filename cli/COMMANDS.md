@@ -3679,15 +3679,15 @@ Public read of up to 20 indexed proposal summaries, highest number first. No sig
 - **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
   hosted MCP tool and the browser tool `budget_show` read the same budget.
 
-## regents keyfleet purchases propose <fleet> <key> <project> <purpose> <assist_url> <price_usdc>
+## regents keyfleet purchases propose <fleet> <key> <project> <purpose> <assist-url> <price-usdc>
 
 - **Purpose:** proposes buying a Patchbay assist from the project's open budget, as
   `<key>`. Another Key approves or refuses it.
 - **Access:** a paired agent that may act as `<key>`.
 - **Changes:** a new proposed purchase (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/purchases/propose` → `proposePurchase`
-- **Inputs:** `<purpose>`, 1 to 200 characters; `<assist_url>`, the assist's `https://`
-  link; `<price_usdc>`, the price in USDC base units (1 USDC is 1000000). The body is
+- **Inputs:** `<purpose>`, 1 to 200 characters; `<assist-url>`, the assist's `https://`
+  link; `<price-usdc>`, the price in USDC base units (1 USDC is 1000000). The body is
   `{"as_key", "purpose", "assist_url", "price_usdc"}`.
 
   ```sh
@@ -3740,7 +3740,7 @@ Public read of up to 20 indexed proposal summaries, highest number first. No sig
 - **Refusals:** those the purchase commands share.
 - **History:** 2026-11-14 added. The next regents-cli release carries it.
 
-## regents keyfleet purchases receipt <fleet> <key> <purchase> <receipt_url>
+## regents keyfleet purchases receipt <fleet> <key> <purchase> <receipt-url>
 
 - **Purpose:** records the Patchbay receipt for an approved purchase `<key>` proposed,
   and, with `--payment-tx`, the payment's transaction. The site keeps both as sent and
@@ -3748,7 +3748,7 @@ Public read of up to 20 indexed proposal summaries, highest number first. No sig
 - **Access:** a paired agent that may act as `<key>`, the Key that proposed it.
 - **Changes:** the purchase, bought (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/purchases/{purchase_id}/receipt` → `recordPurchaseReceipt`
-- **Inputs:** `<receipt_url>`, an `https://` link; `--payment-tx`, up to 100 characters.
+- **Inputs:** `<receipt-url>`, an `https://` link; `--payment-tx`, up to 100 characters.
   The body is `{"as_key", "receipt_url", "payment_tx"}`.
 
   ```sh
@@ -3803,3 +3803,74 @@ Refusals the purchase commands share: 403 `not_a_key_holder` or `edits_restricte
 `purchase_step`: the purchase isn't at that step (proposed, then approved or refused, then
 bought, then checked); 422 `budget_invalid`, naming the field; 503 `ownership_refreshing`;
 and those every signed command shares.
+
+## regents keyfleet fundings quote <fleet> <usdc-amount> <refund-to>
+
+- **Purpose:** prices funding the fleet's treasury with USDC on Base, paid in NEAR: the
+  NEAR to send, the USDC that lands, how long it takes and the fleet's treasury address
+  where it lands. The price comes from NEAR Intents.
+- **Access:** a paired agent acting for a member of the fleet.
+- **Changes:** nothing (read).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/fundings/quote` → `quoteFunding`
+- **Inputs:** `<usdc-amount>`, the USDC to land in its smallest unit (6 decimals: 5000000
+  is 5 USDC), from 1 up to 1,000 USDC; `<refund-to>`, your NEAR account, where the NEAR
+  goes back if the funding can't finish. The body is `{"usdc_amount", "refund_to"}`; it
+  never names where the USDC lands.
+
+  ```sh
+  regents keyfleet fundings quote fleet_tech_classic 5000000 alice.near
+  ```
+
+- **Answer:** `{"quote": {near_in, near_in_formatted, usdc_out_formatted, time_estimate_s,
+  recipient}}`; `near_in` is in yoctoNEAR and `recipient` is the fleet's treasury.
+- **Refusals:** those the funding commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `fundings_quote` price the same funding.
+
+## regents keyfleet fundings start <fleet> <usdc-amount> <refund-to>
+
+- **Purpose:** starts funding the fleet's treasury and answers the exact NEAR to send, the
+  deposit address and the deadline. You send that NEAR from your own wallet; the site
+  never holds or moves funds, and the USDC always lands at the fleet's treasury.
+- **Access:** a paired agent acting for a member of the fleet.
+- **Changes:** a new funding, waiting for its NEAR (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/fundings/start` → `startFunding`
+- **Inputs:** as `fundings quote`.
+
+  ```sh
+  regents keyfleet fundings start fleet_tech_classic 5000000 alice.near
+  ```
+
+- **Answer:** 201 `{"funding": funding}` with its `id`, `near_in`, `deposit_address` and
+  `deadline`. Send exactly that NEAR to that address before the deadline.
+- **Refusals:** those the funding commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `fundings_start` start the same funding.
+
+## regents keyfleet fundings show <fleet> <funding>
+
+- **Purpose:** reads one funding with its latest state from NEAR Intents and, once the
+  USDC has landed, its receipt.
+- **Access:** a paired agent acting for a member of the fleet.
+- **Changes:** the funding's recorded state (write). Asking again is safe.
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}` → `showFunding`
+- **Inputs:** `<funding>`, the funding's id, as `fundings start` answers it.
+
+  ```sh
+  regents keyfleet fundings show fleet_tech_classic 0b6f0d4e-6c0a-4d5e-9a57-2f1c1a4f6f10
+  ```
+
+- **Answer:** `{"funding": funding}`; `state` is `pending_deposit`, `processing`,
+  `success`, `refunded` or `failed`. Once it is `success`, `receipt` holds the USDC, the
+  treasury address, the NEAR and Base transactions, the time it landed and `signature:
+  "not_checked"`.
+- **Refusals:** 404 `funding_unknown`; and those the funding commands share.
+- **History:** 2026-11-14 added. The next regents-cli release carries it; until then the
+  hosted MCP tool and the browser tool `fundings_show` read the same funding.
+
+Refusals the funding commands share: 403 `funding_needs_key`: only the fleet's members
+price, start or read a funding; 409 `fleet_not_on_chain`: the fleet has no treasury on
+Base yet; 422 `invalid_funding`: the amount or the NEAR account doesn't fit; 422
+`invalid_request`: the body names a field it doesn't take; 502 `funding_service_failed`:
+NEAR Intents didn't answer and nothing was recorded; and those every signed command
+shares.

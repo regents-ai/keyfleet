@@ -7742,7 +7742,11 @@
       "route": "POST /api/v1/agent/fleets/{fleet_id}/fundings/quote",
       "interfaces": {
         "webmcp": "fundings_quote",
-        "http": "POST /api/v1/agent/fleets/{fleet_id}/fundings/quote"
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/fundings/quote",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       }
     },
     {
@@ -7791,7 +7795,11 @@
       "route": "POST /api/v1/agent/fleets/{fleet_id}/fundings/start",
       "interfaces": {
         "webmcp": "fundings_start",
-        "http": "POST /api/v1/agent/fleets/{fleet_id}/fundings/start"
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/fundings/start",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       }
     },
     {
@@ -7833,7 +7841,11 @@
       "route": "GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}",
       "interfaces": {
         "webmcp": "fundings_show",
-        "http": "GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}"
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       }
     },
     {

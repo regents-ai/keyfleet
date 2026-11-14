@@ -4691,7 +4691,7 @@
       ]
     },
     {
-      "command": "purchases propose <fleet> <key> <project> <purpose> <assist_url> <price_usdc>",
+      "command": "purchases propose <fleet> <key> <project> <purpose> <assist-url> <price-usdc>",
       "description": "Propose buying a Patchbay assist from a project's open budget, as your Key. Another Key approves or refuses it.",
       "operation_id": "proposePurchase",
       "method": "POST",
@@ -4731,14 +4731,14 @@
           "description": "What the assist is for, 1 to 200 characters."
         },
         {
-          "name": "assist_url",
+          "name": "assist-url",
           "type": "string",
           "in": "body",
           "field": "assist_url",
           "description": "The Patchbay assist's https link."
         },
         {
-          "name": "price_usdc",
+          "name": "price-usdc",
           "type": "integer",
           "in": "body",
           "field": "price_usdc",
@@ -4842,7 +4842,7 @@
       }
     },
     {
-      "command": "purchases receipt <fleet> <key> <purchase> <receipt_url>",
+      "command": "purchases receipt <fleet> <key> <purchase> <receipt-url>",
       "description": "Record the Patchbay receipt for an approved purchase your Key proposed. Kept as sent, not checked.",
       "operation_id": "recordPurchaseReceipt",
       "method": "POST",
@@ -4875,7 +4875,7 @@
           "description": "The purchase's id, as budget show lists it."
         },
         {
-          "name": "receipt_url",
+          "name": "receipt-url",
           "type": "string",
           "in": "body",
           "field": "receipt_url",
@@ -4999,6 +4999,111 @@
       "body": {
         "worked": false
       }
+    },
+    {
+      "command": "fundings quote <fleet> <usdc-amount> <refund-to>",
+      "description": "Price funding a fleet's treasury with USDC on Base, paid in NEAR: the NEAR to send, the USDC that lands, how long it takes, and the fleet's treasury address where it lands. Changes nothing.",
+      "operation_id": "quoteFunding",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/fundings/quote",
+      "webmcp": "fundings_quote",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "usdc-amount",
+          "type": "integer",
+          "in": "body",
+          "field": "usdc_amount",
+          "minimum": 1,
+          "maximum": 1000000000,
+          "description": "The USDC to land, in its smallest unit (6 decimals): 5000000 is 5 USDC. Up to 1,000 USDC."
+        },
+        {
+          "name": "refund-to",
+          "type": "string",
+          "in": "body",
+          "field": "refund_to",
+          "description": "Your NEAR account, such as alice.near, where the NEAR goes back if the funding can't finish."
+        }
+      ]
+    },
+    {
+      "command": "fundings start <fleet> <usdc-amount> <refund-to>",
+      "description": "Start funding a fleet's treasury with USDC on Base, paid in NEAR. Answers the exact NEAR to send, the deposit address and the deadline. You send the NEAR from your own wallet; the site never holds or moves funds. The USDC always lands at the fleet's treasury.",
+      "operation_id": "startFunding",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/fundings/start",
+      "webmcp": "fundings_start",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "usdc-amount",
+          "type": "integer",
+          "in": "body",
+          "field": "usdc_amount",
+          "minimum": 1,
+          "maximum": 1000000000,
+          "description": "The USDC to land, in its smallest unit (6 decimals): 5000000 is 5 USDC. Up to 1,000 USDC."
+        },
+        {
+          "name": "refund-to",
+          "type": "string",
+          "in": "body",
+          "field": "refund_to",
+          "description": "Your NEAR account, such as alice.near, where the NEAR goes back if the funding can't finish."
+        }
+      ]
+    },
+    {
+      "command": "fundings show <fleet> <funding>",
+      "description": "Read one funding of a fleet's treasury with its latest state and, once the USDC has landed, its receipt. Records the latest state; asking again is safe.",
+      "operation_id": "showFunding",
+      "method": "GET",
+      "path": "/api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}",
+      "webmcp": "fundings_show",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "funding",
+          "type": "uuid",
+          "in": "path",
+          "field": "funding_id",
+          "description": "The funding's id, as fundings start answers it."
+        }
+      ]
     }
   ]
 }
