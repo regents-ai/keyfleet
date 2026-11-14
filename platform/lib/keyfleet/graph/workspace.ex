@@ -281,6 +281,7 @@ defmodule Keyfleet.Graph.Workspace do
              :fork
            ]) do
       authorize_if Keyfleet.Graph.Checks.KeyActor
+      authorize_if Keyfleet.Agents.Connection.Listing
     end
   end
 end

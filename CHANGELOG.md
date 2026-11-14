@@ -9821,3 +9821,52 @@ browser suite 127 of 127, devices 70 of 70, required fixes (ash-template
 first run stopped on the release test's list of site tables, which now names
 `oauth_client_documents`. The chain walks in Chromium, 126 of 126; the formal
 checks, all as expected.
+
+## 2026-11-14: Claude can work in a fleet right after it pairs
+
+Claude reads the connector's tool list once, when it connects, and keeps it,
+and `/mcp` keeps nothing between requests and never tells a client its list
+changed. Before an app's identity was paired the same token was listed 4
+tools (the identity tools); after pairing, 105. So right after pairing Claude
+still held the four and could not work in a fleet, and its guide then sent the
+person to reconnect "and allow both permissions", which made a new, unpaired
+identity.
+
+An app whose token carries `keyfleet.agent` is now listed every tool its
+paired agent is, from its first request, with the same names and schemas
+before and after pairing: `Keyfleet.Agents.Connection.Listing`, a policy check
+beside the agent rule on each fleet tool (the twelve `KeyfleetWeb.AgentTools`
+resources and `Keyfleet.Graph.Workspace`'s writes), holds only while AshAi
+lists tools (`ash_ai_pre_check?`). It knows the app by its role and the
+permission by its name, as Ash's built-in actor checks do, so naming it adds
+no compile-connected dependency to the thirteen resources and the count stays
+137 (with the actor struct and `Keyfleet.OAuth` it was 150). Running a fleet tool still takes the paired agent: until then the
+router's argument check (`KeyfleetWeb.ToolErrors.check_input/3`) answers
+`agent_not_paired` in the site's error shape, with "Ask your person for a
+one-use code from Pair New Agent on their Agents page, call pair_identity with
+it, then call this tool again.", before anything is read, and the policies
+refuse it as before. A token without the agent permission still lists the
+identity tools only, and an agent signing its own requests is unchanged. The
+connector's instructions, Claude's guide and the `connection_required` hint now
+say one Allow covers both, the tools work once paired in the same chat, and
+removing and adding the connector makes a new identity that pairs with a new
+code. `docs/agent-parity.md` counts 101 fleet tools (98 was stale).
+
+Tests (`platform/test/keyfleet_web/mcp_connector_test.exs`): an unpaired app's
+`tools/list` equals the paired one's for the same token; every fleet tool
+called before pairing answers `agent_not_paired` with no data and no check-in
+recorded; after pairing the same token's `fleets_show` answers; a second app on
+an already paired account is listed the same tools and runs none until it
+pairs; an identity-only token lists the identity tools only; a signed agent
+lists the fleet tools and no identity tools.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with
+warnings as errors, hex audit, format, credo strict, sobelow, xref (137 of
+137), full suite 1,457 (20 properties, 1,437 tests, 19 excluded), codegen,
+route handoff, typecheck and 488 unit tests, browser suite 125 of 125, devices
+70 of 70, required fixes, commands, the pin check and contracts (547 tests, 6
+skipped). The first run lost one browser test, Agent Message's signed-in send
+(its window had not opened when the form was filled); that file then passed 3
+of 3 by itself and in the second full run. The chain walks in Chromium, 126 of
+126, on PORT 4542, since another worktree's walks held 4502. The formal checks
+all ran as expected. Not run with real Claude; WebKit is not run on the Mac.

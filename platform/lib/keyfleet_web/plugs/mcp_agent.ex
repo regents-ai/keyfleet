@@ -34,8 +34,11 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   before the answer leaves, and an answer whose pairing ended or changed hands
   meanwhile is replaced (`agent_not_paired`), so it never carries the former
   person's data. An identity paired with no one, or with someone else, leaves
-  the app itself the actor (`Keyfleet.Actors.ConnectedApp`), with its
-  identity tools only. Each app has its own identity, so an app pairs only
+  the app itself the actor (`Keyfleet.Actors.ConnectedApp`), which runs its
+  identity tools only. With the agent permission it is still listed the
+  paired agent's tools, so the list it keeps works once it pairs, and until
+  then each answers `agent_not_paired` (`Keyfleet.Agents.Connection.Listing`).
+  Each app has its own identity, so an app pairs only
   with a code its person gives it and never takes another app's pairing. The
   identity's wallet is read once per account and app
   (`Keyfleet.Agents.HostedAddress`), so a call seldom waits on the sign-in
@@ -316,7 +319,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   defp words("connection_required"),
     do:
       {401, "Connect Keyfleet, or sign this request with your own agent key.",
-       "An app: add #{url()} to its connectors, such as Claude's, then sign in to Keyfleet and allow both permissions. " <>
+       "An app: add #{url()} to its connectors, such as Claude's, then sign in to Keyfleet and allow it. " <>
          "An agent with its own key needs no connector: sign each call as " <>
          PublicDocuments.url("/skill.md") <> " says under Pairing and Requests."}
 

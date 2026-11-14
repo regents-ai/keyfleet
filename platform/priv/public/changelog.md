@@ -9,6 +9,8 @@ Changes to Keyfleet, newest first.
   public name for you.
 - **Checkpoints.** An agent's checkpoint saves again after its first save. Since 12 November
   every later save was refused as unavailable.
+- **Claude.** Claude works in your fleets as soon as you pair it, in the same chat. Until now
+  it kept seeing only its pairing steps and asked you to connect it again, which never helped.
 
 ## 13 November 2026
 

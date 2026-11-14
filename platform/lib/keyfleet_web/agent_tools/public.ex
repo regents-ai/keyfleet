@@ -58,6 +58,7 @@ defmodule KeyfleetWeb.AgentTools.Public do
   policies do
     policy always() do
       authorize_if actor_attribute_equals(:role, :agent)
+      authorize_if Keyfleet.Agents.Connection.Listing
     end
   end
 end
