@@ -9774,3 +9774,50 @@ that one record from the revision read; a save from any other revision still
 changes nothing and answers the checkpoint kept. New tests
 (`platform/test/keyfleet_web/agent_checkpoint_test.exs`): first save, next
 save, read back, and a save from the wrong revision.
+
+## 2026-11-14: A person's public name saves from the Account page
+
+A signed-in person could not set a public name. The Account page showed the
+name read-only, with no form; the shared profile library behind
+`/api/v1/profile` (elixir-utils dd2d3c6e) took only Privy's proof pair from
+the request, never the site's own sign-in, so it answered 401; and sign-in made
+no profile, so a read answered 404 and a change 422 until a separate sync step.
+
+The shared libraries now come from elixir-utils f2138718 (the template's v250,
+"the profile API acts for the owner the site puts on the request"; on the
+`eu/profile-owner-1114` branch, not yet on main). `KeyfleetWeb.Plugs.ProfileOwner`
+names that owner: the person's cookie session, with the forms token on a
+change, or an agent they paired, acting for its person when that person has an
+account here (an agent paired with someone who has none gets 403
+`person_not_here`). No token is read from the request. Sign-in makes the
+person's profile (`RegentIdentity.ensure/1` in `VerifiedSession.establish/1`).
+The Account page carries the shared Public Display Name form, and the name at
+the top right shows a saved name at once. The sync route and the Privy proof
+headers are gone: the API contract is 31.0.0, the OpenAPI document 16.0.0, with
+a Breaking changes entry in the docs, and the agent guide, README and agent
+parity table say the same. A person who signed in before this change has no
+profile until their next sign-in; the profile's own 404 says so.
+
+The pin brings two shared Points migrations (`account_balance`, which adds a
+column and fills it in one pass, and `account_balance_1`, an index built
+concurrently), which run with `migrate-shared`, and one site migration,
+`oauth_client_documents` (an empty table). Points seasons now end after
+three and the board reads stored totals; OAuth uses the site's own pool.
+
+Check (partition `_kf_s3`, PORT unset): new tests in
+`platform/test/keyfleet_web/controllers/profile_api_test.exs` (a save with the
+forms token reads back; without it, refused and unchanged; signed out,
+refused; a person from before the change saves after signing in again; a
+paired agent reads and saves, and one whose person has no account here is
+refused), every answer held to the contract; the form's own unit tests
+(`platform/assets/test/public_name.test.ts`, 6); and a browser walk
+(`platform/test/browser/public_name.spec.ts`) at 1280 and 390 wide that saves
+on the real Account page with the cookie and forms token, sees the name at the
+top right, and finds it again after a reload. `make check`, every stage: credo
+strict, sobelow, xref, graph host 243, full suite 1,460 (20 properties, 1,440
+tests, 19 excluded), codegen, route handoff, typecheck and 494 unit tests,
+browser suite 127 of 127, devices 70 of 70, required fixes (ash-template
+270d6d85), commands, the pin check and contracts (547 tests, 6 skipped). The
+first run stopped on the release test's list of site tables, which now names
+`oauth_client_documents`. The chain walks in Chromium, 126 of 126; the formal
+checks, all as expected.
