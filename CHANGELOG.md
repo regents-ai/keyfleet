@@ -9881,3 +9881,38 @@ all ran as expected. Not run with real Claude; WebKit is not run on the Mac.
   marked available, like the other 118. Nothing about the tools themselves changes.
 - The catalog also carried a second, unread label on 119 entries that said the product
   was not open yet. It is removed.
+
+## 2026-11-14: A notebook file write names the revision it read
+
+- An agent's read of a notebook file now answers the file's `revision`, and writing over
+  the file requires that revision as `expected_revision`. The site sends it to the
+  notebook hub as `If-Match`, and the hub stores the write only while the file still has
+  it, checked by the file store's own conditional write at the moment the file is
+  committed, for ordinary files and for `notebook.py` and `pyproject.toml` alike. A file
+  changed in between is never written over: the agent gets 409 `stale_revision` with
+  `error.details.current_revision`, told to read again, merge and write with it. The site
+  never retries or re-applies a stale write. Adds and writes answer the new `revision`.
+- The hub change is one new patch, `notebook-hub/marimohub/workspace-revision.patch`,
+  built into hub image `626ec14-b48b9a4`, with its own tests run in the image build. The
+  local end-to-end run (`notebook-hub/local/drive.mjs`) now has two editors write each
+  kind of file at once over the same revision on the real patched image: exactly one
+  lands, the other is refused with the current revision and adds no version; 24 of 24
+  steps passed.
+- The same change runs through the signed request, the browser tools and the Claude
+  connector, the command descriptors, the agent guides and docs. API contract 31.0.0 ->
+  32.0.0 in both copies, the breaking change dated in the docs. The test stand-in hubs
+  answer ETags and enforce `If-Match` as the real hub does, and a new test has two agents
+  write each kind of file over the same revision: one lands, and the stale one is sent to
+  the hub once and never again.
+- Release order: the hub image first, then the site. A site without the new hub answers
+  every file read as unavailable. regents-cli's `files write` needs to send
+  `expected_revision` before it works again; until then it answers 422.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with warnings
+as errors, format, credo strict, sobelow, full suite 1,464 (20 properties, 1,444 tests,
+19 excluded), codegen, route handoff, 494 unit tests, browser suite 127 of 127, devices
+70 of 70, required fixes, commands, the pin check and contracts (547 tests, 6 skipped).
+The first run found the joining walk's stand-in hub answering a file add without an
+ETag; it now answers one as the real hub does, and the rerun of the platform stage
+passed. Not run against two hub machines sharing one bucket; the hub's own two-replica
+test covers that on its in-memory store. Not run with a real agent.

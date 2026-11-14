@@ -9,8 +9,8 @@ defmodule Keyfleet.BrowserWorkspace do
   The stand-in hub keeps what it is sent while the server runs, as the real
   one does for the requests this site makes: notebooks, their authors and
   code, each notebook's workspace files with their ETags, jobs and their
-  runs. A run has finished
-  the first time it is read again, and its page is a short one of its own.
+  runs. A run has finished the first time it is read again, and its page is a
+  short one of its own.
   """
 
   alias Keyfleet.Graph.{Projector, Projectors, Writer}
@@ -241,18 +241,9 @@ defmodule Keyfleet.BrowserWorkspace do
       Agent.get_and_update(request.state, fn state ->
         kept = Map.get(state.files, id, %{})
 
-        cond do
-          create == "true" and Map.has_key?(kept, path) ->
-            {:conflict, state}
-
-          if_match != nil and not Map.has_key?(kept, path) ->
-            {:not_found, state}
-
-          if_match != nil and if_match != quoted(kept[path]) ->
-            {{:changed, kept[path]}, state}
-
-          true ->
-            {:ok, put_in(state, [:files, id], Map.put(kept, path, request.body))}
+        case stored(kept, path, create == "true", if_match) do
+          :ok -> {:ok, put_in(state, [:files, id], Map.put(kept, path, request.body))}
+          refused -> {refused, state}
         end
       end)
 
@@ -287,6 +278,17 @@ defmodule Keyfleet.BrowserWorkspace do
   end
 
   defp workspace(_method, _what, _id, conn, _request), do: not_found(conn)
+
+  # Whether a write lands on the files `kept`, as the hub's store decides it.
+  defp stored(kept, path, create, if_match) do
+    cond do
+      create and Map.has_key?(kept, path) -> :conflict
+      if_match == nil -> :ok
+      not Map.has_key?(kept, path) -> :not_found
+      if_match != quoted(kept[path]) -> {:changed, kept[path]}
+      true -> :ok
+    end
+  end
 
   defp jobs("GET", [], id, conn, request),
     do: json(conn, 200, %{items: Enum.map(jobs_of(request, id), &Map.delete(&1, "runs"))})

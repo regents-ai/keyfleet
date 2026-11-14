@@ -114,18 +114,16 @@ defmodule Keyfleet.Notebooks.Files do
         {:error, :too_large}
 
       {:ok, %Req.Response{status: 200, body: content} = response} when is_binary(content) ->
-        if String.valid?(content) do
-          with {:ok, revision} <- revision(response),
-               do:
-                 {:ok,
-                  %{path: path, content: content, sha256: sha256(content), revision: revision}}
-        else
-          {:error, :not_text}
-        end
+        if String.valid?(content), do: text(path, content, response), else: {:error, :not_text}
 
       response ->
         answer(response, 200)
     end
+  end
+
+  defp text(path, content, response) do
+    with {:ok, revision} <- revision(response),
+         do: {:ok, %{path: path, content: content, sha256: sha256(content), revision: revision}}
   end
 
   @doc "The sha256 of `content`, in lowercase hex, as a file read answers it."

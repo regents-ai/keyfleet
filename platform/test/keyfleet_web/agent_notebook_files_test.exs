@@ -696,19 +696,9 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     written =
       Agent.get_and_update(files, fn kept ->
-        # A folder at the path, or a file where one of its folders would be.
-        in_the_way? =
-          Enum.any?(kept, fn {kept_path, content} ->
-            is_binary(content) and
-              (String.starts_with?(kept_path, path <> "/") or
-                 String.starts_with?(path, kept_path <> "/"))
-          end)
-
-        cond do
-          in_the_way? or (create == "true" and Map.has_key?(kept, path)) -> {:conflict, kept}
-          if_match != nil and not Map.has_key?(kept, path) -> {:not_found, kept}
-          if_match != nil and if_match != quoted(kept[path]) -> {{:changed, kept[path]}, kept}
-          true -> {:ok, Map.put(kept, path, body)}
+        case stored(kept, path, create == "true", if_match) do
+          :ok -> {:ok, Map.put(kept, path, body)}
+          refused -> {refused, kept}
         end
       end)
 
@@ -751,6 +741,26 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
        do: json(conn, 200, %{success: true, data: %{code: "import marimo"}})
 
   defp hub_answer(conn, _files, _body), do: json(conn, 200, %{success: true, data: %{}})
+
+  # Whether a write lands on the files `kept`, as the hub's store decides it.
+  defp stored(kept, path, create, if_match) do
+    cond do
+      in_the_way?(kept, path) or (create and Map.has_key?(kept, path)) -> :conflict
+      if_match == nil -> :ok
+      not Map.has_key?(kept, path) -> :not_found
+      if_match != quoted(kept[path]) -> {:changed, kept[path]}
+      true -> :ok
+    end
+  end
+
+  # A folder at the path, or a file where one of its folders would be.
+  defp in_the_way?(kept, path) do
+    Enum.any?(kept, fn {kept_path, content} ->
+      is_binary(content) and
+        (String.starts_with?(kept_path, path <> "/") or
+           String.starts_with?(path, kept_path <> "/"))
+    end)
+  end
 
   # The hub keeps the file, then answers after Keyfleet has stopped waiting.
   defp hub_next(:keeps_then_hangs, conn, files, body) do
