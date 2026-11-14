@@ -125,10 +125,11 @@ body[data-sea-lifted] .tour {
   margin: 0;
 }
 
-.tour__link {
+/* Copy sits under the step's words; it keeps the width of its widest answer,
+   so "Copied" never moves the card. */
+.tour__copy {
   justify-self: start;
-  color: var(--ash-accent);
-  text-underline-offset: 0.2em;
+  margin-block-start: var(--space-1);
 }
 
 .tour__actions {
