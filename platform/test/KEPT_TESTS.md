@@ -135,6 +135,8 @@ account as fully as regents.sh does (Credits left for later, his word at 18:57Z)
 | Account says whether World ID has verified the person | `KeyfleetWeb.ShellLiveTest` | The World ID row follows the account's own record. |
 | Account shows the wallet's ENS name, or why there is none | `KeyfleetWeb.ShellLiveTest` | An ENS name shows with its copy icon, a wallet with no name says so, and a name read for a wallet the account no longer uses never shows. |
 | opening Account asks Ethereum again after a failed lookup | `KeyfleetWeb.ShellLiveTest` | "Refresh to try again" is true: opening the page asks again and says it is checking. |
+| a person signed in here saves their public name with the forms token, and reads it back | `KeyfleetWeb.ProfileApiTest` | A signed-in person's public name saves from the Account page and reads back (added 14 November 2026, Sean's 2 a, after no name save had ever succeeded). |
+| a change without the forms token is refused and changes nothing | `KeyfleetWeb.ProfileApiTest` | Another site's page can never change a person's public name with their cookie. |
 
 ## What an agent is told it may do
 
