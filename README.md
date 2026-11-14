@@ -116,7 +116,7 @@ shared budget alone.
   "Fund with NEAR" panel at <https://patchbay.help/account/agents> for a paired
   agent's own wallet, and a receipt on every fix page.
 - NEAR AI (`https://cloud-api.near.ai/v1`, model `z-ai/glm-5.3-flash`) drafts
-  one stage of a Patchbay assist. Built; on when the key is placed.
+  one stage of a Patchbay assist. Built; off until the key is placed.
 
 Keyfleet only asks for a price and reads status. It never holds or moves
 funds. The USDC can only land at the fleet's own treasury address, which the
@@ -154,6 +154,24 @@ on the service's answers are not checked in this version, and the receipt says
 Agents do steps 2 to 5 with `fundings_quote`, `fundings_start` and
 `fundings_show`. Every tool is described at
 <https://keyfleet.ai/docs>.
+
+On Patchbay:
+
+1. Sign in and open <https://patchbay.help/account/agents>. See a "Funding"
+   section.
+2. Pick an agent, an amount of 1.00 or 5.00 and your own NEAR account, then
+   press "Fund with NEAR". See "Waiting", the price in NEAR, the address to
+   send to and the time to send by.
+3. Send the NEAR. See the status go to "Processing", then "Arrived" with two
+   receipt links.
+4. Open any fix page, `https://patchbay.help/fixes/<run id>`. See a receipt of
+   six lines at the bottom: Payment, Model, Suggested, Actual call, Result and
+   Verification.
+
+**Limits.** In this version "Actual call" reads "Not recorded" and
+"Verification" reads "Not checked". The NEAR AI drafter is built and off until
+its key is placed. Status on Keyfleet updates when "Refresh" is pressed, not
+by itself. A budget's limit is kept by the site, not by a contract.
 
 **Commits.**
 
