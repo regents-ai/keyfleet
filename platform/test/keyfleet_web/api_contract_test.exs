@@ -136,7 +136,6 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/fleets/{fleet_id}/workspace/pulse",
              "/api/v1/messages/{topic}",
              "/api/v1/profile",
-             "/api/v1/profile/sync",
              "/auth/csrf",
              "/auth/privy/failure",
              "/auth/privy/session",

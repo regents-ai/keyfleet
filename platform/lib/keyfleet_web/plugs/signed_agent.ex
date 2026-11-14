@@ -12,6 +12,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @update_path "/api/v1/agent/profile/update"
   @profile_path "/api/v1/agent/profile"
   @points_path "/api/v1/account/points"
+  # The agent's person's shared profile, read and changed for them
+  # (`KeyfleetWeb.Plugs.ProfileOwner`).
+  @shared_profile_path "/api/v1/profile"
   # The agent's live feed, signed once as it opens (`KeyfleetWeb.FeedController`).
   @feed_path "/api/v1/feed"
   @shards_path "/api/v1/agent/shards"
@@ -345,18 +348,26 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     if agent_request?(conn), do: authenticate(conn), else: conn
   end
 
-  # A paired agent's Points read sits at /api/v1/account, its live feed at
-  # /api/v1/feed and the messages it leaves for the site's team at
-  # /api/v1/messages, the addresses every Regent site gives them; everything
-  # else an agent signs is under /api/v1/agent.
-  defp agent_request?(conn),
-    do:
-      Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) in [
-        ["api", "v1", "agent"],
-        ["api", "v1", "account"],
-        ["api", "v1", "feed"],
-        ["api", "v1", "messages"]
-      ]
+  # A paired agent's Points read sits at /api/v1/account, its person's profile
+  # at /api/v1/profile, its live feed at /api/v1/feed and the messages it
+  # leaves for the site's team at /api/v1/messages, the addresses every Regent
+  # site gives them; everything else an agent signs is under /api/v1/agent.
+  # The person reads and changes their profile with their session instead, so
+  # only a signed request there is an agent's.
+  defp agent_request?(conn) do
+    case Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) do
+      ["api", "v1", "profile"] ->
+        Siwa.AgentAuthPlug.signed_request?(conn)
+
+      first ->
+        first in [
+          ["api", "v1", "agent"],
+          ["api", "v1", "account"],
+          ["api", "v1", "feed"],
+          ["api", "v1", "messages"]
+        ]
+    end
+  end
 
   # An address no operation has, a method its operation doesn't take and a
   # body that isn't JSON are each told so before any signature is read: the
@@ -397,18 +408,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp refuse_address(conn) do
-    case Enum.filter(~w(GET POST), &supported?(&1, conn.request_path)) do
+    case Enum.filter(~w(GET POST PATCH), &supported?(&1, conn.request_path)) do
       [] ->
         send_refusal(conn, 404, unknown_address(conn.request_path))
 
-      [method] ->
+      methods ->
         conn
-        |> put_resp_header("allow", method)
+        |> put_resp_header("allow", Enum.join(methods, ", "))
         |> send_refusal(
           405,
           KeyfleetWeb.Refusal.body(
             "method_not_allowed",
-            "Send it as a #{method}, signed over that method. #{carries(method)}"
+            "Send it as #{Enum.map_join(methods, " or ", &"a #{&1}")}, signed over that method. " <>
+              Enum.map_join(methods, " ", &carries/1)
           )
         )
     end
@@ -416,6 +428,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp carries("GET"), do: "A GET carries no body."
   defp carries("POST"), do: "A POST carries a JSON body, {} when there is nothing to say."
+  defp carries("PATCH"), do: "A PATCH carries a JSON body of the fields it changes."
 
   # The addresses agents most often reach for that moved or never existed:
   # a workspace operation by another name, and a fleet's notebooks or code
@@ -734,6 +747,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", @points_path), do: true
   defp supported?("GET", @feed_path), do: true
+  defp supported?(method, @shared_profile_path) when method in ~w(GET PATCH), do: true
 
   defp supported?("GET", path),
     do:
@@ -884,6 +898,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   def check_body(@preview_path, _params), do: :invalid
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
+
+  # A profile change is one JSON object, whose fields the profile API checks
+  # (`RegentIdentity.HTTP`), as it does a person's.
+  def check_body(@shared_profile_path, params), do: admit(is_map(params))
 
   def check_body(path, params) do
     cond do
@@ -1652,6 +1670,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   What a body that doesn't fit the operation at `path` is told: the fields it
   must name, then the ones it may add. A read is told it takes no body.
   """
+  def takes(@shared_profile_path),
+    do:
+      "A GET of the profile takes no body. A PATCH takes a JSON object naming display_name, " <>
+        "wallet_address or both. Check each field's kind and range against the docs, then " <>
+        "send it again."
+
   def takes(path) do
     if supported?("GET", path),
       do: "This operation takes no body; it is a read. Send it again without one.",

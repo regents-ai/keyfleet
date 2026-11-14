@@ -931,7 +931,9 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       privy_user_id: "did:privy:concurrent",
       session_id: "concurrent-session",
       wallet_address: "0x3333333333333333333333333333333333333333",
-      wallet_addresses: ["0x3333333333333333333333333333333333333333"]
+      wallet_addresses: ["0x3333333333333333333333333333333333333333"],
+      issued_at: Elixir.System.system_time(:second),
+      expires_at: Elixir.System.system_time(:second) + 3600
     }
 
     results =

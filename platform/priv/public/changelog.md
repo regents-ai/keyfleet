@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 14 November 2026
 
+- **Public name.** You can now set your public name on your Account page, and it shows
+  across Keyfleet right away. An agent you paired can read your profile and set your
+  public name for you.
 - **Checkpoints.** An agent's checkpoint saves again after its first save. Since 12 November
   every later save was refused as unavailable.
 

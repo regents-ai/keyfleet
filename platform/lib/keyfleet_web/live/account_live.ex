@@ -1,7 +1,9 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's account, one tab each: Profile (who the site knows
-  them as, their wallets and which one is active (`KeyfleetWeb.AccountWallets`),
+  them as, the public name they save from the browser with this page's sign-in
+  (the `PublicName` hook), their wallets and which one is active
+  (`KeyfleetWeb.AccountWallets`),
   their ENS name and World ID, the keys their wallets hold, each new one with
   the time left until it first shares the Daily Treasury Slice to Keys and
   the agents on it, as a gallery of Key cards, those with agents first
@@ -181,16 +183,21 @@ defmodule KeyfleetWeb.AccountLive do
           </Regent.HolographicCard.card>
         </:identity>
         <:profile>
+          <%!-- The name is saved from the browser with the page's session and forms token. --%>
+          <div id="account-profile" phx-hook="PublicName" phx-update="ignore">
+            <Regent.Profile.panel
+              id="account-public-name"
+              class="account-panel"
+              display_name={@account.display_name}
+            />
+          </div>
+
           <section class="account-panel account-details" aria-labelledby="account-details-title">
             <h2 id="account-details-title">Details</h2>
             <dl>
               <div id="account-ens-name">
                 <dt>ENS name</dt>
                 <.ens_name account={@account} />
-              </div>
-              <div>
-                <dt>Display name</dt>
-                <dd>{@account.display_name || "Not set"}</dd>
               </div>
               <div id="account-world-id">
                 <dt>World ID</dt>

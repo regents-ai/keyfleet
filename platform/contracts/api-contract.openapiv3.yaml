@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 30.2.0
+  version: 31.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -383,21 +383,28 @@ paths:
   /api/v1/profile:
     get:
       operationId: getMyProfile
-      security: [{privyAccessToken: [], privyIdentityToken: []}]
-      parameters:
-        - {$ref: "#/components/parameters/ExpectedSubject"}
+      summary: Read the person's shared profile.
+      description: The person sends it from this site's pages, signed in; an agent the
+        person paired sends it signed with its own key, acting as them. The profile is made
+        when the person signs in on this site.
+      security: [{cookieSession: []}, {siwaReceipt: []}]
       responses:
         "200": {$ref: "#/components/responses/Profile"}
         "401": {$ref: "#/components/responses/ProfileAuthenticationRequired"}
         "403": {$ref: "#/components/responses/ProfileForbidden"}
         "404": {$ref: "#/components/responses/ProfileNotCreated"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/ProfileUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
     patch:
       operationId: updateMyProfile
-      security: [{privyAccessToken: [], privyIdentityToken: []}]
+      summary: Change the person's display name or selected wallet.
+      description: The person sends it from this site's pages, signed in, with the forms
+        token; an agent the person paired sends it signed with its own key, acting as them.
+      security: [{cookieSession: [], csrfToken: []}, {siwaReceipt: []}]
       parameters:
-        - {$ref: "#/components/parameters/ExpectedSubject"}
         - {$ref: "#/components/parameters/ExpectedProfileId"}
       requestBody:
         required: true
@@ -414,19 +421,7 @@ paths:
         "422": {$ref: "#/components/responses/ProfileInvalidUpdate"}
         "503": {$ref: "#/components/responses/ProfileUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
-  /api/v1/profile/sync:
-    post:
-      operationId: syncMyProfile
-      security: [{privyAccessToken: [], privyIdentityToken: []}]
-      parameters:
-        - {$ref: "#/components/parameters/ExpectedSubject"}
-      responses:
-        "200": {$ref: "#/components/responses/Profile"}
-        "401": {$ref: "#/components/responses/ProfileAuthenticationRequired"}
-        "403": {$ref: "#/components/responses/ProfileForbidden"}
-        "409": {$ref: "#/components/responses/ProfileEvidenceConflict"}
-        "503": {$ref: "#/components/responses/ProfileUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /auth/csrf:
     get:
       operationId: getBrowserCsrf
@@ -4632,12 +4627,6 @@ paths:
         default: {$ref: "#/components/responses/SignInRefusal"}
 components:
   parameters:
-    ExpectedSubject:
-      name: x-privy-user-id
-      in: header
-      required: false
-      description: If supplied, must exactly match the verified account subject; it never selects another account
-      schema: {type: string, minLength: 1}
     ExpectedProfileId:
       name: x-regent-profile-id
       in: header
@@ -4791,29 +4780,44 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/ProfileEnvelope"}
     ProfileAuthenticationRequired:
-      description: Both Privy credentials were not present and valid
+      description: >-
+        authentication_required: the request carries neither a signed-in session on this site
+        (with its forms token, for a change) nor an agent's signature. An agent's signed request
+        that fails its check answers as every signed request does: unauthorized, or the code
+        the sign-in check gave.
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/ProfileError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/ProfileError"}
+              - {$ref: "#/components/schemas/AgentError"}
           examples:
             authenticationRequired:
-              value: {error: {code: authentication_required}}
+              value: {error: {code: authentication_required, message: "Sign in to read or change your profile.", hint: "Sign in on this site, or have an agent you paired send the request, signed with its own key."}}
     ProfileForbidden:
-      description: The credentials do not own this profile
+      description: >-
+        agent_not_paired: the signing agent has no current pairing; its person signs in on this
+        site and pairs it with Pair New Agent on their Agents page. person_not_here: the person
+        it is paired with hasn't signed in on this site yet. profile_forbidden: the profile
+        belongs to another account.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/ProfileError"}
           examples:
+            agentNotPaired:
+              value: {error: {code: agent_not_paired, message: "This agent is not paired with an account.", hint: "Ask your person to sign in on this site and pair you with Pair New Agent on their Agents page, then send the request again. Help: https://patchbay.help/errors/agent_not_paired"}}
+            personNotHere:
+              value: {error: {code: person_not_here, message: "The person this agent is paired with hasn't signed in on this site yet.", hint: "Ask your person to sign in on this site once, then send the request again. Help: https://patchbay.help/errors/person_not_here"}}
             forbidden:
-              value: {error: {code: profile_forbidden}}
+              value: {error: {code: profile_forbidden, message: "This profile belongs to another account.", hint: "Sign in as the profile's owner."}}
     ProfileNotCreated:
-      description: The profile has not been created yet; POST /api/v1/profile/sync creates it
+      description: The person has no profile yet; it is made when they sign in on this site
       content:
         application/json:
           schema: {$ref: "#/components/schemas/ProfileError"}
           examples:
             notCreated:
-              value: {error: {code: profile_not_created}}
+              value: {error: {code: profile_not_created, message: "You have no profile yet.", hint: "It is made when you sign in on this site. Sign in, then try again."}}
     ProfileInvalidJson:
       description: The request body is not valid JSON
       content:
@@ -4821,15 +4825,20 @@ components:
           schema: {$ref: "#/components/schemas/ProfileError"}
           examples:
             invalidJson:
-              value: {error: {code: invalid_profile_json}}
+              value: {error: {code: invalid_profile_json, message: "The request body is not valid JSON.", hint: "Send one JSON object."}}
     ProfileRequestTooLarge:
-      description: The request body is larger than 8192 bytes
+      description: >-
+        profile_request_too_large: the request body is larger than 8192 bytes.
+        request_too_large: an agent's signed body is larger than 4096 bytes.
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/ProfileError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/ProfileError"}
+              - {$ref: "#/components/schemas/AgentError"}
           examples:
             tooLarge:
-              value: {error: {code: profile_request_too_large}}
+              value: {error: {code: profile_request_too_large, message: "The request body is too large.", hint: "Send only display_name and wallet_address, in under 8 KB."}}
     ProfileJsonRequired:
       description: The request body is not application/json
       content:
@@ -4837,33 +4846,42 @@ components:
           schema: {$ref: "#/components/schemas/ProfileError"}
           examples:
             jsonRequired:
-              value: {error: {code: json_required}}
+              value: {error: {code: json_required, message: "Profile changes must be sent as JSON.", hint: "Set Content-Type to application/json."}}
     ProfileInvalidUpdate:
-      description: The update is invalid or the profile has not been created yet
+      description: >-
+        invalid_display_name: the display_name is over 80 characters or holds hidden characters.
+        invalid_profile_update: the change names a field other than display_name and
+        wallet_address, a wallet_address the latest sign-in didn't name, a profile id that isn't
+        the person's, or the person has no profile yet. invalid_request: an agent's signed body
+        isn't a JSON object.
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/ProfileError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/ProfileError"}
+              - {$ref: "#/components/schemas/AgentError"}
           examples:
+            invalidDisplayName:
+              value: {error: {code: invalid_display_name, message: "That name can't be used.", hint: "Send a display_name of at most 80 characters with no hidden characters: no control, line-break, text-direction or zero-width characters, except a zero-width joiner between two visible characters, as in an emoji."}}
             invalidUpdate:
-              value: {error: {code: invalid_profile_update}}
-    ProfileEvidenceConflict:
-      description: The presented sign-in evidence conflicts with the stored profile
-      content:
-        application/json:
-          schema: {$ref: "#/components/schemas/ProfileError"}
-          examples:
-            conflict:
-              value: {error: {code: identity_evidence_conflict}}
+              value: {error: {code: invalid_profile_update, message: "The profile change could not be made.", hint: "Send only display_name and wallet_address, where wallet_address is a wallet linked to your sign-in. If your profile changed, read it again first."}}
     ProfileUnavailable:
-      description: Sign-in is not configured or the profile service is unavailable
+      description: >-
+        profile_unavailable: the profile could not be reached; send the same request again
+        shortly. For an agent's signed request, siwa_request_failed: the sign-in service could
+        not be reached. pairing_unavailable: the agent's pairing could not be checked. not_open_yet:
+        Keyfleet isn't open yet; Retry-After says when to ask again.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/ProfileError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/ProfileError"}
+              - {$ref: "#/components/schemas/AgentError"}
           examples:
-            unconfigured:
-              value: {error: {code: profile_unconfigured}}
             unavailable:
-              value: {error: {code: profile_unavailable}}
+              value: {error: {code: profile_unavailable, message: "Your profile could not be reached right now.", hint: "Try again in a moment."}}
     SharedAgentUnverified:
       description: >-
         verification_failed: the signed request could not be verified for audience keyfleet.
@@ -10472,7 +10490,7 @@ components:
       properties:
         profile_id: {type: string, minLength: 1}
         verification_basis: {type: string, const: last_synchronized_privy_proof}
-        evidence_issued_at: {type: [string, "null"], format: date-time}
+        evidence_issued_at: {type: integer, description: "When the person's latest sign-in evidence the profile holds was issued, in seconds since 1970 (UTC)"}
         display_name: {type: [string, "null"], maxLength: 80}
         linked_wallets:
           type: array
@@ -10508,11 +10526,13 @@ components:
         error:
           type: object
           additionalProperties: false
-          required: [code]
+          required: [code, message, hint]
           properties:
             code:
               type: string
-              enum: [authentication_required, profile_unconfigured, profile_unavailable, profile_not_created, profile_forbidden, invalid_profile_update, invalid_profile_json, profile_request_too_large, json_required, identity_evidence_conflict, method_not_allowed, not_found]
+              enum: [authentication_required, agent_not_paired, person_not_here, profile_unavailable, profile_not_created, profile_forbidden, invalid_display_name, invalid_profile_update, invalid_profile_json, profile_request_too_large, json_required, method_not_allowed, not_found]
+            message: {type: string}
+            hint: {type: string}
     Session:
       type: object
       additionalProperties: false

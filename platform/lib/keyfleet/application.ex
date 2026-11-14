@@ -48,7 +48,6 @@ defmodule Keyfleet.Application do
       KeyfleetWeb.Telemetry,
       {Keyfleet.Accounts.RequestRateLimiter, []},
       database_child(),
-      oauth_repo_child(),
       cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
       graph_processes_child(),
@@ -108,13 +107,6 @@ defmodule Keyfleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: Keyfleet.Repo
-  end
-
-  # Connected apps' grants and tokens, in this site's database.
-  defp oauth_repo_child do
-    if Application.get_env(:keyfleet, :database_startup_enabled, false) and
-         RegentOAuth.enabled?(),
-       do: RegentOAuth.Repo
   end
 
   # Background work lives in the database, so it starts with it. AshOban adds a

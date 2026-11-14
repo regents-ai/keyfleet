@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "dd2d3c6e631df4c20f5055a45184dcb8e4d33139"
+  @elixir_utils_ref "f21387188c7438bec659ebb1672cebbfdb12e901"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "929cb9a336d82c53ff9587ae226652b0ea73fff3"
 
@@ -99,7 +99,8 @@ defmodule Keyfleet.MixProject do
       {:regent_chain,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
       # Keeps crash saving on when one save fails (RegentHttp.ErrorSaving).
-      {:regent_http, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "http"},
+      # regent_oauth names regent_http by a sibling path; this pin replaces it.
+      {:regent_http, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "http", override: true},
       {:regent_points, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "points"},
       {:ens_elixir, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ens"},
       # The Claude connector: its sign-in, and the MCP address and identity tools

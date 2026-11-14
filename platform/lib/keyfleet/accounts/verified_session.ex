@@ -8,9 +8,10 @@ defmodule Keyfleet.Accounts.VerifiedSession do
   @actor %System{}
 
   @doc """
-  Registers or refreshes the account the verified session names, reconciles
-  its linked socials and asks Ethereum for its wallet's ENS name again,
-  returning the providers another account already holds.
+  Registers or refreshes the account the verified session names, gives the
+  person their shared profile when they have none, reconciles its linked
+  socials and asks Ethereum for its wallet's ENS name again, returning the
+  providers another account already holds.
   Without a linked wallet the account's wallet evidence is withdrawn instead.
   """
   def establish(%RegentPrivy.Session{privy_user_id: did} = verified) do
@@ -21,6 +22,7 @@ defmodule Keyfleet.Accounts.VerifiedSession do
         with {:ok, account} <- Accounts.register_verified(did, primary, addresses, actor: @actor),
              {:ok, account} <-
                Accounts.refresh_verified(account, primary, addresses, actor: @actor),
+             {:ok, _profile} <- RegentIdentity.ensure(verified),
              {:ok, conflicts} <- reconcile(account.id, verified.linked_socials),
              :ok <- request_ens_lookup(account) do
           {:ok, account, conflicts}
