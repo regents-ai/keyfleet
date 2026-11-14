@@ -10060,3 +10060,10 @@ removes or renames a field, route or code, or makes an input required.
   for its body is shown a whole first sync it may send, and the docs say that a tool's
   route names, such as `{fleet_id}`, go in the address and the rest of its input is the
   body.
+- A 44.5 KB notebook file sent through the connector was refused with "The request doesn't
+  fit this operation" and no limit. A notebook's code and a file's text are at most
+  20,480 bytes there, now counted in bytes as the tools describe them, not in characters;
+  text past an input's limit is told the limit and its own length. A signed request past
+  its operation's body limit is told the limit and, when the request gives its length, that
+  length too. `notebooks_add_file` and `notebooks_write_file` state the limit in their
+  descriptions. No limit rose.

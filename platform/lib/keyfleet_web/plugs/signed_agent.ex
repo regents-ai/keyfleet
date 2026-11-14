@@ -460,6 +460,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp json_required(conn),
     do: send_refusal(conn, 415, KeyfleetWeb.Refusal.body("json_required"))
 
+  # A body past its limit is told the limit and, when the request says how
+  # long it is, its length; one sent in chunks says no length.
   defp too_large(conn),
     do:
       send_refusal(
@@ -467,10 +469,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         413,
         KeyfleetWeb.Refusal.body(
           "request_too_large",
-          "This operation takes a body of at most #{body_limit(conn.request_path)} bytes. " <>
+          "This operation takes a body of at most #{body_limit(conn.request_path)} bytes#{sent(conn)}. " <>
             "Send a shorter one."
         )
       )
+
+  defp sent(conn) do
+    with [length] <- get_req_header(conn, "content-length"),
+         {bytes, ""} <- Integer.parse(length) do
+      "; this one has #{bytes}"
+    else
+      _no_length -> ""
+    end
+  end
 
   defp json_or_bodyless_get?(conn) do
     case get_req_header(conn, "content-type") do

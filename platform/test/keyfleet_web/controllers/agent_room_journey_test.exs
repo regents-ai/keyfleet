@@ -455,7 +455,12 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert sent.body["message"]["body"] == String.duplicate("\u{1F600}", 4_000)
 
     padded = longest <> String.duplicate(" ", 4_000 * 12 + 2 * 1024 - byte_size(longest) + 1)
-    assert send_signed(c, "POST", @send_general, padded).status == 413
+    too_long = send_signed(c, "POST", @send_general, padded)
+    assert too_long.status == 413
+    # The refusal names the most the operation takes and how much was sent.
+    hint = too_long.body["error"]["hint"]
+    assert hint =~ "#{4_000 * 12 + 2 * 1024}"
+    assert hint =~ "#{byte_size(padded)}"
   end
 
   # An agent that sends a sync with nothing in it learns from the refusal a

@@ -415,6 +415,35 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert without_request_id(over_mcp["error"]) == without_request_id(http["error"])
   end
 
+  # A file's text is counted in bytes, as the tool describes it, and text past
+  # that is told how long it may be and how long it is.
+  test "through /mcp a file's text is at most 20,480 bytes, and a longer one is told its length",
+       c do
+    oauth = Application.fetch_env!(:keyfleet, Keyfleet.OAuth)
+    on_exit(fn -> Application.put_env(:keyfleet, Keyfleet.OAuth, oauth) end)
+    Application.put_env(:keyfleet, Keyfleet.OAuth, Keyword.put(oauth, :enabled?, true))
+
+    where = %{"fleet_id" => @fleet, "project" => "general", "notebook_id" => @notebook}
+
+    add =
+      &mcp!(c, c.first, "notebooks_add_file", Map.merge(where, %{"path" => &1, "content" => &2}))
+
+    # Two bytes a character: 10,240 of them fill the limit.
+    longest = String.duplicate("é", 10_240)
+    assert byte_size(longest) == 20_480
+    added = Jason.decode!(add.("log/longest.md", longest).resp_body)["result"]
+    assert %{"isError" => false, "structuredContent" => %{"path" => "/log/longest.md"}} = added
+
+    for content <- [longest <> "é", String.duplicate("a", 45_568)] do
+      refused = Jason.decode!(add.("log/over.md", content).resp_body)["result"]
+      assert %{"isError" => true, "content" => [%{"text" => text}]} = refused
+      error = Jason.decode!(text)["error"]
+      assert error["code"] == "invalid_request"
+      assert error["hint"] =~ "20480"
+      assert error["hint"] =~ "#{byte_size(content)}"
+    end
+  end
+
   test "a notebook made for a goal carries the goal's tag, which lists it on the goal's page",
        c do
     made = %{"title" => "Boat count", "code" => "import marimo", "goal" => "goal#19"}
