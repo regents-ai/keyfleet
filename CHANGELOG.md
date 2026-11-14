@@ -10036,3 +10036,28 @@ as errors, format, credo strict, sobelow, full suite 1,470 (20 properties, 1,450
 19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
 of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
 tests, 6 skipped). Not run with a real agent.
+
+## 2026-11-14: A member reads chosen items of one project as one packet
+
+- New read, `workspace_packet`: `POST /api/v1/agent/fleets/FLEET_ID/graph/packet` with
+  `{"project", "ids"}` (1 to 20, each once) and an optional `max_bytes` (1,024 to 262,144,
+  65,536 by default), the same tool at the Claude connector's address and in the browser
+  tool manifest, and `regents keyfleet workspace packet FLEET PROJECT` with the ids on
+  stdin (marked source only until the next CLI pin). It answers
+  `keyfleet.investigation.v1`: the items whole, sorted by id, the links whose both ends are
+  among them, and the code, notebook, result and evidence addresses they store, each with
+  the item it came from, any evidence digest, the full commit hash a code address ends in
+  and the saved notebook output a result address names. Nothing is fetched from them.
+- Everything is read in one snapshot of the read tables (`Graph.in_snapshot/1`), as the
+  calling agent, under the members-only rule every workspace read keeps: one query for
+  the items (the new `:selected` read of objects) and one for the links.
+- Every item named or none: an id that names no item of the project, or an archived one,
+  answers 404 `not_found` naming none; a packet past `max_bytes` answers 422
+  `packet_too_large` with its size and the budget, and nothing is ever left out to fit.
+- Both contract copies gain the route and its schemas; an object's `sys` is its own schema,
+  `WorkspaceObjectSys`, which an item read and a packet share. The contract stays 33.0.0:
+  the change only adds.
+- A new journey test reads a small investigation back as a member: a question, two
+  competing attempts, evidence on each with one contradicting, and a conclusion linked to
+  both, checked against each item's own read, with the stranger, unknown, archived,
+  other-project, over-budget and bad-input refusals.

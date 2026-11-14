@@ -2020,6 +2020,52 @@
         }
       },
       {
+        "command": "workspace packet <fleet> <project>",
+        "description": "Read 1 to 20 items of one project together, from one read, to reason over them: each item whole, sorted by id, the links whose both ends are among them, and the code, notebook, result and evidence addresses they store, each with the item it came from. Pipe {\"ids\": [\"goal#1\", \"finding#4\"]} on stdin. It answers every item named or none: an id that is not one of the project's items, or an archived one, answers 404 not_found; a packet larger than --max-bytes answers 422 packet_too_large with its size. Nothing is fetched from the addresses.",
+        "operation_id": "readWorkspacePacket",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/packet",
+        "webmcp": "workspace_packet",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "body",
+            "field": "project",
+            "description": "The project the items are in, by its name; `regents keyfleet projects list` names them."
+          }
+        ],
+        "flags": [
+          {
+            "name": "max-bytes",
+            "type": "integer",
+            "in": "body",
+            "field": "max_bytes",
+            "minimum": 1024,
+            "maximum": 262144,
+            "description": "The most bytes the packet may be, 1,024 to 262,144; 65,536 by default. A larger packet answers 422 packet_too_large with its size, and nothing is left out to fit."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "ids",
+            "type": "array",
+            "required": true,
+            "description": "The items to read, 1 to 20 ids such as task#27, each once."
+          }
+        ]
+      },
+      {
         "command": "workspace create <fleet> <key>",
         "description": "Add a goal, task, finding, evidence, service, note or dead end as a Key to any active project: `projects list` names them, and an archived one answers 409 project_archived, naming them. After an uncertain response, sign and send it again with the same command_id and exact same change.",
         "operation_id": "createWorkspaceObject",
