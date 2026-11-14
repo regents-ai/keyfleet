@@ -81,7 +81,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @project "/api/v1/agent/fleets/{fleet_id}/projects/{project}/"
   @notebook_create "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/create"
   @notebook_files "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/"
-  @fundings "/api/v1/agent/fleets/{fleet_id}/fundings/"
 
   @address %{
     "fleet_id" => @fleet,
@@ -333,9 +332,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @project_start, [], %{"as_key" => 1, "name" => "lab", "title" => "Lab"}},
     {"POST", @project_archive, [], %{"as_key" => 1}},
     {"POST", @project <> "take_over", [], %{"as_key" => 1}},
-    {"POST", @project <> "delete", [], %{"as_key" => 1}},
-    {"POST", @fundings <> "quote", [], %{"usdc_amount" => 5_000_000, "refund_to" => "a.near"}},
-    {"POST", @fundings <> "start", [], %{"usdc_amount" => 5_000_000, "refund_to" => "a.near"}}
+    {"POST", @project <> "delete", [], %{"as_key" => 1}}
   ]
 
   # Fields a body may not send together (the schema's `not: {required: …}`);

@@ -529,42 +529,7 @@ defmodule KeyfleetWeb.Refusal do
        "Start from page 1, or follow next from the page before. Pages count from 1, up to 300."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
-       "Send them in smaller pushes, and keep large files out of the code."},
-
-    # Funding a fleet's treasury with NEAR.
-    "funding_needs_key" =>
-      {"Only a fleet's members start funding its treasury, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
-       "Ask a Key's owner to issue a shard to your wallet, or ask a Key holder to pair you with Pair New Agent on their Agents page."},
-    "funding_unknown" =>
-      {"This fleet has no funding with this id.", "Use the id fundings_start answered with."},
-    "funding_service_failed" =>
-      {"The NEAR exchange service didn't answer as expected, so nothing was recorded.",
-       "Try again in a minute."},
-    "invalid_funding" =>
-      {"This doesn't fit a funding.",
-       "Send usdc_amount in USDC's smallest unit (6 decimals), from 1 up to 1,000 USDC, and refund_to as a NEAR account. The fleet must be live on Base."},
-    # A project's budget for Patchbay assists, and the purchases against it.
-    "budget_none" =>
-      {"This project has no open budget to buy from.",
-       "A Key opens one on the project's page first. budget_show says whether the last one ended."},
-    "budget_invalid" =>
-      {"Something in this request doesn't fit a budget or a purchase.",
-       "A price is a whole number of USDC base units, at least 1, a purpose and a note are 1 to 200 characters, and links start with https://."},
-    "purchase_unknown" =>
-      {"This fleet has no purchase with that id.",
-       "Use the id of one of the purchases budget_show lists for the project."},
-    "purchase_over_budget" =>
-      {"price_usdc is more than this budget has left, so the purchase was refused.",
-       "The refused purchase is in details.purchase. Propose a cheaper assist, or ask the sponsor for a new budget once this one ends."},
-    "purchase_budget_expired" =>
-      {"This budget has ended, so the purchase was refused.",
-       "The refused purchase is in details.purchase. A Key opens a new budget on the project's page."},
-    "not_proposer" =>
-      {"Only the Key that proposed this purchase records its receipt.",
-       "Act as the Key in proposed_by_key, or leave the receipt to that Key."},
-    "purchase_step" =>
-      {"This purchase isn't at that step.",
-       "A purchase is proposed, then approved or refused, then bought with its receipt, then checked. budget_show gives each purchase's state."}
+       "Send them in smaller pushes, and keep large files out of the code."}
   }
 
   @doc "Answers `conn` with `status` and the refusal `code`."

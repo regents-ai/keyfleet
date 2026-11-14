@@ -9,8 +9,6 @@ defmodule KeyfleetWeb.ProjectLive do
   reader who may read the workspace each title opens its item there, a part
   with more than it lists links to the project there, and so does "Open in
   the workspace"; anyone else reads plain titles and no workspace links.
-  A member of the fleet also sees the project's Budget panel
-  (`KeyfleetWeb.BudgetPanel`).
   """
   use KeyfleetWeb, :html
   import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
@@ -22,8 +20,6 @@ defmodule KeyfleetWeb.ProjectLive do
   attr :workspace?, :boolean,
     required: true,
     doc: "the reader may open its items in the workspace"
-
-  attr :budget, :map, default: nil, doc: "the Budget panel, for a member of the fleet"
 
   def page(assigns) do
     ~H"""
@@ -111,8 +107,6 @@ defmodule KeyfleetWeb.ProjectLive do
           empty="No open tasks."
         />
       </div>
-
-      <KeyfleetWeb.BudgetPanel.panel :if={@budget} panel={@budget} />
     </article>
     """
   end
