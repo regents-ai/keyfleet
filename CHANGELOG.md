@@ -10068,3 +10068,27 @@ Check (partition `_kf_s3`): compile with warnings as errors, format, and the new
 (`near_funding_test.exs`, `regent_near_intents_test.exs`, 10 of 10). Nothing has called
 the real service: the client is tested against the saved dry quote and a made-up status
 answer only.
+
+## 2026-11-14 — Fund with NEAR for agents, and the live service's answers
+
+- Agents get the same funding as people: `fundings_quote` (`POST
+  /api/v1/agent/fleets/FLEET_ID/fundings/quote`) prices one, `fundings_start` (`POST
+  .../fundings/start`) records one and answers the NEAR to send, the deposit address and
+  the deadline, and `fundings_show` (`GET .../fundings/FUNDING_ID`) reads its latest state
+  and, once arrived, its receipt with `signature: "not_checked"`. A body names only
+  `usdc_amount` (base units) and `refund_to`; any other field, a `recipient` included,
+  answers 422 `invalid_request`. Only the fleet's members use them: 403
+  `funding_needs_key`, 422 `invalid_funding`, 409 `fleet_not_on_chain`, 502
+  `funding_service_failed`, 404 `funding_unknown`. Both contract copies, the tool manifest,
+  the docs (a Funding section, and `fundings` in the doctor's `may`), `llms.txt`, the
+  Claude guide and `verification/features.yml` say so. The routes are new, so the contract
+  stays 33.0.0. No `regents keyfleet` command yet.
+- The live 1Click service answers a quote it made with 201, so `RegentNearIntents` takes
+  201 for a quote and 200 for its reads; its test's stand-in answers the quote with 201.
+- A status for an address the service doesn't know yet answers 404. That is a funding
+  with no deposit seen, so Refresh leaves it Waiting instead of showing an error.
+
+Check (partition `_kf_s3`): compile with warnings as errors, format, and the funding,
+agent, contract, manifest, route, connector, guide and command tests (agent fundings 9,
+page 8, client 4; the wider set 71 of 71). No browser suite. Nothing has called the
+real service from here.

@@ -7696,6 +7696,145 @@
         }
       },
       "operation_id_field": "operation_id"
+    },
+    {
+      "name": "fundings_quote",
+      "title": "Funding price",
+      "description": "Price funding a fleet's treasury with USDC on Base, paid in NEAR: the NEAR to send, the USDC that lands, how long it takes, and the fleet's treasury address where it lands. Changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63
+          },
+          "usdc_amount": {
+            "type": "integer",
+            "description": "USDC to land, in its smallest unit (6 decimals): 5000000 is 5 USDC",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "refund_to": {
+            "type": "string",
+            "description": "Your NEAR account, where the NEAR goes back if the funding can't finish",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "fleet_id",
+          "usdc_amount",
+          "refund_to"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/fundings/quote",
+      "interfaces": {
+        "webmcp": "fundings_quote",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/fundings/quote"
+      }
+    },
+    {
+      "name": "fundings_start",
+      "title": "Funding",
+      "description": "Start funding a fleet's treasury with USDC on Base, paid in NEAR, as one of the fleet's members. Answers the exact NEAR to send, the deposit address and the deadline. You send the NEAR from your own wallet; the site never holds or moves funds. The USDC always lands at the fleet's treasury.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63
+          },
+          "usdc_amount": {
+            "type": "integer",
+            "description": "USDC to land, in its smallest unit (6 decimals): 5000000 is 5 USDC",
+            "minimum": 1,
+            "maximum": 1000000000
+          },
+          "refund_to": {
+            "type": "string",
+            "description": "Your NEAR account, where the NEAR goes back if the funding can't finish",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "fleet_id",
+          "usdc_amount",
+          "refund_to"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "audience": "members",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/fundings/start",
+      "interfaces": {
+        "webmcp": "fundings_start",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/fundings/start"
+      }
+    },
+    {
+      "name": "fundings_show",
+      "title": "Funding status",
+      "description": "Read one funding of a fleet's treasury with its latest state, and once the USDC has landed, its receipt: the USDC, the treasury address and both transactions. Records the latest state; asking again is safe.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63
+          },
+          "funding_id": {
+            "type": "string",
+            "description": "The funding's id, from fundings_start",
+            "maxLength": 36
+          }
+        },
+        "required": [
+          "fleet_id",
+          "funding_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "audience": "members",
+      "route": "GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}",
+      "interfaces": {
+        "webmcp": "fundings_show",
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}"
+      }
     }
   ],
   "streams": [

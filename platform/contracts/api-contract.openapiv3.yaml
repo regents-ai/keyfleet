@@ -4629,6 +4629,97 @@ paths:
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/fundings/quote:
+    post:
+      x-pairing-required: true
+      operationId: quoteFunding
+      description: >-
+        Prices funding the fleet's treasury with USDC on Base, paid in NEAR: the NEAR to send, the
+        USDC that lands, the seconds it takes, and the fleet's treasury address where it lands.
+        Changes nothing.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FundingRequest"}
+      responses:
+        "200":
+          description: The price
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FundingQuoteEnvelope"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/FundingNeedsKey"}
+        "404": {$ref: "#/components/responses/FundingNotFound"}
+        "409": {$ref: "#/components/responses/FundingFleetNotOnChain"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/FundingInvalid"}
+        "502": {$ref: "#/components/responses/FundingServiceFailed"}
+        "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/fundings/start:
+    post:
+      x-pairing-required: true
+      operationId: startFunding
+      description: >-
+        Starts funding the fleet's treasury with USDC on Base, paid in NEAR, as one of the fleet's
+        members. Answers the exact NEAR to send, the deposit address and the deadline. The agent
+        sends the NEAR from its own wallet; the site never holds or moves funds. The USDC always
+        lands at the fleet's treasury.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FundingRequest"}
+      responses:
+        "201":
+          description: The funding was started; send the NEAR to its deposit address before its deadline
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FundingEnvelope"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/FundingNeedsKey"}
+        "404": {$ref: "#/components/responses/FundingNotFound"}
+        "409": {$ref: "#/components/responses/FundingFleetNotOnChain"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/FundingInvalid"}
+        "502": {$ref: "#/components/responses/FundingServiceFailed"}
+        "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}:
+    get:
+      x-pairing-required: true
+      operationId: showFunding
+      description: >-
+        One funding of the fleet's treasury, with the latest state the exchange service gives,
+        which is recorded; asking again is safe. Once the USDC has landed it carries its receipt.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+        - {$ref: "#/components/parameters/FundingId"}
+      responses:
+        "200":
+          description: The funding
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FundingEnvelope"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/FundingNeedsKey"}
+        "404": {$ref: "#/components/responses/FundingNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "502": {$ref: "#/components/responses/FundingServiceFailed"}
+        "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
 components:
   parameters:
     ExpectedProfileId:
@@ -4703,6 +4794,12 @@ components:
       required: true
       description: The run's id, as POST .../runs/start answered it
       schema: {type: string, pattern: '^run_[0-9A-HJKMNP-TV-Z]{26}$'}
+    FundingId:
+      name: funding_id
+      in: path
+      required: true
+      description: The funding's id, as POST .../fundings/start answered it
+      schema: {type: string, pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'}
   requestBodies:
     AgentEmpty:
       description: >-
@@ -5220,8 +5317,36 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/FleetUnknownError"}
+    FundingNeedsKey:
+      description: "funding_needs_key: only the fleet's members start a funding or record its state, and the agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one. agent_not_paired: the agent has no current pairing."
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/FundingError"}
+    FundingNotFound:
+      description: "fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later. funding_unknown: the fleet has no funding with this id."
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/FundingError"}
+    FundingFleetNotOnChain:
+      description: "fleet_not_on_chain: the fleet has no treasury on Base yet, so there is nowhere for the USDC to land. request_replayed: the sign-in service has seen this signed request before; sign it again and send it."
+      content:
+        application/json:
+          schema:
+            anyOf:
+              - {$ref: "#/components/schemas/FundingError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
+    FundingInvalid:
+      description: "invalid_funding: usdc_amount is outside 1 to 1000000000 (at most 1,000 USDC), or refund_to isn't a NEAR account. invalid_request: the body doesn't fit the operation; the hint names the fields it takes."
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/FundingError"}
+    FundingServiceFailed:
+      description: "funding_service_failed: the NEAR exchange service didn't answer as expected; nothing was recorded."
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/FundingError"}
     PollNeedsKey:
-      description: "poll_needs_key: the agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one. agent_not_paired: the agent has no current pairing; its person signs in on this site and pairs it with Pair New Agent on their Agents page, then it signs the request again."
+      description: "poll_needs_key:the agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one. agent_not_paired: the agent has no current pairing; its person signs in on this site and pairs it with Pair New Agent on their Agents page, then it signs the request again."
       content:
         application/json:
           schema: {$ref: "#/components/schemas/PollForbiddenError"}
@@ -10928,5 +11053,87 @@ components:
           required: [code, message, hint]
           properties:
             code: {type: string, enum: [siwa_request_failed, pairing_unavailable, profile_unavailable, not_open_yet, sign_in_refused]}
+            message: {type: string}
+            hint: {type: string}
+    FundingRequest:
+      type: object
+      additionalProperties: false
+      required: [usdc_amount, refund_to]
+      properties:
+        usdc_amount: {type: integer, minimum: 1, maximum: 1000000000, description: "USDC to land, in its smallest unit (6 decimals): 5000000 is 5 USDC"}
+        refund_to: {type: string, minLength: 2, maxLength: 64, description: "The agent's NEAR account, where the NEAR goes back if the funding can't finish"}
+    FundingQuoteEnvelope:
+      type: object
+      additionalProperties: false
+      required: [quote]
+      properties:
+        quote:
+          type: object
+          additionalProperties: false
+          required: [fleet_id, usdc_amount, usdc, usdc_out_formatted, near_in, near_in_formatted, time_estimate_s, recipient, refund_to]
+          properties:
+            fleet_id: {type: string}
+            usdc_amount: {type: integer, description: "The USDC asked for, in its smallest unit"}
+            usdc: {type: string, description: "The USDC asked for, written out with 6 decimals"}
+            usdc_out_formatted: {type: string, description: "The USDC that lands, as the exchange service writes it"}
+            near_in: {type: string, pattern: '^[0-9]+$', description: "The NEAR to send, in yoctoNEAR"}
+            near_in_formatted: {type: string, description: "The NEAR to send, written out"}
+            time_estimate_s: {type: integer, minimum: 0, description: "About how many seconds it takes"}
+            recipient: {type: string, pattern: '^0x[0-9a-f]{40}$', description: "The fleet's treasury on Base, where the USDC lands"}
+            refund_to: {type: string}
+    FundingEnvelope:
+      type: object
+      additionalProperties: false
+      required: [funding]
+      properties:
+        funding: {$ref: "#/components/schemas/Funding"}
+    Funding:
+      type: object
+      additionalProperties: false
+      required: [id, fleet_id, state, status, usdc_amount, usdc, recipient, refund_to, near_in, near_in_formatted, deposit_address, deadline, time_estimate_s, origin_tx, destination_tx, origin_tx_url, destination_tx_url, receipt, inserted_at]
+      properties:
+        id: {type: string, format: uuid}
+        fleet_id: {type: string}
+        state: {type: string, enum: [pending_deposit, processing, success, refunded, failed]}
+        status: {type: string, enum: [Waiting, Processing, Arrived, Refunded, Failed]}
+        usdc_amount: {type: integer, description: "The USDC that lands, in its smallest unit"}
+        usdc: {type: string, description: "The USDC that lands, written out with 6 decimals"}
+        recipient: {type: string, pattern: '^0x[0-9a-f]{40}$', description: "The fleet's treasury on Base"}
+        refund_to: {type: string}
+        near_in: {type: string, pattern: '^[0-9]+$', description: "The exact NEAR to send, in yoctoNEAR"}
+        near_in_formatted: {type: string}
+        deposit_address: {type: string, description: "Where the agent sends the NEAR from its own wallet"}
+        deadline: {type: [string, "null"], format: date-time, description: "Send the NEAR before this time"}
+        time_estimate_s: {type: integer, minimum: 0}
+        origin_tx: {type: [string, "null"], description: "The NEAR transaction"}
+        destination_tx: {type: [string, "null"], description: "The Base transaction"}
+        origin_tx_url: {type: [string, "null"]}
+        destination_tx_url: {type: [string, "null"]}
+        receipt:
+          description: "Null until the USDC has landed"
+          oneOf:
+            - {type: "null"}
+            - type: object
+              additionalProperties: false
+              required: [usdc, recipient, origin_tx, destination_tx, finished_at, signature]
+              properties:
+                usdc: {type: string}
+                recipient: {type: string, pattern: '^0x[0-9a-f]{40}$'}
+                origin_tx: {type: [string, "null"]}
+                destination_tx: {type: [string, "null"]}
+                finished_at: {type: [string, "null"], format: date-time}
+                signature: {type: string, const: not_checked, description: "The exchange service's quote signature isn't checked yet"}
+        inserted_at: {type: string, format: date-time}
+    FundingError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [funding_needs_key, agent_not_paired, fleet_unknown, fleet_coming_soon, funding_unknown, fleet_not_on_chain, invalid_funding, invalid_request, out_of_range, funding_service_failed]}
             message: {type: string}
             hint: {type: string}

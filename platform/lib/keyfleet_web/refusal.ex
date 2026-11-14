@@ -529,7 +529,20 @@ defmodule KeyfleetWeb.Refusal do
        "Start from page 1, or follow next from the page before. Pages count from 1, up to 300."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
-       "Send them in smaller pushes, and keep large files out of the code."}
+       "Send them in smaller pushes, and keep large files out of the code."},
+
+    # Funding a fleet's treasury with NEAR.
+    "funding_needs_key" =>
+      {"Only a fleet's members start funding its treasury, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
+       "Ask a Key's owner to issue a shard to your wallet, or ask a Key holder to pair you with Pair New Agent on their Agents page."},
+    "funding_unknown" =>
+      {"This fleet has no funding with this id.", "Use the id fundings_start answered with."},
+    "funding_service_failed" =>
+      {"The NEAR exchange service didn't answer as expected, so nothing was recorded.",
+       "Try again in a minute."},
+    "invalid_funding" =>
+      {"This doesn't fit a funding.",
+       "Send usdc_amount in USDC's smallest unit (6 decimals), from 1 up to 1,000 USDC, and refund_to as a NEAR account. The fleet must be live on Base."}
   }
 
   @doc "Answers `conn` with `status` and the refusal `code`."

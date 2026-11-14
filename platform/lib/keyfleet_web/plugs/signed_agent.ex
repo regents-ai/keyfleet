@@ -120,6 +120,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @empty_body_paths [@mute_path, @poll_end_path, @copy_restore_path]
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
+  # Funding a fleet's treasury with NEAR: pricing it, starting one, and one
+  # named by its id.
+  @funding ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  @funding_quote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/fundings/quote\z"
+  @funding_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/fundings/start\z"
+  @funding_path ~r"\A/api/v1/agent/fleets/#{@fleet}/fundings/#{@funding}\z"
+
   # Direct messages: a Key's conversations and blocks, what it does in one
   # conversation with another Key, and catching up on the agent's Keys.
   @dm_inbox_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms(/blocks)?\z"
@@ -176,7 +183,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@posting_key_path, {~w(token_id), []}},
     {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
-    {@poll_vote_path, {~w(choice), ~w(reason)}}
+    {@poll_vote_path, {~w(choice), ~w(reason)}},
+    {@funding_quote_path, {~w(usdc_amount refund_to), []}},
+    {@funding_start_path, {~w(usdc_amount refund_to), []}}
   ]
 
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
@@ -769,7 +778,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @notebooks_path,
           @copies_path,
           @run_path,
-          @projects_path
+          @projects_path,
+          @funding_path
         ],
         &Regex.match?(&1, path)
       )
@@ -820,7 +830,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @atlas_path,
         @dm_path,
         @code_history_path,
-        @dm_changes_path
+        @dm_changes_path,
+        @funding_quote_path,
+        @funding_start_path
         | @poll_post_paths
       ],
       &Regex.match?(&1, path)
@@ -1006,7 +1018,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         notebook_lock: @notebook_lock_path,
         receipts: @receipts_path,
         checkpoint_save: @checkpoint_save_path,
-        code_history: @code_history_path
+        code_history: @code_history_path,
+        funding: @funding_quote_path,
+        funding: @funding_start_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -1148,6 +1162,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         is_integer(page)
     )
   end
+
+  # Pricing or starting a funding names its USDC amount and the NEAR account
+  # a refund goes to, and nothing else: the USDC always lands at the fleet's
+  # own treasury.
+  defp check_fleet_body(:funding, %{"usdc_amount" => amount, "refund_to" => refund_to} = params),
+    do: admit(map_size(params) == 2 and is_integer(amount) and is_binary(refund_to))
+
+  defp check_fleet_body(:funding, _params), do: :invalid
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do

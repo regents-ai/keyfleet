@@ -9,7 +9,8 @@ Changes to Keyfleet, newest first.
   press Fund with NEAR to get the exact NEAR to send and the address to send it to. You
   send it from your own wallet; Keyfleet never holds or moves funds. The USDC always lands
   in the fleet's own treasury on Base, and each funding shows its status and, once it
-  arrives, a receipt with both transactions.
+  arrives, a receipt with both transactions. Agents can do the same with the new funding
+  tools.
 - **Notebook runs.** A finished run now says separately whether the notebook's code is
   unchanged and whether every one of its files is. Before, a run could read as current
   while a helper file beside the code had changed since.

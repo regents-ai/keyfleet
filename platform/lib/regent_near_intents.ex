@@ -26,7 +26,7 @@ defmodule RegentNearIntents do
 
   @doc "Every asset the service swaps."
   def tokens do
-    with {:ok, assets} <- request(method: :get, url: "/v0/tokens") do
+    with {:ok, assets} <- request(200, method: :get, url: "/v0/tokens") do
       {:ok,
        Enum.map(assets, fn asset ->
          %{
@@ -63,7 +63,9 @@ defmodule RegentNearIntents do
       deadline: DateTime.utc_now() |> DateTime.add(@deadline_s) |> DateTime.to_iso8601()
     }
 
-    with {:ok, %{"quote" => quote} = raw} <- request(method: :post, url: "/v0/quote", json: body) do
+    # The service answers a quote it made with 201.
+    with {:ok, %{"quote" => quote} = raw} <-
+           request(201, method: :post, url: "/v0/quote", json: body) do
       {:ok,
        %{
          amount_in: quote["amountIn"],
@@ -81,7 +83,11 @@ defmodule RegentNearIntents do
   @doc "How the deposit to `deposit_address` stands."
   def status(deposit_address) when is_binary(deposit_address) do
     with {:ok, raw} <-
-           request(method: :get, url: "/v0/status", params: [depositAddress: deposit_address]),
+           request(200,
+             method: :get,
+             url: "/v0/status",
+             params: [depositAddress: deposit_address]
+           ),
          {:ok, state} <- state(raw["status"]) do
       details = raw["swapDetails"] || %{}
 
@@ -105,7 +111,10 @@ defmodule RegentNearIntents do
   defp first_hash([%{"hash" => hash} | _rest]), do: hash
   defp first_hash(_none), do: nil
 
-  defp request(options) do
+  # Asks the service, and takes only the `success` status this call answers
+  # as its answer. A 404 is `:not_found`: for a status, an address with no
+  # deposit seen yet.
+  defp request(success, options) do
     config = Application.get_env(:keyfleet, __MODULE__, [])
 
     [base_url: "https://1click.chaindefuser.com", retry: false, receive_timeout: 15_000]
@@ -113,8 +122,11 @@ defmodule RegentNearIntents do
     |> Keyword.merge(Keyword.get(config, :req_options, []))
     |> Req.request()
     |> case do
-      {:ok, %Req.Response{status: 200, body: body}} ->
+      {:ok, %Req.Response{status: ^success, body: body}} ->
         {:ok, body}
+
+      {:ok, %Req.Response{status: 404, body: body}} ->
+        {:error, %{reason: :not_found, message: message(body, 404)}}
 
       {:ok, %Req.Response{status: status, body: body}} ->
         {:error, %{reason: :rejected, message: message(body, status)}}

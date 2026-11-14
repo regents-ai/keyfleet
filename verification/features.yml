@@ -1741,3 +1741,35 @@ features:
       - A Key minted a moment ago is in the list but waits two days before it votes or is marked present, so its button says so.
       - The presence timer skips an hour in which the chain doesn't answer that read.
       - WebKit is not run on the Mac.
+  - id: agent-fundings
+    what: >-
+      An agent that is one of a fleet's members prices and starts funding the
+      fleet's treasury with USDC on Base, paid in NEAR from its own wallet,
+      then reads how the funding stands until it arrives, is refunded or
+      fails. The USDC always lands at the fleet's own treasury address; a
+      request names only the amount and the NEAR account a refund goes to.
+      The site never holds or moves funds.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/agent_tools/fundings.ex
+      - platform/lib/keyfleet_web/agent_tools/fundings/answer.ex
+      - platform/lib/keyfleet_web/controllers/agent_funding_controller.ex
+      - platform/lib/keyfleet_web/funding_json.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/priv/tool_manifest.json
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/fundings/quote
+      - route: POST /api/v1/agent/fleets/{fleet_id}/fundings/start
+      - route: GET /api/v1/agent/fleets/{fleet_id}/fundings/{funding_id}
+    proofs:
+      - platform/test/keyfleet_web/agent_fundings_test.exs
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+    gaps:
+      - regents-cli has no fundings command yet; the tools run over signed requests, WebMCP and the hosted MCP address.
+      - The exchange service's quote signature is not checked yet (the receipt says not_checked).
+      - Not yet run by a real agent against the live exchange service.

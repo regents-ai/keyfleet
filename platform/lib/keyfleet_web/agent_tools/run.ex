@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.AgentTools.Run do
     Code,
     Dms,
     Fleets,
+    Fundings,
     Keys,
     Notebooks,
     Polls,
@@ -51,4 +52,5 @@ defmodule KeyfleetWeb.AgentTools.Run do
   defp answer(Publications), do: Publications.Answer
   defp answer(Rooms), do: Rooms.Answer
   defp answer(Workspace), do: Workspace.Answer
+  defp answer(Fundings), do: Fundings.Answer
 end

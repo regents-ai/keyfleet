@@ -9,7 +9,7 @@ defmodule RegentNearIntentsTest do
     Req.Test.stub(RegentNearIntents, fn conn ->
       {:ok, body, conn} = Plug.Conn.read_body(conn)
       send(self(), {:asked, conn.method, conn.request_path, JSON.decode!(body)})
-      Req.Test.json(conn, @quote_fixture)
+      conn |> Plug.Conn.put_status(201) |> Req.Test.json(@quote_fixture)
     end)
 
     assert {:ok, quote} =
@@ -50,6 +50,16 @@ defmodule RegentNearIntentsTest do
 
     assert {:ok, %{state: :success, origin_tx: "near-tx", destination_tx: "0xbase"}} =
              RegentNearIntents.status("deposit-1")
+  end
+
+  test "a status for an address the service doesn't know is not found" do
+    Req.Test.stub(RegentNearIntents, fn conn ->
+      conn
+      |> Plug.Conn.put_status(404)
+      |> Req.Test.json(%{"message" => "Deposit address deposit-1 not found"})
+    end)
+
+    assert {:error, %{reason: :not_found}} = RegentNearIntents.status("deposit-1")
   end
 
   test "a refusal is an error with the service's message" do

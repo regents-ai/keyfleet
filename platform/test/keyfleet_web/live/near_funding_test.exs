@@ -147,6 +147,19 @@ defmodule KeyfleetWeb.Live.NearFundingTest do
     assert has_element?(visitor, receipt)
   end
 
+  test "Refresh before any deposit, for an address the service doesn't know yet, still reads Waiting",
+       %{conn: conn} do
+    funding = Fundings.start_funding!(@fleet, 5_000_000, "alice.near", actor: human(@member))
+    StubClient.put_status({:error, %{reason: :not_found, message: "Deposit address not found"}})
+
+    view = open(signed_in_as(conn, @member))
+    view |> element("#treasury-funding-#{funding.id}-refresh") |> render_click()
+
+    assert has_element?(view, "#treasury-funding-#{funding.id}-state", "Waiting")
+    refute has_element?(view, "#treasury-funding-problem")
+    assert Fundings.get_funding!(@fleet, funding.id).state == :pending_deposit
+  end
+
   test "a refunded and a failed funding are recorded as such" do
     for state <- [:refunded, :failed] do
       funding = Fundings.start_funding!(@fleet, 1_000_000, "bob.near", actor: human(@member))

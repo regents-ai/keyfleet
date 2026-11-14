@@ -569,6 +569,9 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/unpin", AgentGraphController, :unpin
     post "/fleets/:fleet_id/atlas/swarm", AgentGraphController, :atlas_swarm
     post "/fleets/:fleet_id/atlas/things", AgentGraphController, :atlas_things
+    post "/fleets/:fleet_id/fundings/quote", AgentFundingController, :price
+    post "/fleets/:fleet_id/fundings/start", AgentFundingController, :start
+    get "/fleets/:fleet_id/fundings/:funding_id", AgentFundingController, :show
   end
 
   scope "/", KeyfleetWeb do
