@@ -183,7 +183,7 @@ defmodule KeyfleetWeb.NearFundingPanel do
         <dl class="proposals-facts">
           <div>
             <dt>You send</dt>
-            <dd id={"#{@id}-quote-near"}>{@price.near_in_formatted} NEAR</dd>
+            <dd id={"#{@id}-quote-near"}>{near(@price.near_in_formatted)} NEAR</dd>
           </div>
           <div>
             <dt>Treasury gets</dt>
@@ -235,7 +235,7 @@ defmodule KeyfleetWeb.NearFundingPanel do
               <div>
                 <dt>Send</dt>
                 <dd id={"#{@id}-#{funding.id}-near"}>
-                  {funding.near_in_formatted} NEAR
+                  {near(funding.near_in_formatted)} NEAR
                   <Regent.Primitives.copy_icon
                     id={"#{@id}-#{funding.id}-near-copy"}
                     text={funding.near_in_formatted}
@@ -243,7 +243,7 @@ defmodule KeyfleetWeb.NearFundingPanel do
                   />
                 </dd>
               </div>
-              <div>
+              <div class="near-funding__to">
                 <dt>To</dt>
                 <dd>
                   <code id={"#{@id}-#{funding.id}-deposit"} class="near-funding__deposit">
@@ -267,8 +267,8 @@ defmodule KeyfleetWeb.NearFundingPanel do
               </div>
             </dl>
             <p class="proposals-detail">
-              Send exactly this NEAR from your own NEAR wallet, on the NEAR network, before
-              the deadline. If the swap can't finish, NEAR Intents refunds it to {funding.refund_to}.
+              Copy the exact amount and send it from your own NEAR wallet, on the NEAR network,
+              before the deadline. If the swap can’t finish, NEAR Intents refunds it to {funding.refund_to}.
             </p>
           </div>
 
@@ -333,7 +333,7 @@ defmodule KeyfleetWeb.NearFundingPanel do
           <Regent.Primitives.button
             :if={@member? and funding.state in [:pending_deposit, :processing]}
             id={"#{@id}-#{funding.id}-refresh"}
-            variant="quiet"
+            variant="secondary"
             arrow={false}
             phx-click="refresh"
             phx-value-id={funding.id}
@@ -349,6 +349,16 @@ defmodule KeyfleetWeb.NearFundingPanel do
 
   defp usdc(units),
     do: units |> Decimal.div(@usdc_unit) |> Decimal.normalize() |> Decimal.to_string(:normal)
+
+  # NEAR as a person reads it: four decimals at most, rounded up so the figure
+  # read is never short of the amount the copy button gives exactly.
+  defp near(formatted),
+    do:
+      formatted
+      |> Decimal.new()
+      |> Decimal.round(4, :ceiling)
+      |> Decimal.normalize()
+      |> Decimal.to_string(:normal)
 
   defp short(hash) when byte_size(hash) > 14,
     do: binary_part(hash, 0, 6) <> "…" <> binary_part(hash, byte_size(hash) - 6, 6)

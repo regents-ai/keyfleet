@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.BudgetPanel do
     <section id="project-budget" class="project-part budget-panel" aria-labelledby="budget-title">
       <h2 id="budget-title">Budget</h2>
       <p class="project-note">
-        Funded by its sponsor. This site keeps the limit; no contract holds the money.
+        Sponsor-funded. Keyfleet enforces the limit; no contract holds the money.
       </p>
 
       <dl :if={@panel.budget} id="budget-figures" class="budget-figures">
@@ -115,9 +115,9 @@ defmodule KeyfleetWeb.BudgetPanel do
               {if purchase.worked, do: "Fix worked", else: "Fix failed"}, checked by {key_name(
                 purchase.checked_by_key
               )}: {purchase.result_note}
-              <a :if={purchase.evidence_url} href={purchase.evidence_url} rel="noopener noreferrer">
-                Evidence
-              </a>
+              <span :if={purchase.evidence_url}>
+                · <a href={purchase.evidence_url} rel="noopener noreferrer">Evidence</a>
+              </span>
             </span>
           </div>
           <span class="project-standing">{state(purchase.state)}</span>
@@ -133,15 +133,23 @@ defmodule KeyfleetWeb.BudgetPanel do
         class="budget-open"
         phx-submit="budget_open"
       >
-        <label>
-          Limit (USDC) <input name="limit" type="text" inputmode="decimal" required />
-        </label>
-        <label>
-          Expiry <input name="expires_on" type="date" required />
-        </label>
-        <label>
-          Source <input name="source" type="text" maxlength="200" />
-        </label>
+        <Regent.Primitives.field :let={field} id="budget-limit-input" label="Limit (USDC)">
+          <input
+            id={field.id}
+            name="limit"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            placeholder="25"
+            required
+          />
+        </Regent.Primitives.field>
+        <Regent.Primitives.field :let={field} id="budget-expiry-input" label="Expiry">
+          <input id={field.id} name="expires_on" type="date" required />
+        </Regent.Primitives.field>
+        <Regent.Primitives.field :let={field} id="budget-source-input" label="Source">
+          <input id={field.id} name="source" type="text" maxlength="200" autocomplete="off" />
+        </Regent.Primitives.field>
         <Regent.Primitives.button type="submit">Open budget</Regent.Primitives.button>
       </form>
       <p :if={@panel.notice} id="budget-notice" class="project-note" role="status">
@@ -155,9 +163,9 @@ defmodule KeyfleetWeb.BudgetPanel do
 
   defp key_name(key), do: ActivityLines.key_name(key, nil)
 
-  defp decision(%{state: :refused, refusal_code: :refused}), do: "Refused"
-  defp decision(%{state: :refused}), do: "Refused by the site"
-  defp decision(_purchase), do: "Approved"
+  defp decision(%{state: :refused, refusal_code: :refused}), do: "refused"
+  defp decision(%{state: :refused}), do: "refused by the site"
+  defp decision(_purchase), do: "approved"
 
   defp state(:proposed), do: "Proposed"
   defp state(:approved), do: "Approved"
