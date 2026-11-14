@@ -5,8 +5,8 @@
  * hook copies the layer to the end of the document's body, outside the live
  * page, so nothing the page redraws or moves (a view gliding in, the fleet
  * bar's own stacking) carries it off. The layer covers the screen and takes no
- * presses; only its card does, and the card keeps off the part it points at
- * and, wherever there is room, off Buy Key. Every button on the page, every
+ * presses; only its card does, and the card keeps off Buy Key and every wallet
+ * step first, then off the part it points at. Every button on the page, every
  * wallet button above all, stays in reach while the tour shows, and nothing
  * here waits on, stops or changes a press on the page.
  *
