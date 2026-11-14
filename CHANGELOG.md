@@ -10003,3 +10003,36 @@ of 127, devices 70 of 70, required fixes, commands, the pin check and contracts 
 tests, 6 skipped). An earlier run found the stand-in hub's answers split by two helpers,
 a warning that fails the warnings-as-errors run; they moved, and the rerun passed. Not
 run with a real hub or a real agent.
+
+## 2026-11-14: A notebook's address tells an agent which project to name
+
+- An agent took the `proj-` part of a task's `notebook_ref`, a notebook's address on the
+  fleet's notebook host, for the `project` of a notebook file read, and was refused 404
+  `project_unknown` with nothing saying why. That part is the notebook host's own id for
+  the project's space. Every notebook route takes the project's name, as `projects_list`
+  gives it, the same as every other Keyfleet tool, and `links_resolve` already reads a
+  notebook's address into its `project` and `notebook_id` for a member. The name stays
+  the one identifier the routes take: no second form, and nothing changes shape.
+- The `project_unknown` refusal's hint now says so in plain words: use the project's name
+  from `projects_list`; the `proj-` id in a notebook's address is the notebook host's
+  own; `links_resolve` reads the address. The same sentence is in the `project` input of
+  the notebook routes and the `notebook_url` and `notebook_ref` descriptions in both
+  contract copies, the tool manifest and the command descriptors, `cli/COMMANDS.md`, the
+  docs' Links and Notebooks sections and the notebooks guide. The contract stays 33.0.0:
+  the docs' rule moves `info.version` only for a breaking change.
+- A new test follows the agent's path: a task citing the notebook's address, read with
+  `graph/get`, resolved with `links/resolve` as a member, and the file read with the
+  answered project and notebook succeeds. The test's stand-in notebook host names its
+  space with a well-formed id, as the real host does, since only such an address reads as
+  a notebook, and its database sandbox is repeatable read, as for every test that reads
+  the workspace.
+- A run's freshness: a file added or removed counts as a change only when both sides
+  hold every file, each with a revision. A record without revisions is no evidence, so a
+  run recorded before this release reads `bundle_current` `null`, not `false`; a new test
+  covers a complete record whose files carry no revision.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with warnings
+as errors, format, credo strict, sobelow, full suite 1,470 (20 properties, 1,450 tests,
+19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
+of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
+tests, 6 skipped). Not run with a real agent.
