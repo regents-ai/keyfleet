@@ -1,9 +1,10 @@
 defmodule KeyfleetWeb.McpConnectorTest do
   # The Claude connector's address, /mcp, through this site's own endpoint,
   # router, sign-in, pairings and tools, with the connector switched on:
-  # - who a request runs as follows its token's permissions and its identity's
-  #   pairing: the fleet tools only for the agent paired with that same account,
-  #   and never a wallet's tools;
+  # - what a token is listed follows its permissions alone, the same before and
+  #   after its identity pairs; who a request runs as follows its identity's
+  #   pairing too: the fleet tools run only for the agent paired with that same
+  #   account, and a wallet's tools never;
   # - each app a person connects keeps its own identity, kept across a refreshed
   #   token: a second app of an account paired through the first stays the app;
   # - the account's budget is spent before the sign-in server is asked, so a
@@ -104,29 +105,60 @@ defmodule KeyfleetWeb.McpConnectorTest do
       end
     end
 
-    test "the agent permission with the identity paired to another account, or to no one, stays the app",
+    test "the agent permission with the identity paired to another account, or to no one, stays the app: listed the agent's tools, running none of them",
          c do
       subject = account!()
       token = connect!(subject, @agent_scopes, c.signer.address)
+      agent_tools = Enum.sort(RegentMCPAgents.Tools.names() ++ fleet_tools())
 
-      assert Enum.sort(tool_names(token, c)) == Enum.sort(RegentMCPAgents.Tools.names())
+      assert Enum.sort(tool_names(token, c)) == agent_tools
+      assert not_paired?(call(token, "polls_list", %{fleet_id: @fleet}, c))
 
       pair!(account!(), c.signer.address)
-      assert Enum.sort(tool_names(token, c)) == Enum.sort(RegentMCPAgents.Tools.names())
-      assert %{"error" => _} = call(token, "polls_list", %{fleet_id: @fleet}, c)
+      assert Enum.sort(tool_names(token, c)) == agent_tools
+      assert not_paired?(call(token, "polls_list", %{fleet_id: @fleet}, c))
     end
 
-    test "a second app of an account already paired through another app has its identity tools only",
+    # Claude reads the tool list once, when it connects, and keeps it: the list
+    # it got before pairing must be the one that works after.
+    test "with the agent permission the app is listed the same tools before and after it pairs, and runs a fleet tool only once paired",
+         c do
+      subject = account!()
+      token = connect!(subject, @agent_scopes, c.signer.address)
+      unpaired = json(mcp(rpc("tools/list"), token, c))["result"]["tools"]
+
+      # A call for every fleet tool is more than a minute's budget.
+      budget = Application.fetch_env!(:keyfleet, :mcp_rate_limit)
+      put_env(:keyfleet, :mcp_rate_limit, Keyword.put(budget, :limit, 1_000))
+
+      for tool <- fleet_tools() do
+        assert not_paired?(call(token, tool, %{}, c)), tool
+      end
+
+      sync = %{"fleet_id" => @fleet, "rooms" => [%{"slug" => "general", "after_seq" => 0}]}
+      assert not_paired?(call(token, "fleets_sync", sync, c))
+      assert not_paired?(call(token, "fleets_show", %{fleet_id: @fleet}, c))
+      refute Keyfleet.Repo.exists?(Keyfleet.Agents.CheckIn)
+
+      pair!(subject, c.signer.address)
+      assert json(mcp(rpc("tools/list"), token, c))["result"]["tools"] == unpaired
+
+      assert %{"isError" => false, "structuredContent" => %{"id" => @fleet}} =
+               result(call(token, "fleets_show", %{fleet_id: @fleet}, c))
+    end
+
+    test "a second app of an account already paired through another app runs its identity tools only",
          c do
       subject = account!()
       first = connect!(subject, @agent_scopes, c.signer.address)
       pair!(subject, c.signer.address)
       assert "polls_list" in tool_names(first, c)
 
-      # Same account, same name, the agent permission: still not the paired agent.
+      # Same account, same name, the agent permission: listed the same tools,
+      # still not the paired agent.
       second = connect!(subject, @agent_scopes)
-      assert Enum.sort(tool_names(second, c)) == Enum.sort(RegentMCPAgents.Tools.names())
-      assert %{"error" => _} = call(second, "polls_list", %{fleet_id: @fleet}, c)
+      assert Enum.sort(tool_names(second, c)) == Enum.sort(tool_names(first, c))
+      assert not_paired?(call(second, "polls_list", %{fleet_id: @fleet}, c))
       assert [%{wallet: wallet}] = RegentAgents.list_my_agents!(actor: person(subject))
       assert String.downcase(wallet) == String.downcase(c.signer.address)
       assert "polls_list" in tool_names(first, c)
@@ -794,6 +826,17 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   defp result(%{"result" => result}), do: result
+
+  # A tool's refusal of an app that hasn't paired: the error alone, no data.
+  defp not_paired?(%{
+         "result" => %{"isError" => true, "content" => [%{"text" => text}]} = result
+       }),
+       do:
+         not Map.has_key?(result, "structuredContent") and
+           Jason.decode!(text)["error"]["code"] == "agent_not_paired"
+
+  defp not_paired?(_answer), do: false
+
   defp error(conn), do: json(conn)["error"]
   defp json(conn), do: Jason.decode!(conn.resp_body)
   defp new_wallet, do: "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)

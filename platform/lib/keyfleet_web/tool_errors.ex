@@ -11,6 +11,11 @@ defmodule KeyfleetWeb.ToolErrors do
   identity refusal takes this site's own code and words, or, when no answer
   came, the words every Regent site gives it.
 
+  A connected app whose identity isn't its person's paired agent yet is
+  listed that agent's tools (`Keyfleet.Agents.Connection.Listing`), and any
+  but its identity tools is refused before anything is read, as
+  `agent_not_paired` with the steps that pair it (`check_input/3`).
+
   Input a tool's action cannot take is refused before AshAi runs it
   (`check_input/3`, the router's `tool_argument_transformer`), as the action
   itself would refuse it, with the actor and context it would run with: a
@@ -29,16 +34,25 @@ defmodule KeyfleetWeb.ToolErrors do
   (`Keyfleet.Graph.Validations.WriteAllowance`); the run that follows does.
   """
 
+  alias Keyfleet.Actors.ConnectedApp
   alias Keyfleet.Agents.Connection
   alias Keyfleet.Fleets
   alias Keyfleet.Graph.Errors.ComingSoonFleetError
-  alias KeyfleetWeb.WorkspaceRefusal
+  alias KeyfleetWeb.{Refusal, WorkspaceRefusal}
+
+  @pair_first "Ask your person for a one-use code from Pair New Agent on their Agents page, " <>
+                "call pair_identity with it, then call this tool again."
 
   @doc """
   Casts a tool's `input` as its action takes it. Input it takes goes on to
-  AshAi unchanged; other input is refused as `{:error, text}`.
+  AshAi unchanged; other input is refused as `{:error, text}`, and so is any
+  tool but an identity tool that a connected app calls before it pairs.
   """
   @spec check_input(AshAi.Tool.t(), term(), map()) :: {:ok, term()} | {:error, String.t()}
+  def check_input(%AshAi.Tool{resource: resource}, _arguments, %{actor: %ConnectedApp{}})
+      when resource != Connection,
+      do: {:error, text(Refusal.body("agent_not_paired", @pair_first))}
+
   def check_input(%AshAi.Tool{resource: resource, action: %{name: action}}, arguments, context) do
     with %{} <- arguments, %{} = input <- arguments["input"] || %{} do
       resource
