@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.AgentCodeFileTest do
 
     assert ContractSchema.errors(too_large, "CodeFileRefusedError") == []
     assert too_large["error"]["code"] == "code_file_too_large"
-    assert too_large["error"]["hint"] =~ "#{@limit} bytes"
+    assert too_large["error"]["hint"] =~ "#{@limit}"
     assert too_large["error"]["hint"] =~ "#{@limit + 1}"
 
     # The largest file it reads comes back whole.

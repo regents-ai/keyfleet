@@ -95,42 +95,49 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
   # Whoever may read the commit reads its files: the same rule as the
   # commit's own read (`Keyfleet.Code.Commit`, `:of_hashes`).
   def answer(:file, %{"fleet_id" => fleet_id, "commit" => hash} = params, actor, _waiter) do
-    with {:ok, repository} <- repository(fleet_id, params["project"]),
-         true <- Keyfleet.Access.allowed?(actor, :read, :code, fleet_id) || :members_only do
-      case Code.commit_file(repository, hash, params["path"]) do
-        {:ok, bytes} ->
-          ok(%{
-            commit: hash,
-            commit_url: WorkspacePage.commit_url(fleet_id, repository, hash),
-            path: params["path"],
-            content: bytes,
-            size: byte_size(bytes),
-            sha256: :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower)
-          })
+    case repository(fleet_id, params["project"]) do
+      {:ok, repository} ->
+        fleet_id
+        |> Code.commit_file(repository, hash, params["path"], actor)
+        |> file_answer(fleet_id, repository, params)
 
-        {:too_large, size} ->
-          {422,
-           Refusal.body(
-             "code_file_too_large",
-             "code_file reads a file of at most #{Code.config()[:file_max_bytes]} bytes; " <>
-               "this one has #{size}. Clone the project's repository to read it: " <>
-               "projects_list gives its clone_url."
-           ), nil}
-
-        :not_text ->
-          refusal(422, "code_file_not_text")
-
-        :not_found ->
-          refusal(404, "file_unknown")
-
-        {:error, error} ->
-          Logger.warning("The repository #{repository} could not be read: #{reason(error)}")
-          refusal(503, "code_unavailable")
-      end
-    else
-      {:refused, status, code} -> refusal(status, code)
-      :members_only -> refused(fleet_id, {:error, %Ash.Error.Forbidden{}})
+      {:refused, status, code} ->
+        refusal(status, code)
     end
+  end
+
+  defp file_answer({:ok, bytes}, fleet_id, repository, %{"commit" => hash, "path" => path}) do
+    ok(%{
+      commit: hash,
+      commit_url: WorkspacePage.commit_url(fleet_id, repository, hash),
+      path: path,
+      content: bytes,
+      size: byte_size(bytes),
+      sha256: :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower)
+    })
+  end
+
+  defp file_answer({:too_large, size}, _fleet_id, _repository, _params) do
+    {422,
+     Refusal.body(
+       "code_file_too_large",
+       "code_file reads a file of at most #{Code.config()[:file_max_bytes]} bytes; " <>
+         "this one has #{size}. Clone the project's repository to read it: " <>
+         "projects_list gives its clone_url."
+     ), nil}
+  end
+
+  defp file_answer(:not_text, _fleet_id, _repository, _params),
+    do: refusal(422, "code_file_not_text")
+
+  defp file_answer(:not_found, _fleet_id, _repository, _params), do: refusal(404, "file_unknown")
+
+  defp file_answer(:forbidden, fleet_id, _repository, _params),
+    do: refused(fleet_id, {:error, %Ash.Error.Forbidden{}})
+
+  defp file_answer({:error, error}, _fleet_id, repository, _params) do
+    Logger.warning("The repository #{repository} could not be read: #{reason(error)}")
+    refusal(503, "code_unavailable")
   end
 
   defp ok(body), do: {200, body, nil}

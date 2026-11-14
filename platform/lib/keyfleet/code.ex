@@ -23,7 +23,7 @@ defmodule Keyfleet.Code do
   """
   use Ash.Domain
 
-  alias Keyfleet.AccessCache
+  alias Keyfleet.{Access, AccessCache}
   alias Keyfleet.Actors.System
   alias Keyfleet.Code.{Commit, NodeClient, Push, RecordsDownError, Repository, Sent, Setup}
   alias Keyfleet.Graph.Checks.KeyActor
@@ -180,15 +180,22 @@ defmodule Keyfleet.Code do
   end
 
   @doc """
-  The file at `path` in the commit `hash`, whole: `{:ok, bytes}` for text
-  (`text?/1`), `{:too_large, size}` past `file_max_bytes` with its size in
-  bytes, `:not_text`, `:not_found` while the commit has no file at `path` (no
-  such commit, a folder, a path that can't name a place in the code and no
-  repository yet included), or `{:error, error}` when the store can't be read.
-  The folder holding it tells a file from a folder and gives its size.
+  The file at `path` in the commit `hash` of a fleet's repository, whole, as
+  `actor` reads it: `{:ok, bytes}` for text (`text?/1`), `{:too_large, size}`
+  past `file_max_bytes` with its size in bytes, `:not_text`, `:not_found`
+  while the commit has no file at `path` (no such commit, a folder, a path
+  that can't name a place in the code and no repository yet included),
+  `:forbidden` for a reader the fleet's code isn't open to (the rule a
+  commit's own read keeps, `Keyfleet.Code.Commit`), or `{:error, error}` when
+  the store can't be read. The folder holding it tells a file from a folder
+  and gives its size.
   """
-  def commit_file(repository, hash, path) do
-    if code_path?(path), do: file_in(repository, hash, path), else: :not_found
+  def commit_file(fleet_id, repository, hash, path, actor) do
+    cond do
+      not Access.allowed?(actor, :read, :code, fleet_id) -> :forbidden
+      code_path?(path) -> file_in(repository, hash, path)
+      true -> :not_found
+    end
   end
 
   defp file_in(repository, hash, path) do
