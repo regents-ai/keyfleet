@@ -74,6 +74,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/projects/start",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits/{commit}",
+             "/api/v1/agent/fleets/{fleet_id}/projects/{project}/code/file",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/code/pushes",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/delete",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/describe",

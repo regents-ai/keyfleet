@@ -334,7 +334,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @project_start, [], %{"as_key" => 1, "name" => "lab", "title" => "Lab"}},
     {"POST", @project_archive, [], %{"as_key" => 1}},
     {"POST", @project <> "take_over", [], %{"as_key" => 1}},
-    {"POST", @project <> "delete", [], %{"as_key" => 1}}
+    {"POST", @project <> "delete", [], %{"as_key" => 1}},
+    {"POST", @project <> "code/file", [],
+     %{"commit" => String.duplicate("a", 40), "path" => "lib/app.ex"}}
   ]
 
   # Fields a body may not send together (the schema's `not: {required: …}`);

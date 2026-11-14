@@ -438,6 +438,13 @@ defmodule KeyfleetWeb.McpConnectorTest do
             {"fleets_show", %{"fleet_id" => fleet}},
             {"publications_list", %{"fleet_id" => fleet, "project" => "main"}},
             {"code_pushes", %{"fleet_id" => fleet, "project" => "main"}},
+            {"code_file",
+             %{
+               "fleet_id" => fleet,
+               "project" => "main",
+               "commit" => String.duplicate("a", 40),
+               "path" => "lib/app.ex"
+             }},
             {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}},
             {"workspace_packet",
              %{"fleet_id" => fleet, "project" => "general", "ids" => ["goal#1"]}},

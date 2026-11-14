@@ -64,4 +64,21 @@ defmodule KeyfleetWeb.LinksTest do
              input: %{fleet_id: @fleet, project: "general", commit: hash}
            }
   end
+
+  test "a file's page at a commit names the read of that file; the code as it stands now none" do
+    hash = String.duplicate("ab", 20)
+    files = "/code/#{@fleet}/files"
+
+    assert %{kind: "code_files", read: read} = resolve("#{files}?path=lib%2Fapp.ex&at=#{hash}")
+
+    assert read == %{
+             tool: "code_file",
+             command: "code file",
+             input: %{fleet_id: @fleet, project: "general", commit: hash, path: "lib/app.ex"}
+           }
+
+    for now_or_top <- ["?path=lib%2Fapp.ex", "?at=#{hash}", ""] do
+      assert %{kind: "code_files", read: nil} = resolve(files <> now_or_top)
+    end
+  end
 end
