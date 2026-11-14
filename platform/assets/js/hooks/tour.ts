@@ -32,12 +32,24 @@ import {createCanvasIsland} from "../canvas_island"
 import {watchTheme} from "../theme"
 import {cardSpot, grow, holeAround, mixBox, mixSpot, noHole, pieces, underFoot, type Box, type Spot} from "../tour/place"
 import type {TourPicture, TourRenderer} from "../tour/renderer"
-import {BASE, EASE_IN_OUT, EASE_OUT, FAST, SLOW, byPointer, lastInputByPointer, play, rest, still} from "./motion/shared"
+import {
+  BASE,
+  EASE_IN_OUT,
+  EASE_OUT,
+  FAST,
+  SLOW,
+  byPointer,
+  lastInputByKey,
+  lastInputByPointer,
+  play,
+  rest,
+  still,
+} from "./motion/shared"
 import {backdrop} from "./motion/slides"
 import {colourReader} from "./theme_switch"
 
 type Kind = "visitor" | "holder"
-type Step = {target?: string; title: string; text: string; link?: {label: string; href: string}}
+type Step = {target?: string; title: string; text: string; copy?: string}
 type Run = {kind: Kind; steps: Step[]; at: number; opener: Element | null}
 type Frame = {hole: Box; card: Spot}
 
@@ -94,7 +106,7 @@ function stepsOf(root: HTMLElement, kind: Kind): Step[] {
     target: dataset.target,
     title: dataset.title!,
     text: dataset.text!,
-    link: dataset.link ? {label: dataset.linkLabel!, href: dataset.link} : undefined,
+    copy: dataset.copy,
   }))
 }
 
@@ -122,7 +134,7 @@ export function createTour(root: HTMLElement): TourController {
   const words = find(".tour__words")
   const title = find("[data-tour-title]")
   const text = find("[data-tour-text]")
-  const link = find<HTMLAnchorElement>("[data-tour-link]")
+  const copy = find<HTMLButtonElement>("[data-tour-copy]")
   const say = find("[data-tour-say]")
   const back = find<HTMLButtonElement>("[data-tour-back]")
   const next = find<HTMLButtonElement>("[data-tour-next]")
@@ -289,12 +301,11 @@ export function createTour(root: HTMLElement): TourController {
     const step = current.steps[at]
     title.textContent = step.title
     text.textContent = step.text
-    link.hidden = !step.link
-    if (step.link) {
-      link.href = step.link.href
-      link.textContent = step.link.label
-    }
+    copy.hidden = !step.copy
+    copy.dataset.copyText = step.copy ?? ""
     back.hidden = at === 0
+    // Back pressed on the second step hides itself: focus stays in the card.
+    if (back.hidden && document.activeElement === back) next.focus({preventScroll: true})
     nextLabel.textContent = at === current.steps.length - 1 ? "Done" : "Next"
     ;[...dots.children].forEach((dot, i) => dot.toggleAttribute("data-current", i === at))
     if (!opening) say.textContent = `${step.title}. ${step.text} Step ${at + 1} of ${current.steps.length}.`
@@ -331,7 +342,9 @@ export function createTour(root: HTMLElement): TourController {
     watch()
     if (!still(layer) && !forced.matches) island.mount()
     go(0, moves, true)
-    next.focus({preventScroll: true, focusVisible: !lastInputByPointer()})
+    // Next takes focus, so Enter goes on, with its ring only after a key press:
+    // a tour that starts by itself on a page with no input yet shows none.
+    next.focus({preventScroll: true, focusVisible: lastInputByKey()})
   }
 
   const finish = (moves: boolean) => {
@@ -344,7 +357,7 @@ export function createTour(root: HTMLElement): TourController {
     moving?.cancel()
     if (layer.contains(document.activeElement)) {
       const home = opener instanceof HTMLElement && opener.isConnected && opener !== document.body ? opener : null
-      ;(home ?? document.getElementById("fleet-tour-start"))?.focus({focusVisible: !moves})
+      ;(home ?? document.getElementById("fleet-tour-start"))?.focus({focusVisible: lastInputByKey()})
     }
     if (moves) scope.methods.leave()
     else hide()

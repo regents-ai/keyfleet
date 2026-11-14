@@ -17,9 +17,13 @@ defmodule KeyfleetWeb.Components.Tour do
   without the page being drawn again. Nothing about the tour is kept on the
   server. A step names its part as a CSS selector; a step whose part is not on
   the page is left out, and one that names no part shows its card in the
-  middle of the screen.
+  middle of the screen. A step may carry a message to copy, which its card's
+  Copy button copies: the skill's step carries the one a person pastes to
+  their agent.
   """
   use KeyfleetWeb, :html
+
+  alias KeyfleetWeb.PublicDocuments
 
   @fleet [
     %{
@@ -82,8 +86,7 @@ defmodule KeyfleetWeb.Components.Tour do
           data-target={step[:target]}
           data-title={step.title}
           data-text={step.text}
-          data-link={step[:link] && elem(step.link, 1)}
-          data-link-label={step[:link] && elem(step.link, 0)}
+          data-copy={step[:copy]}
         >
         </div>
       </template>
@@ -109,7 +112,15 @@ defmodule KeyfleetWeb.Components.Tour do
                 <div class="tour__words">
                   <h2 id="fleet-tour-title" class="tour__title" data-tour-title></h2>
                   <p id="fleet-tour-text" class="tour__text" data-tour-text></p>
-                  <a class="tour__link" target="_blank" rel="noopener" data-tour-link hidden></a>
+                  <Regent.Primitives.copy_button
+                    id="fleet-tour-copy"
+                    text=""
+                    class="tour__copy"
+                    data-tour-copy
+                    hidden
+                  >
+                    Copy
+                  </Regent.Primitives.copy_button>
                 </div>
                 <div class="tour__actions">
                   <Regent.Primitives.button variant="quiet" arrow={false} data-tour-skip>
@@ -176,8 +187,9 @@ defmodule KeyfleetWeb.Components.Tour do
         },
         %{
           title: "Skills",
-          text: "Give your agent the Keyfleet skill so it knows how to work here.",
-          link: {"Agent guide", ~p"/agents"}
+          text:
+            "Copy this and paste it to your agent. It tells your agent how to get the Keyfleet skill and use it.",
+          copy: skill_message()
         },
         %{title: "Schedule", text: "Set a daily run for your agent so your Key stays present."},
         %{
@@ -186,5 +198,17 @@ defmodule KeyfleetWeb.Components.Tour do
           text: "Ask your agent to introduce itself in this room."
         }
       ]
+  end
+
+  # What the skill's step copies for the person to paste to their agent, true
+  # for any agent: where the Keyfleet skill is, to save it as its `keyfleet`
+  # skill (or its runtime's own copy, as the skill's Installation says), and to
+  # follow it. Each runtime's own setup is in the pairing message
+  # (`KeyfleetWeb.PairingBox`).
+  defp skill_message do
+    """
+    Install the Keyfleet skill: save #{PublicDocuments.url("/skill.md")} as your keyfleet skill, or your runtime's own copy if #{PublicDocuments.url("/agents")} lists one, and reinstall it when its version changes. \
+    Follow it whenever you work in my Keyfleet fleets: it says how to pair with me, check in and take part.\
+    """
   end
 end

@@ -9922,6 +9922,57 @@ worktree's server held port 4502. Run alone on PORT 4532: browser suite 127 of
 five among them; that run's 16 Firefox and WebKit walks of the Key profile did
 not start, as neither browser is installed on the Mac.
 
+## 2026-11-14: The tour's buttons are one calm set, and its Skills step copies a message for the agent
+
+- The tour card's Skip, Back and Next now read as one set, all one height and
+  square. Next is the only filled button, in the site's main button colours as
+  Buy Key has them (cream with dark words in dark, charcoal with light words in
+  light), but square, where it had a cut corner beside a square Back. Back is
+  an outline and Skip is words alone.
+- When the tour plays by itself, Next has focus, so Enter goes on, but shows
+  no ring; its ring appears once the person uses the keyboard. The button focus
+  goes back to when the tour ends follows the same rule. Back pressed on the
+  second step hides itself, and focus now moves to Next instead of staying on
+  the hidden button.
+- The Skills step's "Agent guide" link is gone. In its place a Copy button
+  copies a message for the person to paste to their agent, true for any agent:
+  "Install the Keyfleet skill: save https://keyfleet.ai/skill.md as your
+  keyfleet skill, or your runtime's own copy if https://keyfleet.ai/agents
+  lists one, and reinstall it when its version changes. Follow it whenever you
+  work in my Keyfleet fleets: it says how to pair with me, check in and take
+  part." The button says Copied in place without moving anything, and screen
+  readers hear it.
+- Across the site, no button rings blue on keyboard focus any more. The thick
+  blue ring that cut-corner buttons showed (four drop shadows) is gone; they
+  show the shared button's own thin ring cut to their corners. Every button,
+  and the controls drawn as buttons (the fleet's tabs, the header's menu
+  buttons), now rings in the warm orange of the buttons' corner marks: Tangerine
+  in dark, and in light a deeper Tangerine that stays readable on the light
+  page. The ring clears 3 to 1 against the page and the cards in both themes
+  (5.1 and 5.7 in light, 6.3 and 5.9 in dark). It stands 2px off the button,
+  so it never lies on the button's own fill. Text links and fields keep their
+  blue ring. With the device's colours forced, a cut-corner button keeps a
+  plain 2px outline in the system's colour. No other button drew a thick or
+  shadow ring; outline and quiet buttons keep their thin 2px outline, now warm.
+
+Tests: `platform/test/browser/fleet_tour.spec.ts` gains a walk that checks the
+tour that plays by itself shows no ring on Next until a key is pressed, and the
+holder's walk now presses Copy at the Skills step from the keyboard and checks
+the clipboard holds the skill's address, focus stays on Copy and the button
+keeps its size.
+
+Check (partition `_kf_s3`): `make check`, PORT unset, exit 0. Required fixes,
+commands, the pin check and contracts (547 tests, 6 skipped) passed, and the
+platform stage passed compile with warnings as errors, hex audit, format,
+credo strict (no issues), sobelow, xref, graph host (243), the full suite
+(1,461: 20 properties, 1,441 tests, 19 excluded), codegen, route handoff,
+typecheck, 499 unit tests, the browser suite 127 of 127 and devices 70 of 70.
+Chain walks on PORT 4532, since other worktrees' servers kept taking 4502:
+Chromium 132 of 132, the tour's six among them; the 16 Firefox and WebKit
+walks of the Key profile did not start, as neither browser is installed on the
+Mac. The stylesheet, built minified as a release builds it, is 58,811 bytes
+gzipped against its 61,440 budget.
+
 ## 2026-11-14: A notebook file write names the revision it read
 
 - An agent's read of a notebook file now answers the file's `revision`, and writing over

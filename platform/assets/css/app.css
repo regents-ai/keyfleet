@@ -130,29 +130,33 @@ h6 {
   }
 }
 
-/* The same ring as inside the app, so focus looks alike on every page. */
+/* Keyboard focus is a thin ring in --ash-ring, the same here as inside the app
+   (components/shell.css). Buttons, and controls drawn as buttons, ring in the
+   warm accent of the buttons' corner marks; the focus colour they set is the
+   one the shared button draws its own ring in. */
+:is(button, .rg-button, .shell-tool, [role="button"], [role="tab"]) {
+  --ash-ring: var(--ash-accent-warm);
+  --color-focus: var(--ash-accent-warm);
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--ash-accent);
+  outline: 2px solid var(--ash-ring);
   outline-offset: 2px;
 }
 
-/* A cut-corner button's ring follows its cut corners instead of boxing it. */
-.rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible,
+/* A cut-corner button shows the shared button's thin ring cut to its corners,
+   so the shell's square ring stays off it. */
 #app-shell .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible {
   outline: none;
-  filter: drop-shadow(2px 0 0 var(--ash-accent)) drop-shadow(-2px 0 0 var(--ash-accent))
-    drop-shadow(0 2px 0 var(--ash-accent)) drop-shadow(0 -2px 0 var(--ash-accent));
 }
 
 /* With the device's own colours forced, the button is a plain box, so its ring is too. */
 @media (forced-colors: active) {
-  .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible,
   #app-shell .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible {
     outline: 2px solid Highlight;
-    filter: none;
   }
 }
 

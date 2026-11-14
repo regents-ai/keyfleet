@@ -124,6 +124,24 @@ async function walk(page: Page, steps: [string, string | null][], {still = false
 const seen = (page: Page) =>
   page.evaluate(() => [localStorage.getItem("keyfleet:tour:visitor"), localStorage.getItem("keyfleet:tour:holder")])
 
+const ringed = (page: Page) => page.evaluate(() => document.activeElement?.matches(":focus-visible") ?? false)
+
+// The Skills step's Copy, pressed from the keyboard, puts the message for the
+// person's agent on the clipboard, naming where the skill is. Focus stays on
+// it in the card, and its answer keeps the button's size.
+async function copiesTheSkill(page: Page) {
+  const copy = page.locator(".tour [data-tour-copy]")
+  await expect(copy).toBeVisible()
+  const before = await copy.boundingBox()
+  await copy.focus()
+  await page.keyboard.press("Enter")
+  await expect(copy).toHaveAttribute("data-copy-state", "copied")
+  await expect(copy).toBeFocused()
+  expect(await copy.boundingBox()).toEqual(before)
+  const skill = `${new URL(page.url()).origin}/skill.md`
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(skill)
+}
+
 test("a first visit plays the visitor's tour, ringing each part in turn, and Done ends it for good", async ({page}) => {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
@@ -139,6 +157,17 @@ test("a first visit plays the visitor's tour, ringing each part in turn, and Don
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await expect(card(page)).toBeHidden()
   expect(errors).toEqual([])
+})
+
+test("a tour that plays by itself rings Next only once a key is pressed", async ({page}) => {
+  await open(page, "/classic/1")
+  await expect(next(page)).toBeFocused()
+  expect(await ringed(page)).toBe(false)
+
+  await page.keyboard.press("Shift+Tab")
+  await page.keyboard.press("Tab")
+  await expect(next(page)).toBeFocused()
+  expect(await ringed(page)).toBe(true)
 })
 
 test("Skip and Escape end the tour, a reload leaves it ended, and Tour plays it again", async ({page}) => {
@@ -191,6 +220,7 @@ test("Buy Key takes its press while the tour shows, at the first step and at its
 test("a holder's tour goes on to their Key, their agent, its skill, its daily run and an intro", async ({page}) => {
   // A Key, and the fleet's rooms with it, so the intro has its room to point at.
   sayInPublic("fibonacci_cascade", me, "Hello")
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"])
   await page.setViewportSize({width: 1280, height: 800})
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await open(page, "/cascade/1")
@@ -199,9 +229,9 @@ test("a holder's tour goes on to their Key, their agent, its skill, its daily ru
   for (const [index, [name, selector]] of holder.entries()) {
     await expect(title(page)).toHaveText(name)
     await expect.poll(async () => (await standing(page, selector)).ringOff).toBeLessThanOrEqual(1.5)
-    const link = page.locator(".tour [data-tour-link]")
-    if (name === "Skills") await expect(link).toHaveAttribute("href", "/agents")
-    else await expect(link).toBeHidden()
+    const copy = page.locator(".tour [data-tour-copy]")
+    if (name === "Skills") await copiesTheSkill(page)
+    else await expect(copy).toBeHidden()
     const now = await standing(page, selector)
     expect(now.covers).toBe(false)
     expect(now.onScreen).toBe(true)
