@@ -35,7 +35,6 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Actors.System
   alias Keyfleet.Agents
-  alias Keyfleet.Budgets
   alias Keyfleet.Chain
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.Scanner
@@ -44,13 +43,11 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
-  alias Keyfleet.Fundings
   alias Keyfleet.GoalIdeas
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
-  alias Keyfleet.Projects
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
@@ -546,112 +543,6 @@ defmodule Keyfleet.BrowserChain do
 
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
   def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
-
-  @doc """
-  Moves the fleet's fundings on: each still waiting arrives, read as NEAR
-  Intents answers a finished swap, and `owner`, who holds a Key, starts one
-  more whose deposit address and NEAR amount are as long as the service's.
-  """
-  def fund!(fleet_id, owner) do
-    actor = holder(owner)
-
-    Fundings.StubClient.put_status(
-      {:ok,
-       %{
-         state: :success,
-         origin_tx: "8Hq3vYk2cGd7uWfP1xJm4sTn6bLr9ZaQe5oVyKw3NpDu",
-         destination_tx: "0x" <> String.duplicate("7c", 32),
-         raw: %{}
-       }}
-    )
-
-    for %{state: :pending_deposit} = funding <- Fundings.list_fundings!(fleet_id),
-        do: Fundings.refresh_funding!(funding, actor: actor)
-
-    Fundings.StubClient.put_quote(
-      {:ok,
-       %{
-         amount_in: "1651313840569386417635746000000",
-         amount_in_formatted: "1651313.840569386417635746",
-         amount_out: "2500000000",
-         amount_out_formatted: "2500",
-         time_estimate_s: 24,
-         deadline: "2026-11-14T23:00:00.000Z",
-         deposit_address: String.duplicate("a3f9", 16),
-         raw: %{}
-       }}
-    )
-
-    Fundings.start_funding!(fleet_id, 1_000_000_000, "alice.near", actor: actor)
-    :ok
-  end
-
-  @doc """
-  Sells `owner` two Keys of the fleet and starts the project `lab` as the
-  first; returns that Key, which sponsors the project's budget in `budget!/3`.
-  """
-  def project!(fleet_id, owner) do
-    sponsor = sell!(fleet_id, owner)
-    sell!(fleet_id, owner)
-    Projects.bootstrap_general!([fleet_id])
-    Projects.start_project!(fleet_id, sponsor, "lab", "Lab", actor: holder(owner))
-    sponsor
-  end
-
-  @doc """
-  Opens a budget on the project `lab` as Key `sponsor`, and the Key after it
-  proposes five purchases that end proposed, approved, refused, bought and
-  worked.
-  """
-  def budget!(fleet_id, owner, sponsor) do
-    actor = holder(owner)
-    proposer = sponsor + 1
-    expires = DateTime.utc_now() |> DateTime.add(7, :day)
-
-    Budgets.open_budget!(fleet_id, sponsor, "lab", 50_000_000, expires, "Sponsor’s own USDC",
-      actor: actor
-    )
-
-    propose = fn purpose, price ->
-      Budgets.propose_purchase!(
-        fleet_id,
-        proposer,
-        "lab",
-        purpose,
-        "https://patchbay.help/a",
-        price, actor: actor)
-    end
-
-    decide = fn purchase, approve, reason ->
-      Budgets.decide_purchase!(fleet_id, sponsor, purchase.id, approve, reason, actor: actor)
-    end
-
-    receipt = fn purchase ->
-      Budgets.record_receipt!(fleet_id, proposer, purchase.id, "https://patchbay.help/r", nil,
-        actor: actor
-      )
-    end
-
-    propose.("Fix the login loop on Safari", 4_000_000)
-    "Speed up the graph view" |> propose.(2_500_000) |> decide.(true, nil)
-    "Rewrite the search index" |> propose.(30_000_000) |> decide.(false, "Too much for one fix")
-    "Patch the nightly build" |> propose.(1_250_000) |> decide.(true, nil) |> receipt.()
-
-    worked = "Fix the flaky upload test" |> propose.(3_000_000) |> decide.(true, nil)
-    receipt.(worked)
-
-    Budgets.record_result!(
-      fleet_id,
-      sponsor,
-      worked.id,
-      true,
-      "The test passed 50 runs in a row",
-      "https://patchbay.help/e",
-      actor: actor
-    )
-
-    :ok
-  end
 
   @doc """
   Gives the fleet a fortnight behind it, for its Worldline, the same every
