@@ -193,6 +193,9 @@ test("a Key holds several agents in the gallery, which moves and removes them", 
 
   for (const viewport of [{width: 390, height: 844}, {width: 320, height: 700}]) {
     await page.setViewportSize(viewport)
+    // Measured as the page first draws at the new size: the Key Astra just went
+    // to is still gliding to the front, and it lands as the window changes size.
+    await page.evaluate(() => new Promise(requestAnimationFrame))
     const remove = gallery.getByRole("button", {name: `Take ${nameB} off Key ${second}`})
     expect((await remove.boundingBox())!.height).toBeGreaterThanOrEqual(44)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)

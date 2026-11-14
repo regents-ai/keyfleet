@@ -67,7 +67,8 @@ const drawn = (list: HTMLElement): Drawn => ({
  * gallery the page redraws whenever it changes or a thread whose connection
  * comes back, is marked `data-redrawn`: it moves only when its items come, go
  * or change places, and what is inside each item stays as it is while they
- * move.
+ * move. A list still moving when the window changes size is at its new place
+ * at once.
  */
 export const listHook = (layouts: Record<string, () => LayoutAnimationParams>): Hook => ({
   mounted(this: ListHook) {
@@ -77,6 +78,16 @@ export const listHook = (layouts: Record<string, () => LayoutAnimationParams>): 
       const layout = createLayout(this.el, {children: this.el.dataset.children})
       scope.add("record", () => layout.record())
       scope.add("move", () => layout.animate(layouts[this.el.dataset.variant ?? ""]()))
+
+      // While the list moves, every element in it is held at the size it had
+      // in the window the move began in. A window that changes size, as a
+      // phone turns or the page zooms, lands the move at once, so the first
+      // frame drawn at the new size has each button at its new size.
+      const land = () => {
+        if (layout.timeline?.completed === false) layout.timeline.complete()
+      }
+      window.addEventListener("resize", land)
+      return () => window.removeEventListener("resize", land)
     })
   },
 

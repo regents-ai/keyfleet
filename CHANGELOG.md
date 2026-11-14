@@ -9673,3 +9673,42 @@ The guides, install lines, the tool manifest's `cli.release` and the Makefile's
 checker pin name the newest release, its tag commit (1608c835) and its wheel
 (SHA256 f071ef49…). `make check-cli` passes Keyfleet's commands against that
 commit.
+
+## 2026-11-13: A Key gliding into place lands when the window changes size
+
+On Account, a Key that moves in the gallery as an agent goes on or off it
+glides to its new place for just under a second (the list's spring settles in
+920ms). For that time the motion holds every element in the gallery at the
+size it had when the glide began. A phone turned, a window resized or the page
+zoomed during a glide left the gallery drawn for the old window until the
+glide ended: changed from 1280 wide to 390, each agent's remove button stayed
+28 pixels high, where on a phone it is 44, for about 0.9 seconds.
+
+A list still moving when the window changes size now lands at once, so the
+first frame drawn at the new size has every button at its new size. This is
+the motion kit's list (`listHook` in `assets/js/hooks/motion/moments.ts`), so
+it holds for every list that moves: the Key gallery, the Rooms and direct
+message threads, notes and the motion lab. In a window that keeps its size the
+glide runs as before, and with reduced motion nothing moves.
+
+The gallery walk measures the remove buttons as the page first draws at each
+new size. Playwright's change of window size returns before the page has run
+its resize steps, and in that moment, which the page never draws, the walk
+could read the glide's held size.
+
+Check (partition `_kf_s4`, browser walks on port 4595, machine load average
+50 to 166 on 16 cores): before the change the gallery walk failed alone 3 of 3,
+reading 28. With the motion changed and the walk not, its file failed 6 of 10
+fresh runs; a log in the page showed each failing read came before the resize
+event, and every frame the page drew at 390 had the glide landed and the
+button 44 high. With the walk changed and the old motion put back, it failed 3
+of 3, reading 28. With both: the walk's file in 10 separate fresh runs, 60 of
+60; the chain walks in Chromium by themselves, 126 of 126. Read frame by frame
+in headless Chromium, at 1280 and at 390 throughout the glide runs as before
+(about 930ms) with each remove button at its own size, and under reduced motion
+nothing moves. `make check`, every stage, PORT unset: compile with warnings as
+errors, unused locks, hex audit, format, credo strict, sobelow, xref, graph
+host 243, full suite 1,454 (20 properties, 1,434 tests, 19 excluded), codegen,
+route handoff, typecheck and 486 unit tests, browser suite 125 of 125, devices
+70 of 70, required fixes, commands, the pin check and contracts (547 tests, 6
+skipped). Firefox was not run; WebKit is not run on the Mac.
