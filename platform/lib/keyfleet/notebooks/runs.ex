@@ -28,11 +28,11 @@ defmodule Keyfleet.Notebooks.Runs do
   Reading the run answers that `source`; once the run has finished,
   `entry_current`, whether the notebook's saved code is still that code, and
   `bundle_current`, whether every file is still as it was, nil when that
-  can't be told; and while the run hasn't succeeded, `last_succeeded`. Listing the notebooks answers each one's
-  `last_succeeded` too: the newest kept page of a run of the notebook that
-  succeeded, read from Keyfleet's copies alone
-  (`Keyfleet.Notebooks.SavedOutput`), so no number of later failed or
-  waiting runs hides the last good result.
+  can't be told; and while the run hasn't succeeded, `last_succeeded`.
+  Listing the notebooks answers each one's `last_succeeded` too: the newest
+  kept page of a run of the notebook that succeeded, read from Keyfleet's
+  copies alone (`Keyfleet.Notebooks.SavedOutput`), so no number of later
+  failed or waiting runs hides the last good result.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
   once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
