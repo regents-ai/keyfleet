@@ -8,11 +8,15 @@ defmodule Keyfleet.Agents.Connection.Listing do
   right once it pairs. Running one takes the paired agent: until then the call
   is refused as `agent_not_paired` (`KeyfleetWeb.ToolErrors.check_input/3`),
   and the policy beside this check refuses it as well.
+
+  Like Ash's built-in actor checks, it knows the app by its `role` and the
+  permission by its name, so the thirteen policies that list tools with it
+  take no compile-time dependency on the rest of the site.
   """
 
   use Ash.Policy.SimpleCheck
 
-  alias Keyfleet.Actors.ConnectedApp
+  @agent_scope "keyfleet.agent"
 
   @impl true
   def describe(_opts),
@@ -20,11 +24,11 @@ defmodule Keyfleet.Agents.Connection.Listing do
 
   @impl true
   def match?(
-        %ConnectedApp{principal: %{scopes: scopes}},
+        %{role: :connected_app, principal: %{scopes: scopes}},
         %{subject: %Ash.ActionInput{context: %{private: %{ash_ai_pre_check?: true}}}},
         _opts
       ),
-      do: Keyfleet.OAuth.agent_scope() in scopes
+      do: @agent_scope in scopes
 
   def match?(_actor, _context, _opts), do: false
 end
