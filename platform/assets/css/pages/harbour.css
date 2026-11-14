@@ -182,11 +182,6 @@ body[data-sea-lifted] .harbour-sea__harbour {
   }
 }
 
-.harbour-sea__lift:focus-visible {
-  outline: 2px solid var(--ash-accent);
-  outline-offset: 2px;
-}
-
 .harbour-sea__lift svg {
   width: 1.75rem;
   height: 1.75rem;
@@ -238,11 +233,6 @@ body[data-sea-lifted] .harbour-sea__bar {
   .harbour-sea__return:hover {
     background: color-mix(in oklab, var(--color-fg) 6%, transparent);
   }
-}
-
-.harbour-sea__return:focus-visible {
-  outline: 2px solid var(--ash-accent);
-  outline-offset: 2px;
 }
 
 /* On a phone the bar tightens and its buttons drop their arrows, so the name,

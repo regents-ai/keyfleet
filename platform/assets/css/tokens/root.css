@@ -40,13 +40,15 @@
   );
 
   /* The palette carries two accents and the shell reads them as two. Blue is what
-     the page points at: focus and links. Orange is what carries value or risk,
-     such as disconnecting or an error.
+     the page points at: links, and the focus ring on links and fields. Orange is
+     what carries value or risk, such as disconnecting or an error, and it rings
+     a focused button, as its corner marks do (app.css).
      Dark takes both swatches raw. Light folds each into Primary only as far as
      4.5:1 on the deepest light panel needs — blue reads 4.7:1 there and orange
      4.6:1, and both clear 5:1 on Surface. */
   --ash-accent: light-dark(color-mix(in oklab, var(--palette-powder-blue) 50%, var(--palette-charcoal)), var(--palette-powder-blue));
   --ash-accent-warm: light-dark(color-mix(in oklab, var(--palette-tangerine-tango) 68%, var(--palette-charcoal)), var(--palette-tangerine-tango));
+  --ash-ring: var(--ash-accent);
 
   /* Behind a dialog the page is dimmed toward Primary in both themes, so the sheet
      in front of it reads the same whichever ground it was opened from. */
