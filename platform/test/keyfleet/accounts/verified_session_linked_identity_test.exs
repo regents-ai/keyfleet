@@ -128,7 +128,9 @@ defmodule Keyfleet.Accounts.VerifiedSessionLinkedIdentityTest do
       session_id: "session-#{suffix}",
       wallet_address: wallet,
       wallet_addresses: [wallet],
-      linked_socials: linked_socials
+      linked_socials: linked_socials,
+      issued_at: Elixir.System.system_time(:second),
+      expires_at: Elixir.System.system_time(:second) + 3600
     }
   end
 

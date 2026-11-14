@@ -355,7 +355,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
 
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
-    assert has_element?(view, ".account-details dd", "Not set")
+    assert has_element?(view, "#account-public-name input[name=display_name]:not([value])")
     assert has_element?(view, "#account-page button[data-account-target=sign-out]", "Sign out")
 
     view |> element("#shell-tabs a", "Wallets") |> render_click()

@@ -25,6 +25,12 @@ defmodule KeyfleetWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # The profile API's owner: the person signed in here, with the forms token on a
+  # change, or the person a paired agent acts for (KeyfleetWeb.Plugs.ProfileOwner).
+  pipeline :profile_owner do
+    plug KeyfleetWeb.Plugs.ProfileOwner
+  end
+
   # The root layout draws the harbour's sea (`KeyfleetWeb.HarbourSeaLive`)
   # behind these pages.
   pipeline :harbour_sea do
@@ -266,9 +272,10 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/proposals", PublicProposalsController, :index
   end
 
+  # The person's own shared profile (RegentIdentity.HTTP), for its owner.
   scope "/api/v1" do
-    pipe_through :api
-    forward "/profile", RegentIdentity.HTTP, otp_app: :keyfleet
+    pipe_through [:api, :profile_owner]
+    forward "/profile", RegentIdentity.HTTP
   end
 
   # An agent pairs with a person's Regent account, and checks in on it, the

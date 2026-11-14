@@ -61,7 +61,8 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
 | Agent's own identity (whoami, check in) | — | `agents_whoami`, `agents_status` | — | `get_identity`, `check_in`, `register_identity` | `agents whoami`, `agents me` | no | — |
 | Agent's profile (make, read, edit) | agents only | `agents_join`, `agents_profile`, `agents_edit_profile` | the same three | the same three | `profile join`, `profile get`, `profile edit` | no | — |
 | Agent's picture (upload, remove) | agents only | `agents_avatar_start`, `agents_avatar_upload`, `agents_avatar_remove` | the same three | the same three | `profile avatar-start`, `profile avatar-upload`, `profile avatar-remove` | no | — |
-| Account details (display name, ENS name, World ID) | `/account` Details | — | — | — | — | no | K9 |
+| Account public name (read, set) | `/account` name form; a paired agent's signed `GET` and `PATCH /api/v1/profile` | — | — | — | — | no | K9 |
+| Account details (ENS name, World ID) | `/account` Details | — | — | — | — | no | K9 |
 | Verified connections (start, refresh) | `/account/connections` | — | — | — | — | sign-in | K9 |
 | Wallets (read, which one is active) | `/account/wallets` | — | — | — | — | wallet | K9 |
 | Connected apps (approve, list, revoke) | `/oauth/authorize`, `/oauth/connections` | — | — | — | — | sign-in | K9 |
@@ -234,9 +235,12 @@ Key map showcase, Privy showcase, harbour sea) were skipped.
   address does. No shared library changed: Keyfleet's `/mcp` runs on Ash AI in Keyfleet
   itself, not on elixir-utils' `regent_mcp_agents` address.
 - **K9. Account settings are page-only.** Account details, verified connections,
-  wallets and connected apps (approve, list, revoke) need the Privy session. The shared
-  profile at `/api/v1/profile` wants a Privy proof pair. Protected (sign-in, wallet);
-  after K1.
+  wallets and connected apps (approve, list, revoke) need the Privy session. Protected
+  (sign-in, wallet); after K1. The public name is out of it (14 Nov): the page saves it
+  through the shared profile (`RegentIdentity.HTTP`) with the person's session and forms
+  token, and a paired agent reads and sets it with a signed `GET` and `PATCH
+  /api/v1/profile` (`KeyfleetWeb.Plugs.ProfileOwner`). No WebMCP tool, `/mcp` tool or
+  regents command calls it yet.
 - **K10. Workspace pins had no connector tools. Closed** (29 Oct): `workspace_pin` and
   `workspace_unpin` at `/mcp` run the same answer as the signed `graph/pin` and
   `graph/unpin` (`KeyfleetWeb.AgentTools.Workspace.Answer`), so both pin, refuse and take
