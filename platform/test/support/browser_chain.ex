@@ -35,6 +35,8 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Actors.System
   alias Keyfleet.Agents
+  alias Keyfleet.Atlas.Count
+  alias Keyfleet.Atlas.Fill
   alias Keyfleet.Chain
   alias Keyfleet.Chain.OwnershipLog
   alias Keyfleet.Chain.Scanner
@@ -523,6 +525,80 @@ defmodule Keyfleet.BrowserChain do
       fork: fork,
       note: note
     })
+  end
+
+  @doc """
+  Gives the fleet's Atlas enough to look at: four projects of about the same
+  work in the year, none filling the picture alone. General holds 105 tasks,
+  more than the blocks read of one kind at once, so the rest gather into one
+  more block, three of them changed again today, beside a few goals and
+  notes; Harbour holds
+  goals, Charts notes and Docks findings, each changed again in September.
+  Returns the busiest task's id as JSON.
+  """
+  def atlas!(fleet_id) do
+    unless Graph.get_cursor!(fleet_id, actor: @system),
+      do: WorkspaceFixtures.open_log(fleet_id)
+
+    tasks =
+      for n <- 1..105,
+          do:
+            WorkspaceFixtures.create(fleet_id, "task", %{"title" => "Sound berth #{n}"},
+              by: rem(n, 5) + 3
+            )
+
+    for {type, name, count} <- [{"goal", "Map the bay", 4}, {"note", "Pilot notes", 6}],
+        n <- 1..count,
+        do: WorkspaceFixtures.create(fleet_id, type, %{"title" => "#{name} #{n}"}, by: 4)
+
+    others =
+      for {project, title, type, name, count, key} <- [
+            {"harbour", "Harbour", "goal", "Chart the reef", 6, 21},
+            {"charts", "Charts", "note", "Tide table", 4, 22},
+            {"docks", "Docks", "finding", "Depth at berth", 5, 23}
+          ] do
+        WorkspaceFixtures.start_project(fleet_id, project, title, by: key)
+
+        things =
+          for n <- 1..count,
+              do:
+                WorkspaceFixtures.create(fleet_id, type, %{"title" => "#{name} #{n}"},
+                  project: project,
+                  by: key
+                )
+
+        {project, type, things}
+      end
+
+    counted!(fleet_id)
+    now = DateTime.utc_now()
+
+    today =
+      for {thing, times} <- Enum.zip(tasks, [12, 6, 3]),
+          n <- 1..times,
+          do: %{thing: thing, kind: "task", project: "general", at: now, key: rem(n, 3) + 3}
+
+    september =
+      for {project, type, things} <- others,
+          {thing, index} <- Enum.with_index(things),
+          n <- 1..div(120, length(things)),
+          do: %{
+            thing: thing,
+            kind: type,
+            project: project,
+            at: DateTime.add(~U[2026-09-25 09:00:00Z], index * 60 + n, :minute),
+            key: rem(n, 4) + 3
+          }
+
+    Count.count(fleet_id, today ++ september)
+    Jason.encode!(%{busiest: hd(tasks)})
+  end
+
+  defp counted!(fleet_id) do
+    case Fill.batch(fleet_id) do
+      {:ok, :counted} -> counted!(fleet_id)
+      {:ok, :caught_up} -> :ok
+    end
   end
 
   @doc """
