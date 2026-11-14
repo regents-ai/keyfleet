@@ -20,8 +20,9 @@ defmodule Keyfleet.Graph.Workspace.Read do
   events after `after_seq`, the whole fleet's or, given `project`, those that
   touched that project, oldest first, at most `limit` of them and no more
   than 512 KiB of them unless one event alone is larger;
-  `next_cursor` is the `after_seq` to read on from, and `run_id` names the
-  log they come from. Given `object`, it answers that object's own changes
+  `next_cursor` is the `after_seq` to read on from, never past `watermark`,
+  so an `after_seq` beyond it still reads the next change, and `run_id` names
+  the log they come from. Given `object`, it answers that object's own changes
   alone: its creation, edits, archiving, links and their removal. Given
   `max_bytes`, a page holds no more than that, and a change larger than it
   alone is refused with its size rather than answered past the budget.
@@ -82,7 +83,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
     end
   end
 
-  defp read(:changes, %{fleet_id: fleet_id, after_seq: after_seq} = args, opts) do
+  defp read(:changes, %{fleet_id: fleet_id} = args, opts) do
     {run_id, watermark} = standing(fleet_id, opts)
 
     with {:ok, events, has_more} <- events(args, opts) do
@@ -91,7 +92,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
       %{
         run_id: run_id,
         events: page,
-        next_cursor: if(has_more, do: List.last(page).seq, else: max(after_seq, watermark)),
+        next_cursor: if(has_more, do: List.last(page).seq, else: watermark),
         has_more: has_more,
         watermark: watermark,
         agents: page |> Enum.map(&writer(&1.actor)) |> Agents.names_by_wallet()

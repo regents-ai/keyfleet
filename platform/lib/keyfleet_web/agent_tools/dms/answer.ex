@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.AgentTools.Dms.Answer do
       {:ok,
        %{
          conversation: conversation && conversation_json(conversation, token_id),
-         cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+         cursor: cursor(messages, Map.get(params, "after_seq", 0), conversation),
          has_more: Dms.more_after?(messages),
          messages: Enum.map(messages, &message_json/1)
        }}
@@ -170,8 +170,12 @@ defmodule KeyfleetWeb.AgentTools.Dms.Answer do
     end
   end
 
-  defp cursor([], after_seq), do: after_seq
-  defp cursor(messages, _after_seq), do: List.last(messages).seq
+  # Where reading on starts: the last message read or, with none, the
+  # after_seq sent, never past the last message the Key may see (none before
+  # its first), so an after_seq beyond it still reads the next one sent.
+  defp cursor([], _after_seq, nil), do: 0
+  defp cursor([], after_seq, conversation), do: min(after_seq, conversation.last_seq)
+  defp cursor(messages, _after_seq, _conversation), do: List.last(messages).seq
 
   defp conversation_json(conversation, token_id) do
     %{

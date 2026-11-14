@@ -269,9 +269,10 @@ defmodule Keyfleet.Proposals do
   The first #{@changes_page} records after it, of every kind the reader numbers,
   are read. `items` holds each proposal they touch, as it stands now, with
   `changed_seq`, the last of them that touched it, and in that order.
-  `next_cursor` is the last record read, to send as `after_seq` next time;
-  `head_seq` the fleet's last record number, and `has_more` whether records
-  after `next_cursor` are waiting. Money records and a key's edits being
+  `next_cursor` is the last record read, to send as `after_seq` next time, or
+  with none read `after_seq`, never past `head_seq`; `head_seq` is the fleet's
+  last record number, and `has_more` whether records after `next_cursor` are
+  waiting. Money records and a key's edits being
   restricted or allowed are counted but touch no proposal; the execution that
   restricted or allowed them does.
   """
@@ -306,7 +307,7 @@ defmodule Keyfleet.Proposals do
 
     %{
       items: items,
-      next_cursor: read |> List.last({after_seq, nil}) |> elem(0),
+      next_cursor: read |> List.last({Kernel.min(after_seq, head_seq), nil}) |> elem(0),
       head_seq: head_seq,
       has_more: rest != []
     }

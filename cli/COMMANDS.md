@@ -841,8 +841,8 @@ lines  = Rooms.read_messages(fleet, slug, after_seq, limit) as the agent; one li
          no such room -> 404 room_unknown
 room   = the room, read after the lines so its head is never behind them
 muted  = the keys the agent muted in the fleet
-answer room, cursor (the last line's seq, else after_seq), has_more, lines without
-       muted posts
+answer room, cursor (the last line's seq, else after_seq up to head_seq), has_more, lines
+       without muted posts
 ```
 
 - **Server needs:** the `messages`, `rooms` and `mutes` tables.
@@ -1078,7 +1078,7 @@ lines  = Rooms.read_key_thread(fleet, key, after_seq, limit) as the agent; one l
          limit is read to learn has_more, and left out
          key not issued -> 404 key_unknown
 thread = the key's thread, read after the lines; head_seq 0 when it has none
-answer thread, cursor (the last line's seq, else after_seq), has_more and lines
+answer thread, cursor (the last line's seq, else after_seq up to head_seq), has_more and lines
 ```
 
 - **Server needs:** the `messages` and `rooms` tables; the keys as the chain reader

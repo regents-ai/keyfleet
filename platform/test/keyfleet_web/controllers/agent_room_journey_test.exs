@@ -261,6 +261,49 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Enum.map(send_signed(c, "POST", @read_general).body["messages"], & &1["seq"]) == [1]
   end
 
+  # Costly failure: an agent that read from past the last post kept a cursor
+  # no post reached, and never read another one.
+  test "a read from past the last post answers the head as its cursor, so the next post is read",
+       c do
+    shard(c)
+    assert send_signed(c, "POST", @send_general, send_body("Survey started", "k-1")).status == 201
+    assert key_thread(c, 1, "send", send_body("Wall note", "w-1")).status == 201
+    past = Jason.encode!(%{after_seq: 1_000})
+
+    read = send_signed(c, "POST", @read_general, past).body
+    assert %{"messages" => [], "cursor" => 1, "room" => %{"head_seq" => 1}} = read
+    wall = key_thread(c, 1, "read", past).body
+    assert %{"messages" => [], "cursor" => 1, "thread" => %{"head_seq" => 1}} = wall
+
+    synced =
+      send_signed(
+        c,
+        "POST",
+        @sync_path,
+        Jason.encode!(%{
+          rooms: [%{slug: "general", after_seq: 1_000}],
+          keys: [%{token_id: 1, after_seq: 1_000}],
+          graph: %{after_seq: 1_000},
+          proposals: %{after_seq: 1_000},
+          run: %{kind: "session"}
+        })
+      ).body
+
+    assert [%{"cursor" => 1, "head_seq" => 1}] = synced["rooms"]
+    assert [%{"cursor" => 1, "head_seq" => 1}] = synced["keys"]
+    assert synced["graph"]["next_cursor"] == synced["graph"]["watermark"]
+    assert synced["proposals"]["next_cursor"] == synced["proposals"]["head_seq"]
+
+    assert send_signed(c, "POST", @send_general, send_body("Survey done", "k-2")).status == 201
+    assert key_thread(c, 1, "send", send_body("Second note", "w-2")).status == 201
+    on = &Jason.encode!(%{after_seq: &1["cursor"]})
+
+    assert [%{"body" => "Survey done"}] =
+             send_signed(c, "POST", @read_general, on.(read)).body["messages"]
+
+    assert [%{"body" => "Second note"}] = key_thread(c, 1, "read", on.(wall)).body["messages"]
+  end
+
   # An address holds one waiting sync at a time here (`:agent_waits_per_address`).
   test "past its address's cap, a sync with nothing new answers at once", c do
     shard(c)

@@ -1083,6 +1083,22 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       422
     )
 
+    # A read past the last message answers the last message's place, so
+    # reading on from it reads the next message sent.
+    past = %{"after_seq" => first["seq"] + 1_000}
+
+    assert %{"messages" => [], "cursor" => cursor} =
+             answer(c, c.signer, "POST", @dm <> "read", own, past, 200).body
+
+    assert cursor == first["seq"]
+    next = %{dm | "idempotency_key" => "dm-3", "body" => "Hull survey, part two"}
+    sent = answer(c, c.signer, "POST", @dm <> "send", own, next, 201).body["message"]
+
+    assert %{"messages" => [%{"id" => sent_id}]} =
+             answer(c, c.signer, "POST", @dm <> "read", own, %{"after_seq" => cursor}, 200).body
+
+    assert sent_id == sent["id"]
+
     answer(c, c.signer, "POST", @dm <> "delete", own, %{}, 200)
 
     assert answer(c, c.signer, "POST", @dm <> "delete", own, %{}, 404).body ==

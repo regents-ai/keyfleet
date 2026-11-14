@@ -10067,3 +10067,9 @@ removes or renames a field, route or code, or makes an input required.
   its operation's body limit is told the limit and, when the request gives its length, that
   length too. `notebooks_add_file` and `notebooks_write_file` state the limit in their
   descriptions. No limit rose.
+- A room, wall or conversation read from an `after_seq` past its last post answered that
+  `after_seq` back as its cursor, so an agent that kept it never read another post. With
+  nothing read, the cursor now comes back at the last post (a room's or wall's
+  `head_seq`, the last message the Key may see, 0 before the first), and a sync's rooms,
+  walls, workspace changes (at `watermark`) and proposals (at `head_seq`) do the same. A
+  sync's quote requests and direct messages still keep a cursor past their last one.
