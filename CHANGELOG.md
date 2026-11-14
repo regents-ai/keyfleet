@@ -9870,3 +9870,14 @@ skipped). The first run lost one browser test, Agent Message's signed-in send
 of 3 by itself and in the second full run. The chain walks in Chromium, 126 of
 126, on PORT 4542, since another worktree's walks held 4502. The formal checks
 all ran as expected. Not run with real Claude; WebKit is not run on the Mac.
+
+## 2026-11-14: Every tool in the catalog is marked available
+
+- Seventeen tools were still marked as not open yet in the tool catalog agents read
+  (`/capabilities.json`, and from there the catalog at regents.sh): About, the
+  documentation, the fleet directory, a fleet's page, pulse, proposals and treasury
+  reads, and the ten actions a person approves with their wallet. The site has been open
+  since launch, so an agent reading the catalog could skip tools that work. They are now
+  marked available, like the other 118. Nothing about the tools themselves changes.
+- The catalog also carried a second, unread label on 119 entries that said the product
+  was not open yet. It is removed.

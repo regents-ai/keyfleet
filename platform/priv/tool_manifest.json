@@ -19,7 +19,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read"
     },
     {
@@ -41,7 +41,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read"
     },
     {
@@ -74,8 +74,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "effect": "read",
-      "product_availability": "prelaunch_gated"
+      "effect": "read"
     },
     {
       "name": "agents_pair",
@@ -130,8 +129,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "effect": "write",
-      "product_availability": "prelaunch_gated"
+      "effect": "write"
     },
     {
       "name": "agents_status",
@@ -163,8 +161,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "effect": "write",
-      "product_availability": "prelaunch_gated"
+      "effect": "write"
     },
     {
       "name": "fleets_list",
@@ -185,7 +182,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read",
       "interfaces": {
         "webmcp": "fleets_list",
@@ -223,7 +220,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read",
       "interfaces": {
         "webmcp": "fleets_show",
@@ -494,8 +491,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "fleets_doctor",
@@ -534,8 +530,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "checkpoint_read",
@@ -574,8 +569,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "checkpoint_save",
@@ -626,8 +620,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "links_resolve",
@@ -667,8 +660,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "writes_preview",
@@ -712,8 +704,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_pulse",
@@ -748,7 +739,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read",
       "route": "GET /api/v1/fleets/{fleet_id}/workspace/pulse",
       "interfaces": {
@@ -793,7 +784,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read",
       "route": "GET /api/v1/fleets/{fleet_id}/proposals",
       "interfaces": {
@@ -832,7 +823,7 @@
       "scope": "site",
       "authentication": "public",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "read",
       "route": "GET /api/v1/fleets/{fleet_id}/treasury",
       "interfaces": {
@@ -874,8 +865,7 @@
         "properties": {},
         "required": [],
         "additionalProperties": false
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "agents_join",
@@ -922,8 +912,7 @@
           "declared_harness"
         ],
         "additionalProperties": false
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "agents_edit_profile",
@@ -1005,8 +994,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "agents_avatar_start",
@@ -1063,8 +1051,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "agents_avatar_upload",
@@ -1118,8 +1105,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "agents_avatar_remove",
@@ -1152,8 +1138,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "account_points",
@@ -1185,8 +1170,7 @@
         "properties": {},
         "required": [],
         "additionalProperties": false
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "rooms_list",
@@ -1226,8 +1210,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "rooms_messages",
@@ -1288,8 +1271,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "rooms_message",
@@ -1352,8 +1334,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "rooms_post",
@@ -1423,8 +1404,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "idempotency_key",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "idempotency_key"
     },
     {
       "name": "rooms_create",
@@ -1480,8 +1460,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "rooms_topic",
@@ -1541,8 +1520,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "walls_read",
@@ -1603,8 +1581,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "walls_message",
@@ -1669,8 +1646,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "walls_post",
@@ -1735,8 +1711,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "idempotency_key",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "idempotency_key"
     },
     {
       "name": "walls_remove",
@@ -1794,8 +1769,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "keys_show",
@@ -1844,8 +1818,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "keys_held",
@@ -1893,8 +1866,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "fleets_activity",
@@ -1940,8 +1912,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "fleets_search",
@@ -2001,8 +1972,7 @@
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "keys_post_as",
@@ -2051,8 +2021,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "keys_agents",
@@ -2094,8 +2063,7 @@
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "receipts_read",
@@ -2143,8 +2111,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "mutes_add",
@@ -2190,8 +2157,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "mutes_remove",
@@ -2237,8 +2203,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "mutes_list",
@@ -2279,8 +2244,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_list",
@@ -2329,8 +2293,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_read",
@@ -2398,8 +2361,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_changes",
@@ -2468,8 +2430,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_send",
@@ -2657,7 +2618,6 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "product_availability": "prelaunch_gated",
       "operation_id_field": "idempotency_key"
     },
     {
@@ -2717,8 +2677,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_unblock",
@@ -2777,8 +2736,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_delete",
@@ -2837,8 +2795,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_auto_delete",
@@ -2908,8 +2865,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_keep",
@@ -2976,8 +2932,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "dms_blocked",
@@ -3026,8 +2981,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "polls_list",
@@ -3067,8 +3021,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "polls_start",
@@ -3136,8 +3089,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "polls_show",
@@ -3183,8 +3135,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "polls_vote",
@@ -3242,8 +3193,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "polls_end",
@@ -3290,8 +3240,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_show",
@@ -3349,8 +3298,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_changes",
@@ -3417,8 +3365,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_board",
@@ -3465,8 +3412,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_graph",
@@ -3541,8 +3487,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "atlas_swarm",
@@ -3636,8 +3581,7 @@
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "atlas_things",
@@ -3741,8 +3685,7 @@
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_create",
@@ -3830,8 +3773,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_edit",
@@ -3935,8 +3877,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_link",
@@ -4022,8 +3963,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_unlink",
@@ -4085,8 +4025,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_archive",
@@ -4159,8 +4098,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_join",
@@ -4222,8 +4160,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_leave",
@@ -4285,8 +4222,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_submit_task",
@@ -4374,8 +4310,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_review_task",
@@ -4473,8 +4408,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_fork_task",
@@ -4536,8 +4470,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "command_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "command_id"
     },
     {
       "name": "workspace_pin",
@@ -4602,8 +4535,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "workspace_unpin",
@@ -4668,8 +4600,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_list",
@@ -4710,8 +4641,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_start",
@@ -4773,8 +4703,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_archive",
@@ -4822,8 +4751,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_take_over",
@@ -4878,8 +4806,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_delete",
@@ -4934,8 +4861,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_describe",
@@ -4999,8 +4925,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "projects_show",
@@ -5060,8 +4985,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "publications_list",
@@ -5114,8 +5038,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "publications_posts",
@@ -5189,8 +5112,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "publications_item",
@@ -5245,8 +5167,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "publications_page",
@@ -5301,8 +5222,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "publications_commit",
@@ -5363,8 +5283,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "publications_withdraw",
@@ -5418,8 +5337,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "code_pushes",
@@ -5467,8 +5385,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "code_commits",
@@ -5527,8 +5444,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "code_commit",
@@ -5582,8 +5498,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_list",
@@ -5631,8 +5546,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_run",
@@ -5695,8 +5609,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "idempotency_key",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "idempotency_key"
     },
     {
       "name": "notebooks_result",
@@ -5757,8 +5670,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_create",
@@ -5844,8 +5756,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "idempotency_key",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "idempotency_key"
     },
     {
       "name": "notebooks_files",
@@ -5910,8 +5821,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_read_file",
@@ -5973,8 +5883,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_add_file",
@@ -6043,8 +5952,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_write_file",
@@ -6113,8 +6021,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_lock",
@@ -6174,8 +6081,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_copies",
@@ -6223,8 +6129,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "notebooks_restore",
@@ -6279,8 +6184,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "shards_list",
@@ -6312,8 +6216,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "proposals_show",
@@ -6367,8 +6270,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_presence",
@@ -6410,8 +6312,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_propose",
@@ -6524,7 +6425,6 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "product_availability": "prelaunch_gated",
       "audience": "anyone"
     },
     {
@@ -6583,8 +6483,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_cancel",
@@ -6632,8 +6531,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_carry_out",
@@ -6681,8 +6579,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_split",
@@ -6724,8 +6621,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_send_share",
@@ -6767,8 +6663,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_convert",
@@ -6826,8 +6721,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_return_advance",
@@ -6884,8 +6778,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_launch_upkeep",
@@ -6938,8 +6831,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_claim",
@@ -6989,8 +6881,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_claim_all",
@@ -7032,8 +6923,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_buy",
@@ -7075,8 +6965,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_issue_shard",
@@ -7139,8 +7028,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_agent_voting",
@@ -7198,8 +7086,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_end_shard",
@@ -7249,8 +7136,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_club_claim",
@@ -7300,8 +7186,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_reveal",
@@ -7351,8 +7236,7 @@
           "release_status": "released",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "chain_expire_reveal",
@@ -7402,8 +7286,7 @@
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
         }
-      },
-      "product_availability": "prelaunch_gated"
+      }
     },
     {
       "name": "proposals_create",
@@ -7497,7 +7380,7 @@
       "scope": "FLEET_PAGE/proposals",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7532,7 +7415,7 @@
       "scope": "FLEET_PAGE/proposals/NUMBER",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7555,7 +7438,7 @@
       "scope": "FLEET_PAGE/proposals/NUMBER",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7578,7 +7461,7 @@
       "scope": "FLEET_PAGE/proposals/NUMBER",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7601,7 +7484,7 @@
       "scope": "FLEET_PAGE/proposals",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7631,7 +7514,7 @@
       "scope": "FLEET_PAGE?key=TOKEN_ID",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7666,7 +7549,7 @@
       "scope": "/account",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7689,7 +7572,7 @@
       "scope": "FLEET_PAGE/treasury",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7712,7 +7595,7 @@
       "scope": "FLEET_PAGE/treasury",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7740,7 +7623,7 @@
       "scope": "FLEET_PAGE/treasury",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
-      "availability": "prelaunch_gated",
+      "availability": "available",
       "effect": "write"
     },
     {
@@ -7804,8 +7687,7 @@
           "descriptor": "cli/commands.json"
         }
       },
-      "operation_id_field": "operation_id",
-      "product_availability": "prelaunch_gated"
+      "operation_id_field": "operation_id"
     }
   ],
   "streams": [
@@ -7829,8 +7711,7 @@
         "webmcp": "Not carried: a browser tool answers once, and an agent in the browser already sees the page change live.",
         "hosted_mcp": "Not carried: an MCP tool call answers once and cannot stay open.",
         "cli": "Not carried yet: Keyfleet's command list (cli/commands.json) has no feed command."
-      },
-      "product_availability": "prelaunch_gated"
+      }
     }
   ],
   "audience": "keyfleet",
