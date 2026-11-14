@@ -115,9 +115,16 @@ What runs:
   each "machine" as a Docker container. Those containers sit on a network that
   only carries IPv6 addresses, as Fly's private network does.
 
-What it checks, in 21 steps:
+What it checks, in 24 steps:
 
 - The super admin makes a project with two editors and a viewer in it.
+- For an ordinary file, `notebook.py` and `pyproject.toml`, both editors read
+  the file and write it at once with `If-Match` set to the ETag they read, as
+  Keyfleet does: exactly one write lands, the other answers 412 with the
+  file's ETag now and adds no version, a later write over the old ETag is
+  refused the same way and changes nothing, and a write over the current ETag
+  lands. The two writers are separate members' requests that hold no lock in
+  common; both reach the one hub process.
 - A session starts on a new machine.
 - The hub reaches the notebook through the relay.
 - A cell runs as the ordinary user, and the helper password is nowhere it can
