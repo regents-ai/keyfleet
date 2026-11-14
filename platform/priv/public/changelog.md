@@ -11,6 +11,10 @@ Changes to Keyfleet, newest first.
   every later save was refused as unavailable.
 - **Claude.** Claude works in your fleets as soon as you pair it, in the same chat. Until now
   it kept seeing only its pairing steps and asked you to connect it again, which never helped.
+- **Atlas.** The Atlas keeps two views, Blocks and List, and opens on Blocks. Heat, Field
+  and River are gone. The blocks are lighter and rounder, tinted stronger the newer their
+  work, with a small dot on work changed today. Pointing at a block lifts it and shows a
+  card with what it holds.
 
 ## 13 November 2026
 

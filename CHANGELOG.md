@@ -9921,3 +9921,17 @@ worktree's server held port 4502. Run alone on PORT 4532: browser suite 127 of
 127, devices 70 of 70, and the chain walks in Chromium 131 of 131, the tour's
 five among them; that run's 16 Firefox and WebKit walks of the Key profile did
 not start, as neither browser is installed on the Mac.
+
+## 2026-11-14 — Atlas: Blocks and List only, and a lighter look
+
+- Removed the Atlas's Heat, Field and River views with their hooks, pictures,
+  styles and tests; Blocks is the default and the switch shows Blocks and List.
+  `?view=` is gone; agent reads are unchanged.
+- Blocks restyled: soft powder-blue and cornflower tints on the panel's surface
+  (`--atlas-tone-1..3`), rounded tiles with gaps drawn in the shader, a warm
+  dot for today, a neutral More tile, names shown only where they fit whole,
+  a lit block with the others dimmed, a card beside the block pointed at or
+  ringed (close button and Escape), and one bar for time, path, zoom and key.
+- The List and the Active strip share the rhythm, with small kind pills.
+- Escape from a block holding a single kind now goes up past it.
+- New browser walk `test/browser/atlas.spec.ts` with `BrowserChain.atlas!/1`.
