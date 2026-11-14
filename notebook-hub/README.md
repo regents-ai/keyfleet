@@ -67,7 +67,9 @@ them to the hub. That part is built separately, in `platform/`.
     for only the notebooks updated after a time (below);
   - `workspace-revision.patch`, which answers a notebook file read with the
     file's stored ETag and writes a file sent with `If-Match` only while it
-    still has that ETag (below).
+    still has that ETag (below);
+  - `workspace-listing.patch`, which names each listed file's stored ETag and
+    lists every file at any depth when asked (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -92,7 +94,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:626ec14`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:626ec14`;
-   - `keyfleet/notebook-hub:626ec14-b48b9a4`, about 430 MB. The part after
+   - `keyfleet/notebook-hub:626ec14-5a00d7a`, about 430 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -115,7 +117,7 @@ What runs:
   each "machine" as a Docker container. Those containers sit on a network that
   only carries IPv6 addresses, as Fly's private network does.
 
-What it checks, in 24 steps:
+What it checks, in 25 steps:
 
 - The super admin makes a project with two editors and a viewer in it.
 - For an ordinary file, `notebook.py` and `pyproject.toml`, both editors read
@@ -125,6 +127,9 @@ What it checks, in 24 steps:
   refused the same way and changes nothing, and a write over the current ETag
   lands. The two writers are separate members' requests that hold no lock in
   common; both reach the one hub process.
+- The viewer lists the notebook's files at any depth (`recursive=true`): every
+  file is there with no folder, each listed ETag equals what a read of that
+  file answers, and a file changed since is listed with its new ETag.
 - A session starts on a new machine.
 - The hub reaches the notebook through the relay.
 - A cell runs as the ordinary user, and the helper password is nowhere it can
@@ -209,7 +214,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:626ec14` as `registry.fly.io/kf-nbk-<fleet>:626ec14` and push it;
-   - tag `keyfleet/notebook-hub:626ec14-b48b9a4` as `registry.fly.io/kf-nb-<fleet>:626ec14-b48b9a4`
+   - tag `keyfleet/notebook-hub:626ec14-5a00d7a` as `registry.fly.io/kf-nb-<fleet>:626ec14-5a00d7a`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -397,6 +402,16 @@ its listed ID.
   server and the write ignored `If-Match`. Keyfleet sends `If-Match` on every
   overwrite; the hub's own file browser does not, and its writes behave as
   before.
+- **A file listing names each file's revision (`workspace-listing.patch`).**
+  `GET /api/v1/projects/{pid}/notebooks/{nid}/workspace/entries` answers each
+  file with `etag`, the same quoted ETag a read of that file answers (the
+  store reports one ETag for an object whether it is listed or read); folders
+  carry none. With `recursive=true` it lists every file under `path` at any
+  depth, and no folders, paged as before (at most 500 a page). Keyfleet reads
+  one such page when a run starts, to record each file the run ran from with
+  its revision, and once more when the finished run is read, to say whether
+  the notebook's files are still those. At the pin the listing went one folder
+  deep and named no ETag.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes

@@ -513,6 +513,24 @@ async function fileRevisions(project) {
 		check(last.text === edit(4) && merged.headers.get('etag') === last.etag, `${path}: the merged write is stored`);
 		ok(`${path}: of two writes over the same ETag one landed; stale writes answered 412 with the ETag now and changed nothing`);
 	}
+
+	const listed = async () =>
+		(await api(VIEWER, 'GET', `${notebookPath}/workspace/entries?recursive=true&limit=500`)).items;
+	const files = await listed();
+	check(
+		['/notebook.py', '/notes/plan.md', '/pyproject.toml'].every((path) => files.some((item) => item.path === path)),
+		`the recursive listing names every file at any depth (got ${files.map((item) => item.path)})`,
+	);
+	check(files.every((item) => item.kind === 'file'), 'the recursive listing names no folders');
+	for (const item of files) {
+		check(item.etag === (await read(item.path)).etag, `${item.path}: listed with the ETag its read answers`);
+	}
+	const plan = files.find((item) => item.path === '/notes/plan.md');
+	check((await put(EDITOR, 'notes/plan.md', 'plan 5', { etag: plan.etag })).ok, 'notes/plan.md changed');
+	const changed = (await listed()).find((item) => item.path === '/notes/plan.md');
+	check(changed.etag !== plan.etag, 'notes/plan.md: listed with a new ETag once changed');
+	check(changed.etag === (await read('notes/plan.md')).etag, 'notes/plan.md: the new listed ETag is its read ETag');
+	ok(`a recursive listing names ${files.length} files, each with its read ETag, and a changed file's listed ETag changes with it`);
 }
 
 /** A run of `notebookId` in a job of its own, started by the editor and read until it has finished. */
