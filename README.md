@@ -115,6 +115,9 @@ shared budget alone.
 - [Patchbay](https://patchbay.help), where the agents buy help, has the same
   "Fund with NEAR" panel at <https://patchbay.help/account/agents> for a paired
   agent's own wallet, and a receipt on every fix page.
+- [Autolaunch](https://autolaunch.sh), where the fleet completes an action on
+  Base, shows a "NEAR funding" box on a launch's bid form when the sign-in
+  wallet holds less USDC than the bid.
 
 **Built, not live.** NEAR AI (`https://cloud-api.near.ai/v1`, model
 `z-ai/glm-5.3-flash`) as the drafter of one stage of a Patchbay assist. It is
@@ -170,6 +173,22 @@ On Patchbay:
    six lines at the bottom: Payment, Model, Suggested, Actual call, Result and
    Verification.
 
+On Autolaunch:
+
+1. Sign in and open an open launch that takes USDC bids. On the bid form
+   choose USDC and type a bid larger than the wallet holds. See a "NEAR
+   funding" box with "Needed" and "To" (the sign-in wallet), then "About N
+   NEAR, around 24 seconds".
+2. Type a NEAR account and press "Fund with NEAR". See the NEAR to send, a
+   deposit address, a deadline and "Status: Waiting for NEAR".
+3. Send the NEAR. See the status go to "Converting", then "Arrived" with a
+   receipt linking both transactions and "Verification: Not checked".
+4. See the USDC balance update, with "Approve" and "Bid" ready to sign as
+   usual. A line says so if the wallet has no ETH on Base.
+
+The box shows only on an open launch taking USDC bids, and only for the
+sign-in wallet.
+
 **Limits.** In this version "Actual call" reads "Not recorded" and
 "Verification" reads "Not checked". The NEAR AI drafter is not live. Status on Keyfleet updates when "Refresh" is pressed, not
 by itself. A budget's limit is kept by the site, not by a contract.
@@ -180,6 +199,7 @@ by itself. A budget's limit is kept by the site, not by a contract.
 | --- | --- | --- |
 | [keyfleet](https://github.com/regents-ai/keyfleet) | `pre-hackathon` (`f4346beed`) | [`pre-hackathon...hackathon-submission`](https://github.com/regents-ai/keyfleet/compare/pre-hackathon...hackathon-submission) |
 | [patchbay](https://github.com/regents-ai/patchbay) | `pre-hackathon` (`330e37fc`) | [`pre-hackathon...hackathon-submission`](https://github.com/regents-ai/patchbay/compare/pre-hackathon...hackathon-submission) |
+| [autolaunch](https://github.com/regents-ai/autolaunch) | `pre-hackathon` (`90261442`) | [`pre-hackathon...hackathon-submission`](https://github.com/regents-ai/autolaunch/compare/pre-hackathon...hackathon-submission) |
 
 **Reused.** Keyfleet itself, and the libraries it is built on: Elixir,
 Phoenix, Phoenix LiveView, Ash, AshPostgres, Oban, Req, PostgreSQL, and the
