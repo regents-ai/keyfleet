@@ -133,10 +133,10 @@
   color: var(--color-fg-muted);
 }
 
-/* Pair New Agent, at the bar’s end. */
+/* Tour and Pair New Agent, side by side at the bar’s end. */
 .fleet-bar__actions {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -942,7 +942,7 @@
     font-size: 0.875rem;
   }
 
-  /* Pair New Agent starts under the fleet’s name. */
+  /* Tour and Pair New Agent start under the fleet’s name. */
   .fleet-bar__actions {
     display: contents;
   }
