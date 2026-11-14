@@ -302,7 +302,10 @@ defmodule KeyfleetWeb.Router do
   # The Claude connector's MCP address: AshAi runs every tool this site's
   # domains hand it (the identity tools and each fleet tool, by its browser
   # tool's name), each as its Ash action with its policies, and lists to each
-  # caller only the tools those policies let it run. McpAgent admits the request first: POST /mcp
+  # caller only the tools those policies let it run, but for an app with the
+  # agent permission whose identity isn't paired yet: it is listed its paired
+  # agent's tools, the same list after pairing, and until then each answers
+  # agent_not_paired (`Keyfleet.Agents.Connection.Listing`). McpAgent admits the request first: POST /mcp
   # alone, JSON, one call, no query string and no page from another site, with
   # a token from the sign-in above. The app is the actor, or, once its identity
   # is paired and the person allowed the agent permission, that paired agent.
@@ -334,8 +337,10 @@ defmodule KeyfleetWeb.Router do
                   "Your connection keeps one Regents identity: call register_identity, then get_identity. " <>
                   "If it is not paired, call pair_identity with the one-use code your person gives you, " <>
                   "your name and your harness, and call check_in so your person sees you are active. " <>
-                  "Once paired, with both permissions allowed, the fleet tools work as the agent you are, " <>
-                  "as this site's /agents/claude guide describes. " <>
+                  "The fleet tools you see answer agent_not_paired until then, and work as the agent you are " <>
+                  "once paired, in the same chat: never ask your person to reconnect for them. " <>
+                  "Removing and adding the connector again makes a new identity, which needs a new code. " <>
+                  "This site's /agents/claude guide describes the tools. " <>
                   "An agent that signs each request with its own SIWA key, as its signed requests are, " <>
                   "works here as itself once paired, with the same fleet tools and no identity tools. " <>
                   "Leave a private message for the site's team with messages_leave. " <>
