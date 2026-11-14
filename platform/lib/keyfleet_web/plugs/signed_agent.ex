@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert|launch|advances/#{@token}/return)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim|keys/buy|keys/#{@token}/(?:shards/end|club_claim|reveal|expire_reveal)|shards/(?:issue|voting))\z"
-  @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork pin unpin)
+  @graph_ops ~w(board view get changes packet create patch link unlink archive join leave submit review fork pin unpin)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
   # A fleet's Atlas: the swarm's work in one window, and its things a page at a time.
@@ -255,6 +255,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # largest is a whole page.
   @min_change_budget 1024
   @max_change_budget 512 * 1024
+  # How many items a packet names, each once, and how large it may be asked
+  # to be (`Keyfleet.Graph.Workspace`).
+  @max_packet_ids 20
+  @packet_budgets 1024..(256 * 1024)
   # What each workspace operation's body holds: its required fields, then the
   # ones it may add. A write names the key it acts as and its command id.
   @command_fields %{"as_key" => :key, "command_id" => :text}
@@ -279,6 +283,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          "limit" => :graph_page,
          "max_bytes" => :change_budget
        }},
+    "packet" => {%{"project" => :text, "ids" => :packet_ids}, %{"max_bytes" => :packet_budget}},
     "create" =>
       {Map.merge(@command_fields, %{"project" => :text, "type" => :text, "data" => :object}), %{}},
     "patch" =>
@@ -1303,8 +1308,23 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp shaped?(:get_parts, _value), do: false
 
+  # A packet's items, each named once.
+  defp shaped?(:packet_ids, value),
+    do:
+      is_list(value) and length(value) in 1..@max_packet_ids and
+        Enum.all?(value, &is_binary/1) and value == Enum.uniq(value)
+
   defp shaped?(kind, value)
-       when kind in [:key, :version, :seq, :graph_page, :change_budget, :most_active, :atlas_page],
+       when kind in [
+              :key,
+              :version,
+              :seq,
+              :graph_page,
+              :change_budget,
+              :packet_budget,
+              :most_active,
+              :atlas_page
+            ],
        do: is_integer(value)
 
   defp shaped?(nil, _value), do: false
@@ -1313,6 +1333,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp in_bounds?(:seq, value), do: value in 0..@max_seq
   defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
   defp in_bounds?(:change_budget, value), do: value in @min_change_budget..@max_change_budget
+  defp in_bounds?(:packet_budget, value), do: value in @packet_budgets
   defp in_bounds?(:most_active, value), do: value in 0..@max_most_active
   defp in_bounds?(:atlas_page, value), do: value in 1..@max_atlas_page
   # As long as a pin's target is kept (`Keyfleet.Graph.Pin`).

@@ -49,7 +49,10 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
       {422, "This command_id was used for a different change. Use a new command_id."},
     "over_budget" =>
       {422,
-       "details.bytes is the size of the change at details.seq. Send max_bytes of at least that, or leave it out."}
+       "details.bytes is the size of the change at details.seq. Send max_bytes of at least that, or leave it out."},
+    "packet_too_large" =>
+      {422,
+       "details.bytes is the packet's size and details.max_bytes the most allowed. Name fewer items, or send max_bytes of at least details.bytes, up to 262144."}
   }
 
   @doc "The status and body refusing a workspace request for `error`, or nil for an error of no workspace refusal."

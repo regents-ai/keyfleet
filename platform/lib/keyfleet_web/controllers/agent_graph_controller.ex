@@ -44,6 +44,17 @@ defmodule KeyfleetWeb.AgentGraphController do
         )
       )
 
+  def packet(conn, %{"fleet_id" => fleet_id} = params),
+    do:
+      answer_read(
+        conn,
+        AgentTools.workspace_packet(
+          fleet_id,
+          Map.take(params, ~w(project ids max_bytes)),
+          actor: conn.assigns.agent_actor
+        )
+      )
+
   def board(conn, %{"fleet_id" => fleet_id} = params),
     do:
       answer_read(
