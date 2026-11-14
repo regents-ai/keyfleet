@@ -92,6 +92,82 @@ Agents reach Keyfleet through:
 Claude Code, Codex, Hermes, OpenClaw, Grok Bot, Dots and other runtimes, and
 [llms.txt](https://keyfleet.ai/llms.txt) indexes everything an agent reads.
 
+## NEAR
+
+Built for the NEAR hackathon on 14 November 2026. Only the NEAR integration
+built in the hackathon window is to be judged. Everything else in this
+repository existed before it and is marked by the `pre-hackathon` tag.
+
+**What it is.** A fleet gets a budget paid in NEAR. A member funds the fleet's
+treasury on Base with USDC by sending NEAR from their own wallet. A project
+then gets a spending limit, and two of the fleet's agents buy help under it:
+one proposes a purchase, another approves it, and the site refuses any
+purchase that would go over the limit. Every step leaves a receipt.
+
+**Problem.** A team of agents on Base could only be funded by someone who
+already held USDC on Base, and nothing stopped one agent from spending a
+shared budget alone.
+
+**Tools.**
+
+- [NEAR Intents 1Click](https://docs.near-intents.org) prices the swap, gives
+  the deposit address and reports progress. Route: NEAR to USDC on Base.
+- NEAR AI is the model behind one stage of an assist on
+  [Patchbay](https://patchbay.help), where the agents buy help.
+
+Keyfleet only asks for a price and reads status. It never holds or moves
+funds. The USDC can only land at the fleet's own treasury address, which the
+site reads from the chain; a request cannot name another address. Signatures
+on the service's answers are not checked in this version, and the receipt says
+"Not checked".
+
+**Steps.**
+
+1. Open <https://keyfleet.ai/classic/1/treasury> signed in as a holder of one
+   of the fleet's Keys. See a "Funding" panel.
+2. Type an amount of USDC and a NEAR account for refunds, then press "Get
+   price". See the NEAR to send, the USDC the treasury gets and the time it
+   takes.
+3. Press "Fund with NEAR". See the exact NEAR amount, a deposit address and a
+   deadline, with the status "Waiting".
+4. Send that NEAR to that address from your own NEAR wallet, then press
+   "Refresh". See the status move to "Processing", then "Arrived".
+5. On "Arrived", see the receipt: the USDC, the treasury address, links to the
+   NEAR and Base transactions, and the time.
+6. Open a project's page, for example
+   <https://keyfleet.ai/classic/1/projects/general>, and under "Budget" enter a
+   limit and an expiry and press "Open budget". See the limit, what is spent
+   and what is left.
+7. As an agent on one Key, call `purchases_propose` with a purpose, the
+   assist's link and its price. See the purchase listed as "Proposed".
+8. As an agent on a different Key, call `purchases_decide` with
+   `"approve": true`. See it "Approved". The same Key that proposed it is
+   refused with `same_key`.
+9. Propose and approve a purchase priced above what is left. See it refused
+   with `purchase_over_budget` and listed as "Refused".
+10. The proposer calls `purchases_receipt`, and another Key calls
+    `purchases_result`. See the purchase "Bought", then "Worked" or "Failed".
+
+Agents do steps 2 to 5 with `fundings_quote`, `fundings_start` and
+`fundings_show`. Every tool is described at
+<https://keyfleet.ai/docs>.
+
+**Commits.**
+
+| Repository | Before | Hackathon work |
+| --- | --- | --- |
+| [keyfleet](https://github.com/regents-ai/keyfleet) | `pre-hackathon` (`f4346beed`) | [`pre-hackathon...hackathon-submission`](https://github.com/regents-ai/keyfleet/compare/pre-hackathon...hackathon-submission) |
+
+**Reused.** Keyfleet itself, and the libraries it is built on: Elixir,
+Phoenix, Phoenix LiveView, Ash, AshPostgres, Oban, Req, PostgreSQL, and the
+Regent shared packages in
+[elixir-utils](https://github.com/regents-ai/elixir-utils). No template was
+used for the NEAR work.
+
+**AI-written code.** The NEAR integration was written by Claude models under
+the direction of the repository's owner, as was most of this repository. The
+commits name the model as co-author.
+
 ## Repository
 
 | Path | Contents |
