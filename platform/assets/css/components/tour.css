@@ -160,3 +160,41 @@ body[data-sea-lifted] .tour {
   }
 }
 }
+
+/* The card's buttons, one calm set: square and one height. Next is the one
+   filled button, in the page's blue with the page's ground for its words, and
+   square: a cut of nothing squares the shared button's shape, its keyboard
+   ring and its marks alike. Back and Copy are outlines; Skip is words alone,
+   set back to line up with the words above it. These rules sit outside the
+   product layer, as the shared button's own do, so that inside the card they
+   win. */
+.tour__card .rg-button--primary {
+  --rg-cut-control: 0px;
+  --rg-p-accent: var(--ash-accent);
+  --rg-p-on-accent: var(--color-bg);
+}
+
+.tour__card .rg-button--secondary::before {
+  transition: background-color 150ms ease;
+}
+
+.tour__card .rg-button--quiet {
+  margin-inline-start: calc(-1 * var(--space-1));
+  padding-inline: var(--space-1);
+  color: var(--color-fg-muted);
+  transition: color 150ms ease;
+}
+
+@media (hover: hover) {
+  .tour__card .rg-button--primary:hover::before {
+    background-color: color-mix(in oklab, var(--ash-accent) 85%, var(--color-fg));
+  }
+
+  .tour__card .rg-button--secondary:hover::before {
+    background-color: color-mix(in oklab, var(--color-fg) 6%, var(--color-surface));
+  }
+
+  .tour__card .rg-button--quiet:hover {
+    color: var(--color-fg);
+  }
+}
