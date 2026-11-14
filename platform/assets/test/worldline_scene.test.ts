@@ -1,6 +1,7 @@
 import {describe, expect, it} from "vitest"
 
 import {
+  CRUISE,
   DAY,
   DISTANCE,
   FORM,
@@ -21,6 +22,7 @@ import {
   markAt,
   nearest,
   orbitAngle,
+  pace,
   paths,
   percent,
   place,
@@ -29,6 +31,7 @@ import {
   tips,
   type Box,
   type Camera,
+  type Flight,
   type Frame,
   type Lens,
   type Mark,
@@ -322,6 +325,33 @@ describe("the flight", () => {
         expect(head[1]).toBeCloseTo(end[1], 5)
         expect(head[2]).toBeCloseTo(end[2], 5)
       }
+    }
+  })
+
+  // Every reading of what the pace turns on, and those while it follows now.
+  const readings: Flight[] = Array.from({length: 64}, (_, bits) => ({
+    opened: (bits & 1) > 0,
+    following: (bits & 2) > 0,
+    still: (bits & 4) > 0,
+    shown: (bits & 8) > 0,
+    planet: (bits & 16) > 0,
+    finger: (bits & 32) > 0,
+  }))
+  const aloft = readings.filter(reading => reading.opened && reading.following && !reading.still)
+  const ON = ["shown", "planet", "finger"] as const
+
+  it("flies at full pace on nothing, and a twentieth on a mark, a planet or a finger on either, alone or together", () => {
+    expect(aloft).toHaveLength(8)
+    for (const reading of aloft) {
+      const on = ON.some(each => reading[each])
+      expect(pace(reading)).toBe(on ? CRUISE : 1)
+    }
+    expect(CRUISE).toBe(0.05)
+  })
+
+  it("does not fly before it opens, away from now or for a reader who asked for less motion, whatever is pointed at", () => {
+    for (const reading of readings) {
+      if (!reading.opened || !reading.following || reading.still) expect(pace(reading)).toBe(0)
     }
   })
 })

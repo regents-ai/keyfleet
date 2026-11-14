@@ -286,7 +286,7 @@ for (const width of [390, 1280]) {
     expect(errors).toEqual([])
   })
 
-  test(`the Worldline flies on its own, slows while pointed at, and still opens the mark pointed at, at ${width} wide`, async ({
+  test(`the Worldline flies on its own, slows only on a mark, and opens the mark pointed at, at ${width} wide`, async ({
     page,
   }) => {
     const errors = watchErrors(page)
@@ -315,13 +315,15 @@ for (const width of [390, 1280]) {
       return from.reduce((sum, at, i) => sum + apart(at, to[i]), 0)
     }
 
-    // With the mouse on the picture, they orbit at a twentieth of the pace.
+    // With the mouse on the picture but on nothing in it, they fly on.
     const flying = await orbited()
     expect(flying).toBeGreaterThan(4)
     const box = (await stage.boundingBox())!
-    await page.mouse.move(box.x + 24, box.y + 24)
+    const empty = {x: box.x + 24, y: box.y + 24}
+    await page.mouse.move(empty.x, empty.y)
+    await expect(link).toBeHidden()
     await page.waitForTimeout(600)
-    expect(await orbited()).toBeLessThan(flying / 5)
+    expect(await orbited()).toBeGreaterThan(flying / 5)
 
     // Moved back through time, it stops flying; Now flies on again.
     await page.mouse.wheel(0, -40)
@@ -334,16 +336,26 @@ for (const width of [390, 1280]) {
     await page.waitForTimeout(600)
     expect(await orbited()).toBeGreaterThan(flying / 5)
 
-    // Pointed at, a mark's link rides it slowly, and opens the page it
-    // happened on.
+    // On a mark they orbit at a twentieth of the pace, its link riding it
+    // slowly; moved off it, still on the picture, they fly on.
     await zoomOut(page)
     await pointAtMark(page, stage, link)
-    const href = (await link.getAttribute("href"))!
-    expect(href).toMatch(/^\/classic\/1[/?]/)
+    await page.waitForTimeout(600)
+    expect(await orbited()).toBeLessThan(flying / 5)
+    const pointed = (await link.getAttribute("href"))!
     const held = (await link.boundingBox())!
     await page.waitForTimeout(500)
     expect(apart((await link.boundingBox())!, held)).toBeLessThan(6)
-    expect(await link.getAttribute("href")).toBe(href)
+    expect(await link.getAttribute("href")).toBe(pointed)
+    await page.mouse.move(empty.x, empty.y)
+    await expect(link).toBeHidden()
+    await page.waitForTimeout(600)
+    expect(await orbited()).toBeGreaterThan(flying / 5)
+
+    // Pointed at, a mark's link opens the page it happened on.
+    await pointAtMark(page, stage, link)
+    const href = (await link.getAttribute("href"))!
+    expect(href).toMatch(/^\/classic\/1[/?]/)
     await link.click()
     await expect.poll(() => path(page.url())).toBe(href)
     expect(errors).toEqual([])

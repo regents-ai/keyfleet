@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 13 November 2026
 
+- **Pace.** The Worldline keeps flying at full speed while you move over it, and slows
+  only on the event or planet you point at, tap or choose with the keys.
 - **Waiting.** The Treasury page says since when the fleet's money has waited for someone
   to move it: the Daily Treasury Slice to Keys, the share owed to REGENT staking and the
   Key sales waiting to become REGENT.

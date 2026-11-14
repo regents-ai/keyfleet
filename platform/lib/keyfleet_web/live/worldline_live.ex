@@ -13,10 +13,11 @@ defmodule KeyfleetWeb.WorldlineLive do
   a pixel for each post, and everything fleet-wide a point on the line
   itself. While it shows now, the picture flies: the planets circle the line
   far faster than real time, each event turning with its planet's path at
-  its own time, slowing while the reader points at it. The page
-  sends it the newest events once it is live, older ones as the reader moves
-  back to them, and new ones a moment after they happen. `?show=list` shows
-  the same events as links, newest first, with "Older" for the page before.
+  its own time, slowing while the reader is on one of its events or planets.
+  The page sends it the newest events once it is live, older ones as the
+  reader moves back to them, and new ones a moment after they happen.
+  `?show=list` shows the same events as links, newest first, with "Older"
+  for the page before.
   Every event links to the page it happened on.
 
   `?by=` keeps one Key's events or one wallet's (`WorldlinePage.by/1`), in
@@ -539,7 +540,7 @@ defmodule KeyfleetWeb.WorldlineLive do
       </span>
       One turn is a day for Workspace, three for Code and a week for Notebooks.
       <span class="worldline-help__flight">
-        At now the planets spin faster than that, slowing while you point at or touch the picture; moving through time stops them, and Now starts them again.
+        At now the planets spin faster than that, slowing on the event or planet you point at or tap; moving through time stops them, and Now starts them again.
       </span>
       <span class="visually-hidden">
         Arrow keys move through time, Alt and the arrow keys turn it, plus and minus zoom, End goes back to now, and Enter opens the event shown.

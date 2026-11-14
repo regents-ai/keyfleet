@@ -34,11 +34,13 @@
  * faster than real time, each helix turning about the line with its planet
  * and each bead on it keeping its place at its own time, and the stars drift
  * by, the nearer faster. Only real time moves anything along the line: the
- * sun moves on and new events arrive at theirs. With the mouse on the
- * picture, or a finger down, the flight eases to a twentieth of its pace.
- * Moved through time, the picture eases to a stop and the orbits hold where
- * they stand, so no bead jumps; Now flies on again from there, and Reset
- * returns to the view it opens on.
+ * sun moves on and new events arrive at theirs. On a mark or a planet the
+ * flight eases to a twentieth of its pace, so what is there can be read and
+ * pressed: while the mouse is on it, a finger is down on it, it has the
+ * keyboard, or a mark's link shows from a tap. Anywhere else on the picture
+ * it flies on at full pace. Moved through time, the picture eases to a stop
+ * and the orbits hold where they stand, so no bead jumps; Now flies on again
+ * from there, and Reset returns to the view it opens on.
  *
  * The picture is drawn only with WebGPU. Without it the line and the sun the
  * page drew stay, with a note that the List has every event. For a reader who
@@ -76,6 +78,7 @@ import {
   lineOnScreen,
   markAt,
   nearest,
+  pace,
   pack,
   paths,
   percent,
@@ -153,8 +156,7 @@ const NEWS = 2600
  * Notebooks every 140 seconds.
  */
 const SPIN = DAY / 20
-/** The flight's pace while the mouse is on the picture or a finger is down, of full; and how long it takes to ease to a new pace, in milliseconds. */
-const CRUISE = 0.05
+/** How long the flight takes to ease to a new pace (`pace`), in milliseconds. */
 const PACING = 350
 /** How fast each layer of stars drifts at full pace, in radians a second, the farthest first. */
 const DRIFT = [0.006, 0.014, 0.03]
@@ -235,11 +237,10 @@ export const Worldline: Hook = {
     let ticked: number | undefined
     let strained = false
     // How far the picture has flown: the orbits' seconds on (`Frame`); how
-    // far each layer of stars has drifted round; and whether the mouse is on
-    // the picture or a finger is down on it.
+    // far each layer of stars has drifted round; and whether a finger is
+    // down on a mark or a planet.
     let flown = 0
     const drift = DRIFT.map(() => 0)
-    let hovering = false
     let touching = false
 
     // A press on the picture, while one finger or the mouse is down: where it
@@ -347,15 +348,20 @@ export const Worldline: Hook = {
         }),
       )
 
-    // The flight's pace: full while the picture follows now, a twentieth
-    // while the mouse is on it or a finger is down, and none while the reader
-    // has it elsewhere in time, before it has opened, or for a reader who
-    // asked for less motion. Every change of pace is eased into, so taken
-    // away from now the orbits slow to a stop and hold where they stand, and
-    // no bead ever jumps.
+    // The flight's pace (`pace`): a twentieth while the reader is on a mark
+    // or a planet, full anywhere else while the picture follows now, and
+    // none away from now. Every change of pace is eased into, so taken away
+    // from now the orbits slow to a stop and hold where they stand, and no
+    // bead ever jumps.
     const steer = () => {
-      const opened = loaded && motion.revealed >= 1e12
-      const want = !opened || !following || still(root) ? 0 : hovering || touching ? CRUISE : 1
+      const want = pace({
+        opened: loaded && motion.revealed >= 1e12,
+        following,
+        still: still(root),
+        shown: focus !== undefined,
+        planet: lifted !== undefined,
+        finger: touching,
+      })
       if (want === aim) return
       aim = want
       pacing?.cancel()
@@ -919,7 +925,9 @@ export const Worldline: Hook = {
             if (event.button !== 0 || onControl(event)) return
             const spot = local(event)
             pointers.set(event.pointerId, spot)
-            if (event.pointerType === "touch") touching = true
+            // A finger down on a mark or a planet slows the flight; one down
+            // anywhere else on the picture does not.
+            if (event.pointerType === "touch" && (onTip(event) || pointAt(spot.x, spot.y, NEAR_TOUCH))) touching = true
             takeOver()
             holdCamera()
             if (pointers.size === 1) {
@@ -952,9 +960,9 @@ export const Worldline: Hook = {
             if (!pointers.has(event.pointerId)) {
               // The mark shown stays while the pointer is on its link, card
               // and all; on a planet's link no mark shows, and the planet
-              // stands out. The flight slows while the mouse is on the picture.
+              // stands out. Either slows the flight; the rest of the picture
+              // does not.
               if (event.pointerType !== "mouse") return
-              hovering = true
               const onLink = link.contains(event.target as Node)
               pointed = onTip(event)
               lift(true)
@@ -1038,7 +1046,6 @@ export const Worldline: Hook = {
           "pointerleave",
           event => {
             if (event.pointerType !== "mouse") return
-            hovering = false
             pointed = null
             lift(true)
             if (focusBy === "pointer" && !pointers.size) choose(undefined, "pointer")

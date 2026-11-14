@@ -566,6 +566,36 @@ export function lineOnScreen(frame: Frame, at: Lens): {readonly x: number; reado
   return {x: (x / Math.max(length, 1e-6)) * least, y: (y / Math.max(length, 1e-6)) * least, length: least}
 }
 
+/** The flight's pace while the reader is on a mark or a planet, of full. */
+export const CRUISE = 0.05
+
+/** What the flight's pace turns on. */
+export type Flight = {
+  /** Whether the picture has opened: its first page read and drawn out to the sun. */
+  readonly opened: boolean
+  /** Whether it follows now. */
+  readonly following: boolean
+  /** Whether the reader asked for less motion. */
+  readonly still: boolean
+  /** Whether a mark's link shows: pointed at, tapped or chosen from the keyboard. */
+  readonly shown: boolean
+  /** Whether a planet's link is pointed at or has the keyboard. */
+  readonly planet: boolean
+  /** Whether a finger is down on a mark or a planet. */
+  readonly finger: boolean
+}
+
+/**
+ * The flight's pace, of full: none before the picture has opened, while it
+ * stands away from now, or for a reader who asked for less motion; `CRUISE`
+ * while the reader is on a mark or a planet, so it can be read and pressed;
+ * and full otherwise, wherever else on the picture the pointer is.
+ */
+export function pace(flight: Flight): number {
+  if (!flight.opened || !flight.following || flight.still) return 0
+  return flight.shown || flight.planet || flight.finger ? CRUISE : 1
+}
+
 /** The zoom as the picture names it: 100% is the view it opens on. */
 export function percent(span: number): string {
   const value = (100 * OPENING) / span

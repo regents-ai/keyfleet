@@ -9712,3 +9712,51 @@ host 243, full suite 1,454 (20 properties, 1,434 tests, 19 excluded), codegen,
 route handoff, typecheck and 486 unit tests, browser suite 125 of 125, devices
 70 of 70, required fixes, commands, the pin check and contracts (547 tests, 6
 skipped). Firefox was not run; WebKit is not run on the Mac.
+
+## 2026-11-13: The Worldline slows only on what is pointed at
+
+The Worldline's flight eased to a twentieth of its pace whenever the mouse was
+anywhere over the picture, or a finger was down anywhere on it, so moving the
+mouse across the picture all but stopped it.
+
+It now flies at full pace while the pointer is over the picture, and eases to
+a twentieth, with the same 350ms ease as before, only while the reader is on
+something that opens: an event's mark with its card showing (a bead on a
+planet's path, a room post's pixel or a mark on the line, whichever the pick
+finds within 24 pixels, 36 for a finger), or a planet's link, its head or its
+name. The sun's Now is not one. A mark shown by a tap stays shown, and the
+flight slowed, until a tap elsewhere; a finger down slows it only on a mark or
+a planet. From the keyboard, the mark the stage shows as it takes focus (the
+one nearest the middle) slows it, as does a planet's link holding focus;
+Escape or tabbing away lets it fly. What decides the pace is one function,
+`pace` in `assets/js/worldline/scene.ts`, tested over every case; the hook
+(`assets/js/hooks/worldline.ts`) reads it every frame, and its flag for a
+pointer anywhere on the picture is gone. The caption under the picture says
+so.
+
+Check (partition `_kf_s3`, browser walks on port 4593 and 4594, machine load
+average 34 to 52 on 16 cores): in headless Chromium with WebGPU, a seeded fleet
+with events on all three planets, signed in, each planet's turn read from its
+place on the screen. At 1280 wide the pace was 1.000 with the pointer off the
+picture, still on empty picture for 5 seconds and moving across it; 0.050 on a
+caught Workspace bead for 5 seconds, its card showing on every frame with the
+same link; 1.000 again once moved off it onto empty picture; and a click on a
+slowed bead opened its page. At full pace a bead crosses the screen at a median
+of 20 pixels a second on Workspace (at most 30), 11 on Code and 6 on
+Notebooks, and at 390 wide 8, 4 and 2; a sweep of the mouse caught one in under
+half a second, so the pick was left as it was. Once caught, the bead slipped
+3.7 pixels during the ease and 4.7 more over 5 seconds, staying inside the
+pick. From the keyboard: 0.050 with the middle mark shown and with a planet's
+link focused, 1.000 after Escape and after tabbing out. By touch: a finger
+held on empty picture for 3 seconds, 1.000; a tap on a bead, 0.050 with its
+card shown; a tap on empty picture, 1.000. With reduced motion nothing moves,
+on a bead or off it. Frames held at 16.7ms throughout, none over 25ms. The
+Worldline walks by themselves, 15 of 15; the chain walks in Chromium by
+themselves, 126 of 126. `make check`, every stage, PORT unset: compile with
+warnings as errors, unused locks, hex audit, format, credo strict, sobelow,
+xref, graph host 243, full suite 1,454 (20 properties, 1,434 tests, 19
+excluded), codegen, usage rules, route handoff, typecheck and 488 unit tests,
+browser suite 125 of 125, devices 70 of 70, required fixes, commands, the pin
+check and contracts (547 tests, 6 skipped). Minified, app.js is 68.7 KiB gzip
+of its 175 and app.css 56.9 KiB of its 60. Firefox was not run; WebKit is not
+run on the Mac.
