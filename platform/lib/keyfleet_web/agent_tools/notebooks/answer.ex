@@ -21,9 +21,11 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   changed, and a Key whose edits a vote of the fleet has restricted lists and
   reads, and starts, makes and writes nothing. Starting a run spends the
   agent's `:notebook_run_starts` allowance, the same one the notebook host
-  spends. A file add or write the hub was asked for and didn't answer is
-  neither done nor refused: it answers `notebook_outcome_unknown`, with a
-  receipt to settle it by.
+  spends. A file write names the revision it read, and one over a file
+  changed since answers `stale_revision` with the file's revision now. A
+  file add or write the hub was asked for and didn't answer is neither done
+  nor refused: it answers `notebook_outcome_unknown`, with a receipt to
+  settle it by.
   """
 
   alias Keyfleet.Actors.Agent
@@ -68,6 +70,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
       {:error, :copy_not_found} -> refusal(404, "notebook_copy_not_found")
       {:error, :file_exists} -> refusal(409, "notebook_file_exists")
       {:error, :writes_paused} -> refusal(409, "notebook_writes_paused")
+      {:error, {:stale_revision, current}} -> stale(current)
       {:error, :refused} -> refusal(422, "notebook_file_refused")
       {:error, :files_full} -> refusal(422, "notebook_files_full")
       {:error, :too_large} -> refusal(422, "notebook_file_too_large")
@@ -119,7 +122,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
     do: write(params, actor, subject, space, :add)
 
   defp run(:write_file, params, actor, subject, space),
-    do: write(params, actor, subject, space, :write)
+    do: write(params, actor, subject, space, {:write, params["expected_revision"]})
 
   defp run(:lock, %{"fleet_id" => fleet_id} = params, actor, subject, _space) do
     %{"project" => project, "notebook_id" => notebook_id, "locked" => locked} = params
@@ -157,6 +160,15 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   defp edited(refused, _actor, _fleet_id), do: refused
 
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
+
+  # A write over a file changed since the revision it named: nothing was
+  # written, and the file's revision now is the one to read and merge from.
+  defp stale(current) do
+    body =
+      put_in(Refusal.body("stale_revision"), [:error, :details], %{current_revision: current})
+
+    {409, body, nil}
+  end
 
   # A file write the hub was asked for and didn't answer: the receipt names
   # what was sent, and reading the path back answers the same sha256 exactly

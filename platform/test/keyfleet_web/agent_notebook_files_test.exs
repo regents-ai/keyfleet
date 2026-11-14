@@ -3,7 +3,10 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   # signed requests here. The hub is a local server that keeps files as the
   # real one does: adding a file at a path already taken, or writing one where
   # a folder is or under a file, is refused with the one conflict the real hub
-  # answers for every reason, and each path it answers starts with `/`. A test
+  # answers for every reason, and each path it answers starts with `/`. Each
+  # file has an ETag, its content's hash, and a write naming one with
+  # If-Match lands only while the file still has it, else 412 with the file's
+  # ETag now, as the real hub's file store answers. A test
   # can set how it answers the next request to a path by a method, once
   # (`answer_next/4`). Like Fly's private addresses, it answers only on IPv6,
   # by name.
@@ -24,6 +27,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   @workspace "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/workspace/"
   @jobs "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/jobs"
   @add "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/add"
+  @write "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write"
 
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -114,15 +118,29 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert listed["cursor"] == nil
 
     read = &json_response(post!(c, c.second, files <> "read", %{"path" => &1}), &2)
-    assert read.("log/a.md", 200)["content"] == "First, from the first agent."
+    first_read = read.("log/a.md", 200)
+    assert first_read["content"] == "First, from the first agent."
 
     # Writing a file is how its own writer replaces it.
-    post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    corrected =
+      Map.merge(entry, %{
+        "content" => "First, corrected.",
+        "expected_revision" => first_read["revision"]
+      })
+
+    written = json_response(post!(c, c.first, files <> "write", corrected), 200)
     assert_receive {:hub, "PUT", @workspace <> "files", ^first, %{"create" => "false"}, _body}
-    assert read.("log/a.md", 200)["content"] == "First, corrected."
+    assert %{"content" => "First, corrected.", "revision" => revision} = read.("log/a.md", 200)
+    assert written["revision"] == revision
 
     # Only a file's maker writes over it.
-    over = post!(c, c.second, files <> "write", %{entry | "content" => "Second, over the first."})
+    over =
+      post!(c, c.second, files <> "write", %{
+        corrected
+        | "content" => "Second, over the first.",
+          "expected_revision" => revision
+      })
+
     assert json_response(over, 403)["error"]["code"] == "notebooks_maker_only"
     assert read.("log/a.md", 200)["content"] == "First, corrected."
 
@@ -131,6 +149,74 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert read.("chart.png", 422)["error"]["code"] == "notebook_file_not_text"
     Agent.update(c.files, &Map.put(&1, "big.md", String.duplicate("a", 1024 * 1024 + 1)))
     assert read.("big.md", 422)["error"]["code"] == "notebook_file_too_large"
+  end
+
+  # Costly failure: two agents read a file, both change it, and the second
+  # write silently replaces the first, so the first agent's work is lost.
+  for path <- ["log/a.md", "notebook.py", "pyproject.toml"] do
+    test "of two writes over the revision both read, #{path} keeps one and the other is refused",
+         c do
+      path = unquote(path)
+      # The notebook's creator unlocked it, so both agents write any of its files.
+      Keyfleet.Notebooks.Setting
+      |> Ash.Changeset.for_create(
+        :switch,
+        %{fleet_id: @fleet, notebook_id: @notebook, unlocked: true},
+        actor: %System{}
+      )
+      |> Ash.create!()
+
+      Agent.update(c.files, &Map.put(&1, path, "As it was."))
+      files = "#{@api}/#{@notebook}/files/"
+
+      read = fn agent ->
+        json_response(post!(c, agent, files <> "read", %{"path" => path}), 200)
+      end
+
+      %{"revision" => revision} = read.(c.first)
+      assert read.(c.second)["revision"] == revision
+
+      [first, second] =
+        [{c.first, "From the first agent."}, {c.second, "From the second agent."}]
+        |> Task.async_stream(fn {agent, content} ->
+          write = %{"path" => path, "content" => content, "expected_revision" => revision}
+          post!(c, agent, files <> "write", write)
+        end)
+        |> Enum.map(fn {:ok, conn} -> conn end)
+
+      # Exactly one lands; the other is told the revision the file has now.
+      assert Enum.sort([first.status, second.status]) == [200, 409]
+      [landed, refused] = Enum.sort_by([first, second], & &1.status)
+      saved = json_response(landed, 200)
+      stale = json_response(refused, 409)
+
+      assert ContractSchema.response_errors(stale, "POST", @write, 409) == []
+      assert stale["error"]["code"] == "stale_revision"
+      assert stale["error"]["details"] == %{"current_revision" => saved["revision"]}
+
+      kept = read.(c.first)
+      assert kept["revision"] == saved["revision"]
+
+      assert kept["content"] in ["From the first agent.", "From the second agent."]
+
+      # A stale write is sent once and never read back or sent again here.
+      loser = if refused == first, do: c.first, else: c.second
+      flush_hub()
+      again = %{"path" => path, "content" => "Late.", "expected_revision" => revision}
+      assert json_response(post!(c, loser, files <> "write", again), 409)
+      loser_subject = loser.subject
+      assert_received {:hub, "PUT", _put, ^loser_subject, _query, _body}
+      refute_received {:hub, _method, _path, _subject, _query, _body}
+      assert Agent.get(c.files, & &1[path]) == kept["content"]
+
+      # Written over the revision it reads now, the change lands.
+      merged = %{again | "content" => "Merged.", "expected_revision" => kept["revision"]}
+
+      assert json_response(post!(c, loser, files <> "write", merged), 200)["revision"] ==
+               Files.sha256("Merged.")
+
+      assert Agent.get(c.files, & &1[path]) == "Merged."
+    end
   end
 
   # Costly failure: a file added while its maker can't be kept stays as the
@@ -201,9 +287,10 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert last_did(c.first) == :notebook
 
     # Kept as the first agent's own: it writes over it, and no one else does.
-    over = post!(c, c.second, files <> "write", %{entry | "content" => "Second, over the first."})
+    over_read = Map.put(entry, "expected_revision", read["revision"])
+    over = post!(c, c.second, files <> "write", %{over_read | "content" => "Second, over."})
     assert json_response(over, 403)["error"]["code"] == "notebooks_maker_only"
-    own = post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    own = post!(c, c.first, files <> "write", %{over_read | "content" => "First, corrected."})
     assert json_response(own, 200)["path"] == "/log/a.md"
   end
 
@@ -269,10 +356,12 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert Agent.get(c.files, & &1) == %{}
     assert last_did(c.first) == nil
 
-    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "/log/a.md"
+    added = json_response(post!(c, c.first, files <> "add", entry), 200)
+    assert added["path"] == "/log/a.md"
 
     answer_next(c, "PUT", "files", :paused)
-    paused = post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    over = %{"content" => "First, corrected.", "expected_revision" => added["revision"]}
+    paused = post!(c, c.first, files <> "write", Map.merge(entry, over))
     assert json_response(paused, 409)["error"]["code"] == "notebook_writes_paused"
     assert Agent.get(c.files, & &1) == %{"log/a.md" => entry["content"]}
   end
@@ -432,6 +521,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     |> dispatch(@endpoint, :post, "/mcp", raw)
   end
 
+  defp flush_hub do
+    receive do
+      {:hub, _method, _path, _subject, _query, _body} -> flush_hub()
+    after
+      0 -> :ok
+    end
+  end
+
   # Each request has its own id, so two refusals are compared without it.
   defp without_request_id(error),
     do: update_in(error, ["details", "receipt"], &Map.delete(&1, "request_id"))
@@ -573,7 +670,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
        ) do
     case Agent.get(files, &Map.fetch(&1, conn.query_params["path"])) do
       {:ok, content} ->
-        send_resp(conn, 200, content)
+        conn |> etag(content) |> send_resp(200, content)
 
       :error ->
         json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No such file"}})
@@ -595,8 +692,9 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          body
        ) do
     %{"path" => path, "create" => create} = conn.query_params
+    if_match = conn |> get_req_header("if-match") |> List.first()
 
-    added =
+    written =
       Agent.get_and_update(files, fn kept ->
         # A folder at the path, or a file where one of its folders would be.
         in_the_way? =
@@ -606,15 +704,32 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
                  String.starts_with?(path, kept_path <> "/"))
           end)
 
-        if in_the_way? or (create == "true" and Map.has_key?(kept, path)),
-          do: {false, kept},
-          else: {true, Map.put(kept, path, body)}
+        cond do
+          in_the_way? or (create == "true" and Map.has_key?(kept, path)) -> {:conflict, kept}
+          if_match != nil and not Map.has_key?(kept, path) -> {:not_found, kept}
+          if_match != nil and if_match != quoted(kept[path]) -> {{:changed, kept[path]}, kept}
+          true -> {:ok, Map.put(kept, path, body)}
+        end
       end)
 
-    if added,
-      do: json(conn, 200, %{success: true, data: item(path, body)}),
-      else:
+    case written do
+      :ok ->
+        conn |> etag(body) |> json(200, %{success: true, data: item(path, body)})
+
+      :conflict ->
         json(conn, 409, %{success: false, error: %{code: "CONFLICT", message: "already exists"}})
+
+      :not_found ->
+        json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No such file"}})
+
+      {:changed, current} ->
+        conn
+        |> etag(current)
+        |> json(412, %{
+          success: false,
+          error: %{code: "PRECONDITION_FAILED", message: "changed since it was read"}
+        })
+    end
   end
 
   defp hub_answer(
@@ -642,7 +757,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     path = conn.query_params["path"]
     Agent.update(files, &Map.put(&1, path, body))
     Process.sleep(600)
-    json(conn, 200, %{success: true, data: item(path, body)})
+    conn |> etag(body) |> json(200, %{success: true, data: item(path, body)})
   end
 
   # The hub fails before changing anything.
@@ -677,6 +792,9 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       size: byte_size(content),
       modified_at: 1
     }
+
+  defp etag(conn, content), do: put_resp_header(conn, "etag", quoted(content))
+  defp quoted(content), do: ~s("#{Files.sha256(content)}")
 
   defp json(conn, status, body),
     do:

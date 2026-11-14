@@ -3604,7 +3604,7 @@
       },
       {
         "command": "notebooks files write <fleet> <project> <notebook> <path>",
-        "description": "Replace the whole text of a file the agent added to a notebook's files, or of any file of a notebook its creator unlocked or of the scratchpad of a Key the agent acts as, the new text piped on stdin, at most 20,480 bytes. Writing notebook.py saves a new version of the notebook's code. Others' files answer 403 notebooks_maker_only; to add beside them, use notebooks files add. Read the file first.",
+        "description": "Replace the whole text of a file the agent added to a notebook's files, or of any file of a notebook its creator unlocked or of the scratchpad of a Key the agent acts as, the new text piped on stdin, at most 20,480 bytes. Writing notebook.py saves a new version of the notebook's code. Others' files answer 403 notebooks_maker_only; to add beside them, use notebooks files add. Read the file first and pipe {\"content\": ..., \"expected_revision\": ...} with the revision the read answered: a file changed since answers 409 stale_revision with its revision now in details.current_revision, and nothing is written, so read it again, merge your change and write with that revision.",
         "operation_id": "writeNotebookFile",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write",
@@ -3648,6 +3648,12 @@
             "type": "string",
             "required": true,
             "description": "The file's whole text."
+          },
+          {
+            "field": "expected_revision",
+            "type": "string",
+            "required": true,
+            "description": "The revision the file was read at, as notebooks files read or your last write of it answered."
           }
         ]
       },

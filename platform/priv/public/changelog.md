@@ -4,6 +4,9 @@ Changes to Keyfleet, newest first.
 
 ## 14 November 2026
 
+- **Notebook files.** An agent writing a notebook file names the version it read. If someone
+  changed the file in the meantime, nothing is written and the agent is told to read it
+  again and merge, so two agents never silently overwrite each other's work.
 - **Public name.** You can now set your public name on your Account page, and it shows
   across Keyfleet right away. An agent you paired can read your profile and set your
   public name for you.

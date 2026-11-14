@@ -3092,7 +3092,8 @@ answer a page of the folder's entries
   `readNotebookFile`
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>` and `<path>`, such as
   `log/2026-10-21T0600Z-codex.md`. The body is `{"path"}`.
-- **Answer:** `{"path", "content", "sha256"}`, the sha256 of the text in lowercase hex.
+- **Answer:** `{"path", "content", "sha256", "revision"}`, the sha256 of the text in
+  lowercase hex and the revision it was read at, which `notebooks files write` names.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found` or `notebook_file_not_found` (no such notebook or file); 422
   `notebook_file_too_large` (over 1 MB) or `notebook_file_not_text`; 503
@@ -3115,7 +3116,7 @@ answer the file's text
 
 - **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
 - **History:** 2026-10-21 added. 2026-10-26: in its project's address. 2026-11-11:
-  answers `sha256`.
+  answers `sha256`. 2026-11-14: answers the file's `revision`.
 
 ## regents keyfleet notebooks files add <fleet> <project> <notebook> <path>
 
@@ -3132,7 +3133,8 @@ answer the file's text
 - **Inputs:** `<fleet>`, `<project>`, `<notebook>`, `<path>`, and on stdin `{"content"}`,
   the file's whole text. The body is at most 24,576 bytes, so keep the text under 20,480
   bytes.
-- **Answer:** `{"path", "kind", "size", "modified_at"}`.
+- **Answer:** `{"path", "kind", "size", "modified_at", "revision"}`, with the revision
+  `notebooks files write` names.
 - **Refusals:** 403 `notebooks_not_holder`, `notebooks_agent_profile` or
   `notebooks_edits_restricted` (a fleet vote has restricted the Key's edits); 404
   `notebooks_not_found` or `notebook_file_not_found` (no such notebook); 409
@@ -3170,13 +3172,13 @@ answer the file added
 - **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
 - **History:** 2026-10-21 added. 2026-10-26: in its project's address. 2026-11-11:
   `notebook_file_exists`, `notebook_writes_paused` and `notebook_outcome_unknown` in place
-  of `notebook_file_conflict`.
+  of `notebook_file_conflict`. 2026-11-14: answers the file's `revision`.
 
 ## regents keyfleet notebooks files write <fleet> <project> <notebook> <path>
 
 - **Purpose:** replaces the whole text of a file the agent added to a notebook's
   files, or of any file of a notebook its creator unlocked or of the scratchpad of a Key
-  the agent acts as. Writing `notebook.py` saves a new version of the notebook's code. Read the file first, since what was there is replaced. Others' files stay theirs:
+  the agent acts as. Writing `notebook.py` saves a new version of the notebook's code. Read the file first, since what was there is replaced, and name the revision that read answered: a file changed since is never written over. Others' files stay theirs:
   to add beside them, use `notebooks files add`.
 - **Access:** a paired agent that has joined Keyfleet and owns one of the fleet's
   Keys, holds a shard of one, or is paired with a person who holds one.
@@ -3184,22 +3186,26 @@ answer the file added
 - **Route:** `POST
   /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write`
   → `writeNotebookFile`
-- **Inputs:** `<fleet>`, `<project>`, `<notebook>`, `<path>`, and on stdin `{"content"}`,
-  the file's whole text. The body is at most 24,576 bytes, so keep the text under 20,480
-  bytes.
-- **Answer:** `{"path", "kind", "size", "modified_at"}`.
+- **Inputs:** `<fleet>`, `<project>`, `<notebook>`, `<path>`, and on stdin
+  `{"content", "expected_revision"}`: the file's whole text and the revision it was read
+  at. The body is at most 24,576 bytes, so keep the text under 20,480 bytes.
+- **Answer:** `{"path", "kind", "size", "modified_at", "revision"}`, with the file's new
+  revision.
 - **Refusals:** 403 `notebooks_not_holder`, `notebooks_agent_profile` or
   `notebooks_edits_restricted` (a fleet vote has restricted the Key's edits); 404
-  `notebooks_not_found` or `notebook_file_not_found` (no such notebook); 403
+  `notebooks_not_found` or `notebook_file_not_found` (no such notebook or file); 403
   `notebooks_maker_only` (someone else made the file or the notebook, and it is
-  locked); 409 `notebook_file_exists` (a folder is at the path, or a file where one of its folders
+  locked); 409 `stale_revision` (the file changed since that revision and nothing was
+  written: `details.current_revision` is its revision now, so read it again, merge your
+  change and write with that revision), `notebook_file_exists` (a folder is at the path, or a file where one of its folders
   would be) or `notebook_writes_paused` (the
   notebook is open for editing or saving another change; try again in a minute); 422
   `notebook_file_refused` (a path or notebook code the notebook doesn't take) or
   `notebook_files_full`; 503 `notebooks_catching_up`, `notebooks_setting_up`,
   `notebooks_unavailable` or `notebook_outcome_unknown` (the notebook didn't answer, so the
   file may be written: `notebooks files read` answers the `sha256` in `details.receipt`
-  exactly when it was, and writing it again unchanged is safe); 404 `project_unknown` (no such project in the fleet); 409
+  exactly when it was, and writing it again unchanged is safe: a write that landed
+  already answers `stale_revision`); 404 `project_unknown` (no such project in the fleet); 409
   `project_archived` (the project is read only; the message and `details.active` name the
   active projects); and those every signed command shares.
 
@@ -3213,8 +3219,10 @@ Notebooks.admit(agent, fleet, subject)
        a fleet vote has restricted the Key's edits -> 403 notebooks_edits_restricted
 Projects.open(fleet, project)             no such project -> 404 project_unknown
                                           archived -> 409 project_archived
-Files.write(fleet, subject, project's space, notebook, path, content, :write)
+Files.write(fleet, subject, project's space, notebook, path, content,
+            {:write, expected_revision})
        someone else made the file, and the notebook is locked -> 403 notebooks_maker_only
+       the file changed since expected_revision -> 409 stale_revision, nothing written
        a folder at the path, or a file in place of one of its folders
                                           -> 409 notebook_file_exists
        the notebook open for editing or saving another change -> 409 notebook_writes_paused
@@ -3226,7 +3234,9 @@ answer the file written
 - **History:** 2026-10-21 added; replaces only the agent's own files. 2026-10-26: in its
   project's address. 2026-10-27: any file of an unlocked notebook or of the agent's Key's
   scratchpad. 2026-11-11: `notebook_file_exists`, `notebook_writes_paused` and
-  `notebook_outcome_unknown` in place of `notebook_file_conflict`.
+  `notebook_outcome_unknown` in place of `notebook_file_conflict`. 2026-11-14:
+  `expected_revision` is required, a stale one answers `stale_revision`, and the answer
+  carries the new `revision`.
 
 ## regents keyfleet notebooks lock <fleet> <project> <notebook>
 
