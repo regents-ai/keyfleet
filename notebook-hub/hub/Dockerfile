@@ -80,24 +80,34 @@ RUN git apply /tmp/run-page-status.patch
 # Atlas asks only for the notebooks saved since its last read.
 COPY marimohub/notebooks-updated-after.patch /tmp/notebooks-updated-after.patch
 RUN git apply /tmp/notebooks-updated-after.patch
+# A workspace file read answers its stored ETag, and a write with If-Match lands only
+# while the file still has it (the store's conditional put, for notebook.py and
+# pyproject.toml too); otherwise 412 with the current ETag.
+COPY marimohub/workspace-revision.patch /tmp/workspace-revision.patch
+RUN git apply /tmp/workspace-revision.patch
+# A workspace listing answers each file's stored ETag, the one its read answers, and
+# with recursive=true lists every file at any depth, so Keyfleet records what a run
+# ran from in one read.
+COPY marimohub/workspace-listing.patch /tmp/workspace-listing.patch
+RUN git apply /tmp/workspace-listing.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
 # marimohub's catalog tests, with the three catalog-commit.patch adds and the
 # maintenance-lock-landed.patch lease tests.
 RUN cd packages/core && pnpm exec vp test run src/services/catalog/
-# The notebook and thumbnail tests, with the sweep-concurrency.patch add and the
-# notebook-prune-hourly.patch adds, and the storage client's tests, with the
-# storage-read-retry.patch adds.
-RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts src/services/content/ThumbnailService.test.ts
+# The notebook, workspace and thumbnail tests, with the sweep-concurrency.patch add,
+# the notebook-prune-hourly.patch adds and the workspace-revision.patch stale-write
+# tests, and the storage client's tests, with the storage-read-retry.patch adds.
+RUN cd packages/core && pnpm exec vp test run src/services/content/NotebookService.test.ts src/services/content/NotebookWorkspaceService.test.ts src/services/content/ThumbnailService.test.ts
 RUN cd packages/storage-s3 && pnpm exec vp test run
 # The server's loop and startup tests, with the lease and hourly prune adds, and the
 # Cloudflare example's tests for its lease calls.
 RUN cd apps/server && pnpm exec vp test run src/backgroundLoops.test.ts src/cron.test.ts src/cron.tracing.test.ts src/bootstrap.test.ts
 RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
 # The app pool tests, with the app-pool-sweep.patch add, the notebook-machines.patch
-# route tests and the notebooks-updated-after.patch notebook route tests, with the API
-# description both add to.
+# route tests and the notebooks-updated-after.patch, workspace-revision.patch and
+# workspace-listing.patch notebook route tests, with the API description they add to.
 RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts src/routes/admin.machines.test.ts src/routes/notebooks.test.ts src/openapi.spec.test.ts
 # The python-check.patch pyproject tests, the run-failure.patch redaction, run
 # record, access and generated-description tests, and the run-page-status.patch

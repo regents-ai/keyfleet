@@ -23,15 +23,16 @@ defmodule Keyfleet.Notebooks.Runs do
   removed.
 
   A run started here records what it ran from (`Keyfleet.Notebooks.RunSource`):
-  the sha256 of the notebook's saved code just before it started, and the
-  entries at the top of its files. Reading the run answers that `source`;
-  once the run has finished, `code_current`, whether the notebook's saved
-  code is still that code; and while the run hasn't succeeded,
-  `last_succeeded`. Listing the notebooks answers each one's
-  `last_succeeded` too: the newest kept page of a run of the notebook that
-  succeeded, read from Keyfleet's copies alone
-  (`Keyfleet.Notebooks.SavedOutput`), so no number of later failed or
-  waiting runs hides the last good result.
+  the sha256 of the notebook's saved code just before it started, and every
+  file of it then with its revision (`Keyfleet.Notebooks.Files.manifest/4`).
+  Reading the run answers that `source`; once the run has finished,
+  `entry_current`, whether the notebook's saved code is still that code, and
+  `bundle_current`, whether every file is still as it was, nil when that
+  can't be told; and while the run hasn't succeeded, `last_succeeded`.
+  Listing the notebooks answers each one's `last_succeeded` too: the newest
+  kept page of a run of the notebook that succeeded, read from Keyfleet's
+  copies alone (`Keyfleet.Notebooks.SavedOutput`), so no number of later
+  failed or waiting runs hides the last good result.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
   once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
@@ -94,7 +95,7 @@ defmodule Keyfleet.Notebooks.Runs do
 
     with {:ok, %{"code" => code}} <-
            fleet_id |> request(subject, :get, notebook <> "/content") |> answer(200),
-         {:ok, files} <- Files.list(fleet_id, subject, project_id, notebook_id, nil, nil),
+         {:ok, manifest} <- Files.manifest(fleet_id, subject, project_id, notebook_id),
          {:ok, job_id} <- job(fleet_id, subject, notebook),
          {:ok, run} <-
            fleet_id
@@ -103,12 +104,17 @@ defmodule Keyfleet.Notebooks.Runs do
              headers: [{"idempotency-key", idempotency_key}]
            )
            |> answer(201) do
-      source = record_source(fleet_id, notebook_id, run["run_id"], code, files)
+      source = record_source(fleet_id, notebook_id, run["run_id"], code, manifest)
 
       {:ok,
        notebook_id
        |> view(run, nil)
-       |> Map.merge(%{source: source, code_current: nil, last_succeeded: nil})}
+       |> Map.merge(%{
+         source: source,
+         entry_current: nil,
+         bundle_current: nil,
+         last_succeeded: nil
+       })}
     end
   end
 
@@ -122,12 +128,13 @@ defmodule Keyfleet.Notebooks.Runs do
     with {:ok, run_path, run} <- find(fleet_id, subject, project_id, notebook_id, run_id),
          {:ok, result_url} <- result_url(fleet_id, subject, notebook_id, run_id, run, run_path),
          {:ok, source} <- source(fleet_id, run_id),
-         {:ok, current} <- code_current(fleet_id, subject, project_id, notebook_id, source, run),
+         {:ok, current} <- current(fleet_id, subject, project_id, notebook_id, source, run),
          {:ok, last} <- last_succeeded(fleet_id, notebook_id, run) do
       {:ok,
        notebook_id
        |> view(run, result_url)
-       |> Map.merge(%{source: source, code_current: current, last_succeeded: last})}
+       |> Map.merge(current)
+       |> Map.merge(%{source: source, last_succeeded: last})}
     end
   end
 
@@ -295,17 +302,15 @@ defmodule Keyfleet.Notebooks.Runs do
 
   # What the run ran from, as recorded the moment it started; nil when the
   # record couldn't be written, which is saved with the site's errors.
-  defp record_source(fleet_id, notebook_id, run_id, code, files) do
-    entries = Enum.map(files.entries, &Map.take(&1, [:path, :kind, :size]))
-
+  defp record_source(fleet_id, notebook_id, run_id, code, manifest) do
     recorded =
       Notebooks.record_run_source(
         fleet_id,
         run_id,
         notebook_id,
         sha256(code),
-        entries,
-        files.cursor == nil,
+        manifest.files,
+        manifest.complete,
         actor: %System{}
       )
 
@@ -350,20 +355,51 @@ defmodule Keyfleet.Notebooks.Runs do
     end
   end
 
-  # Whether a finished run's notebook still holds the code it ran from.
-  defp code_current(fleet_id, subject, project_id, notebook_id, %{code_sha256: ran}, %{
-         "status" => status
-       })
+  # Whether a finished run's notebook still holds what it ran from: its entry
+  # code (`entry_current`), and every file of it (`bundle_current`, nil when
+  # that can't be told).
+  defp current(fleet_id, subject, project_id, notebook_id, %{} = source, %{"status" => status})
        when status in @finished do
     with {:ok, %{"code" => code}} <-
            fleet_id
            |> request(subject, :get, notebook_path(project_id, notebook_id) <> "/content")
            |> answer(200),
-         do: {:ok, sha256(code) == ran}
+         {:ok, now} <- Files.manifest(fleet_id, subject, project_id, notebook_id) do
+      entry_current = sha256(code) == source.code_sha256
+
+      {:ok,
+       %{entry_current: entry_current, bundle_current: entry_current and same_files(source, now)}}
+    end
   end
 
-  defp code_current(_fleet_id, _subject, _project_id, _notebook_id, _source, _run),
-    do: {:ok, nil}
+  defp current(_fleet_id, _subject, _project_id, _notebook_id, _source, _run),
+    do: {:ok, %{entry_current: nil, bundle_current: nil}}
+
+  # Whether the files a run ran from are the notebook's files now, by path
+  # and revision (a file's revision changes whenever its bytes do). A side is
+  # whole when it holds every file, each with a revision; a side that isn't
+  # gives no evidence of which files there are. So: false when a file both
+  # sides list has another revision, or both sides are whole and differ;
+  # true when both are whole and the same; otherwise nil. Recorded files come
+  # back from the database with string keys.
+  defp same_files(source, now) do
+    ran = Map.new(source.files, &{&1["path"], &1["revision"]})
+    kept = Map.new(now.files, &{&1.path, &1.revision})
+
+    cond do
+      revised?(ran, kept) -> false
+      whole?(ran, source.files_complete) and whole?(kept, now.complete) -> ran == kept
+      true -> nil
+    end
+  end
+
+  defp revised?(ran, kept) do
+    Enum.any?(ran, fn {path, revision} ->
+      revision != nil and Map.get(kept, path) not in [nil, revision]
+    end)
+  end
+
+  defp whole?(files, complete), do: complete and nil not in Map.values(files)
 
   # The notebook's last good page, beside a run that hasn't succeeded.
   defp last_succeeded(_fleet_id, _notebook_id, %{"status" => "succeeded"}), do: {:ok, nil}

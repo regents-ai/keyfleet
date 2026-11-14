@@ -99,7 +99,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
     end
 
     action :write_file, :map do
-      description "Writes a notebook's file whole, replacing what it held."
+      description "Writes a notebook's file whole, over the revision read."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @project
       argument :notebook_id, :string, allow_nil?: false, constraints: @notebook
@@ -108,6 +108,10 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       argument :content, :string,
         allow_nil?: false,
         constraints: [max_length: 20_480, trim?: false, allow_empty?: true]
+
+      argument :expected_revision, :string,
+        allow_nil?: false,
+        constraints: [match: ~r/\A[!#-~]{1,128}\z/, trim?: false]
 
       run {Run, tool: "notebooks_write_file"}
     end

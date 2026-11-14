@@ -242,8 +242,12 @@ defmodule KeyfleetWeb.AgentWalkTest do
           else: {true, Map.put(kept, path, body)}
       end)
 
+    # A stored file's ETag is its content's hash, as the hub's file store makes it.
     if added,
-      do: json(conn, 200, %{success: true, data: item(path, body)}),
+      do:
+        conn
+        |> put_resp_header("etag", ~s("#{Keyfleet.Notebooks.Files.sha256(body)}"))
+        |> json(200, %{success: true, data: item(path, body)}),
       else:
         json(conn, 409, %{success: false, error: %{code: "CONFLICT", message: "already exists"}})
   end

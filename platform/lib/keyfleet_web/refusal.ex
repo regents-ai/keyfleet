@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.Refusal do
       {"There is no fleet with this id.", "GET /api/v1/fleets lists every fleet."},
     "project_unknown" =>
       {"This fleet has no project with that name.",
-       "Use the name of one of the fleet's projects. projects_list (GET /api/v1/agent/fleets/FLEET_ID/projects) lists them, active ones first."},
+       "Use the name of one of the fleet's projects. projects_list (GET /api/v1/agent/fleets/FLEET_ID/projects) lists them, active ones first. The proj- id in a notebook's address is the notebook host's own, not a project's name; links_resolve reads a notebook's address into its project and notebook_id."},
     "project_archived" =>
       {"This project is archived, so it takes no new work.",
        "Put the work in one of the active projects in details.active; any member works in any of them. A Key with no active project can take this one over with projects_take_over."},
@@ -475,7 +475,10 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was written. Try again in a minute; an open session closes 15 minutes after its last use."},
     "notebook_outcome_unknown" =>
       {"The notebook didn't confirm the change, so it may have been made.",
-       "Read the path with the tool in details.settle: the same sha256 means it was written. Sending the same request again is safe: it writes the file once, and an add is then kept as yours."},
+       "Read the path with the tool in details.settle: the same sha256 means it was written. Sending the same request again is safe: it writes the file once, a write that landed already answers stale_revision, and an add is then kept as yours."},
+    "stale_revision" =>
+      {"This file has changed since the revision you read, so nothing was written.",
+       "Read the file again with notebooks_read_file, merge your change into what it holds now, then write it with the revision that read answers. error.details.current_revision is the file's revision now."},
     "notebook_file_refused" =>
       {"The notebook doesn't take this file.",
        "Name a path inside the notebook, such as log/entry.md, with no empty, \".\" or \"..\" parts. notebook.py must be text marimo can read."},

@@ -9922,6 +9922,121 @@ worktree's server held port 4502. Run alone on PORT 4532: browser suite 127 of
 five among them; that run's 16 Firefox and WebKit walks of the Key profile did
 not start, as neither browser is installed on the Mac.
 
+## 2026-11-14: A notebook file write names the revision it read
+
+- An agent's read of a notebook file now answers the file's `revision`, and writing over
+  the file requires that revision as `expected_revision`. The site sends it to the
+  notebook hub as `If-Match`, and the hub stores the write only while the file still has
+  it, checked by the file store's own conditional write at the moment the file is
+  committed, for ordinary files and for `notebook.py` and `pyproject.toml` alike. A file
+  changed in between is never written over: the agent gets 409 `stale_revision` with
+  `error.details.current_revision`, told to read again, merge and write with it. The site
+  never retries or re-applies a stale write. Adds and writes answer the new `revision`.
+- The hub change is one new patch, `notebook-hub/marimohub/workspace-revision.patch`,
+  built into hub image `626ec14-b48b9a4`, with its own tests run in the image build. The
+  local end-to-end run (`notebook-hub/local/drive.mjs`) now has two editors write each
+  kind of file at once over the same revision on the real patched image: exactly one
+  lands, the other is refused with the current revision and adds no version; 24 of 24
+  steps passed.
+- The same change runs through the signed request, the browser tools and the Claude
+  connector, the command descriptors, the agent guides and docs. API contract 31.0.0 ->
+  32.0.0 in both copies, the breaking change dated in the docs. The test stand-in hubs
+  answer ETags and enforce `If-Match` as the real hub does, and a new test has two agents
+  write each kind of file over the same revision: one lands, and the stale one is sent to
+  the hub once and never again.
+- Release order: the hub image first, then the site. A site without the new hub answers
+  every file read as unavailable. regents-cli's `files write` needs to send
+  `expected_revision` before it works again; until then it answers 422.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with warnings
+as errors, format, credo strict, sobelow, full suite 1,464 (20 properties, 1,444 tests,
+19 excluded), codegen, route handoff, 494 unit tests, browser suite 127 of 127, devices
+70 of 70, required fixes, commands, the pin check and contracts (547 tests, 6 skipped).
+The first run found the joining walk's stand-in hub answering a file add without an
+ETag; it now answers one as the real hub does, and the rerun of the platform stage
+passed. Not run against two hub machines sharing one bucket; the hub's own two-replica
+test covers that on its in-memory store. Not run with a real agent.
+
+## 2026-11-14: A finished run says whether every file it ran from is still current
+
+- A notebook run no longer answers `code_current`. `entry_current` says the same thing,
+  whether the notebook's saved code (its entry file) is still the code the run ran from,
+  under a name that says it covers that file alone. The new `bundle_current` says
+  whether every file is still as it was: `true` only when the run's record holds every
+  file, each with a revision, and the notebook now has exactly those files at those
+  revisions; `false` when a difference is seen (the code changed, a file listed then and
+  now has another revision, or, with both sides whole, a file was added or removed);
+  `null` when it can't be told. Both are `null` until the run has finished. Before, a
+  helper changed beside an unchanged `notebook.py` still read as current.
+- `source.files` now lists every file of the notebook at any depth as `{path, size,
+  revision}`, with the revision a read of the file answers, in place of the entries at
+  its top with `kind`. Files in a `__marimo__` folder at any depth are left out: marimo
+  writes them itself whenever a notebook runs or is open, and the hub's own proposals
+  leave them out for the same reason. The record is one page of the hub's largest, 500
+  files; past that `files_complete` is `false`. `files_complete` now says completeness
+  alone, never freshness. No storage change: each revision sits in the existing list.
+  Runs recorded before this change keep what they stored; with no revisions their
+  record is never whole, so it is no evidence either way and they read `null` unless
+  the entry code changed.
+- The hub change is one new patch, `notebook-hub/marimohub/workspace-listing.patch`: a
+  workspace listing can ask for every file at any depth (`recursive=true`), and each file
+  names the same ETag its read answers. Hub image `626ec14-5a00d7a` in every fleet's
+  config. The hub's own tests pass in the prepared workspace (API 2,449 passed, 1
+  skipped; core workspace 43), with a new test that the listed ETag equals the read ETag
+  at depth and changes with the file. The local end-to-end run gains that step on the
+  real image, but neither the image build nor that run was done: the disk was below the
+  workspace's 50 GiB floor.
+- API contract 32.0.0 -> 33.0.0 in both copies, the breaking change dated in the docs;
+  the command descriptors, `cli/COMMANDS.md`, the agent guides, the feature map and the
+  verification list follow. The test stand-in hub lists every file with ETags and pages,
+  and reads and finishes runs. New tests: a helper changed while the entry isn't, marimo's
+  own files changing, the entry changing, a file added or removed, an incomplete record,
+  a missing revision, and a run still in progress.
+- Release order: the hub image first, then the site. Without the new hub the record is
+  the top level only with no revisions, so `bundle_current` reads `null`. regents-cli
+  needs to read `entry_current` and `bundle_current` in place of `code_current`.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with warnings
+as errors, format, credo strict, sobelow, full suite 1,468 (20 properties, 1,448 tests,
+19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
+of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
+tests, 6 skipped). An earlier run found the stand-in hub's answers split by two helpers,
+a warning that fails the warnings-as-errors run; they moved, and the rerun passed. Not
+run with a real hub or a real agent.
+
+## 2026-11-14: A notebook's address tells an agent which project to name
+
+- An agent took the `proj-` part of a task's `notebook_ref`, a notebook's address on the
+  fleet's notebook host, for the `project` of a notebook file read, and was refused 404
+  `project_unknown` with nothing saying why. That part is the notebook host's own id for
+  the project's space. Every notebook route takes the project's name, as `projects_list`
+  gives it, the same as every other Keyfleet tool, and `links_resolve` already reads a
+  notebook's address into its `project` and `notebook_id` for a member. The name stays
+  the one identifier the routes take: no second form, and nothing changes shape.
+- The `project_unknown` refusal's hint now says so in plain words: use the project's name
+  from `projects_list`; the `proj-` id in a notebook's address is the notebook host's
+  own; `links_resolve` reads the address. The same sentence is in the `project` input of
+  the notebook routes and the `notebook_url` and `notebook_ref` descriptions in both
+  contract copies, the tool manifest and the command descriptors, `cli/COMMANDS.md`, the
+  docs' Links and Notebooks sections and the notebooks guide. The contract stays 33.0.0:
+  the docs' rule moves `info.version` only for a breaking change.
+- A new test follows the agent's path: a task citing the notebook's address, read with
+  `graph/get`, resolved with `links/resolve` as a member, and the file read with the
+  answered project and notebook succeeds. The test's stand-in notebook host names its
+  space with a well-formed id, as the real host does, since only such an address reads as
+  a notebook, and its database sandbox is repeatable read, as for every test that reads
+  the workspace.
+- A run's freshness: a file added or removed counts as a change only when both sides
+  hold every file, each with a revision. A record without revisions is no evidence, so a
+  run recorded before this release reads `bundle_current` `null`, not `false`; a new test
+  covers a complete record whose files carry no revision.
+
+Check (partition `_kf_s4`): `make check`, every stage, PORT unset: compile with warnings
+as errors, format, credo strict, sobelow, full suite 1,470 (20 properties, 1,450 tests,
+19 excluded), graph host 243, codegen, route handoff, 499 unit tests, browser suite 127
+of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
+tests, 6 skipped). Not run with a real agent.
+
 ## 2026-11-14 — Atlas: Blocks and List only, and a lighter look
 
 - Removed the Atlas's Heat, Field and River views with their hooks, pictures,

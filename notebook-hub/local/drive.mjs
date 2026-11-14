@@ -1,6 +1,7 @@
-// Drives one notebook session, then three failing runs, through the local hub
-// and checks each step. Every request carries a pass signed as Keyfleet signs
-// them. Started by local/run.sh, which sets every variable read below.
+// Drives file writes over the revision read, one notebook session, then three
+// failing runs, through the local hub and checks each step. Every request
+// carries a pass signed as Keyfleet signs them. Started by local/run.sh, which
+// sets every variable read below.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, createPrivateKey, randomBytes, randomUUID, sign } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -332,6 +333,8 @@ async function main() {
 		`${PROVISIONER} made the project, with ${EDITOR} and ${OTHER_EDITOR} as editors and ${VIEWER} as a viewer`,
 	);
 
+	await fileRevisions(project);
+
 	const notebook = await api(EDITOR, 'POST', `/projects/${project.id}/notebooks`, {
 		title: 'Relay proof',
 		description: 'Runs one cell on a runner machine',
@@ -428,6 +431,106 @@ async function main() {
 
 	await failedRuns(project);
 	console.log('Local end-to-end run succeeded.');
+}
+
+/**
+ * Each kind of file, written by both editors at once over the ETag both read,
+ * as Keyfleet writes a file with If-Match: exactly one write lands, the other
+ * answers 412 with the file's ETag now and changes nothing, a later write over
+ * the old ETag is refused the same way, and one over the current ETag lands.
+ * The two writes are separate requests by separate members, holding no lock
+ * between them.
+ */
+async function fileRevisions(project) {
+	const notebook = await api(EDITOR, 'POST', `/projects/${project.id}/notebooks`, {
+		title: 'Revisions',
+		description: 'Two editors write the same files',
+		code: PLAIN,
+	});
+	const notebookPath = `/projects/${project.id}/notebooks/${notebook.id}`;
+	const file = (path) => `${HUB_URL}/api/v1${notebookPath}/workspace/files?path=${encodeURIComponent(path)}`;
+	const put = (subject, path, body, { etag, create = false } = {}) =>
+		fetch(`${file(path)}&create=${create}`, {
+			method: 'PUT',
+			headers: {
+				...as(subject),
+				'content-type': 'application/octet-stream',
+				...(etag === undefined ? {} : { 'if-match': etag }),
+			},
+			body,
+		});
+	const read = async (path) => {
+		const response = await fetch(file(path), { headers: as(EDITOR) });
+		check(response.ok, `${path}: read returned ${response.status}`);
+		return { etag: response.headers.get('etag'), text: await response.text() };
+	};
+	const versions = async () =>
+		(await api(EDITOR, 'GET', `${notebookPath}/versions?limit=100`)).items.length;
+	const pyproject = (n) => `[project]\nname = "revisions"\nversion = "0.1.${n}"\n`;
+
+	check((await put(EDITOR, 'notes/plan.md', 'plan 0', { create: true })).ok, 'notes/plan.md added');
+	check((await put(EDITOR, 'pyproject.toml', pyproject(0))).ok, 'pyproject.toml written');
+
+	for (const [path, edit] of [
+		['notes/plan.md', (n) => `plan ${n}`],
+		['notebook.py', (n) => PLAIN.replace('"ready"', `"edit ${n}"`)],
+		['pyproject.toml', pyproject],
+	]) {
+		const source = path !== 'notes/plan.md';
+		const before = await read(path);
+		check(/^"[^"]+"$/.test(before.etag ?? ''), `${path}: the read answers a strong ETag (got ${before.etag})`);
+		const versionsBefore = await versions();
+
+		const sent = [
+			[EDITOR, edit(1)],
+			[OTHER_EDITOR, edit(2)],
+		];
+		const answers = await Promise.all(
+			sent.map(([subject, body]) => put(subject, path, body, { etag: before.etag })),
+		);
+		const statuses = answers.map((answer) => answer.status).sort((a, b) => a - b);
+		check(statuses.join() === '200,412', `${path}: one write of two lands (got ${statuses})`);
+		const won = answers.findIndex((answer) => answer.status === 200);
+		const lost = answers[1 - won];
+		const after = await read(path);
+		check(after.text === sent[won][1], `${path}: the file holds the write that landed`);
+		check(answers[won].headers.get('etag') === after.etag, `${path}: the write answers the ETag it stored`);
+		check(lost.headers.get('etag') === after.etag, `${path}: the refused write is told the ETag now`);
+		check((await lost.json()).error?.code === 'PRECONDITION_FAILED', `${path}: refused as a failed precondition`);
+		check(
+			(await versions()) === versionsBefore + (source ? 1 : 0),
+			`${path}: ${source ? 'one new version' : 'no new version'}, none from the refused write`,
+		);
+
+		const stale = await put(EDITOR, path, edit(3), { etag: before.etag });
+		check(stale.status === 412, `${path}: a write over the old ETag is refused (got ${stale.status})`);
+		check(stale.headers.get('etag') === after.etag, `${path}: and told the ETag now`);
+		check((await read(path)).text === sent[won][1], `${path}: the refused write changed nothing`);
+
+		const merged = await put(OTHER_EDITOR, path, edit(4), { etag: after.etag });
+		check(merged.ok, `${path}: a write over the current ETag lands (got ${merged.status})`);
+		const last = await read(path);
+		check(last.text === edit(4) && merged.headers.get('etag') === last.etag, `${path}: the merged write is stored`);
+		ok(`${path}: of two writes over the same ETag one landed; stale writes answered 412 with the ETag now and changed nothing`);
+	}
+
+	const listed = async () =>
+		(await api(VIEWER, 'GET', `${notebookPath}/workspace/entries?recursive=true&limit=500`)).items;
+	const files = await listed();
+	check(
+		['/notebook.py', '/notes/plan.md', '/pyproject.toml'].every((path) => files.some((item) => item.path === path)),
+		`the recursive listing names every file at any depth (got ${files.map((item) => item.path)})`,
+	);
+	check(files.every((item) => item.kind === 'file'), 'the recursive listing names no folders');
+	for (const item of files) {
+		check(item.etag === (await read(item.path)).etag, `${item.path}: listed with the ETag its read answers`);
+	}
+	const plan = files.find((item) => item.path === '/notes/plan.md');
+	check((await put(EDITOR, 'notes/plan.md', 'plan 5', { etag: plan.etag })).ok, 'notes/plan.md changed');
+	const changed = (await listed()).find((item) => item.path === '/notes/plan.md');
+	check(changed.etag !== plan.etag, 'notes/plan.md: listed with a new ETag once changed');
+	check(changed.etag === (await read('notes/plan.md')).etag, 'notes/plan.md: the new listed ETag is its read ETag');
+	ok(`a recursive listing names ${files.length} files, each with its read ETag, and a changed file's listed ETag changes with it`);
 }
 
 /** A run of `notebookId` in a job of its own, started by the editor and read until it has finished. */

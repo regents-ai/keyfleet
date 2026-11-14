@@ -102,7 +102,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @notebook_create_path ~r"\A#{@in_project}/notebooks/create\z"
   @files_list_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/list\z"
   @file_read_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/read\z"
-  @file_write_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/(add|write)\z"
+  @file_add_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/add\z"
+  @file_write_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/write\z"
   @notebook_lock_path ~r"\A#{@in_project}/notebooks/#{@notebook}/lock\z"
   # A project's daily copies of its notebooks, each named by its id.
   @copy ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -156,7 +157,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
     {@files_list_path, {[], ~w(path cursor)}},
     {@file_read_path, {~w(path), []}},
-    {@file_write_path, {~w(path content), []}},
+    {@file_add_path, {~w(path content), []}},
+    {@file_write_path, {~w(path content expected_revision), []}},
     {@notebook_lock_path, {~w(locked), []}},
     {@topic_path, {~w(topic), []}},
     {@checkpoint_save_path, {~w(expected_revision state), []}},
@@ -809,6 +811,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @notebook_create_path,
         @files_list_path,
         @file_read_path,
+        @file_add_path,
         @file_write_path,
         @notebook_lock_path,
         @copy_restore_path,
@@ -837,7 +840,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       catch_up?(path) -> @sync_max_body
       limit = form_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
-      fleet_op(path) in [:notebook_create, :file_write] -> @notebook_write_max_body
+      fleet_op(path) in [:notebook_create, :file_add, :file_write] -> @notebook_write_max_body
       graph_op(path) in @graph_writes -> @graph_write_max_body
       true -> 4096
     end
@@ -998,6 +1001,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
         file_read: @file_read_path,
+        file_add: @file_add_path,
         file_write: @file_write_path,
         notebook_lock: @notebook_lock_path,
         receipts: @receipts_path,
@@ -1107,9 +1111,22 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_fleet_body(:file_read, _params), do: :invalid
 
-  # Adding or writing a file names the file and its whole text.
-  defp check_fleet_body(:file_write, %{"path" => path, "content" => content} = params),
+  # Adding a file names the file and its whole text.
+  defp check_fleet_body(:file_add, %{"path" => path, "content" => content} = params),
     do: admit(map_size(params) == 2 and is_binary(path) and is_binary(content))
+
+  defp check_fleet_body(:file_add, _params), do: :invalid
+
+  # Writing over a file names the revision it was read at, too.
+  defp check_fleet_body(
+         :file_write,
+         %{"path" => path, "content" => content, "expected_revision" => revision} = params
+       ),
+       do:
+         admit(
+           map_size(params) == 3 and is_binary(path) and is_binary(content) and
+             is_binary(revision) and Regex.match?(~r/\A[!#-~]{1,128}\z/, revision)
+         )
 
   defp check_fleet_body(:file_write, _params), do: :invalid
 

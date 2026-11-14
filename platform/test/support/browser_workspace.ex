@@ -8,8 +8,9 @@ defmodule Keyfleet.BrowserWorkspace do
 
   The stand-in hub keeps what it is sent while the server runs, as the real
   one does for the requests this site makes: notebooks, their authors and
-  code, each notebook's workspace files, jobs and their runs. A run has finished
-  the first time it is read again, and its page is a short one of its own.
+  code, each notebook's workspace files with their ETags, jobs and their
+  runs. A run has finished the first time it is read again, and its page is a
+  short one of its own.
   """
 
   alias Keyfleet.Graph.{Projector, Projectors, Writer}
@@ -223,28 +224,46 @@ defmodule Keyfleet.BrowserWorkspace do
     json(conn, 200, %{items: items})
   end
 
+  # A file's ETag is its content's hash, as the hub's file store makes it.
   defp workspace("GET", "files", id, conn, request) do
     case Map.fetch(files(request, id), conn.query_params["path"]) do
-      {:ok, content} -> Plug.Conn.send_resp(conn, 200, content)
+      {:ok, content} -> conn |> etag(content) |> Plug.Conn.send_resp(200, content)
       :error -> not_found(conn)
     end
   end
 
+  # A write with If-Match lands only while the file still has that ETag.
   defp workspace("PUT", "files", id, conn, request) do
     %{"path" => path, "create" => create} = conn.query_params
+    if_match = conn |> Plug.Conn.get_req_header("if-match") |> List.first()
 
-    added =
+    written =
       Agent.get_and_update(request.state, fn state ->
         kept = Map.get(state.files, id, %{})
 
-        if create == "true" and Map.has_key?(kept, path),
-          do: {false, state},
-          else: {true, put_in(state, [:files, id], Map.put(kept, path, request.body))}
+        case stored(kept, path, create == "true", if_match) do
+          :ok -> {:ok, put_in(state, [:files, id], Map.put(kept, path, request.body))}
+          refused -> {refused, state}
+        end
       end)
 
-    if added,
-      do: json(conn, 200, %{path: "/" <> path, kind: "file", size: byte_size(request.body)}),
-      else: json(conn, 409, %{code: "CONFLICT", message: "already exists"}, false)
+    case written do
+      :ok ->
+        conn
+        |> etag(request.body)
+        |> json(200, %{path: "/" <> path, kind: "file", size: byte_size(request.body)})
+
+      :conflict ->
+        json(conn, 409, %{code: "CONFLICT", message: "already exists"}, false)
+
+      :not_found ->
+        not_found(conn)
+
+      {:changed, current} ->
+        conn
+        |> etag(current)
+        |> json(412, %{code: "PRECONDITION_FAILED", message: "changed since read"}, false)
+    end
   end
 
   defp workspace("DELETE", "entries", id, conn, request) do
@@ -259,6 +278,17 @@ defmodule Keyfleet.BrowserWorkspace do
   end
 
   defp workspace(_method, _what, _id, conn, _request), do: not_found(conn)
+
+  # Whether a write lands on the files `kept`, as the hub's store decides it.
+  defp stored(kept, path, create, if_match) do
+    cond do
+      create and Map.has_key?(kept, path) -> :conflict
+      if_match == nil -> :ok
+      not Map.has_key?(kept, path) -> :not_found
+      if_match != quoted(kept[path]) -> {:changed, kept[path]}
+      true -> :ok
+    end
+  end
 
   defp jobs("GET", [], id, conn, request),
     do: json(conn, 200, %{items: Enum.map(jobs_of(request, id), &Map.delete(&1, "runs"))})
@@ -350,6 +380,11 @@ defmodule Keyfleet.BrowserWorkspace do
     do: for(_ <- 1..length, into: "", do: <<Enum.random(alphabet)>>)
 
   defp not_found(conn), do: json(conn, 404, %{code: "NOT_FOUND", message: "Not found"}, false)
+
+  defp etag(conn, content), do: Plug.Conn.put_resp_header(conn, "etag", quoted(content))
+
+  defp quoted(content),
+    do: ~s("#{:sha256 |> :crypto.hash(content) |> Base.encode16(case: :lower)}")
 
   defp json(conn, status, data, success \\ true) do
     body = if success, do: %{success: true, data: data}, else: %{success: false, error: data}

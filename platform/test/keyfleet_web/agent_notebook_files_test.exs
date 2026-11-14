@@ -3,7 +3,10 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   # signed requests here. The hub is a local server that keeps files as the
   # real one does: adding a file at a path already taken, or writing one where
   # a folder is or under a file, is refused with the one conflict the real hub
-  # answers for every reason, and each path it answers starts with `/`. A test
+  # answers for every reason, and each path it answers starts with `/`. Each
+  # file has an ETag, its content's hash, and a write naming one with
+  # If-Match lands only while the file still has it, else 412 with the file's
+  # ETag now, as the real hub's file store answers. A test
   # can set how it answers the next request to a path by a method, once
   # (`answer_next/4`). Like Fly's private addresses, it answers only on IPv6,
   # by name.
@@ -15,18 +18,28 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   alias Keyfleet.Actors.System
   alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, Notebooks, PairingHelpers, Projects}
   alias Keyfleet.Notebooks.Files
+  alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
   @notebook "nb-0123456789abcdef"
   @api "/api/v1/agent/fleets/#{@fleet}/projects/general/notebooks"
-  @workspace "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/workspace/"
-  @jobs "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/jobs"
+  @space "proj-0123456789abcdef"
+  @notebooks "/api/v1/projects/#{@space}/notebooks"
+  @workspace "#{@notebooks}/#{@notebook}/workspace/"
+  @jobs "#{@notebooks}/#{@notebook}/jobs"
   @add "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/add"
+  @write "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write"
 
   setup do
-    owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
+    # A task is read in the workspace's own snapshot, which the sandbox holds.
+    owner =
+      Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo,
+        shared: true,
+        isolation: "REPEATABLE READ"
+      )
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
 
     Fleets.bootstrap_catalog!()
@@ -56,7 +69,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     @fleet
     |> Projects.project!(Projects.general(), actor: %System{})
-    |> Projects.record_space!("proj-fleet", actor: %System{})
+    |> Projects.record_space!(@space, actor: %System{})
 
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
@@ -85,14 +98,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert json_response(created, 200) == %{
              "notebook_id" => @notebook,
              "title" => "Classic #1 pilot log",
-             "notebook_url" => Notebooks.notebook_url(@fleet, "proj-fleet", @notebook)
+             "notebook_url" => Notebooks.notebook_url(@fleet, @space, @notebook)
            }
 
     assert last_did(c.first) == :notebook
 
     first = c.first.subject
 
-    assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
+    assert_receive {:hub, "POST", @notebooks, ^first, _query, body}
     assert %{"description" => "", "tags" => []} = Jason.decode!(body)
 
     files = "#{@api}/#{@notebook}/files/"
@@ -114,15 +127,29 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert listed["cursor"] == nil
 
     read = &json_response(post!(c, c.second, files <> "read", %{"path" => &1}), &2)
-    assert read.("log/a.md", 200)["content"] == "First, from the first agent."
+    first_read = read.("log/a.md", 200)
+    assert first_read["content"] == "First, from the first agent."
 
     # Writing a file is how its own writer replaces it.
-    post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    corrected =
+      Map.merge(entry, %{
+        "content" => "First, corrected.",
+        "expected_revision" => first_read["revision"]
+      })
+
+    written = json_response(post!(c, c.first, files <> "write", corrected), 200)
     assert_receive {:hub, "PUT", @workspace <> "files", ^first, %{"create" => "false"}, _body}
-    assert read.("log/a.md", 200)["content"] == "First, corrected."
+    assert %{"content" => "First, corrected.", "revision" => revision} = read.("log/a.md", 200)
+    assert written["revision"] == revision
 
     # Only a file's maker writes over it.
-    over = post!(c, c.second, files <> "write", %{entry | "content" => "Second, over the first."})
+    over =
+      post!(c, c.second, files <> "write", %{
+        corrected
+        | "content" => "Second, over the first.",
+          "expected_revision" => revision
+      })
+
     assert json_response(over, 403)["error"]["code"] == "notebooks_maker_only"
     assert read.("log/a.md", 200)["content"] == "First, corrected."
 
@@ -131,6 +158,74 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert read.("chart.png", 422)["error"]["code"] == "notebook_file_not_text"
     Agent.update(c.files, &Map.put(&1, "big.md", String.duplicate("a", 1024 * 1024 + 1)))
     assert read.("big.md", 422)["error"]["code"] == "notebook_file_too_large"
+  end
+
+  # Costly failure: two agents read a file, both change it, and the second
+  # write silently replaces the first, so the first agent's work is lost.
+  for path <- ["log/a.md", "notebook.py", "pyproject.toml"] do
+    test "of two writes over the revision both read, #{path} keeps one and the other is refused",
+         c do
+      path = unquote(path)
+      # The notebook's creator unlocked it, so both agents write any of its files.
+      Keyfleet.Notebooks.Setting
+      |> Ash.Changeset.for_create(
+        :switch,
+        %{fleet_id: @fleet, notebook_id: @notebook, unlocked: true},
+        actor: %System{}
+      )
+      |> Ash.create!()
+
+      Agent.update(c.files, &Map.put(&1, path, "As it was."))
+      files = "#{@api}/#{@notebook}/files/"
+
+      read = fn agent ->
+        json_response(post!(c, agent, files <> "read", %{"path" => path}), 200)
+      end
+
+      %{"revision" => revision} = read.(c.first)
+      assert read.(c.second)["revision"] == revision
+
+      [first, second] =
+        [{c.first, "From the first agent."}, {c.second, "From the second agent."}]
+        |> Task.async_stream(fn {agent, content} ->
+          write = %{"path" => path, "content" => content, "expected_revision" => revision}
+          post!(c, agent, files <> "write", write)
+        end)
+        |> Enum.map(fn {:ok, conn} -> conn end)
+
+      # Exactly one lands; the other is told the revision the file has now.
+      assert Enum.sort([first.status, second.status]) == [200, 409]
+      [landed, refused] = Enum.sort_by([first, second], & &1.status)
+      saved = json_response(landed, 200)
+      stale = json_response(refused, 409)
+
+      assert ContractSchema.response_errors(stale, "POST", @write, 409) == []
+      assert stale["error"]["code"] == "stale_revision"
+      assert stale["error"]["details"] == %{"current_revision" => saved["revision"]}
+
+      kept = read.(c.first)
+      assert kept["revision"] == saved["revision"]
+
+      assert kept["content"] in ["From the first agent.", "From the second agent."]
+
+      # A stale write is sent once and never read back or sent again here.
+      loser = if refused == first, do: c.first, else: c.second
+      flush_hub()
+      again = %{"path" => path, "content" => "Late.", "expected_revision" => revision}
+      assert json_response(post!(c, loser, files <> "write", again), 409)
+      loser_subject = loser.subject
+      assert_received {:hub, "PUT", _put, ^loser_subject, _query, _body}
+      refute_received {:hub, _method, _path, _subject, _query, _body}
+      assert Agent.get(c.files, & &1[path]) == kept["content"]
+
+      # Written over the revision it reads now, the change lands.
+      merged = %{again | "content" => "Merged.", "expected_revision" => kept["revision"]}
+
+      assert json_response(post!(c, loser, files <> "write", merged), 200)["revision"] ==
+               Files.sha256("Merged.")
+
+      assert Agent.get(c.files, & &1[path]) == "Merged."
+    end
   end
 
   # Costly failure: a file added while its maker can't be kept stays as the
@@ -201,9 +296,10 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert last_did(c.first) == :notebook
 
     # Kept as the first agent's own: it writes over it, and no one else does.
-    over = post!(c, c.second, files <> "write", %{entry | "content" => "Second, over the first."})
+    over_read = Map.put(entry, "expected_revision", read["revision"])
+    over = post!(c, c.second, files <> "write", %{over_read | "content" => "Second, over."})
     assert json_response(over, 403)["error"]["code"] == "notebooks_maker_only"
-    own = post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    own = post!(c, c.first, files <> "write", %{over_read | "content" => "First, corrected."})
     assert json_response(own, 200)["path"] == "/log/a.md"
   end
 
@@ -269,10 +365,12 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert Agent.get(c.files, & &1) == %{}
     assert last_did(c.first) == nil
 
-    assert json_response(post!(c, c.first, files <> "add", entry), 200)["path"] == "/log/a.md"
+    added = json_response(post!(c, c.first, files <> "add", entry), 200)
+    assert added["path"] == "/log/a.md"
 
     answer_next(c, "PUT", "files", :paused)
-    paused = post!(c, c.first, files <> "write", %{entry | "content" => "First, corrected."})
+    over = %{"content" => "First, corrected.", "expected_revision" => added["revision"]}
+    paused = post!(c, c.first, files <> "write", Map.merge(entry, over))
     assert json_response(paused, 409)["error"]["code"] == "notebook_writes_paused"
     assert Agent.get(c.files, & &1) == %{"log/a.md" => entry["content"]}
   end
@@ -288,8 +386,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       Keyword.put(Notebooks.config(), :fleets, %{@fleet => "http://localhost:#{port}"})
     )
 
-    added =
-      Files.write(@fleet, nil, c.first.subject, "proj-fleet", @notebook, "log/a.md", "x", :add)
+    added = Files.write(@fleet, nil, c.first.subject, @space, @notebook, "log/a.md", "x", :add)
 
     assert added == {:error, :unavailable}
   end
@@ -328,7 +425,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
            )
 
     first = c.first.subject
-    assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
+    assert_receive {:hub, "POST", @notebooks, ^first, _query, body}
     assert Jason.decode!(body)["tags"] == ["goal-19"]
 
     for goal <- ["goal-19", "task#3", "goal#0", 19] do
@@ -342,8 +439,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
       assert refused.status in 400..499
 
-      refute_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", _subject, _query,
-                      _body}
+      refute_receive {:hub, "POST", @notebooks, _subject, _query, _body}
     end
   end
 
@@ -353,6 +449,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     runs = "#{@api}/#{@notebook}/runs/start"
     first = c.first.subject
     second = c.second.subject
+    Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
 
     # Each notebook as the Docs place lists it, with its description and when
     # it was added, and no run before one is started.
@@ -363,11 +460,11 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
              list["notebooks"]
 
     started = post!(c, c.first, runs, %{"idempotency_key" => "run-1"})
-    assert json_response(started, 200)["run_id"] == "run_1"
+    assert json_response(started, 200)["run_id"] == run_id(1)
     assert_receive {:hub, "POST", @jobs, ^first, _query, _body}
 
     again = post!(c, c.first, runs, %{"idempotency_key" => "run-2"})
-    assert json_response(again, 200)["run_id"] == "run_2"
+    assert json_response(again, 200)["run_id"] == run_id(2)
     refute_receive {:hub, "POST", @jobs, _subject, _query, _body}
 
     post!(c, c.second, runs, %{"idempotency_key" => "run-3"})
@@ -382,9 +479,196 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         |> hd()
         |> get_in(["last_run", "run_id"]))
 
-    assert listed.(c.first) == "run_2"
-    assert listed.(c.second) == "run_3"
+    assert listed.(c.first) == run_id(2)
+    assert listed.(c.second) == run_id(3)
   end
+
+  # Costly failure: an agent handed a task's notebook address takes its proj-…
+  # part, the notebook host's own id, for the project, and every read of the
+  # notebook is refused. links_resolve names the project and notebook they take.
+  test "a task's notebook address reads as the project and notebook a file read takes", c do
+    Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
+    [%{"notebook_url" => url}] = json_response(get!(c, c.first, @api), 200)["notebooks"]
+
+    Workspace.open_log(@fleet)
+    task = Workspace.create(@fleet, "task", %{"title" => "Count boats", "notebook_ref" => url})
+    shown = post!(c, c.first, "/api/v1/agent/fleets/#{@fleet}/graph/get", %{"id" => task})
+    cited = json_response(shown, 200)["object"]["data"]["notebook_ref"]
+    assert cited == url
+
+    link = json_response(post!(c, c.first, "/api/v1/agent/links/resolve", %{"url" => cited}), 200)
+    assert ContractSchema.errors(link, "Link") == []
+
+    assert %{"kind" => "notebook", "read" => %{"tool" => "notebooks_files", "input" => input}} =
+             link
+
+    %{"project" => project, "notebook_id" => notebook} = input
+    assert {project, notebook} == {"general", @notebook}
+
+    files = "/api/v1/agent/fleets/#{@fleet}/projects/#{project}/notebooks/#{notebook}/files/"
+    read = json_response(post!(c, c.first, files <> "read", %{"path" => "notebook.py"}), 200)
+    assert read["content"] == "import marimo"
+  end
+
+  describe "a finished run's files" do
+    setup c do
+      Agent.update(c.files, fn kept ->
+        Map.merge(kept, %{
+          "notebook.py" => "import marimo\nfrom helper import total",
+          "helper.py" => "def total(): return 1",
+          "data/rows.csv" => "a,b\n1,2",
+          "__marimo__/session/notebook.py.json" => ~s({"cells": []})
+        })
+      end)
+
+      :ok
+    end
+
+    # Costly failure: an agent cites a result as the notebook's current
+    # output because the entry file is unchanged, while a helper beside it
+    # that the result depends on has changed since.
+    test "a helper changed after the run leaves the entry current and the whole bundle not",
+         c do
+      {run_id, read} = run!(c)
+
+      assert %{"entry_current" => nil, "bundle_current" => nil} = read.()
+
+      finish!(c, run_id)
+      answer = read.()
+      assert %{"entry_current" => true, "bundle_current" => true} = answer
+
+      source = answer["source"]
+      assert ContractSchema.errors(source, "NotebookRunSource") == []
+      assert source["files_complete"]
+
+      assert Enum.map(source["files"], &{&1["path"], &1["revision"]}) ==
+               for(
+                 path <- ["data/rows.csv", "helper.py", "notebook.py"],
+                 do: {"/" <> path, Files.sha256(Agent.get(c.files, & &1[path]))}
+               )
+
+      Agent.update(c.files, &Map.put(&1, "helper.py", "def total(): return 2"))
+      assert %{"entry_current" => true, "bundle_current" => false} = read.()
+    end
+
+    # Costly failure: every result reads as stale once anyone opens the
+    # notebook, because marimo rewrites its own session caches.
+    test "marimo's own files changing leaves both current; the entry changing leaves neither",
+         c do
+      {run_id, read} = run!(c)
+      finish!(c, run_id)
+
+      Agent.update(c.files, fn kept ->
+        kept
+        |> Map.put("__marimo__/session/notebook.py.json", ~s({"cells": [1]}))
+        |> Map.put("lib/__marimo__/notebook.html", "<p>page</p>")
+      end)
+
+      assert %{"entry_current" => true, "bundle_current" => true} = read.()
+
+      Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo\nprint(2)"))
+      assert %{"entry_current" => false, "bundle_current" => false} = read.()
+    end
+
+    test "a file added or removed after the run leaves the bundle not current", c do
+      {added, read_added} = run!(c)
+      finish!(c, added)
+      Agent.update(c.files, &Map.put(&1, "data/more.csv", "c\n3"))
+      assert %{"entry_current" => true, "bundle_current" => false} = read_added.()
+
+      {removed, read_removed} = run!(c)
+      finish!(c, removed)
+      Agent.update(c.files, &Map.delete(&1, "data/rows.csv"))
+      assert %{"entry_current" => true, "bundle_current" => false} = read_removed.()
+    end
+
+    # Completeness says whether the record holds every file; freshness whether
+    # those files are still the notebook's. Each is told apart from the other.
+    test "an incomplete record or a missing revision leaves the bundle unknown, not current",
+         c do
+      Agent.update(c.files, fn kept ->
+        Map.merge(kept, Map.new(1..500, &{"zz/#{&1}.txt", "#{&1}"}))
+      end)
+
+      {partial, read_partial} = run!(c)
+      finish!(c, partial)
+      answer = read_partial.()
+      refute answer["source"]["files_complete"]
+      assert length(answer["source"]["files"]) < 500
+      assert %{"entry_current" => true, "bundle_current" => nil} = answer
+
+      # A file the record does hold, changed: seen, so not current.
+      Agent.update(c.files, &Map.put(&1, "helper.py", "def total(): return 2"))
+      assert %{"bundle_current" => false} = read_partial.()
+
+      Agent.update(c.files, fn kept ->
+        kept |> Map.reject(fn {path, _} -> is_binary(path) and path =~ ~r/^zz\// end)
+      end)
+
+      Agent.update(c.files, &Map.put(&1, "unrevised", ["helper.py"]))
+      {unrevised, read_unrevised} = run!(c)
+      finish!(c, unrevised)
+      answer = read_unrevised.()
+      assert answer["source"]["files_complete"]
+      helper = Enum.find(answer["source"]["files"], &(&1["path"] == "/helper.py"))
+      assert helper["revision"] == nil
+      assert %{"entry_current" => true, "bundle_current" => nil} = answer
+    end
+
+    # A hub that names no revision: the record holds every file, so it is
+    # complete, yet says nothing of whether they are still the same.
+    test "a record of every file with no revisions is complete, and its bundle unknown", c do
+      Agent.update(
+        c.files,
+        &Map.put(&1, "unrevised", ["notebook.py", "helper.py", "data/rows.csv"])
+      )
+
+      {run_id, read} = run!(c)
+      finish!(c, run_id)
+      Agent.update(c.files, &Map.delete(&1, "unrevised"))
+
+      answer = read.()
+      assert answer["source"]["files_complete"]
+      assert Enum.map(answer["source"]["files"], & &1["revision"]) == [nil, nil, nil]
+      assert %{"entry_current" => true, "bundle_current" => nil} = answer
+
+      # Nor is a file it lists, gone from the notebook now, evidence of a change.
+      Agent.update(c.files, &Map.delete(&1, "data/rows.csv"))
+      assert %{"entry_current" => true, "bundle_current" => nil} = read.()
+    end
+  end
+
+  # Starts a run as the first agent, answering its id and a read of it.
+  defp run!(c) do
+    key = "run-#{:erlang.unique_integer([:positive])}"
+
+    run_id =
+      json_response(
+        post!(c, c.first, "#{@api}/#{@notebook}/runs/start", %{"idempotency_key" => key}),
+        200
+      )["run_id"]
+
+    {run_id,
+     fn -> json_response(get!(c, c.first, "#{@api}/#{@notebook}/runs/#{run_id}"), 200) end}
+  end
+
+  defp finish!(c, run_id) do
+    Agent.update(c.files, fn kept ->
+      %{
+        kept
+        | "jobs" =>
+            Enum.map(
+              kept["jobs"],
+              &%{&1 | "runs" => Enum.map(&1["runs"], fn run -> finished(run, run_id) end)}
+            )
+      }
+    end)
+  end
+
+  defp finished(%{"run_id" => run_id} = run, run_id), do: %{run | "status" => "succeeded"}
+  defp finished(run, _run_id), do: run
+
+  defp run_id(n), do: "run_" <> String.pad_leading(Integer.to_string(n), 26, "0")
 
   defp get!(c, agent, path) do
     request = SignedAgentHelpers.sign(agent.signer, c.secret, "www.example.com", "GET", path, nil)
@@ -430,6 +714,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     end)
     |> put_req_header("accept", "application/json, text/event-stream")
     |> dispatch(@endpoint, :post, "/mcp", raw)
+  end
+
+  defp flush_hub do
+    receive do
+      {:hub, _method, _path, _subject, _query, _body} -> flush_hub()
+    after
+      0 -> :ok
+    end
   end
 
   # Each request has its own id, so two refusals are compared without it.
@@ -507,7 +799,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     run =
       Agent.get_and_update(files, fn kept ->
         all = Enum.flat_map(kept["jobs"], & &1["runs"])
-        run = %{"run_id" => "run_#{length(all) + 1}", "status" => "queued"}
+        run = %{"run_id" => run_id(length(all) + 1), "status" => "queued"}
 
         {run, %{kept | "jobs" => Enum.map(kept["jobs"], &with_run(&1, job_id, run))}}
       end)
@@ -520,13 +812,22 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          files,
          _body
        ) do
-    [job_id, "runs"] = String.split(runs, "/")
-    job = Enum.find(Agent.get(files, & &1["jobs"]), &(&1["id"] == job_id))
-    json(conn, 200, %{success: true, data: %{items: Enum.take(job["runs"], 1)}})
+    case String.split(runs, "/") do
+      [job_id, "runs"] ->
+        job = Enum.find(Agent.get(files, & &1["jobs"]), &(&1["id"] == job_id))
+        json(conn, 200, %{success: true, data: %{items: Enum.take(job["runs"], 1)}})
+
+      [_job_id, "runs", run_id] ->
+        run_answer(conn, Enum.find(all_runs(files), &(&1["run_id"] == run_id)))
+
+      # A run's page; these runs keep none.
+      [_job_id, "runs", _run_id, "html"] ->
+        json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No page"}})
+    end
   end
 
   defp hub_answer(
-         %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,
+         %Plug.Conn{method: "GET", request_path: @notebooks} = conn,
          _files,
          _body
        ),
@@ -541,7 +842,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          })
 
   defp hub_answer(
-         %Plug.Conn{method: "POST", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,
+         %Plug.Conn{method: "POST", request_path: @notebooks} = conn,
          _files,
          body
        ) do
@@ -554,16 +855,32 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          files,
          _body
        ) do
-    # No path lists the whole workspace, as a run's record of its files does;
-    # the jobs kept beside the files are not files.
+    # One folder's files and folders, or with `recursive` every file under it
+    # at any depth, as a run's record of its files reads them; the jobs kept
+    # beside the files are not files. A page holds at most `limit`, and a
+    # cursor names the rest. A file under "unrevised" is listed with no ETag.
     folder = if path = conn.query_params["path"], do: path <> "/", else: ""
+    recursive = conn.query_params["recursive"] == "true"
+    limit = String.to_integer(conn.query_params["limit"] || "200")
+    kept = Agent.get(files, & &1)
 
-    items =
-      for {path, content} when is_binary(content) <- Enum.sort(Agent.get(files, & &1)),
+    listed =
+      &Map.drop(item(&1, &2), if(&1 in Map.get(kept, "unrevised", []), do: [:etag], else: []))
+
+    entries =
+      for {path, content} when is_binary(content) <- Enum.sort(kept),
           String.starts_with?(path, folder),
-          do: item(path, content)
+          uniq: true do
+        case String.split(String.replace_prefix(path, folder, ""), "/", parts: 2) do
+          [_name] -> listed.(path, content)
+          [_folder, _rest] when recursive -> listed.(path, content)
+          [inner, _rest] -> %{path: "/" <> folder <> inner, name: inner, kind: "directory"}
+        end
+      end
 
-    json(conn, 200, %{success: true, data: %{items: items}})
+    page = %{items: Enum.take(entries, limit)}
+    page = if length(entries) > limit, do: Map.put(page, :cursor, "next"), else: page
+    json(conn, 200, %{success: true, data: page})
   end
 
   defp hub_answer(
@@ -573,7 +890,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
        ) do
     case Agent.get(files, &Map.fetch(&1, conn.query_params["path"])) do
       {:ok, content} ->
-        send_resp(conn, 200, content)
+        conn |> etag(content) |> send_resp(200, content)
 
       :error ->
         json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No such file"}})
@@ -595,54 +912,80 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          body
        ) do
     %{"path" => path, "create" => create} = conn.query_params
+    if_match = conn |> get_req_header("if-match") |> List.first()
 
-    added =
+    written =
       Agent.get_and_update(files, fn kept ->
-        # A folder at the path, or a file where one of its folders would be.
-        in_the_way? =
-          Enum.any?(kept, fn {kept_path, content} ->
-            is_binary(content) and
-              (String.starts_with?(kept_path, path <> "/") or
-                 String.starts_with?(path, kept_path <> "/"))
-          end)
-
-        if in_the_way? or (create == "true" and Map.has_key?(kept, path)),
-          do: {false, kept},
-          else: {true, Map.put(kept, path, body)}
+        case stored(kept, path, create == "true", if_match) do
+          :ok -> {:ok, Map.put(kept, path, body)}
+          refused -> {refused, kept}
+        end
       end)
 
-    if added,
-      do: json(conn, 200, %{success: true, data: item(path, body)}),
-      else:
+    case written do
+      :ok ->
+        conn |> etag(body) |> json(200, %{success: true, data: item(path, body)})
+
+      :conflict ->
         json(conn, 409, %{success: false, error: %{code: "CONFLICT", message: "already exists"}})
+
+      :not_found ->
+        json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No such file"}})
+
+      {:changed, current} ->
+        conn
+        |> etag(current)
+        |> json(412, %{
+          success: false,
+          error: %{code: "PRECONDITION_FAILED", message: "changed since it was read"}
+        })
+    end
   end
 
   defp hub_answer(
-         %Plug.Conn{method: "POST", request_path: "/api/v1/projects/proj-fleet/members"} = conn,
+         %Plug.Conn{method: "POST", request_path: "/api/v1/projects/#{@space}/members"} = conn,
          _files,
          _body
        ),
        do: json(conn, 201, %{success: true, data: %{}})
 
-  # A run records the code it ran from, so starting one reads the notebook.
+  # A run records the code it ran from, so starting one reads the notebook's
+  # entry file.
   defp hub_answer(
-         %Plug.Conn{
-           method: "GET",
-           request_path: "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/content"
-         } = conn,
-         _files,
+         %Plug.Conn{method: "GET", request_path: "#{@notebooks}/#{@notebook}/content"} = conn,
+         files,
          _body
        ),
-       do: json(conn, 200, %{success: true, data: %{code: "import marimo"}})
+       do: json(conn, 200, %{success: true, data: %{code: Agent.get(files, & &1["notebook.py"])}})
 
   defp hub_answer(conn, _files, _body), do: json(conn, 200, %{success: true, data: %{}})
+
+  # Whether a write lands on the files `kept`, as the hub's store decides it.
+  defp stored(kept, path, create, if_match) do
+    cond do
+      in_the_way?(kept, path) or (create and Map.has_key?(kept, path)) -> :conflict
+      if_match == nil -> :ok
+      not Map.has_key?(kept, path) -> :not_found
+      if_match != quoted(kept[path]) -> {:changed, kept[path]}
+      true -> :ok
+    end
+  end
+
+  # A folder at the path, or a file where one of its folders would be.
+  defp in_the_way?(kept, path) do
+    Enum.any?(kept, fn {kept_path, content} ->
+      is_binary(content) and
+        (String.starts_with?(kept_path, path <> "/") or
+           String.starts_with?(path, kept_path <> "/"))
+    end)
+  end
 
   # The hub keeps the file, then answers after Keyfleet has stopped waiting.
   defp hub_next(:keeps_then_hangs, conn, files, body) do
     path = conn.query_params["path"]
     Agent.update(files, &Map.put(&1, path, body))
     Process.sleep(600)
-    json(conn, 200, %{success: true, data: item(path, body)})
+    conn |> etag(body) |> json(200, %{success: true, data: item(path, body)})
   end
 
   # The hub fails before changing anything.
@@ -669,14 +1012,26 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   defp with_run(%{"id" => job_id} = job, job_id, run), do: %{job | "runs" => [run | job["runs"]]}
   defp with_run(job, _job_id, _run), do: job
 
+  defp all_runs(files),
+    do: Agent.get(files, &Enum.flat_map(&1["jobs"], fn job -> job["runs"] end))
+
+  defp run_answer(conn, nil),
+    do: json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
+
+  defp run_answer(conn, run), do: json(conn, 200, %{success: true, data: run})
+
   defp item(path, content),
     do: %{
       path: "/" <> path,
       name: Path.basename(path),
       kind: "file",
       size: byte_size(content),
-      modified_at: 1
+      modified_at: 1,
+      etag: quoted(content)
     }
+
+  defp etag(conn, content), do: put_resp_header(conn, "etag", quoted(content))
+  defp quoted(content), do: ~s("#{Files.sha256(content)}")
 
   defp json(conn, status, body),
     do:

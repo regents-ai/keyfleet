@@ -1,0 +1,215 @@
+diff --git a/apps/cli/generated/cli-manifest.json b/apps/cli/generated/cli-manifest.json
+index 1d66cdce..b06471bf 100644
+--- a/apps/cli/generated/cli-manifest.json
++++ b/apps/cli/generated/cli-manifest.json
+@@ -3544,6 +3544,15 @@
+ 					"description": "Exact tag to match.",
+ 					"value_type": "string",
+ 					"repeatable": false
++				},
++				{
++					"name": "updated_after",
++					"cli_name": "updated-after",
++					"in": "query",
++					"required": false,
++					"description": "Only notebooks updated after this time.",
++					"value_type": "string",
++					"repeatable": false
+ 				}
+ 			],
+ 			"destructive": false,
+@@ -4621,6 +4630,15 @@
+ 					"required": false,
+ 					"value_type": "string",
+ 					"repeatable": false
++				},
++				{
++					"name": "recursive",
++					"cli_name": "recursive",
++					"in": "query",
++					"required": false,
++					"description": "With true, every file under the folder at any depth, and no folders.",
++					"value_type": "string",
++					"repeatable": false
+ 				}
+ 			],
+ 			"destructive": false,
+diff --git a/packages/api/openapi.yaml b/packages/api/openapi.yaml
+index c1c82918..c1651286 100644
+--- a/packages/api/openapi.yaml
++++ b/packages/api/openapi.yaml
+@@ -2581,6 +2581,11 @@ components:
+           minimum: 0
+         mime_type:
+           type: string
++        etag:
++          type: string
++          description: A file's stored ETag, the same strong validator its read answers.
++            Echo as `If-Match` to guard a write.
++          example: '"2025-03-05T14:00:00Z"'
+       required:
+         - path
+         - name
+@@ -9567,6 +9572,17 @@ paths:
+           required: false
+           name: limit
+           in: query
++        - schema:
++            type: string
++            enum:
++              - 'true'
++              - 'false'
++            description: With true, every file under the folder at any depth, and no
++              folders.
++          required: false
++          description: With true, every file under the folder at any depth, and no folders.
++          name: recursive
++          in: query
+       responses:
+         '200':
+           description: Workspace entries
+diff --git a/packages/api/src/routes/notebooks.test.ts b/packages/api/src/routes/notebooks.test.ts
+index 8ca4519f..9a7c4fa0 100644
+--- a/packages/api/src/routes/notebooks.test.ts
++++ b/packages/api/src/routes/notebooks.test.ts
+@@ -1514,6 +1514,52 @@ describe('Notebook routes', () => {
+ 				},
+ 			);
+ 
++			it('lists every file at any depth with the ETag its read answers', async () => {
++				const created = await expectOk<any>(
++					await request('POST', nb(''), { title: 'NB', description: 'D', code: 'print(1)' }),
++					201,
++				);
++				const workspace = `/api/v1${nb(`/${created.id}/workspace`)}`;
++				const file = (path: string) => `${workspace}/files?path=${encodeURIComponent(path)}`;
++				await expectOk(
++					await app.request(`${file('/lib/deep/helper.py')}&create=true`, {
++						method: 'PUT',
++						body: 'a',
++					}),
++				);
++				const list = async (query: string) =>
++					(await expectOk<any>(await app.request(`${workspace}/entries?${query}`))).items as any[];
++
++				const all = await list('recursive=true');
++				expect(all.map((item) => item.path).sort((a, b) => a.localeCompare(b))).toEqual([
++					'/lib/deep/helper.py',
++					'/notebook.py',
++					'/pyproject.toml',
++				]);
++				expect(all.every((item) => item.kind === 'file')).toBe(true);
++				for (const item of all) {
++					expect(item.etag).toBe((await app.request(file(item.path))).headers.get('etag'));
++				}
++				const top = await list('path=%2F');
++				expect(top.find((item) => item.path === '/lib')).toMatchObject({ kind: 'directory' });
++				expect(top.find((item) => item.path === '/lib').etag).toBeUndefined();
++				expect(top.find((item) => item.path === '/notebook.py').etag).toMatch(/^"[^"]+"$/);
++
++				const before = all.find((item) => item.path === '/lib/deep/helper.py').etag;
++				await expectOk(
++					await app.request(file('/lib/deep/helper.py'), {
++						method: 'PUT',
++						headers: { 'if-match': before },
++						body: 'b',
++					}),
++				);
++				const after = (await list('recursive=true&path=%2Flib')).map((item) => item.etag);
++				expect(after).toEqual([
++					(await app.request(file('/lib/deep/helper.py'))).headers.get('etag'),
++				]);
++				expect(after[0]).not.toBe(before);
++			});
++
+ 			it('refuses an ETag for a file that is gone, and with create', async () => {
+ 				const { id, url, etag } = await notebookWith('/data.txt');
+ 				await expectError(
+diff --git a/packages/api/src/routes/notebooks.ts b/packages/api/src/routes/notebooks.ts
+index bf5d3fe0..e5d681fc 100644
+--- a/packages/api/src/routes/notebooks.ts
++++ b/packages/api/src/routes/notebooks.ts
+@@ -164,6 +164,11 @@ const WorkspaceItemSchema = z
+ 		size: z.number().int().nonnegative().optional(),
+ 		modified_at: z.number().int().nonnegative().optional(),
+ 		mime_type: z.string().optional(),
++		etag: z.string().optional().openapi({
++			description:
++				"A file's stored ETag, the same strong validator its read answers. Echo as `If-Match` to guard a write.",
++			example: '"2025-03-05T14:00:00Z"',
++		}),
+ 	})
+ 	.openapi('WorkspaceItem');
+ 
+@@ -171,6 +176,9 @@ const WorkspacePathQuery = z.object({ path: z.string().optional().default('/') }
+ const WorkspaceListQuery = WorkspacePathQuery.extend({
+ 	cursor: z.string().optional(),
+ 	limit: z.coerce.number().int().min(1).max(500).optional(),
++	recursive: z.enum(['true', 'false']).optional().openapi({
++		description: 'With true, every file under the folder at any depth, and no folders.',
++	}),
+ });
+ const WorkspaceSearchQuery = WorkspacePathQuery.extend({ query: z.string().min(1) });
+ const WorkspaceFilePathQuery = z.object({ path: z.string().min(1) });
+@@ -891,6 +899,7 @@ function toWorkspaceItem(item: WorkspaceFileItem) {
+ 		...(item.size === undefined ? {} : { size: item.size }),
+ 		...(item.modifiedAt === undefined ? {} : { modified_at: item.modifiedAt }),
+ 		...(item.mimeType === undefined ? {} : { mime_type: item.mimeType }),
++		...(item.etag ? { etag: etagFor(item.etag) } : {}),
+ 	};
+ }
+ 
+@@ -1020,6 +1029,7 @@ app.openapi(listWorkspaceEntries, async (c) => {
+ 		query.path,
+ 		query.cursor,
+ 		query.limit,
++		query.recursive === 'true',
+ 	);
+ 	return c.json(
+ 		{
+diff --git a/packages/client/src/schema.ts b/packages/client/src/schema.ts
+index afd8897d..481cc2ce 100644
+--- a/packages/client/src/schema.ts
++++ b/packages/client/src/schema.ts
+@@ -3465,6 +3465,11 @@ export interface components {
+ 			size?: number;
+ 			modified_at?: number;
+ 			mime_type?: string;
++			/**
++			 * @description A file's stored ETag, the same strong validator its read answers. Echo as `If-Match` to guard a write.
++			 * @example "2025-03-05T14:00:00Z"
++			 */
++			etag?: string;
+ 		};
+ 		WorkspaceAccess: {
+ 			writable: boolean;
+@@ -8785,6 +8790,8 @@ export interface operations {
+ 				path?: string;
+ 				cursor?: string;
+ 				limit?: number;
++				/** @description With true, every file under the folder at any depth, and no folders. */
++				recursive?: 'true' | 'false';
+ 			};
+ 			header?: never;
+ 			path: {
+diff --git a/packages/core/src/services/content/NotebookWorkspaceService.ts b/packages/core/src/services/content/NotebookWorkspaceService.ts
+index d30873ca..44b5fe3a 100644
+--- a/packages/core/src/services/content/NotebookWorkspaceService.ts
++++ b/packages/core/src/services/content/NotebookWorkspaceService.ts
+@@ -204,12 +204,15 @@ export class NotebookWorkspaceService {
+ 		path = '',
+ 		cursor?: string,
+ 		limit = DEFAULT_PAGE_SIZE,
++		recursive = false,
+ 	): Promise<WorkspaceListResult> {
+ 		const context = await this.context(projectId, notebookId);
+ 		if (!context.prefix) return { items: [] };
+ 		const directory = normalizeWorkspaceDirectoryInput(path);
+ 		const prefix = `${context.prefix}${directory ? `${directory}/` : ''}`;
+-		const result = await this.bucket.list({ prefix, delimiter: '/', cursor, limit });
++		// Recursive: every file under the folder at any depth, and no folders.
++		const delimiter = recursive ? undefined : '/';
++		const result = await this.bucket.list({ prefix, delimiter, cursor, limit });
+ 		const entries = new Map<string, WorkspaceFileItem>();
+ 		for (const object of result.objects) {
+ 			const relative = object.key.slice(context.prefix.length);

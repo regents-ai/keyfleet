@@ -13,8 +13,15 @@ defmodule Keyfleet.Notebooks.Files do
   add files of their own to one notebook without losing any, and only a
   file's maker writes over it.
 
+  Each file read and each file saved answers its `revision`, the hub's ETag
+  for the stored file. Writing over a file names the revision it was read
+  at, and the hub stores the write only while the file still has it, so a
+  write over a change made since is refused, never applied.
+
   Each answer is `{:ok, answer}` or `{:error, reason}`: `:file_not_found` for a
-  notebook or file the hub doesn't have; `:file_exists` when another file, or a
+  notebook or file the hub doesn't have; `{:stale_revision, revision}` when
+  the file was changed since the revision written over was read, with the
+  file's revision now; `:file_exists` when another file, or a
   folder, is at the path written, or a file is where one of its folders would
   be; `:writes_paused` when the notebook is open for editing or saving another
   change; `:not_maker` for writing over another member's file; `:refused` for a
@@ -34,8 +41,12 @@ defmodule Keyfleet.Notebooks.Files do
   @read_max_bytes 1024 * 1024
   # A listing names at most this many entries a page.
   @page 200
+  # What a run ran from is read in one page of the hub's largest.
+  @manifest_page 500
   # Connecting to the hub failed in these ways, so it was never asked.
   @unreached [:econnrefused, :nxdomain, :ehostunreach, :enetunreach]
+  # The hub's strong ETag for a stored file; its quoted value is the revision.
+  @etag ~r/\A"([!#-~]{1,128})"\z/
 
   @doc """
   Makes a notebook titled `title` with `code` as `subject`, answering its id,
@@ -87,8 +98,48 @@ defmodule Keyfleet.Notebooks.Files do
   end
 
   @doc """
+  Every file of `notebook_id`, at any depth, as `subject`, each as `%{path,
+  size, revision}` with the revision a read of it answers (nil when the hub
+  names none), read in one page of at most #{@manifest_page} files; and
+  `complete`, whether that page held every file. Files in a `__marimo__`
+  folder at any depth are left out: marimo writes them itself when a
+  notebook runs or is open (saved pages, session caches), so they are not
+  what a run ran from.
+  """
+  def manifest(fleet_id, subject, project_id, notebook_id) do
+    with {:ok, %{"items" => items} = page} <-
+           fleet_id
+           |> request(
+             subject,
+             :get,
+             notebook_path(project_id, notebook_id) <> "/workspace/entries",
+             params: [recursive: true, limit: @manifest_page]
+           )
+           |> answer(200) do
+      files =
+        for %{"path" => path} = item <- items, not marimo_owned?(path) do
+          %{path: path, size: item["size"], revision: listed_revision(item["etag"])}
+        end
+
+      {:ok, %{files: files, complete: page["cursor"] == nil}}
+    end
+  end
+
+  defp marimo_owned?(path), do: "__marimo__" in String.split(path, "/")
+
+  defp listed_revision(etag) when is_binary(etag) do
+    case Regex.run(@etag, etag) do
+      [_etag, revision] -> revision
+      nil -> nil
+    end
+  end
+
+  defp listed_revision(_none), do: nil
+
+  @doc """
   The text of the file at `path` in `notebook_id`, as `subject`, with its
-  `sha256` (`sha256/1`).
+  `sha256` (`sha256/1`) and the `revision` it was read at, from the same
+  read of the hub's store.
   """
   def read(fleet_id, subject, project_id, notebook_id, path) do
     case request(
@@ -103,14 +154,17 @@ defmodule Keyfleet.Notebooks.Files do
       {:ok, %Req.Response{status: 200, body: :too_large}} ->
         {:error, :too_large}
 
-      {:ok, %Req.Response{status: 200, body: content}} when is_binary(content) ->
-        if String.valid?(content),
-          do: {:ok, %{path: path, content: content, sha256: sha256(content)}},
-          else: {:error, :not_text}
+      {:ok, %Req.Response{status: 200, body: content} = response} when is_binary(content) ->
+        if String.valid?(content), do: text(path, content, response), else: {:error, :not_text}
 
       response ->
         answer(response, 200)
     end
+  end
+
+  defp text(path, content, response) do
+    with {:ok, revision} <- revision(response),
+         do: {:ok, %{path: path, content: content, sha256: sha256(content), revision: revision}}
   end
 
   @doc "The sha256 of `content`, in lowercase hex, as a file read answers it."
@@ -120,11 +174,14 @@ defmodule Keyfleet.Notebooks.Files do
   Writes `content` to the file at `path` in `notebook_id`, as `subject`,
   making its folders as needed: `:add` makes a new file, kept as
   `subject`'s, and leaves one already there as it is, answering
-  `:file_exists`; `:write` replaces a file `subject` made, or any file of a
-  notebook open to `actor` for editing
+  `:file_exists`; `{:write, revision}` replaces a file `subject` made, or
+  any file of a notebook open to `actor` for editing
   (`Keyfleet.Notebooks.Makers.open_to?/4`), answering `:not_maker` for anyone
-  else's. A file added whose maker can't be kept is removed again, so it
-  never stays as the notebook maker's.
+  else's, and only while the file is still at `revision`: one changed since
+  answers `{:stale_revision, revision}` with its revision now, and is never
+  written again here. Either answers the file saved with its new `revision`.
+  A file added whose maker can't be kept is removed again, so it never stays
+  as the notebook maker's.
 
   The hub refuses either with one conflict for every reason, so the path is
   read to tell them apart: an add's own file saved before is that add's
@@ -139,10 +196,10 @@ defmodule Keyfleet.Notebooks.Files do
          do: {:ok, item}
   end
 
-  def write(fleet_id, actor, subject, project_id, notebook_id, path, content, :write) do
+  def write(fleet_id, actor, subject, project_id, notebook_id, path, content, {:write, revision}) do
     with {:ok, key} <- file_key(path) do
       case overwrite(fleet_id, actor, subject, project_id, notebook_id, key) do
-        :ok -> replace(fleet_id, subject, project_id, notebook_id, path, key, content)
+        :ok -> replace(fleet_id, subject, project_id, notebook_id, path, key, content, revision)
         {:error, :not_found} -> {:error, :file_not_found}
         {:error, reason} -> {:error, reason}
       end
@@ -150,7 +207,7 @@ defmodule Keyfleet.Notebooks.Files do
   end
 
   defp add(fleet_id, subject, project_id, notebook_id, path, key, content) do
-    case put(fleet_id, subject, project_id, notebook_id, path, content, true) do
+    case put(fleet_id, subject, project_id, notebook_id, path, content, :create) do
       {:error, :conflict} -> taken(fleet_id, subject, project_id, notebook_id, path, key, content)
       answer -> answer
     end
@@ -162,7 +219,7 @@ defmodule Keyfleet.Notebooks.Files do
   # add's own file, saved; while that can't be read, the add may be saved.
   defp taken(fleet_id, subject, project_id, notebook_id, path, key, content) do
     case read(fleet_id, subject, project_id, notebook_id, path) do
-      {:ok, %{content: ^content}} -> own(fleet_id, subject, notebook_id, key, content)
+      {:ok, %{content: ^content} = file} -> own(fleet_id, subject, notebook_id, key, file)
       {:ok, _another} -> {:error, :file_exists}
       {:error, reason} when reason in [:too_large, :not_text] -> {:error, :file_exists}
       {:error, :file_not_found} -> paused(fleet_id, subject, project_id, notebook_id, key)
@@ -170,10 +227,17 @@ defmodule Keyfleet.Notebooks.Files do
     end
   end
 
-  defp own(fleet_id, subject, notebook_id, key, content) do
+  defp own(fleet_id, subject, notebook_id, key, file) do
     case Makers.unclaimed?(fleet_id, notebook_id, key, subject) do
       {:ok, true} ->
-        {:ok, %{path: "/" <> key, kind: "file", size: byte_size(content), modified_at: nil}}
+        {:ok,
+         %{
+           path: "/" <> key,
+           kind: "file",
+           size: byte_size(file.content),
+           modified_at: nil,
+           revision: file.revision
+         }}
 
       {:ok, false} ->
         {:error, :file_exists}
@@ -183,9 +247,9 @@ defmodule Keyfleet.Notebooks.Files do
     end
   end
 
-  defp replace(fleet_id, subject, project_id, notebook_id, path, key, content) do
+  defp replace(fleet_id, subject, project_id, notebook_id, path, key, content, revision) do
     with {:error, :conflict} <-
-           put(fleet_id, subject, project_id, notebook_id, path, content, false),
+           put(fleet_id, subject, project_id, notebook_id, path, content, {:write, revision}),
          do: paused(fleet_id, subject, project_id, notebook_id, key)
   end
 
@@ -234,29 +298,61 @@ defmodule Keyfleet.Notebooks.Files do
     with :error <- Makers.file_key(path), do: {:error, :refused}
   end
 
-  defp put(fleet_id, subject, project_id, notebook_id, path, content, create) do
+  # A new file (`:create`), or one written over only while the hub's store
+  # still holds it at `revision` (`{:write, revision}`, sent as `If-Match`).
+  defp put(fleet_id, subject, project_id, notebook_id, path, content, precondition) do
+    {create, condition} =
+      case precondition do
+        :create -> {true, []}
+        {:write, revision} -> {false, [{"if-match", ~s("#{revision}")}]}
+      end
+
     fleet_id
     |> request(subject, :put, notebook_path(project_id, notebook_id) <> "/workspace/files",
       params: [path: path, create: create],
-      headers: [{"content-type", "application/octet-stream"}],
+      headers: [{"content-type", "application/octet-stream"} | condition],
       body: content
     )
     |> case do
       {:ok, %Req.Response{status: 409}} ->
         {:error, :conflict}
 
+      # The file changed since `revision`, and nothing was written. With no
+      # revision now, the file is gone.
+      {:ok, %Req.Response{status: 412} = response} when not create ->
+        case revision(response) do
+          {:ok, current} -> {:error, {:stale_revision, current}}
+          {:error, :unavailable} -> {:error, :file_not_found}
+        end
+
       {:error, %Req.TransportError{reason: reason}} when reason in @unreached ->
         {:error, :unavailable}
 
       response ->
-        response |> answer(200) |> written()
+        written(response, answer(response, 200))
     end
   end
 
-  defp written({:ok, item}), do: {:ok, entry(item)}
+  defp written({:ok, response}, {:ok, item}) do
+    case revision(response) do
+      {:ok, revision} -> {:ok, item |> entry() |> Map.put(:revision, revision)}
+      {:error, :unavailable} -> {:error, :unknown}
+    end
+  end
+
   # Asked, with no answer read: the file may be written.
-  defp written({:error, :unavailable}), do: {:error, :unknown}
-  defp written(refused), do: refused
+  defp written(_response, {:error, :unavailable}), do: {:error, :unknown}
+  defp written(_response, refused), do: refused
+
+  # The revision the hub's answer names for the stored file.
+  defp revision(response) do
+    with [etag] <- Req.Response.get_header(response, "etag"),
+         [_etag, revision] <- Regex.run(@etag, etag) do
+      {:ok, revision}
+    else
+      _none -> {:error, :unavailable}
+    end
+  end
 
   defp entry(item) do
     %{
