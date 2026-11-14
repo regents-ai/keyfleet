@@ -141,20 +141,17 @@ input:focus-visible,
   outline-offset: 2px;
 }
 
-/* A cut-corner button's ring follows its cut corners instead of boxing it. */
-.rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible,
+/* A cut-corner button shows keyboard focus itself, with the shared button's
+   thin ring cut to its corners and its corner marks, so the shell's square
+   ring (components/shell.css) stays off it. */
 #app-shell .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible {
   outline: none;
-  filter: drop-shadow(2px 0 0 var(--ash-accent)) drop-shadow(-2px 0 0 var(--ash-accent))
-    drop-shadow(0 2px 0 var(--ash-accent)) drop-shadow(0 -2px 0 var(--ash-accent));
 }
 
 /* With the device's own colours forced, the button is a plain box, so its ring is too. */
 @media (forced-colors: active) {
-  .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible,
   #app-shell .rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)):focus-visible {
     outline: 2px solid Highlight;
-    filter: none;
   }
 }
 
