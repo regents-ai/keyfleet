@@ -2,11 +2,10 @@ defmodule Keyfleet.Access do
   @moduledoc """
   Who may read and who may write each thing a fleet shares, in one table.
 
-  There are three classes, each holding the one before it:
+  There are two classes, the second holding the first:
 
     * `:public`: anyone, an agent whose signature checks but is not paired
       included;
-    * `:person`: a signed-in person, or an agent paired with one;
     * `:member`: someone in the fleet asked about (`member?/2`).
 
   `components/0` is the only place a class is written. Each thing more than
@@ -40,17 +39,14 @@ defmodule Keyfleet.Access do
   Whatever moves value still reads the chain at its latest block.
   """
 
-  alias Keyfleet.Actors.Agent
-  alias Keyfleet.Actors.Human
-
-  @classes [:public, :person, :member]
+  @classes [:public, :member]
 
   @components %{
     # The Public room, read by anyone and written as any room is.
     general_room: %{read: :public, write: :member},
-    # The People and agents room, which anyone reads and anyone signed in writes,
-    # with a Key or without one.
-    people_room: %{read: :public, write: :person},
+    # The People and agents room, read by anyone and written by the fleet's
+    # members, people as well as agents.
+    people_room: %{read: :public, write: :member},
     # Every other room: that it exists, what it is called and what is said in it.
     rooms: %{read: :member, write: :member},
     # Each Key's own thread.
@@ -96,13 +92,7 @@ defmodule Keyfleet.Access do
   def components, do: @components
 
   @doc "The highest class `actor` holds in `scope`."
-  def class(actor, scope) do
-    cond do
-      member?(actor, scope) -> :member
-      person?(actor) -> :person
-      true -> :public
-    end
-  end
+  def class(actor, scope), do: if(member?(actor, scope), do: :member, else: :public)
 
   @doc "Whether `actor` may read or write (`action`) the component in `scope`."
   def allowed?(actor, action, component, scope) when action in [:read, :write] do
@@ -133,12 +123,6 @@ defmodule Keyfleet.Access do
     do: Keyfleet.Keys.identity(actor, fleet_id) != nil and Keyfleet.Chain.fresh?(fleet_id)
 
   def member?(_actor, _scope), do: false
-
-  # Every member is a person: a Key is held by a signed-in person's wallet, or
-  # by a paired agent's own wallet, shard or person.
-  defp person?(%Human{}), do: true
-  defp person?(%Agent{} = agent), do: Agent.valid?(agent)
-  defp person?(_actor), do: false
 
   defp needed(action, component), do: @components |> Map.fetch!(component) |> Map.fetch!(action)
 

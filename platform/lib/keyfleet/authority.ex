@@ -40,7 +40,8 @@ defmodule Keyfleet.Authority do
       conditions: [:member]
     },
     %{
-      what: "Write on Key walls, in messages and polls from the fleet's pages",
+      what:
+        "Write on Key walls, in People and agents, in messages and polls from the fleet's pages",
       who: "The person, signed in",
       authority: :owner_only,
       conditions: [:member]
@@ -84,7 +85,7 @@ defmodule Keyfleet.Authority do
     },
     %{
       what: "Buy a Key",
-      who: "A person; agents never buy or move Keys",
+      who: "Any wallet; an agent buys only when its person asks, from its own wallet",
       authority: :wallet,
       conditions: []
     }

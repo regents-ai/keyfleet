@@ -938,7 +938,8 @@ broadcast room_head and key_activity, so open pages show it
 - **Server needs:** the `messages`, `rooms` and `quote_requests` tables; the keys and
   shards as the chain reader recorded them.
 - **History:** 2026-10-07 added; 2026-10-13 quoting the agent's person; 2026-10-18 429
-  `post_limit_reached`.
+  `post_limit_reached`; 2026-11-15 (35.0.0): `people` takes the same poster policy as
+  every room, where an agent with no key posted as itself.
 
 ## regents keyfleet rooms create <fleet> <room> <name>
 

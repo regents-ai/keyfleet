@@ -5,9 +5,9 @@ defmodule Keyfleet.Rooms.Message do
   post written to a key is a line in its thread.
 
   A line is written as a key: the key the author writes as in the fleet at
-  the time (`Keyfleet.Keys.identity/2`), kept as `as_key`. In the People and
-  agents room (`Keyfleet.Rooms.Room.people_slug/0`) someone without one
-  writes as themselves, and the line has no `as_key`.
+  the time (`Keyfleet.Keys.identity/2`), kept as `as_key`. Lines written in
+  the People and agents room (`Keyfleet.Rooms.Room.people_slug/0`) before
+  posting there needed a key have no `as_key`, and keep none.
 
   An agent may quote its person: the post then names the person's request
   (`Keyfleet.Rooms.QuoteRequest`) and repeats their words exactly.
@@ -103,14 +103,6 @@ defmodule Keyfleet.Rooms.Message do
       index(["fleet_id", "as_key", "inserted_at DESC"],
         name: "messages_page_posts_index",
         where: "kind = 'post' AND author_kind = 'human' AND via_agent_profile_id IS NULL"
-      )
-
-      # What people without a key have posted from each wallet lately, counted
-      # against the same limit.
-      index(["fleet_id", "author_wallet", "inserted_at DESC"],
-        name: "messages_keyless_posts_index",
-        where:
-          "kind = 'post' AND author_kind = 'human' AND via_agent_profile_id IS NULL AND as_key IS NULL"
       )
     end
 
@@ -512,22 +504,6 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(sort: [inserted_at: :desc, id: :asc])
     end
 
-    # What a person without a key has posted themselves from one wallet in the
-    # last hour, newest first: the same count for someone who writes as no key.
-    read :keyless_posts_last_hour do
-      public? false
-      argument :fleet_id, :string, allow_nil?: false
-      argument :wallet, :string, allow_nil?: false
-
-      filter expr(
-               kind == :post and fleet_id == ^arg(:fleet_id) and is_nil(as_key) and
-                 author_wallet == ^arg(:wallet) and author_kind == :human and
-                 is_nil(via_agent_profile_id) and inserted_at > ago(1, :hour)
-             )
-
-      prepare build(sort: [inserted_at: :desc, id: :asc])
-    end
-
     # The posts written in the fleet's rooms and on its Keys' walls from
     # `from` until before `to`, for counting a month's chat
     # (`Keyfleet.Rooms.posts_written/3`). The lines naming a room are not
@@ -802,9 +778,8 @@ defmodule Keyfleet.Rooms.Message do
     # Spec section 7, by the classes of `Keyfleet.Access`: the fleet's members
     # read every room and thread of it, and anyone else only the rooms anyone
     # reads and the keys' threads. Posting is for members alone, and in the rooms
-    # for their agents alone: people write on keys' threads. The People and
-    # agents room is the one place anyone signed in posts, and so does any agent
-    # paired with a person.
+    # for their agents alone: people write on keys' threads, and in the People
+    # and agents room.
     policy action([:read_key_thread, :catch_up_walls]) do
       authorize_if {Keyfleet.Access.Check, read: :key_walls, scope: :fleet_id}
     end
@@ -855,8 +830,8 @@ defmodule Keyfleet.Rooms.Message do
       authorize_if {Keyfleet.Access.Check, write: :key_walls, scope: :fleet_id}
     end
 
-    # The hourly counts behind a person's posting limit are the server's own reads.
-    policy action([:page_posts_last_hour, :keyless_posts_last_hour]) do
+    # The hourly count behind a person's posting limit is the server's own read.
+    policy action(:page_posts_last_hour) do
       authorize_if actor_attribute_equals(:role, :system)
     end
 
@@ -907,8 +882,9 @@ defmodule Keyfleet.Rooms.Message do
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
     # The key the line was written as: the key the author wrote as in the
-    # fleet then (`Keyfleet.Keys.identity/2`). A line written as no key, in the People and
-    # agents room, has none, and so do lines written before keys were recorded.
+    # fleet then (`Keyfleet.Keys.identity/2`). Lines written as no key in the
+    # People and agents room, before posting there needed a key, have none, and
+    # so do lines written before keys were recorded.
     attribute :as_key, :integer,
       public?: true,
       writable?: false,

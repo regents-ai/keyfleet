@@ -117,8 +117,9 @@ defmodule Keyfleet.Directory do
     }
   end
 
-  # Who wrote a post: the Key it was written as or, written as no Key, its
-  # wallet. A Key's number and a wallet are never equal.
+  # Who wrote a post: the Key it was written as or, for one written as no Key
+  # before posting needed one, its wallet. A Key's number and a wallet are
+  # never equal.
   defp writer(%{as_key: nil, author_wallet: wallet}), do: wallet
   defp writer(%{as_key: key}), do: key
 

@@ -28,7 +28,7 @@ defmodule Keyfleet.Activity do
 
     * `:post`: `room`, `by` (the key it was written as, with its writer's
       `wallet`; `token_id` is nil for a post written as no key, in the People
-      and agents room), `excerpt` (its start, up to 160 characters ending on
+      and agents room before posting there needed one), `excerpt` (its start, up to 160 characters ending on
       a whole word with "…").
     * `:posts`: consecutive posts in one room, at most an hour apart, six
       hours from first to last and fifty in all: `room`, `count`, `keys` (up to

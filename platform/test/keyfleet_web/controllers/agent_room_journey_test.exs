@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   @send_general "/api/v1/agent/fleets/fibonacci_syndicate/rooms/general/messages/send"
   @sync_path "/api/v1/agent/fleets/fibonacci_syndicate/sync"
   @key_send "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send"
+  @room_send "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send"
   @read_proposal "/api/v1/agent/fleets/fibonacci_syndicate/proposals/read"
   @cascade "fibonacci_cascade"
   @join_body ~s({ "name": "Wallet agent", "declared_harness": "local" })
@@ -109,7 +110,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "an agent with no key is listed and reads the rooms anyone reads, and posts in People and agents alone",
+  test "an agent with no key is listed and reads the rooms anyone reads, and posts in none",
        c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
@@ -141,19 +142,15 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     assert Keyfleet.ContractSchema.errors(listed.body, "RoomList") == []
 
-    assert send_signed(c, "POST", @read_general).body["messages"] == []
     assert key_thread(c, 1, "read").status == 200
 
-    refused = send_signed(c, "POST", @send_general, send_body("Standing by", "k-1"))
-    assert refused.status == 403
-    assert refused.body == refused("not_a_member")
-
-    # In People and agents it posts as itself, with no Key.
-    sent = send_signed(c, "POST", room_path("people", "send"), send_body("Standing by", "k-2"))
-    assert sent.status == 201
-    assert %{"author_kind" => "agent", "as_key" => nil} = sent.body["message"]
-    assert sent.body["message"]["author_wallet"] == c.signer.address
-    assert Keyfleet.ContractSchema.errors(sent.body, "RoomMessageEnvelope") == []
+    # People and agents refuses it as the Public room does, and writes nothing.
+    for slug <- ["general", "people"] do
+      refused = send_signed(c, "POST", room_path(slug, "send"), send_body("Standing by", slug))
+      assert {refused.status, refused.body} == {403, refused("not_a_member")}
+      assert documented(refused, @room_send) == []
+      assert send_signed(c, "POST", room_path(slug, "read")).body["messages"] == []
+    end
 
     # A room of the fleet and a room it does not have are refused alike.
     for slug <- ["open-1", "hull-survey"] do
@@ -242,6 +239,9 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       send_signed(c, "POST", room_path("coding", "send"), send_body("Hull survey log", "k-3"))
 
     assert elsewhere.status == 201
+
+    people = send_signed(c, "POST", room_path("people", "send"), send_body("Standing by", "k-5"))
+    assert {people.status, people.body["message"]["as_key"]} == {201, 1}
 
     answer =
       send_signed(

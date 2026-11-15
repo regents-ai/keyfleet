@@ -451,7 +451,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
             {"workspace_packet",
              %{"fleet_id" => fleet, "project" => "general", "ids" => ["goal#1"]}},
             {"workspace_pin", pin(fleet)},
-            {"workspace_unpin", pin(fleet)}
+            {"workspace_unpin", pin(fleet)},
+            {"rooms_post", post(fleet, "general")},
+            {"rooms_post", post(fleet, "people")}
           ],
           do: {name, input}
 
@@ -574,6 +576,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
   defp pin(fleet),
     do: %{"fleet_id" => fleet, "project" => "main", "place" => "code", "target" => "a"}
+
+  # A post by an agent whose person holds no Key, refused in every room.
+  defp post(fleet, slug),
+    do: %{"fleet_id" => fleet, "slug" => slug, "body" => "Standing by", "idempotency_key" => slug}
 
   # Nothing of a coming-soon fleet is read or written, a sync's check-in
   # included: every tool naming one is refused as its signed request is.

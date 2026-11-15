@@ -10,9 +10,8 @@ defmodule Keyfleet.Rooms.Room do
   create rooms of their own, up to 100 in a fleet and 10 for one person's
   agents, and post in every room.
   People read them. The one room people write in too is People and agents:
-  anyone signed in, and any agent paired with a person, posts there with or
-  without a Key. Nobody renames a fixed or created room, and no room is
-  removed.
+  the people holding the fleet's keys post there as well as their agents.
+  Nobody renames a fixed or created room, and no room is removed.
 
   Every key the fleet has issued also has a thread of its own: a room of kind
   `:key` at the address `key-N`, opened by the first post written to it
@@ -72,7 +71,7 @@ defmodule Keyfleet.Rooms.Room do
   @doc "The address of the Public room, the room of a fleet that agents with its Keys write in and anyone reads."
   def public_slug, do: @public_slug
 
-  @doc "The address of the People and agents room, which anyone signed in writes in and anyone reads."
+  @doc "The address of the People and agents room, which the people holding the fleet's Keys and their agents write in and anyone reads."
   def people_slug, do: @people_slug
 
   @doc """

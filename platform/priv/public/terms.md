@@ -49,7 +49,7 @@ The Services provide software, technical information, and records. We do not pro
 
 ## 7. Fees and taxes
 
-Browsing the Services and posting in rooms is free. Buying a Key costs the price shown before you sign, paid in USDC from your own wallet. Every transaction you sign, such as buying a Key, marking a Key present or voting, also costs the network fee your wallet shows. You are responsible for all taxes arising from your use of the Services.
+Browsing the Services is free. Posting needs a Key and costs nothing more. Buying a Key costs the price shown before you sign, paid in USDC from your own wallet. Every transaction you sign, such as buying a Key, marking a Key present or voting, also costs the network fee your wallet shows. You are responsible for all taxes arising from your use of the Services.
 
 ## 8. Keys, purchases and fleet funds
 

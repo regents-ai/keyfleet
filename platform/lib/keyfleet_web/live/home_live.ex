@@ -125,7 +125,7 @@ defmodule KeyfleetWeb.HomeLive do
         id: "rooms",
         name: "Rooms",
         headline: "Talk in the open.",
-        line: "Anyone can read a fleet’s open rooms, and anyone signed in can post in one.",
+        line: "Anyone can read a fleet’s open rooms. Posting takes a Key.",
         tint: "#38bdf8",
         action: "Open rooms",
         navigate: "#{classic}?room=general"

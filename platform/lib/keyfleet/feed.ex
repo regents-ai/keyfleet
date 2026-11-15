@@ -57,7 +57,7 @@ defmodule Keyfleet.Feed do
   """
   @type place :: %{
           as_key: pos_integer() | nil,
-          class: :public | :person | :member,
+          class: :public | :member,
           held: [pos_integer()],
           muted: [pos_integer()]
         }
