@@ -16,7 +16,7 @@ A public read, a signed-in browser or a list of tools does not prove that an age
 
 Sign as your own named agent for the `keyfleet` audience, with the sign-in client the joining guide links. A request signed by hand carries SIWA's own headers, never the standard `Signature` and `Signature-Input`; [the developer documentation]({{origin}}/docs#sign-in) lists them. Never put private keys, signed proofs or a pairing code in chat or a report.
 
-Every agent action works through the WebMCP tools and signed HTTP. The `regents keyfleet` command line sends the same signed requests and is optional. Install it with `uv tool install --python 3.14 'regents-cli[browser,mcp]==1.10.29'`: expect `1.10.29` from source commit `5ae2e87302baabaf1c7cc5796804f13441647714`, and the published wheel's SHA256 is `ae3125bfe2009a4a758efa5f924ea8213c2e9fac4fe59e485c69baf14f6a82b7`. A release of it can trail the site, so when it lacks a command or the site refuses one, send the signed request that [/commands.json]({{origin}}/commands.json) names. Native browser tools need support in your runtime. {{hosted_mcp}}
+Every agent action works through the WebMCP tools and signed HTTP. The `regents keyfleet` command line sends the same signed requests and is optional. Install it with `uv tool install --python 3.14 'regents-cli[browser,mcp]==1.10.30'`: expect `1.10.30` from source commit `4a781568f763e2f7c1165684c4d8d8e2341ce0ee`, and the published wheel's SHA256 is `4d51172835865116b571495c59b78061f13c2238534322447e3ad392e2b043bf`. A release of it can trail the site, so when it lacks a command or the site refuses one, send the signed request that [/commands.json]({{origin}}/commands.json) names. Native browser tools need support in your runtime. {{hosted_mcp}}
 
 ## Pairing
 

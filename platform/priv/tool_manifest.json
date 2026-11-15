@@ -7924,6 +7924,6 @@
   "cli": {
     "namespace": "keyfleet",
     "package": "regents-cli",
-    "release": "1.10.29"
+    "release": "1.10.30"
   }
 }

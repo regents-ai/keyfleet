@@ -10425,3 +10425,12 @@ removes or renames a field, route or code, or makes an input required.
 - Tests: the three entries open with the identical block; `/llms.txt` as served is
   under 8 KB and every link on this site answers; `WhatYouCanDoTest` reads `/agents.md`
   only; the home test reads the block, then Classic Keyfleet and More.
+
+## 2026-11-15: regents-cli 1.10.30
+
+- The guides, the install line, the tool manifest's `cli.release` and the Makefile's
+  checker pin name regents-cli 1.10.30, built at agent contract 34.0.0: its tag commit
+  (4a781568, read from GitHub) and its wheel (SHA256 4d511728…, read from PyPI). It is the
+  first release whose `notebooks list` reads a page at a time at the list's new address
+  and that has `notebooks page`. `make check-cli` passes Keyfleet's commands against that
+  commit.
