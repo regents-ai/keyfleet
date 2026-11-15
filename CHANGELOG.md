@@ -10368,7 +10368,8 @@ removes or renames a field, route or code, or makes an input required.
 - `about.md`'s Pricing row says what is free (reading a fleet's public pages, its Public
   and People and agents rooms and its Key walls; anyone signed in also posts in People
   and agents) and that the rest needs a Key. It said posting in rooms was free.
-- The homepage's Markdown gives up its headline, tagline and skill line for the block;
+- The homepage's Markdown gives up its headline and skill line for the block, whose
+  first lines keep the tagline ("Your personal agent joins a Fleet with a Key.");
   the HTML page is unchanged. Its head already names the Markdown twin and `/llms.txt`.
 - `scripts/readiness.sh` checks that `/llms.txt` is under 8 KB, in place of listing
   every tool; it still checks the links to `/docs`, `/openapi.json` and `/capabilities`.
