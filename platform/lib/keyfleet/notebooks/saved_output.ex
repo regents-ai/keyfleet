@@ -136,8 +136,7 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     # milliseconds since 1970, that may be cleared: each has a newer run page
     # of its notebook, so it is not the one `:newest_runs` answers; it did
     # not succeed, or has a newer page of its notebook that did, so it is not
-    # the one `:last_succeeded` answers; and no Key has it public
-    # (`Keyfleet.Projects.Publication`, by `Keyfleet.Notebooks.result_path/3`).
+    # the one `:last_succeeded` answers; and no Key has it public.
     read :past_keeping do
       argument :before, :integer, allow_nil?: false
 
@@ -154,19 +153,7 @@ defmodule Keyfleet.Notebooks.SavedOutput do
                       fleet_id == parent(fleet_id) and notebook_id == parent(notebook_id) and
                         succeeded and saved_at > parent(saved_at)
                     )) and
-                 not exists(
-                   Keyfleet.Projects.Publication,
-                   fleet_id == parent(fleet_id) and
-                     page ==
-                       parent(
-                         "/results/" <>
-                           notebook_id <>
-                           "/" <>
-                           source_id <>
-                           "/" <>
-                           type(saved_at, :string)
-                       )
-                 )
+                 not exists(publications, true)
              )
     end
   end
@@ -198,5 +185,26 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     end
 
     create_timestamp :inserted_at
+  end
+
+  relationships do
+    # The Keys' publications of this page, by its address
+    # (`Keyfleet.Notebooks.result_path/3`).
+    has_many :publications, Keyfleet.Projects.Publication do
+      no_attributes? true
+
+      filter expr(
+               fleet_id == parent(fleet_id) and
+                 page ==
+                   parent(
+                     "/results/" <>
+                       notebook_id <>
+                       "/" <>
+                       source_id <>
+                       "/" <>
+                       type(saved_at, :string)
+                   )
+             )
+    end
   end
 end
