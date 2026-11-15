@@ -932,6 +932,36 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert Enum.sort(told) == Enum.sort(Map.keys(tool["input_schema"]["properties"]))
   end
 
+  # Costly failure: a preview that finds nothing wrong with a write to a fleet
+  # that hasn't opened sends an agent to make a write that can only be refused.
+  test "a preview of a write to a fleet that hasn't opened answers that fleet's refusal alone",
+       c do
+    previewed = fn tool, input ->
+      body = %{"tool" => tool, "input" => Map.put(input, "fleet_id", "fleet_tech_classic")}
+      answer(c, c.signer, "POST", "/api/v1/agent/preview", @address, body, 200).body["refusals"]
+    end
+
+    dm = %{
+      "token_id" => "2",
+      "other_token_id" => "1",
+      "body" => "Hull survey notes",
+      "idempotency_key" => "dm-1"
+    }
+
+    goal = %{
+      "as_key" => 2,
+      "command_id" => "g-1",
+      "project" => "general",
+      "type" => "goal",
+      "data" => %{"title" => "Survey the hull"}
+    }
+
+    for refusals <- [previewed.("dms_send", dm), previewed.("workspace_create", goal)] do
+      assert [%{"code" => "fleet_coming_soon"} = refusal] = refusals
+      assert refusal == Map.take(refused("fleet_coming_soon")["error"], Map.keys(refusal))
+    end
+  end
+
   # Costly failure: an agent sending a body the docs didn't foresee gets an
   # answer no doc describes, or a refusal with no next step, and is stuck.
   property "RF-HINT: any body sent to a signed route here gets a documented answer, and a refusal a hint",

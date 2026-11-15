@@ -13,7 +13,9 @@ defmodule KeyfleetWeb.Preview do
   and has the graph decide it without writing it
   (`Keyfleet.Graph.Workspace.Relay`). Its refusal is the one the write's
   signed request would answer (`KeyfleetWeb.WorkspaceRefusal`), in place of
-  the preview's own word for a Key the agent doesn't act as.
+  the preview's own word for a Key the agent doesn't act as. A write that
+  names a fleet that hasn't opened is refused as every agent request about
+  that fleet is, and nothing else is checked.
 
   Nothing is written, checked in or held, and a preview approves nothing: the
   write itself is checked again when it is sent, against the state then, and
@@ -48,13 +50,13 @@ defmodule KeyfleetWeb.Preview do
       fleet_id = input["fleet_id"]
       standing = standing(actor, fleet_id)
       as_key = as_key(route, input, standing)
-      request_refusals = refusals(method, path, body, tool)
 
       refusals =
-        case {workspace_write(name), request_refusals} do
-          {nil, refusals} -> refusals ++ key_refusals(as_key, input, standing)
-          {write, []} -> checked(write, input, actor)
-          {_write, refusals} -> refusals
+        case {coming_soon?(fleet_id), workspace_write(name), refusals(method, path, body, tool)} do
+          {true, _write, _refusals} -> [Refusal.body("fleet_coming_soon").error]
+          {false, nil, refusals} -> refusals ++ key_refusals(as_key, input, standing)
+          {false, write, []} -> checked(write, input, actor)
+          {false, _write, refusals} -> refusals
         end
 
       {:ok,
@@ -87,6 +89,13 @@ defmodule KeyfleetWeb.Preview do
         :tool_unknown
     end
   end
+
+  # A fleet that hasn't opened refuses every agent request about it, before
+  # anything else is read (`KeyfleetWeb.Plugs.FleetComingSoon`).
+  defp coming_soon?(fleet_id) when is_binary(fleet_id),
+    do: Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id))
+
+  defp coming_soon?(_no_fleet), do: false
 
   # The workspace action a write tool runs, as the Claude connector's tool of
   # the same name does (`Keyfleet.Graph`'s tools), or nil for another write.

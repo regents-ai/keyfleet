@@ -10239,3 +10239,27 @@ removes or renames a field, route or code, or makes an input required.
   signed write and the preview.
 - The contract, the agent docs, `docs.md` and the CLI's preview description say so. The
   contract stays 33.0.0: no shape changes.
+
+## 2026-11-15: A preview of a write to a fleet that hasn't opened answers that fleet's refusal
+
+- `writes_preview` of any write naming a coming-soon fleet answers `fleet_coming_soon`
+  alone, as every agent request about that fleet does (`Plugs.FleetComingSoon`). Before, a
+  workspace write's preview answered `ownership_refreshing` and other previews answered
+  no refusal for it.
+
+## 2026-11-15: regents-cli 1.10.29, and `presence mark` may be sent by the agent's own wallet
+
+- The guides, install lines, the tool manifest's `cli.release` and the Makefile's checker
+  pin name the newest release, its tag commit (5ae2e873) and its wheel (SHA256
+  ae3125bf…, read from PyPI). `make check-cli` passes Keyfleet's commands against that
+  commit.
+- `presence mark <fleet>` in `cli/commands.json` carries `"sends": true` (Sean's 17 a, 15
+  Nov): its answer lists Base transactions for the agent's own wallet, value 0, so the
+  command line offers `--send` for it. Keyfleet still builds the transactions and sends
+  none.
+
+## 2026-11-15: hono 4.13.18
+
+- `platform/package-lock.json` moves `hono`, which arrives through Privy's sign-in
+  package and whose flagged server parts Keyfleet does not run, to 4.13.18, past the five
+  advisories GitHub listed (fixed in 4.13.16).

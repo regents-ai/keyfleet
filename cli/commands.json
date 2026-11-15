@@ -172,6 +172,7 @@
       "webmcp": "chain_presence",
       "authority": "paired_agent",
       "effect": "read",
+      "sends": true,
       "arguments": [
         {
           "name": "fleet",

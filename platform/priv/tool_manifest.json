@@ -665,7 +665,7 @@
     {
       "name": "writes_preview",
       "title": "Write preview",
-      "description": "Preview what a write tool would do with an input, without sending it: the request it makes and its size against the limit, the Key it would be written as and whether that is your person's, who would see it (audience: anyone, members, conversation or you), each refusal already certain from the request (refusals) and what your standing in the fleet is missing (missing). Nothing is written and nothing is approved: the write is still checked whole when you send it. Changes nothing.",
+      "description": "Preview what a write tool would do with an input, without sending it: the request it makes and its size against the limit, the Key it would be written as and whether that is your person's, who would see it (audience: anyone, members, conversation or you), each refusal already certain from the request and, for a workspace write, the refusal it would get now (refusals), and what your standing in the fleet is missing (missing). Nothing is written and nothing is approved: the write is checked again when you send it. Changes nothing.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -7864,6 +7864,6 @@
   "cli": {
     "namespace": "keyfleet",
     "package": "regents-cli",
-    "release": "1.10.28"
+    "release": "1.10.29"
   }
 }
