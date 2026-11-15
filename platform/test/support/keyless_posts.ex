@@ -12,6 +12,8 @@ defmodule Keyfleet.KeylessPosts do
 
   @doc "`agent`'s post in `fleet_id`'s People and agents room, written as no Key."
   def seed!(fleet_id, agent, body) do
+    # A test's seed, not a caller: the room is read as stored, and anyone may
+    # read this room.
     room = Rooms.get_room!(fleet_id, Room.people_slug(), authorize?: false)
     profile = Keyfleet.Agents.get_my_profile!(actor: agent)
 

@@ -98,6 +98,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   for (const {transaction} of [first, second]) {
     expect(transaction.to.toLowerCase()).toBe(usdc)
     expect(transaction.data.startsWith(approveSelector)).toBe(true)
+    expect(transaction.data.endsWith(builderCode)).toBe(true)
   }
 
   // The purchase can be pressed as soon as an approval is sent, before it
@@ -122,6 +123,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   const bought = (await sentByStandIn(page))[2]
   expect(bought.transaction.to.toLowerCase()).toBe(fleetContract)
   expect(bought.transaction.data.startsWith(purchaseSelector)).toBe(true)
+  expect(bought.transaction.data.endsWith(builderCode)).toBe(true)
 
   // A purchase the contract refuses says so, and Buy stays to press again.
   landStep(bought.hash, bought.transaction, false)
@@ -184,6 +186,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   const [approval] = await sentByStandIn(page)
   expect(approval.transaction.to.toLowerCase()).toBe(usdc)
   expect(approval.transaction.data.startsWith(approveSelector)).toBe(true)
+  expect(approval.transaction.data.endsWith(builderCode)).toBe(true)
   await expect(window.locator("#buy-key-button")).toBeEnabled()
 
   allowUsdc(me, approvedAmount(approval.transaction.data))
@@ -196,6 +199,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   const bought = (await sentByStandIn(page))[1]
   expect(bought.transaction.to.toLowerCase()).toBe(fleetContract)
   expect(bought.transaction.data.startsWith(purchaseSelector)).toBe(true)
+  expect(bought.transaction.data.endsWith(builderCode)).toBe(true)
   await expect(window).toBeVisible()
   await expect(page).toHaveURL(/\/$/)
   expect(errors).toEqual([])
