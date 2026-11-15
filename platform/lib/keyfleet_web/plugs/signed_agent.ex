@@ -447,15 +447,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp unknown_address(path) do
     cond do
       Regex.match?(@graph_unknown_path, path) ->
-        KeyfleetWeb.Refusal.body(
-          "operation_unknown",
+        KeyfleetWeb.Refusal.operation_unknown(
           "The workspace's operations are #{Enum.join(@graph_ops, ", ")}: each a POST to " <>
             "/api/v1/agent/fleets/FLEET_ID/graph/OPERATION."
         )
 
       Regex.match?(@outside_projects_path, path) ->
-        KeyfleetWeb.Refusal.body(
-          "operation_unknown",
+        KeyfleetWeb.Refusal.operation_unknown(
           "A fleet's notebooks and code are inside its projects, under " <>
             "/api/v1/agent/fleets/FLEET_ID/projects/PROJECT/. projects_list " <>
             "(GET /api/v1/agent/fleets/FLEET_ID/projects) names them."

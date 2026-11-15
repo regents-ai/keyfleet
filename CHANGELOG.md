@@ -10434,3 +10434,21 @@ removes or renames a field, route or code, or makes an input required.
   first release whose `notebooks list` reads a page at a time at the list's new address
   and that has `notebooks page`. `make check-cli` passes Keyfleet's commands against that
   commit.
+
+## 2026-11-15: an address no operation has names its likeliest sender
+
+- 404 `operation_unknown` ends its hint, at every address no agent operation has and for
+  every caller, with one more sentence: a command-line tool or a saved tool list that
+  sent the request is older than the site, so install regents-cli again with the line
+  `/agents.md` gives, or read `/capabilities.json` again. A regents-cli made before agent
+  contract 34.0.0 still sends `notebooks list` to the address that release replaced, and
+  the refusal told it only where the operations are listed. Nothing is detected and no
+  address is kept: `KeyfleetWeb.Refusal.operation_unknown/1` adds the sentence after the
+  two hints `KeyfleetWeb.Plugs.SignedAgent` words itself. `/docs` says so under Sign-in.
+- The help for reading one run says whose run `last_succeeded` is, as `/docs` and the
+  contract already did: the notebook's last good page, whoever started that run
+  (`notebooks result`, `notebooks_result`, `cli/COMMANDS.md`, `/skill/notebooks.md`).
+- Tests: every tool in the manifest and every command in `cli/commands.json` names a
+  method and address the router serves, in every family of addresses, not only under
+  `/api/v1/agent/`; an address under a forwarded plug (`/api/agents/v1`) is asked of that
+  plug. A tool or command left naming an address the site stopped serving fails there.

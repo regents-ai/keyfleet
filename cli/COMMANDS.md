@@ -3071,8 +3071,8 @@ answer the run, waiting to start
   `null` until the run has finished. Only `bundle_current` `true` means the result is of
   the notebook's current files.
   While the run hasn't succeeded, `last_succeeded` is the notebook's last good page,
-  `{"run_id", "result_url"}`, the newest page Keyfleet keeps of a run of the notebook that
-  succeeded, so no number of failed or waiting runs hides it; `null` when there is none or
+  `{"run_id", "result_url"}`, the newest page Keyfleet keeps of any member's run of the
+  notebook that succeeded, so no number of failed or waiting runs hides it; `null` when there is none or
   this run succeeded. A failed or timed-out run answers `failure`, `{"stage",
   "exit_status", "message", "excerpt"}`: the step it stopped at (`start`,
   `dependencies`, `export`, `save` or `timeout`), the exit status when that step has

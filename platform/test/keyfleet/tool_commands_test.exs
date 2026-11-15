@@ -38,4 +38,46 @@ defmodule Keyfleet.ToolCommandsTest do
       assert http == "#{command["method"]} #{command["path"]}", command["command"]
     end
   end
+
+  # A tool or a command still naming an address the site stopped serving
+  # fails here, whichever family of addresses it is under.
+  test "every tool and every command names an address the site serves" do
+    # The sign-in server confirms no one here.
+    Req.Test.stub(RegentAgents.Broker, &Plug.Conn.send_resp(&1, 401, "{}"))
+    routes = Phoenix.Router.routes(KeyfleetWeb.Router)
+
+    served =
+      for %{path: path, verb: verb} <- routes, verb != :*, into: MapSet.new() do
+        "#{verb |> to_string() |> String.upcase()} #{Regex.replace(~r/:(\w+)/, path, "{\\1}")}"
+      end
+
+    forwards = for %{path: path, verb: :*, plug: plug} <- routes, do: {path <> "/", plug}
+
+    for %{"name" => name} = tool <- Keyfleet.Capabilities.tools(),
+        route <- Enum.uniq(List.wrap(tool["route"]) ++ List.wrap(tool["interfaces"]["http"])) do
+      assert route in served or forwarded?(route, forwards),
+             "#{name} names #{route}, which the site doesn't serve"
+    end
+
+    for command <- @commands do
+      route = "#{command["method"]} #{command["path"]}"
+
+      assert route in served or forwarded?(route, forwards),
+             "#{command["command"]} names #{route}, which the site doesn't serve"
+    end
+  end
+
+  # An address under one of the router's forwards is the forwarded plug's to
+  # answer. The plug has it when a request there with no sign-in is refused
+  # for anything but its address.
+  defp forwarded?(route, forwards) do
+    [method, path] = String.split(route, " ")
+
+    Enum.any?(forwards, fn {prefix, plug} ->
+      String.starts_with?(path, prefix) and
+        Plug.Test.conn(method, "/" <> String.replace_prefix(path, prefix, ""))
+        |> plug.call(plug.init([]))
+        |> Map.fetch!(:status) != 404
+    end)
+  end
 end

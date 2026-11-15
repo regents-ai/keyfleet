@@ -10,6 +10,12 @@ defmodule KeyfleetWeb.Refusal do
   route answers itself is `KeyfleetWeb.ErrorJSON`'s.
   """
 
+  # Said after where to look, at every address no agent operation has: the
+  # likeliest sender of one is a tool made for an earlier site.
+  @older_sender "If a command-line tool or a saved tool list sent this, it is older than the " <>
+                  "site: install regents-cli again with the line /agents.md gives, or read " <>
+                  "/capabilities.json again."
+
   @refusals %{
     # Signed agent requests, and browser sign-in.
     "unauthorized" =>
@@ -26,7 +32,8 @@ defmodule KeyfleetWeb.Refusal do
        "Put what the request asks for in its signed JSON body, then send it again."},
     "operation_unknown" =>
       {"There is no agent operation at this address.",
-       "/docs lists each operation with its method and address: lowercase, with no trailing slash."},
+       "/docs lists each operation with its method and address: lowercase, with no trailing slash. " <>
+         @older_sender},
     "method_not_allowed" =>
       {"This operation takes another method.",
        "Send it with the method the Allow header names, signed over that method."},
@@ -616,4 +623,11 @@ defmodule KeyfleetWeb.Refusal do
   operation takes.
   """
   def body(code, hint), do: put_in(body(code), [:error, :hint], hint)
+
+  @doc """
+  The body refusing an address no agent operation has, with `where`, where the
+  operation it most likely meant is, and then what every such refusal says of
+  a sender older than the site.
+  """
+  def operation_unknown(where), do: body("operation_unknown", where <> " " <> @older_sender)
 end
