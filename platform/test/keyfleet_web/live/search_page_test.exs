@@ -87,8 +87,14 @@ defmodule KeyfleetWeb.Live.SearchPageTest do
     })
 
     conn = signed_in_as(conn, @holder)
-    survey = Notebooks.notebook_url(@fleet, @space, "nb-0000000000000001")
-    log = Notebooks.notebook_url(@fleet, @space, "nb-0000000000000002")
+
+    opens = fn notebook_id ->
+      "/fleets/#{@fleet}/notebooks/open?" <>
+        URI.encode_query(to: Notebooks.notebook_path(@space, notebook_id))
+    end
+
+    survey = opens.("nb-0000000000000001")
+    log = opens.("nb-0000000000000002")
 
     {:ok, view, _html} = live(conn, @path <> "?q=survey")
     assert has_element?(view, ~s(#search-matches a[href="#{survey}"]), "Hull survey")

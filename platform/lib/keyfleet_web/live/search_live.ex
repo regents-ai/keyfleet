@@ -4,7 +4,8 @@ defmodule KeyfleetWeb.SearchLive do
   the address as `?q=`, drawn inside the fleet's page under its bar
   (`KeyfleetWeb.FleetLive`), whose search box opens it. It lists what the
   reader may read that matches, newest first (`Keyfleet.Search`), each line
-  linking to the page it is on, a notebook's on the fleet's notebook host;
+  linking to the page it is on, a notebook's on the fleet's notebook host
+  by way of its sign-in step here;
   "Show more" adds the next page under them.
   """
 
@@ -146,8 +147,14 @@ defmodule KeyfleetWeb.SearchLive do
 
   defp dom_id(%{kind: kind, id: id}), do: "search-#{kind}-" <> String.replace(id, "#", "-")
 
-  # A notebook opens on the fleet's notebook host; every other match opens here.
-  defp to(_fleet_id, %{kind: "notebook", url: url}), do: %{href: url}
+  # A notebook opens on the fleet's notebook host, through the step here that
+  # signs its reader in there (`KeyfleetWeb.NotebookOpenController`); every
+  # other match opens here.
+  defp to(fleet_id, %{kind: "notebook", url: url}) do
+    to = URI.encode_query(to: URI.parse(url).path)
+    %{href: "/fleets/#{fleet_id}/notebooks/open?" <> to}
+  end
+
   defp to(fleet_id, match), do: %{patch: SearchJSON.path(fleet_id, match)}
 
   defp kind(%{kind: "post"}), do: "Post"
