@@ -159,6 +159,9 @@ class Request(_Shape):
     op: str
     command: Optional[Command] = None
     body: dict[str, Any]
+    # A write marked `check` is decided as it would be and answered, but
+    # never applied: nothing is written and its command id stays unused.
+    check: bool = False
 
 
 class HelloBody(_Shape):

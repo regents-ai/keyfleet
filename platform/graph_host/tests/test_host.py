@@ -129,6 +129,7 @@ REFUSALS = [
     ("bad_request", {"v": 2, "req": "r", "op": "hello", "body": {}}),
     ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL})),
     ("bad_request", request("hello", {}, command("c"))),
+    ("bad_request", {**request("changes", {"after_seq": 0, "limit": 10}), "check": True}),
     ("bad_request", request("changes", {"after_seq": 0, "limit": 501})),
     ("bad_request", request("patch", {"id": "goal#1", "set": {}}, command("c"))),
     ("bad_request", request("create", {"project": "general", "type": "goal", "data": GOAL}, {**command("c"), "principal": "system"})),
@@ -153,6 +154,42 @@ def test_each_refusal_names_its_code_and_writes_nothing(seeded, code, message):
     assert reply["ok"] is False
     assert reply["error"]["code"] == code, reply
     assert _call(seeded, request("hello", {}))["result"]["head_seq"] == head
+
+
+@pytest.mark.parametrize(
+    ("code", "message"), [(code, message) for code, message in REFUSALS if message["op"] in protocol.WRITE_OPS]
+)
+def test_a_checked_write_gets_the_refusal_its_write_gets_and_writes_nothing(seeded, code, message):
+    head = _call(seeded, request("hello", {}))["result"]["head_seq"]
+
+    checked = _call(seeded, {**message, "check": True})
+
+    assert checked["error"]["code"] == code, checked
+    assert checked == _call(seeded, message)
+    assert _call(seeded, request("hello", {}))["result"]["head_seq"] == head
+
+
+def test_a_checked_write_that_would_apply_leaves_no_trace_and_its_command_id_then_writes(seeded):
+    patch = request("patch", {"id": "goal#1", "expected_version": 2, "set": {"status": "dropped"}}, command("p"))
+    head = _call(seeded, request("hello", {}))["result"]["head_seq"]
+
+    assert _call(seeded, {**patch, "check": True}) == {"v": 1, "req": "r1", "ok": True}
+
+    assert _call(seeded, request("hello", {}))["result"]["head_seq"] == head
+    goal = seeded.graph.get_object("goal#1")
+    assert (goal.version, goal.data["status"]) == (2, "achieved")
+    written = _call(seeded, patch)
+    assert (written["ok"], written["replayed"], written["result"]) == (True, False, {"id": "goal#1", "version": 3})
+    assert [event["payload"]["command_id"] for event in written["events"] if event["type"] == "keyfleet.command"] == ["p"]
+
+
+def test_a_checked_write_of_a_command_already_applied_is_accepted_as_its_retry_is(seeded):
+    retry = request("patch", {"id": "goal#1", "expected_version": 1, "set": {"status": "achieved"}}, command("s6"))
+    head = _call(seeded, request("hello", {}))["result"]["head_seq"]
+
+    assert _call(seeded, {**retry, "check": True}) == {"v": 1, "req": "r1", "ok": True}
+    assert _call(seeded, request("hello", {}))["result"]["head_seq"] == head
+    assert _call(seeded, retry)["replayed"] is True
 
 
 RUNTIME_OPS = [

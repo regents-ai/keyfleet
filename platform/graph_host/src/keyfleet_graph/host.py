@@ -10,6 +10,9 @@ it and `Runtime.load` rebuilds memory from what is durable.
 
 Refusals are decided before the transaction begins, write nothing and are
 not remembered; each is a pure function of the request and the current state.
+So a write marked `check` is decided exactly as it would be and stops there:
+it is answered accepted, or with the refusal the write would get, and leaves
+no event, no ledger entry and no command id behind.
 
 Each command carries the fleet's projects as the site read them at the
 write's turn. A write goes only into an active project, and an object of a
@@ -182,9 +185,13 @@ class Host:
                     "this command id was already used with a different body",
                     {"command_id": command.id},
                 )
+            if request.check:
+                return _checked(request.req)
             return self._accepted(request.req, prior["result"], replayed=True, events=[])
 
         apply = _PLANNERS[request.op](self, command, body)
+        if request.check:
+            return _checked(request.req)
         head = self._head_seq()
         reactions = Reactions(self.graph, self.depends_on, self.log_id)
         with self._transaction():
@@ -733,6 +740,12 @@ def _open_runtime(db_path: str, run_id: str) -> Runtime:
     return Runtime.load(db_path, run_id, behaviors=[], tools=[])
 
 
+# A checked write the host would accept, whether it would apply or answer its
+# command's earlier result.
+def _checked(req: str) -> dict[str, Any]:
+    return {"v": 1, "req": req, "ok": True}
+
+
 def _decode(frame: bytes | protocol.TooLarge) -> Any:
     """Parse the frame once, with the JSON parser's nesting limit and no NaN or infinity literals."""
     if isinstance(frame, protocol.TooLarge):
@@ -759,6 +772,8 @@ def _parse(message: Any) -> protocol.Request:
     if request.op in protocol.READ_OPS:
         if request.command is not None:
             raise Refusal("bad_request", f"{request.op} takes no command")
+        if request.check:
+            raise Refusal("bad_request", f"{request.op} is a read: only a write is checked")
     elif request.op not in protocol.WRITE_OPS:
         raise Refusal("bad_request", f"unknown op {request.op!r}")
     return request

@@ -205,6 +205,30 @@ def test_a_review_that_could_not_reproduce_the_work_disputes_it(host):
     assert "commit_ref" not in review.data["sys"]["review"]
 
 
+# Costly failure: a check that says yes to a review its write then refuses
+# sends an agent off with work it believes is recorded.
+def test_a_checked_review_gets_the_refusal_its_review_gets_and_a_good_one_writes_nothing_until_sent(host):
+    _submit(host, "s1", 1)
+    task = host.graph.get_object("task#1")
+    head = host._head_seq()
+
+    def checked(review, command_id):
+        message = {**request("review", review, command(command_id, **REVIEWER)), "check": True}
+        return host.handle(json.dumps(message).encode("utf-8"))
+
+    refused = checked(_review(2, reproduction="reproduced"), "r1")
+    assert refused["error"]["code"] == "invalid"
+    assert refused == _call(host, "review", _review(2, reproduction="reproduced"), command("r1", **REVIEWER))
+
+    assert checked(_review(2, reproduction="passed"), "r2") == {"v": 1, "req": "r1", "ok": True}
+    assert (host._head_seq(), host.graph.relations(type="reviews")) == (head, [])
+    assert host.graph.get_object("task#1").version == task.version
+
+    written = _call(host, "review", _review(2, reproduction="passed"), command("r2", **REVIEWER))
+    assert (written["ok"], written["replayed"]) == (True, False)
+    assert host.graph.get_object(written["result"]["id"]).data["reproduction"] == "passed"
+
+
 def test_a_restart_takes_the_named_reviewer_off_each_task_once_and_keeps_the_rest(db):
     host = Host("fleet_a", str(db), [])
     _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Named"}}, command("t1"))
