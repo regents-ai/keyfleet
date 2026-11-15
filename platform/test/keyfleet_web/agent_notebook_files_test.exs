@@ -482,7 +482,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     # Each notebook as the Docs place lists it, with its description and when
     # it was added, and no run before one is started.
-    list = json_response(get!(c, c.first, @api), 200)
+    list = json_response(post!(c, c.first, "#{@api}/list", %{}), 200)
     assert ContractSchema.errors(list, "NotebookList") == []
 
     assert [%{"description" => "", "created_at" => "2026-10-21T09:00:00Z", "last_run" => nil}] =
@@ -504,7 +504,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert Enum.map(jobs, &length(&1["runs"])) == [2, 1]
 
     listed =
-      &(json_response(get!(c, &1, @api), 200)["notebooks"]
+      &(json_response(post!(c, &1, "#{@api}/list", %{}), 200)["notebooks"]
         |> hd()
         |> get_in(["last_run", "run_id"]))
 
@@ -512,12 +512,48 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert listed.(c.second) == run_id(3)
   end
 
+  # Costly failure: a project with more notebooks than one answer holds keeps
+  # its older ones from every agent, which can neither find nor run them.
+  test "a project's notebooks list a page at a time, newest first, to the last", c do
+    notebooks =
+      for n <- 1..101 do
+        added = DateTime.add(~U[2026-11-15 09:00:00Z], -n, :minute)
+        id = "nb-" <> String.pad_leading(Integer.to_string(n), 16, "0")
+        %{id: id, title: "Note #{n}", description: "", created_at: DateTime.to_iso8601(added)}
+      end
+
+    Agent.update(c.files, &Map.put(&1, "notebooks", notebooks))
+    list = &json_response(post!(c, c.first, "#{@api}/list", &1), 200)
+
+    first = list.(%{})
+    assert %{"has_more" => true, "cursor" => cursor} = first
+    assert is_binary(cursor)
+
+    second = list.(%{"cursor" => cursor})
+    assert %{"has_more" => true, "cursor" => cursor} = second
+
+    last = list.(%{"cursor" => cursor})
+    assert %{"has_more" => false, "cursor" => nil} = last
+
+    pages = [first, second, last]
+    for page <- pages, do: assert(ContractSchema.errors(page, "NotebookList") == [])
+    assert Enum.map(pages, &length(&1["notebooks"])) == [50, 50, 1]
+
+    assert Enum.flat_map(pages, fn page -> Enum.map(page["notebooks"], & &1["notebook_id"]) end) ==
+             Enum.map(notebooks, & &1.id)
+
+    refused = post!(c, c.first, "#{@api}/list", %{"cursor" => "after:nb-ffffffffffffffff"})
+    assert json_response(refused, 422)["error"]["code"] == "notebook_file_refused"
+  end
+
   # Costly failure: an agent handed a task's notebook address takes its proj-…
   # part, the notebook host's own id, for the project, and every read of the
   # notebook is refused. links_resolve names the project and notebook they take.
   test "a task's notebook address reads as the project and notebook a file read takes", c do
     Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
-    [%{"notebook_url" => url}] = json_response(get!(c, c.first, @api), 200)["notebooks"]
+
+    [%{"notebook_url" => url}] =
+      json_response(post!(c, c.first, "#{@api}/list", %{}), 200)["notebooks"]
 
     Workspace.open_log(@fleet)
     task = Workspace.create(@fleet, "task", %{"title" => "Count boats", "notebook_ref" => url})
@@ -577,7 +613,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     file = %{"path" => "notebook.py", "content" => "import marimo"}
 
     calls = [
-      {:get, by_id},
+      {:post, "#{by_id}/list", %{}},
       {:post, "#{by_id}/create",
        %{"title" => "Log", "code" => "import marimo", "idempotency_key" => "nb-1"}},
       {:post, "#{notebook}/files/list", %{}},
@@ -925,20 +961,41 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     end
   end
 
+  # The notebooks other than the one these tests work in have no jobs.
   defp hub_answer(
-         %Plug.Conn{method: "GET", request_path: @notebooks} = conn,
+         %Plug.Conn{
+           method: "GET",
+           path_info: ["api", "v1", "projects", @space, "notebooks", _, "jobs"]
+         } =
+           conn,
          _files,
          _body
        ),
-       do:
-         json(conn, 200, %{
-           success: true,
-           data: %{
-             items: [
-               %{id: @notebook, title: "Log", description: "", created_at: "2026-10-21T09:00:00Z"}
-             ]
-           }
-         })
+       do: json(conn, 200, %{success: true, data: %{items: []}})
+
+  # The project's notebooks, newest first, kept under "notebooks" (one, unless
+  # a test sets them), a page of at most `limit` at a time as the hub pages
+  # them: `next_cursor` names the rest, or is null after the last, and a
+  # cursor it never answered is refused.
+  defp hub_answer(
+         %Plug.Conn{method: "GET", request_path: @notebooks} = conn,
+         files,
+         _body
+       ) do
+    log = %{id: @notebook, title: "Log", description: "", created_at: "2026-10-21T09:00:00Z"}
+    notebooks = Agent.get(files, &Map.get(&1, "notebooks", [log]))
+    limit = String.to_integer(conn.query_params["limit"])
+
+    case after_cursor(notebooks, conn.query_params["cursor"]) do
+      {:ok, rest} ->
+        {page, more} = Enum.split(rest, limit)
+        next = if more != [], do: "after:" <> List.last(page).id
+        json(conn, 200, %{success: true, data: %{items: page, next_cursor: next}})
+
+      :error ->
+        json(conn, 400, %{success: false, error: %{code: "BAD_REQUEST", message: "Bad cursor"}})
+    end
+  end
 
   defp hub_answer(
          %Plug.Conn{method: "POST", request_path: @notebooks} = conn,
@@ -1107,6 +1164,18 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   # notebook's workspace, once.
   defp answer_next(c, method, path, answer),
     do: Agent.update(c.files, &Map.put(&1, {:next, method, @workspace <> path}, answer))
+
+  # The notebooks after the one a cursor names; no cursor, all of them.
+  defp after_cursor(notebooks, nil), do: {:ok, notebooks}
+
+  defp after_cursor(notebooks, "after:" <> id) do
+    case Enum.split_while(notebooks, &(&1.id != id)) do
+      {_before, [_named | rest]} -> {:ok, rest}
+      {_all, []} -> :error
+    end
+  end
+
+  defp after_cursor(_notebooks, _cursor), do: :error
 
   defp with_run(%{"id" => job_id} = job, job_id, run), do: %{job | "runs" => [run | job["runs"]]}
   defp with_run(job, _job_id, _run), do: job

@@ -35,11 +35,11 @@ defmodule Keyfleet.Notebooks.Runs do
   failed or waiting runs hides the last good result.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
-  once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
-  or `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
-  have, `:runs_full` when the notebook takes no more runs for now, or
-  `:unavailable` when the hub didn't answer or the kept pages couldn't be
-  read.
+  once its page is kept, `result_url`, or `{:ok, page}` for a listing; or
+  `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
+  have, `:runs_full` when the notebook takes no more runs for now,
+  `:refused` for a listing's cursor the hub doesn't take, or `:unavailable`
+  when the hub didn't answer or the kept pages couldn't be read.
   """
 
   alias Keyfleet.Actors.System
@@ -56,33 +56,53 @@ defmodule Keyfleet.Notebooks.Runs do
   @finished ["cancelled" | @with_page]
   # A listing asks after this many notebooks' runs at once.
   @lookups 4
+  # A listing names at most this many notebooks a page.
+  @page 50
 
   @doc """
-  The fleet's 50 newest notebooks, newest first, as `subject`: each with its
-  title, description and when it was added, as the Docs place lists them;
-  its address (`Keyfleet.Notebooks.notebook_url/3`); `subject`'s newest
-  run there, or nil when they have started none; and its last good page.
+  A page of the fleet's notebooks, newest first, as `subject`, from `cursor`,
+  or from the newest when it is nil: `notebooks`, each with its title,
+  description and when it was added, as the Docs place lists them; its
+  address (`Keyfleet.Notebooks.notebook_url/3`); `subject`'s newest run
+  there, or nil when they have started none; and its last good page. Beside
+  them, the `cursor` that names the next page, or nil after the last, and
+  `has_more`, whether there is one.
   """
-  def list(fleet_id, subject, project_id) do
-    with {:ok, %{"items" => notebooks}} <-
+  def list(fleet_id, subject, project_id, cursor) do
+    params = Enum.reject([cursor: cursor, limit: @page], &is_nil(elem(&1, 1)))
+
+    with {:ok, %{"items" => notebooks} = page} <-
            fleet_id
            |> request(subject, :get, "/api/v1/projects/#{segment(project_id)}/notebooks",
-             params: [limit: 50]
+             params: params
            )
-           |> answer(200),
+           |> page_answer(),
          {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks),
          {:ok, result_urls} <- result_urls(fleet_id, runs),
          {:ok, good} <- last_good_pages(fleet_id, Enum.map(notebooks, & &1["id"])) do
       locks = Notebooks.locks(fleet_id)
+      next = page["next_cursor"]
 
       {:ok,
-       Enum.zip_with(
-         notebooks,
-         runs,
-         &listing(&1, &2, fleet_id, project_id, result_urls, good, locks)
-       )}
+       %{
+         notebooks:
+           Enum.zip_with(
+             notebooks,
+             runs,
+             &listing(&1, &2, fleet_id, project_id, result_urls, good, locks)
+           ),
+         cursor: next,
+         has_more: next != nil
+       }}
     end
   end
+
+  # The hub refuses a cursor it never answered, as it refuses one of a
+  # notebook's files (`Keyfleet.Notebooks.Files.list/6`).
+  defp page_answer({:ok, %Req.Response{status: status}}) when status in [400, 422],
+    do: {:error, :refused}
+
+  defp page_answer(response), do: answer(response, 200)
 
   @doc """
   Starts a run of `notebook_id`'s saved code as `subject`, recording what it

@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
   @run ~S"run_[0-9A-HJKMNP-TV-Z]{26}"
-  @notebooks_path ~r"\A#{@in_project}/notebooks\z"
+  @notebooks_list_path ~r"\A#{@in_project}/notebooks/list\z"
   @run_start_path ~r"\A#{@in_project}/notebooks/#{@notebook}/runs/start\z"
   @run_path ~r"\A#{@in_project}/notebooks/#{@notebook}/runs/#{@run}\z"
   @notebook_create_path ~r"\A#{@in_project}/notebooks/create\z"
@@ -155,6 +155,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@publish_commit_path, {~w(as_key commit), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
+    {@notebooks_list_path, {[], ~w(cursor)}},
     {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
     {@files_list_path, {[], ~w(path cursor)}},
     {@file_read_path, {~w(path), []}},
@@ -784,7 +785,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @dm_inbox_path,
           @code_pushes_path,
           @code_commit_path,
-          @notebooks_path,
           @copies_path,
           @run_path,
           @projects_path
@@ -826,6 +826,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @publish_page_path,
         @publish_commit_path,
         @run_start_path,
+        @notebooks_list_path,
         @notebook_create_path,
         @files_list_path,
         @file_read_path,
@@ -1017,6 +1018,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         publish_page: @publish_page_path,
         publish_commit: @publish_commit_path,
         run_start: @run_start_path,
+        notebooks_list: @notebooks_list_path,
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
         file_read: @file_read_path,
@@ -1123,6 +1125,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_fleet_body(:receipts, _params), do: :invalid
   defp check_fleet_body(:checkpoint_save, params), do: check_checkpoint_body(params)
+
+  # A project's notebooks read from the newest, or on from the last page's
+  # cursor.
+  defp check_fleet_body(:notebooks_list, params) when map_size(params) == 0, do: :ok
+
+  defp check_fleet_body(:notebooks_list, %{"cursor" => cursor} = params)
+       when map_size(params) == 1 and is_binary(cursor),
+       do: :ok
+
+  defp check_fleet_body(:notebooks_list, _params), do: :invalid
   defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
   defp check_fleet_body(:files_list, params), do: check_files_list_body(params)
 

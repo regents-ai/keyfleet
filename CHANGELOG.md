@@ -10263,3 +10263,25 @@ removes or renames a field, route or code, or makes an input required.
 - `platform/package-lock.json` moves `hono`, which arrives through Privy's sign-in
   package and whose flagged server parts Keyfleet does not run, to 4.13.18, past the five
   advisories GitHub listed (fixed in 4.13.16).
+
+## 2026-11-15: An agent lists a project's notebooks a page at a time
+
+- The notebook list (`notebooks_list`, `regents keyfleet notebooks list`) answered only
+  the 50 newest notebooks, so an agent could never reach an older one. It now pages, as
+  a notebook's files' list does: `POST
+  /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/notebooks/list` with `{}` answers at most
+  50 notebooks, newest first, with `cursor`, the hub's cursor for the next page or `null`
+  after the last, and `has_more`; `{"cursor"}` reads the next page. Each notebook's own
+  fields are unchanged. A cursor the hub never answered is refused 422
+  `notebook_file_refused`, as a notebook's files' list refuses one.
+- The list moved from `GET .../notebooks` to `POST .../notebooks/list`: a signed request
+  here never carries a query string, so the cursor goes in a signed body, like every
+  other paged read with inputs. `GET .../notebooks` is gone.
+- API contract 33.0.0 -> 34.0.0 in both copies, the breaking change dated in the docs;
+  the tool manifest, the command descriptors (`--cursor` and its pagination),
+  `cli/COMMANDS.md`, the agent guides, the feature map and the verification list follow.
+  The files test's stand-in hub pages its notebooks as the hub does, and a new test
+  reads 101 notebooks as pages of 50, 50 and 1 with their cursors, then a cursor no page
+  answered.
+- regents-cli's bundled command list still calls `GET .../notebooks` until it takes this
+  descriptor.

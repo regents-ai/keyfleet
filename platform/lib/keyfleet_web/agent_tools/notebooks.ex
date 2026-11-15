@@ -26,9 +26,10 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
 
   actions do
     action :list, :map do
-      description "A project's notebooks, each with the last run an agent started there."
+      description "A project's notebooks, a page at a time, each with the last run an agent started there."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @project
+      argument :cursor, :string, constraints: @path
       run {Run, tool: "notebooks_list"}
     end
 

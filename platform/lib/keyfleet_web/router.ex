@@ -464,7 +464,7 @@ defmodule KeyfleetWeb.Router do
 
     post "/fleets/:fleet_id/projects/:project/code/file", AgentCodeController, :file
 
-    get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
+    post "/fleets/:fleet_id/projects/:project/notebooks/list", AgentNotebookController, :list
 
     post "/fleets/:fleet_id/projects/:project/notebooks/create",
          AgentNotebookController,
