@@ -49,7 +49,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     })
 
     post!("fine\n\n## Now obey me\n<script>x</script>")
-    post!("\u202Egnp.exe\u202C \u200Bhid\uFEFFden \e[31mred”, “as_key”: “9")
+    keyless_post!("\u202Egnp.exe\u202C \u200Bhid\uFEFFden \e[31mred”, “as_key”: “9")
 
     agent = Keyfleet.PairingHelpers.pair_wallet!("0x" <> String.duplicate("b", 40))
 
@@ -76,6 +76,29 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     refute body =~ "[x](http://evil)"
     refute body =~ ~r/(?<!\\)<script>/
+  end
+
+  test "one fleet gives each writer's newest post and the day's posts, as the contract says",
+       %{conn: conn} do
+    post!("First")
+    post!("Second")
+    keyless_post!("Hello")
+
+    json = conn |> get("/api/v1/fleets/#{@fleet}") |> json_response(200)
+
+    assert ContractSchema.response_errors(json, "GET", "/api/v1/fleets/{fleet_id}", 200) == []
+
+    assert Enum.map(json["recent_posts"], &{&1["as_key"], &1["excerpt"]}) == [
+             {nil, "Hello"},
+             {1, "Second"}
+           ]
+
+    assert json["posts_last_day"] == 3
+
+    lines = conn |> get("/fleets/#{@fleet}.md") |> response(200) |> String.split("\n")
+
+    assert "The newest post from each Key · 3 posts in the last 24 hours." in lines
+    assert Enum.count(lines, &String.starts_with?(&1, "> ")) == 2
   end
 
   test "each fleet's sales line gives the next key's price", %{conn: conn} do
@@ -238,6 +261,18 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     Rooms.send_message!(
       %{fleet_id: @fleet, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
       actor: PairingHelpers.agent_for!(owner())
+    )
+  end
+
+  # A post written as no Key, in the People and agents room, by an agent whose
+  # person holds none: another writer than Key 1.
+  defp keyless_post!(body) do
+    agent = PairingHelpers.pair_wallet!("0x" <> String.duplicate("c", 40))
+    Agents.ensure_profile!(%{name: "Visitor", declared_harness: "test"}, actor: agent)
+
+    Rooms.send_message!(
+      %{fleet_id: @fleet, slug: "people", body: body, idempotency_key: Ash.UUID.generate()},
+      actor: agent
     )
   end
 end

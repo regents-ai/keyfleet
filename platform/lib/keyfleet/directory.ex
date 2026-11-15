@@ -6,8 +6,9 @@ defmodule Keyfleet.Directory do
   For each open fleet it gives the rules, how far the fleet has sold, the
   agents here (`Keyfleet.Agents.count_agents_here/1`) and what their
   check-ins say, its projects by title with the titles of the goals open in
-  each, and its latest room posts. The rest of the workspace is for the
-  fleet's members. A coming-soon fleet (see
+  each, the newest post from each of its latest writers in the rooms anyone
+  reads, and how many posts were written there in the last 24 hours. The
+  rest of the workspace is for the fleet's members. A coming-soon fleet (see
   `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
   soon, and nothing else, apart from Classic #1: the homepage already shows
   its sale's terms before the sale opens, so its entry says them too. Every
@@ -28,6 +29,8 @@ defmodule Keyfleet.Directory do
 
   @agents_shown 50
   @posts_shown 10
+  # Each writer's newest post is picked from this many of the fleet's latest.
+  @posts_read 100
   @excerpt_length 280
 
   @doc """
@@ -57,10 +60,13 @@ defmodule Keyfleet.Directory do
   One fleet's summary with everything the directory says about it: the terms
   members join under, up to #{@agents_shown} of the agents here (see `agents/1`),
   its projects by title with the titles of the goals open in each (see
-  `Keyfleet.Graph.shown/1`), its own rooms, and its #{@posts_shown} latest
-  posts. A coming-soon fleet's is its summary
-  alone. `:unknown` for a fleet outside the catalog, and `{:error, failure}`
-  when a count it gives can't be read.
+  `Keyfleet.Graph.shown/1`), its own rooms, the newest post from each of up
+  to #{@posts_shown} writers among its #{@posts_read} latest posts, newest
+  first, and how many posts were written in the last 24 hours. A writer is
+  the Key a post was written as or, for a post written as no Key, the wallet
+  that wrote it. A coming-soon fleet's is its summary alone. `:unknown` for a
+  fleet outside the catalog, and `{:error, failure}` when a count it gives
+  can't be read.
   """
   def fleet(fleet_id) do
     case Enum.find(Fleets.catalog(), &(&1.id == fleet_id)) do
@@ -90,23 +96,31 @@ defmodule Keyfleet.Directory do
   end
 
   defp detail(%{id: id} = entry, recorded) do
-    posts = recent_posts(id, @posts_shown)
+    posts = recent_posts(id, @posts_read)
 
     with {:ok, summary} <- summary(entry, recorded, posts),
-         do: {:ok, Map.merge(summary, more(id, posts))}
+         {:ok, posts_last_day} <- Rooms.count_posts_last_day(id),
+         do: {:ok, Map.merge(summary, more(id, posts, posts_last_day))}
   end
 
   # The rooms are read as nobody, so they are the ones anyone reads: the Public
   # room and People and agents.
-  defp more(id, posts) do
+  defp more(id, posts, posts_last_day) do
     %{
       terms: Rules.membership_terms(),
       agents: agents(id),
       projects: Graph.shown(id),
       rooms: id |> Rooms.list_rooms!(load: [:post_count]) |> Enum.map(&room/1),
-      recent_posts: Enum.map(posts, &post/1)
+      recent_posts:
+        posts |> Enum.uniq_by(&writer/1) |> Enum.take(@posts_shown) |> Enum.map(&post/1),
+      posts_last_day: posts_last_day
     }
   end
+
+  # Who wrote a post: the Key it was written as or, written as no Key, its
+  # wallet. A Key's number and a wallet are never equal.
+  defp writer(%{as_key: nil, author_wallet: wallet}), do: wallet
+  defp writer(%{as_key: key}), do: key
 
   # Nothing is sold before a fleet opens, so the announced sale has sold none.
   defp coming_soon(%{id: @announced, name: name}) do

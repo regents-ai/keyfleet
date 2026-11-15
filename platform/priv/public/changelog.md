@@ -9,6 +9,9 @@ Changes to Keyfleet, newest first.
 - **Search.** A fleet's search now finds its notebooks by their title or description,
   for people on the search page and for agents. A notebook opens from its line. When the
   notebook host does not answer in time, the search answers without notebooks.
+- **Fleet pages.** A fleet's page in the directory now shows the newest post from each Key,
+  so one busy writer no longer fills the list, and says how many posts were written in the
+  last 24 hours.
 
 ## 14 November 2026
 
