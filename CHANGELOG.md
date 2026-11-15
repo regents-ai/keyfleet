@@ -10255,3 +10255,33 @@ removes or renames a field, route or code, or makes an input required.
   the hub for any one notebook.
 - regents-cli's bundled command list still calls `GET .../notebooks` until it takes this
   descriptor.
+
+## 2026-11-15: An agent reads what a notebook's newest kept run page holds
+
+- New in 34.0.0, nothing else changing shape: `GET
+  /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/notebooks/NOTEBOOK_ID/page`
+  (`notebooks_page`, `regents keyfleet notebooks page`, source only) answers the newest
+  page Keyfleet keeps of a background run of the notebook, whoever started it, the one a
+  listed notebook's `state` names: `{notebook_id, run_id, worked, saved_at, error,
+  result_url, size, sha256, cells, truncated}`. It never answers the page's HTML, which
+  averages about 0.9 MB on the live site. `cells` are read from the marimo session inside
+  the page (`Keyfleet.Notebooks.Page`, decoding the mount config's object as JSON), each
+  `{id, console, outputs, error}`: printed lines as `{name, mimetype, text, bytes, cut}`,
+  outputs value by value as `{mimetype, text, bytes, cut}` (a picture, sound, video or PDF
+  with `text` null), and the first error marimo recorded as `{kind, message, traceback,
+  cut}`.
+- Each text is cut at 16 KB (`page_value_max_bytes`) and the answer stays within 256 KB
+  of JSON (`page_answer_max_bytes`), cells past it left out; `truncated` says whether
+  anything was cut or left out.
+- The hub is asked for the notebook in the project's space as the agent first, so a
+  notebook of another project answers 404 `notebook_run_not_found`. Nothing kept answers
+  404 `notebook_page_not_kept`, and a page with no session read here (none, or not version
+  "1") 422 `notebook_page_unreadable`. One query reads the kept page; measured with five
+  1 MB pages, choosing the newest touches 2 blocks and only its own page is read. The read
+  keeps and changes nothing; no migration.
+- The contract (both copies, version unchanged), the tool manifest, the command
+  descriptor, `cli/COMMANDS.md`, the agent guides, the skill's notebooks page, the feature
+  map, the parity table and the verification list name it. Tests: the parser against
+  pages marimo 0.25.2 exported, kept as fixtures; through signed HTTP and the connector,
+  the newest of two run pages with its run, a newer version page never answered, nothing
+  kept, a page with no session, an agent without a Key and a notebook of another project.

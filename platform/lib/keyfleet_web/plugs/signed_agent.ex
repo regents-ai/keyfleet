@@ -100,6 +100,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @notebooks_list_path ~r"\A#{@in_project}/notebooks/list\z"
   @run_start_path ~r"\A#{@in_project}/notebooks/#{@notebook}/runs/start\z"
   @run_path ~r"\A#{@in_project}/notebooks/#{@notebook}/runs/#{@run}\z"
+  @notebook_page_path ~r"\A#{@in_project}/notebooks/#{@notebook}/page\z"
   @notebook_create_path ~r"\A#{@in_project}/notebooks/create\z"
   @files_list_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/list\z"
   @file_read_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/read\z"
@@ -787,6 +788,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @code_commit_path,
           @copies_path,
           @run_path,
+          @notebook_page_path,
           @projects_path
         ],
         &Regex.match?(&1, path)

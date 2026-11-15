@@ -28,6 +28,10 @@ defmodule Keyfleet.Notebooks.Runs do
   failed if it did, and whether the notebook was changed after the page was
   made.
 
+  Reading a notebook's page keeps nothing and changes nothing: it answers
+  what that same newest kept run page holds (`Keyfleet.Notebooks.Page`), once
+  the hub has answered the notebook to the agent in the project's space.
+
   A run started here records what it ran from (`Keyfleet.Notebooks.RunSource`):
   the sha256 of the notebook's saved code just before it started, and every
   file of it then with its revision (`Keyfleet.Notebooks.Files.manifest/4`).
@@ -42,14 +46,15 @@ defmodule Keyfleet.Notebooks.Runs do
   once its page is kept, `result_url`, or `{:ok, page}` for a listing; or
   `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
   have, `:runs_full` when the notebook takes no more runs for now,
-  `:cursor_unknown` for a listing's cursor the hub doesn't take, or
-  `:unavailable` when the hub didn't answer or the kept pages couldn't be
-  read.
+  `:cursor_unknown` for a listing's cursor the hub doesn't take,
+  `:page_not_kept` or `:page_unreadable` for a notebook's page Keyfleet
+  doesn't keep or can't read, or `:unavailable` when the hub didn't answer or
+  the kept pages couldn't be read.
   """
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.{Files, RecordsDownError}
+  alias Keyfleet.Notebooks.{Files, Page, RecordsDownError, SavedOutput}
 
   import Keyfleet.Notebooks.MemberRequest
 
@@ -99,6 +104,50 @@ defmodule Keyfleet.Notebooks.Runs do
     do: {:error, :cursor_unknown}
 
   defp page_answer(response), do: answer(response, 200)
+
+  @doc """
+  `notebook_id`'s page as `subject`: the newest page Keyfleet keeps of a
+  background run of it, whoever started the run, read once the hub has
+  answered the notebook to `subject` in the project's space. Answers the
+  page's run, how that run went, the page's address, size and sha256, and
+  its cells (`Keyfleet.Notebooks.Page`), all within `page_answer_max_bytes`
+  of JSON.
+  """
+  def page(fleet_id, subject, project_id, notebook_id) do
+    with {:ok, _notebook} <-
+           fleet_id
+           |> request(subject, :get, notebook_path(project_id, notebook_id))
+           |> answer(200),
+         {:ok, pages} <-
+           newest_run_pages(fleet_id, [notebook_id],
+             query: Ash.Query.select(SavedOutput, [:page])
+           ),
+         do: held(pages[notebook_id], fleet_id)
+  end
+
+  defp held(nil, _fleet_id), do: {:error, :page_not_kept}
+
+  defp held(kept, fleet_id) do
+    config = Notebooks.config()
+
+    facts =
+      kept
+      |> kept_run(fleet_id)
+      |> Map.merge(%{
+        notebook_id: kept.notebook_id,
+        size: byte_size(kept.page),
+        sha256: sha256(kept.page)
+      })
+
+    room =
+      config[:page_answer_max_bytes] -
+        byte_size(Jason.encode!(Map.merge(facts, %{cells: [], truncated: false})))
+
+    case Page.read(kept.page, room, config[:page_value_max_bytes]) do
+      {:ok, cells, truncated} -> {:ok, Map.merge(facts, %{cells: cells, truncated: truncated})}
+      {:error, :unreadable} -> {:error, :page_unreadable}
+    end
+  end
 
   @doc """
   Starts a run of `notebook_id`'s saved code as `subject`, recording what it
@@ -254,9 +303,10 @@ defmodule Keyfleet.Notebooks.Runs do
   end
 
   # The newest kept page of each of `notebook_ids`' background runs, by
-  # notebook. A failed read is saved with the site's errors.
-  defp newest_run_pages(fleet_id, notebook_ids) do
-    case Notebooks.newest_run_outputs(fleet_id, notebook_ids, actor: %System{}) do
+  # notebook, in one read that loads a page's bytes only when `options`
+  # select them. A failed read is saved with the site's errors.
+  defp newest_run_pages(fleet_id, notebook_ids, options \\ []) do
+    case Notebooks.newest_run_outputs(fleet_id, notebook_ids, [actor: %System{}] ++ options) do
       {:ok, kept} ->
         {:ok, Map.new(kept, &{&1.notebook_id, &1})}
 
@@ -294,12 +344,19 @@ defmodule Keyfleet.Notebooks.Runs do
   defp state(page, notebook, fleet_id) do
     {:ok, updated_at, _offset} = DateTime.from_iso8601(notebook["updated_at"])
 
+    page
+    |> kept_run(fleet_id)
+    |> Map.put(:changed_since, DateTime.to_unix(updated_at, :millisecond) > page.saved_at)
+  end
+
+  # Which run made a kept page, whether it worked and where it stopped if
+  # that is known, when the page was made, and its address.
+  defp kept_run(page, fleet_id) do
     %{
       run_id: page.source_id,
       worked: page.succeeded,
       saved_at: DateTime.from_unix!(page.saved_at, :millisecond),
       error: page.failure,
-      changed_since: DateTime.to_unix(updated_at, :millisecond) > page.saved_at,
       result_url: Notebooks.result_url(fleet_id, page.notebook_id, page.source_id, page.saved_at)
     }
   end

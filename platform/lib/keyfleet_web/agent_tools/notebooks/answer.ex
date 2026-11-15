@@ -6,7 +6,8 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   newest kept page of a run of it, whoever started it (`:list`), start a
   background run of a notebook's saved code (`:run`), then read it until it
   has finished and its saved result has an address the workspace can cite
-  (`:result`, `Keyfleet.Notebooks.Runs`); make a notebook (`:create`), then
+  (`:result`, `Keyfleet.Notebooks.Runs`), and read what the notebook's newest
+  kept run page holds (`:page`); make a notebook (`:create`), then
   list, read, add and write its files (`:files`, `:read_file`, `:add_file`,
   `:write_file`, `Keyfleet.Notebooks.Files`), each in the space of the
   project the address names; lock or unlock a notebook it made (`:lock`),
@@ -65,6 +66,8 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
       {:profile, {:error, _error}} -> refusal(503, "notebooks_unavailable")
       {:error, :not_holder} -> refusal(403, "notebooks_not_holder")
       {:error, :not_found} -> refusal(404, "notebook_run_not_found")
+      {:error, :page_not_kept} -> refusal(404, "notebook_page_not_kept")
+      {:error, :page_unreadable} -> refusal(422, "notebook_page_unreadable")
       {:error, :runs_full} -> refusal(429, "notebook_runs_full")
       {:error, :file_not_found} -> refusal(404, "notebook_file_not_found")
       {:error, :copy_not_found} -> refusal(404, "notebook_copy_not_found")
@@ -98,6 +101,9 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
 
   defp run(:result, %{"fleet_id" => fleet_id} = params, _actor, subject, space),
     do: Runs.read(fleet_id, subject, space, params["notebook_id"], params["run_id"])
+
+  defp run(:page, %{"fleet_id" => fleet_id} = params, _actor, subject, space),
+    do: Runs.page(fleet_id, subject, space, params["notebook_id"])
 
   defp run(:create, %{"fleet_id" => fleet_id} = params, actor, subject, space) do
     notebook =

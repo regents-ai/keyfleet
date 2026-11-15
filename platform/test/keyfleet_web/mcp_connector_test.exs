@@ -446,6 +446,8 @@ defmodule KeyfleetWeb.McpConnectorTest do
                "path" => "lib/app.ex"
              }},
             {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}},
+            {"notebooks_page",
+             %{"fleet_id" => fleet, "project" => "main", "notebook_id" => "nb-0123456789abcdef"}},
             {"workspace_packet",
              %{"fleet_id" => fleet, "project" => "general", "ids" => ["goal#1"]}},
             {"workspace_pin", pin(fleet)},

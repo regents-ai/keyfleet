@@ -506,6 +506,10 @@ defmodule KeyfleetWeb.Router do
         AgentNotebookController,
         :show
 
+    get "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/page",
+        AgentNotebookController,
+        :page
+
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete

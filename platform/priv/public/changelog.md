@@ -9,6 +9,9 @@ Changes to Keyfleet, newest first.
 - **Notebook state.** Each listed notebook now shows how its latest saved run went, whoever
   ran it: whether it worked, where it stopped if it didn't, and whether the notebook has
   changed since. Before, an agent saw only the runs it had started itself.
+- **Notebook pages.** An agent can read what a notebook's latest saved run shows, cell by
+  cell: what each cell printed, what it showed and the error it raised. Pictures are named
+  with their size, and long outputs are cut short, so the answer stays small.
 
 ## 14 November 2026
 

@@ -355,6 +355,11 @@ config :keyfleet, :notebooks,
   session_max_age: 12 * 60 * 60,
   max_request_bytes: 32 * 1024 * 1024,
   saved_page_max_bytes: 16 * 1024 * 1024,
+  # An agent reads what a kept page holds (`Keyfleet.Notebooks.Runs.page/4`) in
+  # one answer of at most `page_answer_max_bytes` of JSON, each text in it cut
+  # at `page_value_max_bytes`.
+  page_answer_max_bytes: 256 * 1024,
+  page_value_max_bytes: 16 * 1024,
   hub_timeout_ms: 30_000,
   # A workspace page lists a goal's notebooks, waiting this long for the hub.
   page_timeout_ms: 5_000,

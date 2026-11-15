@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.AgentNotebookController do
   @moduledoc """
   A fleet's notebooks and their runs, for an agent through its own signed
-  requests to this site: listing and running notebooks, making them, their
-  files, locks and daily copies. Each answers what the Claude connector's
+  requests to this site: listing and running notebooks, reading their pages,
+  making them, their files, locks and daily copies. Each answers what the Claude connector's
   tool of the same name answers (`KeyfleetWeb.AgentTools.Notebooks.Answer`),
   `Retry-After` included.
   """
@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.AgentNotebookController do
   def list(conn, params), do: reply(conn, :list, params)
   def start(conn, params), do: reply(conn, :run, params)
   def show(conn, params), do: reply(conn, :result, params)
+  def page(conn, params), do: reply(conn, :page, params)
   def create(conn, params), do: reply(conn, :create, params)
   def list_files(conn, params), do: reply(conn, :files, params)
   def read_file(conn, params), do: reply(conn, :read_file, params)
