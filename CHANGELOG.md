@@ -10236,3 +10236,32 @@ removes or renames a field, route or code, or makes an input required.
   answered.
 - regents-cli's bundled command list still calls `GET .../notebooks` until it takes this
   descriptor.
+
+## 2026-11-15: Fleet search finds notebooks by title and description
+
+- A fleet's search (the search page, `fleets_search`, `regents keyfleet fleets search`)
+  gains a fourth kind of match, `notebook`: a notebook of any project the searcher may
+  open whose title or description holds the query as written, in any case. It has
+  `title`, `project`, `match` (up to 24 words of its description around the query), `at`
+  (when it was added) and `url`, the notebook's address on the fleet's notebook host.
+- `Keyfleet.Search` asks the hub as the searcher, never as the site: it lets them in
+  (`Notebooks.admit/3`), then lists each project space's notebooks with the hub's `q`,
+  four spaces at a time, reading every page the hub answers. Keyfleet keeps no copy.
+  The hub is asked while the database searches run, and waited on for at most
+  `search_timeout_ms` (3,000 in `config/config.exs`, beside the notebook settings). No
+  hub, no admission or no answer in time brings no notebooks, and a space the hub refuses
+  none of its own, while the other kinds answer as before; a hub that fails or is late is
+  saved with the site's errors (`HubSilentError`).
+- Notebooks join the other kinds' merge, order and cursor unchanged: newest first, then
+  by kind and id, a cursor of `{at, kind, id}` that now takes a notebook's id.
+- The page shows a notebook as one more line in the list, labelled Notebook, opening the
+  notebook on its host; its words are escaped like every other match's.
+- The contract stays 34.0.0 and the breaking change joins that day's note: `SearchMatch.kind`
+  gains `notebook`. The docs, the tool manifest, the command descriptor, `cli/COMMANDS.md`,
+  the agent guides and the notebook skill say that notebook matches are left out when the
+  notebook host does not answer.
+- New tests, against a stand-in hub (`Keyfleet.NotebookHubHelpers`): a notebook found by
+  a word of its title and of its description, for a member, an agent and on the page; a
+  space the hub refuses and a searcher holding no Key bring none; notebooks paged among
+  posts at page sizes 1, 2 and 3 with a tie in time; and a fleet without a hub and a hub
+  that answers too late still answer posts.

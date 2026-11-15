@@ -3,11 +3,25 @@ defmodule KeyfleetWeb.Live.SearchPageTest do
   # the page it is on, and pages on with "Show more".
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.{Accounts, Actors, ChainHelpers, Dms, Fleets, Keys, PairingHelpers, Rooms}
+  alias Keyfleet.{
+    Accounts,
+    Actors,
+    ChainHelpers,
+    Dms,
+    Fleets,
+    Keys,
+    NotebookHubHelpers,
+    Notebooks,
+    PairingHelpers,
+    Projects,
+    Rooms
+  }
+
   alias Keyfleet.WorkspaceFixtures, as: Workspace
 
   @fleet "fleet_tech_classic"
   @path "/classic/1/search"
+  @space "proj-0000000000000001"
   @holder "0x" <> String.duplicate("d", 40)
   @other "0x" <> String.duplicate("e", 40)
 
@@ -45,6 +59,46 @@ defmodule KeyfleetWeb.Live.SearchPageTest do
 
     assert has_element?(view, "#search-matches li", "Hull survey started")
     assert view |> element("#search-matches") |> render() |> count_lines() == 1
+  end
+
+  # Costly failure: a holder never finds the fleet's notebooks from its
+  # search, or finds one whose line opens nowhere.
+  test "a holder finds a notebook by a word of its title or description, its line opening it",
+       %{conn: conn} do
+    @fleet
+    |> Projects.project!(Projects.general(), actor: %Actors.System{})
+    |> Projects.record_space!(@space, actor: %Actors.System{})
+
+    NotebookHubHelpers.serve!(@fleet, %{
+      @space => [
+        NotebookHubHelpers.notebook(
+          1,
+          "Hull survey",
+          "Plates and rivets",
+          ~U[2026-11-01 09:00:00Z]
+        ),
+        NotebookHubHelpers.notebook(
+          2,
+          "Rotor log",
+          "Readings of the <b>hull</b>",
+          ~U[2026-11-02 09:00:00Z]
+        )
+      ]
+    })
+
+    conn = signed_in_as(conn, @holder)
+    survey = Notebooks.notebook_url(@fleet, @space, "nb-0000000000000001")
+    log = Notebooks.notebook_url(@fleet, @space, "nb-0000000000000002")
+
+    {:ok, view, _html} = live(conn, @path <> "?q=survey")
+    assert has_element?(view, ~s(#search-matches a[href="#{survey}"]), "Hull survey")
+    assert has_element?(view, ~s(#search-matches a[href="#{survey}"]), "Notebook")
+
+    {:ok, view, _html} = live(conn, @path <> "?q=readings")
+    assert has_element?(view, ~s(#search-matches a[href="#{log}"]), "Rotor log")
+    # The hub's words are shown as words, never as the page's own markup.
+    refute has_element?(view, "#search-matches b")
+    assert has_element?(view, ~s(#search-matches a[href="#{log}"]), "<b>hull</b>")
   end
 
   test "the bar's box opens the search, and Show more adds the next page",

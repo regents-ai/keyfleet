@@ -36,8 +36,9 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   the agent reads from the newest page again.
 
   A search finds the fleet's posts, direct messages and workspace items whose
-  words match, newest first, as the reader may read each (`Keyfleet.Search`),
-  each with the address of the page it is on. A page's cursor is handed back
+  words match, and the notebooks whose title or description holds the query,
+  newest first, as the reader may read each (`Keyfleet.Search`), each with
+  the address of the page it is on. A page's cursor is handed back
   unchanged to read on from it; it never runs out.
 
   A receipt says whether a request ran, asked by the key the agent sent it

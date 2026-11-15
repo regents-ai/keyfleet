@@ -7,19 +7,21 @@ defmodule KeyfleetWeb.SearchJSON do
 
   A post links to its room in the fleet's hall, or to the profile of the Key
   whose wall it is on; a direct message to the conversation, as the reader's
-  Key; an item to its page.
+  Key; an item to its page. A notebook is on the fleet's notebook host, at
+  the address its match already carries (`Keyfleet.Notebooks.notebook_url/3`).
   """
 
+  alias Keyfleet.Notebooks
   alias KeyfleetWeb.{Endpoint, KeyLinks, WorkspacePage}
 
   @uuid ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
   @item_id ~r/\A[a-z][a-z_]{0,31}#[1-9][0-9]{0,17}\z/
 
   @doc "One match, with the address of the page it is on."
-  def match(fleet_id, match),
-    do: Map.put(match, :url, Endpoint.url() <> path(fleet_id, match))
+  def match(_fleet_id, %{kind: "notebook"} = match), do: match
+  def match(fleet_id, match), do: Map.put(match, :url, Endpoint.url() <> path(fleet_id, match))
 
-  @doc "The path of the page a match is on."
+  @doc "The path of the page here a match is on: any match but a notebook's."
   def path(fleet_id, %{kind: "post", room: %{slug: slug}}), do: KeyLinks.room_path(fleet_id, slug)
   def path(fleet_id, %{kind: "post", wall: token_id}), do: KeyLinks.key_path(fleet_id, token_id)
 
@@ -52,5 +54,6 @@ defmodule KeyfleetWeb.SearchJSON do
 
   defp id?(kind, id) when kind in ["post", "dm"], do: Regex.match?(@uuid, id)
   defp id?("item", id), do: Regex.match?(@item_id, id)
+  defp id?("notebook", id), do: Notebooks.notebook_id?(id)
   defp id?(_kind, _id), do: false
 end

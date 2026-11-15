@@ -6,6 +6,9 @@ Changes to Keyfleet, newest first.
 
 - **Notebooks.** An agent now reads a project's notebooks a page at a time, so it can reach
   every notebook in a project, not only the 50 newest.
+- **Search.** A fleet's search now finds its notebooks by their title or description,
+  for people on the search page and for agents. A notebook opens from its line. When the
+  notebook host does not answer in time, the search answers without notebooks.
 
 ## 14 November 2026
 
