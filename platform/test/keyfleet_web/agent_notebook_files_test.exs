@@ -474,19 +474,17 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
   # Costly failure: one agent's job holds everyone's runs, so its maker
   # deleting it stops and loses the others' runs.
-  test "each agent's runs go in a job of its own, and each lists its own last run", c do
+  test "each agent's runs go in a job of its own", c do
     runs = "#{@api}/#{@notebook}/runs/start"
     first = c.first.subject
     second = c.second.subject
     Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
 
     # Each notebook as the Docs place lists it, with its description and when
-    # it was added, and no run before one is started.
+    # it was added.
     list = json_response(post!(c, c.first, "#{@api}/list", %{}), 200)
     assert ContractSchema.errors(list, "NotebookList") == []
-
-    assert [%{"description" => "", "created_at" => "2026-10-21T09:00:00Z", "last_run" => nil}] =
-             list["notebooks"]
+    assert [%{"description" => "", "created_at" => "2026-10-21T09:00:00Z"}] = list["notebooks"]
 
     started = post!(c, c.first, runs, %{"idempotency_key" => "run-1"})
     assert json_response(started, 200)["run_id"] == run_id(1)
@@ -502,14 +500,80 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     jobs = Agent.get(c.files, & &1["jobs"])
     assert Enum.map(jobs, & &1["created_by"]) == [first, second]
     assert Enum.map(jobs, &length(&1["runs"])) == [2, 1]
+  end
 
-    listed =
-      &(json_response(post!(c, &1, "#{@api}/list", %{}), 200)["notebooks"]
-        |> hd()
-        |> get_in(["last_run", "run_id"]))
+  # Costly failure: an agent builds on a notebook whose last run failed, or
+  # whose result is older than its code, because the list showed only its own
+  # runs; or the list asks the hub about every notebook, one by one.
+  test "a listed notebook's state is its newest kept run page, whoever ran it", c do
+    Agent.update(c.files, &Map.put(&1, "notebook.py", "import marimo"))
 
-    assert listed.(c.first) == run_id(2)
-    assert listed.(c.second) == run_id(3)
+    state = fn agent ->
+      list = json_response(post!(c, agent, "#{@api}/list", %{}), 200)
+      assert ContractSchema.errors(list, "NotebookList") == []
+      [%{"state" => state}] = list["notebooks"]
+      state
+    end
+
+    # Nothing kept is no state, and nor is a page kept from a notebook version,
+    # even one newer than every run's.
+    assert state.(c.first) == nil
+    version = "ver_" <> String.duplicate("0", 26)
+    later = ms(~U[2026-11-15 13:00:00Z])
+    Notebooks.keep_saved_output!(@fleet, @notebook, version, later, "v", false, actor: %System{})
+
+    assert state.(c.first) == nil
+
+    # The first agent's run worked; the second's, after it, failed, and the
+    # second reads it.
+    {mine, read_mine} = run!(c)
+    finish!(c, mine, %{"status" => "succeeded", "finished_at" => "2026-11-15T12:00:00Z"})
+    assert read_mine.()["result_url"]
+
+    theirs =
+      json_response(
+        post!(c, c.second, "#{@api}/#{@notebook}/runs/start", %{"idempotency_key" => "theirs"}),
+        200
+      )["run_id"]
+
+    finish!(c, theirs, %{
+      "status" => "failed",
+      "finished_at" => "2026-11-15T12:05:00Z",
+      "failure" => %{
+        "stage" => "export",
+        "exit_status" => 1,
+        "message" => "Cell 3 raised ValueError",
+        "excerpt" => "ValueError: bad row 7"
+      }
+    })
+
+    assert json_response(get!(c, c.second, "#{@api}/#{@notebook}/runs/#{theirs}"), 200)[
+             "result_url"
+           ]
+
+    # The first agent's list says how the second's run went, from Keyfleet's
+    # copies: it asks the hub for the page of notebooks and nothing else.
+    flush_hub()
+    listed = state.(c.first)
+    assert_received {:hub, "GET", @notebooks, _subject, _query, _body}
+    refute_received {:hub, "GET", @notebooks, _subject, _query, _body}
+    refute_received {:hub, _method, @notebooks <> "/" <> _rest, _subject, _query, _body}
+
+    saved_at = ms(~U[2026-11-15 12:05:00Z])
+
+    assert listed == %{
+             "run_id" => theirs,
+             "worked" => false,
+             "saved_at" => "2026-11-15T12:05:00.000Z",
+             "error" => %{"stage" => "export", "message" => "Cell 3 raised ValueError"},
+             "changed_since" => false,
+             "result_url" => Notebooks.result_url(@fleet, @notebook, theirs, saved_at)
+           }
+
+    # Once the notebook changes after that page, the page is not of it as it is.
+    changed = Map.put(log_notebook(), :updated_at, "2026-11-15T12:06:00Z")
+    Agent.update(c.files, &Map.put(&1, "notebooks", [changed]))
+    assert %{"run_id" => ^theirs, "changed_since" => true} = state.(c.second)
   end
 
   # Costly failure: a project with more notebooks than one answer holds keeps
@@ -519,7 +583,8 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       for n <- 1..101 do
         added = DateTime.add(~U[2026-11-15 09:00:00Z], -n, :minute)
         id = "nb-" <> String.pad_leading(Integer.to_string(n), 16, "0")
-        %{id: id, title: "Note #{n}", description: "", created_at: DateTime.to_iso8601(added)}
+        at = DateTime.to_iso8601(added)
+        %{id: id, title: "Note #{n}", description: "", created_at: at, updated_at: at}
       end
 
     Agent.update(c.files, &Map.put(&1, "notebooks", notebooks))
@@ -542,8 +607,15 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert Enum.flat_map(pages, fn page -> Enum.map(page["notebooks"], & &1["notebook_id"]) end) ==
              Enum.map(notebooks, & &1.id)
 
+    # A cursor no page answered is refused alike here and in a notebook's files.
     refused = post!(c, c.first, "#{@api}/list", %{"cursor" => "after:nb-ffffffffffffffff"})
-    assert json_response(refused, 422)["error"]["code"] == "notebook_file_refused"
+    assert %{"error" => error} = json_response(refused, 422)
+    assert error["code"] == "notebook_cursor_unknown"
+    assert ContractSchema.errors(%{"error" => error}, "NotebookCursorError") == []
+
+    answer_next(c, "GET", "entries", :refuses)
+    files = post!(c, c.first, "#{@api}/#{@notebook}/files/list", %{"cursor" => "made-up"})
+    assert json_response(files, 422) == %{"error" => error}
   end
 
   # Costly failure: an agent handed a task's notebook address takes its proj-…
@@ -787,23 +859,26 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
      fn -> json_response(get!(c, c.first, "#{@api}/#{@notebook}/runs/#{run_id}"), 200) end}
   end
 
-  defp finish!(c, run_id) do
+  # Run `run_id` ends as `ending` says; one with `finished_at` has its page.
+  defp finish!(c, run_id, ending \\ %{"status" => "succeeded"}) do
     Agent.update(c.files, fn kept ->
       %{
         kept
         | "jobs" =>
             Enum.map(
               kept["jobs"],
-              &%{&1 | "runs" => Enum.map(&1["runs"], fn run -> finished(run, run_id) end)}
+              &%{&1 | "runs" => Enum.map(&1["runs"], fn run -> finished(run, run_id, ending) end)}
             )
       }
     end)
   end
 
-  defp finished(%{"run_id" => run_id} = run, run_id), do: %{run | "status" => "succeeded"}
-  defp finished(run, _run_id), do: run
+  defp finished(%{"run_id" => run_id} = run, run_id, ending), do: Map.merge(run, ending)
+  defp finished(run, _run_id, _ending), do: run
 
   defp run_id(n), do: "run_" <> String.pad_leading(Integer.to_string(n), 26, "0")
+
+  defp ms(at), do: DateTime.to_unix(at, :millisecond)
 
   defp get!(c, agent, path) do
     request = SignedAgentHelpers.sign(agent.signer, c.secret, "www.example.com", "GET", path, nil)
@@ -955,9 +1030,8 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       [_job_id, "runs", run_id] ->
         run_answer(conn, Enum.find(all_runs(files), &(&1["run_id"] == run_id)))
 
-      # A run's page; these runs keep none.
-      [_job_id, "runs", _run_id, "html"] ->
-        json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No page"}})
+      [_job_id, "runs", run_id, "html"] ->
+        run_page(conn, Enum.find(all_runs(files), &(&1["run_id"] == run_id)))
     end
   end
 
@@ -982,8 +1056,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          files,
          _body
        ) do
-    log = %{id: @notebook, title: "Log", description: "", created_at: "2026-10-21T09:00:00Z"}
-    notebooks = Agent.get(files, &Map.get(&1, "notebooks", [log]))
+    notebooks = Agent.get(files, &Map.get(&1, "notebooks", [log_notebook()]))
     limit = String.to_integer(conn.query_params["limit"])
 
     case after_cursor(notebooks, conn.query_params["cursor"]) do
@@ -1148,6 +1221,10 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   defp hub_next(:fails, conn, _files, _body),
     do: json(conn, 502, %{success: false, error: %{code: "BAD_GATEWAY", message: "Upstream"}})
 
+  # The hub refuses the request as it asks.
+  defp hub_next(:refuses, conn, _files, _body),
+    do: json(conn, 400, %{success: false, error: %{code: "BAD_REQUEST", message: "Bad cursor"}})
+
   # A member's live session can still save, so the hub changes no file.
   defp hub_next(:paused, conn, _files, _body),
     do:
@@ -1187,6 +1264,31 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     do: json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No run"}})
 
   defp run_answer(conn, run), do: json(conn, 200, %{success: true, data: run})
+
+  # A run's page, made when it finished, as the hub names it; a run that
+  # hasn't finished with one has none.
+  defp run_page(conn, %{"finished_at" => finished_at} = run) do
+    conn
+    |> put_resp_content_type("text/html")
+    |> put_resp_header("x-marimohub-run-id", run["run_id"])
+    |> put_resp_header("x-marimohub-run-status", run["status"])
+    |> put_resp_header("x-marimohub-captured-at", finished_at)
+    |> send_resp(200, "<p>#{run["run_id"]}</p>")
+  end
+
+  defp run_page(conn, _run),
+    do: json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No page"}})
+
+  # The one notebook these tests work in, as the hub lists it: `updated_at`
+  # is when its code, packages or details last changed.
+  defp log_notebook,
+    do: %{
+      id: @notebook,
+      title: "Log",
+      description: "",
+      created_at: "2026-10-21T09:00:00Z",
+      updated_at: "2026-10-21T09:00:00Z"
+    }
 
   defp item(path, content),
     do: %{

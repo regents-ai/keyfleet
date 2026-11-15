@@ -3369,7 +3369,7 @@
       },
       {
         "command": "notebooks list <fleet> <project>",
-        "description": "List a project's notebooks, at most 50 a page, newest first, with the cursor for the next page, or null after the last: each with its id, its title, whether it is locked, the Key whose scratchpad it is (or null) the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none, and the notebook's last good page (its run_id and result_url), or null. Changes nothing.",
+        "description": "List a project's notebooks, at most 50 a page, newest first, with the cursor for the next page, or null after the last: each with its id, its title, whether it is locked, the Key whose scratchpad it is (or null), and its state, the newest page Keyfleet keeps of a background run of it, whoever started the run (its run_id, worked, saved_at, error, changed_since and result_url), or null when it keeps none. Changes nothing.",
         "operation_id": "listNotebooks",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/list",

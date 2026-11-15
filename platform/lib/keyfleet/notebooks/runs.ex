@@ -13,14 +13,20 @@ defmodule Keyfleet.Notebooks.Runs do
   Reading a finished run keeps its page and answers the saved result's
   address (`Keyfleet.Notebooks.result_url/4`), as reading that page on the
   notebook host does (`KeyfleetWeb.Plugs.NotebookGateway`): an address is
-  never handed out for a page Keyfleet hasn't kept. Listing the notebooks
-  keeps no page: it answers each one's newest run in the agent's own "Agent
-  runs" with `result_url` once that run's page has been kept.
+  never handed out for a page Keyfleet hasn't kept.
 
   A run answers the hub's `failure` as the hub gave it to the agent: where a
   failed or timed-out run stopped, and, when the agent started the run or
   wrote the notebook, the last lines of that step's output with secrets
-  removed.
+  removed. Its page's copy records where it stopped and why, never those
+  lines (`Keyfleet.Notebooks.record_run_failure/3`).
+
+  Listing the notebooks keeps no page and asks the hub only for the page of
+  notebooks: each one's `state` is the newest page Keyfleet keeps of a
+  background run of it, whoever started the run, read from Keyfleet's copies
+  alone (`Keyfleet.Notebooks.SavedOutput`): whether that run worked, how it
+  failed if it did, and whether the notebook was changed after the page was
+  made.
 
   A run started here records what it ran from (`Keyfleet.Notebooks.RunSource`):
   the sha256 of the notebook's saved code just before it started, and every
@@ -28,18 +34,17 @@ defmodule Keyfleet.Notebooks.Runs do
   Reading the run answers that `source`; once the run has finished,
   `entry_current`, whether the notebook's saved code is still that code, and
   `bundle_current`, whether every file is still as it was, nil when that
-  can't be told; and while the run hasn't succeeded, `last_succeeded`.
-  Listing the notebooks answers each one's `last_succeeded` too: the newest
-  kept page of a run of the notebook that succeeded, read from Keyfleet's
-  copies alone (`Keyfleet.Notebooks.SavedOutput`), so no number of later
-  failed or waiting runs hides the last good result.
+  can't be told; and while the run hasn't succeeded, `last_succeeded`, the
+  newest kept page of a run of the notebook that succeeded, so no number of
+  later failed or waiting runs hides the last good result.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
   once its page is kept, `result_url`, or `{:ok, page}` for a listing; or
   `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
   have, `:runs_full` when the notebook takes no more runs for now,
-  `:refused` for a listing's cursor the hub doesn't take, or `:unavailable`
-  when the hub didn't answer or the kept pages couldn't be read.
+  `:cursor_unknown` for a listing's cursor the hub doesn't take, or
+  `:unavailable` when the hub didn't answer or the kept pages couldn't be
+  read.
   """
 
   alias Keyfleet.Actors.System
@@ -54,8 +59,6 @@ defmodule Keyfleet.Notebooks.Runs do
   # A finished run has made its page, unless it was cancelled or skipped.
   @with_page ~w(succeeded failed timed_out)
   @finished ["cancelled" | @with_page]
-  # A listing asks after this many notebooks' runs at once.
-  @lookups 4
   # A listing names at most this many notebooks a page.
   @page 50
 
@@ -63,10 +66,10 @@ defmodule Keyfleet.Notebooks.Runs do
   A page of the fleet's notebooks, newest first, as `subject`, from `cursor`,
   or from the newest when it is nil: `notebooks`, each with its title,
   description and when it was added, as the Docs place lists them; its
-  address (`Keyfleet.Notebooks.notebook_url/3`); `subject`'s newest run
-  there, or nil when they have started none; and its last good page. Beside
-  them, the `cursor` that names the next page, or nil after the last, and
-  `has_more`, whether there is one.
+  address (`Keyfleet.Notebooks.notebook_url/3`); and its `state`, the newest
+  page Keyfleet keeps of a background run of it, whoever started the run, or
+  nil when it keeps none. Beside them, the `cursor` that names the next page,
+  or nil after the last, and `has_more`, whether there is one.
   """
   def list(fleet_id, subject, project_id, cursor) do
     params = Enum.reject([cursor: cursor, limit: @page], &is_nil(elem(&1, 1)))
@@ -77,30 +80,23 @@ defmodule Keyfleet.Notebooks.Runs do
              params: params
            )
            |> page_answer(),
-         {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks),
-         {:ok, result_urls} <- result_urls(fleet_id, runs),
-         {:ok, good} <- last_good_pages(fleet_id, Enum.map(notebooks, & &1["id"])) do
+         {:ok, pages} <- newest_run_pages(fleet_id, Enum.map(notebooks, & &1["id"])) do
       locks = Notebooks.locks(fleet_id)
       next = page["next_cursor"]
 
       {:ok,
        %{
-         notebooks:
-           Enum.zip_with(
-             notebooks,
-             runs,
-             &listing(&1, &2, fleet_id, project_id, result_urls, good, locks)
-           ),
+         notebooks: Enum.map(notebooks, &listing(&1, fleet_id, project_id, pages, locks)),
          cursor: next,
          has_more: next != nil
        }}
     end
   end
 
-  # The hub refuses a cursor it never answered, as it refuses one of a
-  # notebook's files (`Keyfleet.Notebooks.Files.list/6`).
+  # The listing asks only for the cursor it is given, so a refusal is of the
+  # cursor: one the hub never answered.
   defp page_answer({:ok, %Req.Response{status: status}}) when status in [400, 422],
-    do: {:error, :refused}
+    do: {:error, :cursor_unknown}
 
   defp page_answer(response), do: answer(response, 200)
 
@@ -205,48 +201,9 @@ defmodule Keyfleet.Notebooks.Runs do
     end
   end
 
-  # Each notebook's newest run of the agent's, in the notebooks' order. A notebook the
-  # hub doesn't answer for leaves the whole listing unanswered.
-  defp last_runs(fleet_id, subject, project_id, notebooks) do
-    answers =
-      Task.async_stream(
-        notebooks,
-        &last_run(fleet_id, subject, notebook_path(project_id, &1["id"])),
-        max_concurrency: @lookups,
-        # Each asks the hub at most twice.
-        timeout: 2 * Notebooks.config()[:hub_timeout_ms],
-        on_timeout: :kill_task
-      )
-
-    with {:ok, runs} <- Enum.reduce_while(answers, {:ok, []}, &gather/2),
-         do: {:ok, Enum.reverse(runs)}
-  end
-
-  defp gather({:ok, {:ok, run}}, {:ok, runs}), do: {:cont, {:ok, [run | runs]}}
-  defp gather(_unanswered, _runs), do: {:halt, {:error, :unavailable}}
-
-  defp last_run(fleet_id, subject, notebook) do
-    with {:ok, %{"items" => jobs}} <-
-           fleet_id
-           |> request(subject, :get, notebook <> "/jobs", params: [limit: @jobs])
-           |> answer(200) do
-      case own_job(jobs, subject) do
-        %{"id" => id} -> newest_run(fleet_id, subject, "#{notebook}/jobs/#{segment(id)}/runs")
-        nil -> {:ok, nil}
-      end
-    end
-  end
-
-  # The hub lists a job's runs newest first.
-  defp newest_run(fleet_id, subject, runs) do
-    with {:ok, %{"items" => items}} <-
-           fleet_id |> request(subject, :get, runs, params: [limit: 1]) |> answer(200),
-         do: {:ok, List.first(items)}
-  end
-
-  # The listed runs' kept pages, read at once, by notebook and run. Of two
-  # copies of one run's page, the newer is its saved result. A failed read is
-  # saved with the site's errors (`Keyfleet.Notebooks.RecordsDownError`).
+  # The runs' kept pages, read at once, by notebook and run. Of two copies of
+  # one run's page, the newer is its saved result. A failed read is saved
+  # with the site's errors (`Keyfleet.Notebooks.RecordsDownError`).
   defp result_urls(fleet_id, runs) do
     run_ids = for %{"run_id" => run_id} <- runs, do: run_id
 
@@ -296,8 +253,25 @@ defmodule Keyfleet.Notebooks.Runs do
     end
   end
 
+  # The newest kept page of each of `notebook_ids`' background runs, by
+  # notebook. A failed read is saved with the site's errors.
+  defp newest_run_pages(fleet_id, notebook_ids) do
+    case Notebooks.newest_run_outputs(fleet_id, notebook_ids, actor: %System{}) do
+      {:ok, kept} ->
+        {:ok, Map.new(kept, &{&1.notebook_id, &1})}
+
+      {:error, error} ->
+        RecordsDownError.report(
+          "The newest run pages of #{fleet_id}'s notebooks could not be read: " <>
+            inspect(error.__struct__)
+        )
+
+        {:error, :unavailable}
+    end
+  end
+
   # A notebook with nothing kept of it is locked and nobody's scratchpad.
-  defp listing(notebook, run, fleet_id, project_id, result_urls, good, locks) do
+  defp listing(notebook, fleet_id, project_id, pages, locks) do
     lock = Map.get(locks, notebook["id"], %{locked: true, key: nil})
 
     %{
@@ -308,15 +282,25 @@ defmodule Keyfleet.Notebooks.Runs do
       locked: lock.locked,
       scratchpad_key: lock.key,
       notebook_url: Notebooks.notebook_url(fleet_id, project_id, notebook["id"]),
-      last_run:
-        if run do
-          %{
-            run_id: run["run_id"],
-            status: run["status"],
-            result_url: result_urls[{notebook["id"], run["run_id"]}]
-          }
-        end,
-      last_succeeded: good[notebook["id"]]
+      state: state(pages[notebook["id"]], notebook, fleet_id)
+    }
+  end
+
+  # How the notebook's newest kept run page went, and whether the notebook
+  # was changed after the hub made it: the hub moves a notebook's
+  # `updated_at` when its code, packages or details change.
+  defp state(nil, _notebook, _fleet_id), do: nil
+
+  defp state(page, notebook, fleet_id) do
+    {:ok, updated_at, _offset} = DateTime.from_iso8601(notebook["updated_at"])
+
+    %{
+      run_id: page.source_id,
+      worked: page.succeeded,
+      saved_at: DateTime.from_unix!(page.saved_at, :millisecond),
+      error: page.failure,
+      changed_since: DateTime.to_unix(updated_at, :millisecond) > page.saved_at,
+      result_url: Notebooks.result_url(fleet_id, page.notebook_id, page.source_id, page.saved_at)
     }
   end
 
@@ -443,14 +427,17 @@ defmodule Keyfleet.Notebooks.Runs do
     end)
   end
 
-  # A finished run's kept page, kept now if it isn't yet; nil while the run
-  # has no page.
-  defp result_url(fleet_id, subject, notebook_id, run_id, %{"status" => status}, run_path)
+  # A finished run's kept page, kept now if it isn't yet, with how the run
+  # failed if it did; nil while the run has no page.
+  defp result_url(fleet_id, subject, notebook_id, run_id, %{"status" => status} = run, run_path)
        when status in @with_page do
     with {:ok, kept} <- result_urls(fleet_id, [%{"run_id" => run_id}]) do
-      {:ok,
-       kept[{notebook_id, run_id}] ||
-         keep_page(fleet_id, subject, notebook_id, run_id, run_path <> "/html")}
+      url =
+        kept[{notebook_id, run_id}] ||
+          keep_page(fleet_id, subject, notebook_id, run_id, run_path <> "/html")
+
+      if url, do: Notebooks.record_run_failure(fleet_id, run_id, run["failure"])
+      {:ok, url}
     end
   end
 

@@ -10222,9 +10222,25 @@ removes or renames a field, route or code, or makes an input required.
   a notebook's files' list does: `POST
   /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/notebooks/list` with `{}` answers at most
   50 notebooks, newest first, with `cursor`, the hub's cursor for the next page or `null`
-  after the last, and `has_more`; `{"cursor"}` reads the next page. Each notebook's own
-  fields are unchanged. A cursor the hub never answered is refused 422
-  `notebook_file_refused`, as a notebook's files' list refuses one.
+  after the last, and `has_more`; `{"cursor"}` reads the next page. A cursor the hub
+  never answered is refused 422 `notebook_cursor_unknown`, and so is one a notebook's
+  files' list never answered, in place of `notebook_file_refused`.
+- Each listed notebook answers `state` in place of `last_run` and `last_succeeded`: the
+  newest page Keyfleet keeps of a background run of it, whoever started the run, or
+  `null`, as `{run_id, worked, saved_at, error, changed_since, result_url}`. It is read
+  from Keyfleet's own copies alone, so the list asks the hub only for the page of
+  notebooks; before, it asked for every notebook's jobs and their runs. `error` is where a
+  run that didn't succeed stopped, `{stage, message}`, never the output excerpt the hub
+  shows only to the run's starter and the notebook's author; `changed_since` compares the
+  hub's `updated_at` for the notebook, which moves when its code, packages or details
+  change, with when the page was made.
+- A kept copy records how its run failed (`notebook_saved_outputs.failure`, a nullable
+  map of `stage` and `message`, migration `20261115082252`, which only adds the column).
+  Reading a finished run (`notebooks_result`) records it whether the page was kept just
+  now or before; opening a run's page through the notebook host reads the run's record
+  once the page is sent, for a run that didn't succeed. A failure once recorded is never
+  replaced. Copies kept before this answer `error` `null` beside `worked` `false` until
+  someone reads that run again.
 - The list moved from `GET .../notebooks` to `POST .../notebooks/list`: a signed request
   here never carries a query string, so the cursor goes in a signed body, like every
   other paged read with inputs. `GET .../notebooks` is gone.
@@ -10233,6 +10249,9 @@ removes or renames a field, route or code, or makes an input required.
   `cli/COMMANDS.md`, the agent guides, the feature map and the verification list follow.
   The files test's stand-in hub pages its notebooks as the hub does, and a new test
   reads 101 notebooks as pages of 50, 50 and 1 with their cursors, then a cursor no page
-  answered.
+  answered. New tests cover `state`: none kept, the newest of several runs' pages
+  including another agent's, a failure read by one agent shown to another without its
+  excerpt, `changed_since` both ways, a version's page never a state, and no request to
+  the hub for any one notebook.
 - regents-cli's bundled command list still calls `GET .../notebooks` until it takes this
   descriptor.

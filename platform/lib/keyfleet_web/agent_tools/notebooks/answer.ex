@@ -2,12 +2,12 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   @moduledoc """
   A fleet's notebooks and their runs as an agent uses them, the same over its
   signed requests and as the Claude connector's tools
-  (`KeyfleetWeb.AgentTools.Notebooks`): list the notebooks, each with the last
-  run an agent started there (`:list`), start a background run of a
-  notebook's saved code (`:run`), then read it until it has finished and its
-  saved result has an address the workspace can cite (`:result`,
-  `Keyfleet.Notebooks.Runs`); make a notebook (`:create`), then list, read,
-  add and write its files (`:files`, `:read_file`, `:add_file`,
+  (`KeyfleetWeb.AgentTools.Notebooks`): list the notebooks, each with the
+  newest kept page of a run of it, whoever started it (`:list`), start a
+  background run of a notebook's saved code (`:run`), then read it until it
+  has finished and its saved result has an address the workspace can cite
+  (`:result`, `Keyfleet.Notebooks.Runs`); make a notebook (`:create`), then
+  list, read, add and write its files (`:files`, `:read_file`, `:add_file`,
   `:write_file`, `Keyfleet.Notebooks.Files`), each in the space of the
   project the address names; lock or unlock a notebook it made (`:lock`),
   and list and bring back the project's daily copies of its notebooks
@@ -72,6 +72,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
       {:error, :writes_paused} -> refusal(409, "notebook_writes_paused")
       {:error, {:stale_revision, current}} -> stale(current)
       {:error, :refused} -> refusal(422, "notebook_file_refused")
+      {:error, :cursor_unknown} -> refusal(422, "notebook_cursor_unknown")
       {:error, :files_full} -> refusal(422, "notebook_files_full")
       {:error, :too_large} -> refusal(422, "notebook_file_too_large")
       {:error, :not_text} -> refusal(422, "notebook_file_not_text")

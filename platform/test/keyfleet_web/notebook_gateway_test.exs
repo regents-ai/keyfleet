@@ -264,6 +264,37 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
            )
   end
 
+  # Costly failure: a failed run's page opened here is kept without how the
+  # run failed, so every agent's notebook list shows it failed for no reason;
+  # or its output, which only its starter and author may read, is kept for all.
+  test "a failed run's page kept here records where the run stopped, and keeps it", c do
+    cookie = enter!(c.holder)
+    jobs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000003/jobs/job-1/runs/"
+    failed = jobs <> "run_" <> String.duplicate("1", 26)
+    worked = jobs <> "run_" <> String.duplicate("2", 26)
+
+    opened = send_notebook(:get, failed <> "/html", cookie, "")
+    assert opened.status == 200
+    assert [_address] = get_resp_header(opened, "link")
+    assert_received {:hub, "GET", ^failed, "u_" <> _, _body}
+
+    stopped = %{stage: "export", message: "Cell 3 raised ValueError"}
+    assert kept_failure() == stopped
+
+    # Neither a failure recorded after it nor keeping the page again replaces it.
+    Notebooks.record_run_failure(@fleet, "run_" <> String.duplicate("1", 26), %{
+      "stage" => "timeout",
+      "message" => "later"
+    })
+
+    assert send_notebook(:get, failed <> "/html", cookie, "").status == 200
+    assert kept_failure() == stopped
+
+    # A run that worked asks for no record.
+    assert send_notebook(:get, worked <> "/html", cookie, "").status == 200
+    refute_received {:hub, "GET", ^worked, _subject, _body}
+  end
+
   # Costly failure: one member deletes, stops or writes over another's
   # notebook work, which the group can no longer use.
   test "members open, copy and run each other's work, and only its maker removes or stops it",
@@ -1129,6 +1160,40 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   defp notebook_answer(conn, _holder, ["nb-0000000000000001", "jobs", _job, "runs", _run]),
     do: json(conn, 200, %{success: true, data: %{triggered_by: "u_other"}})
 
+  # Notebook nb-0000000000000003's runs: run_1… failed, run_2… worked an hour
+  # before, each with its page.
+  defp notebook_answer(conn, _holder, [
+         "nb-0000000000000003",
+         "jobs",
+         _job,
+         "runs",
+         run_id,
+         "html"
+       ]) do
+    {status, made} =
+      if String.starts_with?(run_id, "run_1"),
+        do: {"failed", "2026-11-15T12:00:00Z"},
+        else: {"succeeded", "2026-11-15T11:00:00Z"}
+
+    conn
+    |> put_resp_content_type("text/html")
+    |> put_resp_header("x-marimohub-run-id", run_id)
+    |> put_resp_header("x-marimohub-run-status", status)
+    |> put_resp_header("x-marimohub-captured-at", made)
+    |> send_resp(200, "<p>#{run_id}</p>")
+  end
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000003", "jobs", _job, "runs", run_id]) do
+    failure = %{
+      stage: "export",
+      exit_status: 1,
+      message: "Cell 3 raised ValueError",
+      excerpt: "ValueError: bad row 7"
+    }
+
+    json(conn, 200, %{success: true, data: %{run_id: run_id, status: "failed", failure: failure}})
+  end
+
   defp notebook_answer(conn, _holder, [_notebook, "workspace", "entries"]) do
     items = entries(fetch_query_params(conn).query_params["path"])
     json(conn, 200, %{success: true, data: %{items: items}})
@@ -1146,6 +1211,14 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       conn |> put_resp_content_type("application/json") |> send_resp(status, Jason.encode!(body))
 
   defp subject(pass), do: JOSE.JWT.peek_payload(pass).fields["sub"]
+
+  # How the newest kept run page of nb-0000000000000003 says its run failed.
+  defp kept_failure do
+    {:ok, [kept]} =
+      Notebooks.newest_run_outputs(@fleet, ["nb-0000000000000003"], actor: %System{})
+
+    kept.failure
+  end
 
   defp server(answer) do
     pid =

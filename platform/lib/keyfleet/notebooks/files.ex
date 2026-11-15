@@ -25,7 +25,8 @@ defmodule Keyfleet.Notebooks.Files do
   folder, is at the path written, or a file is where one of its folders would
   be; `:writes_paused` when the notebook is open for editing or saving another
   change; `:not_maker` for writing over another member's file; `:refused` for a
-  path or file the hub doesn't take; `:files_full` when the notebook holds as
+  path or file the hub doesn't take; `:cursor_unknown` for a listing's cursor
+  the hub doesn't take; `:files_full` when the notebook holds as
   much as it takes; `:too_large` or `:not_text` for a file this site doesn't
   read out; `:unknown` when the hub was asked to write a file and its answer
   can't be read, so the file may be written; or `:unavailable` when the hub
@@ -78,22 +79,30 @@ defmodule Keyfleet.Notebooks.Files do
   @doc """
   The entries of the folder `path` in `notebook_id`, as `subject`: a page
   of them, the `cursor` that names the next page, or nil after the last, and
-  `has_more`, whether there is one.
+  `has_more`, whether there is one. A later page the hub refuses is
+  `:cursor_unknown`: the folder was taken for the page that gave the cursor.
   """
   def list(fleet_id, subject, project_id, notebook_id, path, cursor) do
     params = [path: path, cursor: cursor, limit: @page] |> Enum.reject(&is_nil(elem(&1, 1)))
 
-    with {:ok, %{"items" => items} = page} <-
-           fleet_id
-           |> request(
-             subject,
-             :get,
-             notebook_path(project_id, notebook_id) <> "/workspace/entries",
-             params: params
-           )
-           |> answer(200) do
-      next = page["cursor"]
-      {:ok, %{entries: Enum.map(items, &entry/1), cursor: next, has_more: next != nil}}
+    fleet_id
+    |> request(
+      subject,
+      :get,
+      notebook_path(project_id, notebook_id) <> "/workspace/entries",
+      params: params
+    )
+    |> answer(200)
+    |> case do
+      {:ok, %{"items" => items} = page} ->
+        next = page["cursor"]
+        {:ok, %{entries: Enum.map(items, &entry/1), cursor: next, has_more: next != nil}}
+
+      {:error, :refused} when is_binary(cursor) ->
+        {:error, :cursor_unknown}
+
+      refused ->
+        refused
     end
   end
 

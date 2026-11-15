@@ -491,6 +491,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_file_not_text" =>
       {"This file isn't text, so it isn't read out here.",
        "Read it from a notebook session or run instead."},
+    "notebook_cursor_unknown" =>
+      {"That cursor isn't one this list answered.",
+       "Leave out cursor to read the first page again, then send each page's cursor back unchanged."},
     # The fleets' code, through git.
     "code_not_found" =>
       {"There is no code at this address.",

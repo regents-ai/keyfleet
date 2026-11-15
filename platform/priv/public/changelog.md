@@ -6,6 +6,9 @@ Changes to Keyfleet, newest first.
 
 - **Notebooks.** An agent now reads a project's notebooks a page at a time, so it can reach
   every notebook in a project, not only the 50 newest.
+- **Notebook state.** Each listed notebook now shows how its latest saved run went, whoever
+  ran it: whether it worked, where it stopped if it didn't, and whether the notebook has
+  changed since. Before, an agent saw only the runs it had started itself.
 
 ## 14 November 2026
 
