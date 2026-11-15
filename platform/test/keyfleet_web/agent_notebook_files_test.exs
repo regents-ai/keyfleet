@@ -415,6 +415,35 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert without_request_id(over_mcp["error"]) == without_request_id(http["error"])
   end
 
+  # A file's text is counted in bytes, as the tool describes it, and text past
+  # that is told how long it may be and how long it is.
+  test "through /mcp a file's text is at most 20,480 bytes, and a longer one is told its length",
+       c do
+    oauth = Application.fetch_env!(:keyfleet, Keyfleet.OAuth)
+    on_exit(fn -> Application.put_env(:keyfleet, Keyfleet.OAuth, oauth) end)
+    Application.put_env(:keyfleet, Keyfleet.OAuth, Keyword.put(oauth, :enabled?, true))
+
+    where = %{"fleet_id" => @fleet, "project" => "general", "notebook_id" => @notebook}
+
+    add =
+      &mcp!(c, c.first, "notebooks_add_file", Map.merge(where, %{"path" => &1, "content" => &2}))
+
+    # Two bytes a character: 10,240 of them fill the limit.
+    longest = String.duplicate("é", 10_240)
+    assert byte_size(longest) == 20_480
+    added = Jason.decode!(add.("log/longest.md", longest).resp_body)["result"]
+    assert %{"isError" => false, "structuredContent" => %{"path" => "/log/longest.md"}} = added
+
+    for content <- [longest <> "é", String.duplicate("a", 45_568)] do
+      refused = Jason.decode!(add.("log/over.md", content).resp_body)["result"]
+      assert %{"isError" => true, "content" => [%{"text" => text}]} = refused
+      error = Jason.decode!(text)["error"]
+      assert error["code"] == "invalid_request"
+      assert error["hint"] =~ "20480"
+      assert error["hint"] =~ "#{byte_size(content)}"
+    end
+  end
+
   test "a notebook made for a goal carries the goal's tag, which lists it on the goal's page",
        c do
     made = %{"title" => "Boat count", "code" => "import marimo", "goal" => "goal#19"}
@@ -508,6 +537,76 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     files = "/api/v1/agent/fleets/#{@fleet}/projects/#{project}/notebooks/#{notebook}/files/"
     read = json_response(post!(c, c.first, files <> "read", %{"path" => "notebook.py"}), 200)
     assert read["content"] == "import marimo"
+  end
+
+  # Costly failure: an agent handed the Atlas's or the workspace's link to a
+  # notebook, which opens it through this site, is told the address names
+  # nothing and picks the ids out by hand.
+  test "a link that opens a notebook here reads as that notebook, or as its saved page", c do
+    site = String.replace_prefix(KeyfleetWeb.Endpoint.url(), "http://", "https://")
+    open = &"#{site}/fleets/#{&1}/notebooks/open?#{URI.encode_query(to: &2)}"
+    resolve = &post!(c, c.first, "/api/v1/agent/links/resolve", %{"url" => &1})
+
+    link = json_response(resolve.(open.(@fleet, Notebooks.notebook_path(@space, @notebook))), 200)
+    assert ContractSchema.errors(link, "Link") == []
+
+    assert %{"kind" => "notebook", "read" => %{"tool" => "notebooks_files", "input" => input}} =
+             link
+
+    assert input == %{"fleet_id" => @fleet, "project" => "general", "notebook_id" => @notebook}
+
+    run_id = "run_" <> String.duplicate("0", 26)
+    saved = Notebooks.result_path(@notebook, run_id, 1_763_000_000_000)
+
+    assert %{"kind" => "notebook_result", "names" => names} =
+             json_response(resolve.(open.(@fleet, saved)), 200)
+
+    assert %{"notebook_id" => @notebook, "run_id" => ^run_id} = names
+
+    for unknown <- [open.(@fleet, "/"), open.("fleet_tech_classic", saved)] do
+      assert json_response(resolve.(unknown), 422)["error"]["code"] == "link_unknown"
+    end
+  end
+
+  # Costly failure: an agent puts the proj-… id from a notebook's address where
+  # the project's name goes and is refused on some notebook route without
+  # being told the id isn't a project's name or how to read the address.
+  test "every notebook route given a notebook address's proj- id refuses it as no project", c do
+    by_id = "/api/v1/agent/fleets/#{@fleet}/projects/#{@space}/notebooks"
+    notebook = "#{by_id}/#{@notebook}"
+    file = %{"path" => "notebook.py", "content" => "import marimo"}
+
+    calls = [
+      {:get, by_id},
+      {:post, "#{by_id}/create",
+       %{"title" => "Log", "code" => "import marimo", "idempotency_key" => "nb-1"}},
+      {:post, "#{notebook}/files/list", %{}},
+      {:post, "#{notebook}/files/read", %{"path" => "notebook.py"}},
+      {:post, "#{notebook}/files/add", file},
+      {:post, "#{notebook}/files/write", Map.put(file, "expected_revision", "r1")},
+      {:post, "#{notebook}/lock", %{"locked" => false}},
+      {:get, "#{by_id}/copies"},
+      {:post, "#{by_id}/copies/#{Ecto.UUID.generate()}/restore", %{}},
+      {:post, "#{notebook}/runs/start", %{"idempotency_key" => "run-1"}},
+      {:get, "#{notebook}/runs/#{run_id(1)}"}
+    ]
+
+    hint = KeyfleetWeb.Refusal.body("project_unknown").error.hint
+
+    for call <- calls do
+      answer =
+        case call do
+          {:get, path} -> get!(c, c.first, path)
+          {:post, path, body} -> post!(c, c.first, path, body)
+        end
+
+      assert %{"code" => "project_unknown", "hint" => ^hint, "details" => details} =
+               json_response(answer, 404)["error"]
+
+      assert details["project"] == @space
+    end
+
+    refute_received {:hub, _method, @notebooks <> _rest, _subject, _query, _body}
   end
 
   describe "a finished run's files" do

@@ -21,6 +21,8 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
   @notebook [min_length: 19, max_length: 19, trim?: false]
   @path [max_length: 512, trim?: false]
   @once [max_length: 128, trim?: false]
+  # A notebook's code and a file's text, in bytes, as the tools describe them.
+  @text [max_length: 20_480, length_count: :bytes, trim?: false]
 
   actions do
     action :list, :map do
@@ -57,7 +59,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :project, :string, allow_nil?: false, constraints: @project
       argument :title, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
-      argument :code, :string, allow_nil?: false, constraints: [max_length: 20_480, trim?: false]
+      argument :code, :string, allow_nil?: false, constraints: @text
       argument :description, :string, constraints: [max_length: 1000, trim?: false]
       argument :goal, :string, constraints: [match: ~r/\Agoal#[1-9][0-9]{0,9}\z/]
       argument :folder, :string, constraints: [match: ~r/\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/]
@@ -90,11 +92,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       argument :project, :string, allow_nil?: false, constraints: @project
       argument :notebook_id, :string, allow_nil?: false, constraints: @notebook
       argument :path, :string, allow_nil?: false, constraints: @path
-
-      argument :content, :string,
-        allow_nil?: false,
-        constraints: [max_length: 20_480, trim?: false, allow_empty?: true]
-
+      argument :content, :string, allow_nil?: false, constraints: [allow_empty?: true] ++ @text
       run {Run, tool: "notebooks_add_file"}
     end
 
@@ -104,10 +102,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks do
       argument :project, :string, allow_nil?: false, constraints: @project
       argument :notebook_id, :string, allow_nil?: false, constraints: @notebook
       argument :path, :string, allow_nil?: false, constraints: @path
-
-      argument :content, :string,
-        allow_nil?: false,
-        constraints: [max_length: 20_480, trim?: false, allow_empty?: true]
+      argument :content, :string, allow_nil?: false, constraints: [allow_empty?: true] ++ @text
 
       argument :expected_revision, :string,
         allow_nil?: false,

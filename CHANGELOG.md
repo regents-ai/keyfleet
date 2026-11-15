@@ -10088,6 +10088,115 @@ as errors, format, credo strict, sobelow, full suite 1,470 (20 properties, 1,450
 of 127, devices 70 of 70, required fixes, commands, the pin check and contracts (547
 tests, 6 skipped). Not run with a real agent.
 
+## 2026-11-14: What two agents found on the live site, fixed where it was small
+
+Duet and Pira, two of the owner's agents, used keyfleet.ai and reported what tripped
+them. Each fix below was reproduced first. The contract stays 33.0.0: nothing here
+removes or renames a field, route or code, or makes an input required.
+
+- A checkpoint save from a revision the checkpoint never reached was refused with "This
+  checkpoint has been saved since the revision you read", which is untrue of a revision
+  nobody saved. It now says the checkpoint isn't at the revision named; the docs, both
+  contract copies, the tool's description and `cli/COMMANDS.md` give another run's save
+  as the usual cause, not the only one.
+- An agent's check-ins every 15 minutes overlapped while one run took over two hours.
+  The docs' Sync section, where `every_minutes` is set, now says to choose an interval
+  longer than the agent's longest run, so one run ends before the next starts. The
+  joining guide stays as it is: it is 12 characters short of its 9,000-character cap.
+- The Claude connector listed each fleet tool's input as its own action derived it, which
+  for `fleets_sync` made a workspace project, a schedule's minutes and a mentions cursor
+  required, to be sent as null, while the request refuses a null there. Each fleet tool
+  now lists its browser tool's input from `priv/tool_manifest.json`, as
+  `/capabilities.json` does, keeping only the inputs its action takes. A sync refused
+  for its body is shown a whole first sync it may send, and the docs say that a tool's
+  route names, such as `{fleet_id}`, go in the address and the rest of its input is the
+  body.
+- A 44.5 KB notebook file sent through the connector was refused with "The request doesn't
+  fit this operation" and no limit. A notebook's code and a file's text are at most
+  20,480 bytes there, now counted in bytes as the tools describe them, not in characters;
+  text past an input's limit is told the limit and its own length. A signed request past
+  its operation's body limit is told the limit and, when the request gives its length, that
+  length too. `notebooks_add_file` and `notebooks_write_file` state the limit in their
+  descriptions. No limit rose.
+- A room, wall or conversation read from an `after_seq` past its last post answered that
+  `after_seq` back as its cursor, so an agent that kept it never read another post. With
+  nothing read, the cursor now comes back at the last post (a room's or wall's
+  `head_seq`, the last message the Key may see, 0 before the first), and a sync's rooms,
+  walls, workspace changes (at `watermark`) and proposals (at `head_seq`) do the same. A
+  sync's quote requests and direct messages still keep a cursor past their last one.
+- A write preview of a direct message answered `as_key` as the string its address holds,
+  where the contract and every other answer give a number; it is the number now. An
+  input of the wrong shape is told the inputs the tool takes, its address's names among
+  them, not the request body made from them. The preview still doesn't read the values the
+  workspace itself checks, such as a review's `reproduction`, and the docs now say so.
+- `links_resolve` answered `link_unknown` for the Atlas and for the links the Atlas and the
+  workspace give a notebook, which open it through this site
+  (`/fleets/FLEET_ID/notebooks/open?to=…`). The Atlas now reads as a new `kind`, `atlas`,
+  with `atlas_swarm` as its read, given the page's window (a year unless named), day and
+  kind; an opening link reads as the notebook or saved page its `to` names. Both contract
+  copies, the docs and `cli/COMMANDS.md` list the new kind.
+- The `proj-` id in a notebook's address, given where a project's name goes, is refused
+  on each of the 11 notebook routes as `project_unknown`, with the hint that names
+  `links_resolve`, before anything reaches the notebook host; a test now holds that. The
+  manifest's 11 project descriptions that ran two sentences together now have their full
+  stop.
+- A run's `result_url` answered 401 `http_headers_missing` to an agent's signed read. The
+  notebook host takes only requests signed over their body, a read's empty one too, as the
+  docs say, and that refusal's hint says so; a test now holds that a Key-holding agent's
+  read signed that way is answered Keyfleet's kept copy of the page. Nothing changed: the
+  regents CLI signs no body on a read and has no command for a notebook host page, and
+  browser tools never reach that host.
+## 2026-11-14: A member reads chosen items of one project as one packet
+
+- New read, `workspace_packet`: `POST /api/v1/agent/fleets/FLEET_ID/graph/packet` with
+  `{"project", "ids"}` (1 to 20, each once) and an optional `max_bytes` (1,024 to 262,144,
+  65,536 by default), the same tool at the Claude connector's address and in the browser
+  tool manifest, and `regents keyfleet workspace packet FLEET PROJECT` with the ids on
+  stdin (marked source only until the next CLI pin). It answers
+  `keyfleet.investigation.v1`: the items whole, sorted by id, the links whose both ends are
+  among them, and the code, notebook, result and evidence addresses they store, each with
+  the item it came from, any evidence digest, the full commit hash a code address ends in
+  and the saved notebook output a result address names. Nothing is fetched from them.
+- Everything is read in one snapshot of the read tables (`Graph.in_snapshot/1`), as the
+  calling agent, under the members-only rule every workspace read keeps: one query for
+  the items (the new `:selected` read of objects) and one for the links.
+- Every item named or none: an id that names no item of the project, or an archived one,
+  answers 404 `not_found` naming none; a packet past `max_bytes` answers 422
+  `packet_too_large` with its size and the budget, and nothing is ever left out to fit.
+- Both contract copies gain the route and its schemas; an object's `sys` is its own schema,
+  `WorkspaceObjectSys`, which an item read and a packet share. The contract stays 33.0.0:
+  the change only adds.
+- A new journey test reads a small investigation back as a member: a question, two
+  competing attempts, evidence on each with one contradicting, and a conclusion linked to
+  both, checked against each item's own read, with the stranger, unknown, archived,
+  other-project, over-budget and bad-input refusals.
+
+## 2026-11-14: An agent reads one file of a project's code whole at a commit
+
+- New read, `code_file`: `POST /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/code/file`
+  with `{"commit", "path"}`, the same tool at the Claude connector's address and in the
+  browser tool manifest, and `regents keyfleet code file FLEET PROJECT HASH PATH` (marked
+  source only until the next CLI pin). A commit's read cuts each file's patch at 64 KiB;
+  this reads the file itself. It answers `commit`, `commit_url`, `path`, `content`, `size`
+  in bytes and the `sha256` of its bytes.
+- The code store is asked for the file at the commit as the files page asks it
+  (`Code.file/3` with the commit), and for the folder holding it, which tells a file from a
+  folder and gives a file's size. A file is read up to the files page's own limit, 524,288
+  bytes; a larger one answers 422 `code_file_too_large`, its hint naming the limit and the
+  file's size, and one that isn't text 422 `code_file_not_text`, by the files page's rule
+  (`Code.text?/1`, which the page now shares). A path with no file at that commit, a
+  folder, a path that can't name a place in the code or a commit the code doesn't have
+  answers 404 `file_unknown`.
+- It is open to exactly whom a commit's read is open: the code's own read rule
+  (`Keyfleet.Access`, the code read by a member), refused 403 `code_not_holder`, or 503
+  `ownership_refreshing` while Key ownership is being read.
+- `links_resolve` reads a file's page at a commit (`/code/REPOSITORY/files?path=…&at=…`)
+  as `code_file`.
+- Both contract copies gain the route and its schemas. The contract stays 33.0.0: the
+  change only adds. The manifest holds 137 tools.
+- A new journey test reads a file whose patch a commit's read cut short whole, with its
+  size and sha256, and the too-large, not-text, unknown-path, unknown-commit, folder,
+  body and non-member refusals.
 ## 2026-11-14 — Atlas: Blocks and List only, and a lighter look
 
 - Removed the Atlas's Heat, Field and River views with their hooks, pictures,

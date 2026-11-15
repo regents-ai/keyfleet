@@ -356,7 +356,8 @@ defmodule KeyfleetWeb.Router do
               read_ttl_ms: 0,
               cache_scope: "private",
               allowed_origins: &is_binary/1,
-              tool_argument_transformer: &KeyfleetWeb.ToolErrors.check_input/3
+              tool_argument_transformer: &KeyfleetWeb.ToolErrors.check_input/3,
+              tool_definition_transformer: &KeyfleetWeb.ToolSchemas.definition/3
             ],
             log: false
   end
@@ -461,6 +462,8 @@ defmodule KeyfleetWeb.Router do
         AgentCodeController,
         :commit
 
+    post "/fleets/:fleet_id/projects/:project/code/file", AgentCodeController, :file
+
     get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
 
     post "/fleets/:fleet_id/projects/:project/notebooks/create",
@@ -555,6 +558,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/view", AgentGraphController, :view
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes
+    post "/fleets/:fleet_id/graph/packet", AgentGraphController, :packet
     post "/fleets/:fleet_id/graph/create", AgentGraphController, :create
     post "/fleets/:fleet_id/graph/patch", AgentGraphController, :patch
     post "/fleets/:fleet_id/graph/link", AgentGraphController, :link

@@ -75,6 +75,9 @@ defmodule KeyfleetWeb.AgentTools.Workspace.Read do
         opts
       )
 
+  defp read(:packet, %{fleet_id: fleet_id} = args, opts),
+    do: Graph.workspace_packet(fleet_id, Map.take(args, [:project, :ids, :max_bytes]), opts)
+
   # What the workspace's pages keep at hand, the whole fleet's or one
   # project's: how many goals and tasks stand where, its newest goals and the
   # tasks that have waited longest for review, as its Project shows them, and

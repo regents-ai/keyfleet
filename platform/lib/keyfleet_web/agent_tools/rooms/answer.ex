@@ -103,7 +103,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       paged(
         %{
           room: RoomJSON.room(room),
-          cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+          cursor: cursor(messages, Map.get(params, "after_seq", 0), room.head_seq),
           has_more: Rooms.more_after?(messages),
           messages: []
         },
@@ -161,7 +161,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
         paged(
           %{
             thread: %{token_id: String.to_integer(token_id), head_seq: head_seq(thread)},
-            cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+            cursor: cursor(messages, Map.get(params, "after_seq", 0), head_seq(thread)),
             has_more: Rooms.more_after?(messages),
             messages: []
           },
@@ -368,8 +368,11 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
 
   defp sent(_fleet_id, {:error, error}, actor), do: refuse(error, actor)
 
-  defp cursor([], after_seq), do: after_seq
-  defp cursor(messages, _after_seq), do: List.last(messages).seq
+  # Where reading on starts: the last post read or, with none, the after_seq
+  # sent, never past the head, so an after_seq beyond it still reads the next
+  # post written.
+  defp cursor([], after_seq, head_seq), do: min(after_seq, head_seq)
+  defp cursor(messages, _after_seq, _head_seq), do: List.last(messages).seq
 
   # A page of posts within the caller's `max_bytes`: one cut short reads on
   # from the last post it kept.

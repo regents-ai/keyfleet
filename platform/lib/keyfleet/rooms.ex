@@ -625,8 +625,8 @@ defmodule Keyfleet.Rooms do
     end
   end
 
-  defp synced_wall(%{token_id: token_id, after_seq: after_seq}, nil, _posts),
-    do: %{token_id: token_id, head_seq: 0, cursor: after_seq, messages: []}
+  defp synced_wall(%{token_id: token_id}, nil, _posts),
+    do: %{token_id: token_id, head_seq: 0, cursor: 0, messages: []}
 
   defp synced_wall(%{token_id: token_id, after_seq: after_seq}, thread, posts) do
     read = Map.get(posts, thread.id, [])
@@ -634,13 +634,16 @@ defmodule Keyfleet.Rooms do
     %{
       token_id: token_id,
       head_seq: thread.head_seq,
-      cursor: cursor(read, after_seq),
+      cursor: cursor(read, after_seq, thread.head_seq),
       messages: Enum.reject(read, & &1.removed_from_wall)
     }
   end
 
-  defp cursor([], after_seq), do: after_seq
-  defp cursor(posts, _after_seq), do: List.last(posts).seq
+  # Where reading on starts: the last post read or, with none, the after_seq
+  # sent, never past the head, so an after_seq beyond it still reads the next
+  # post written.
+  defp cursor([], after_seq, head_seq), do: Kernel.min(after_seq, head_seq)
+  defp cursor(posts, _after_seq, _head_seq), do: List.last(posts).seq
 
   defp synced(%{slug: slug, after_seq: after_seq}, room, posts) do
     %{id: room_id, kind: kind, head_seq: head_seq} = room
@@ -651,7 +654,7 @@ defmodule Keyfleet.Rooms do
       slug: slug,
       kind: kind,
       head_seq: head_seq,
-      cursor: cursor(messages, after_seq),
+      cursor: cursor(messages, after_seq, head_seq),
       messages: messages
     }
   end

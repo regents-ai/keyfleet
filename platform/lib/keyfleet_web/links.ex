@@ -1,10 +1,11 @@
 defmodule KeyfleetWeb.Links do
   @moduledoc """
   What a Keyfleet address names, so an agent handed a link (a task's page, a
-  room in a fleet's hall, a commit, a notebook or a saved run) reads it
+  room in a fleet's hall, the Atlas, a commit, a notebook or a saved run) reads it
   without picking the ids out by hand.
 
-  An address is read from its own parts: a page of this site, a fleet's
+  An address is read from its own parts: a page of this site, the Atlas's
+  and the workspace's links that open a notebook through it, a fleet's
   notebook host or the code host's clone address. `resolve/2` answers the
   fleet, what kind of thing the address is, its ids and the read an agent
   calls next (`read`, the WebMCP tool and the CLI command with its input),
@@ -23,6 +24,9 @@ defmodule KeyfleetWeb.Links do
 
   # A Key's number, as its pages' addresses spell it.
   @key ~r/\A[1-9][0-9]{0,17}\z/
+
+  # The Atlas's `?kind=`, as the swarm's `source`.
+  @atlas_sources %{"graph" => "graph", "notebooks" => "notebook"}
 
   @doc "What `url` names, as `{:ok, link}`, or `:unknown`."
   def resolve(url, actor) do
@@ -46,14 +50,26 @@ defmodule KeyfleetWeb.Links do
 
   defp on_host(host, path, query, actor) do
     cond do
-      host == URI.parse(KeyfleetWeb.Endpoint.url()).host -> page(path, query)
+      host == URI.parse(KeyfleetWeb.Endpoint.url()).host -> page(path, query, actor)
       host == Code.config()[:host] -> clone(path)
       match?({:ok, _fleet_id}, Notebooks.fleet_for_host(host)) -> notebook(host, path, actor)
       true -> :unknown
     end
   end
 
-  defp page(path, query) do
+  # The Atlas and the workspace link a notebook, or a saved page of it,
+  # through this site (`KeyfleetWeb.NotebookOpenController`): `to` is its
+  # path on the fleet's notebook host.
+  defp page("/fleets/" <> rest, %{"to" => to}, actor) do
+    with [fleet_id, "notebooks", "open"] <- String.split(rest, "/"),
+         true <- Notebooks.hub?(fleet_id) do
+      notebook_at(fleet_id, to, actor)
+    else
+      _other -> :unknown
+    end
+  end
+
+  defp page(path, query, _actor) do
     case Fleets.at_path(path) do
       %{id: fleet_id, path: fleet_path} ->
         under = path |> String.replace_prefix(fleet_path, "") |> String.split("/", trim: true)
@@ -99,10 +115,21 @@ defmodule KeyfleetWeb.Links do
     end
   end
 
+  # A path at a commit reads as that file, whole (`code_file` refuses one
+  # that names a folder); the top folder, or the code as it stands now, is
+  # the repository's to clone.
   defp fleet_page(fleet_id, ["code", repository, "files"], query) do
     with {:ok, project} <- project_of(fleet_id, repository) do
-      names = %{path: Map.get(query, "path", ""), at: query["at"]}
-      link(fleet_id, "code_files", code(repository, project, names), nil)
+      names = code(repository, project, %{path: Map.get(query, "path", ""), at: query["at"]})
+
+      case names do
+        %{path: path, at: at} when path != "" and is_binary(at) ->
+          file = %{commit: at, path: path}
+          link(fleet_id, "code_files", names, {"code_file", "code file"}, file)
+
+        _folder_or_now ->
+          link(fleet_id, "code_files", names, nil)
+      end
     end
   end
 
@@ -134,6 +161,22 @@ defmodule KeyfleetWeb.Links do
   defp fleet_page(fleet_id, ["polls", poll_id], _query),
     do: link(fleet_id, "poll", %{poll_id: poll_id}, {"polls_show", "polls show"})
 
+  # The Atlas reads as the swarm it draws (`KeyfleetWeb.AtlasLive`): its
+  # window, a year unless named, the day it holds and the one kind it shows.
+  defp fleet_page(fleet_id, ["atlas"], query) do
+    swarm =
+      Map.reject(
+        %{
+          window: atlas_window(query["window"]),
+          at: atlas_day(query["at"]),
+          source: @atlas_sources[query["kind"]]
+        },
+        fn {_name, value} -> is_nil(value) end
+      )
+
+    link(fleet_id, "atlas", %{}, {"atlas_swarm", "atlas swarm"}, swarm)
+  end
+
   defp fleet_page(fleet_id, ["keys", token_id | rest], _query) do
     if Regex.match?(@key, token_id), do: key_page(fleet_id, token_id, rest), else: :unknown
   end
@@ -159,6 +202,17 @@ defmodule KeyfleetWeb.Links do
   end
 
   defp key_page(_fleet_id, _token_id, _rest), do: :unknown
+
+  defp atlas_window(word) when word in ~w(day week month), do: word
+  defp atlas_window(_word), do: "year"
+
+  # The start of the day the address names; now's when it names none.
+  defp atlas_day(word) do
+    case Date.from_iso8601(word || "") do
+      {:ok, date} -> date |> DateTime.new!(~T[00:00:00], "Etc/UTC") |> DateTime.to_iso8601()
+      {:error, _not_a_day} -> nil
+    end
+  end
 
   # A project's clone address: `<fleet id>.git` for general, `<fleet
   # id>-<project>.git` for any other.
@@ -191,10 +245,13 @@ defmodule KeyfleetWeb.Links do
     })
   end
 
-  # A notebook, or one saved page of it, on the fleet's notebook host.
   defp notebook(host, path, actor) do
     {:ok, fleet_id} = Notebooks.fleet_for_host(host)
+    notebook_at(fleet_id, path, actor)
+  end
 
+  # A notebook, or one saved page of it, at `path` on the fleet's notebook host.
+  defp notebook_at(fleet_id, path, actor) do
     if Notebooks.notebook?(path) do
       ["", "projects", space, "notebooks", notebook_id] = String.split(path, "/")
       project = space_project(fleet_id, space, actor)

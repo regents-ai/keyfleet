@@ -226,6 +226,44 @@ defmodule KeyfleetWeb.McpConnectorTest do
       end
     end
 
+    # A tool lists its browser tool's input, so a call that sends only what it
+    # lists as required, leaving out what it lists as optional, is answered as
+    # its signed request is.
+    test "each fleet tool lists its browser tool's input, and a sync sending only what it requires is answered",
+         c do
+      pair!(account!(), c.signer.address)
+      ChainHelpers.issue_shard!(@fleet, 1, c.signer.address)
+      manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+      listed = signed_mcp(c, rpc("tools/list")).body["result"]["tools"]
+
+      for %{"name" => name, "inputSchema" => %{"properties" => %{"input" => input}}} <- listed do
+        schema = manifest[name]["input_schema"]
+        names = Map.keys(input["properties"])
+        assert input["properties"] == Map.take(schema["properties"], names), name
+        assert input["required"] == Enum.filter(schema["required"], &(&1 in names)), name
+      end
+
+      sync = Enum.find(listed, &(&1["name"] == "fleets_sync"))["inputSchema"]["properties"]
+      assert sync["input"] == manifest["fleets_sync"]["input_schema"]
+
+      input = %{
+        "fleet_id" => @fleet,
+        "rooms" => [],
+        "graph" => %{"after_seq" => 0},
+        "proposals" => %{"after_seq" => 0},
+        "run" => %{"kind" => "session"}
+      }
+
+      assert Enum.sort(Map.keys(input)) == Enum.sort(sync["input"]["required"])
+
+      for part <- ["graph", "proposals", "run"],
+          do: assert(Map.keys(input[part]) == sync["input"]["properties"][part]["required"])
+
+      http = http_twin(c, manifest["fleets_sync"], input)
+      assert http.status == 200
+      assert %{"isError" => false} = result(signed_call(c, "fleets_sync", input))
+    end
+
     # messages_leave and its signed request (KeyfleetWeb.LeftMessagesApiTest)
     # leave one message: the request with the tool's operation_id answers the
     # tool's receipt, and both refuse the same input with the same words.
@@ -400,7 +438,16 @@ defmodule KeyfleetWeb.McpConnectorTest do
             {"fleets_show", %{"fleet_id" => fleet}},
             {"publications_list", %{"fleet_id" => fleet, "project" => "main"}},
             {"code_pushes", %{"fleet_id" => fleet, "project" => "main"}},
+            {"code_file",
+             %{
+               "fleet_id" => fleet,
+               "project" => "main",
+               "commit" => String.duplicate("a", 40),
+               "path" => "lib/app.ex"
+             }},
             {"notebooks_list", %{"fleet_id" => fleet, "project" => "main"}},
+            {"workspace_packet",
+             %{"fleet_id" => fleet, "project" => "general", "ids" => ["goal#1"]}},
             {"workspace_pin", pin(fleet)},
             {"workspace_unpin", pin(fleet)}
           ],

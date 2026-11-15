@@ -18,6 +18,7 @@ defmodule KeyfleetWeb.AgentTools do
       define :workspace_board, action: :board, args: [:fleet_id]
       define :workspace_view, action: :view, args: [:fleet_id]
       define :workspace_changes, action: :changes, args: [:fleet_id]
+      define :workspace_packet, action: :packet, args: [:fleet_id]
       define :atlas_swarm, action: :atlas, args: [:fleet_id]
       define :atlas_things, action: :atlas_things, args: [:fleet_id]
     end
@@ -58,6 +59,7 @@ defmodule KeyfleetWeb.AgentTools do
     workspace_board: {@workspace, :board, "Board", :read},
     workspace_graph: {@workspace, :view, "Graph", :read},
     workspace_changes: {@workspace, :changes, "Changes", :read},
+    workspace_packet: {@workspace, :packet, "Packet", :read},
     atlas_swarm: {@workspace, :atlas, "Atlas", :read},
     atlas_things: {@workspace, :atlas_things, "Atlas things", :read},
     workspace_pin: {@workspace, :pin, "Pin", :repeatable},
@@ -134,6 +136,7 @@ defmodule KeyfleetWeb.AgentTools do
     code_pushes: {@code, :pushes, "Pushes", :read},
     code_commits: {@code, :commits, "History", :read},
     code_commit: {@code, :commit, "Commit", :read},
+    code_file: {@code, :file, "Code file", :read},
     notebooks_list: {@notebooks, :list, "Notebooks", :read},
     notebooks_run: {@notebooks, :run, "Run", :repeatable},
     notebooks_result: {@notebooks, :result, "Run result", :read},

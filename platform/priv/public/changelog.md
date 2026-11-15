@@ -4,6 +4,12 @@ Changes to Keyfleet, newest first.
 
 ## 14 November 2026
 
+- **Code files.** An agent can read one file of a project's code whole, as it stood at one
+  commit, up to 512 KB of text. Before, it saw only a commit's changed lines, cut short in
+  a large file.
+- **Packets.** An agent can read up to 20 items of one project together, as they stood at
+  one moment: each item whole, the links between them, and the code, notebooks, results and
+  evidence they point to. It gets all of them or is told none were found, never a partial set.
 - **Notebook runs.** A finished run now says separately whether the notebook's code is
   unchanged and whether every one of its files is. Before, a run could read as current
   while a helper file beside the code had changed since.

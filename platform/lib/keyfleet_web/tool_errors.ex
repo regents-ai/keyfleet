@@ -23,7 +23,8 @@ defmodule KeyfleetWeb.ToolErrors do
   (`RegentMCPAgents.pairing_input_refusal/0`), another identity tool's in the
   words every Regent site gives it, a fleet tool's with the refusal its signed
   request answers (an unknown fleet as `fleet_unknown`), or else as
-  `invalid_request`. A workspace write that names a coming-soon fleet is
+  `invalid_request`, whose hint tells text longer than its input takes how
+  long it may be and how long it is. A workspace write that names a coming-soon fleet is
   refused once its input has the shape its signed request needs, as every
   agent request about one is (`KeyfleetWeb.Plugs.FleetComingSoon`). A tool
   that answers as its signed request also checks its body as that
@@ -90,13 +91,39 @@ defmodule KeyfleetWeb.ToolErrors do
 
   defp refused(Connection, _identity, _errors), do: Jason.encode!(RegentMCPAgents.Tools.refusal())
 
-  defp refused(_resource, _action, errors) do
+  defp refused(resource, action, errors) do
     {_status, body} =
       Enum.find_value(errors, &WorkspaceRefusal.for_error/1) ||
         WorkspaceRefusal.refusal(422, "invalid_request")
 
-    text(body)
+    text(Enum.find_value(errors, body, &too_long(&1, resource, action, body)))
   end
+
+  # Text longer than its input takes is told how long it may be and how long
+  # it is, counted as its action counts it.
+  defp too_long(
+         %Ash.Error.Action.InvalidArgument{field: field, value: value, vars: [max: max]},
+         resource,
+         action,
+         %{error: %{code: "invalid_request"}} = body
+       )
+       when is_binary(value) do
+    with %{constraints: constraints} <-
+           Enum.find(Ash.Resource.Info.action(resource, action).arguments, &(&1.name == field)) do
+      unit = constraints[:length_count] || Ash.Type.String.default_length_count()
+      {size, units} = measured(value, unit)
+
+      put_in(
+        body.error.hint,
+        "#{field} is at most #{max} #{units}; this one has #{size}. Send a shorter one."
+      )
+    end
+  end
+
+  defp too_long(_error, _resource, _action, _body), do: nil
+
+  defp measured(value, :bytes), do: {byte_size(value), "bytes"}
+  defp measured(value, :codepoints), do: {length(String.codepoints(value)), "characters"}
 
   @doc "`body` as a tool error's text, with `retry_after` in seconds when there is one."
   @spec text(map(), String.t() | integer() | nil) :: String.t()

@@ -23,7 +23,7 @@ defmodule Keyfleet.Code do
   """
   use Ash.Domain
 
-  alias Keyfleet.AccessCache
+  alias Keyfleet.{Access, AccessCache}
   alias Keyfleet.Actors.System
   alias Keyfleet.Code.{Commit, NodeClient, Push, RecordsDownError, Repository, Sent, Setup}
   alias Keyfleet.Graph.Checks.KeyActor
@@ -178,6 +178,44 @@ defmodule Keyfleet.Code do
       {:error, error} -> {:error, error}
     end
   end
+
+  @doc """
+  The file at `path` in the commit `hash` of a fleet's repository, whole, as
+  `actor` reads it: `{:ok, bytes}` for text (`text?/1`), `{:too_large, size}`
+  past `file_max_bytes` with its size in bytes, `:not_text`, `:not_found`
+  while the commit has no file at `path` (no such commit, a folder, a path
+  that can't name a place in the code and no repository yet included),
+  `:forbidden` for a reader the fleet's code isn't open to (the rule a
+  commit's own read keeps, `Keyfleet.Code.Commit`), or `{:error, error}` when
+  the store can't be read. The folder holding it tells a file from a folder
+  and gives its size.
+  """
+  def commit_file(fleet_id, repository, hash, path, actor) do
+    cond do
+      not Access.allowed?(actor, :read, :code, fleet_id) -> :forbidden
+      code_path?(path) -> file_in(repository, hash, path)
+      true -> :not_found
+    end
+  end
+
+  defp file_in(repository, hash, path) do
+    {above, [name]} = path |> String.split("/") |> Enum.split(-1)
+
+    with {:ok, read} <- file(repository, path, hash),
+         {:ok, entries} <- folder(repository, Enum.join(above, "/"), hash) do
+      entries
+      |> Enum.find(&(&1.name == name and not &1.folder?))
+      |> whole(read)
+    end
+  end
+
+  # What was read at a path, by the entry the folder holding it has there.
+  defp whole(nil, _read), do: :not_found
+  defp whole(%{size: size}, :too_large), do: {:too_large, size}
+  defp whole(_file, bytes), do: if(text?(bytes), do: {:ok, bytes}, else: :not_text)
+
+  @doc "Whether a file's `bytes` are text: UTF-8 with no NUL byte."
+  def text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
 
   @doc """
   One page of the repository's history, newest first, from the commit `from`

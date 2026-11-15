@@ -3,13 +3,16 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
   A project's code as an agent reads it, the same over its signed requests
   and as the Claude connector's tools (`KeyfleetWeb.AgentTools.Code`): the
   changes sent lately to its repository, each with the address a workspace
-  cites its commit by (`:pushes`); its history (`:commits`); and one commit
+  cites its commit by (`:pushes`); its history (`:commits`); one commit
   with what it changed (`:commit`), read as the commit page and the history
-  page read them (`KeyfleetWeb.WorkspacePage`). Git itself reaches the code
+  page read them (`KeyfleetWeb.WorkspacePage`); and one file at a commit,
+  whole (`:file`). Git itself reaches the code
   through `KeyfleetWeb.Plugs.CodeGateway`. Each answer is
   `{status, body, nil}`; `params` is the signed request's JSON, its body
   with the names in its address.
   """
+
+  require Logger
 
   alias Keyfleet.Actors.{Agent, System}
   alias Keyfleet.{Code, Fleets, Projects}
@@ -87,6 +90,54 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
     end
   rescue
     NotFoundError -> refusal(404, "commit_unknown")
+  end
+
+  # Whoever may read the commit reads its files: the same rule as the
+  # commit's own read (`Keyfleet.Code.Commit`, `:of_hashes`).
+  def answer(:file, %{"fleet_id" => fleet_id, "commit" => hash} = params, actor, _waiter) do
+    case repository(fleet_id, params["project"]) do
+      {:ok, repository} ->
+        fleet_id
+        |> Code.commit_file(repository, hash, params["path"], actor)
+        |> file_answer(fleet_id, repository, params)
+
+      {:refused, status, code} ->
+        refusal(status, code)
+    end
+  end
+
+  defp file_answer({:ok, bytes}, fleet_id, repository, %{"commit" => hash, "path" => path}) do
+    ok(%{
+      commit: hash,
+      commit_url: WorkspacePage.commit_url(fleet_id, repository, hash),
+      path: path,
+      content: bytes,
+      size: byte_size(bytes),
+      sha256: :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower)
+    })
+  end
+
+  defp file_answer({:too_large, size}, _fleet_id, _repository, _params) do
+    {422,
+     Refusal.body(
+       "code_file_too_large",
+       "code_file reads a file of at most #{Code.config()[:file_max_bytes]} bytes; " <>
+         "this one has #{size}. Clone the project's repository to read it: " <>
+         "projects_list gives its clone_url."
+     ), nil}
+  end
+
+  defp file_answer(:not_text, _fleet_id, _repository, _params),
+    do: refusal(422, "code_file_not_text")
+
+  defp file_answer(:not_found, _fleet_id, _repository, _params), do: refusal(404, "file_unknown")
+
+  defp file_answer(:forbidden, fleet_id, _repository, _params),
+    do: refused(fleet_id, {:error, %Ash.Error.Forbidden{}})
+
+  defp file_answer({:error, error}, _fleet_id, repository, _params) do
+    Logger.warning("The repository #{repository} could not be read: #{reason(error)}")
+    refusal(503, "code_unavailable")
   end
 
   defp ok(body), do: {200, body, nil}
@@ -176,4 +227,7 @@ defmodule KeyfleetWeb.AgentTools.Code.Answer do
 
     refusal(503, "code_catching_up")
   end
+
+  defp reason(%module{}), do: inspect(module)
+  defp reason(reason), do: inspect(reason)
 end

@@ -92,6 +92,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
   @code_history_path ~r"\A#{@in_project}/code/commits\z"
   @code_commit_path ~r"\A#{@in_project}/code/commits/(?:[0-9a-f]{40}|[0-9a-f]{64})\z"
+  @code_file_path ~r"\A#{@in_project}/code/file\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
@@ -128,7 +129,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert|launch|advances/#{@token}/return)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim|keys/buy|keys/#{@token}/(?:shards/end|club_claim|reveal|expire_reveal)|shards/(?:issue|voting))\z"
-  @graph_ops ~w(board view get changes create patch link unlink archive join leave submit review fork pin unpin)
+  @graph_ops ~w(board view get changes packet create patch link unlink archive join leave submit review fork pin unpin)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
   @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
   # A fleet's Atlas: the swarm's work in one window, and its things a page at a time.
@@ -173,6 +174,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@activity_path, {[], ~w(cursor)}},
     {@search_path, {~w(query), ~w(cursor limit)}},
     {@code_history_path, {[], ~w(from page)}},
+    {@code_file_path, {~w(commit path), []}},
     {@posting_key_path, {~w(token_id), []}},
     {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
@@ -255,6 +257,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # largest is a whole page.
   @min_change_budget 1024
   @max_change_budget 512 * 1024
+  # How many items a packet names, each once, and how large it may be asked
+  # to be (`Keyfleet.Graph.Workspace`).
+  @max_packet_ids 20
+  @packet_budgets 1024..(256 * 1024)
   # What each workspace operation's body holds: its required fields, then the
   # ones it may add. A write names the key it acts as and its command id.
   @command_fields %{"as_key" => :key, "command_id" => :text}
@@ -279,6 +285,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          "limit" => :graph_page,
          "max_bytes" => :change_budget
        }},
+    "packet" => {%{"project" => :text, "ids" => :packet_ids}, %{"max_bytes" => :packet_budget}},
     "create" =>
       {Map.merge(@command_fields, %{"project" => :text, "type" => :text, "data" => :object}), %{}},
     "patch" =>
@@ -460,6 +467,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp json_required(conn),
     do: send_refusal(conn, 415, KeyfleetWeb.Refusal.body("json_required"))
 
+  # A body past its limit is told the limit and, when the request says how
+  # long it is, its length; one sent in chunks says no length.
   defp too_large(conn),
     do:
       send_refusal(
@@ -467,10 +476,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         413,
         KeyfleetWeb.Refusal.body(
           "request_too_large",
-          "This operation takes a body of at most #{body_limit(conn.request_path)} bytes. " <>
+          "This operation takes a body of at most #{body_limit(conn.request_path)} bytes#{sent(conn)}. " <>
             "Send a shorter one."
         )
       )
+
+  defp sent(conn) do
+    with [length] <- get_req_header(conn, "content-length"),
+         {bytes, ""} <- Integer.parse(length) do
+      "; this one has #{bytes}"
+    else
+      _no_length -> ""
+    end
+  end
 
   defp json_or_bodyless_get?(conn) do
     case get_req_header(conn, "content-type") do
@@ -820,6 +838,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @atlas_path,
         @dm_path,
         @code_history_path,
+        @code_file_path,
         @dm_changes_path
         | @poll_post_paths
       ],
@@ -1006,7 +1025,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         notebook_lock: @notebook_lock_path,
         receipts: @receipts_path,
         checkpoint_save: @checkpoint_save_path,
-        code_history: @code_history_path
+        code_history: @code_history_path,
+        code_file: @code_file_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -1148,6 +1168,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         is_integer(page)
     )
   end
+
+  # A file is read at one commit, by its full hash, and its path of up to
+  # 1,024 characters; a path that names no file is the controller's to refuse.
+  defp check_fleet_body(:code_file, %{"commit" => hash, "path" => path} = params),
+    do:
+      admit(
+        map_size(params) == 2 and is_binary(hash) and
+          Regex.match?(~r/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/, hash) and is_binary(path) and
+          length(String.codepoints(path)) in 1..1024
+      )
+
+  defp check_fleet_body(:code_file, _params), do: :invalid
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do
@@ -1303,8 +1335,23 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp shaped?(:get_parts, _value), do: false
 
+  # A packet's items, each named once.
+  defp shaped?(:packet_ids, value),
+    do:
+      is_list(value) and length(value) in 1..@max_packet_ids and
+        Enum.all?(value, &is_binary/1) and value == Enum.uniq(value)
+
   defp shaped?(kind, value)
-       when kind in [:key, :version, :seq, :graph_page, :change_budget, :most_active, :atlas_page],
+       when kind in [
+              :key,
+              :version,
+              :seq,
+              :graph_page,
+              :change_budget,
+              :packet_budget,
+              :most_active,
+              :atlas_page
+            ],
        do: is_integer(value)
 
   defp shaped?(nil, _value), do: false
@@ -1313,6 +1360,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp in_bounds?(:seq, value), do: value in 0..@max_seq
   defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
   defp in_bounds?(:change_budget, value), do: value in @min_change_budget..@max_change_budget
+  defp in_bounds?(:packet_budget, value), do: value in @packet_budgets
   defp in_bounds?(:most_active, value), do: value in 0..@max_most_active
   defp in_bounds?(:atlas_page, value), do: value in 1..@max_atlas_page
   # As long as a pin's target is kept (`Keyfleet.Graph.Pin`).
@@ -1716,7 +1764,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       {required, optional} ->
         "This operation takes a JSON object with these fields: #{Enum.join(required, ", ")}; " <>
           "and only these besides, each optional: #{Enum.join(optional, ", ")}."
-    end <> " Check each field's kind and range against the docs, then send it again."
+    end <>
+      least(path) <> " Check each field's kind and range against the docs, then send it again."
+  end
+
+  # A sync's body has a shape for each field, so a refused one is shown the
+  # least it may send: its first sync, naming no rooms.
+  defp least(path) do
+    if Regex.match?(@sync_path, path),
+      do:
+        ~s( A first sync naming no rooms sends {"rooms":[],"graph":{"after_seq":0},) <>
+          ~s("proposals":{"after_seq":0},"run":{"kind":"session"}}.),
+      else: ""
   end
 
   defp fields(@join_path), do: {~w(name declared_harness), []}

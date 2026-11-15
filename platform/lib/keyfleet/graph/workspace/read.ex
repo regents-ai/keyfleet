@@ -20,8 +20,9 @@ defmodule Keyfleet.Graph.Workspace.Read do
   events after `after_seq`, the whole fleet's or, given `project`, those that
   touched that project, oldest first, at most `limit` of them and no more
   than 512 KiB of them unless one event alone is larger;
-  `next_cursor` is the `after_seq` to read on from, and `run_id` names the
-  log they come from. Given `object`, it answers that object's own changes
+  `next_cursor` is the `after_seq` to read on from, never past `watermark`,
+  so an `after_seq` beyond it still reads the next change, and `run_id` names
+  the log they come from. Given `object`, it answers that object's own changes
   alone: its creation, edits, archiving, links and their removal. Given
   `max_bytes`, a page holds no more than that, and a change larger than it
   alone is refused with its size rather than answered past the budget.
@@ -32,6 +33,14 @@ defmodule Keyfleet.Graph.Workspace.Read do
   first, at most 600; `more_nodes` and `more_edges` say whether any were left
   out, and `owners` counts the items each Key owns among them.
 
+  `packet` answers a chosen 1 to 20 of one project's objects whole, sorted
+  by id, the links whose both ends are among them, and the code, notebook,
+  result and evidence addresses they store (`references`). It answers every
+  object named or none: an id that names no object of the project, or an
+  archived one, is refused as `not_found`, naming none, and a packet larger
+  than `max_bytes` as `packet_too_large`, with its size. Nothing outside the
+  read tables is read.
+
   `get` and `changes` name, in `agents`, the agents behind what they
   answer, by wallet: the agent that created the object, or that made each
   change, with the name it gave itself, as the fleet's pages show it beside
@@ -40,10 +49,12 @@ defmodule Keyfleet.Graph.Workspace.Read do
   use Ash.Resource.Actions.Implementation
 
   alias Keyfleet.Agents
+  alias Keyfleet.Code
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.RefusedError
   alias Keyfleet.Graph.Event
   alias Keyfleet.Graph.RerunCheck
+  alias Keyfleet.Notebooks
 
   @relation_page 200
   @graph_nodes 120
@@ -82,7 +93,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
     end
   end
 
-  defp read(:changes, %{fleet_id: fleet_id, after_seq: after_seq} = args, opts) do
+  defp read(:changes, %{fleet_id: fleet_id} = args, opts) do
     {run_id, watermark} = standing(fleet_id, opts)
 
     with {:ok, events, has_more} <- events(args, opts) do
@@ -91,7 +102,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
       %{
         run_id: run_id,
         events: page,
-        next_cursor: if(has_more, do: List.last(page).seq, else: max(after_seq, watermark)),
+        next_cursor: if(has_more, do: List.last(page).seq, else: watermark),
         has_more: has_more,
         watermark: watermark,
         agents: page |> Enum.map(&writer(&1.actor)) |> Agents.names_by_wallet()
@@ -130,6 +141,113 @@ defmodule Keyfleet.Graph.Workspace.Read do
       more_edges: more_edges != [],
       watermark: watermark
     }
+  end
+
+  defp read(:packet, %{fleet_id: fleet_id, project: project, ids: ids} = args, opts) do
+    {run_id, watermark} = standing(fleet_id, opts)
+    objects = Graph.selected_objects!(fleet_id, project, ids, opts)
+
+    if length(objects) == length(ids) do
+      objects = Enum.sort_by(objects, & &1.id)
+
+      relations =
+        fleet_id
+        |> Graph.relations_among!(ids, opts)
+        |> Enum.sort_by(& &1.id)
+
+      %{
+        format: "keyfleet.investigation.v1",
+        fleet_id: fleet_id,
+        project: project,
+        run_id: run_id,
+        watermark: watermark,
+        objects: Enum.map(objects, &packet_object/1),
+        relations: Enum.map(relations, &Map.take(&1, [:id, :type, :source, :target, :data])),
+        references: Enum.flat_map(objects, &references(fleet_id, &1)),
+        complete_for_selection: true
+      }
+      |> fits(args.max_bytes)
+    else
+      {:error, RefusedError.exception(code: "not_found", reason: "no such object", details: %{})}
+    end
+  end
+
+  defp packet_object(object),
+    do: Map.take(object, [:id, :type, :version, :owner_key, :review, :data, :sys])
+
+  # A packet is answered whole or refused with its size: nothing in it is
+  # ever left out to fit.
+  defp fits(packet, max_bytes) do
+    case byte_size(Jason.encode!(packet)) do
+      bytes when bytes <= max_bytes ->
+        packet
+
+      bytes ->
+        {:error,
+         RefusedError.exception(
+           code: "packet_too_large",
+           reason: "the packet is #{bytes} bytes, more than max_bytes",
+           details: %{bytes: bytes, max_bytes: max_bytes}
+         )}
+    end
+  end
+
+  # The code, notebooks, results and evidence an object cites, as its fields
+  # store them, each with the identity its address or its fields carry.
+  defp references(fleet_id, %{type: "task", data: data} = object) do
+    for field <- ~w(commit_ref notebook_ref result_ref),
+        is_binary(data[field]),
+        do: reference(fleet_id, object.id, field, data[field], nil)
+  end
+
+  defp references(fleet_id, %{type: "evidence", data: data} = object),
+    do: [reference(fleet_id, object.id, "source_uri", data["source_uri"], data["digest"])]
+
+  defp references(fleet_id, %{type: "service", data: data} = object) do
+    for uri <- Map.get(data, "implementation_refs", []),
+        do: reference(fleet_id, object.id, "implementation_refs", uri, nil)
+  end
+
+  defp references(
+         fleet_id,
+         %{type: "review", sys: %{"review" => %{"commit_ref" => uri}}} = object
+       ),
+       do: [reference(fleet_id, object.id, "sys.review.commit_ref", uri, nil)]
+
+  defp references(_fleet_id, _object), do: []
+
+  defp reference(fleet_id, from, field, uri, digest) do
+    %{
+      from: from,
+      field: field,
+      uri: uri,
+      digest: digest,
+      commit: commit(field, uri),
+      saved_output: saved_output(fleet_id, uri)
+    }
+  end
+
+  # The full hash a code address ends in, as a task's rerun takes it.
+  defp commit(field, uri)
+       when field in ~w(commit_ref sys.review.commit_ref implementation_refs) do
+    hash = Path.basename(URI.parse(uri).path || "")
+    if Code.full_hash?(hash), do: hash
+  end
+
+  defp commit(_field, _uri), do: nil
+
+  # The saved notebook output an address on the fleet's notebook host names:
+  # its notebook, the version or background run that saved it, and when.
+  defp saved_output(fleet_id, uri) do
+    path = String.replace_prefix(uri, Notebooks.url(fleet_id, ""), "")
+
+    case Notebooks.result(path) do
+      {:ok, {notebook, source, saved_at}} ->
+        %{notebook: notebook, source: source, saved_at: saved_at}
+
+      :error ->
+        nil
+    end
   end
 
   defp graph_node(object) do
