@@ -15,9 +15,12 @@ defmodule Keyfleet.Notebooks.SavedOutput do
   A hub keeps only a notebook's newest versions and recent runs, replaces a
   version's page when the same code runs again, and drops everything when a
   notebook is deleted. The copy is taken before the address is handed out
-  (`KeyfleetWeb.Plugs.NotebookGateway`), so an address that was ever handed
-  out keeps showing what it showed. The first copy under an address stays,
-  until one of the fleet's members removes it; the address is then gone.
+  (`KeyfleetWeb.Plugs.NotebookGateway`), so an address that was handed out
+  shows what it showed while the copy is kept. The first copy under an
+  address stays until one of the fleet's members removes it or, for a
+  background run's page, until it is cleared once its time is past
+  (`:past_keeping`, `Keyfleet.Notebooks.RunPagePruner`); the address is then
+  gone.
   """
   use Ash.Resource,
     domain: Keyfleet.Notebooks,
@@ -38,6 +41,12 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     end
 
     destroy :remove
+
+    # Every copy, page and all. A filter that asks about other copies
+    # (`:past_keeping`) is authorised through it.
+    read :read do
+      primary? true
+    end
 
     # A copy kept before copies recorded their run's outcome, of a run the
     # hub names succeeded (`Keyfleet.Notebooks.MarkSucceeded`).
@@ -121,6 +130,44 @@ defmodule Keyfleet.Notebooks.SavedOutput do
              )
 
       prepare build(select: [:notebook_id, :source_id])
+    end
+
+    # The copies of background runs' pages the hub made before `before`, in
+    # milliseconds since 1970, that may be cleared: each has a newer run page
+    # of its notebook, so it is not the one `:newest_runs` answers; it did
+    # not succeed, or has a newer page of its notebook that did, so it is not
+    # the one `:last_succeeded` answers; and no Key has it public
+    # (`Keyfleet.Projects.Publication`, by `Keyfleet.Notebooks.result_path/3`).
+    read :past_keeping do
+      argument :before, :integer, allow_nil?: false
+
+      filter expr(
+               string_starts_with(source_id, "run_") and saved_at < ^arg(:before) and
+                 exists(
+                   Keyfleet.Notebooks.SavedOutput,
+                   fleet_id == parent(fleet_id) and notebook_id == parent(notebook_id) and
+                     string_starts_with(source_id, "run_") and saved_at > parent(saved_at)
+                 ) and
+                 (not succeeded or
+                    exists(
+                      Keyfleet.Notebooks.SavedOutput,
+                      fleet_id == parent(fleet_id) and notebook_id == parent(notebook_id) and
+                        succeeded and saved_at > parent(saved_at)
+                    )) and
+                 not exists(
+                   Keyfleet.Projects.Publication,
+                   fleet_id == parent(fleet_id) and
+                     page ==
+                       parent(
+                         "/results/" <>
+                           notebook_id <>
+                           "/" <>
+                           source_id <>
+                           "/" <>
+                           type(saved_at, :string)
+                       )
+                 )
+             )
     end
   end
 

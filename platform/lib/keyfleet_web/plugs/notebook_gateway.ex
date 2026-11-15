@@ -34,7 +34,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   succeed also has its copy record where the run stopped, read from the run's
   record once the page is sent. The address shows that
   copy whatever the hub keeps, until one of the fleet's members removes it
-  (`DELETE` on the address). Someone without a notebook sign-in who opens one
+  (`DELETE` on the address) or, for a run's page, until it is cleared 30 days
+  after it was made (`Keyfleet.Notebooks.RunPagePruner`); either way it then
+  answers 404 `notebooks_not_found`. Someone without a notebook sign-in who opens one
   is sent to Keyfleet to get one (`open_url/2`), and comes back to it, unless
   a Key made it public (`Keyfleet.Projects.Publication`): then anyone reads it,
   signed in or not, from that copy alone, and nothing else on the host opens

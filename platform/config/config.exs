@@ -310,6 +310,7 @@ config :keyfleet, Oban,
       {"31 3 * * *", Keyfleet.Notebooks.DailyBackup},
       {"*/5 * * * *", Keyfleet.Chain.Watch},
       {"17 4 * * *", Keyfleet.ErrorPruner},
+      {"47 4 * * *", Keyfleet.Notebooks.RunPagePruner},
       {"41 * * * *", Keyfleet.Keys.DeckEndCheck},
       {"13 * * * *", Keyfleet.Usage.Count},
       {"* * * * *", Keyfleet.Atlas.Fill},
@@ -341,7 +342,8 @@ config :keyfleet, Oban,
 # projects is not asked of the hub again for `editor_ttl_ms`. An "Open
 # notebooks" link works once, for `handoff_ttl_seconds`, and the notebook
 # sign-in it sets lasts `session_max_age` seconds. Keyfleet keeps its own copy
-# of each saved page it hands out an address for, up to `saved_page_max_bytes`.
+# of each saved page it hands out an address for, up to `saved_page_max_bytes`;
+# a run's copy for 30 days (`Keyfleet.Notebooks.RunPagePruner`).
 config :keyfleet, :notebooks,
   issuer: "https://keyfleet.ai",
   host_suffix: "notebooks.keyfleet.ai",
