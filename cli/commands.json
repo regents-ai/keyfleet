@@ -1582,7 +1582,7 @@
     },
     {
       "command": "preview <tool>",
-      "description": "Preview what a write would do without sending it: the request and its size, the Key it is written as, who would see it, each refusal already certain and what your standing in the fleet is missing. Pipe the tool's input on stdin as {\"input\": {...}}.",
+      "description": "Preview what a write would do without sending it: the request and its size, the Key it is written as, who would see it, each refusal already certain (for a workspace write, the refusal the write would get now) and what your standing in the fleet is missing. Pipe the tool's input on stdin as {\"input\": {...}}.",
       "operation_id": "previewWrite",
       "method": "POST",
       "path": "/api/v1/agent/preview",

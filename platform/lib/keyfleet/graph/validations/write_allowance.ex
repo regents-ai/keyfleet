@@ -7,7 +7,9 @@ defmodule Keyfleet.Graph.Validations.WriteAllowance do
   write refused for the Key it names spends it too, and nobody probes Keys
   for free. A connector tool's input checked before the tool runs
   (`KeyfleetWeb.ToolErrors.check_input/3`, `input_check` in its context)
-  spends nothing: the run that follows spends it. It is kept by wallet, not
+  spends nothing: the run that follows spends it. Nor does a preview of a
+  write, which runs the action with `input_check` and writes nothing
+  (`KeyfleetWeb.Preview`). It is kept by wallet, not
   by the Key a write names: that Key is checked only later, so anyone could
   spend another Key's allowance by naming it.
   """

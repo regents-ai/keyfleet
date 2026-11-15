@@ -1179,6 +1179,97 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert length(commands(c, ann)) == 1
   end
 
+  # Costly failure: a preview that finds nothing wrong with a write its call
+  # then refuses sends an agent off believing its work is recorded.
+  test "a preview of a workspace write answers the refusal its write gets, and one it would take leaves no trace until it is sent",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+    task = make!(c, ann, "t-1", "task", %{title: "Draft"})
+
+    submit = %{
+      as_key: 1,
+      command_id: "s-1",
+      id: task["id"],
+      expected_version: 1,
+      result_ref: "https://example.com/brief"
+    }
+
+    assert graph(c, ann, "submit", submit).status == 200
+
+    review = %{
+      as_key: 2,
+      command_id: "r-1",
+      task: task["id"],
+      task_version: 2,
+      decision: "accept",
+      rationale: "Ran the notebook from the result.",
+      conflicts_of_interest: "none",
+      reproduction: "reproduced"
+    }
+
+    assert [refusal] = preview(c, bea, "workspace_review_task", review)["refusals"]
+    refused = graph(c, bea, "review", review)
+    assert {refused.status, refused.body["error"]["code"]} == {422, "invalid"}
+    assert refusal == Map.take(refused.body["error"], ~w(code message hint))
+
+    passed = %{review | command_id: "r-2", reproduction: "passed"}
+    {:ok, %{"result" => log}} = Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
+    check_ins = check_ins(bea)
+
+    assert preview(c, bea, "workspace_review_task", passed)["refusals"] == []
+
+    assert {:ok, %{"result" => ^log}} =
+             Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
+
+    assert check_ins(bea) == check_ins
+    assert graph(c, ann, "get", %{id: task["id"]}).body["object"]["review"] == "awaiting_review"
+
+    reviewed = graph(c, bea, "review", passed)
+    assert {reviewed.status, reviewed.body["replayed"]} == {200, false}
+    assert last_did(bea, @fleet) == :review
+    assert graph(c, ann, "get", %{id: task["id"]}).body["object"]["review"] == "reproduced"
+
+    # A Key the agent doesn't act as is refused as its write is.
+    assert [stranger] = preview(c, bea, "workspace_create", goal_command("g-1"))["refusals"]
+    refused = graph(c, bea, "create", goal_command("g-1"))
+    assert {refused.status, stranger["code"]} == {403, "not_a_key_holder"}
+    assert stranger == Map.take(refused.body["error"], ~w(code message hint))
+  end
+
+  test "a preview of a workspace write spends none of its wallet's write allowance and is never held back by it",
+       c do
+    start_graph(c)
+    [ann, _bea] = shard_agents(c)
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+    Application.put_env(
+      :keyfleet,
+      :limits,
+      Keyword.put(limits, :graph_writes, limit: 1, window_seconds: 60)
+    )
+
+    for _preview <- 1..3,
+        do: assert(preview(c, ann, "workspace_create", goal_command("g-1"))["refusals"] == [])
+
+    assert graph(c, ann, "create", goal_command("g-1")).status == 200
+    assert preview(c, ann, "workspace_create", goal_command("g-2"))["refusals"] == []
+
+    limited = graph(c, ann, "create", goal_command("g-2"))
+    assert {limited.status, limited.body["error"]["code"]} == {429, "workspace_limit_reached"}
+  end
+
+  test "a preview of a workspace write while the workspace isn't taking requests says so, as its write does",
+       c do
+    [ann, _bea] = shard_agents(c)
+
+    assert [unavailable] = preview(c, ann, "workspace_create", goal_command("g-1"))["refusals"]
+    refused = graph(c, ann, "create", goal_command("g-1"))
+    assert {refused.status, unavailable["code"]} == {503, "graph_unavailable"}
+    assert unavailable == Map.take(refused.body["error"], ~w(code message hint))
+  end
+
   defp start_graph(c, opts \\ []) do
     opts =
       Keyword.merge(
@@ -1274,6 +1365,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     for %{"type" => "keyfleet.command"} = event <- events, do: event
   end
 
+  defp check_ins(signer) do
+    [profile] = Keyfleet.Agents.agents_by_wallets!([signer.address], load: [:check_ins])
+    profile.check_ins
+  end
+
   # What the agent did last in the fleet, as its check-in records it.
   defp last_did(signer, fleet) do
     [profile] = Keyfleet.Agents.agents_by_wallets!([signer.address], load: [:check_ins])
@@ -1347,6 +1443,20 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   defp graph(c, agent, op, body, fleet \\ @fleet),
     do: send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet}/graph/#{op}", body)
+
+  # What a write tool would do with `input` in the fleet, as a signed preview
+  # answers it.
+  defp preview(c, agent, tool, input) do
+    previewed =
+      send_signed(c, agent, "POST", "/api/v1/agent/preview", %{
+        tool: tool,
+        input: Map.put(input, :fleet_id, @fleet)
+      })
+
+    assert previewed.status == 200
+    assert ContractSchema.errors(previewed.body, "WritePreview") == []
+    previewed.body
+  end
 
   defp send_signed(c, signer, method, path, body),
     do: send_signed(c, signer, receipt(c, signer), method, path, body)

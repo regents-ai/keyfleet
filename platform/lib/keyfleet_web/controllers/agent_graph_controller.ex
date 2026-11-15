@@ -162,12 +162,8 @@ defmodule KeyfleetWeb.AgentGraphController do
     end
   end
 
-  defp refuse(conn, %{errors: errors} = error),
-    do: answer(conn, Enum.find_value(errors, &WorkspaceRefusal.for_error/1) || fallback(error))
-
-  defp answer(conn, {status, body}), do: conn |> put_status(status) |> json(body)
-
-  # The policy's own refusal, before the write took its turn.
-  defp fallback(%Ash.Error.Forbidden{}), do: WorkspaceRefusal.refusal(403, "not_a_key_holder")
-  defp fallback(%Ash.Error.Invalid{}), do: WorkspaceRefusal.refusal(422, "invalid_request")
+  defp refuse(conn, error) do
+    {status, body} = WorkspaceRefusal.for_action_error(error)
+    conn |> put_status(status) |> json(body)
+  end
 end

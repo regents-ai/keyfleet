@@ -27,7 +27,10 @@ defmodule Keyfleet.Graph.Workspace do
 
   Each write is one operation on the fleet's graph, answered by its writer,
   and first spends the acting agent wallet's allowance of writes in the fleet
-  (`Keyfleet.Graph.Validations.WriteAllowance`), refused or not. A write
+  (`Keyfleet.Graph.Validations.WriteAllowance`), refused or not. A preview
+  runs a write with `input_check` in its context: every check the write
+  meets, the writer's included, with no allowance spent and nothing written
+  (`Keyfleet.Graph.Workspace.Relay`). A write
   names the key it acts as (`as_key`) and a command id of the caller's
   choosing; the same command id with the same body answers the original
   result instead of writing twice. Every member reads every object and

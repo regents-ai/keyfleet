@@ -4,11 +4,20 @@ defmodule KeyfleetWeb.Preview do
   the request its browser tool makes from the input, the Key it would be
   written as, who would see it (`audience`), its size against the
   operation's limit, and each refusal already certain from the request and
-  the agent's standing. Nothing is written, checked in or held, and a
-  preview approves nothing: the write itself is still checked whole when it
-  is sent, by rules a preview doesn't read, such as a task's version, the
-  values the workspace takes in an item's fields (the graph host's own
-  check) or a post limit.
+  the agent's standing.
+
+  A workspace write whose request is taken is also checked whole, as it
+  would be if it were sent now: its action runs with `input_check` in its
+  context, so its validations spend no write allowance, its policy reads the
+  agent's standing, and the fleet's writer stamps its command at its turn
+  and has the graph decide it without writing it
+  (`Keyfleet.Graph.Workspace.Relay`). Its refusal is the one the write's
+  signed request would answer (`KeyfleetWeb.WorkspaceRefusal`), in place of
+  the preview's own word for a Key the agent doesn't act as.
+
+  Nothing is written, checked in or held, and a preview approves nothing: the
+  write itself is checked again when it is sent, against the state then, and
+  by rules a preview doesn't read, such as a post limit.
 
   Each write tool's `audience` is the manifest's (`priv/tool_manifest.json`):
   `anyone`, `members` (the fleet's Keys), `conversation` (the two Keys of a
@@ -20,7 +29,7 @@ defmodule KeyfleetWeb.Preview do
   """
 
   alias Keyfleet.{Capabilities, Fleets, Graph, Projects}
-  alias KeyfleetWeb.{Budget, Refusal, Standing}
+  alias KeyfleetWeb.{Budget, Refusal, Standing, WorkspaceRefusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
   @public_rooms ~w(general people)
@@ -39,6 +48,14 @@ defmodule KeyfleetWeb.Preview do
       fleet_id = input["fleet_id"]
       standing = standing(actor, fleet_id)
       as_key = as_key(route, input, standing)
+      request_refusals = refusals(method, path, body, tool)
+
+      refusals =
+        case {workspace_write(name), request_refusals} do
+          {nil, refusals} -> refusals ++ key_refusals(as_key, input, standing)
+          {write, []} -> checked(write, input, actor)
+          {_write, refusals} -> refusals
+        end
 
       {:ok,
        %{
@@ -54,7 +71,7 @@ defmodule KeyfleetWeb.Preview do
          as_key: as_key,
          for_person: for_person?(as_key, standing),
          audience: audience(tool["audience"], input, actor),
-         refusals: refusals(method, path, body, tool) ++ key_refusals(as_key, input, standing),
+         refusals: refusals,
          missing: if(standing, do: standing.missing, else: [])
        }}
     end
@@ -68,6 +85,30 @@ defmodule KeyfleetWeb.Preview do
 
       _read_or_unknown ->
         :tool_unknown
+    end
+  end
+
+  # The workspace action a write tool runs, as the Claude connector's tool of
+  # the same name does (`Keyfleet.Graph`'s tools), or nil for another write.
+  defp workspace_write(name) do
+    Enum.find_value(AshAi.Info.tools(Graph), fn tool ->
+      if Atom.to_string(tool.name) == name, do: {tool.resource, tool.action}
+    end)
+  end
+
+  # The workspace write checked whole and not written: what refuses it, as
+  # its signed request would be answered.
+  defp checked({resource, action}, input, actor) do
+    resource
+    |> Ash.ActionInput.for_action(action, input, actor: actor, context: %{input_check: true})
+    |> Ash.run_action()
+    |> case do
+      {:ok, _taken} ->
+        []
+
+      {:error, error} ->
+        {_status, %{error: refusal}} = WorkspaceRefusal.for_action_error(error)
+        [Map.take(refusal, [:code, :message, :hint])]
     end
   end
 

@@ -10214,3 +10214,28 @@ removes or renames a field, route or code, or makes an input required.
   for each level to draw before the next key.
 - The tour's pointer box takes the warm accent, like the buttons' focus ring.
 - New browser walk `test/browser/atlas.spec.ts` with `BrowserChain.atlas!/1`.
+
+## 2026-11-15: A preview of a workspace write is told the refusal that write would get
+
+- `writes_preview` (`POST /api/v1/agent/preview`) of any of the ten workspace writes
+  checks the write whole once its request is taken: the action's own validations and
+  policy, then the fleet's writer stamps the command at its turn, with the standing read
+  then, and has the graph decide it without writing it. Its `refusals` is that write's own
+  refusal, with the code, message and hint its signed request answers
+  (`WorkspaceRefusal`), or none when it would be written. A review with reproduction
+  `reproduced` is now refused `invalid` in its preview, as its write is, where before the
+  preview answered no refusals.
+- A preview spends none of the wallet's write allowance and is never held back by it,
+  and leaves no event, change, ledger entry or used command id: the same command id
+  still writes when the write is sent. A workspace that isn't taking requests answers
+  its `graph_unavailable` refusal, never none. Previews of other writes are unchanged.
+- The graph host's write frame takes an optional `"check": true`: the write is parsed,
+  checked and planned as it would be, the duplicate-command case included, and answered
+  `{"v": 1, "req", "ok": true}` or its refusal, with no transaction opened. A read
+  marked `check` is refused `bad_request`. The protocol stays at version 1 because every
+  frame a site already sends means what it did, so the graph machine is released first.
+- `Writer.check/4` sends it; `Relay` sends a check for a run with `input_check` in its
+  context. `WorkspaceRefusal.for_action_error/1` maps a failed action's error for both the
+  signed write and the preview.
+- The contract, the agent docs, `docs.md` and the CLI's preview description say so. The
+  contract stays 33.0.0: no shape changes.

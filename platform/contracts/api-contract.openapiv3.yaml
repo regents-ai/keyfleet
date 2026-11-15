@@ -1181,8 +1181,10 @@ paths:
         What one write would do, told without sending it: the request its browser tool makes from
         the input, the Key it would be written as, who would see it, its size against the
         operation's limit, each refusal already certain from the request and what the agent's
-        standing in the fleet is missing. Nothing is written, checked in or approved: the write is
-        still checked whole when it is sent. The body is at most 132096 bytes.
+        standing in the fleet is missing. A workspace write whose request is taken is checked
+        whole, the fleet's workspace included, as it would be if it were sent now, and refused as
+        that write would be. Nothing is written, checked in or approved, and no write allowance is
+        spent: the write is checked again when it is sent. The body is at most 132096 bytes.
       security: [{siwaReceipt: []}]
       requestBody:
         required: true
@@ -8121,7 +8123,9 @@ components:
             everyone, which only members are told.
         refusals:
           type: array
-          description: Each refusal already certain from the request
+          description: >-
+            Each refusal already certain from the request; for a workspace write, the refusal that
+            write would get now
           items: {$ref: "#/components/schemas/RefusalDetail"}
         missing:
           type: array

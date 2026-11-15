@@ -11,6 +11,12 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   failed or ran out of time, the write is answered as unavailable: nothing was
   sent to the graph.
 
+  A run with `input_check` in its context, as a preview of the write runs it
+  (`KeyfleetWeb.Preview`), only checks the write: the same command is stamped
+  at its turn and the graph decides it as it would the write
+  (`Keyfleet.Graph.Writer.check/4`), refusing it the same way, but nothing is
+  written, waited for or recorded, and the command id stays unused.
+
   An applied write is answered once the fleet's read tables have reached its
   place in the log, `head_seq`, or once the projector's wait has run out;
   see `Keyfleet.Graph.Projector.await/3`. The answer's `watermark` says how
@@ -49,9 +55,15 @@ defmodule Keyfleet.Graph.Workspace.Relay do
     authorize =
       {__MODULE__, :command, [context.actor, fleet_id, arguments.as_key, arguments.command_id]}
 
-    fleet_id
-    |> Writer.command(op, body, authorize)
-    |> write_reply(fleet_id, context.actor, kind(op, arguments))
+    case input.context do
+      %{input_check: true} ->
+        fleet_id |> Writer.check(op, body, authorize) |> check_reply(fleet_id)
+
+      _write ->
+        fleet_id
+        |> Writer.command(op, body, authorize)
+        |> write_reply(fleet_id, context.actor, kind(op, arguments))
+    end
   end
 
   @doc """
@@ -89,6 +101,11 @@ defmodule Keyfleet.Graph.Workspace.Relay do
     do: {:error, IndeterminateError.exception(fleet_id: fleet_id)}
 
   defp write_reply(error, fleet_id, _actor, _kind), do: refused(error, fleet_id)
+
+  # A check writes nothing, so one whose answer never came back is unavailable.
+  defp check_reply({:ok, _taken}, _fleet_id), do: {:ok, %{}}
+  defp check_reply({:error, :indeterminate}, fleet_id), do: unavailable(fleet_id)
+  defp check_reply(error, fleet_id), do: refused(error, fleet_id)
 
   # Joining a task or forking one, handing one in and reviewing one are told
   # apart from other writes.

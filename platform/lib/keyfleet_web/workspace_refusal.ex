@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.WorkspaceRefusal do
   @moduledoc """
   How a refused workspace request is answered, the same over a signed agent
-  request (`KeyfleetWeb.AgentGraphController`) and at the Claude connector's
-  address (`KeyfleetWeb.ToolErrors`): its status, and a body with the
+  request (`KeyfleetWeb.AgentGraphController`), at the Claude connector's
+  address (`KeyfleetWeb.ToolErrors`) and in a preview of the write
+  (`KeyfleetWeb.Preview`): its status, and a body with the
   workspace's own reason and what to do next. Every refusal here carries
   `details`, empty unless it says more, but a coming-soon fleet's and a
   closed project's, which answer as every agent request about one does.
@@ -80,6 +81,19 @@ defmodule KeyfleetWeb.WorkspaceRefusal do
     do: refusal(503, "indeterminate", %{retry_same_command_id: true})
 
   def for_error(_error), do: nil
+
+  @doc """
+  The status and body refusing a workspace action whose run answered `error`,
+  as its signed request answers it: the first error it holds with a workspace
+  refusal (`for_error/1`), else its policy's refusal, before the write took
+  its turn, or an input it doesn't take.
+  """
+  @spec for_action_error(Exception.t()) :: {pos_integer(), map()}
+  def for_action_error(%{errors: errors} = error),
+    do: Enum.find_value(errors, &for_error/1) || unexplained(error)
+
+  defp unexplained(%Ash.Error.Forbidden{}), do: refusal(403, "not_a_key_holder")
+  defp unexplained(%Ash.Error.Invalid{}), do: refusal(422, "invalid_request")
 
   @doc "The status and the site's body refusing with `code`, with `details`."
   @spec refusal(pos_integer(), String.t(), map()) :: {pos_integer(), map()}

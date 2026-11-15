@@ -13,7 +13,8 @@ defmodule Keyfleet.Graph.Writer do
   a request is in flight, leaves the outcome unknown: the caller gets
   `{:error, :indeterminate}` and the host is killed. The host keeps a ledger of
   every command it committed, so retrying with the same command id returns the
-  original result instead of applying it twice.
+  original result instead of applying it twice. A write can also be checked
+  without being made (`check/4`), which the host neither applies nor records.
 
   Each host is started with the fleet's starting goals (`:starting_goals`, each
   `%{title, outcome}`), which it keeps in the workspace as listed before it
@@ -92,6 +93,20 @@ defmodule Keyfleet.Graph.Writer do
     end
   end
 
+  @doc """
+  Checks a write without making it: it takes its turn and is authorized as
+  `command/4` would be, and the host decides it as it would decide the write,
+  answering `{:ok, reply}` when it would take it, or the refusal the write
+  would get. The host writes nothing for a check and keeps no record of its
+  command id, so the write itself may follow under the same id.
+  """
+  @spec check(String.t(), String.t(), map(), authorize()) :: reply()
+  def check(fleet_id, op, body, authorize) when op in @write_ops do
+    with {:ok, json} <- encode(body) do
+      send_to_writer(fleet_id, {:check, op, json, authorize})
+    end
+  end
+
   # Bodies are encoded here, in the caller's process, so one that JSON cannot
   # express is refused before it reaches the writer.
   defp encode(term) do
@@ -158,10 +173,19 @@ defmodule Keyfleet.Graph.Writer do
     end
   end
 
-  def handle_call({:command, op, body, authorize}, from, %{host: %{ready?: true}} = state) do
-    case check(authorize, state) do
+  def handle_call({:command, op, body, authorize}, from, %{host: %{ready?: true}} = state),
+    do: send_command(%{v: 1, op: op}, body, authorize, from, state)
+
+  # A check is the write's own frame, marked `check`.
+  def handle_call({:check, op, body, authorize}, from, %{host: %{ready?: true}} = state),
+    do: send_command(%{v: 1, op: op, check: true}, body, authorize, from, state)
+
+  def handle_call(_request, _from, state), do: {:reply, {:error, :unavailable}, state}
+
+  defp send_command(message, body, authorize, from, state) do
+    case stamp(authorize, state) do
       {:ok, command} ->
-        message = %{v: 1, op: op, command: command, body: Jason.Fragment.new(body)}
+        message = Map.merge(message, %{command: command, body: Jason.Fragment.new(body)})
         handle_call({:send, Jason.encode!(message)}, from, state)
 
       {:error, error} ->
@@ -169,12 +193,11 @@ defmodule Keyfleet.Graph.Writer do
     end
   end
 
-  def handle_call(_request, _from, state), do: {:reply, {:error, :unavailable}, state}
-
   # A database pool that is down or out of time exits its caller, and a fault
-  # in the check raises; either would stop the writer, so a check that exits
-  # or raises is answered as unavailable, with nothing sent.
-  defp check({module, function, args}, state) do
+  # in the ownership check raises; either would stop the writer, so an
+  # ownership check that exits or raises is answered as unavailable, with
+  # nothing sent.
+  defp stamp({module, function, args}, state) do
     apply(module, function, args ++ [state.check_timeout])
   rescue
     error ->
