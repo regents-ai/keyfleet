@@ -45,10 +45,11 @@ defmodule Keyfleet.Notebooks.RunsTest do
     assert answer.failure == failure(25)
     refute answer.result_url == good_url
 
+    # The list's state is the newest run's page, and how that run failed, never
+    # its exit status or output.
     assert {:ok, %{notebooks: [listed]}} = Runs.list(@fleet, @subject, @space, nil)
-    assert listed.last_run.run_id == newest
-    assert listed.last_run.status == "failed"
-    assert listed.last_succeeded == %{run_id: good, result_url: good_url}
+    assert %{run_id: ^newest, worked: false, changed_since: false} = listed.state
+    assert listed.state.error == %{stage: "export", message: "run 25 stopped"}
   end
 
   defp read(run_id), do: Runs.read(@fleet, @subject, @space, @notebook, run_id)
@@ -76,7 +77,14 @@ defmodule Keyfleet.Notebooks.RunsTest do
 
     case conn.path_info do
       ["api", "v1", "projects", @space, "notebooks"] ->
-        data(conn, %{"items" => [%{"id" => @notebook, "title" => "Runs", "description" => ""}]})
+        notebook = %{
+          "id" => @notebook,
+          "title" => "Runs",
+          "description" => "",
+          "updated_at" => "2026-11-12T00:00:00Z"
+        }
+
+        data(conn, %{"items" => [notebook]})
 
       ["api", "v1", "projects", @space, "notebooks", @notebook, "jobs"] ->
         data(conn, %{

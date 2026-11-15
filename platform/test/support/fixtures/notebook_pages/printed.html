@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Preload is necessary because we show these images when we disconnect from the server,
+    but at that point we cannot load these images from the server -->
+    <!-- Preload the fonts -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="a marimo app" />
+
+    <script data-marimo="true">
+      function __resizeIframe(obj) {
+        const scrollbarHeight = 20; // Max between windows, mac, and linux
+
+        function setHeight() {
+          // Guard against race condition where iframe isn't ready
+          if (!obj.contentWindow?.document?.documentElement) {
+            return;
+          }
+          const element = obj.contentWindow.document.documentElement;
+          // If there is no vertical scrollbar, we don't need to resize the iframe
+          if (element.scrollHeight === element.clientHeight) {
+            return;
+          }
+
+          // Create a new height that includes the scrollbar height if it's visible
+          const hasHorizontalScrollbar = element.scrollWidth > element.clientWidth;
+          const newHeight = element.scrollHeight + (hasHorizontalScrollbar ? scrollbarHeight : 0);
+
+          // Only update the height if it's different from the current height
+          if (obj.style.height !== `${newHeight}px`) {
+            obj.style.height = `${newHeight}px`;
+          }
+        }
+
+        // Resize the iframe to the height of the content and bottom scrollbar height
+        setHeight();
+
+        // Resize the iframe when the content changes
+        const resizeObserver = new ResizeObserver((_entries) => {
+          setHeight();
+        });
+        // Only observe if iframe content is ready
+        if (obj.contentWindow?.document?.body) {
+          resizeObserver.observe(obj.contentWindow.document.body);
+        }
+      }
+    </script>
+    <marimo-filename hidden>printed.py</marimo-filename>
+    <!-- TODO(Trevor): Legacy, required by VS Code plugin. Remove when plugin is updated (see marimo/server/_templates/template.py) -->
+    <marimo-version data-version="{{ version }}" hidden></marimo-version>
+    <marimo-user-config data-config="{{ user_config }}" hidden></marimo-user-config>
+    <marimo-server-token data-token="{{ server_token }}" hidden></marimo-server-token>
+    <!-- /TODO -->
+    <title>printed</title>
+    <script type="module" crossorigin src="https://cdn.jsdelivr.net/npm/@marimo-team/frontend@0.25.2/dist/assets/index-s-M1OXjs.js"></script>
+  
+<script data-marimo="true">
+    Object.defineProperty(window, "__MARIMO_STATIC__", {
+        value: Object.freeze({
+            files: Object.freeze({}),
+            modelNotifications: Object.freeze([]),
+        }),
+        writable: false,
+        configurable: false,
+    });
+</script>
+
+<script data-marimo="true">
+    Object.defineProperty(window, "__MARIMO_EXPORT_CONTEXT__", {
+        value: Object.freeze({
+            trusted: true,
+            notebookCode: "import marimo\n\n__generated_with = \"0.25.2\"\napp = marimo.App()\n\n\n@app.cell\ndef _():\n    import sys\n\n    import marimo as mo\n\n    print(\"loading rows\")\n    print(\"two rows skipped\", file=sys.stderr)\n    rows = [1, 2, 3]\n    return mo, rows\n\n\n@app.cell\ndef _(mo, rows):\n    mo.md(f\"**Rows:** {len(rows)}\")\n    return\n\n\n@app.cell\ndef _(rows):\n    total = sum(rows) / 0\n    return (total,)\n\n\n@app.cell\ndef _(total):\n    total * 2\n    return\n\n\nif __name__ == \"__main__\":\n    app.run()\n",
+        }),
+        writable: false,
+        configurable: false,
+    });
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script data-marimo="true">
+      Object.defineProperty(window, "__MARIMO_MOUNT_CONFIG__", {
+        value: Object.freeze({
+            "filename": "printed.py",
+            "cwd": "",
+            "lspWorkspace": null,
+            "mode": "read",
+            "version": "0.25.2",
+            "serverToken": "static",
+            "config": {"ai": {"allow_provider_config": true, "custom_providers": {}, "enabled": true, "models": {"custom_models": [], "displayed_models": []}}, "completion": {"activate_on_typing": true, "auto_close_pairs": true, "copilot": false, "signature_hint_on_typing": false}, "diagnostics": {"sql_linter": true}, "display": {"cell_output": "below", "code_editor_font_size": 14, "code_lens": true, "dataframes": "rich", "default_table_max_columns": 50, "default_table_page_size": 10, "default_width": "medium", "reference_highlighting": true, "theme": "light"}, "formatting": {"line_length": 79}, "keymap": {"overrides": {}, "preset": "default"}, "language_servers": {"pylsp": {"enable_flake8": false, "enable_mypy": true, "enable_pydocstyle": false, "enable_pyflakes": false, "enable_pylint": false, "enable_ruff": true, "enabled": false}}, "mcp": {"mcpServers": {}, "presets": []}, "package_management": {"manager": "uv"}, "runtime": {"auto_instantiate": false, "auto_reload": "off", "default_csv_encoding": "utf-8", "default_sql_output": "auto", "on_cell_change": "autorun", "output_max_bytes": 8000000, "reactive_tests": true, "show_tracebacks": false, "std_stream_max_bytes": 1000000, "watcher_on_save": "lazy"}, "save": {"autosave": "after_delay", "autosave_delay": 1000, "format_on_save": false}, "server": {"browser": "default", "follow_symlink": false}, "snippets": {"custom_paths": [], "include_default_snippets": true}},
+            "configOverrides": {},
+            "appConfig": {"sql_output": "auto", "width": "compact"},
+            "layout": null,
+            "view": {"showAppCode": true},
+            "notebook": {"cells": [{"code": "import sys\n\nimport marimo as mo\n\nprint(\"loading rows\")\nprint(\"two rows skipped\", file=sys.stderr)\nrows = [1, 2, 3]", "code_hash": "211a588a6f012e9abdb1b5989cc83e14", "config": {"column": null, "disabled": false, "expand_output": false, "hide_code": false}, "id": "Hbol", "name": "_"}, {"code": "mo.md(f\"**Rows:** {len(rows)}\")", "code_hash": "9ceedcb80fd776e3f386bac7fadac4dc", "config": {"column": null, "disabled": false, "expand_output": false, "hide_code": false}, "id": "MJUe", "name": "_"}, {"code": "total = sum(rows) / 0", "code_hash": "a663ab34456c1980a51c1ec222dd6f02", "config": {"column": null, "disabled": false, "expand_output": false, "hide_code": false}, "id": "vblA", "name": "_"}, {"code": "total * 2", "code_hash": "0f345e9759b6af43b00936d483e05f22", "config": {"column": null, "disabled": false, "expand_output": false, "hide_code": false}, "id": "bkHC", "name": "_"}], "metadata": {"marimo_version": "0.25.2"}, "version": "1"},
+            "session": {"cells": [{"code_hash": "211a588a6f012e9abdb1b5989cc83e14", "console": [{"mimetype": "text/plain", "name": "stdout", "text": "loading rows\n", "type": "stream"}, {"mimetype": "text/plain", "name": "stderr", "text": "two rows skipped\n", "type": "stream"}], "id": "Hbol", "outputs": [{"data": {"text/plain": ""}, "type": "data"}]}, {"code_hash": "9ceedcb80fd776e3f386bac7fadac4dc", "console": [], "id": "MJUe", "outputs": [{"data": {"text/markdown": "\u003Cspan class=\"markdown prose dark:prose-invert contents\"\u003E\u003Cspan class=\"paragraph\"\u003E\u003Cstrong\u003ERows:\u003C/strong\u003E 3\u003C/span\u003E\u003C/span\u003E"}, "type": "data"}]}, {"code_hash": "a663ab34456c1980a51c1ec222dd6f02", "console": [{"mimetype": "application/vnd.marimo+traceback", "name": "stderr", "text": "\u003Cspan class=\"codehilite\"\u003E\u003Cdiv class=\"highlight\"\u003E\u003Cpre\u003E\u003Cspan\u003E\u003C/span\u003E\u003Cspan class=\"gt\"\u003ETraceback (most recent call last):\u003C/span\u003E\n  File \u003Cspan class=\"nb\"\u003E\"/var/folders/r2/dyvhtvrs1wj_j0crbq99gc4r0000gn/T/marimo_24688/__marimo__cell_vblA_.py\"\u003C/span\u003E, line \u003Cspan class=\"m\"\u003E1\u003C/span\u003E, in \u003Cspan class=\"n\"\u003E\u0026lt;module\u0026gt;\u003C/span\u003E\n\u003Cspan class=\"w\"\u003E    \u003C/span\u003E\u003Cspan class=\"n\"\u003Etotal\u003C/span\u003E \u003Cspan class=\"o\"\u003E=\u003C/span\u003E \u003Cspan class=\"nb\"\u003Esum\u003C/span\u003E\u003Cspan class=\"p\"\u003E(\u003C/span\u003E\u003Cspan class=\"n\"\u003Erows\u003C/span\u003E\u003Cspan class=\"p\"\u003E)\u003C/span\u003E \u003Cspan class=\"o\"\u003E/\u003C/span\u003E \u003Cspan class=\"mi\"\u003E0\u003C/span\u003E\n\u003Cspan class=\"w\"\u003E            \u003C/span\u003E\u003Cspan class=\"pm\"\u003E~~~~~~~~~~^~~\u003C/span\u003E\n\u003Cspan class=\"gr\"\u003EZeroDivisionError\u003C/span\u003E: \u003Cspan class=\"n\"\u003Edivision by zero\u003C/span\u003E\n\u003C/pre\u003E\u003C/div\u003E\n\u003C/span\u003E", "type": "stream"}], "id": "vblA", "outputs": [{"ename": "exception", "evalue": "division by zero", "traceback": null, "type": "error"}]}, {"code_hash": "0f345e9759b6af43b00936d483e05f22", "console": [], "id": "bkHC", "outputs": [{"ename": "exception", "evalue": "An ancestor raised an exception (ZeroDivisionError): ", "traceback": null, "type": "error"}]}], "metadata": {"marimo_version": "0.25.2", "script_metadata_hash": null}, "version": "1"},
+            "runtimeConfig": null
+        }),
+        writable: false,
+        configurable: false,
+      });
+    </script>
+  
+<marimo-code hidden="">
+    import%20marimo%0A%0A__generated_with%20%3D%20%220.25.2%22%0Aapp%20%3D%20marimo.App()%0A%0A%0A%40app.cell%0Adef%20_()%3A%0A%20%20%20%20import%20sys%0A%0A%20%20%20%20import%20marimo%20as%20mo%0A%0A%20%20%20%20print(%22loading%20rows%22)%0A%20%20%20%20print(%22two%20rows%20skipped%22%2C%20file%3Dsys.stderr)%0A%20%20%20%20rows%20%3D%20%5B1%2C%202%2C%203%5D%0A%20%20%20%20return%20mo%2C%20rows%0A%0A%0A%40app.cell%0Adef%20_(mo%2C%20rows)%3A%0A%20%20%20%20mo.md(f%22**Rows%3A**%20%7Blen(rows)%7D%22)%0A%20%20%20%20return%0A%0A%0A%40app.cell%0Adef%20_(rows)%3A%0A%20%20%20%20total%20%3D%20sum(rows)%20%2F%200%0A%20%20%20%20return%20(total%2C)%0A%0A%0A%40app.cell%0Adef%20_(total)%3A%0A%20%20%20%20total%20*%202%0A%20%20%20%20return%0A%0A%0Aif%20__name__%20%3D%3D%20%22__main__%22%3A%0A%20%20%20%20app.run()%0A
+</marimo-code>
+
+<marimo-code-hash hidden="">e63ec23cd9175432f3c76e68968340c7</marimo-code-hash>
+</body>
+</html>

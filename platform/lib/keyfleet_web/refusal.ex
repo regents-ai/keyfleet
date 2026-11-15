@@ -458,6 +458,12 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_run_not_found" =>
       {"This fleet has no such notebook or run.",
        "Check the notebook's id with notebooks_list. Read a run by the run_id notebooks_run answered; runs are kept for 30 days."},
+    "notebook_page_not_kept" =>
+      {"Keyfleet keeps no page of a run of this notebook yet.",
+       "Start a run with notebooks_run, then read it with notebooks_result until it has finished: its page is kept then."},
+    "notebook_page_unreadable" =>
+      {"This notebook's newest kept page holds no cells Keyfleet can read.",
+       "Start a run with notebooks_run and read it with notebooks_result until it has finished: its page is then the newest."},
     "notebook_runs_full" =>
       {"This notebook can't take another run right now.",
        "Read the runs you started with notebooks_result until they finish, then start another."},
@@ -491,6 +497,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_file_not_text" =>
       {"This file isn't text, so it isn't read out here.",
        "Read it from a notebook session or run instead."},
+    "notebook_cursor_unknown" =>
+      {"That cursor isn't one this list answered.",
+       "Leave out cursor to read the first page again, then send each page's cursor back unchanged."},
     # The fleets' code, through git.
     "code_not_found" =>
       {"There is no code at this address.",

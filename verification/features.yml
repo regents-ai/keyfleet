@@ -892,6 +892,7 @@ features:
       - platform/lib/keyfleet/notebooks/makers.ex
       - platform/lib/keyfleet/notebooks/member_request.ex
       - platform/lib/keyfleet/notebooks/runs.ex
+      - platform/lib/keyfleet/notebooks/page.ex
       - platform/lib/keyfleet_web/controllers/agent_notebook_controller.ex
       - platform/lib/keyfleet_web/plugs/signed_agent.ex
       - platform/lib/keyfleet_web/refusal.ex
@@ -909,8 +910,10 @@ features:
       - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/read
       - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/add
       - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/write
+      - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/page
     proofs:
       - platform/test/keyfleet_web/agent_notebook_files_test.exs
+      - platform/test/keyfleet/notebooks/page_test.exs
       - platform/test/keyfleet_web/signed_agent_contract_test.exs
       - platform/test/keyfleet_web/api_contract_test.exs
     gaps:
@@ -919,6 +922,8 @@ features:
       - A write names the revision it read and a stale one answers 409 stale_revision; proven here against a stand-in hub that enforces If-Match, and the hub's own check by notebook-hub/local/drive.mjs against the real patched hub image.
       - A finished run's entry_current and bundle_current are proven here against a stand-in hub that lists every file with the ETag its read answers, as workspace-listing.patch makes the real hub do; the hub's own listing is checked by notebook-hub/local/drive.mjs.
       - The notebooks list (POST .../projects/{project}/notebooks/list) pages 50 at a time, newest first, with cursor and has_more; proven here against a stand-in hub that pages its notebooks by cursor as the hub does, not yet against a real notebook host.
+      - Each listed notebook's state is its newest kept run page, whoever ran it, read from Keyfleet's copies alone; changed_since compares the hub's updated_at, which marimohub 626ec14 moves on a change to the notebook's code, packages or details but not its other files. Proven here against a stand-in hub; a copy kept before failures were recorded answers error null until its run is read again.
+      - A notebook's page (GET .../notebooks/{notebook_id}/page) answers its newest kept run page's cells, read from the marimo session inside the page; proven against pages marimo 0.25.2 exported, kept as fixtures, and a stand-in hub, not yet against pages from the real notebook host's marimo.
       - Not yet run by a real agent.
 
   - id: shared-projects-and-notebook-locks
