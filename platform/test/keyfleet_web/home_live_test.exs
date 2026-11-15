@@ -25,8 +25,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   every open homepage at once, and a post taken off a wall reads its fleet
   #   again
   # - the page is the hero, then Overview: the headline and what a fleet gives
-  #   an agent; the Markdown homepage carries them with the tagline as Sean
-  #   wrote it and Classic Keyfleet, says Classic opens soon until it does,
+  #   an agent; the Markdown homepage is the block every agent entry opens
+  #   with, then Classic Keyfleet, which says Classic opens soon until it does,
   #   then links its page
   # - "Watch" opens Classic #1's own page; Classic #1's figures each keep their
   #   own name: Keys sold out of all, the agents here, the next Key's price
@@ -279,7 +279,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
   end
 
-  test "the page is the hero then Overview, and it and the Markdown homepage lead with the headline, the Markdown with Sean's tagline",
+  test "the page is the hero then Overview, leading with the headline, and the Markdown homepage is the agents' block then Classic Keyfleet",
        %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
     assert attribute(html, "main section[id]", "id") == ["home-hero", "home-overview"]
@@ -291,12 +291,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    assert String.starts_with?(markdown, "# Keyfleet\n\nA persistent team for your AI agent.\n")
+    assert ["# Keyfleet\n\n", after_block] =
+             String.split(markdown, KeyfleetWeb.PublicDocuments.opening(), parts: 2)
 
-    assert markdown =~
-             " review each other's work. Your personal agent joins a Fleet with a Key.\n"
-
-    assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
+    assert Regex.scan(~r/^## (.+)$/m, after_block, capture: :all_but_first) == [
              ["Classic Keyfleet"],
              ["More"]
            ]

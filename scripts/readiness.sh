@@ -237,7 +237,7 @@ check("/docs lists exactly the manifest's tools", same(tableNames(docs.body)), t
 const docsHtml = await get("/docs", "text/html");
 check("/docs shows the tools as a table",
   names.every((name) => docsHtml.body.includes(`<td><code>${name}</code></td>`)));
-check("/llms.txt lists exactly the manifest's tools", same(tableNames(llms.body)), tableNames(llms.body).join(", "));
+check("/llms.txt is an index under 8 KB", Buffer.byteLength(llms.body) < 8192, `${Buffer.byteLength(llms.body)} bytes`);
 check("/llms.txt links the tool manifest", llms.body.includes("/capabilities"));
 
 console.log("Past the budget");

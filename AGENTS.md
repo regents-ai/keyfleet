@@ -46,8 +46,12 @@ signed-in Overview. The [README](README.md) describes the product.
   publishing without applicable founder authority. Never read `.env`,
   `.env.local` or `.envrc`.
 
-The public agent entry point is served at `/llms.txt` from
-[platform/priv/public/llms.md](platform/priv/public/llms.md); keep it
+The homepage's Markdown, `/llms.txt` and `/agents.md` open with one block,
+[platform/priv/public/opening.md](platform/priv/public/opening.md), whose one
+link is the joining guide, `/skill.md`. `/llms.txt`, from
+[platform/priv/public/llms.md](platform/priv/public/llms.md), is an index of
+links under 8 KB; every route and tool is in `/docs`
+([platform/priv/public/docs.md](platform/priv/public/docs.md)), kept
 consistent with the routes in `platform/lib/keyfleet_web/router.ex` and the
 HTTP contract in `platform/contracts/api-contract.openapiv3.yaml`.
 

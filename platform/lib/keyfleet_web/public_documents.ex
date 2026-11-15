@@ -6,14 +6,15 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   @directory Application.app_dir(:keyfleet, "priv/public")
   @files Enum.map(
-           ~w(docs about changelog opportunities privacy terms llms help agents),
+           ~w(docs about changelog opportunities privacy terms llms help agents opening words),
            &Path.join(@directory, &1 <> ".md")
          )
   for file <- @files, do: @external_resource(file)
   @sources Map.new(@files, &{Path.basename(&1, ".md"), File.read!(&1)})
-  # The About page's Key facts, repeated in llms.txt so AI tools read the same facts.
-  [_about, facts] = String.split(@sources["about"], "\n## Key facts\n")
-  @key_facts "## Key facts\n" <> String.trim_trailing(hd(String.split(facts, "\n## ", parts: 2)))
+  # The block every agent entry opens with: the homepage's Markdown, llms.txt
+  # and agents.md. The last two follow it with the words it uses.
+  @opening String.trim_trailing(@sources["opening"])
+  @words String.trim_trailing(@sources["words"])
   @openapi_path Path.join(@directory, "openapi.json")
   @external_resource @openapi_path
   @openapi @openapi_path |> File.read!() |> Jason.decode!()
@@ -141,6 +142,12 @@ defmodule KeyfleetWeb.PublicDocuments do
   def document(_path), do: nil
 
   def llms, do: source("llms")
+
+  @doc """
+  The block every agent entry opens with: what Keyfleet is, what it costs,
+  what the agent's person does, the four steps and the joining guide.
+  """
+  def opening, do: fill(@opening)
 
   @doc """
   Public agent guidance with this deployment's current launch state, in its
@@ -385,16 +392,20 @@ defmodule KeyfleetWeb.PublicDocuments do
     }
   end
 
-  # `{{key_facts}}` is the About page's Key facts section; `{{what_you_can_do}}`
-  # is what an agent may do in each status, as whoami tells it; `{{tools}}` is the
-  # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
-  # a pairing may name, as the pair request accepts them; `{{goal_ideas}}` the
-  # starting ideas for a fleet's shared goal, as every agent guide ends with them;
-  # `{{hosted_mcp}}` whether the Claude connector's address answers now.
-  defp source(name) do
-    @sources[name]
+  defp source(name), do: fill(@sources[name])
+
+  # `{{opening}}` is the block every agent entry opens with and `{{words}}` the
+  # words it uses; `{{what_you_can_do}}` is what an agent may do in each status,
+  # as whoami tells it; `{{tools}}` is the browser tools table, from the one tool
+  # manifest; `{{harnesses}}` the agents a pairing may name, as the pair request
+  # accepts them; `{{goal_ideas}}` the starting ideas for a fleet's shared goal,
+  # as every agent guide ends with them; `{{hosted_mcp}}` whether the Claude
+  # connector's address answers now.
+  defp fill(text) do
+    text
+    |> String.replace("{{opening}}", @opening)
+    |> String.replace("{{words}}", @words)
     |> String.replace("{{hosted_mcp}}", hosted_mcp())
-    |> String.replace("{{key_facts}}", @key_facts)
     |> String.replace("{{what_you_can_do}}", what_you_can_do())
     |> String.replace("{{origin}}", url(""))
     |> String.replace("{{tools}}", Keyfleet.Capabilities.markdown_table())

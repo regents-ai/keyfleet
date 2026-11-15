@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     open = "The Regents Club and Classic #1 are open"
 
     assert conn |> get("/llms.txt") |> response(200) =~ open
-    assert build_conn() |> get("/llms.txt") |> response(200) =~ "Classic #1 sells its 1,024 Keys"
+    assert build_conn() |> get("/llms.txt") |> response(200) =~ "Classic #1 sells 1,024 Keys"
     assert build_conn() |> get("/docs") |> html_response(200) =~ open
 
     assert build_conn()
@@ -223,6 +223,40 @@ defmodule KeyfleetWeb.AgentFilesTest do
              |> get(path)
              |> response(200),
              path
+    end
+  end
+
+  test "the Markdown homepage, /llms.txt and /agents.md each open with the same block under their title" do
+    opening = KeyfleetWeb.PublicDocuments.opening()
+
+    blocks =
+      for path <- ~w(/ /llms.txt /agents.md) do
+        body =
+          build_conn() |> put_req_header("accept", "text/markdown") |> get(path) |> response(200)
+
+        [_title, after_title] = String.split(body, "\n\n", parts: 2)
+        binary_part(after_title, 0, min(byte_size(opening), byte_size(after_title)))
+      end
+
+    assert blocks == [opening, opening, opening]
+  end
+
+  test "/llms.txt is an index under 8 KB as the live site serves it, every link on this site answering",
+       %{conn: conn} do
+    llms = conn |> get("/llms.txt") |> response(200)
+    origin = KeyfleetWeb.Endpoint.url()
+
+    assert byte_size(String.replace(llms, origin, "https://keyfleet.ai")) < 8_192
+
+    paths =
+      for [_, url] <- Regex.scan(~r/\]\(([^)]+)\)/, llms),
+          String.starts_with?(url, origin),
+          do: URI.parse(url).path
+
+    assert "/capabilities.json" in paths and "/docs" in paths
+
+    for path <- paths do
+      assert build_conn() |> get(path) |> response(200), path
     end
   end
 
