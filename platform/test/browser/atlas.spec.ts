@@ -61,8 +61,23 @@ test("a member's Atlas opens on the blocks, which open, go back up, show a card 
   await page.locator(`${blocks} [data-blocks-trail] button`, {hasText: "Fleet"}).click()
   await expect(level).toHaveText("Projects")
 
-  // The keyboard rings a block, opens it, zooms, and goes back up.
+  // Escape goes up a level at a time, each once the picture has drawn the
+  // level before.
   const stage = page.locator("#atlas-blocks-stage")
+  const upToProjects = () =>
+    expect(async () => {
+      await page.keyboard.press("Escape")
+      await expect(level).toHaveText("Projects", {timeout: 250})
+    }).toPass()
+
+  // General's tasks take most of it, so they show as it opens; Escape still
+  // goes back up to the projects.
+  await page.mouse.click(general.x, general.y)
+  await expect(level).toHaveText("Items")
+  await stage.focus()
+  await upToProjects()
+
+  // The keyboard rings a block, opens it, zooms, and goes back up.
   await stage.focus()
   await page.keyboard.press("ArrowRight")
   await page.keyboard.press("Enter")
@@ -71,11 +86,8 @@ test("a member's Atlas opens on the blocks, which open, go back up, show a card 
   await page.keyboard.press("+")
   await page.keyboard.press("-")
   const card = page.locator(`${blocks} [data-blocks-card]`)
-  // Escape puts away the card of the ringed block, then goes up a level at a time.
-  for (let tries = 0; tries < 6 && (await level.textContent()) !== "Projects"; tries++) {
-    await page.keyboard.press("Escape")
-  }
-  await expect(level).toHaveText("Projects")
+  // Escape puts away the card of the ringed block, then goes up.
+  await upToProjects()
   await expect(stage).toBeFocused()
 
   // The block pointed at has a card beside it, never over it, and its close

@@ -46,7 +46,7 @@ body[data-sea-lifted] .tour {
 }
 
 .tour__edge > .tour__piece {
-  background: var(--ash-accent);
+  background: var(--ash-accent-warm);
 }
 
 /* The light round the ring shows once a first frame of it has really been

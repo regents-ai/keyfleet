@@ -10208,5 +10208,9 @@ removes or renames a field, route or code, or makes an input required.
   a lit block with the others dimmed, a card beside the block pointed at or
   ringed (close button and Escape), and one bar for time, path, zoom and key.
 - The List and the Active strip share the rhythm, with small kind pills.
-- Escape from a block holding a single kind now goes up past it.
+- Escape goes up past a block that one of its own nearly fills (a project whose
+  one kind takes most of it, or holds a single kind): before, Escape from such a
+  kind opened the project and stayed in the kind. The walk now covers it and waits
+  for each level to draw before the next key.
+- The tour's pointer box takes the warm accent, like the buttons' focus ring.
 - New browser walk `test/browser/atlas.spec.ts` with `BrowserChain.atlas!/1`.

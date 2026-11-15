@@ -685,6 +685,32 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   const screenX = (x: number) => (x - camera.x) * camera.zoom + width / 2
   const screenY = (y: number) => (y - camera.y) * camera.zoom + height / 2
 
+  // The tile in view from a point at a zoom: the deepest there whose children
+  // show; and the deepest tile there at all.
+  function viewed(x: number, y: number, zoom: number): [Tile, Tile] {
+    let next = fleet
+    let deepest = fleet
+    for (;;) {
+      const into = childAt(next, x, y)
+      if (!into) break
+      deepest = into
+      if (into.children.length === 0 || shown(zoom, into.fill) < 0.5) break
+      next = into
+    }
+    return [next, deepest]
+  }
+
+  // Whether a tile is the one in view once it fills the stage: not when the
+  // tile at its middle takes so much of it that that tile's children show too.
+  function opens(t: Tile) {
+    const zoom = Math.max(ZOOM.min, fills(t.to, width, height))
+    const halfW = width / 2 / zoom
+    const halfH = height / 2 / zoom
+    const x = clamp(t.to.x + t.to.w / 2, halfW, width - halfW)
+    const y = clamp(t.to.y + t.to.h / 2, halfH, height - halfH)
+    return viewed(x, y, zoom)[0] === t
+  }
+
   function render() {
     if (!width || !height) return
     const zoom = camera.zoom
@@ -693,17 +719,8 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     camera.x = clamp(camera.x, halfW, width - halfW)
     camera.y = clamp(camera.y, halfH, height - halfH)
 
-    // The tile in view: the deepest at the middle whose children show; and
-    // the deepest tile there at all, which bounds the zoom once it has none.
-    let next = fleet
-    let deepest = fleet
-    for (;;) {
-      const into = childAt(next, camera.x, camera.y)
-      if (!into) break
-      deepest = into
-      if (into.children.length === 0 || shown(zoom, into.fill) < 0.5) break
-      next = into
-    }
+    // The deepest tile at the middle bounds the zoom once it has no children.
+    const [next, deepest] = viewed(camera.x, camera.y, zoom)
     ZOOM.max = deepest.children.length > 0 ? Infinity : Math.max(zoom, deepest.fill, 1)
     if (next !== focus) {
       focus = next
@@ -1044,8 +1061,9 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
   }
 
   // Back up a level: from a thing filling the stage to the things around it,
-  // or from the tile in view to its parent's. A tile holding only one other
-  // is filled by it as it opens, so the way up passes it by.
+  // or from the tile in view to its parent's. A tile that one of its own
+  // nearly fills still shows that one's children as it opens, so the way up
+  // passes it by.
   function up() {
     if (cursor && framed(cursor)) {
       open(focus, false)
@@ -1054,7 +1072,7 @@ export function createBlocksStage(root: HTMLElement, ask: Ask): BlocksStage {
     if (focus === fleet) return
     let left = focus
     let target = left.parent!
-    while (target !== fleet && target.children.length === 1) {
+    while (target !== fleet && !opens(target)) {
       left = target
       target = target.parent!
     }
