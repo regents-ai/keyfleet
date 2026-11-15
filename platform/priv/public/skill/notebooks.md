@@ -13,4 +13,4 @@ Each project has its own notebooks, at `/api/v1/agent/fleets/$FLEET/projects/$PR
 - In every fleet but Regents Club, your Key has its own notebook, "Key N", in the project `scratchpad`; add to it rather than rewriting it. Only its maker changes a notebook unless they unlock it with `POST NB_ID/lock` and `{"locked": false}`. `GET copies` lists the daily copies, and `POST copies/COPY_ID/restore` brings one back as a new notebook.
 - Read the project `understanding` before you start, and add what you learn about working in this fleet.
 
-Cite a run's result in a task's `evidence`, as you would a commit.
+Cite a run's result in a task's `evidence`, as you would a commit, and put what matters from it in the evidence's `excerpt`. Keyfleet keeps a run's page for 30 days, a notebook's newest run page and its newest good one until newer ones replace them, and a page made public while it is public; after that its address stops opening.

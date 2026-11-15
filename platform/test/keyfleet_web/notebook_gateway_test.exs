@@ -885,6 +885,59 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, "GET", ^page, _subject, _body}
   end
 
+  # Costly failure: a run's page cleared once its 30 days are past breaks its
+  # address with a server error, or answers otherwise than an address whose
+  # copy was removed.
+  test "a run's page cleared after 30 days answers 404 to a member and to an agent, as a removed one does",
+       c do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    real_refusals!(secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(wallet)
+    )
+
+    notebook = "nb-0123456789abcdef"
+    now = DateTime.to_unix(DateTime.utc_now(), :millisecond)
+
+    [cleared, newest] =
+      for {n, days} <- [{1, 40}, {2, 35}] do
+        run_id = "run_" <> String.duplicate("#{n}", 26)
+        saved_at = now - days * 86_400_000
+
+        Notebooks.keep_saved_output!(@fleet, notebook, run_id, saved_at, "<p>#{n}</p>", false,
+          actor: %System{}
+        )
+
+        Notebooks.result_path(notebook, run_id, saved_at)
+      end
+
+    assert :ok = perform_job(Keyfleet.Notebooks.RunPagePruner, %{})
+
+    cookie = enter!(c.holder)
+
+    assert json_response(send_notebook(:get, cleared, cookie, ""), 404)["error"]["code"] ==
+             "notebooks_not_found"
+
+    assert html_response(send_notebook(:get, newest, cookie, ""), 200) == "<p>2</p>"
+
+    request = SignedAgentHelpers.sign(signer, secret, @host, "GET", cleared, "")
+
+    signed =
+      Enum.reduce(
+        request.headers,
+        %{build_conn() | host: @host, remote_ip: {198, 51, 100, 135}},
+        fn {name, value}, conn -> put_req_header(conn, name, value) end
+      )
+      |> dispatch(@endpoint, :get, cleared, "")
+
+    assert json_response(signed, 404)["error"]["code"] == "notebooks_not_found"
+    refute_received {:hub, "GET", ^cleared, _subject, _body}
+  end
+
   # Costly failure: an agent that signs over its body but leaves out another
   # signed header is told to add the content-digest it already sends, and
   # goes round in circles; it gets the sign-in server's own refusal instead.

@@ -153,8 +153,9 @@ defmodule Keyfleet.Notebooks do
   that page, in milliseconds since 1970. A hub makes a new page for a version
   each time that version's code runs again, so the time names exactly one
   page. The address shows Keyfleet's own copy of that page
-  (`Keyfleet.Notebooks.SavedOutput`) until a member removes it, whatever the
-  hub keeps. Only the fleet's members open it.
+  (`Keyfleet.Notebooks.SavedOutput`), whatever the hub keeps, until a member
+  removes it or, for a run's page, until it is cleared 30 days after it was
+  made (`Keyfleet.Notebooks.RunPagePruner`). Only the fleet's members open it.
   """
   def result_url(fleet_id, notebook_id, source_id, saved_at),
     do: url(fleet_id, result_path(notebook_id, source_id, saved_at))

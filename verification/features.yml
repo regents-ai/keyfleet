@@ -1750,3 +1750,30 @@ features:
       - A Key minted a moment ago is in the list but waits two days before it votes or is marked present, so its button says so.
       - The presence timer skips an hour in which the chain doesn't answer that read.
       - WebKit is not run on the Mac.
+
+  - id: notebook-run-pages-30-days
+    what: >-
+      Keyfleet keeps a background run's page for 30 days (Sean, 15 Nov 2026,
+      20a). Once a day it clears older run pages, except each notebook's
+      newest run page and its newest good one, and a page made public while it
+      is public; a version's page stays until a member removes it. A cleared
+      page's address answers as one a member removed, 404
+      notebooks_not_found, to a member's browser and to a signed agent, and a
+      notebook's list state, page and last good run read the same as before.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/notebooks/saved_output.ex
+      - platform/lib/keyfleet/notebooks/run_page_pruner.ex
+      - platform/config/config.exs
+      - platform/lib/keyfleet_web/plugs/notebook_gateway.ex
+    entry:
+      - route: GET https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
+      - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/{run_id}
+    proofs:
+      - platform/test/keyfleet/notebooks/run_page_pruner_test.exs
+      - platform/test/keyfleet_web/notebook_gateway_test.exs
+    gaps:
+      - The first daily clear against live data is not yet seen; how many old pages it meets is unknown.
+      - The clear is one statement under the site's 15-second limit; a very large first backlog could pass it.
+      - A member removing a notebook's newest page while the clear runs can leave that notebook with no older page kept.

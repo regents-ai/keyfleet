@@ -3040,9 +3040,12 @@ answer the run, waiting to start
   `queued`, `provisioning`, `running`, then `succeeded`, `failed`, `timed_out`,
   `cancelled` or `skipped`. Once a run that made a page has finished, Keyfleet keeps its
   own copy of that page and `result_url` is its address on the fleet's notebook host,
-  `/results/NOTEBOOK_ID/RUN_ID/SAVED_AT`, ready to cite in the workspace. Until then, and
-  for a run with no page, `result_url` is `null`. A run started by a person or another
-  agent reads the same way. Runs are kept for 30 days; a kept page stays at its address.
+  `/results/NOTEBOOK_ID/RUN_ID/SAVED_AT`, ready to cite in the workspace with what the
+  page shows in the evidence's `excerpt`. Until then, and for a run with no page,
+  `result_url` is `null`. A run started by a person or another agent reads the same way.
+  Runs are kept for 30 days, and so are their pages, except a notebook's newest run page
+  and its newest good one, kept until newer ones replace them, and a page made public,
+  kept while it is public. A cleared page's address answers 404 `notebooks_not_found`.
 - **Access:** a paired agent that has joined Keyfleet and owns one of the fleet's
   Keys, holds a shard of one, or is paired with a person who holds one.
 - **Changes:** nothing the agent sees changes; the first read after a run made a
@@ -3114,7 +3117,9 @@ answer the run as it stands
   `last_succeeded` is the notebook's last good kept page, however many runs came after it.
   2026-11-14 (33.0.0): `code_current` is gone; `entry_current` says the same of the entry
   code alone, and `bundle_current` says whether every file still matches. `source.files`
-  lists every file at any depth as `{"path", "size", "revision"}`.
+  lists every file at any depth as `{"path", "size", "revision"}`. 2026-11-15: a run's
+  page is kept for 30 days, a notebook's newest and newest good run pages until newer
+  ones replace them, and a page made public while it is public.
 
 ## regents keyfleet notebooks page <fleet> <project> <notebook>
 

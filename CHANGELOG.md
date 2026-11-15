@@ -10480,3 +10480,44 @@ removes or renames a field, route or code, or makes an input required.
   in the Public room, and nothing is written; a Key holder posts there from the page and
   a shard's agent by its signed request; anyone still reads it. The directory tests put
   their keyless posts in the database as such posts were stored.
+
+## 2026-11-15: run pages are kept 30 days
+
+- Sean's decision 20 a: Keyfleet stops keeping every notebook run's page for good. Once
+  a day at 04:47 UTC (`Keyfleet.Notebooks.RunPagePruner`, Oban cron, the `default`
+  queue) it clears the copies of background runs' pages whose `saved_at` is more than 30
+  days ago, except each notebook's newest run page and its newest page of a run that
+  succeeded, and a page a Key has public. A notebook version's page is never cleared. A
+  cited result whose page is cleared stops opening; Sean chose this over keeping cited
+  pages.
+- The rule is one read, `SavedOutput`'s `:past_keeping`, and the job removes what it
+  names with the `:remove` destroy as one atomic bulk delete, as the system actor. A copy
+  stays when no newer run page of its notebook exists in its fleet (what `:newest_runs`
+  answers), when it succeeded and no newer succeeded page exists (what `:last_succeeded`
+  answers), or when a publication of its fleet names its path
+  (`Notebooks.result_path/3`). Ties at the newest moment are all kept. So a listed
+  notebook's `state`, `notebooks_page` and `last_succeeded` answer the same before and
+  after a clearing. `SavedOutput` gains a primary read, system-only like its other
+  actions, through which Ash authorises the filter's `exists` over the same table.
+- One `DELETE` statement, which never reads a page: the copy that is newest when it
+  starts is kept, and a copy kept while it runs is not seen by it, so it is cleared on a
+  later day if its time is past. A second run clears nothing more. On 4,000 local copies
+  the plan uses the existing `notebook_saved_outputs_unique_address_index` for the
+  filter and both lookups and found the 400 to clear in 6 ms; deleting them (200 KB of
+  page each) took 1.5 s. No migration and no new index.
+- A cleared address answers as one whose copy its maker removed: 404
+  `notebooks_not_found`, to a member's browser and to a signed agent. Reading an old run
+  through this site keeps its page again only while the hub still holds the run; the
+  workspace, `links_resolve` and the packet read only parse the address and never assume
+  the copy.
+- The docs (Background runs and Saved results), `/skill/notebooks.md`, the run result's
+  description in the contract (both copies), `cli/COMMANDS.md`, `cli/commands.json` and
+  the tool manifest say how long pages are kept and tell agents to put what a result
+  shows in the citing evidence's `excerpt`. The contract stays 34.0.0: no field, route,
+  type or refusal changes, so the breaking-change note does not follow.
+- Tests: old run pages go while each notebook's newest and newest good run pages stay
+  however old, a version's page, a public page and a page under 30 days stay, another
+  fleet's notebook and publication are told apart, and the reads answer the same; a
+  second run is harmless; a property over generated notebooks checks the rule against
+  `:newest_runs` and `:last_succeeded` for every mix; and the notebook host answers a
+  cleared address 404 to a member and to an agent without asking the hub.
