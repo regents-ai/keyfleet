@@ -87,6 +87,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/read",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/lock",
+             "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/page",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/start",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/{run_id}",
              "/api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit",

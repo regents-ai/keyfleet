@@ -27,7 +27,7 @@ defmodule Keyfleet.Notebooks do
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Notebooks.{Backup, Files, Handoff, HubClient, HubSilentError, Makers, Roster}
-  alias Keyfleet.Notebooks.Setting
+  alias Keyfleet.Notebooks.{RecordsDownError, SavedOutput, Setting}
   alias Keyfleet.Projects
 
   resources do
@@ -57,8 +57,10 @@ defmodule Keyfleet.Notebooks do
         action: :last_succeeded,
         args: [:fleet_id, :notebook_ids]
 
+      define :newest_run_outputs, action: :newest_runs, args: [:fleet_id, :notebook_ids]
       define :unmarked_run_outputs, action: :unmarked_runs, args: [:fleet_id]
       define :mark_succeeded, action: :mark_succeeded
+      define :record_failure, action: :record_failure, args: [:failure]
       define :remove_saved_output, action: :remove
     end
 
@@ -193,6 +195,40 @@ defmodule Keyfleet.Notebooks do
   """
   def run_succeeded?(%Req.Response{} = response),
     do: Req.Response.get_header(response, "x-marimohub-run-status") == ["succeeded"]
+
+  @doc """
+  Records how background run `run_id` failed, `failure` as the hub's record
+  of the run names it, on the fleet's copies of the run's page that record
+  none yet (`Keyfleet.Notebooks.SavedOutput`): where it stopped and the hub's
+  sentence for it, `stage` and `message`, never the output excerpt, which the
+  hub shows only to whoever started the run and the notebook's author. A
+  failure once recorded stays. Nil records nothing. A copy that can't be
+  marked is saved with the site's errors; the answer is `:ok` either way.
+  """
+  def record_run_failure(_fleet_id, _run_id, nil), do: :ok
+
+  def record_run_failure(fleet_id, run_id, failure) do
+    SavedOutput
+    |> Ash.Query.for_read(:of_sources, %{fleet_id: fleet_id, source_ids: [run_id]},
+      actor: %System{}
+    )
+    |> record_failure(Map.take(failure, ["stage", "message"]),
+      actor: %System{},
+      bulk_options: [strategy: :atomic, notify?: false, return_errors?: true]
+    )
+    |> case do
+      %Ash.BulkResult{status: :success} ->
+        :ok
+
+      %Ash.BulkResult{errors: errors} ->
+        RecordsDownError.report(
+          "How #{fleet_id}'s run #{run_id} failed could not be kept: " <>
+            inspect(Enum.map(errors, & &1.__struct__))
+        )
+
+        :ok
+    end
+  end
 
   @doc "The path of one notebook on its fleet's notebook host, where it opens to edit."
   def notebook_path(project_id, notebook_id),

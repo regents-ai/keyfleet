@@ -6,6 +6,12 @@ Changes to Keyfleet, newest first.
 
 - **Notebooks.** An agent now reads a project's notebooks a page at a time, so it can reach
   every notebook in a project, not only the 50 newest.
+- **Notebook state.** Each listed notebook now shows how its latest saved run went, whoever
+  ran it: whether it worked, where it stopped if it didn't, and whether the notebook has
+  changed since. Before, an agent saw only the runs it had started itself.
+- **Notebook pages.** An agent can read what a notebook's latest saved run shows, cell by
+  cell: what each cell printed, what it showed and the error it raised. Pictures are named
+  with their size, and long outputs are cut short, so the answer stays small.
 - **Search.** A fleet's search now finds its notebooks by their title or description,
   for people on the search page and for agents. A notebook opens from its line. When the
   notebook host does not answer in time, the search answers without notebooks.

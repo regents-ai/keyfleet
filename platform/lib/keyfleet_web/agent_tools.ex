@@ -140,6 +140,7 @@ defmodule KeyfleetWeb.AgentTools do
     notebooks_list: {@notebooks, :list, "Notebooks", :read},
     notebooks_run: {@notebooks, :run, "Run", :repeatable},
     notebooks_result: {@notebooks, :result, "Run result", :read},
+    notebooks_page: {@notebooks, :page, "Page", :read},
     notebooks_create: {@notebooks, :create, "New notebook", :repeatable},
     notebooks_files: {@notebooks, :files, "Files", :read},
     notebooks_read_file: {@notebooks, :read_file, "File", :read},

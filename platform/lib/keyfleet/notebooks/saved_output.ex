@@ -6,7 +6,11 @@ defmodule Keyfleet.Notebooks.SavedOutput do
   milliseconds since 1970. `succeeded` is whether the page is a background
   run's that succeeded, as the hub named the run when it answered the page
   (`Keyfleet.Notebooks.run_succeeded?/1`), so a notebook's last good page is
-  read from the copies alone (`:last_succeeded`).
+  read from the copies alone (`:last_succeeded`). `failure` is how a run
+  that didn't succeed stopped, `stage` and `message` as the hub records them,
+  once the run's record has been read (`Keyfleet.Notebooks.record_run_failure/3`),
+  so a notebook's newest run page says how it went whoever reads it
+  (`:newest_runs`); nil for any other copy.
 
   A hub keeps only a notebook's newest versions and recent runs, replaces a
   version's page when the same code runs again, and drops everything when a
@@ -40,6 +44,12 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     update :mark_succeeded do
       accept []
       change set_attribute(:succeeded, true)
+    end
+
+    # How the run failed, on a copy that records none yet: one recorded stays.
+    update :record_failure do
+      accept [:failure]
+      change filter(expr(is_nil(failure)))
     end
 
     read :at do
@@ -82,6 +92,24 @@ defmodule Keyfleet.Notebooks.SavedOutput do
               )
     end
 
+    # The newest copy of each of `notebook_ids`' pages from a background run,
+    # whoever started it, without its page.
+    read :newest_runs do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :notebook_ids, {:array, :string}, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and notebook_id in ^arg(:notebook_ids) and
+                 string_starts_with(source_id, "run_")
+             )
+
+      prepare build(
+                select: [:notebook_id, :source_id, :saved_at, :succeeded, :failure],
+                distinct: [:notebook_id],
+                distinct_sort: [saved_at: :desc]
+              )
+    end
+
     # The fleet's copies of background runs' pages not marked succeeded,
     # without their pages.
     read :unmarked_runs do
@@ -114,6 +142,14 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     attribute :saved_at, :integer, allow_nil?: false, constraints: [min: 1]
     attribute :page, :binary, allow_nil?: false
     attribute :succeeded, :boolean, allow_nil?: false, default: false
+
+    attribute :failure, :map do
+      constraints fields: [
+                    stage: [type: :string, allow_nil?: false],
+                    message: [type: :string, allow_nil?: false]
+                  ]
+    end
+
     create_timestamp :inserted_at
   end
 end

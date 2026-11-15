@@ -30,7 +30,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   (`Keyfleet.Notebooks.result_url/4`), is one saved notebook page: a
   version's, or a background run's. When the hub hands back a saved page,
   this site keeps its own copy (`Keyfleet.Notebooks.SavedOutput`) and only
-  then names the page's address in a `Link` header; the address shows that
+  then names the page's address in a `Link` header; a run's page that didn't
+  succeed also has its copy record where the run stopped, read from the run's
+  record once the page is sent. The address shows that
   copy whatever the hub keeps, until one of the fleet's members removes it
   (`DELETE` on the address). Someone without a notebook sign-in who opens one
   is sent to Keyfleet to get one (`open_url/2`), and comes back to it, unless
@@ -83,6 +85,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   alias Keyfleet.Notebooks.{
     HubSilentError,
     Makers,
+    MemberRequest,
     Pass,
     RecordsDownError,
     ResultNotKeptError,
@@ -641,7 +644,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
               receive_timeout: http_timeout(conn)
             )
             |> answered(done)
-            |> answer_back(conn, fleet_id)
+            |> answer_back(conn, fleet_id, subject)
 
           {:error, reason} ->
             maker_refusal(conn, reason)
@@ -664,8 +667,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp answered(answer, _done), do: answer
 
-  defp answer_back({:refused, reason}, conn, _fleet_id), do: maker_refusal(conn, reason)
-  defp answer_back(answer, conn, fleet_id), do: stream_back(answer, conn, fleet_id)
+  defp answer_back({:refused, reason}, conn, _fleet_id, _subject), do: maker_refusal(conn, reason)
+
+  defp answer_back(answer, conn, fleet_id, subject),
+    do: stream_back(answer, conn, fleet_id, subject)
 
   defp http_timeout(%{
          method: "POST",
@@ -954,7 +959,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp stream_back({:error, error}, conn, fleet_id) do
+  defp stream_back({:error, error}, conn, fleet_id, _subject) do
     HubSilentError.report(
       "The notebook hub of #{fleet_id} did not answer a request: #{inspect(error)}"
     )
@@ -962,7 +967,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     Refusal.json(conn, 502, "notebooks_unavailable")
   end
 
-  defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id) do
+  defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id, subject) do
     conn =
       for {name, values} <- response.headers,
           name in @kept_response,
@@ -980,7 +985,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         send_resp(conn, response.status, "")
 
       address = saved_page_address(conn, response) ->
-        keep_page(response, conn, fleet_id, address)
+        keep_page(response, conn, fleet_id, subject, address)
 
       true ->
         conn = send_chunked(conn, response.status)
@@ -1038,7 +1043,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A saved page is read whole, kept, and only then sent with its address, so
   # an address is never handed out for a page Keyfleet hasn't kept. A page past
   # `saved_page_max_bytes` goes on streaming as it came, with no address.
-  defp keep_page(response, conn, fleet_id, address) do
+  defp keep_page(response, conn, fleet_id, subject, address) do
     cap = Notebooks.config()[:saved_page_max_bytes]
 
     response.body
@@ -1062,7 +1067,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end)
     |> case do
       {:reading, conn, parts, _size} ->
-        send_kept(conn, fleet_id, address, parts, Notebooks.run_succeeded?(response))
+        send_kept(conn, fleet_id, subject, address, parts, Notebooks.run_succeeded?(response))
 
       {:streaming, conn} ->
         conn
@@ -1070,18 +1075,22 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # The page is a notebook's own saved page, sent as members wrote it on purpose:
-  # `stream_back/3` has already put it in a sandbox of its own (`sandbox_saved_page/1`).
+  # `stream_back/4` has already put it in a sandbox of its own (`sandbox_saved_page/1`).
   # sobelow_skip ["XSS.SendResp"]
-  defp send_kept(conn, fleet_id, {notebook_id, source_id, saved_at}, parts, succeeded) do
+  defp send_kept(conn, fleet_id, subject, {notebook_id, source_id, saved_at}, parts, succeeded) do
     page = IO.iodata_to_binary(parts)
 
     case Notebooks.keep_saved_output(fleet_id, notebook_id, source_id, saved_at, page, succeeded,
            actor: %Keyfleet.Actors.System{}
          ) do
       {:ok, _kept} ->
+        conn =
+          conn
+          |> put_result_link(fleet_id, notebook_id, source_id, saved_at)
+          |> send_resp(200, page)
+
+        record_failure(conn, fleet_id, subject, source_id, succeeded)
         conn
-        |> put_result_link(fleet_id, notebook_id, source_id, saved_at)
-        |> send_resp(200, page)
 
       {:error, error} ->
         ResultNotKeptError.report(
@@ -1092,6 +1101,23 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         send_resp(conn, 200, page)
     end
   end
+
+  # How a run whose page was kept stopped, when it didn't succeed, is in the
+  # run's record beside the page's address, read as whoever read the page,
+  # once the page has been sent (`Keyfleet.Notebooks.record_run_failure/3`).
+  defp record_failure(conn, fleet_id, subject, "run_" <> _id = run_id, false) do
+    record = "/" <> Enum.map_join(Enum.drop(conn.path_info, -1), "/", &MemberRequest.segment/1)
+
+    case MemberRequest.request(fleet_id, subject, :get, record) do
+      {:ok, %Req.Response{status: 200, body: %{"data" => run}}} ->
+        Notebooks.record_run_failure(fleet_id, run_id, run["failure"])
+
+      _no_record ->
+        :ok
+    end
+  end
+
+  defp record_failure(_conn, _fleet_id, _subject, _source_id, _succeeded), do: :ok
 
   # Whoever made a saved output removes it (`Keyfleet.Notebooks.Makers.result/4`):
   # its copy is deleted and the address is gone.

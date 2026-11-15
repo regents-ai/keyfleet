@@ -10271,9 +10271,25 @@ removes or renames a field, route or code, or makes an input required.
   a notebook's files' list does: `POST
   /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/notebooks/list` with `{}` answers at most
   50 notebooks, newest first, with `cursor`, the hub's cursor for the next page or `null`
-  after the last, and `has_more`; `{"cursor"}` reads the next page. Each notebook's own
-  fields are unchanged. A cursor the hub never answered is refused 422
-  `notebook_file_refused`, as a notebook's files' list refuses one.
+  after the last, and `has_more`; `{"cursor"}` reads the next page. A cursor the hub
+  never answered is refused 422 `notebook_cursor_unknown`, and so is one a notebook's
+  files' list never answered, in place of `notebook_file_refused`.
+- Each listed notebook answers `state` in place of `last_run` and `last_succeeded`: the
+  newest page Keyfleet keeps of a background run of it, whoever started the run, or
+  `null`, as `{run_id, worked, saved_at, error, changed_since, result_url}`. It is read
+  from Keyfleet's own copies alone, so the list asks the hub only for the page of
+  notebooks; before, it asked for every notebook's jobs and their runs. `error` is where a
+  run that didn't succeed stopped, `{stage, message}`, never the output excerpt the hub
+  shows only to the run's starter and the notebook's author; `changed_since` compares the
+  hub's `updated_at` for the notebook, which moves when its code, packages or details
+  change, with when the page was made.
+- A kept copy records how its run failed (`notebook_saved_outputs.failure`, a nullable
+  map of `stage` and `message`, migration `20261115082252`, which only adds the column).
+  Reading a finished run (`notebooks_result`) records it whether the page was kept just
+  now or before; opening a run's page through the notebook host reads the run's record
+  once the page is sent, for a run that didn't succeed. A failure once recorded is never
+  replaced. Copies kept before this answer `error` `null` beside `worked` `false` until
+  someone reads that run again.
 - The list moved from `GET .../notebooks` to `POST .../notebooks/list`: a signed request
   here never carries a query string, so the cursor goes in a signed body, like every
   other paged read with inputs. `GET .../notebooks` is gone.
@@ -10282,7 +10298,10 @@ removes or renames a field, route or code, or makes an input required.
   `cli/COMMANDS.md`, the agent guides, the feature map and the verification list follow.
   The files test's stand-in hub pages its notebooks as the hub does, and a new test
   reads 101 notebooks as pages of 50, 50 and 1 with their cursors, then a cursor no page
-  answered.
+  answered. New tests cover `state`: none kept, the newest of several runs' pages
+  including another agent's, a failure read by one agent shown to another without its
+  excerpt, `changed_since` both ways, a version's page never a state, and no request to
+  the hub for any one notebook.
 - regents-cli's bundled command list still calls `GET .../notebooks` until it takes this
   descriptor.
 
@@ -10340,3 +10359,33 @@ removes or renames a field, route or code, or makes an input required.
   show, newest first; posts written as no Key from two wallets are two writers; the day's
   count leaves out a Key's thread, a members' room and a post two days old; and one
   fleet's JSON fits the contract, with the count line on its Markdown page.
+
+## 2026-11-15: An agent reads what a notebook's newest kept run page holds
+
+- New in 34.0.0, nothing else changing shape: `GET
+  /api/v1/agent/fleets/FLEET_ID/projects/PROJECT/notebooks/NOTEBOOK_ID/page`
+  (`notebooks_page`, `regents keyfleet notebooks page`, source only) answers the newest
+  page Keyfleet keeps of a background run of the notebook, whoever started it, the one a
+  listed notebook's `state` names: `{notebook_id, run_id, worked, saved_at, error,
+  result_url, size, sha256, cells, truncated}`. It never answers the page's HTML, which
+  averages about 0.9 MB on the live site. `cells` are read from the marimo session inside
+  the page (`Keyfleet.Notebooks.Page`, decoding the mount config's object as JSON), each
+  `{id, console, outputs, error}`: printed lines as `{name, mimetype, text, bytes, cut}`,
+  outputs value by value as `{mimetype, text, bytes, cut}` (a picture, sound, video or PDF
+  with `text` null), and the first error marimo recorded as `{kind, message, traceback,
+  cut}`.
+- Each text is cut at 16 KB (`page_value_max_bytes`) and the answer stays within 256 KB
+  of JSON (`page_answer_max_bytes`), cells past it left out; `truncated` says whether
+  anything was cut or left out.
+- The hub is asked for the notebook in the project's space as the agent first, so a
+  notebook of another project answers 404 `notebook_run_not_found`. Nothing kept answers
+  404 `notebook_page_not_kept`, and a page with no session read here (none, or not version
+  "1") 422 `notebook_page_unreadable`. One query reads the kept page; measured with five
+  1 MB pages, choosing the newest touches 2 blocks and only its own page is read. The read
+  keeps and changes nothing; no migration.
+- The contract (both copies, version unchanged), the tool manifest, the command
+  descriptor, `cli/COMMANDS.md`, the agent guides, the skill's notebooks page, the feature
+  map, the parity table and the verification list name it. Tests: the parser against
+  pages marimo 0.25.2 exported, kept as fixtures; through signed HTTP and the connector,
+  the newest of two run pages with its run, a newer version page never answered, nothing
+  kept, a page with no session, an agent without a Key and a notebook of another project.
