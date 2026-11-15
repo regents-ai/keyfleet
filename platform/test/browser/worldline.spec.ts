@@ -18,8 +18,12 @@ const owner = `0x7d${randomBytes(19).toString("hex")}`
 const stranger = "0x0000000000000000000000000000000000000001"
 
 // The headless shell Playwright runs by default hands out no WebGPU canvas
-// textures, so the picture never draws there; full Chromium draws it.
-test.use({channel: "chromium"})
+// textures, so the picture never draws there; full Chromium draws it. Its
+// window keeps a toolbar and can't take every size a walk sets, and when its
+// resize lands late the page is drawn at the window's size, so with no
+// viewport of its own Playwright sizes only the page. It then takes no device
+// scale, and a plain undefined would bring back the project's.
+test.use({channel: "chromium", viewport: null, deviceScaleFactor: async ({}, use) => use(undefined)})
 
 let key = 0
 
@@ -251,50 +255,39 @@ for (const width of [390, 1280]) {
   })
 
   // Its own page, so no scroll from earlier steps is still under way.
-  test.describe(() => {
-    // Playwright sets the page's size here without resizing the browser
-    // window. Full Chromium's window keeps a toolbar and is never under 500
-    // wide, so resized for this page it leaves the page less room than asked
-    // (500 by 433 at 390 wide); when that resize lands after the page has
-    // replaced the blank one, the page is drawn at that size, and a wheel low
-    // on it reaches nothing. Playwright takes no device scale without a
-    // viewport, and a plain undefined would bring back the project's.
-    test.use({viewport: null, deviceScaleFactor: async ({}, use) => use(undefined)})
+  test(`off the Worldline, or past now on it, the wheel scrolls the page, at ${width} wide`, async ({page}) => {
+    const errors = watchErrors(page)
+    await page.emulateMedia({reducedMotion: "reduce"})
+    // A short window gives the page room to scroll.
+    await page.setViewportSize({width, height: 520})
+    await open(page, "/classic/1/worldline")
 
-    test(`off the Worldline, or past now on it, the wheel scrolls the page, at ${width} wide`, async ({page}) => {
-      const errors = watchErrors(page)
-      await page.emulateMedia({reducedMotion: "reduce"})
-      // A short window gives the page room to scroll.
-      await page.setViewportSize({width, height: 520})
-      await open(page, "/classic/1/worldline")
+    const stage = page.locator("#worldline-stage")
+    const now = page.locator("[data-worldline-now]")
+    const scroller = page.locator("#app-shell-scroller")
+    await scroller.evaluate(element => element.scrollTo(0, 0))
 
-      const stage = page.locator("#worldline-stage")
-      const now = page.locator("[data-worldline-now]")
-      const scroller = page.locator("#app-shell-scroller")
-      await scroller.evaluate(element => element.scrollTo(0, 0))
+    // Off the picture the wheel scrolls the page.
+    const legend = (await page.locator("#worldline-legend").boundingBox())!
+    await page.mouse.move(legend.x + 4, legend.y + legend.height / 2)
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => scrolled(page)).toBeGreaterThan(0)
 
-      // Off the picture the wheel scrolls the page.
-      const legend = (await page.locator("#worldline-legend").boundingBox())!
-      await page.mouse.move(legend.x + 4, legend.y + legend.height / 2)
-      await page.mouse.wheel(0, 120)
-      await expect.poll(() => scrolled(page)).toBeGreaterThan(0)
-
-      // On it, at now, scrolling on toward now scrolls the page too, and the
-      // picture stays at the head. The picture's top is brought near the
-      // window's first, with the page still able to scroll on.
-      await page.waitForTimeout(600)
-      const below = (await stage.boundingBox())!.y - 100
-      await scroller.evaluate((element, by) => element.scrollBy(0, by), below)
-      await page.waitForTimeout(600)
-      const top = await scrolled(page)
-      const over = (await stage.boundingBox())!
-      expect(over.y).toBeLessThan(160)
-      await page.mouse.move(over.x + over.width / 2, over.y + 60)
-      await page.mouse.wheel(0, 120)
-      await expect.poll(() => scrolled(page)).toBeGreaterThan(top)
-      await expect(now).toBeHidden()
-      expect(errors).toEqual([])
-    })
+    // On it, at now, scrolling on toward now scrolls the page too, and the
+    // picture stays at the head. The picture's top is brought near the
+    // window's first, with the page still able to scroll on.
+    await page.waitForTimeout(600)
+    const below = (await stage.boundingBox())!.y - 100
+    await scroller.evaluate((element, by) => element.scrollBy(0, by), below)
+    await page.waitForTimeout(600)
+    const top = await scrolled(page)
+    const over = (await stage.boundingBox())!
+    expect(over.y).toBeLessThan(160)
+    await page.mouse.move(over.x + over.width / 2, over.y + 60)
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => scrolled(page)).toBeGreaterThan(top)
+    await expect(now).toBeHidden()
+    expect(errors).toEqual([])
   })
 
   test(`the Worldline flies on its own, slows only on a mark, and opens the mark pointed at, at ${width} wide`, async ({
