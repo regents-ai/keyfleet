@@ -358,6 +358,8 @@ config :keyfleet, :notebooks,
   hub_timeout_ms: 30_000,
   # A workspace page lists a goal's notebooks, waiting this long for the hub.
   page_timeout_ms: 5_000,
+  # A fleet's search waits this long for the hub's notebooks after its own.
+  search_timeout_ms: 3_000,
   # The Fly runner allows 120 seconds to boot, plus creation and notebook setup.
   session_start_timeout_ms: 180_000,
   # Notebook sessions a fleet may have open at once; its refusal and the docs say ten.

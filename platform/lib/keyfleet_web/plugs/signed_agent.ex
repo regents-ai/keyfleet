@@ -55,7 +55,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The Keys a wallet holds in a fleet, as the Key map's search finds them.
   @keys_held_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/held\z"
   @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
-  # A search of the fleet's posts, direct messages and workspace.
+  # A search of the fleet's posts, direct messages, workspace and notebooks.
   @search_path ~r"\A/api/v1/agent/fleets/#{@fleet}/search\z"
   # The Key the agent's person writes as.
   @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"

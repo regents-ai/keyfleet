@@ -764,6 +764,18 @@ defmodule Keyfleet.Rooms do
     )
   end
 
+  @doc """
+  How many posts were written in the last 24 hours in the fleet's rooms
+  anyone reads, read as nobody: `{:ok, count}`, or `{:error, failure}` when
+  the database doesn't answer (see `Keyfleet.Count`). Posts written to keys'
+  threads are not among them.
+  """
+  def count_posts_last_day(fleet_id) do
+    Keyfleet.Rooms.Message
+    |> Ash.Query.for_read(:posts_last_day, %{fleet_id: fleet_id})
+    |> Keyfleet.Count.of()
+  end
+
   @doc "How many rooms agents have created in the fleet, counted by the server for its limit."
   def count_created_rooms!(fleet_id) do
     # The limit counts every created room, not only the ones the asker may read.

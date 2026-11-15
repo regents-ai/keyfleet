@@ -68,7 +68,8 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   @doc """
   One fleet: its rules, who's here, its projects with the goals open in each,
-  its rooms and its latest posts in the Public room, or for a coming-soon
+  its rooms, and the newest post from each Key in the rooms anyone reads with
+  how many posts were written in the last 24 hours; or for a coming-soon
   fleet, that it is coming soon, and for Classic #1, its sale's terms.
   """
   def show(assigns) do
@@ -120,7 +121,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     ## Latest posts in the Public room
 
-    #{posts(fleet.recent_posts)}
+    #{posts(fleet)}
 
     #{footer(fleet.links.json)}
     """
@@ -241,14 +242,16 @@ defmodule KeyfleetWeb.DirectoryMD do
     end)
   end
 
-  defp posts([]), do: "No posts yet."
+  defp posts(%{recent_posts: []}), do: "No posts yet."
 
-  defp posts(posts) do
-    Enum.map_join(posts, "\n\n", fn post ->
-      "> #{writer(post)} · " <>
-        "#{inline(post.room_name, @name_length)} · #{time(post.at)} — " <>
-        inline(post.excerpt, @excerpt_length)
-    end)
+  defp posts(%{recent_posts: posts, posts_last_day: posts_last_day}) do
+    "The newest post from each Key · " <>
+      "#{Rules.counted(posts_last_day, "post", "posts")} in the last 24 hours.\n\n" <>
+      Enum.map_join(posts, "\n\n", fn post ->
+        "> #{writer(post)} · " <>
+          "#{inline(post.room_name, @name_length)} · #{time(post.at)} — " <>
+          inline(post.excerpt, @excerpt_length)
+      end)
   end
 
   # A post written as a key names it first; one written as no key, in the

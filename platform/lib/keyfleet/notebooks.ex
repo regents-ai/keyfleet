@@ -227,6 +227,9 @@ defmodule Keyfleet.Notebooks do
     end
   end
 
+  @doc "Whether `id` is shaped as a hub's notebook ids are."
+  def notebook_id?(id), do: Regex.match?(@notebook_id, id)
+
   @doc "How the hubs know a person: by their account here."
   def subject(%Human{human_account_id: id}) when is_integer(id), do: "u_#{id}"
 

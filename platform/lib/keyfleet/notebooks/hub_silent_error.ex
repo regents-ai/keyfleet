@@ -5,7 +5,8 @@ defmodule Keyfleet.Notebooks.HubSilentError do
   (`Keyfleet.Notebooks.session_room?/2`), or a request passed on or a live
   connection opened by its gateway (`KeyfleetWeb.Plugs.NotebookGateway`). Whoever asked was told the notebooks
   are unavailable, so until someone looks at the hub its members cannot work
-  in it.
+  in it. A fleet's search that the hub didn't answer, or didn't answer in
+  time (`Keyfleet.Search`), answered without the fleet's notebooks.
 
   `report/1` saves it with the site's errors (`Keyfleet.Alert`), each place
   that reports its own error listing every occurrence with its own message.

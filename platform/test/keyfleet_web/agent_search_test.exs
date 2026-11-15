@@ -7,12 +7,27 @@ defmodule KeyfleetWeb.AgentSearchTest do
   import Plug.Conn
 
   alias Keyfleet.Actors.{Human, System}
-  alias Keyfleet.{ChainHelpers, ContractSchema, Dms, Fleets, Keys, PairingHelpers, Rooms}
+
+  alias Keyfleet.{
+    Agents,
+    ChainHelpers,
+    ContractSchema,
+    Dms,
+    Fleets,
+    Keys,
+    NotebookHubHelpers,
+    Notebooks,
+    PairingHelpers,
+    Projects,
+    Rooms
+  }
+
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
+  @space "proj-0000000000000001"
   @api "/api/v1/agent/fleets/#{@fleet}/search"
   @person "0x" <> String.duplicate("a", 40)
   @other "0x" <> String.duplicate("b", 40)
@@ -37,10 +52,55 @@ defmodule KeyfleetWeb.AgentSearchTest do
 
     # The agent's person holds Key 1; someone else holds Key 2.
     {:ok, signer} = Siwa.LocalSigner.new()
-    PairingHelpers.pair_wallet!(String.downcase(signer.address), @person)
+    agent = PairingHelpers.pair_wallet!(String.downcase(signer.address), @person)
     record!(1, @person)
     record!(2, @other)
-    %{secret: secret, signer: signer}
+    %{secret: secret, signer: signer, agent: agent}
+  end
+
+  # Costly failure: an agent never finds the fleet's notebooks by what they
+  # are called or what they are for, so it starts one that already exists.
+  test "finds the notebooks the hub lists for it by a word of their title or description, with their address",
+       c do
+    profile =
+      Agents.ensure_profile!(%{name: "Searcher", declared_harness: "local"}, actor: c.agent)
+
+    @fleet
+    |> Projects.project!(Projects.general(), actor: %System{})
+    |> Projects.record_space!(@space, actor: %System{})
+
+    NotebookHubHelpers.serve!(@fleet, %{
+      @space => [
+        NotebookHubHelpers.notebook(
+          1,
+          "Probe telemetry",
+          "Charts the deploy timings",
+          ~U[2026-11-01 09:00:00Z]
+        ),
+        NotebookHubHelpers.notebook(
+          2,
+          "Deploy budget",
+          "What each run costs",
+          ~U[2026-11-02 09:00:00Z]
+        )
+      ]
+    })
+
+    page = c |> post!(%{"query" => "deploy"}) |> json_response(200)
+    assert ContractSchema.errors(page, "SearchPage") == []
+
+    assert [
+             %{"kind" => "notebook", "title" => "Deploy budget", "id" => by_title},
+             %{"kind" => "notebook", "title" => "Probe telemetry", "match" => match, "url" => url}
+           ] = page["matches"]
+
+    assert match == "Charts the deploy timings"
+    assert url == Notebooks.notebook_url(@fleet, @space, "nb-0000000000000001")
+    assert by_title == "nb-0000000000000002"
+    assert Enum.all?(page["matches"], &(&1["project"] == "general"))
+
+    subject = Notebooks.agent_subject(profile.id)
+    assert_received {:listed, @space, ^subject, "deploy"}
   end
 
   test "finds posts, messages and items with their pages, and reads on from its cursor", c do

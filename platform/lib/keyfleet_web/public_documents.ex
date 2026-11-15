@@ -91,7 +91,8 @@ defmodule KeyfleetWeb.PublicDocuments do
        "Quick questions {fleet}'s Keys answer together: the active ones, then the past ones."},
     :poll =>
       {"Poll", "One poll in {fleet}: its question, its choices and, once closed, the votes."},
-    :search => {"Search", "Search {fleet}'s rooms, messages and workspace on Keyfleet."},
+    :search =>
+      {"Search", "Search {fleet}'s rooms, messages, workspace and notebooks on Keyfleet."},
     :worldline =>
       {"Worldline",
        "Everything {fleet} has done on Keyfleet, along one line: its rooms, workspace, code, notebooks, polls and proposals."},

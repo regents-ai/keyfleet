@@ -49,7 +49,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
     end
 
     action :search, :map do
-      description "Finds the fleet's posts, direct messages and workspace items whose words match."
+      description "Finds the fleet's posts, direct messages and workspace items whose words match, and its notebooks whose title or description holds the query."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
       argument :query, :string, allow_nil?: false, constraints: [max_length: 200, trim?: false]
       argument :cursor, :string, constraints: [max_length: 512, trim?: false]

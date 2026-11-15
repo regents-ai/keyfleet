@@ -27,7 +27,7 @@ defmodule Keyfleet.Rooms.Message do
   @max_body 4_000
   @max_page 200
   @max_posts_as_key 20
-  @max_recent_in_fleet 10
+  @max_recent_in_fleet 100
 
   postgres do
     table "messages"
@@ -400,7 +400,8 @@ defmodule Keyfleet.Rooms.Message do
     end
 
     # The fleet's newest posts in its rooms, newest first, for the fleet
-    # directory. Posts written to keys' threads are left out.
+    # directory, which keeps the newest from each writer among them. Posts
+    # written to keys' threads are left out.
     read :recent_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -414,6 +415,19 @@ defmodule Keyfleet.Rooms.Message do
 
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [inserted_at: :desc, id: :asc], before: []}
+    end
+
+    # The posts written in the fleet's rooms in the last 24 hours, for
+    # counting them in the fleet directory. Posts written to keys' threads
+    # are left out. Read through the fleet's room lines index
+    # (`messages_fleet_room_lines_index`).
+    read :posts_last_day do
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and not in_key_thread and
+                 inserted_at > ago(1, :day)
+             )
     end
 
     # The fleet's lines in its rooms older than one line, newest first, for
@@ -808,6 +822,7 @@ defmodule Keyfleet.Rooms.Message do
              :read,
              :posts_as_key,
              :recent_in_fleet,
+             :posts_last_day,
              :fleet_lines_before,
              :room_posts_as_key,
              :room_posts_by_wallet,

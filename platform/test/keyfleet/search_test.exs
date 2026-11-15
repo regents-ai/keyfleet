@@ -3,18 +3,26 @@ defmodule Keyfleet.SearchTest do
   # pages through every match once, whatever the page size.
   use ExUnit.Case, async: false
 
+  import Ecto.Query, only: [from: 2]
+  import Keyfleet.NotebookHubHelpers, only: [notebook: 4]
+
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Dms
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.NotebookHubHelpers
+  alias Keyfleet.Notebooks
   alias Keyfleet.PairingHelpers
+  alias Keyfleet.Projects
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Search
   alias Keyfleet.WorkspaceFixtures, as: Workspace
 
   @fleet "fibonacci_syndicate"
+  @general "proj-0000000000000001"
+  @understanding "proj-0000000000000002"
 
   setup do
     pid =
@@ -86,6 +94,100 @@ defmodule Keyfleet.SearchTest do
     for size <- [1, 3, 7], do: assert(walk(human("a"), "hull", size) == whole)
   end
 
+  # Costly failure: a fleet's notebooks never turn up in its search, so a
+  # member looking for one by its title or description never finds it.
+  test "a member finds the notebooks the hub lists for them by a word of their title or description" do
+    serve!(%{
+      @general => [
+        notebook(1, "Hull survey", "Plates and rivets, port side", ~U[2026-11-01 09:00:00Z]),
+        notebook(
+          2,
+          "Rotor log",
+          "Readings of the HULL after the storm",
+          ~U[2026-11-02 09:00:00Z]
+        ),
+        notebook(3, "Lunch", "Soup", ~U[2026-11-03 09:00:00Z])
+      ]
+    })
+
+    assert [by_description, by_title] = found(human("a"), "hull")
+
+    assert %{kind: "notebook", title: "Rotor log", project: "general", at: at} = by_description
+    assert DateTime.compare(at, ~U[2026-11-02 09:00:00Z]) == :eq
+    assert by_description.match == "Readings of the HULL after the storm"
+    assert by_description.url == Notebooks.notebook_url(@fleet, @general, by_description.id)
+
+    assert %{kind: "notebook", title: "Hull survey", match: "Plates and rivets, port side"} =
+             by_title
+
+    # The hub was asked as the member, never as the site.
+    assert_received {:listed, @general, "u_97", "hull"}
+    assert [%{title: "Lunch"}] = found(human("a"), "soup")
+  end
+
+  test "a project whose notebooks the hub doesn't let the reader into brings none, and nor does holding no Key" do
+    serve!(%{
+      @general => [notebook(1, "Hull survey", "", ~U[2026-11-01 09:00:00Z])],
+      @understanding => {:status, 403}
+    })
+
+    assert [%{kind: "notebook", project: "general"}] = found(human("a"), "hull")
+    assert_received {:listed, @general, "u_97", "hull"}
+    assert_received {:listed, @understanding, "u_97", "hull"}
+
+    assert found(human("z"), "hull") == []
+    assert found(nil, "hull") == []
+    refute_received {:listed, _space, _subject, _q}
+  end
+
+  test "pages hold every notebook once among the other matches, at any page size" do
+    writer = PairingHelpers.agent_for!(human("a"))
+    for n <- 1..3, do: post!(writer, "general", "Hull reading #{n}")
+    now = DateTime.utc_now()
+
+    serve!(%{
+      @general => [
+        notebook(1, "Hull plan", "", DateTime.add(now, 60)),
+        notebook(2, "Hull a", "", DateTime.add(now, -60)),
+        notebook(3, "Hull b", "", DateTime.add(now, -60))
+      ],
+      @understanding => [notebook(4, "Hull notes", "", DateTime.add(now, -30))]
+    })
+
+    whole = walk(human("a"), "hull", 50)
+    assert kinds(whole) == %{"notebook" => 4, "post" => 3}
+    assert Enum.uniq_by(whole, &{&1.kind, &1.id}) == whole
+
+    assert whole
+           |> Enum.chunk_every(2, 1, :discard)
+           |> Enum.all?(fn [newer, older] -> DateTime.compare(newer.at, older.at) != :lt end)
+
+    for size <- [1, 2, 3], do: assert(walk(human("a"), "hull", size) == whole)
+  end
+
+  test "a fleet without a hub, and a hub that doesn't answer in time, still find everything else" do
+    writer = PairingHelpers.agent_for!(human("a"))
+    post!(writer, "general", "Hull reading")
+
+    assert [%{kind: "post"}] = found(human("a"), "hull")
+
+    serve!(%{
+      @general => {:after, 1_000, [notebook(1, "Hull survey", "", ~U[2026-11-01 09:00:00Z])]}
+    })
+
+    notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+    Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :search_timeout_ms, 100))
+
+    assert [%{kind: "post"}] = found(human("a"), "hull")
+
+    assert Repo.exists?(
+             from(error in ErrorTracker.Error,
+               where:
+                 like(error.reason, ^"The notebook hub of #{@fleet} did not answer a search%")
+             )
+           )
+  end
+
   test "a query with no words in it, or too long, is refused" do
     for query <- ["   ", "hull\0", "-zz", "-a -b", ~s(-"a b"), "or -a"] do
       assert Search.page(@fleet, query, nil, human("a")) == {:error, :query}, inspect(query)
@@ -113,6 +215,18 @@ defmodule Keyfleet.SearchTest do
   end
 
   defp kinds(matches), do: Enum.frequencies_by(matches, & &1.kind)
+
+  # The fleet's hub, with `general` and `understanding` each in a space of
+  # their own.
+  defp serve!(spaces) do
+    for {project, space} <- [{"general", @general}, {"understanding", @understanding}] do
+      @fleet
+      |> Projects.project!(project, actor: %Actors.System{})
+      |> Projects.record_space!(space, actor: %Actors.System{})
+    end
+
+    NotebookHubHelpers.serve!(@fleet, spaces)
+  end
 
   defp post!(actor, slug, body) do
     Rooms.send_message!(

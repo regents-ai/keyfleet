@@ -36,7 +36,8 @@ defmodule KeyfleetWeb.DirectoryJSON do
       agents: Enum.map(fleet.agents, &agent/1),
       projects: fleet.projects,
       rooms: Enum.map(fleet.rooms, &linked(fleet, &1)),
-      recent_posts: Enum.map(fleet.recent_posts, &post(fleet, &1))
+      recent_posts: Enum.map(fleet.recent_posts, &post(fleet, &1)),
+      posts_last_day: fleet.posts_last_day
     })
   end
 

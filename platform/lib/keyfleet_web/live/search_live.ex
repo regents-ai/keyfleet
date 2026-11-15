@@ -4,7 +4,9 @@ defmodule KeyfleetWeb.SearchLive do
   the address as `?q=`, drawn inside the fleet's page under its bar
   (`KeyfleetWeb.FleetLive`), whose search box opens it. It lists what the
   reader may read that matches, newest first (`Keyfleet.Search`), each line
-  linking to the page it is on; "Show more" adds the next page under them.
+  linking to the page it is on, a notebook's on the fleet's notebook host
+  by way of its sign-in step here;
+  "Show more" adds the next page under them.
   """
 
   use KeyfleetWeb, :html
@@ -89,7 +91,7 @@ defmodule KeyfleetWeb.SearchLive do
           :if={@search.state == :idle}
           id="search-idle"
           class="kf-empty"
-          title="Search this fleet’s rooms, messages and workspace."
+          title="Search this fleet’s rooms, messages, workspace and notebooks."
         />
 
         <Regent.Primitives.empty_state
@@ -112,7 +114,7 @@ defmodule KeyfleetWeb.SearchLive do
           class="search-matches"
         >
           <li :for={match <- @search.matches} id={dom_id(match)} data-kind={match.kind}>
-            <.link patch={SearchJSON.path(@search.fleet_id, match)} class="search-match">
+            <.link {to(@search.fleet_id, match)} class="search-match">
               <span class="search-match__head">
                 <span class="search-match__kind">{kind(match)}</span>
                 <span class="search-match__place">{place(match)}</span>
@@ -145,8 +147,19 @@ defmodule KeyfleetWeb.SearchLive do
 
   defp dom_id(%{kind: kind, id: id}), do: "search-#{kind}-" <> String.replace(id, "#", "-")
 
+  # A notebook opens on the fleet's notebook host, through the step here that
+  # signs its reader in there (`KeyfleetWeb.NotebookOpenController`); every
+  # other match opens here.
+  defp to(fleet_id, %{kind: "notebook", url: url}) do
+    to = URI.encode_query(to: URI.parse(url).path)
+    %{href: "/fleets/#{fleet_id}/notebooks/open?" <> to}
+  end
+
+  defp to(fleet_id, match), do: %{patch: SearchJSON.path(fleet_id, match)}
+
   defp kind(%{kind: "post"}), do: "Post"
   defp kind(%{kind: "dm"}), do: "Message"
+  defp kind(%{kind: "notebook"}), do: "Notebook"
 
   defp kind(%{kind: "item", type: type}),
     do: type |> WorkspacePage.type_name() |> elem(0) |> String.capitalize()
@@ -154,6 +167,10 @@ defmodule KeyfleetWeb.SearchLive do
   defp place(%{kind: "post", room: %{name: name}}), do: name
   defp place(%{kind: "post", wall: token_id}), do: "Key #{grouped(token_id)}"
   defp place(%{kind: "dm", other_key: other}), do: "Key #{grouped(other)}"
-  defp place(%{kind: "item", title: title}) when is_binary(title) and title != "", do: title
-  defp place(%{kind: "item", id: id}), do: id
+
+  defp place(%{kind: kind, title: title})
+       when kind in ["item", "notebook"] and is_binary(title) and title != "",
+       do: title
+
+  defp place(%{kind: kind, id: id}) when kind in ["item", "notebook"], do: id
 end

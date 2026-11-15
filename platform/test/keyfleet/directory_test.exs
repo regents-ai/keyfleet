@@ -2,6 +2,7 @@ defmodule Keyfleet.DirectoryTest do
   use ExUnit.Case, async: false
 
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Directory
   alias Keyfleet.Fleets
@@ -13,7 +14,6 @@ defmodule Keyfleet.DirectoryTest do
 
   @fleet "fibonacci_syndicate"
   @system %Actors.System{}
-  @owner "0x" <> String.duplicate("a", 40)
 
   setup do
     # A fleet's entry reads its workspace in a repeatable-read snapshot, which
@@ -24,7 +24,7 @@ defmodule Keyfleet.DirectoryTest do
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
-    for token_id <- 1..6, do: epoch!(token_id, 1, @owner)
+    for token_id <- 1..6, do: epoch!(token_id, 1, wallet(token_id))
     :ok
   end
 
@@ -53,11 +53,10 @@ defmodule Keyfleet.DirectoryTest do
   test "a long post's excerpt ends at a word with an ellipsis, within 280 code points" do
     family = "👨‍👩‍👧"
     words = String.duplicate("word ", 60)
-    writer = PairingHelpers.agent_for!(owner())
-    post!(writer, "general", String.duplicate("a", 275) <> family <> "b")
-    post!(writer, "general", String.duplicate("b", 279) <> family)
-    post!(writer, "general", words)
-    post!(writer, "general", String.duplicate("c", 280))
+    post!(writer(1), "general", String.duplicate("a", 275) <> family <> "b")
+    post!(writer(2), "general", String.duplicate("b", 279) <> family)
+    post!(writer(3), "general", words)
+    post!(writer(4), "general", String.duplicate("c", 280))
 
     {:ok, fleet} = Directory.fleet(@fleet)
     excerpts = Enum.map(fleet.recent_posts, & &1.excerpt)
@@ -72,32 +71,79 @@ defmodule Keyfleet.DirectoryTest do
     assert Enum.all?(excerpts, &(length(String.codepoints(&1)) <= 280))
   end
 
-  test "latest posts are the newest ten in the fleet's rooms, never a key's thread" do
-    writer = PairingHelpers.agent_for!(owner())
-    for n <- 1..11, do: post!(writer, "general", "Post #{n}")
+  test "one Key's flood of posts leaves it one line, and the other Keys' newest posts still show" do
+    post!(writer(2), "general", "Two, first")
+    post!(writer(3), "general", "Three")
+    post!(writer(2), "general", "Two, again")
+    for n <- 1..12, do: post!(writer(1), "general", "Flood #{n}")
 
     Rooms.send_to_key!(
       %{fleet_id: @fleet, token_id: 2, body: "To key two", idempotency_key: "thread"},
-      actor: owner()
+      actor: holder(1)
     )
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert Enum.map(fleet.recent_posts, & &1.excerpt) == for(n <- 11..2//-1, do: "Post #{n}")
+    assert Enum.map(fleet.recent_posts, &{&1.as_key, &1.excerpt}) == [
+             {1, "Flood 12"},
+             {2, "Two, again"},
+             {3, "Three"}
+           ]
 
     assert hd(fleet.recent_posts).author == %{
              kind: :human,
-             wallet: RegentFormat.short_address(@owner),
+             wallet: RegentFormat.short_address(wallet(1)),
              via_agent: "Their agent"
            }
 
     assert fleet.last_post_at == hd(fleet.recent_posts).at
-
     assert listed(@fleet).last_post_at == fleet.last_post_at
   end
 
+  test "a post written as no Key counts the wallet that wrote it as its writer" do
+    visitor = keyless("b")
+    other = keyless("c")
+    post!(visitor, "people", "Hello")
+    post!(other, "people", "Hi there")
+    post!(visitor, "people", "Hello again")
+
+    {:ok, fleet} = Directory.fleet(@fleet)
+
+    assert Enum.map(fleet.recent_posts, &{&1.as_key, &1.excerpt}) == [
+             {nil, "Hello again"},
+             {nil, "Hi there"}
+           ]
+  end
+
+  test "the day's posts count the last 24 hours in the rooms anyone reads, never a Key's thread" do
+    post!(writer(1), "general", "Today")
+    post!(keyless("b"), "people", "Hello")
+    post!(writer(2), "open-1", "For members")
+    post!(writer(3), "general", "Old")
+
+    Rooms.send_to_key!(
+      %{fleet_id: @fleet, token_id: 2, body: "To key two", idempotency_key: "thread"},
+      actor: holder(1)
+    )
+
+    # Posts are never edited, so the old one is moved back two days with its
+    # guard off, inside this test's own transaction.
+    Repo.query!("ALTER TABLE keyfleet_app.messages DISABLE TRIGGER immutable_messages")
+
+    Repo.query!(
+      "UPDATE keyfleet_app.messages SET inserted_at = inserted_at - interval '2 days' WHERE body = 'Old'"
+    )
+
+    Repo.query!("ALTER TABLE keyfleet_app.messages ENABLE TRIGGER immutable_messages")
+
+    {:ok, fleet} = Directory.fleet(@fleet)
+
+    assert fleet.posts_last_day == 2
+    assert Enum.map(fleet.recent_posts, & &1.excerpt) == ["Hello", "Today", "Old"]
+  end
+
   test "a room's posts leave out the lines that record its namings" do
-    writer = PairingHelpers.agent_for!(owner())
+    writer = writer(1)
 
     "open-1"
     |> then(&Rooms.get_room!(@fleet, &1, authorize?: false))
@@ -175,7 +221,22 @@ defmodule Keyfleet.DirectoryTest do
     Enum.find(fleets, &(&1.id == fleet_id))
   end
 
-  defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+  # Each Key has a holder of its own.
+  defp wallet(token_id), do: "0x" <> String.duplicate("#{token_id}", 40)
+
+  defp holder(token_id),
+    do: %Actors.Human{human_account_id: token_id, wallet_addresses: [wallet(token_id)]}
+
+  # The agent of Key `token_id`'s holder, which writes as that Key for them.
+  defp writer(token_id), do: PairingHelpers.agent_for!(holder(token_id))
+
+  # An agent whose person holds no Key, which writes as no Key from its own
+  # wallet, in the People and agents room.
+  defp keyless(character) do
+    agent = PairingHelpers.pair_wallet!("0x" <> String.duplicate(character, 40))
+    Agents.ensure_profile!(%{name: "Visitor", declared_harness: "test"}, actor: agent)
+    agent
+  end
 
   defp post!(writer, slug, body) do
     Rooms.send_message!(
