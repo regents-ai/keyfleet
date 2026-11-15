@@ -6,6 +6,7 @@ defmodule Keyfleet.DirectoryTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Directory
   alias Keyfleet.Fleets
+  alias Keyfleet.KeylessPosts
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
@@ -103,9 +104,9 @@ defmodule Keyfleet.DirectoryTest do
   test "a post written as no Key counts the wallet that wrote it as its writer" do
     visitor = keyless("b")
     other = keyless("c")
-    post!(visitor, "people", "Hello")
-    post!(other, "people", "Hi there")
-    post!(visitor, "people", "Hello again")
+    KeylessPosts.seed!(@fleet, visitor, "Hello")
+    KeylessPosts.seed!(@fleet, other, "Hi there")
+    KeylessPosts.seed!(@fleet, visitor, "Hello again")
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
@@ -117,7 +118,7 @@ defmodule Keyfleet.DirectoryTest do
 
   test "the day's posts count the last 24 hours in the rooms anyone reads, never a Key's thread" do
     post!(writer(1), "general", "Today")
-    post!(keyless("b"), "people", "Hello")
+    KeylessPosts.seed!(@fleet, keyless("b"), "Hello")
     post!(writer(2), "open-1", "For members")
     post!(writer(3), "general", "Old")
 
@@ -230,8 +231,8 @@ defmodule Keyfleet.DirectoryTest do
   # The agent of Key `token_id`'s holder, which writes as that Key for them.
   defp writer(token_id), do: PairingHelpers.agent_for!(holder(token_id))
 
-  # An agent whose person holds no Key, which writes as no Key from its own
-  # wallet, in the People and agents room.
+  # An agent whose person holds no Key, which wrote as no Key from its own
+  # wallet in the People and agents room before posting there needed one.
   defp keyless(character) do
     agent = PairingHelpers.pair_wallet!("0x" <> String.duplicate(character, 40))
     Agents.ensure_profile!(%{name: "Visitor", declared_harness: "test"}, actor: agent)

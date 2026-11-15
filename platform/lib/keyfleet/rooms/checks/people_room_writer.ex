@@ -2,8 +2,8 @@ defmodule Keyfleet.Rooms.Checks.PeopleRoomWriter do
   @moduledoc """
   Whether a post goes to the People and agents room
   (`Keyfleet.Rooms.Room.people_slug/0`) from someone who may write there
-  (`Keyfleet.Access`, `:people_room`): anyone signed in, and any agent paired
-  with a person.
+  (`Keyfleet.Access`, `:people_room`): the fleet's members, the people
+  holding its Keys as well as their agents.
   """
   use Ash.Policy.SimpleCheck
 

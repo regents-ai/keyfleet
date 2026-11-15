@@ -277,7 +277,6 @@ defmodule Keyfleet.AtlasTest do
       for opts <- [
             [actor: stranger],
             [actor: nil],
-            [actor: stranger, context: Access.context(stranger, @fleet, :person)],
             [actor: member, context: Access.context(member, @fleet, :public)]
           ] do
         assert {:error, %Ash.Error.Forbidden{}} = Atlas.swarm(@fleet, :week, from, to, %{}, opts)

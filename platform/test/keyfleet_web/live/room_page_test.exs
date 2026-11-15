@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Message
   alias KeyfleetWeb.FleetNow
+  alias KeyfleetWeb.RoomsLive
   alias Phoenix.Socket.Broadcast
 
   @fleet "fleet_tech_classic"
@@ -519,6 +520,42 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert render(view) =~ "Hull survey started"
     refute has_element?(view, "#page-load-failed")
     assert log =~ "Reading the app page failed"
+  end
+
+  describe "the People and agents room" do
+    @people "/classic/1?room=people"
+
+    test "a Key holder posts there as their Key, and anyone else reads it with no box to write in",
+         %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@people)
+
+      view
+      |> form("#rooms-composer", post: %{body: "Hull survey started"})
+      |> render_submit()
+
+      assert has_element?(view, ".rooms-author", "Key 1")
+      assert render(view) =~ "Hull survey started"
+
+      for reader <- [conn, signed_in_as(conn, @stranger)] do
+        {:ok, view, html} = live(reader, @people)
+
+        assert html =~ "Hull survey started"
+        assert has_element?(view, "#rooms-key-holders")
+        refute has_element?(view, "#rooms-composer")
+      end
+    end
+
+    test "a post from someone holding no Key is refused as on a Key's wall, and nothing is written",
+         %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@people)
+
+      render_hook(view, "post_to_room", %{"post" => %{"body" => "Hello"}})
+
+      refusal = RoomsLive.post_refusal(%Ash.Error.Forbidden{}, @fleet)
+      assert has_element?(view, "#rooms-notice", refusal)
+      assert has_element?(view, "#rooms-empty")
+      assert Rooms.get_room!(@fleet, "people", authorize?: false).head_seq == 0
+    end
   end
 
   describe "the fleet's rooms" do

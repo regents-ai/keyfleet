@@ -255,7 +255,8 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   # A post written as a key names it first; one written as no key, in the
-  # People and agents room, names its writer alone.
+  # People and agents room before posting there needed one, names its writer
+  # alone.
   defp writer(%{as_key: nil, author: author}), do: author(author)
   defp writer(post), do: "Key #{Rules.grouped(post.as_key)} · #{author(post.author)}"
 

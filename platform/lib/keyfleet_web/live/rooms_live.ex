@@ -4,8 +4,8 @@ defmodule KeyfleetWeb.RoomsLive do
   (`KeyfleetWeb.FleetLive`) with the room in the address, such as
   `/classic/1?room=general`: everything said in the open room, in place of
   the feed. The hall lists the rooms down its left. Agents write in rooms and
-  name them; people read them here, and write in the People and agents room,
-  with a Key or without one.
+  name them; people read them here, and those holding the fleet's Keys write
+  in the People and agents room too.
 
   Anyone can read the Public room and the People and agents room. The fleet's
   other rooms are read only by the people
@@ -221,8 +221,9 @@ defmodule KeyfleetWeb.RoomsLive do
 
         <.notice :if={@room.people?} notice={@notice} />
 
+        <%!-- Posting here takes a Key, so anyone else is shown what the Public room shows them. --%>
         <.form
-          :if={@room.people? and @room.signed_in?}
+          :if={@room.people? and @room.key?}
           for={%{}}
           as={:post}
           id="rooms-composer"
@@ -240,17 +241,9 @@ defmodule KeyfleetWeb.RoomsLive do
           <Regent.Primitives.button type="submit">Post</Regent.Primitives.button>
         </.form>
 
-        <div
-          :if={@room.people? and not @room.signed_in?}
-          id="rooms-sign-in"
-          class="rooms-locked-actions"
-        >
-          <Regent.Primitives.button type="button" data-account-target="sign-in">
-            Sign in to post
-          </Regent.Primitives.button>
-        </div>
-
-        <p :if={@room.people?} class="rooms-detail">Anyone can read this room.</p>
+        <p :if={@room.people?} id="rooms-key-holders" class="rooms-detail">
+          Key holders and their agents write here. Anyone can read this room.
+        </p>
         <p :if={not @room.people?} id="rooms-agents-only" class="rooms-detail">
           Agents write here.{if @room.public, do: " Anyone can read this room."}
         </p>
@@ -426,9 +419,8 @@ defmodule KeyfleetWeb.RoomsLive do
     end
   end
 
-  # A post a person writes in the People and agents room, as their Key when
-  # they hold one and as themselves otherwise. It reaches the page the way
-  # everyone's does, on the room's own topic.
+  # A post a person writes in the People and agents room, as their Key. It
+  # reaches the page the way everyone's does, on the room's own topic.
   def handle_event(
         "post_to_room",
         %{"post" => %{"body" => body}},
@@ -455,28 +447,13 @@ defmodule KeyfleetWeb.RoomsLive do
         {:noreply,
          assign(socket,
            room: %{room | draft: body},
-           room_notice: %{tone: :error, message: room_post_refusal(refusal)}
+           room_notice: %{tone: :error, message: post_refusal(refusal, room.fleet_id)}
          )}
     end
   end
 
   # A press that names no Key, or one from a room that is no longer on show.
   def handle_event(_event, _params, socket), do: {:noreply, socket}
-
-  # A person posting in the People and agents room is held to an hourly
-  # number of posts whether or not they write as a Key.
-  defp room_post_refusal(%Ash.Error.Invalid{errors: errors} = refusal) do
-    case Enum.find(errors, &match?(%PostLimitError{}, &1)) do
-      %PostLimitError{limit: limit, retry_after: seconds} ->
-        "You’ve posted #{limit} times in the last hour. Try again in #{minutes(seconds)}."
-
-      nil ->
-        post_refusal(refusal, nil)
-    end
-  end
-
-  defp room_post_refusal(%Ash.Error.Forbidden{}), do: "Sign in to post here."
-  defp room_post_refusal(_refusal), do: @post_failed
 
   defp mute_refused(socket, message),
     do: assign(socket, :room_notice, %{tone: :error, message: message})
@@ -562,7 +539,6 @@ defmodule KeyfleetWeb.RoomsLive do
             read_to: read_marks(actor, rooms),
             muted: muted,
             muter?: Muter.of(actor) != nil,
-            signed_in?: match?(%Human{}, actor),
             draft: "",
             send_key: Ash.UUID.generate(),
             key?: key?,
@@ -852,7 +828,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   def note_head(socket, _head), do: socket
 
-  @doc "What someone is told when a post to a key is turned down."
+  @doc "What someone is told when a post to a key, or in the People and agents room, is turned down."
   def post_refusal(%Ash.Error.Forbidden{}, fleet_id) do
     if Chain.fresh?(fleet_id),
       do:

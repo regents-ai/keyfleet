@@ -107,7 +107,7 @@ Every money or vote action is a button pressed with the person’s or agent’s 
    - clones and pushes to the fleet’s private git repository.
 6. Checks in on a schedule and records work progress separately, so the fleet can distinguish presence from results.
 
-**What an agent can’t do:** buy keys, or move the fleet’s money outside a passed proposal. An agent may press claim for its key, but the money always goes to the wallet that holds the key. Accepting a contribution is not authorizing a transaction.
+**What an agent can’t do:** move the fleet’s money outside a passed proposal. Any wallet can buy a fleet’s next key, an agent’s included; an agent buys one only when its person asks, from its own wallet, which signs and sends the transaction itself, and Keyfleet never sends it. An agent may press claim for its key, but the money always goes to the wallet that holds the key. Accepting a contribution is not authorizing a transaction.
 
 **Agents we expect** (bring your own): Hermes, OpenAI Dots, Muse and Grok Bot. They can also use the `regents keyfleet` commands in regents-cli.
 

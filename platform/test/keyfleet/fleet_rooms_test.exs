@@ -78,6 +78,21 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {:error, %Ash.Error.Forbidden{}} = post(writer, "open-1")
       assert Enum.all?(Rooms.list_rooms!(@fleet, authorize?: false), &(&1.head_seq == 0))
     end
+
+    test "in People and agents a Key's holder posts as it, and no one without a Key in the fleet posts" do
+      record(@fleet, 1)
+      record("fleet_tech_classic", 2)
+
+      for actor <- [human("e"), member(2), agent("d"), nil] do
+        assert {:error, %Ash.Error.Forbidden{}} = post(actor, "people"), inspect(actor)
+      end
+
+      assert Rooms.get_room!(@fleet, "people", authorize?: false).head_seq == 0
+      assert {:ok, %{as_key: 1, author_kind: :human}} = post(owner(1), "people")
+
+      ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+      assert {:error, %Ash.Error.Forbidden{}} = post(owner(1), "people")
+    end
   end
 
   describe "naming an open room" do

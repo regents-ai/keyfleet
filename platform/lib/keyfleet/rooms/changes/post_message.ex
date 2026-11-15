@@ -9,10 +9,8 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   A line is written as the author's key in the fleet
   (`Keyfleet.Keys.identity/2`), which is kept on the line as `as_key`. An
   agent writing as the person it is paired with writes the person's line,
-  marked with its profile as `via_agent_profile`. In the People and agents
-  room (`Keyfleet.Rooms.Room.people_slug/0`) someone without a key writes as
-  themselves: a person from their account's wallet, an agent from its own.
-  A post keeps the Keys its words mention (`Keyfleet.Rooms.Mentions`).
+  marked with its profile as `via_agent_profile`. A post keeps the Keys its
+  words mention (`Keyfleet.Rooms.Mentions`).
 
   A sender names every post with a key of its own. If the same key arrives again
   with the same words, the room keeps the post it already has and answers with
@@ -31,7 +29,6 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
   alias Keyfleet.Rooms.Mentions
-  alias Keyfleet.Rooms.Room
   alias Keyfleet.Rooms.Sequence
 
   @impl true
@@ -86,12 +83,11 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
     do: Rooms.get_post_in_room!(room.fleet_id, reply_to_id, room.id, actor: actor) != nil
 
   # Who the line is written as is read once more under the room's lock: a key
-  # that changed hands since the policy looked leaves nothing to write as,
-  # except in the People and agents room, where the author writes as themselves.
+  # that changed hands since the policy looked leaves nothing to write as.
   defp write(changeset, room, actor, kind) do
     Sequence.lock_room!(room.id)
 
-    case Keyfleet.Keys.identity(actor, room.fleet_id) || keyless(actor, room) do
+    case Keyfleet.Keys.identity(actor, room.fleet_id) do
       nil ->
         Ash.Changeset.add_error(changeset, NoKeyToWriteAsError.exception(fleet_id: room.fleet_id))
 
@@ -99,18 +95,6 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
         write_as(changeset, room, actor, kind, identity)
     end
   end
-
-  # Someone without a key, in the People and agents room: a person writes from
-  # their account's wallet, an agent from its own.
-  defp keyless(actor, %{slug: slug, kind: :fixed}) do
-    if slug == Room.people_slug(), do: own_wallet(actor)
-  end
-
-  defp keyless(_actor, _room), do: nil
-
-  defp own_wallet(%Human{wallet_addresses: [wallet | _]}), do: %{token_id: nil, wallet: wallet}
-  defp own_wallet(%Agent{wallet_address: wallet}), do: %{token_id: nil, wallet: wallet}
-  defp own_wallet(_actor), do: nil
 
   defp write_as(changeset, room, actor, kind, %{token_id: as_key, wallet: wallet} = identity) do
     body = Ash.Changeset.get_argument(changeset, :body)

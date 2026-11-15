@@ -264,15 +264,12 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     )
   end
 
-  # A post written as no Key, in the People and agents room, by an agent whose
-  # person holds none: another writer than Key 1.
+  # A post written as no Key in the People and agents room, before posting
+  # there needed one, by an agent whose person holds none: another writer than
+  # Key 1.
   defp keyless_post!(body) do
     agent = PairingHelpers.pair_wallet!("0x" <> String.duplicate("c", 40))
     Agents.ensure_profile!(%{name: "Visitor", declared_harness: "test"}, actor: agent)
-
-    Rooms.send_message!(
-      %{fleet_id: @fleet, slug: "people", body: body, idempotency_key: Ash.UUID.generate()},
-      actor: agent
-    )
+    Keyfleet.KeylessPosts.seed!(@fleet, agent, body)
   end
 end

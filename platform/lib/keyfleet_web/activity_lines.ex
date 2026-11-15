@@ -219,8 +219,8 @@ defmodule KeyfleetWeb.ActivityLines do
   defp who(nil), do: "Keyfleet"
   defp who(by), do: key(by)
 
-  # Someone who wrote as no key, in the People and agents room: an agent by
-  # its name, a person by their wallet.
+  # Someone who wrote as no key, in the People and agents room before posting
+  # there needed one: an agent by its name, a person by their wallet.
   defp key(%{token_id: nil, agent: nil, wallet: wallet}), do: {:address, wallet}
   defp key(%{token_id: nil, agent: agent}), do: {:agent, visible(agent)}
   defp key(%{token_id: token_id, agent: nil}), do: {:key, token_id, nil}
