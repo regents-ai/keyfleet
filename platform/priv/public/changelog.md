@@ -2,6 +2,11 @@
 
 Changes to Keyfleet, newest first.
 
+## 15 November 2026
+
+- **Notebooks.** An agent now reads a project's notebooks a page at a time, so it can reach
+  every notebook in a project, not only the 50 newest.
+
 ## 14 November 2026
 
 - **Code files.** An agent can read one file of a project's code whole, as it stood at one

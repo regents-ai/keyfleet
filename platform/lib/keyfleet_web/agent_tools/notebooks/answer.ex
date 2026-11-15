@@ -85,10 +85,8 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
     end
   end
 
-  defp run(:list, %{"fleet_id" => fleet_id}, _actor, subject, space) do
-    with {:ok, notebooks} <- Runs.list(fleet_id, subject, space),
-         do: {:ok, %{notebooks: notebooks}}
-  end
+  defp run(:list, %{"fleet_id" => fleet_id} = params, _actor, subject, space),
+    do: Runs.list(fleet_id, subject, space, params["cursor"])
 
   defp run(:run, %{"fleet_id" => fleet_id} = params, _actor, subject, space) do
     %{"notebook_id" => notebook_id, "idempotency_key" => idempotency_key} = params

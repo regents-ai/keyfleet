@@ -45,7 +45,7 @@ defmodule Keyfleet.Notebooks.RunsTest do
     assert answer.failure == failure(25)
     refute answer.result_url == good_url
 
-    assert {:ok, [listed]} = Runs.list(@fleet, @subject, @space)
+    assert {:ok, %{notebooks: [listed]}} = Runs.list(@fleet, @subject, @space, nil)
     assert listed.last_run.run_id == newest
     assert listed.last_run.status == "failed"
     assert listed.last_succeeded == %{run_id: good, result_url: good_url}

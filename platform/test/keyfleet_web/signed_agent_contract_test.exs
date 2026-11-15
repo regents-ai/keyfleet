@@ -325,6 +325,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "folder" => "experiments",
        "idempotency_key" => "n-1"
      }},
+    {"POST", @project <> "notebooks/list", [], %{"cursor" => "c"}},
     {"POST", @notebook_files <> "list", [], %{"path" => "log", "cursor" => "c"}},
     {"POST", @notebook_files <> "read", [], %{"path" => "log/a.md"}},
     {"POST", @notebook_files <> "add", [], %{"path" => "log/a.md", "content" => "Seen"}},

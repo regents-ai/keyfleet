@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.AgentNotebookController do
   alias KeyfleetWeb.AgentReply
   alias KeyfleetWeb.AgentTools.Notebooks.Answer
 
-  def index(conn, params), do: reply(conn, :list, params)
+  def list(conn, params), do: reply(conn, :list, params)
   def start(conn, params), do: reply(conn, :run, params)
   def show(conn, params), do: reply(conn, :result, params)
   def create(conn, params), do: reply(conn, :create, params)

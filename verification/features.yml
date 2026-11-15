@@ -918,6 +918,7 @@ features:
       - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
       - A write names the revision it read and a stale one answers 409 stale_revision; proven here against a stand-in hub that enforces If-Match, and the hub's own check by notebook-hub/local/drive.mjs against the real patched hub image.
       - A finished run's entry_current and bundle_current are proven here against a stand-in hub that lists every file with the ETag its read answers, as workspace-listing.patch makes the real hub do; the hub's own listing is checked by notebook-hub/local/drive.mjs.
+      - The notebooks list (POST .../projects/{project}/notebooks/list) pages 50 at a time, newest first, with cursor and has_more; proven here against a stand-in hub that pages its notebooks by cursor as the hub does, not yet against a real notebook host.
       - Not yet run by a real agent.
 
   - id: shared-projects-and-notebook-locks

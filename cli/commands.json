@@ -3369,10 +3369,10 @@
       },
       {
         "command": "notebooks list <fleet> <project>",
-        "description": "List a project's 50 newest notebooks, newest first, each with its id, its title, whether it is locked, the Key whose scratchpad it is (or null) the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none, and the notebook's last good page (its run_id and result_url), or null. Changes nothing.",
+        "description": "List a project's notebooks, at most 50 a page, newest first, with the cursor for the next page, or null after the last: each with its id, its title, whether it is locked, the Key whose scratchpad it is (or null) the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none, and the notebook's last good page (its run_id and result_url), or null. Changes nothing.",
         "operation_id": "listNotebooks",
-        "method": "GET",
-        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/list",
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "read",
@@ -3392,7 +3392,21 @@
             "field": "project",
             "description": "The project's name, such as general; `regents keyfleet projects list` names them all. Not the proj- id in a notebook's address: `regents keyfleet links resolve` reads that address into its project and notebook."
           }
-        ]
+        ],
+        "flags": [
+          {
+            "name": "cursor",
+            "type": "string",
+            "in": "body",
+            "field": "cursor",
+            "description": "Pass the last page's cursor unchanged to read the next page; omit for the first."
+          }
+        ],
+        "pagination": {
+          "has_more": "has_more",
+          "cursor": "cursor",
+          "flag": "cursor"
+        }
       },
       {
         "command": "notebooks run <fleet> <project> <notebook>",
