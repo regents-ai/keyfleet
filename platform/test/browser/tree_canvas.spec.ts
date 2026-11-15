@@ -1,4 +1,4 @@
-import {expect, test, type Page} from "@playwright/test"
+import {expect, test, type Locator, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {call, prepareFleet, sellKey} from "./support/fleet_chain"
 
@@ -26,6 +26,24 @@ const view = (page: Page) =>
     const [, x, y, zoom] = /translate3d\(([-\d.]+)px, ([-\d.]+)px, 0(?:px)?\) scale\(([\d.]+)\)/.exec(el.style.transform)!
     return {x: Number(x), y: Number(y), zoom: Number(zoom)}
   })
+
+// Waits until a card has come to rest: it stands on screen where it stood a
+// moment before, so a press at its middle lands on it and not on a card
+// gliding past.
+async function atRest(locator: Locator) {
+  const where = async () => JSON.stringify(await locator.boundingBox())
+  let before = ""
+  await expect
+    .poll(
+      async () => {
+        const was = before
+        before = await where()
+        return before === was
+      },
+      {intervals: [150]},
+    )
+    .toBe(true)
+}
 
 // A point of open ground on the canvas, clear of the cards and the zoom.
 const ground = (page: Page) =>
@@ -104,6 +122,7 @@ for (const [width, height] of [
     // title is a link to the item's page.
     await page.locator(`${tree} [data-tree-zoom="fit"]`).click()
     await expect(task).toBeVisible()
+    await atRest(task)
     await task.locator(".tree-card-kind").click()
     await expect(surface).toHaveAttribute("data-lighting", "")
     await expect(task).toHaveAttribute("data-pressed", "")
