@@ -10,7 +10,11 @@ const fleet = "fibonacci_syndicate"
 const me = "0x1111111111111111111111111111111111111111"
 const blocks = "#atlas-blocks"
 
-test.use({channel: "chromium"})
+// Full Chromium's window keeps a toolbar and can't take every size a walk
+// sets, and when its resize lands late the page is drawn at the window's
+// size, so with no viewport of its own Playwright sizes only the page. It then
+// takes no device scale, and a plain undefined would bring back the project's.
+test.use({channel: "chromium", viewport: null, deviceScaleFactor: async ({}, use) => use(undefined)})
 
 test.beforeAll(() => {
   prepareFleet(fleet)

@@ -18,8 +18,12 @@ const owner = `0x7d${randomBytes(19).toString("hex")}`
 const stranger = "0x0000000000000000000000000000000000000001"
 
 // The headless shell Playwright runs by default hands out no WebGPU canvas
-// textures, so the picture never draws there; full Chromium draws it.
-test.use({channel: "chromium"})
+// textures, so the picture never draws there; full Chromium draws it. Its
+// window keeps a toolbar and can't take every size a walk sets, and when its
+// resize lands late the page is drawn at the window's size, so with no
+// viewport of its own Playwright sizes only the page. It then takes no device
+// scale, and a plain undefined would bring back the project's.
+test.use({channel: "chromium", viewport: null, deviceScaleFactor: async ({}, use) => use(undefined)})
 
 let key = 0
 
