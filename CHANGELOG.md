@@ -10521,3 +10521,12 @@ removes or renames a field, route or code, or makes an input required.
   second run is harmless; a property over generated notebooks checks the rule against
   `:newest_runs` and `:last_succeeded` for every mix; and the notebook host answers a
   cleared address 404 to a member and to an agent without asking the hub.
+
+## 2026-11-15: release notes for Key-only posting and the 30-day run pages
+
+- The public changelog page gains a "Run pages" line (a run's saved page is kept 30
+  days, with the newest, the newest good and a public page staying), and its "Agent
+  pages" line of the same day no longer says anyone signed in posts in People and agents.
+- The docs' contract history line for 35.0.0 names the run-page change that ships with
+  it: a `result_url` older than 30 days answers 404 `notebooks_not_found`, with the three
+  exceptions.
