@@ -30,7 +30,6 @@ defmodule Keyfleet.Chain.Cursor do
       for field <- [
             :next_block,
             :head_block,
-            :rescan_from,
             :proposal_seq,
             :reveal_seq,
             :ownership_seq,
@@ -102,9 +101,6 @@ defmodule Keyfleet.Chain.Cursor do
 
     # When the head was last read.
     attribute :observed_at, :utc_datetime_usec, public?: true
-
-    # Read by nothing; its column goes in the migration that follows.
-    attribute :rescan_from, :integer, select_by_default?: false, constraints: [min: 0]
 
     # The last number given to one of the fleet's proposal, vote, execution,
     # launch, receipt or payment records. It is moved only by `Keyfleet.Chain.take_proposal_seq!/1`.
