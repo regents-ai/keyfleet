@@ -32,7 +32,7 @@ defmodule Keyfleet.Feed do
 
   A kind of event is added in three places here: its topic in `topics/1`, a
   clause of `heard/2` turning that topic's notice into events, and its read in
-  `since/2`, which `missed/2` runs.
+  `between/3`, which `missed/3` runs.
   """
 
   require Ash.Query
@@ -44,6 +44,7 @@ defmodule Keyfleet.Feed do
   alias Keyfleet.Dms
   alias Keyfleet.Dms.Checks.KeyHolder
   alias Keyfleet.Keys
+  alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Muter
 
@@ -81,6 +82,11 @@ defmodule Keyfleet.Feed do
   # A reconnect, and the missed events' read, get at most this many missed
   # events; past that each is told to resync.
   @missed_limit 100
+  # An event's id is the time its post was written, not the time it was
+  # committed, so one committed late can come in behind a later one. The
+  # missed events' read answers only events this old, by the database's
+  # clock, and a post committed within this long of its id is never passed.
+  @settling_seconds 5
   # A line named by its room and place is read wherever it is.
   @any_time ~U[1970-01-01 00:00:00.000000Z]
 
@@ -158,27 +164,63 @@ defmodule Keyfleet.Feed do
   def id(%DateTime{} = at), do: at |> DateTime.to_unix(:microsecond) |> Integer.to_string()
 
   @doc """
-  Every event after the one whose id is `id`, oldest first, for a reconnect
-  and for the missed events' read; `:resync` when there are more than a
-  reconnect gets, or for an id that is not an event's: anything but digits
-  naming a moment.
+  Every event after the one whose id is `id`, oldest first, up to a moment
+  read once from the database's clock: now for a reconnect (`:now`), whose
+  open feed hears the rest, and the settled moment, five seconds before now,
+  for the missed events' read (`:settled`). With them comes the cursor to
+  read on from, the later of `id` and that moment.
+
+  `{:resync, cursor}`, with that moment's id, when there are more than a
+  reconnect gets, or for an id that is no event's: anything but 1 to 20
+  digits naming a moment no later than now.
   """
-  @spec missed(t(), String.t()) :: {:ok, [event()]} | :resync | {:error, term()}
-  def missed(feed, id) do
-    with true <- String.match?(id, ~r/\A[0-9]+\z/),
-         {:ok, since} <- id |> String.to_integer() |> DateTime.from_unix(:microsecond) do
-      since(feed, since)
+  @spec missed(t(), String.t(), :now | :settled) ::
+          {:ok, [event()], String.t()} | {:resync, String.t()} | {:error, term()}
+  def missed(feed, id, upto) do
+    with {:ok, now} <- now() do
+      until = until(now, upto)
+
+      with {:ok, since} <- since(id, now),
+           {:ok, events} <- between(feed, since, until) do
+        {:ok, events, id(Enum.max([since, until], DateTime))}
+      else
+        :resync -> {:resync, id(until)}
+        error -> error
+      end
+    end
+  end
+
+  @doc "The settled moment's id: where the missed events' read starts with no cursor."
+  @spec settled() :: {:ok, String.t()} | {:error, term()}
+  def settled, do: with({:ok, now} <- now(), do: {:ok, id(until(now, :settled))})
+
+  # The clock every event's id is read from.
+  defp now do
+    with {:ok, %Postgrex.Result{rows: [[now]]}} <- Repo.query("SELECT clock_timestamp()"),
+         do: {:ok, now}
+  end
+
+  defp until(now, :now), do: now
+  defp until(now, :settled), do: DateTime.add(now, -@settling_seconds, :second)
+
+  defp since(id, now) do
+    with true <- String.match?(id, ~r/\A[0-9]{1,20}\z/),
+         {:ok, since} <- id |> String.to_integer() |> DateTime.from_unix(:microsecond),
+         true <- DateTime.compare(since, now) != :gt do
+      {:ok, since}
     else
       _not_an_id -> :resync
     end
   end
 
-  defp since(%__MODULE__{actor: actor, fleets: fleets}, since) do
+  defp between(%__MODULE__{actor: actor, fleets: fleets}, since, until) do
+    scope = {:between, since, until}
+
     reads =
       Enum.flat_map(fleets, fn {fleet_id, place} ->
         [
-          fn -> posts(actor, fleet_id, place, {:since, since}) end,
-          fn -> dms(actor, fleet_id, {:since, since}) end
+          fn -> posts(actor, fleet_id, place, scope) end,
+          fn -> dms(actor, fleet_id, scope) end
         ]
       end)
 
@@ -212,7 +254,8 @@ defmodule Keyfleet.Feed do
   # The posts in a fleet that are the agent's to answer, each read as the
   # agent, with the class it holds there now: the ones naming its Key, then
   # those on its Key's wall and in the rooms. `scope` is one line,
-  # `{:line, room_id, seq}`, or everything posted after a time, `{:since, at}`.
+  # `{:line, room_id, seq}`, or everything posted after one time and up to
+  # another, `{:between, since, until}`.
   defp posts(_actor, _fleet_id, %{as_key: nil}, _scope), do: {:ok, []}
 
   defp posts(actor, fleet_id, %{as_key: me, muted: muted}, scope) do
@@ -301,14 +344,15 @@ defmodule Keyfleet.Feed do
     end
   end
 
-  defp within(query, {:since, at}), do: Ash.Query.filter(query, inserted_at > ^at)
+  defp within(query, {:between, since, until}),
+    do: Ash.Query.filter(query, inserted_at > ^since and inserted_at <= ^until)
 
   defp within(query, {:line, room_id, seq}),
     do: Ash.Query.filter(query, room_id == ^room_id and seq == ^seq)
 
   defp within(query, {:seq, seq}), do: Ash.Query.filter(query, seq == ^seq)
 
-  defp after_at({:since, at}), do: at
+  defp after_at({:between, since, _until}), do: since
   defp after_at({:line, _room_id, _seq}), do: @any_time
 
   defp where(%{kind: :key, token_id: token_id}), do: %{wall: token_id}

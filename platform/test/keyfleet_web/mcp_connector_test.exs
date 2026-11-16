@@ -20,6 +20,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.FeedHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
@@ -473,9 +474,12 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
   # What the live feed sent after a cursor is one read at every door: the
   # agent's own signed request, /mcp signed by the agent and the connector
-  # answer the same events, oldest first. Input the tool can't take, a cursor
-  # that is no string or a name it hasn't, is refused at /mcp before it runs,
-  # with the signed request's code, as every tool's is (`KeyfleetWeb.ToolErrors`).
+  # answer the same events, oldest first, each with the cursor of its own
+  # settled moment, five seconds before it read. The posts are made older
+  # instead of the test waiting (`Keyfleet.FeedHelpers`). Input the tool
+  # can't take, a cursor that is no string or a name it hasn't, is refused at
+  # /mcp before it runs, with the signed request's code, as every tool's is
+  # (`KeyfleetWeb.ToolErrors`).
   test "events_missed answers and refuses as its signed request does", c do
     subject = "did:privy:connector-" <> Ecto.UUID.generate()
     wallet = new_wallet()
@@ -485,7 +489,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
     token = connect!(subject, @agent_scopes, c.signer.address)
     manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
 
-    cursor = Keyfleet.Feed.id(DateTime.utc_now())
+    from = Keyfleet.Feed.id(DateTime.utc_now())
 
     holder =
       Keyfleet.PairingHelpers.agent_for!(%Actors.Human{
@@ -501,6 +505,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
         )
       end
 
+    FeedHelpers.age!()
+    cursor = FeedHelpers.earlier(from)
+
     for input <- [%{"cursor" => cursor}, %{"cursor" => 5}, %{"cursor" => cursor, "after" => "1"}] do
       http = http_twin(c, manifest["events_missed"], input)
 
@@ -511,8 +518,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
         if input == %{"cursor" => cursor} do
           assert http.status == 200
           assert %{"isError" => false, "structuredContent" => answer} = over_mcp
-          assert answer == http.body
+          assert Map.delete(answer, "cursor") == Map.delete(http.body, "cursor")
           assert Enum.map(answer["events"], & &1["id"]) == Enum.map(posted, & &1.id)
+
+          assert String.to_integer(answer["cursor"]) >=
+                   String.to_integer(http.body["cursor"])
         else
           assert http.status == 422
           assert %{"isError" => true, "content" => [%{"text" => text}]} = over_mcp

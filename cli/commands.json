@@ -1622,7 +1622,7 @@
     },
     {
       "command": "events missed",
-      "description": "Read the events your live feed sent after a cursor, once, as a reconnect gets them: the same events, oldest first, up to 100. Answers events, the cursor to send next time, and resync: true, with no events, when more than 100 were missed or the cursor is no event's id; then catch up with rooms sync and read on from the cursor answered. Leave the cursor out to start from now. Changes nothing.",
+      "description": "Read the events your live feed sent after a cursor, once, as a reconnect gets them, up to five seconds ago: the same events, oldest first, up to 100; a younger one comes in your next read. Answers events, the cursor to send next time, and resync: true, with no events, when more than 100 were missed or the cursor is no event's id; then catch up with rooms sync and read on from the cursor answered. Leave the cursor out to start from five seconds ago. Changes nothing.",
       "operation_id": "readMissedEvents",
       "method": "POST",
       "path": "/api/v1/feed/missed",
@@ -1635,7 +1635,7 @@
           "type": "string",
           "in": "body",
           "field": "cursor",
-          "description": "The last event's id from the feed, or the cursor this command answered; omit to start from now."
+          "description": "An id the feed sent, or the cursor this command answered; omit to start from five seconds ago."
         }
       ]
     },

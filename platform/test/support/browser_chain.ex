@@ -448,6 +448,20 @@ defmodule Keyfleet.BrowserChain do
     token_id
   end
 
+  @doc """
+  Sells the fleet's next key to `owner`, who said `body` in the Public room
+  `seconds` ago: the missed events' read answers a post only once it is five
+  seconds old (`Keyfleet.Feed`), so a walk writes its post older instead of
+  waiting. Returns the key's number.
+  """
+  def say_earlier!(fleet_id, owner, body, seconds) do
+    Rooms.bootstrap_rooms!([fleet_id])
+    token_id = sell!(fleet_id, owner)
+    at = DateTime.add(DateTime.utc_now(), -seconds)
+    happen!(fleet_id, %{key: token_id, owner: owner, at: at}, {:post, "general", body}, [])
+    token_id
+  end
+
   @doc "Opens the fleet's workspace log, once per fleet, before `work!/2`."
   def open_workspace!(fleet_id) do
     WorkspaceFixtures.open_log(fleet_id)

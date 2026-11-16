@@ -4,14 +4,17 @@ defmodule KeyfleetWeb.AgentFeedTest do
   # as a Key: and never another Key's, a muted Key's, its own, or a room its
   # reader may not read. The feed ends when its sign-in runs out. What it sent
   # after a cursor is also one signed read, which answers what a reconnect
-  # replays.
+  # replays once it is five seconds old.
   use ExUnit.Case, async: false
   use ExUnitProperties
+
+  import Keyfleet.FeedHelpers
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ContractSchema
   alias Keyfleet.Dms
+  alias Keyfleet.Feed
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
@@ -186,13 +189,23 @@ defmodule KeyfleetWeb.AgentFeedTest do
     assert {one["id"], two["id"]} == {second.id, third.id}
     quiet!(feed)
 
-    # An id that is not one of the feed's says to resync, and carries no id.
+    # An id that is not one of the feed's says to resync, with the time it was
+    # read as its id: a reconnect sending that replays only what came after.
     feed = open!(c, c.signer, [{"last-event-id", "yesterday"}])
-    assert {[%{id: nil, data: %{"kind" => "resync"}}], _feed} = take(feed, 1)
+    assert {[%{id: read_at, data: %{"kind" => "resync"}}], _feed} = take(feed, 1)
+    after_resync = post!(c.a, "general", "After the resync")
+
+    feed = open!(c, c.signer, [{"last-event-id", read_at}])
+    assert {[%{data: %{"id" => id}}], feed} = take(feed, 1)
+    assert id == after_resync.id
+    quiet!(feed)
 
     for n <- 1..101, do: post!(c.a, "general", "Missed #{n}")
     feed = open!(c, c.signer, [{"last-event-id", last}])
-    assert {[%{id: nil, data: %{"kind" => "resync"}}], _feed} = take(feed, 1)
+    assert {[%{id: read_at, data: %{"kind" => "resync"}}], _feed} = take(feed, 1)
+
+    feed = open!(c, c.signer, [{"last-event-id", read_at}])
+    quiet!(feed)
   end
 
   test "a reader that is not a member is never told of a members' room", c do
@@ -275,8 +288,10 @@ defmodule KeyfleetWeb.AgentFeedTest do
 
   ## What the feed missed, read once
 
-  test "the missed read answers what a reconnect replays, in order, and reads on from its cursor",
-       c do
+  # The read answers only events five seconds old by the database's clock;
+  # the tests make their events older instead of waiting (`age!/0`).
+
+  test "the missed read answers what a reconnect replays, in order, once five seconds old", c do
     feed = open!(c, c.signer)
     post!(c.a, "general", "First")
     assert {[%{id: last}], _feed} = take(feed, 1)
@@ -286,41 +301,107 @@ defmodule KeyfleetWeb.AgentFeedTest do
     wall!(c.c, 2, "Fourth")
     dm!(human("a"), 1, 2, "Fifth")
 
+    # An id from the open feed is later than the settled moment: nothing yet,
+    # and the same cursor back.
+    assert missed!(c, c.signer, %{"cursor" => last}) ==
+             %{"events" => [], "cursor" => last, "resync" => false}
+
+    age!()
+    last = earlier(last)
     feed = open!(c, c.signer, [{"last-event-id", last}])
     assert {replayed, _feed} = take(feed, 4)
 
     read = missed!(c, c.signer, %{"cursor" => last})
     assert read["events"] == Enum.map(replayed, & &1.data)
-    assert read["cursor"] == List.last(replayed).id
+    assert micros(read["cursor"]) > micros(List.last(replayed).id)
     refute read["resync"]
 
-    assert missed!(c, c.signer, %{"cursor" => read["cursor"]}) ==
-             %{"events" => [], "cursor" => read["cursor"], "resync" => false}
-
-    # With no cursor it starts from now, and reads on from the cursor it gives.
-    assert %{"events" => [], "cursor" => now, "resync" => false} = missed!(c, c.signer, %{})
-    later = post!(c.a, "general", "Later")
-    assert %{"events" => [%{"id" => id}]} = missed!(c, c.signer, %{"cursor" => now})
-    assert id == later.id
+    assert %{"events" => [], "resync" => false} =
+             missed!(c, c.signer, %{"cursor" => read["cursor"]})
 
     # An id that is not one of the feed's says to resync.
     assert %{"events" => [], "resync" => true} = missed!(c, c.signer, %{"cursor" => "yesterday"})
   end
 
-  test "the missed read answers up to 100 events, and past 100 says to resync from now", c do
+  test "with no cursor, or nothing new, the cursor answered is the settled moment", c do
+    before = database_now()
+    assert %{"events" => [], "cursor" => from, "resync" => false} = missed!(c, c.signer, %{})
+    assert_settled(from, before)
+
+    before = database_now()
+
+    assert %{"events" => [], "cursor" => cursor, "resync" => false} =
+             missed!(c, c.signer, %{"cursor" => earlier(from)})
+
+    assert_settled(cursor, before)
+  end
+
+  test "an event younger than five seconds waits for the next read", c do
     %{"cursor" => from} = missed!(c, c.signer, %{})
-    posted = for n <- 1..100, do: post!(c.a, "general", "Missed #{n}")
+    young = post!(c.a, "general", "Young")
 
-    read = missed!(c, c.signer, %{"cursor" => from})
-    assert Enum.map(read["events"], & &1["id"]) == Enum.map(posted, & &1.id)
-    refute read["resync"]
-
-    post!(c.a, "general", "One too many")
-
-    assert %{"events" => [], "cursor" => now, "resync" => true} =
+    assert %{"events" => [], "cursor" => cursor, "resync" => false} =
              missed!(c, c.signer, %{"cursor" => from})
 
-    assert missed!(c, c.signer, %{"cursor" => now})["events"] == []
+    age!()
+    assert ids(missed!(c, c.signer, %{"cursor" => earlier(cursor)})) == [young.id]
+  end
+
+  test "a message stamped before an event and committed after a read is answered by a later read",
+       c do
+    {room_post, late, read} = committed_after_read!(c, -1)
+    assert ids(read) == [late.id, room_post.id]
+    assert missed!(c, c.signer, %{"cursor" => read["cursor"]})["events"] == []
+  end
+
+  test "two events in the same microsecond are both answered", c do
+    {room_post, late, read} = committed_after_read!(c, 0)
+    assert Enum.sort(ids(read)) == Enum.sort([room_post.id, late.id])
+    assert missed!(c, c.signer, %{"cursor" => read["cursor"]})["events"] == []
+  end
+
+  test "a cursor later than now is no event's id, read once or sent on a reconnect", c do
+    for future <- [Feed.id(DateTime.add(database_now(), 3600)), "253402300799999999"] do
+      assert %{"events" => [], "cursor" => cursor, "resync" => true} =
+               missed!(c, c.signer, %{"cursor" => future})
+
+      assert micros(cursor) < micros(future)
+
+      feed = open!(c, c.signer, [{"last-event-id", future}])
+      assert {[%{id: read_at, data: %{"kind" => "resync"}}], _feed} = take(feed, 1)
+      assert micros(read_at) < micros(future)
+    end
+  end
+
+  test "a cursor is 1 to 20 digits: 21 say to resync, read once or sent on a reconnect", c do
+    %{"cursor" => from} = missed!(c, c.signer, %{})
+    posted = post!(c.a, "general", "One")
+    age!()
+    from = earlier(from)
+
+    assert ids(missed!(c, c.signer, %{"cursor" => String.pad_leading(from, 20, "0")})) ==
+             [posted.id]
+
+    padded = String.pad_leading(from, 21, "0")
+    assert %{"events" => [], "resync" => true} = missed!(c, c.signer, %{"cursor" => padded})
+
+    feed = open!(c, c.signer, [{"last-event-id", padded}])
+    assert {[%{data: %{"kind" => "resync"}}], _feed} = take(feed, 1)
+  end
+
+  test "the missed read answers up to 100 events, and past 100 says to resync", c do
+    %{"cursor" => from} = missed!(c, c.signer, %{})
+    [first | rest] = for n <- 0..100, do: post!(c.a, "general", "Missed #{n}")
+    age!()
+
+    read = missed!(c, c.signer, %{"cursor" => aged_id(first)})
+    assert ids(read) == Enum.map(rest, & &1.id)
+    refute read["resync"]
+
+    assert %{"events" => [], "cursor" => settled, "resync" => true} =
+             missed!(c, c.signer, %{"cursor" => earlier(from)})
+
+    assert missed!(c, c.signer, %{"cursor" => settled})["events"] == []
   end
 
   test "the missed read tells an agent only what is its own, and refuses one that may not read",
@@ -330,9 +411,10 @@ defmodule KeyfleetWeb.AgentFeedTest do
     post!(c.a, "coding", "@Key 2 in the members' room")
     wall!(c.a, 2, "On Key 2's wall")
     dm!(human("a"), 1, 2, "To Key 2")
+    age!()
 
-    assert missed!(c, c.outsider, %{"cursor" => cursor}) ==
-             %{"events" => [], "cursor" => cursor, "resync" => false}
+    assert %{"events" => [], "resync" => false} =
+             missed!(c, c.outsider, %{"cursor" => earlier(cursor)})
 
     unsigned = Req.post!(c.site <> @missed, json: %{}, retry: false)
     assert unsigned.status == 401
@@ -349,8 +431,8 @@ defmodule KeyfleetWeb.AgentFeedTest do
   end
 
   # For every cursor, the read answers exactly the events posted after it,
-  # oldest first, and a cursor that reads on to none; anything that is no
-  # event's id says to resync.
+  # oldest first, and a cursor past them that reads on to none; anything that
+  # is no event's id says to resync.
   property "the missed read answers every event after any cursor, in order", c do
     %{"cursor" => from} = missed!(c, c.signer, %{})
 
@@ -361,25 +443,71 @@ defmodule KeyfleetWeb.AgentFeedTest do
           else: post!(c.a, "general", "#{n}")
       end
 
+    age!()
     ids = Enum.map(posted, & &1.id)
-    cursors = [from | Enum.map(posted, &Keyfleet.Feed.id(&1.inserted_at))]
+    cursors = [earlier(from) | Enum.map(posted, &aged_id/1)]
 
     check all(after_n <- integer(0..length(posted)), max_runs: 14) do
       read = missed!(c, c.signer, %{"cursor" => Enum.at(cursors, after_n)})
 
-      assert Enum.map(read["events"], & &1["id"]) == Enum.drop(ids, after_n)
-      assert read["cursor"] == List.last(cursors)
+      assert ids(read) == Enum.drop(ids, after_n)
+      assert micros(read["cursor"]) > micros(List.last(cursors))
       assert missed!(c, c.signer, %{"cursor" => read["cursor"]})["events"] == []
     end
 
     check all(
-            cursor <- string(:printable, max_length: 24),
-            not String.match?(cursor, ~r/\A[0-9]+\z/),
+            cursor <-
+              one_of([
+                string(:printable, max_length: 24),
+                string(?0..?9, min_length: 21, max_length: 40)
+              ]),
+            not String.match?(cursor, ~r/\A[0-9]{1,20}\z/),
             max_runs: 20
           ) do
       assert %{"events" => [], "resync" => true} = missed!(c, c.signer, %{"cursor" => cursor})
     end
   end
+
+  # A room post, a read right after it, then a direct message written
+  # `offset` microseconds from the room post but committed after that read:
+  # posts in different rooms, walls and conversations take no common lock,
+  # and an id is when a post was written, not committed. Then the read that
+  # follows on from the first's cursor.
+  defp committed_after_read!(c, offset) do
+    %{"cursor" => from} = missed!(c, c.signer, %{})
+    room_post = post!(c.a, "general", "Committed first")
+    %{"cursor" => cursor} = missed!(c, c.signer, %{"cursor" => from})
+
+    late = dm!(human("a"), 1, 2, "Committed after the read")
+    backdate_dm!(late.id, DateTime.add(room_post.inserted_at, offset, :microsecond))
+    age!()
+    {room_post, late, missed!(c, c.signer, %{"cursor" => earlier(cursor)})}
+  end
+
+  defp backdate_dm!(id, at) do
+    %{num_rows: 1} =
+      Repo.query!("UPDATE keyfleet_app.dm_messages SET inserted_at = $1 WHERE id = $2", [
+        DateTime.to_naive(at),
+        Ecto.UUID.dump!(id)
+      ])
+  end
+
+  # `cursor` is the database's now, read between `before` and this check,
+  # less five seconds.
+  defp assert_settled(cursor, before) do
+    settled = fn at -> at |> DateTime.add(-5) |> Feed.id() |> micros() end
+    assert micros(cursor) >= settled.(before)
+    assert micros(cursor) <= settled.(database_now())
+  end
+
+  defp database_now do
+    %{rows: [[now]]} = Repo.query!("SELECT clock_timestamp()")
+    now
+  end
+
+  defp ids(read), do: Enum.map(read["events"], & &1["id"])
+
+  defp micros(id), do: String.to_integer(id)
 
   ## The feed, read as a client reads it
 

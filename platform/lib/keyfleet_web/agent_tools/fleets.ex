@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
     end
 
     action :missed, :map do
-      description "Your live feed's events after a cursor it gave, up to 100, or a resync."
+      description "Your live feed's events after a cursor and up to five seconds ago, up to 100, or a resync."
       argument :cursor, :string, constraints: [trim?: false, allow_empty?: true]
       run {Run, tool: "events_missed"}
     end

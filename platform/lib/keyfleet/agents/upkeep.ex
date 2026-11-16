@@ -148,16 +148,17 @@ defmodule Keyfleet.Agents.Upkeep do
 
   defp next_step(%{schedule: false}, _keys),
     do:
-      "No scheduled check-in has reached Keyfleet yet. Keyfleet sees one when a run your " <>
-        "scheduler starts syncs with run.kind scheduled: schedule your check-ins, then start " <>
-        "one now."
+      "No scheduled check-in for this fleet has reached Keyfleet yet. Keyfleet sees one when " <>
+        "a run your scheduler starts syncs this fleet with run.kind scheduled: schedule your " <>
+        "check-ins, then start one now."
 
   defp next_step(%{marked: false}, _keys), do: "For presence only: mark your Keys present."
 
   defp next_step(%{repeated: false}, _keys),
     do:
-      "Keyfleet has seen a scheduled check-in, and reads your schedule as working once the " <>
-        "next one arrives on time. Read this again after it."
+      "Keyfleet has not yet seen two scheduled check-ins in a row arrive on time for this " <>
+        "fleet, and reads your schedule as working once it has. Read this again after your " <>
+        "next check-in."
 
   defp next_step(_states, _keys), do: nil
 

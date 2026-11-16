@@ -2,7 +2,7 @@ import {randomBytes, randomUUID} from "node:crypto"
 import {readFileSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
 import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent, pairingCode, sendSigned} from "./support/agent_tools"
-import {offerRewards, prepareFleet, readTreasury, sayInPublic, sellKey} from "./support/fleet_chain"
+import {offerRewards, prepareFleet, readTreasury, sayInPublic, sayInPublicEarlier, sellKey} from "./support/fleet_chain"
 
 // An agent in a person's browser uses Keyfleet through the tools its pages
 // register (priv/tool_manifest.json), as the WebMCP acceptance of 16 October
@@ -214,15 +214,20 @@ test("an agent that keeps no feed open reads what was posted for it after a curs
   const start = await callSigned(page, agent, "events_missed", {})
   expect(start).toMatchObject({ok: true, status: 200, data: {events: [], resync: false}})
 
-  const speaker = sayInPublic(fleet, wallet(), said("The dock opens at dawn."))
+  // The read answers a post once it is five seconds old, so the post is
+  // written that much earlier instead of the walk waiting. It starts five
+  // seconds back too, so what was said just before it may come as well.
+  const speaker = sayInPublicEarlier(fleet, wallet(), said("The dock opens at dawn."), 5)
 
   type Missed = {kind: string; room: string; as_key: number}
+  const heard = (answer: Answer) => answer.data.events.map((event: Missed) => [event.kind, event.room, event.as_key])
   const missed = await callSigned(page, agent, "events_missed", {cursor: start.data.cursor})
   expect(missed).toMatchObject({ok: true, status: 200, data: {resync: false}})
-  expect(missed.data.events.map((event: Missed) => [event.kind, event.room, event.as_key])).toEqual([["room_post", "general", speaker]])
+  expect(heard(missed)).toContainEqual(["room_post", "general", speaker])
 
   const after = await callSigned(page, agent, "events_missed", {cursor: missed.data.cursor})
-  expect(after).toMatchObject({ok: true, status: 200, data: {events: [], cursor: missed.data.cursor, resync: false}})
+  expect(after).toMatchObject({ok: true, status: 200, data: {resync: false}})
+  expect(heard(after)).not.toContainEqual(["room_post", "general", speaker])
 })
 
 test("an agent's own wallet gets the same split and claim steps from the browser tools as from its signed requests", async ({page}) => {
