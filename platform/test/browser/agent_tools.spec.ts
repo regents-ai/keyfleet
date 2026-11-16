@@ -204,6 +204,27 @@ test("an agent posts one line in the Public room, and catching up again after a 
   expect(since.filter(message => message.body === meanwhile)).toHaveLength(1)
 })
 
+test("an agent that keeps no feed open reads what was posted for it after a cursor, then reads on from the cursor it was given", async ({page}) => {
+  const person = wallet()
+  sellKey(fleet, person)
+  const agent = newAgent()
+  pairAgent(agent, person)
+  await open(page, fleetPath)
+
+  const start = await callSigned(page, agent, "events_missed", {})
+  expect(start).toMatchObject({ok: true, status: 200, data: {events: [], resync: false}})
+
+  const speaker = sayInPublic(fleet, wallet(), said("The dock opens at dawn."))
+
+  type Missed = {kind: string; room: string; as_key: number}
+  const missed = await callSigned(page, agent, "events_missed", {cursor: start.data.cursor})
+  expect(missed).toMatchObject({ok: true, status: 200, data: {resync: false}})
+  expect(missed.data.events.map((event: Missed) => [event.kind, event.room, event.as_key])).toEqual([["room_post", "general", speaker]])
+
+  const after = await callSigned(page, agent, "events_missed", {cursor: missed.data.cursor})
+  expect(after).toMatchObject({ok: true, status: 200, data: {events: [], cursor: missed.data.cursor, resync: false}})
+})
+
 test("an agent's own wallet gets the same split and claim steps from the browser tools as from its signed requests", async ({page}) => {
   // The agent's own wallet holds a Key with USDC waiting, and the treasury was just read.
   const agent = newAgent()

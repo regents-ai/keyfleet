@@ -105,6 +105,7 @@ defmodule KeyfleetWeb.AgentTools do
     proposals_show: {@fleets, :proposal, "Proposal", :read},
     links_resolve: {@fleets, :link, "Link", :read},
     writes_preview: {@fleets, :preview, "Preview", :read},
+    events_missed: {@fleets, :missed, "Missed events", :read},
     keys_show: {@keys, :show, "Key", :read},
     keys_held: {@keys, :held, "Held Keys", :read},
     walls_remove: {@keys, :wall_remove, "Remove post", :remove},

@@ -32,7 +32,7 @@ defmodule Keyfleet.Feed do
 
   A kind of event is added in three places here: its topic in `topics/1`, a
   clause of `heard/2` turning that topic's notice into events, and its read in
-  `missed/2`.
+  `since/2`, which `missed/2` runs.
   """
 
   require Ash.Query
@@ -78,7 +78,8 @@ defmodule Keyfleet.Feed do
           optional(atom()) => term()
         }
 
-  # A reconnect gets at most this many missed events; past that it is told to resync.
+  # A reconnect, and the missed events' read, get at most this many missed
+  # events; past that each is told to resync.
   @missed_limit 100
   # A line named by its room and place is read wherever it is.
   @any_time ~U[1970-01-01 00:00:00.000000Z]
@@ -149,11 +150,30 @@ defmodule Keyfleet.Feed do
     do: Enum.find(feed.fleets, fn {fleet_id, place} -> topic in topics.(fleet_id, place) end)
 
   @doc """
-  Every event after `since`, oldest first, for a reconnect; `:resync` when
-  there are more than a reconnect gets.
+  The id of the moment `at`, in microseconds. An event's id is the moment it
+  was posted: the cursor a reconnect sends back as `Last-Event-ID`, and the
+  missed events' read (`events_missed`) as `cursor`.
   """
-  @spec missed(t(), DateTime.t()) :: {:ok, [event()]} | :resync | {:error, term()}
-  def missed(%__MODULE__{actor: actor, fleets: fleets}, since) do
+  @spec id(DateTime.t()) :: String.t()
+  def id(%DateTime{} = at), do: at |> DateTime.to_unix(:microsecond) |> Integer.to_string()
+
+  @doc """
+  Every event after the one whose id is `id`, oldest first, for a reconnect
+  and for the missed events' read; `:resync` when there are more than a
+  reconnect gets, or for an id that is not an event's: anything but digits
+  naming a moment.
+  """
+  @spec missed(t(), String.t()) :: {:ok, [event()]} | :resync | {:error, term()}
+  def missed(feed, id) do
+    with true <- String.match?(id, ~r/\A[0-9]+\z/),
+         {:ok, since} <- id |> String.to_integer() |> DateTime.from_unix(:microsecond) do
+      since(feed, since)
+    else
+      _not_an_id -> :resync
+    end
+  end
+
+  defp since(%__MODULE__{actor: actor, fleets: fleets}, since) do
     reads =
       Enum.flat_map(fleets, fn {fleet_id, place} ->
         [

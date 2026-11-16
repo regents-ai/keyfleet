@@ -47,6 +47,9 @@ defmodule KeyfleetWeb.Refusal do
       {"The sign-in service could not be reached.", "Try again in a moment."},
     "feed_full" =>
       {"This site has as many feeds open as it can hold right now.", "Try again in a minute."},
+    "feed_unavailable" =>
+      {"The events your feed missed can't be read right now.",
+       "Send the same cursor again in a moment."},
     "request_too_large" =>
       {"The request body is larger than this operation takes.",
        "Send a shorter body. /docs gives each operation's limit."},

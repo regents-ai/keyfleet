@@ -10702,3 +10702,42 @@ removes or renames a field, route or code, or makes an input required.
   page, proposals, visit log, wallet steps and chain client tests (200), and the wallet
   buttons, wallet Keys and security policy walks in Chromium (21) passed. Nothing was
   retried or skipped. No migration.
+
+## 2026-11-16: missed events on every agent door, and the feed ends with its sign-in
+
+- `POST /api/v1/feed/missed` with an optional `{"cursor"}` (`readMissedEvents`, the
+  `events_missed` tool at `/mcp`, in WebMCP and through the connector, and the
+  `events missed` command) reads once what the live feed sent after a cursor: the same
+  events a reconnect sending it as `Last-Event-ID` gets, in the same shape and order, up
+  to 100, with `cursor`, the last event's id to send next time (the same cursor when none
+  came), and `resync`. Past 100, or for a cursor that is no event's id, `resync` is true,
+  no events come and `cursor` is now's; with no cursor the read starts from now. It is
+  one Ash action (`KeyfleetWeb.AgentTools.Fleets` `:missed`), whose answer the signed
+  request runs too, and it reads with the feed's own `Keyfleet.Feed.missed/2`. A read
+  that fails answers 503 `feed_unavailable`. Nothing is written.
+- The feed and the read share one rule for an id: digits naming a moment. A
+  `Last-Event-ID` with a sign, such as `-5`, now resyncs as every other id that is not
+  the feed's does, where before it replayed from that moment.
+- An open feed ends the moment the sign-in it opened with runs out, with
+  `{"kind": "closed", "reason": "unauthorized", "message", "hint"}`, the words a signed
+  request is refused with then, and closes. One timer in the feed's own process waits
+  for that moment; nothing is polled or written.
+- `cli/commands.json` and `cli/COMMANDS.md` gain `feed`, the open stream, and
+  `events missed`; both are source only until regents-cli moves its Keyfleet pin. The
+  feed's manifest entry links the command list and names `events_missed` for the
+  browser and MCP, which do not carry a stream.
+- Contract 35.1.0 (both copies): the new operation and its three schemas, and
+  `FeedEvent`'s `unauthorized` close with `message` and `hint`. The tool manifest has
+  139 tools. The guide stays at 3.33.0, since `skill.md` carries no feed text; `/docs`,
+  `/agents.md`, the Claude guide, the public changelog, the parity table (K17), the
+  feature map and the verification list say what changed.
+- Tests: the feed tests (14 and a property: the read answers what a reconnect replays,
+  the 100 limit, a resync past it and for a cursor that is no id, an agent whose person
+  holds no Key told nothing, unpaired 403, unsigned 401, a body it can't take 422, every
+  answer checked against the contract, and a feed closing with the sign-in refusal when
+  a 300 ms sign-in runs out), the connector tests (20, one new: the same events over
+  signed `/mcp` and the connector as over HTTP, and the same refusal code), and the
+  contract, command list, signed request, guide, route and launch gate tests (109) all
+  passed, as did the unit tests (477 in 37 files), the typecheck, Credo, the format and
+  compile checks and both command list checkers. A new browser walk case calls
+  `events_missed` in Chromium; it has not been run. No migration.
