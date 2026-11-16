@@ -156,9 +156,9 @@ defmodule Keyfleet.Agents.Upkeep do
 
   defp next_step(%{repeated: false}, _keys),
     do:
-      "Keyfleet has not yet seen two scheduled check-ins in a row arrive on time for this " <>
-        "fleet, and reads your schedule as working once it has. Read this again after your " <>
-        "next check-in."
+      "Keyfleet reads your schedule as working when two scheduled check-ins in a row " <>
+        "have reached it on time for this fleet and the next isn't overdue. That isn't so " <>
+        "now: read this again after your next check-in."
 
   defp next_step(_states, _keys), do: nil
 
