@@ -10582,5 +10582,9 @@ removes or renames a field, route or code, or makes an input required.
   1496 tests) with 19 left for outside tools, 472 unit tests, 127 in the browser walk,
   70 in the phone walks, 333 in the graph host and 547 contract tests with 6 skipped.
   Nothing was retried, skipped, removed or given longer to wait.
-- On a 16-core Mac, the whole check took 647 s before and 444 s after, the second while
-  other sessions' walks held the machine at about twice the load of the first.
+- Two browser walks raced the page at the new pace and now wait for it: the signed-in
+  Agent Message walk presses its button once the page has joined its server, and the
+  refusal motion walk judges the last message once the server has answered and its shake
+  has begun and ended.
+- On a 16-core Mac, the whole check took 647 s before and 444 s, 314 s and 311 s in three
+  runs in a row after, the first of them on a machine as busy as it was before.
