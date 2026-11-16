@@ -209,6 +209,17 @@ page reads the key's holder from the chain when it is pressed, and the
 treasury's balances are read from the chain every five minutes, so neither
 depends on the records. No record is changed by hand.
 
+A later release that records a new kind of event adds nothing to what is
+already saved. Reading old blocks again doesn't add that kind for a transaction
+already saved, since a saved transaction records nothing more. A saved
+transaction in the last 300 blocks that also holds an event of the new kind no
+longer matches its records once that event is read, so it is named in the
+warning above as no longer matching the chain, though the chain never changed,
+and its records stay as first saved. Blocks further back are never read again,
+so their events of the new kind are never recorded and no warning names them.
+A transaction in the last 300 blocks with nothing saved yet is new history, and
+all its events are recorded, the new kind among them.
+
 ## When a stretch is not read
 
 A node that will not answer a stretch whole is asked for it again in halves,
