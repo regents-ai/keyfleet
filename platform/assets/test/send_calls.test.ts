@@ -13,7 +13,9 @@ const fleet = "0x3333333333333333333333333333333333333333"
 const marker = "80218021802180218021802180218021"
 // Keyfleet's code, bc_u09360jo, as the server ends every step's data with it.
 const suffix = `0x62635f7530393336306a6f0b00${marker}` as const
-const data = `0xa9059cbb${"00".repeat(64)}${suffix.slice(2)}` as const
+const calldata = `0xa9059cbb${"00".repeat(64)}` as const
+// What the server builds: the call, then Keyfleet's code.
+const data = `${calldata}${suffix.slice(2)}` as const
 const sentHash = `0x${"ab".repeat(32)}`
 const includedHash = `0x${"cd".repeat(32)}`
 const base = {chain_id: 8453}
@@ -121,7 +123,7 @@ afterEach(() => {
 })
 
 describe("a wallet that appends the builder code itself gets the step as one call", () => {
-  it("sends one wallet_sendCalls with the step unchanged and the code from its data, and answers the included hash", async () => {
+  it("sends one wallet_sendCalls with the step's data without its code, the code for the wallet to append, and answers the included hash", async () => {
     const active = wallet({capabilities: () => onBase})
 
     expect(await send(active.provider)).toBe(includedHash)
@@ -133,7 +135,7 @@ describe("a wallet that appends the builder code itself gets the step as one cal
         chainId: "0x2105",
         from: signer,
         atomicRequired: false,
-        calls: [{to: fleet, data, value: "0x0"}],
+        calls: [{to: fleet, data: calldata, value: "0x0"}],
         capabilities: {dataSuffix: {value: suffix, optional: true}},
       }],
     }])
@@ -188,6 +190,61 @@ describe("every other wallet gets the step as a transaction, as before", () => {
     expect(await send(active.provider)).toBe(sentHash)
     expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
     expect(active.beforeSends()).toEqual(["eth_chainId"])
+  })
+
+  it("a wallet that never says what it can do gets one eth_sendTransaction two seconds on", async () => {
+    vi.useFakeTimers({toFake: ["setTimeout", "clearTimeout"]})
+    const active = wallet({capabilities: () => new Promise(() => {})})
+
+    const sent = send(active.provider)
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(active.sends()).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await sent).toBe(sentHash)
+    expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
+    expect(active.beforeSends()).toEqual(["eth_chainId"])
+  })
+
+  it("a wallet that appends the code gets one eth_sendTransaction when its calls could not be followed here", async () => {
+    vi.resetModules()
+    vi.doMock("viem/actions", () => {
+      throw new TypeError("Failed to fetch dynamically imported module")
+    })
+    try {
+      const fresh = await import("../js/wallet_actions/send_step")
+      const active = wallet({capabilities: () => onBase})
+      const selected = () => ({address: signer, provider: active.provider, switchChain})
+
+      expect(await fresh.sendStep(base, signer, step, selected, () => {})).toBe(sentHash)
+      expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
+      expect(active.beforeSends()).toEqual(["eth_chainId"])
+    } finally {
+      vi.doUnmock("viem/actions")
+      vi.resetModules()
+    }
+  })
+
+  it("a wallet that appends the code gets one eth_sendTransaction two seconds on when the calls' wait never loads", async () => {
+    vi.useFakeTimers({toFake: ["setTimeout", "clearTimeout"]})
+    vi.resetModules()
+    vi.doMock("viem/actions", () => new Promise(() => {}))
+    try {
+      const fresh = await import("../js/wallet_actions/send_step")
+      const active = wallet({capabilities: () => onBase})
+      const selected = () => ({address: signer, provider: active.provider, switchChain})
+
+      const sent = fresh.sendStep(base, signer, step, selected, () => {})
+      await vi.advanceTimersByTimeAsync(1_999)
+      expect(active.sends()).toEqual([])
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(await sent).toBe(sentHash)
+      expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
+    } finally {
+      vi.doUnmock("viem/actions")
+      vi.resetModules()
+    }
   })
 
   it("does not ask a wallet what it can do for data with no code in it", async () => {
@@ -259,8 +316,8 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
 
     expect(await Promise.all([first, second])).toEqual([{transaction_hash: includedHash}, {transaction_hash: includedHash}])
     expect(active.sends().map(({params}) => (params as [{calls: unknown}])[0].calls)).toEqual([
-      [{to: fleet, data, value: "0x0"}],
-      [{to: fleet, data, value: "0x0"}],
+      [{to: fleet, data: calldata, value: "0x0"}],
+      [{to: fleet, data: calldata, value: "0x0"}],
     ])
     expect(pushed.map(([event]) => event)).toEqual(["step_sent", "step_sent"])
   })

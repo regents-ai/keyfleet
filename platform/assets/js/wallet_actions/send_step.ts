@@ -31,10 +31,12 @@ export type Failure = NothingSent["reason"] | "wallet_declined" | "insufficient_
  * wallet that changes network part-way is refused before it sees the transaction.
  *
  * A wallet that says it appends a builder code itself (ERC-5792's `dataSuffix`,
- * the way a smart wallet credits one) is sent the step with `wallet_sendCalls`
- * and the code from the step's own data; every other wallet gets
- * `eth_sendTransaction`. Either way one press makes one send, and the answer is
- * one transaction hash.
+ * the way a smart wallet credits one) is sent the step with `wallet_sendCalls`:
+ * the step's data without its code, and the code for the wallet to append, so
+ * the code is on the chain once. Every other wallet gets `eth_sendTransaction`,
+ * and so does one that does not answer in time or whose calls this page cannot
+ * follow. Either way one press makes one send, and the answer is one
+ * transaction hash.
  */
 export async function sendStep(
   chain: StepChain,
@@ -45,11 +47,11 @@ export async function sendStep(
 ): Promise<Hash> {
   const chainId: Hex = `0x${chain.chain_id.toString(16)}`
   const provider = await ready(chain, signer, wallet)
-  const suffix = await suffixWalletAppends(provider, chainId, signer, step.data)
+  const calls = await callsPath(provider, chainId, signer, step.data)
   await unchanged(provider, chain, wallet)
 
   sending()
-  if (suffix) return sendCall(provider, chainId, signer, step, suffix)
+  if (calls) return sendCall(provider, chainId, signer, step, calls.suffix, calls.wait)
   const hash = await provider.request({
     method: "eth_sendTransaction",
     params: [{
@@ -87,24 +89,63 @@ export function builderCodeSuffix(data: string): Hex | null {
   return start >= 2 ? `0x${data.slice(start)}` : null
 }
 
+// How long deciding how to send may take: the wallet saying what it can do,
+// then the load of the code that follows its calls. A wallet that answers at
+// all answers from what it already holds; past this the step is sent as a
+// transaction, so every press reaches the wallet.
+const callsPathWaitMs = 2_000
+
+type CallsWait = (provider: EthereumProvider, id: string) => Promise<unknown>
+
 /**
- * The suffix ending the step's data, when the wallet says it appends one for the
- * signer on this chain (ERC-5792 `wallet_getCapabilities`; a capability under
- * `0x0` holds on every chain). Null when the data has none, or the wallet does not
- * know the method, refuses it or does not say so: the step is then sent as a
- * transaction.
+ * The suffix ending the step's data and the wait for the wallet's calls, when
+ * the wallet says it appends a suffix for the signer on this chain (ERC-5792
+ * `wallet_getCapabilities`; a capability under `0x0` holds on every chain) and
+ * its calls can be followed here. Null when the data has no suffix, when the
+ * wallet does not know the method, refuses it or does not say so, when the wait
+ * cannot be loaded, or when all this takes longer than `callsPathWaitMs`: the
+ * step is then sent as a transaction.
  */
-async function suffixWalletAppends(
+async function callsPath(
   provider: EthereumProvider,
   chainId: Hex,
   signer: Address,
   data: Hex,
-): Promise<Hex | null> {
+): Promise<{suffix: Hex; wait: CallsWait} | null> {
   const suffix = builderCodeSuffix(data)
   if (!suffix) return null
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<null>(resolve => {
+    timer = setTimeout(() => resolve(null), callsPathWaitMs)
+  })
   try {
-    const answer = await provider.request({method: "wallet_getCapabilities", params: [signer, [chainId]]})
-    return [chainId, "0x0"].some(id => appendsSuffix(answer, id)) ? suffix : null
+    const asked = provider.request({method: "wallet_getCapabilities", params: [signer, [chainId]]})
+    const answer = await Promise.race([asked, late])
+    if (![chainId, "0x0"].some(id => appendsSuffix(answer, id))) return null
+    const wait = await Promise.race([callsWait(), late])
+    return wait && {suffix, wait}
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * viem's wait for a wallet's calls, loaded before the wallet is asked to send,
+ * so a call it sends can always be followed. Loaded at a press rather than with
+ * the page: Privy's code already carries viem, so the page's first load stays as
+ * it was. Null when it cannot be loaded, as on a page left open across a release.
+ */
+async function callsWait(): Promise<CallsWait | null> {
+  try {
+    const [{createClient, custom}, {waitForCallsStatus}] = await Promise.all([import("viem"), import("viem/actions")])
+    return async (provider, id) => {
+      // Base makes a block every two seconds; viem would read every second for it.
+      const client = createClient({transport: custom(provider), pollingInterval: 1_000})
+      const {receipts} = await waitForCallsStatus(client, {id})
+      return receipts?.[0]?.transactionHash
+    }
   } catch {
     return null
   }
@@ -116,11 +157,13 @@ function appendsSuffix(capabilities: unknown, chainId: string): boolean {
 }
 
 /**
- * Sends the step as the one call of `wallet_sendCalls`, exactly as the server
- * built it, asking the wallet to append `suffix` to what it submits. The wallet
- * answers an id; viem's wait reads the calls' status until the wallet says they
- * are done, and the answer is the hash of the transaction that included them,
- * reverted or not. A wait that ends with none leaves the outcome to the wallet.
+ * Sends the step as the one call of `wallet_sendCalls`: the data the server
+ * built with `suffix` taken off its end, and `suffix` for the wallet to append
+ * to what it submits, as Base asks, so the two together are the server's data
+ * and the code is there once. The wallet answers an id; `wait` reads the calls'
+ * status until the wallet says they are done, and the answer is the hash of the
+ * transaction that included them, reverted or not. A wait that ends with none
+ * leaves the outcome to the wallet.
  */
 async function sendCall(
   provider: EthereumProvider,
@@ -128,7 +171,9 @@ async function sendCall(
   signer: Address,
   step: TransactionStep,
   suffix: Hex,
+  wait: CallsWait,
 ): Promise<Hash> {
+  const data = step.data.slice(0, step.data.length - (suffix.length - 2)) as Hex
   const answer = await provider.request({
     method: "wallet_sendCalls",
     params: [{
@@ -137,24 +182,18 @@ async function sendCall(
       from: signer,
       // One call is atomic already; requiring it would make a wallet that can't batch refuse, or ask to upgrade.
       atomicRequired: false,
-      calls: [{to: step.to, data: step.data, value: step.value}],
+      calls: [{to: step.to, data, value: step.value}],
       capabilities: {dataSuffix: {value: suffix, optional: true}},
     }],
   })
   const id = (answer as {id?: unknown} | null)?.id
   if (typeof id !== "string") throw new Error("The wallet did not return an id for the calls.")
 
-  // Loaded here rather than with the page: Privy's code already carries viem, so
-  // the page's first load stays as it was.
-  const [{createClient, custom}, {waitForCallsStatus}] = await Promise.all([import("viem"), import("viem/actions")])
-  // Base makes a block every two seconds; viem would read every second for it.
-  const client = createClient({transport: custom(provider), pollingInterval: 1_000})
-  const {receipts} = await waitForCallsStatus(client, {id})
-  const hash = receipts?.[0]?.transactionHash
+  const hash = await wait(provider, id)
   if (typeof hash !== "string" || !transactionHash.test(hash)) {
     throw new Error("The wallet's calls ended without a transaction.")
   }
-  return hash
+  return hash as Hash
 }
 
 /**
