@@ -565,10 +565,12 @@ defmodule KeyfleetWeb.WorkspacePage do
   # One project's newest notebooks, each locked or open to every member's
   # edits, with whether the member is the one who locks it, and the daily
   # copies of them the member may bring back; or each project's few newest in
-  # turn; and what the fleet's members pinned there. On the canvas
-  # (`docs.view`), the notebooks shown are its cards as well
-  # (`notebook_canvas/3`). None of it comes from the workspace's log, so it
-  # keeps no place in it (`seen`), and its notices don't read it again.
+  # turn; and what the fleet's members pinned there. Each notebook shown says
+  # whether it changed since its newest kept run page (`since_run/2`), all of
+  # them from one read. On the canvas (`docs.view`), the notebooks shown are
+  # its cards as well (`notebook_canvas/3`). None of it comes from the
+  # workspace's log, so it keeps no place in it (`seen`), and its notices
+  # don't read it again.
   defp place(fleet, :docs, shown, projects, params, opts) do
     docs = docs!(params)
     hub? = Notebooks.hub?(fleet.id)
@@ -583,6 +585,9 @@ defmodule KeyfleetWeb.WorkspacePage do
         |> with_locks(fleet.id, shown_hub?, opts[:actor])
 
     sections = if(is_nil(shown), do: sections(fleet.id, projects, spaces, docs), else: [])
+    pages = run_pages(fleet.id, on_show(notebooks, sections))
+    notebooks = since_run(notebooks, pages)
+    sections = Enum.map(sections, &%{&1 | notebooks: since_run(&1.notebooks, pages)})
 
     %{
       docs: docs,
@@ -856,22 +861,25 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
+  # The Docs place's notebooks on show: the project's, or with no project
+  # shown, each section's (the one not on show is nil or empty).
+  defp on_show(notebooks, sections),
+    do: readable(notebooks) ++ Enum.flat_map(sections, &readable(&1.notebooks))
+
   # The Docs place's canvas, when the fleet has a notebook hub and the canvas
-  # is the view: the project's notebooks on show, or with no project shown,
-  # each section's (the one not on show is nil or empty).
-  defp docs_canvas(fleet_id, true, %{view: :canvas}, notebooks, sections, opts) do
-    on_show = readable(notebooks) ++ Enum.flat_map(sections, &readable(&1.notebooks))
-    notebook_canvas(fleet_id, on_show, opts)
-  end
+  # is the view: the notebooks on show.
+  defp docs_canvas(fleet_id, true, %{view: :canvas}, notebooks, sections, opts),
+    do: notebook_canvas(fleet_id, on_show(notebooks, sections), opts)
 
   defp docs_canvas(_fleet_id, _hub?, _docs, _notebooks, _sections, _opts), do: nil
 
   # The notebooks shown as a tree canvas's cards, the #{@canvas_notebooks}
   # most recently changed, each headed by the Key that made it
-  # (`Keyfleet.Notebooks.keys/2`), with when it last ran; and the tasks that name one
-  # of them as their notebook (`notebook_ref`), each linked from its
-  # notebook. The hub keeps nothing of which notebook another was made from,
-  # so notebooks link to nothing else.
+  # (`Keyfleet.Notebooks.keys/2`), standing "Changed" while it changed since
+  # its newest kept run page; and the tasks that name one of them as their
+  # notebook (`notebook_ref`), each linked from its notebook. The hub keeps
+  # nothing of which notebook another was made from, so notebooks link to
+  # nothing else.
   defp notebook_canvas(fleet_id, notebooks, opts) do
     notebooks =
       notebooks
@@ -896,13 +904,12 @@ defmodule KeyfleetWeb.WorkspacePage do
             href: notebook.open,
             patch: false,
             tone: :plain,
-            standing: nil,
+            standing: if(notebook.changed_since_run?, do: "Changed"),
             author: key_label(keys[notebook.id]),
             created: notebook.added,
             changed: notebook.changed,
             archived: false,
-            folder: notebook.folder,
-            ran: notebook.ran
+            folder: notebook.folder
           }
         end) ++
           Enum.map(tasks, fn task ->
@@ -1760,7 +1767,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       name: name,
       folder: %{path: folder, link: Code.files_path(fleet_id, repository, folder)},
       code: folder_entries(fleet_id, repository, folder),
-      notebooks: notebooks,
+      notebooks: since_run(notebooks, run_pages(fleet_id, readable(notebooks))),
       notebooks_unshown: unshown
     }
   end
@@ -1853,9 +1860,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # A notebook as a page shows it: when it last changed (`changed`) and ran
-  # (`ran`, nil for never) as the hub writes them, and the address tasks cite
-  # it by (`url`).
+  # A notebook as a page shows it: when it last changed (`changed`) as the
+  # hub writes it, and the address tasks cite it by (`url`).
   defp notebook_row(fleet_id, space, notebook) do
     {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
 
@@ -1867,11 +1873,36 @@ defmodule KeyfleetWeb.WorkspacePage do
       folder: Enum.find_value(notebook["tags"], &folder/1),
       added: added,
       changed: notebook["updated_at"],
-      ran: notebook["last_run_at"],
       open: notebook_link(fleet_id, space, notebook["id"]),
       url: Notebooks.notebook_url(fleet_id, space, notebook["id"])
     }
   end
+
+  # The newest page Keyfleet keeps of a background run of each of `rows`'
+  # notebooks, whoever started it, by notebook, from one read of Keyfleet's
+  # own copies (`Keyfleet.Notebooks.SavedOutput`, which only the site itself
+  # reads); none without a row.
+  defp run_pages(_fleet_id, []), do: %{}
+
+  defp run_pages(fleet_id, rows) do
+    fleet_id
+    |> Notebooks.newest_run_outputs!(Enum.map(rows, & &1.id), actor: %System{})
+    |> Map.new(&{&1.notebook_id, &1})
+  end
+
+  # Each row with whether its notebook changed after its newest kept run page
+  # was made (`changed_since_run?`, `Keyfleet.Notebooks.changed_since?/2`),
+  # false while none is kept, as an agent's listing says it.
+  defp since_run(rows, pages) when is_list(rows) do
+    for row <- rows do
+      Map.put(row, :changed_since_run?, changed_since_run?(row.changed, pages[row.id]))
+    end
+  end
+
+  defp since_run(none_or_unreadable, _pages), do: none_or_unreadable
+
+  defp changed_since_run?(_changed, nil), do: false
+  defp changed_since_run?(changed, page), do: Notebooks.changed_since?(changed, page)
 
   defp folder("folder/" <> folder), do: folder
   defp folder(_tag), do: nil

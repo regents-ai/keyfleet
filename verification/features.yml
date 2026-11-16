@@ -770,13 +770,18 @@ features:
       pins, newest first, beside the notebooks or the code, and any member
       lifts one, here or on the code's own pages. Anyone else reads none of it.
       While a vote has restricted the edits of the Key a member acts as, it
-      neither pins nor unpins.
+      neither pins nor unpins. A notebook whose code, packages or details
+      changed after its newest kept run page is marked Changed in Docs' lists
+      and canvas and among a goal's notebooks, by the same rule as an agent's
+      listing (`changed_since`); one with no kept run page, or not changed
+      since, is not.
     who: person
     level: ordinary
     paths:
       - platform/lib/keyfleet/graph.ex
       - platform/lib/keyfleet/graph/pin.ex
       - platform/lib/keyfleet/graph/validations/unrestricted.ex
+      - platform/lib/keyfleet/notebooks.ex
       - platform/lib/keyfleet/notebooks/hub_client.ex
       - platform/lib/keyfleet_web/live/workspace_page.ex
       - platform/lib/keyfleet_web/live/workspace_live.ex
@@ -785,6 +790,7 @@ features:
       - platform/assets/js/places_chart/shader.ts
       - platform/assets/js/places_chart/renderer.ts
       - platform/assets/js/hooks/places_chart.ts
+      - platform/assets/js/hooks/tree_canvas/stage.ts
       - platform/assets/js/theme_tone.ts
       - platform/assets/js/app.ts
       - platform/priv/repo/migrations/20261021011817_add_workspace_pins.exs
@@ -796,6 +802,7 @@ features:
     gaps:
       - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
       - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.
+      - The Changed mark is proven on the pages' HTML, not walked in a browser; a canvas card says Changed without the list's spoken "since its last run".
 
   - id: account-page-head
     what: >-
@@ -1777,3 +1784,65 @@ features:
       - The first daily clear against live data is not yet seen; how many old pages it meets is unknown.
       - The clear is one statement under the site's 15-second limit; a very large first backlog could pass it.
       - A member removing a notebook's newest page while the clear runs can leave that notebook with no older page kept.
+
+  - id: kept-notebook-page-opens
+    what: >-
+      A member opens a page Keyfleet keeps of a notebook's run from its address
+      on the fleet's notebook host, as a result link sends them. Without a
+      notebook sign-in they go to Keyfleet, which signs them in to the fleet's
+      notebooks and brings them back, and the host shows Keyfleet's own copy
+      of the page as a page of its own, in a sandbox where its scripts run
+      and never read as another type. Keyfleet adds nothing around it: its
+      cells scroll and its parts are reached with the keyboard as the page
+      allows, and a page that fits a phone's width fits there.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/plugs/notebook_gateway.ex
+      - platform/lib/keyfleet_web/controllers/notebook_open_controller.ex
+      - platform/lib/keyfleet_web/controllers/notebook_open_html.ex
+      - platform/lib/keyfleet/notebooks.ex
+    entry:
+      - route: GET https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
+      - route: GET /fleets/{fleet_id}/notebooks/open
+    proofs:
+      - platform/test/browser/kept_page.spec.ts
+      - platform/test/keyfleet_web/notebook_gateway_test.exs
+    gaps:
+      - The walk's page is written by hand. A page marimo exports draws its cells with a frontend it loads from cdn.jsdelivr.net, and the walk reads nothing from outside the machine, so a real marimo page drawing in the sandbox is not walked.
+      - The desktop walk runs in npm run test:chain, which make check does not run; the iPhone 15 and Pixel 7 walks run in make check's devices lane.
+      - The walk opens the page's address directly, not by pressing a result link on the workspace; WebKit is not run on the Mac.
+
+  - id: wallet-network-switch
+    what: >-
+      A person presses a wallet button while their wallet is on another
+      network, and their wallet asks to switch to Base through Privy's own
+      switch, which also adds Base to a wallet app that lacks it. Every press
+      asks again; nothing is remembered or held back. Privy connects every
+      wallet on Base and offers no other network. A declined switch leaves
+      "Your wallet declined the switch to Base. Nothing was sent." Any other
+      failed switch, or a wallet still elsewhere when the step is sent, leaves
+      "Your wallet isn't on Base. Change the network to Base in your wallet
+      app, then press again. Nothing was sent."
+    who: person
+    level: protected
+    paths:
+      - platform/assets/js/wallet_actions/send_step.ts
+      - platform/assets/js/wallet_actions/connected_wallet.ts
+      - platform/assets/js/privy_bridge.tsx
+      - platform/lib/keyfleet/wallet_steps.ex
+      - platform/lib/keyfleet_web/components/layouts/root.html.heex
+      - platform/lib/keyfleet_web/wallet/onchain_steps.ex
+    entry:
+      - live: KeyfleetWeb.ShellLive
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/assets/test/send_step.test.ts
+      - platform/assets/test/onchain_steps.test.ts
+      - platform/assets/test/privy_bridge.test.ts
+      - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/browser/wallet_buttons.spec.ts
+    gaps:
+      - The walks press from another network with a stand-in wallet whose switch stands in for Privy's; a real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release.
+      - The anvil lab's network, which Privy does not list, reaches Privy with the site's own name and node (a unit test checks this); the lab needs a real Privy sign-in, so it is not walked end to end, and it has not been tried by hand since this change.
+      - WebKit is not run on the Mac.

@@ -124,8 +124,8 @@ export const pushCode = (fleet: string, key: number, wallet: string, head: strin
 /** Opens the product pages, or closes them behind the launch gate. */
 export const setSurfaces = (open: boolean) => void call("surfaces!", [open])
 
-/** A transaction a page's wallet sent, as the page sent it. */
-export type SentTransaction = {from: string; to: string; data: string; value: string}
+/** A transaction a page's wallet sent, as the page sent it, with its chain id in hex. */
+export type SentTransaction = {from: string; to: string; data: string; value: string; chainId: string}
 
 /** The step sent as `transaction` is included under `hash`; it did what it asked when `succeeded`. */
 export const landStep = (hash: string, transaction: SentTransaction, succeeded: boolean) =>

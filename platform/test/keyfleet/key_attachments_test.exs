@@ -29,7 +29,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
     :ok
   end
 
-  test "replays preserve row identity and database observation time; conflicting epoch values fail" do
+  test "replays preserve row identity and database observation time; another reading of an epoch keeps the first" do
     input = event()
     first = Keys.record_epoch!(input, actor: @system)
     assert %DateTime{} = first.observed_at
@@ -43,8 +43,8 @@ defmodule Keyfleet.KeyAttachmentsTest do
           transaction_hash: hash("c"),
           log_index: 1
         ] do
-      assert {:error, %Ash.Error.Invalid{}} =
-               Keys.record_epoch(Map.put(input, field, value), actor: @system)
+      assert {:ok, kept} = Keys.record_epoch(Map.put(input, field, value), actor: @system)
+      assert persisted_fields(kept) == persisted_fields(first)
     end
 
     assert [row] = Keys.key_history!(@fleet, 1)
@@ -264,7 +264,7 @@ defmodule Keyfleet.KeyAttachmentsTest do
   end
 
   @tag :independent_connections
-  test "simultaneous conflicting observations cannot replace the winning epoch" do
+  test "simultaneous conflicting observations keep the epoch saved first" do
     input =
       event(
         token_id: :rand.uniform(1_000_000_000) + 100,
@@ -274,8 +274,8 @@ defmodule Keyfleet.KeyAttachmentsTest do
     on_exit(fn -> forget(input.token_id) end)
 
     results = race_inputs([input, Map.put(input, :owner_wallet, wallet("b"))])
-    assert [winner] = for({:ok, row} <- results, do: row)
-    assert [{:error, %Ash.Error.Invalid{}}] = Enum.filter(results, &match?({:error, _}, &1))
+    assert [{:ok, winner}, {:ok, kept}] = results
+    assert persisted_fields(kept) == persisted_fields(winner)
 
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       assert [row] = Keys.key_history!(@fleet, input.token_id)

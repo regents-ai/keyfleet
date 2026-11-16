@@ -50,11 +50,6 @@ defmodule Keyfleet.Chain.RpcClient do
   defp head_of(_header), do: {:error, :invalid_block_header}
 
   @impl true
-  def get_block_hash(block_number) do
-    with {:ok, %{"hash" => hash}} <- block(hex_quantity(block_number)), do: {:ok, hash}
-  end
-
-  @impl true
   def get_logs(addresses, topic0s, from_block, to_block) do
     filter = %{
       address: addresses,

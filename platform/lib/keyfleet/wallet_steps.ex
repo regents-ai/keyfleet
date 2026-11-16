@@ -15,9 +15,21 @@ defmodule Keyfleet.WalletSteps do
   end
 
   @doc """
-  The chain a fleet on `chain_id` sends to, as a wallet is shown it:
+  The one chain the site's wallet buttons send on, the only entry in
+  `:wallet_chains`, as `chain/1` gives it. The root layout hands it to the
+  page, and Privy connects every wallet on it (`privy_bridge.tsx`).
+  """
+  def chain do
+    [chain_id] = :keyfleet |> Application.fetch_env!(:wallet_chains) |> Map.keys()
+    chain(chain_id)
+  end
+
+  @doc """
+  The chain a fleet on `chain_id` sends to, as a review names it:
   `%{chain_id: id, name: name, rpc_url: url}` from `:wallet_chains`, or nil
-  when the site sets none for it.
+  when the site sets none for it. The page's words use the name. Privy takes
+  the name and the public `rpc_url` for a network not in its own list, such as
+  the anvil lab's; `RegentChain.Review` requires the `rpc_url` too.
   """
   def chain(chain_id) do
     case Application.fetch_env!(:keyfleet, :wallet_chains) do

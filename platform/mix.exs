@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "f21387188c7438bec659ebb1672cebbfdb12e901"
+  @elixir_utils_ref "b9213015070f189980c83048be5f79e478e81ee4"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "69dbfface3fdc2ab728f8cc57cface25f9c7120c"
 
@@ -37,7 +37,13 @@ defmodule Keyfleet.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test, "test.external": :test]
+      preferred_envs: [
+        precommit: :test,
+        "precommit.checks": :test,
+        "precommit.suite": :test,
+        "precommit.walks": :test,
+        "test.external": :test
+      ]
     ]
   end
 
@@ -76,6 +82,7 @@ defmodule Keyfleet.MixProject do
       # The code gateway's connection to the fleets' code store.
       {:mint, "~> 1.11"},
       {:ash_oban, "~> 0.10.3"},
+      {:ash_state_machine, "~> 0.3.1"},
       {:igniter, "== 0.8.5", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.14.6"},
       {:regent_privy,
@@ -191,7 +198,24 @@ defmodule Keyfleet.MixProject do
       # only on a migrated database.
       test: ["ecto.create --quiet", "keyfleet.setup_local_auth", "test"],
       "test.external": ["test --only external"],
+      # The whole platform gate, in turn. `make check` builds the assets first,
+      # then runs the same three parts side by side: precommit.checks then
+      # precommit.walks in one lane, precommit.suite in another. Neither lane
+      # writes what the other reads: the assets (`assets/vendor`, `priv/static`
+      # and `priv/esbuild-meta.json`, which the suite's pages read) are built
+      # only before them, and the suite and each walk's server have a database
+      # of their own. The compile comes first so that it is the one with
+      # warnings as errors: in one run, a task that has run does not run again.
       precommit: [
+        "compile --warnings-as-errors",
+        "assets.build",
+        "precommit.checks",
+        "precommit.suite",
+        "precommit.walks"
+      ],
+      # The checks that need neither a database nor a server. The typecheck
+      # reads the shared libraries' copied scripts and tokens.
+      "precommit.checks": [
         "compile --warnings-as-errors",
         "deps.unlock --check-unused",
         "cmd mix hex.audit",
@@ -269,23 +293,25 @@ defmodule Keyfleet.MixProject do
         # connector listing each fleet tool's browser input adds one: the router
         # hands AshAi `KeyfleetWeb.ToolSchemas.definition/3` as it compiles.
         "xref graph --label compile-connected --fail-above 138",
-        "cmd --cd graph_host uv run --frozen --offline pytest -q",
-        "test --warnings-as-errors",
         "ash.codegen --check",
         "usage_rules.sync --check",
         "keyfleet.route_handoff --check",
-        # The typecheck reads the shared libraries' copied scripts and tokens.
-        "regent_ui.assets",
-        "regent_identity.assets",
-        "regent_agent_access.assets",
         "cmd npm run typecheck",
-        "cmd npm test",
-        # The browser suite (test/browser) on its own server, once the ExUnit suite
-        # on the same database has finished.
-        "cmd npm run test:browser",
-        # The main flows at an iPhone's and a Pixel's screen, and the
-        # accessibility check of every main page (playwright.devices.config.ts).
-        "cmd npm run test:devices"
+        "cmd npm test"
+      ],
+      # The graph host's tests, then the ExUnit suite, whose graph tests run
+      # their hosts from the environment uv brings up to date for the first.
+      "precommit.suite": [
+        "cmd --cd graph_host uv run --frozen --offline pytest -q",
+        "test --warnings-as-errors"
+      ],
+      # The browser suite (test/browser), then the main flows at an iPhone's
+      # and a Pixel's screen with the accessibility check of every main page
+      # (playwright.devices.config.ts), on the assets already built, each on a
+      # server and database of its own.
+      "precommit.walks": [
+        "cmd npx playwright test",
+        "cmd npx playwright test --config playwright.devices.config.ts"
       ]
     ]
   end

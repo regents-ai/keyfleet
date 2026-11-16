@@ -1,9 +1,9 @@
 defmodule Keyfleet.Chain.StubClient do
   @moduledoc """
-  The chain as a test describes it: a chain id, a head, a list of raw logs and
-  the hash of each block, held in the calling process so tests running side by
-  side never share one. It also keeps every log request it was asked, so a test
-  can see how the chain was asked.
+  The chain as a test describes it: a chain id, a head and a list of raw logs,
+  held in the calling process so tests running side by side never share one.
+  It also keeps every log request it was asked, so a test can see how the
+  chain was asked.
 
   Like a real node, it knows nothing above its head: a head behind the logs
   stands for a node that has not caught up.
@@ -16,16 +16,12 @@ defmodule Keyfleet.Chain.StubClient do
 
   @behaviour Keyfleet.Chain.Client
 
-  # Every block's hash unless a test names another, and the hash the chain
-  # tests give each log.
-  @block_hash "0x" <> String.duplicate("b", 64)
   @regent_buyer "0x" <> String.duplicate("b0", 20)
   @regent_buyer_call RegentChain.Call.encode("REGENT_BUYER()", [])
 
   @doc """
   Sets the head and the logs the chain answers with. `opts` may name the
-  `:chain_id` (8453), `:block_hashes`, a map from block number to the hash
-  that block has now, `:max_logs`, the most logs one answer may hold, as a
+  `:chain_id` (8453), `:max_logs`, the most logs one answer may hold, as a
   provider limits the size of an answer; a request for more fails, and
   `:observe`, a function called as each log request arrives, whose results
   `observations/0` returns, and `:calls`, a function answering each contract
@@ -54,7 +50,6 @@ defmodule Keyfleet.Chain.StubClient do
       head: head,
       logs: logs,
       chain_id: Keyword.get(opts, :chain_id, 8453),
-      block_hashes: Keyword.get(opts, :block_hashes, %{}),
       max_logs: Keyword.get(opts, :max_logs),
       observe: Keyword.get(opts, :observe, fn -> nil end),
       calls: Keyword.get(opts, :calls, &buyer_only/3),
@@ -114,15 +109,6 @@ defmodule Keyfleet.Chain.StubClient do
     if max_logs && length(found) > max_logs,
       do: {:error, :chain_unavailable},
       else: {:ok, found}
-  end
-
-  @impl true
-  def get_block_hash(block) do
-    %{head: head, block_hashes: hashes} = chain()
-
-    if block <= head.number,
-      do: {:ok, Map.get(hashes, block, @block_hash)},
-      else: {:error, :block_unavailable}
   end
 
   @impl true

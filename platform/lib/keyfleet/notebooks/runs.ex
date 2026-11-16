@@ -337,16 +337,13 @@ defmodule Keyfleet.Notebooks.Runs do
   end
 
   # How the notebook's newest kept run page went, and whether the notebook
-  # was changed after the hub made it: the hub moves a notebook's
-  # `updated_at` when its code, packages or details change.
+  # was changed after the hub made it (`Keyfleet.Notebooks.changed_since?/2`).
   defp state(nil, _notebook, _fleet_id), do: nil
 
   defp state(page, notebook, fleet_id) do
-    {:ok, updated_at, _offset} = DateTime.from_iso8601(notebook["updated_at"])
-
     page
     |> kept_run(fleet_id)
-    |> Map.put(:changed_since, DateTime.to_unix(updated_at, :millisecond) > page.saved_at)
+    |> Map.put(:changed_since, Notebooks.changed_since?(notebook["updated_at"], page))
   end
 
   # Which run made a kept page, whether it worked and where it stopped if

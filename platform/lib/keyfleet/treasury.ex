@@ -65,11 +65,15 @@ defmodule Keyfleet.Treasury do
   def native, do: @native
 
   @doc """
-  Every money event recorded from blocks `from..to` of the fleet, so a
-  second reading of them can be checked against the record.
+  Every money event recorded from blocks `from..to` of the fleet, and from the
+  `transactions` named wherever they were recorded, so a reading of those
+  blocks can be checked against the record.
   """
-  def recorded_in_blocks!(fleet_id, from, to),
-    do: events_recorded_in_blocks!(fleet_id, from, to, actor: %System{})
+  def recorded_in_blocks!(fleet_id, from, to, transactions \\ []),
+    do:
+      events_recorded_in_blocks!(fleet_id, from, to, %{transactions: transactions},
+        actor: %System{}
+      )
 
   @doc """
   The assets the fleet's deployment names, and so knows by address: ETH, its

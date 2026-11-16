@@ -290,6 +290,72 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              Ash.get!(Keyfleet.Keys.KeyPicture, picture.id)
   end
 
+  # A small picture is made or failed, never both: the database refuses the
+  # row, a failure is kept only on a picture not made, and a made one only on
+  # a picture its job has not given up on. Either leaves the row as it is,
+  # which the job takes as a record that no longer applies.
+  test "a small picture is never both made and failed" do
+    picture =
+      Keyfleet.Keys.KeyPicture
+      |> Ash.Changeset.for_create(
+        :record,
+        %{
+          fleet_id: "fibonacci_cascade",
+          token_id: 3,
+          seed: Traits.keccak256("golden-1"),
+          cid: "b" <> String.duplicate("c", 58)
+        },
+        actor: %System{}
+      )
+      |> Ash.create!()
+
+    id = Ecto.UUID.dump!(picture.id)
+
+    assert_raise Postgrex.Error, ~r/key_pictures_close_up_made_or_failed/, fn ->
+      Keyfleet.Repo.query!(
+        "UPDATE keyfleet_app.key_pictures SET close_up_cid = 'bd', close_up_failed_at = now() WHERE id = $1",
+        [id]
+      )
+    end
+
+    assert_raise Postgrex.Error, ~r/key_pictures_small_card_made_or_failed/, fn ->
+      Keyfleet.Repo.query!(
+        "UPDATE keyfleet_app.key_pictures SET small_card_cid = 'bd', small_card_failed_at = now() WHERE id = $1",
+        [id]
+      )
+    end
+
+    # The close-up made, the small card given up on.
+    Keyfleet.Repo.query!(
+      "UPDATE keyfleet_app.key_pictures SET close_up_cid = 'bd', small_card_failed_at = now() WHERE id = $1",
+      [id]
+    )
+
+    kept = Ash.get!(Keyfleet.Keys.KeyPicture, picture.id)
+
+    {:ok, card} =
+      Vix.Vips.Image.write_to_buffer(Vix.Vips.Operation.black!(767, 959, bands: 3), ".png")
+
+    Req.Test.stub(KeyArt, fn conn ->
+      conn |> Plug.Conn.put_resp_content_type("image/png") |> Plug.Conn.send_resp(200, card)
+    end)
+
+    Req.Test.stub(Lighthouse, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(200, JSON.encode!(%{Hash: "b" <> String.duplicate("e", 58)}))
+    end)
+
+    for action <- [:close_up_failed, :make_small_card] do
+      assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+               kept
+               |> Ash.Changeset.for_update(action, %{}, context: %{private: %{ash_oban?: true}})
+               |> Ash.update()
+    end
+
+    assert Ash.get!(Keyfleet.Keys.KeyPicture, picture.id) == kept
+  end
+
   # A key's traits need its fleet's table; a key still waiting for its card
   # does not, so it is still served.
   @tag :tmp_dir

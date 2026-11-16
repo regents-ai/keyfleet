@@ -21,8 +21,7 @@ defmodule KeyfleetWeb.Telemetry do
   Each pass of a fleet's chain reader (`Keyfleet.Chain.ReadFleet`) reports
   `[:keyfleet, :indexer, :lag]`: `blocks` between the head it follows and the
   last block it has read, for its fixed `indexer` name and `chain_id` (the
-  chain-events skill). Every ten seconds the site poller counts the fleets
-  stopped at a disagreement (`[:keyfleet, :fleets, :stopped]`). A site that sends
+  chain-events skill). A site that sends
   from its own wallet names, as `unconfirmed_sends` in
   `config :keyfleet, KeyfleetWeb.Telemetry`, the function that answers each of its
   fixed sending flows with when its oldest signed, unconfirmed transaction was
@@ -46,7 +45,7 @@ defmodule KeyfleetWeb.Telemetry do
 
   # The reasons the wallet hook reports (`Failure` in send_step.ts). Only these
   # are counted, so a label never holds whatever a browser chose to send.
-  @wallet_failures ~w(step_unknown wallet_unavailable network_mismatch wallet_declined insufficient_funds send_unconfirmed)
+  @wallet_failures ~w(step_unknown wallet_unavailable switch_declined network_mismatch wallet_declined insufficient_funds send_unconfirmed)
 
   @reporter :keyfleet_prometheus
 
@@ -75,11 +74,7 @@ defmodule KeyfleetWeb.Telemetry do
   def site_poller,
     do:
       {:telemetry_poller,
-       measurements:
-         [
-           {Keyfleet.SharedReading, :measure, []},
-           {__MODULE__, :fleets_stopped, []}
-         ] ++ unconfirmed_sends_step(),
+       measurements: [{Keyfleet.SharedReading, :measure, []}] ++ unconfirmed_sends_step(),
        period: 10_000,
        name: :keyfleet_site_poller}
 
@@ -93,30 +88,11 @@ defmodule KeyfleetWeb.Telemetry do
     end
   end
 
-  # The poller drops for good a measurement that raises or exits, and the row
-  # would then keep its last number. So whatever stops this tick (a database
-  # that cannot answer, Oban not running) is logged and the tick is skipped; the
-  # next one tries again. Fleets are counted only where the chain queue runs, so
-  # nothing is read where no queue runs (tests).
-  @doc false
-  def fleets_stopped do
-    if Enum.any?(Oban.check_all_queues(), &(&1.queue == "chain")), do: count_fleets_stopped()
-    :ok
-  rescue
-    error -> not_measured("stopped fleets", Exception.message(error))
-  catch
-    :exit, reason -> not_measured("stopped fleets", Exception.format_exit(reason))
-  end
-
-  @doc false
-  def count_fleets_stopped do
-    stopped = Keyfleet.Chain.Cursor |> Ash.Query.for_read(:stopped) |> Ash.count!()
-    :telemetry.execute([:keyfleet, :fleets, :stopped], %{count: stopped}, %{})
-  end
-
   # The site's query, `{module, function, args}`, answers `{flow, signed_at}`
-  # for each of its sending flows, `signed_at` nil when nothing waits. Logged
-  # and skipped like the job age.
+  # for each of its sending flows, `signed_at` nil when nothing waits. The
+  # poller drops for good a measurement that raises or exits, and the row
+  # would then keep its last number, so whatever stops this tick is logged and
+  # the tick is skipped; the next one tries again.
   @doc false
   def oldest_unconfirmed_sends({module, function, args}) do
     now = DateTime.utc_now()
@@ -214,11 +190,6 @@ defmodule KeyfleetWeb.Telemetry do
         tags: [:flow],
         description:
           "Age of the oldest transaction the site's own wallet signed that is not yet confirmed"
-      ),
-      last_value("keyfleet.fleets_stopped",
-        event_name: [:keyfleet, :fleets, :stopped],
-        measurement: :count,
-        description: "Fleets stopped right now"
       ),
       last_value("health.shared_reading.oldest.seconds",
         event_name: [:keyfleet, :shared_reading, :kind],

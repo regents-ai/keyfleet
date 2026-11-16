@@ -112,8 +112,7 @@ defmodule Keyfleet.ReleaseTest do
     exports = Release.__info__(:functions)
 
     for {path, command, env} <- [
-          {"rel/overlays/bin/seed-deployment", :seed_deployment, "KEYFLEET_DEPLOYED_MANIFEST"},
-          {"rel/overlays/bin/clear-fleet-stop", :clear_fleet_stop, "KEYFLEET_STOPPED_FLEET"}
+          {"rel/overlays/bin/seed-deployment", :seed_deployment, "KEYFLEET_DEPLOYED_MANIFEST"}
         ] do
       script = File.read!(path)
 

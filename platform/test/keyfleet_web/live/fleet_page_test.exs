@@ -768,6 +768,29 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to 0xaaaa..aaaa. Nothing was sent."
     end
 
+    # A press whose wallet stays on another network sends nothing, and the
+    # note tells a switch the person declined apart from one that failed.
+    test "a declined or failed network switch leaves a note that nothing was sent",
+         %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+      active!(view, @owner)
+
+      notes =
+        for reason <- ~w(switch_declined network_mismatch) do
+          press_fails!(view, reason)
+          text(view, "#buy-key-order-press-note")
+        end
+
+      assert [declined, mismatch] = notes
+      assert declined != mismatch
+      assert Enum.all?(notes, &(&1 =~ "Base" and String.ends_with?(&1, "Nothing was sent.")))
+    end
+
     # Costly failure: with no wallet of the account open, or another wallet
     # open, Buy says the account's wallet can't pay the network fee, though
     # the press is never sent from it.

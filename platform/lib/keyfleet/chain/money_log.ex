@@ -131,6 +131,14 @@ defmodule Keyfleet.Chain.MoneyLog do
   @doc "Every field any kind of record carries."
   def fields, do: @fields
 
+  @contracts for {contract, events} <- @events,
+                 {_sig, {kind, _indexed, _data}} <- events,
+                 into: %{},
+                 do: {kind, contract}
+
+  @doc "The contract a kind of record is read from: `:fleet`, `:treasury`, `:rewards` or `:buyer`."
+  def contract(kind), do: Map.fetch!(@contracts, kind)
+
   @doc "The topic0 of each event read from the fleet contract."
   def fleet_topics, do: Map.keys(@by_topic.fleet)
 

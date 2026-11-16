@@ -341,18 +341,19 @@ defmodule Keyfleet.Proposals do
 
   @doc """
   Every proposal, vote, cancellation and execution recorded from blocks
-  `from..to` of the fleet, so a second reading of them can be checked against
-  the record.
+  `from..to` of the fleet, and from the `transactions` named wherever they
+  were recorded, so a reading of those blocks can be checked against the
+  record.
   """
-  def recorded_in_blocks!(fleet_id, from, to) do
+  def recorded_in_blocks!(fleet_id, from, to, transactions \\ []) do
     Enum.flat_map(
       [
-        &proposals_recorded_in_blocks!/4,
-        &votes_recorded_in_blocks!/4,
-        &cancellations_recorded_in_blocks!/4,
-        &executions_recorded_in_blocks!/4
+        &proposals_recorded_in_blocks!/5,
+        &votes_recorded_in_blocks!/5,
+        &cancellations_recorded_in_blocks!/5,
+        &executions_recorded_in_blocks!/5
       ],
-      & &1.(fleet_id, from, to, actor: %System{})
+      & &1.(fleet_id, from, to, %{transactions: transactions}, actor: %System{})
     )
   end
 end

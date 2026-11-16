@@ -64,9 +64,13 @@ const failures: Record<Failure, {message: string; hint: string}> = {
     message: "No wallet on the signed-in account is open, so nothing was sent.",
     hint: "Sign in, open a wallet on your account in the wallet app, then call again.",
   },
+  switch_declined: {
+    message: "The wallet declined the switch to the page's network. Nothing was sent.",
+    hint: "Ask the person signed in before calling again.",
+  },
   network_mismatch: {
-    message: "The wallet didn't switch to the page's network. Nothing was sent.",
-    hint: "Switch the wallet to the network the page names, adding it if the wallet doesn't list it, then call again.",
+    message: "The wallet isn't on the page's network. Nothing was sent.",
+    hint: "Change the wallet's network to the one the page names in the wallet app, then call again.",
   },
   wallet_declined: {
     message: "The wallet declined this. Nothing was sent.",

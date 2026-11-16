@@ -10543,3 +10543,174 @@ removes or renames a field, route or code, or makes an input required.
   activity, as it always has.
 - Nothing changes for any other wallet, including the wallet made at sign-in: it sends
   exactly as before, with the code already in the step.
+## 2026-11-15: a deck's cards keep drawing after one fails
+
+- On a fleet's deck page, cards near the screen draw one at a time. If one
+  card's picture failed to draw, the flag that says a draw is under way was
+  never let go, and no later card drew. The flag is now let go whatever
+  happens; the failure is still reported.
+
+## 2026-11-15: four records keep only the stages they declare
+
+- A project's stages (active, archived, deleted) and its four moves, and an ENS lookup's
+  stages (pending, done, failed) and its three moves, are each written once, in the
+  record's `state_machine` block (ash_state_machine 0.3.1, new). A move from the wrong
+  stage is refused there; `Keyfleet.Projects.Hold` still checks first and answers as
+  before.
+- The database refuses a row that contradicts itself: a Key's close-up or small card
+  both made and failed, a kept notebook page marked succeeded with a failure recorded,
+  an archived project that no Key holds, and an ENS lookup in any stage but the three.
+  The migration only adds these rules and changes no row or column.
+- Making a small picture or recording that it failed, marking a kept page succeeded and
+  recording a run's failure each leave a row that already holds the other outcome as it
+  is, so the job ends quietly instead of writing both. Before, nothing in the record
+  stopped the second outcome being written over the first.
+- Nothing a person or agent sees changes: every page, answer, tool and wording is the
+  same.
+- Tests: an ENS lookup goes from pending to done, or to failed after its last failed
+  try, and a done or failed one moves again only when asked again; a project moves only
+  along its declared moves and a stale copy is refused as before; a made picture is
+  never recorded failed, nor a failed one made; a kept page with a failure is never
+  marked succeeded, nor a succeeded one given a failure; and each database rule refuses
+  a row written past the record.
+
+## 2026-11-16: the full check runs its gates side by side
+
+- `make check` builds the pages' scripts and styles once, then runs its gates side by
+  side instead of one after another: the platform's checks then its two browser walks in
+  one lane, the graph host's tests then the Elixir suite in another, and the
+  required-fixes, command, sign-in version and contract checks each in their own. Each
+  gate writes its output to `platform/_build/check/<gate>.log`; at the end every log is
+  printed, the failed ones last, then one line per gate. A failing gate still fails the
+  whole check.
+- The browser walk's server has a database of its own, as the phone walks' server
+  already had, so the Elixir suite runs beside both. Nothing is rebuilt while the lanes
+  run.
+- Each gate has a budget about 40% over its time in the check (`CHECK_BUDGETS` in the
+  `Makefile`); a gate over it gets a `SLOW` line, which warns and never fails.
+- `mix precommit` is still the whole platform gate, run in turn, made of the same three
+  parts the check runs side by side.
+- Every test still runs, with the same counts: 1517 in the Elixir suite (21 properties,
+  1496 tests) with 19 left for outside tools, 472 unit tests, 127 in the browser walk,
+  70 in the phone walks, 333 in the graph host and 547 contract tests with 6 skipped.
+  Nothing was retried, skipped, removed or given longer to wait.
+- Two browser walks raced the page at the new pace and now wait for it: the signed-in
+  Agent Message walk presses its button once the page has joined its server, and the
+  refusal motion walk judges the last message once the server has answered and its shake
+  has begun and ended.
+- On a 16-core Mac, the whole check took 647 s before and 444 s, 314 s and 311 s in three
+  runs in a row after, the first of them on a machine as busy as it was before.
+
+## 2026-11-16: the chain reader keeps what it saved first
+
+- Each event the chain reader saves is written once and kept as first saved. When a
+  stretch read again no longer matches what was saved (a transaction moved to another
+  block, its block's hash changed, one of its events changed, or it is gone), the saved
+  records stay, nothing more of that transaction is saved, and the reader logs one
+  warning naming the fleet, the transaction and its contracts, then reads on. The
+  warning comes from the pass that reads that block for the last time, once the reader
+  is 300 blocks past it, so each change is named once.
+- A transaction not saved before is still saved, wherever it sits in the stretch. A new
+  event that would take the place of one already kept (another owner for the same Key
+  ownership, another reveal of a Key or another end of its draw wait, another proposal
+  under a number already used, a second cancellation or execution of a proposal) is
+  not saved; the first one stays.
+- The stop is gone. A change in the chain's history no longer stops a fleet's reading
+  until an operator repairs the record by hand. The stopped state, the release command
+  and mix task that cleared it (`clear-fleet-stop`), the `keyfleet_fleets_stopped`
+  number, the reader's block hash check and the repair steps in `docs/chain-reader.md`
+  are removed. The cursor's `rescan_from` column is read by nothing; dropping it is a
+  migration of its own that waits for approval.
+- An event that cannot be read, or a block the node keeps refusing, still ends the pass
+  with nothing saved from that stretch, and a node that does not answer is still one
+  warning and a minute's wait. The lag number and the "catching up" notice stay.
+- What people and agents see: a fleet whose history changed no longer shows its Key
+  ownership as out of date, so its members keep their rooms and workspace. After such a
+  change, which is rare on Base, pages, rooms and the workspace go by the records kept,
+  which can name an owner, reveal, card or proposal the chain no longer has; a wallet
+  step still reads a Key's holder from the chain when it is pressed.
+- Tests: a saved Key sale moved to another block, in a block whose hash changed,
+  changed or gone keeps its records and history and saves nothing more of its
+  transaction, is named once over three passes, and a later sale in the same stretch is
+  saved with the cursor moving on; the same for a proposal, a renewal, a vote's voter or
+  block hash, a payment and an execution gone; every kind of record read again as saved
+  is kept without a warning; a different reveal for a revealed Key keeps the first; an
+  event that cannot be read still ends the pass with nothing saved.
+
+## 2026-11-16: from the notebooks review: Changed, a kept page walked, two notes
+
+- A notebook whose code, packages or details changed after its newest kept run page now
+  says Changed in the workspace: in Docs' lists for one project and for every project,
+  on Docs' canvas, and among a goal's notebooks. A screen reader hears "Changed since its
+  last run". A notebook with no kept run page, or not changed since, shows nothing new.
+  It is the same rule an agent's notebook list uses (`changed_since`), now one function
+  for both, read from Keyfleet's own copies in one read for the whole list, and nothing
+  more is asked of the notebook host. The canvas's "Not run" and "Ran <day>" badge is gone: it
+  drew the host's last run time, which the host never records.
+- A new browser walk opens a kept notebook page as a member: from the page's address it
+  goes through Keyfleet's notebook sign-in and back, then checks the page's sandbox,
+  that every cell shows and its script runs, that the keys scroll it and reach its table
+  and slider, and that it fits the screen. It runs in desktop Chromium and at an iPhone
+  15's and a Pixel 7's screen. Its page is written by hand, because a real marimo page
+  loads its frontend from the internet and the walk stays on the machine.
+- The guide's notebook page read, in `skill/notebooks.md` and `/docs`, now tells an
+  agent to compare the page's `run_id` with its own run, that whether the code is
+  current is on the run's read (`entry_current`, `bundle_current`), and to stop or open
+  `result_url` while `truncated` is true. The guide stays at 3.33.0.
+- `docs/chain-reader.md` now says what a release that records a new kind of event does
+  to saved history: transactions already saved gain nothing, one in the last 300 blocks
+  holding the new kind is named in the "no longer matches" warning, and older blocks are
+  never read again.
+- Tests: the workspace page and agent notebook tests (116), the runs test (1), the guide
+  and agent file tests (39), the canvas layout unit tests (10), and the new walk once in
+  desktop Chromium and once at each phone (3), all passed. Nothing was retried, skipped
+  or given longer to wait.
+
+## 2026-11-16: a wallet on another network is asked to switch to Base
+
+- Pressing a wallet button while the wallet is on another network now asks the wallet to
+  switch to Base through Privy's own switch, which also adds Base to a wallet app that
+  doesn't have it. Before, a wallet on a phone showed no switch prompt and the page only
+  said the wallet was on a different network. Every press asks again; nothing is
+  remembered, held back or skipped. The checks before a send stay as they were: the
+  wallet's account, that it is still the same wallet, its network read last of all, and
+  the step sent with Base's chain id.
+- Privy now connects every wallet on the site's one wallet chain, Base, and offers no
+  other network. Each page names the chain in `wallet-chain-id`, `wallet-chain-name` and
+  `wallet-chain-rpc-url` tags beside the Privy app tag, from the one chain in
+  `:wallet_chains` (`Keyfleet.WalletSteps.chain/0`). For Base the sign-in script takes
+  Privy's own entry, so the Privy wallet reads and sends through Privy's nodes. For a
+  network Privy does not list, such as the anvil lab's, it describes the network from the
+  site's own name and public node, paid in ETH, as Privy's guide to networks does. Privy
+  still loads only when a page needs it, and the pages' security policy needed no change.
+- A switch the person declines leaves "Your wallet declined the switch to Base. Nothing
+  was sent." Any other failed switch, or a wallet still elsewhere when the step is sent,
+  leaves "Your wallet isn't on Base. Change the network to Base in your wallet app, then
+  press again. Nothing was sent." The new reason, `switch_declined`, is counted in the
+  wallet numbers and the visit log, and an agent using the page's tools is told it too.
+- The site's own switch and add-network requests to the wallet are gone. The page now
+  reads only the chain id from a review, no longer the chain's name or public node. The
+  server keeps both: the name for the page's words and for Privy, the public node for
+  Privy on a network it does not list; the chain package's review requires it too.
+- The shared library pin moves to b921301, which is the commit Keyfleet was on plus one
+  word: the chain package accepts the new reason. Every other shared package is unchanged.
+- The wallet Privy makes at sign-in is moved through the provider the page holds, because
+  Privy's own switch for it only changes Privy's record (the template's 8f28f899). Wallet
+  apps go through Privy's switch. Keyfleet's steps go to one network and Privy's wallet
+  starts on it, so this changes nothing a person sees today.
+- The browser walk's stand-in wallet can start on another network, and its switch moves
+  it to the network asked or is declined. Two new walks press Approve from Ethereum
+  (network 1): one is switched and sends on Base; the other declines, sends nothing and
+  shows the declined note, and the next press still reaches the wallet.
+- The anvil lab keeps working on its own network (31337). `docs/anvil-lab.md` now says
+  Privy asks the wallet to add and switch to it as it connects, and a button asks again
+  when pressed on another network. The lab needs a real Privy sign-in, so it is not
+  walked end to end.
+- Tests: three new send step tests (a switch only off Base, asked again on every press,
+  a declined switch told apart from a failed one), Privy's switch carried beside each
+  wallet, Privy given its own entry for Base and the site's name and node for the lab's
+  network, a fleet page test that a declined and a failed switch each leave their note,
+  and the two walks from another network. The unit tests (476 in 37 files), the fleet
+  page, proposals, visit log, wallet steps and chain client tests (200), and the wallet
+  buttons, wallet Keys and security policy walks in Chromium (21) passed. Nothing was
+  retried or skipped. No migration.

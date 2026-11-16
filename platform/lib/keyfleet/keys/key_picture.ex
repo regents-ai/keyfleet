@@ -6,9 +6,8 @@ defmodule Keyfleet.Keys.KeyPicture do
   the picture; until then the key's metadata shows the Interim Keyfleet
   Access Pass.
 
-  A picture is the Key's name and seed drawn, so it never changes: a Key
-  whose seed an operator corrects after a reorg is shown by its new seed's
-  picture, drawn afresh, and the old one is no longer asked for.
+  A picture is the Key's name and seed drawn, so it never changes, as the
+  reveal it was drawn from is kept as first saved.
 
   Each picture also gets two small pictures: a close-up, kept at
   `close_up_cid`, the small square at the card's middle that the fleet's map
@@ -21,6 +20,11 @@ defmodule Keyfleet.Keys.KeyPicture do
   time is kept (`close_up_failed_at`, `small_card_failed_at`) and that small
   picture is not looked for again, so a picture that can't be made never
   holds the key-art queue.
+
+  So each small picture is not made, made or failed, and never both made and
+  failed: the database refuses that row, a made one is kept only on a picture
+  whose job has not failed (`make_close_up`, `make_small_card`), and a failure
+  only on one not made (`close_up_failed`, `small_card_failed`).
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -37,6 +41,14 @@ defmodule Keyfleet.Keys.KeyPicture do
     check_constraints do
       check_constraint(:token_id, "key_pictures_positive_token", check: "token_id > 0")
       check_constraint(:seed, "key_pictures_seed_shape", check: "seed ~ '^0x[0-9a-f]{64}$'")
+
+      check_constraint(:close_up_cid, "key_pictures_close_up_made_or_failed",
+        check: "close_up_cid IS NULL OR close_up_failed_at IS NULL"
+      )
+
+      check_constraint(:small_card_cid, "key_pictures_small_card_made_or_failed",
+        check: "small_card_cid IS NULL OR small_card_failed_at IS NULL"
+      )
     end
   end
 
@@ -77,12 +89,14 @@ defmodule Keyfleet.Keys.KeyPicture do
     end
 
     # Each reads the card back, makes its small picture and keeps it, outside
-    # any transaction. The same card always gives the same small picture at
-    # the same address, so running twice is safe.
+    # any transaction, on a picture whose job has not given up on it. The
+    # same card always gives the same small picture at the same address, so
+    # running twice is safe.
     update :make_close_up do
       public? false
       transaction? false
       require_atomic? false
+      change filter(expr(is_nil(close_up_failed_at)))
       change {MakeSmallPicture, kind: :close_up}
     end
 
@@ -90,19 +104,24 @@ defmodule Keyfleet.Keys.KeyPicture do
       public? false
       transaction? false
       require_atomic? false
+      change filter(expr(is_nil(small_card_failed_at)))
       change {MakeSmallPicture, kind: :small_card}
     end
 
-    # A small picture's job failed its last try.
+    # A small picture's job failed its last try, on a picture that still has
+    # none. A picture made meanwhile leaves the row as it is, and its job
+    # stops as one whose record no longer applies.
     update :close_up_failed do
       public? false
       accept []
+      change filter(expr(is_nil(close_up_cid)))
       change set_attribute(:close_up_failed_at, &DateTime.utc_now/0)
     end
 
     update :small_card_failed do
       public? false
       accept []
+      change filter(expr(is_nil(small_card_cid)))
       change set_attribute(:small_card_failed_at, &DateTime.utc_now/0)
     end
   end
