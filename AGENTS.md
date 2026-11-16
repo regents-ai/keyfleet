@@ -21,7 +21,9 @@ signed-in Overview. The [README](README.md) describes the product.
   README's "Shipping a change" says how a change goes live.
 - `make check` runs every gate, each writing its output to
   `platform/_build/check/<gate>.log`, then prints every gate's log, the failed
-  ones last, and one line per gate. It builds the platform's assets first, then
+  ones last, and one line per gate, with `SLOW: <gate> took N s (budget M s)`
+  under a gate over its budget (`CHECK_BUDGETS` in the `Makefile`; it warns
+  and never fails). It builds the platform's assets first, then
   runs these lanes side by side: the platform's checks (compile with warnings as
   errors, Credo, Sobelow, the TypeScript typecheck and the unit tests) then its
   browser walks; the graph host's tests then the ExUnit suite; the

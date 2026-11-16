@@ -20,6 +20,12 @@ CHECK_FIRST := platform-assets
 CHECK_LANES := "platform-checks platform-walks" platform-suite check-required-fixes check-cli check-siwa-latest check-contracts
 CHECK_GATES := $(CHECK_FIRST) $(subst ",,$(CHECK_LANES))
 CHECK_LOGS := platform/_build/check
+# Each gate's budget in seconds, about 40% over its time in make check on a
+# 16-core Mac (Nov 2026), and 5 s for a gate that takes a second or two. A gate
+# over its budget gets a SLOW line under its own at the end; it never fails the
+# check.
+CHECK_BUDGETS := platform-assets:5 platform-checks:35 platform-walks:380 \
+  platform-suite:620 check-required-fixes:5 check-cli:5 check-siwa-latest:5 check-contracts:215
 check:
 	@mkdir -p $(CHECK_LOGS) && : > $(CHECK_LOGS)/results
 	@echo "Running $(words $(CHECK_GATES)) gates, $(CHECK_FIRST) first, then the rest side by side; each writes $(CHECK_LOGS)/<gate>.log."
@@ -45,6 +51,8 @@ check:
 	for gate in $(CHECK_GATES); do \
 	  set -- $$(grep "^$$gate " $(CHECK_LOGS)/results); \
 	  if [ "$$2" = 0 ]; then echo "$$gate: ok in $$3 s"; else echo "$$gate: FAILED after $$3 s"; fi; \
+	  budget=$$(printf '%s\n' $(CHECK_BUDGETS) | sed -n "s/^$$gate://p"); \
+	  if [ "$$3" -gt "$$budget" ]; then echo "SLOW: $$gate took $$3 s (budget $$budget s)"; fi; \
 	done; \
 	test -z "$$failed"
 # The check an ordinary change runs before it ships (scripts/check-change.sh).

@@ -354,7 +354,9 @@ host's tests, then the test suite with warnings as errors. `mix
 precommit.walks` runs the browser suite, then the phone walks, on the assets
 already built. `make check` builds the assets once, then runs
 `precommit.checks` and `precommit.walks` in one lane beside
-`precommit.suite` in another, each writing to `_build/check/<gate>.log`.
+`precommit.suite` in another, each writing to `_build/check/<gate>.log`, and
+prints a `SLOW` line for any gate over its budget (`CHECK_BUDGETS` in the
+root `Makefile`), which warns and never fails.
 `npm run test:browser` builds the assets and runs the browser suite alone.
 
 | Command | What it does |
