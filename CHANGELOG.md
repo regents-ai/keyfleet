@@ -10537,6 +10537,7 @@ removes or renames a field, route or code, or makes an input required.
   card's picture failed to draw, the flag that says a draw is under way was
   never let go, and no later card drew. The flag is now let go whatever
   happens; the failure is still reported.
+
 ## 2026-11-15: four records keep only the stages they declare
 
 - A project's stages (active, archived, deleted) and its four moves, and an ENS lookup's
