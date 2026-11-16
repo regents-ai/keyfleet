@@ -10703,6 +10703,16 @@ removes or renames a field, route or code, or makes an input required.
   buttons, wallet Keys and security policy walks in Chromium (21) passed. Nothing was
   retried or skipped. No migration.
 
+## 2026-11-16: the chain cursor's `rescan_from` column is dropped
+
+- The chain reader's bookmark table (`chain_cursors`) loses its `rescan_from` column and
+  the rule on it (migration `20261116071756_drop_chain_cursor_rescan_from`). The column
+  held the block a stopped fleet waited at; the reader stopped using it earlier today and
+  nothing read or wrote it since. Sean approved the drop as decision 28 a on 16 Nov.
+- No behaviour changes. Going back needs no database step: the release before this one
+  never selects the column. Running the migration down puts back an empty column and its
+  rule, not what the column held.
+
 ## 2026-11-16: missed events on every agent door, and the feed ends with its sign-in
 
 - `POST /api/v1/feed/missed` with an optional `{"cursor"}` (`readMissedEvents`, the
