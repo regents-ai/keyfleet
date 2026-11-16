@@ -10725,3 +10725,17 @@ removes or renames a field, route or code, or makes an input required.
   activity, as it always has.
 - Nothing changes for any other wallet, including the wallet made at sign-in: it sends
   exactly as before, with the code already in the step.
+- Deciding how to send has two seconds: the wallet saying whether it adds the code, then
+  the page getting ready to follow what it sends. Past that, or when either fails, the
+  press goes to the wallet as an ordinary transaction, exactly as before this change.
+- The code is on Base once. Such a wallet is handed the step's data without the code and
+  adds it itself, as Base's guide asks, so what lands is what the server built.
+- Released on Sean's decision 27 a (16 Nov) after a separate reviewer tried to break it:
+  the four faults it proved with failing tests (a silent wallet holding the press, the
+  code on the chain twice, a sent call the page could lose after a release, a stalled
+  load holding the press) are closed, each with a test.
+- Known gaps, both in the shared chain library: after a smart account's press the page
+  says the transaction is not the one it prepared and never says Done, because the
+  transaction is its bundler's; the same happens for a wallet that puts its own code
+  before the site's. The press itself works and money moves as built.
+- No migration. Agent contract and guide unchanged.
