@@ -78,10 +78,12 @@ test("a signed-in person leaves a message from the window and sees its receipt",
 
   await page.setViewportSize({width: 390, height: 844})
   await page.goto("/agents")
+  // The button opens the window only once the page's script listens, which it
+  // does by the time the page has joined its server, so it is pressed then.
+  await expect(page.locator(".phx-connected:has(#agents-message-person-form)").first()).toBeAttached()
   await opener(page).click()
 
   const form = window(page).locator("#agents-message-person-form")
-  await expect(page.locator(".phx-connected:has(#agents-message-person-form)").first()).toBeAttached()
   const body = form.getByRole("textbox", {name: "Message", exact: true})
   await body.fill("x")
   await body.fill("")

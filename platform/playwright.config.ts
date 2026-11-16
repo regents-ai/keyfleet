@@ -1,6 +1,9 @@
 import {defineConfig, devices} from "@playwright/test"
 
 const baseURL = `https://localhost:${process.env.PORT || "4502"}`
+// The server gets a database of its own, the partition's name with `_walk`
+// after it, made afresh for each run, so the ExUnit suite can run beside it.
+const env = `MIX_ENV=test MIX_TEST_PARTITION=${process.env.MIX_TEST_PARTITION ?? ""}_walk`
 
 export default defineConfig({
   testDir: "./test/browser",
@@ -48,7 +51,6 @@ export default defineConfig({
   forbidOnly: true,
   retries: 0,
   reporter: "line",
-  globalTeardown: "./test/browser/support/remove_browser_account.ts",
   // The server's certificate is one it made for itself. Every walk starts
   // with the fleet page's guided tours seen, so neither opens over what it
   // presses.
@@ -70,18 +72,19 @@ export default defineConfig({
       ],
     },
   },
-  // The database is created and brought up to date first, as the chain config
-  // does, then the four fleets are put in the catalog for the fleet pages. They
-  // are never deployed, so nothing is on sale. This runs without
+  // The database is dropped, made and brought up to date first, as the chain
+  // config does, then the four fleets are put in the catalog for the fleet
+  // pages. They are never deployed, so nothing is on sale. This runs without
   // KEYFLEET_BROWSER_TEST, which would open the port before the server is ready.
   webServer: {
     command: [
       "mkdir -p tmp/cert && rm -f tmp/walk-lines.jsonl",
       "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
-      "MIX_ENV=test mix ecto.create --quiet",
-      "MIX_ENV=test mix keyfleet.setup_local_auth",
-      "MIX_ENV=test mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()'",
-      "MIX_ENV=test KEYFLEET_BROWSER_TEST=1 mix phx.server",
+      `${env} mix ecto.drop --quiet`,
+      `${env} mix ecto.create --quiet`,
+      `${env} mix keyfleet.setup_local_auth`,
+      `${env} mix run -e 'Keyfleet.Fleets.bootstrap_catalog!()'`,
+      `${env} KEYFLEET_BROWSER_TEST=1 mix phx.server`,
     ].join(" && "),
     url: `${baseURL}/`,
     ignoreHTTPSErrors: true,
