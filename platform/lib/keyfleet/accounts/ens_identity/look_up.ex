@@ -39,7 +39,6 @@ defmodule Keyfleet.Accounts.EnsIdentity.LookUp do
           changeset
           |> Ash.Changeset.force_change_attribute(:ens_name, identity[:name])
           |> Ash.Changeset.force_change_attribute(:ens_avatar_url, identity[:avatar_url])
-          |> Ash.Changeset.force_change_attribute(:lookup_state, :done)
 
         {:cancel, reason} ->
           Ash.Changeset.add_error(changeset, CancelJob.exception(reason: reason))

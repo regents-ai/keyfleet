@@ -12,6 +12,11 @@ defmodule Keyfleet.Notebooks.SavedOutput do
   so a notebook's newest run page says how it went whoever reads it
   (`:newest_runs`); nil for any other copy.
 
+  So a copy is plain, succeeded or failed, and never succeeded with a failure
+  recorded: the database refuses that row, `:mark_succeeded` leaves a copy
+  with a failure as it is, and `:record_failure` one marked succeeded or with
+  a failure already.
+
   A hub keeps only a notebook's newest versions and recent runs, replaces a
   version's page when the same code runs again, and drops everything when a
   notebook is deleted. The copy is taken before the address is handed out
@@ -30,6 +35,12 @@ defmodule Keyfleet.Notebooks.SavedOutput do
   postgres do
     table "notebook_saved_outputs"
     repo(Keyfleet.Repo)
+
+    check_constraints do
+      check_constraint(:failure, "notebook_saved_outputs_succeeded_or_failed",
+        check: "NOT succeeded OR failure IS NULL"
+      )
+    end
   end
 
   actions do
@@ -49,16 +60,19 @@ defmodule Keyfleet.Notebooks.SavedOutput do
     end
 
     # A copy kept before copies recorded their run's outcome, of a run the
-    # hub names succeeded (`Keyfleet.Notebooks.MarkSucceeded`).
+    # hub names succeeded (`Keyfleet.Notebooks.MarkSucceeded`), unless it
+    # records how its run failed.
     update :mark_succeeded do
       accept []
+      change filter(expr(is_nil(failure)))
       change set_attribute(:succeeded, true)
     end
 
-    # How the run failed, on a copy that records none yet: one recorded stays.
+    # How the run failed, on a copy that records none yet and is not marked
+    # succeeded: one recorded stays.
     update :record_failure do
       accept [:failure]
-      change filter(expr(is_nil(failure)))
+      change filter(expr(is_nil(failure) and not succeeded))
     end
 
     read :at do

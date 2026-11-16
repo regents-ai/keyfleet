@@ -16,6 +16,12 @@ defmodule Keyfleet.Projects.Project do
   Projects stay with the Key's number when the Key changes hands. Only an
   active project takes new work.
 
+  A project starts active, or archived for `general`, and its moves are
+  declared in the `state_machine` block: an active project is archived
+  (`archived`), a shared one deleted (`unshared`), and an archived project is
+  taken over (`taken_over`) or deleted (`deleted`). A deleted project never
+  moves again, and the database refuses an archived project that no Key holds.
+
   Its repository in the code store is named when the project starts: the
   fleet's own name for `general`, which keeps the fleet's first repository,
   and `<fleet id>-<name>` for every other. Fleet ids hold no hyphen, so no two
@@ -46,7 +52,8 @@ defmodule Keyfleet.Projects.Project do
   use Ash.Resource,
     domain: Keyfleet.Projects,
     data_layer: AshPostgres.DataLayer,
-    authorizers: [Ash.Policy.Authorizer]
+    authorizers: [Ash.Policy.Authorizer],
+    extensions: [AshStateMachine]
 
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Validations.{FreshOwnership, KnownFleet}
@@ -84,6 +91,21 @@ defmodule Keyfleet.Projects.Project do
       check_constraint(:state, "projects_state",
         check: "state IN ('active', 'archived', 'deleted')"
       )
+
+      check_constraint(:state, "projects_archived_held",
+        check: "key IS NOT NULL OR state <> 'archived'"
+      )
+    end
+  end
+
+  state_machine do
+    initial_states([:active, :archived])
+
+    transitions do
+      transition(:archived, from: :active, to: :archived)
+      transition(:taken_over, from: :archived, to: :active)
+      transition(:deleted, from: :archived, to: :deleted)
+      transition(:unshared, from: :active, to: :deleted)
     end
   end
 
@@ -341,7 +363,7 @@ defmodule Keyfleet.Projects.Project do
       accept []
       require_atomic? false
       change filter(expr(state == :active and is_nil(key)))
-      change set_attribute(:state, :deleted)
+      change transition_state(:deleted)
       change Keyfleet.Projects.Changes.Forget
       change Keyfleet.Notebooks.Changes.ForgetScratchpads
     end
@@ -350,7 +372,7 @@ defmodule Keyfleet.Projects.Project do
       public? false
       accept []
       change filter(expr(state == :active))
-      change set_attribute(:state, :archived)
+      change transition_state(:archived)
     end
 
     update :taken_over do
@@ -359,7 +381,7 @@ defmodule Keyfleet.Projects.Project do
       argument :key, :integer, allow_nil?: false
       change filter(expr(state == :archived))
       change set_attribute(:key, arg(:key))
-      change set_attribute(:state, :active)
+      change transition_state(:active)
     end
 
     update :deleted do
@@ -368,7 +390,7 @@ defmodule Keyfleet.Projects.Project do
       argument :key, :integer, allow_nil?: false
       require_atomic? false
       change filter(expr(state == :archived and created_by_key == ^arg(:key)))
-      change set_attribute(:state, :deleted)
+      change transition_state(:deleted)
       change Keyfleet.Projects.Changes.Forget
     end
 

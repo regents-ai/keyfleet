@@ -68,6 +68,45 @@ defmodule Keyfleet.Notebooks.MarkSucceededTest do
     assert [%{source_id: @good, saved_at: 1}] = last_succeeded()
   end
 
+  # A copy is plain, succeeded or failed, never succeeded with a failure
+  # recorded: marking leaves a copy that records how its run failed as it
+  # is, recording a failure leaves one marked succeeded as it is, and neither
+  # is an error, saved or answered. The database refuses the row outright.
+  test "a copy is never marked succeeded and failed at once" do
+    stopped = %{"stage" => "export", "message" => "Stopped."}
+
+    for {run_id, n, succeeded} <- [{@good, 1, false}, {@gone, 3, true}] do
+      Notebooks.keep_saved_output!(@fleet, @notebook, run_id, n, "<p>#{run_id}</p>", succeeded,
+        actor: %System{}
+      )
+    end
+
+    assert :ok = Notebooks.record_run_failure(@fleet, @good, stopped)
+    errors = saved_errors()
+
+    # The hub names @good succeeded, though its copy records how it failed.
+    assert :ok = perform_job(MarkSucceeded, %{fleet_id: @fleet})
+    assert :ok = Notebooks.record_run_failure(@fleet, @gone, stopped)
+
+    assert outcomes([{@good, 1}, {@gone, 3}]) == [
+             %{
+               source_id: @good,
+               succeeded: false,
+               failure: %{stage: "export", message: "Stopped."}
+             },
+             %{source_id: @gone, succeeded: true, failure: nil}
+           ]
+
+    assert saved_errors() == errors
+
+    assert_raise Postgrex.Error, ~r/notebook_saved_outputs_succeeded_or_failed/, fn ->
+      Keyfleet.Repo.query!(
+        "UPDATE keyfleet_app.notebook_saved_outputs SET succeeded = true WHERE source_id = $1",
+        [@good]
+      )
+    end
+  end
+
   defp copies do
     for {run_id, n} <- Enum.with_index([@good, @failed, @gone], 1) do
       @fleet
@@ -75,6 +114,17 @@ defmodule Keyfleet.Notebooks.MarkSucceededTest do
       |> Map.take([:id, :notebook_id, :source_id, :saved_at, :page, :succeeded])
     end
   end
+
+  defp outcomes(kept) do
+    for {run_id, n} <- kept do
+      @fleet
+      |> Notebooks.saved_output!(@notebook, run_id, n, actor: %System{})
+      |> Map.take([:source_id, :succeeded, :failure])
+    end
+  end
+
+  # Saved errors are ErrorTracker's own table, which no Ash resource reads.
+  defp saved_errors, do: Keyfleet.Repo.aggregate(ErrorTracker.Occurrence, :count)
 
   defp last_succeeded,
     do: Notebooks.last_succeeded_outputs!(@fleet, [@notebook], actor: %System{})

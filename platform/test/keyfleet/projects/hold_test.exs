@@ -4,6 +4,8 @@ defmodule Keyfleet.Projects.HoldTest do
 
   require Ash.Query
 
+  alias Ash.Error.Changes.StaleRecord
+  alias AshStateMachine.Errors.NoMatchingTransition
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Code
@@ -157,6 +159,83 @@ defmodule Keyfleet.Projects.HoldTest do
 
     assert %{state: :archived, key: 329} =
              Projects.project!("regents_club", "general", actor: @system)
+  end
+
+  # A project moves only from the stage each move names: an active one is
+  # archived, an archived one taken over or deleted, a deleted one never
+  # moves. Any other move is refused and the project stays as it was.
+  test "a project moves only from the stage each move names, and a refused move changes nothing" do
+    Projects.start_project!(@fleet, 20, "lab", "Lab", actor: owner(20))
+    active = stored("lab")
+
+    for {action, arguments} <- [taken_over: %{key: 3}, deleted: %{key: 20}] do
+      assert {:error, %Ash.Error.Invalid{errors: [%NoMatchingTransition{}]}} =
+               move(active, action, arguments)
+    end
+
+    assert stored("lab") == active
+    Projects.archive_project!(@fleet, 20, actor: owner(20))
+    archived = stored("lab")
+
+    for {action, arguments} <- [archived: %{}, unshared: %{}] do
+      assert {:error, %Ash.Error.Invalid{errors: [%NoMatchingTransition{}]}} =
+               move(archived, action, arguments)
+    end
+
+    assert stored("lab") == archived
+    Projects.delete_project!(@fleet, 20, "lab", actor: owner(20))
+    deleted = stored("lab")
+
+    for {action, arguments} <- [
+          archived: %{},
+          taken_over: %{key: 20},
+          deleted: %{key: 20},
+          unshared: %{}
+        ] do
+      assert {:error, %Ash.Error.Invalid{errors: [%NoMatchingTransition{}]}} =
+               move(deleted, action, arguments)
+    end
+
+    assert stored("lab") == deleted
+  end
+
+  # Of two steps on one project, the second was checked against the project
+  # as it read it, so it finds the project changed and is refused.
+  test "a move checked against a project that has since moved is refused" do
+    Projects.start_project!(@fleet, 20, "lab", "Lab", actor: owner(20))
+    read_active = stored("lab")
+    Projects.archive_project!(@fleet, 20, actor: owner(20))
+
+    assert {:error, %Ash.Error.Invalid{errors: [%StaleRecord{}]}} =
+             move(read_active, :archived)
+
+    read_archived = stored("lab")
+    Projects.take_over_project!(@fleet, 3, "lab", actor: owner(3))
+
+    for {action, arguments} <- [taken_over: %{key: 20}, deleted: %{key: 20}] do
+      assert {:error, %Ash.Error.Invalid{errors: [%StaleRecord{}]}} =
+               move(read_archived, action, arguments)
+    end
+
+    assert %{state: :active, key: 3} = stored("lab")
+  end
+
+  test "the database refuses an archived project that no Key holds" do
+    assert_raise Postgrex.Error, ~r/projects_archived_held/, fn ->
+      Keyfleet.Repo.query!(
+        "UPDATE keyfleet_app.projects SET key = NULL WHERE fleet_id = $1 AND name = 'general'",
+        [@fleet]
+      )
+    end
+  end
+
+  defp move(project, action, arguments \\ %{}),
+    do: project |> Ash.Changeset.for_update(action, arguments, actor: @system) |> Ash.update()
+
+  defp stored(name) do
+    Keyfleet.Projects.Project
+    |> Ash.Query.filter(fleet_id == ^@fleet and name == ^name)
+    |> Ash.read_one!(actor: @system)
   end
 
   defp owner(key), do: %Actors.Human{human_account_id: key, wallet_addresses: [wallet(key)]}
