@@ -1350,7 +1350,8 @@ change never runs it twice either way.
 - **Route:** `GET /api/v1/agent/fleets/{fleet_id}/doctor` → `readFleetDoctor`
 - **Inputs:** `<fleet>`.
 - **Answer:** `{"fleet_id", "fleet_name", "agent", "pairing", "profile",
-  "ownership_fresh", "key", "keys", "may", "missing", "versions", "build"}`. `agent` is
+  "ownership_fresh", "key", "keys", "may", "missing", "setup", "gas", "versions",
+  "build"}`. `agent` is
   `{"wallet_address", "chain_id", "verification_method", "sign_in_expires_at",
   "registry_listing", "human_backed"}`. `pairing` is `paired` or `person_not_here`.
   `profile` is `{"id", "name", "declared_harness"}` or `null`. `key` is the Key the agent
@@ -1359,8 +1360,12 @@ change never runs it twice either way.
   `general_room`, `people_room`, `key_walls`, `workspace`, `code` and `polls`. `missing`
   lists each thing between the agent and the fleet's work as the refusal it would meet,
   `{"code", "message", "hint"}`: `person_not_here`, `profile_not_found`,
-  `ownership_refreshing`, `not_a_member` or `edits_restricted`. `versions` is
-  `{"api_contract", "agent_guide"}`, as `/capabilities.json` answers them.
+  `ownership_refreshing`, `not_a_member` or `edits_restricted`. `setup` is
+  `{"paired", "gas", "schedule", "marked", "repeated", "next_step"}`: how far presence
+  and scheduled check-ins have come, as Keyfleet has seen them, with what to do next or
+  `null`; `may`, not `setup`, says what the agent can do now. `gas` is as a sync's
+  `yours.gas`. `versions` is `{"api_contract", "agent_guide"}`, as `/capabilities.json`
+  answers them.
 - **Refusals:** 503 `profile_unavailable`. And those every signed command shares.
 
 Server:

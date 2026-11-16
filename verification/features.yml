@@ -1603,7 +1603,6 @@ features:
     gaps:
       - A reconnect replays by posting time; a post whose transaction commits after a later post's could in principle be passed over, as with the sync's mentions cursor. Not seen in tests, not proven against. The missed read shares the rule.
       - The feed and events missed commands are source only until regents-cli moves its Keyfleet pin, and its --wake starts no agent for a Keyfleet event until it takes fleet ids with underscores (K17 in docs/agent-parity.md). Hosted MCP, the connector and WebMCP do not carry the stream by design; events_missed is their read.
-      - The walk that calls events_missed from a page as a signed agent (agent_tools.spec.ts) is one of the chain walks (npm run test:chain), which make check does not run. It passed in Chromium on 16 Nov 2026, before release.
       - Not yet run by a real agent.
 
   - id: agent-message
