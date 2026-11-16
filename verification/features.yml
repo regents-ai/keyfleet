@@ -1812,3 +1812,37 @@ features:
       - The walk's page is written by hand. A page marimo exports draws its cells with a frontend it loads from cdn.jsdelivr.net, and the walk reads nothing from outside the machine, so a real marimo page drawing in the sandbox is not walked.
       - The desktop walk runs in npm run test:chain, which make check does not run; the iPhone 15 and Pixel 7 walks run in make check's devices lane.
       - The walk opens the page's address directly, not by pressing a result link on the workspace; WebKit is not run on the Mac.
+
+  - id: wallet-network-switch
+    what: >-
+      A person presses a wallet button while their wallet is on another
+      network, and their wallet asks to switch to Base through Privy's own
+      switch, which also adds Base to a wallet app that lacks it. Every press
+      asks again; nothing is remembered or held back. Privy connects every
+      wallet on Base and offers no other network. A declined switch leaves
+      "Your wallet declined the switch to Base. Nothing was sent." Any other
+      failed switch, or a wallet still elsewhere when the step is sent, leaves
+      "Your wallet isn't on Base. Change the network to Base in your wallet
+      app, then press again. Nothing was sent."
+    who: person
+    level: protected
+    paths:
+      - platform/assets/js/wallet_actions/send_step.ts
+      - platform/assets/js/wallet_actions/connected_wallet.ts
+      - platform/assets/js/privy_bridge.tsx
+      - platform/lib/keyfleet/wallet_steps.ex
+      - platform/lib/keyfleet_web/components/layouts/root.html.heex
+      - platform/lib/keyfleet_web/wallet/onchain_steps.ex
+    entry:
+      - live: KeyfleetWeb.ShellLive
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/assets/test/send_step.test.ts
+      - platform/assets/test/onchain_steps.test.ts
+      - platform/assets/test/privy_bridge.test.ts
+      - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/browser/wallet_buttons.spec.ts
+    gaps:
+      - A real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release; the walk's stand-in wallet starts on Base, so no walk presses a button from another network.
+      - The anvil lab's chain (31337) is not in Privy's list of networks, so Privy does not start in the lab and the lab cannot sign in.
+      - WebKit is not run on the Mac.

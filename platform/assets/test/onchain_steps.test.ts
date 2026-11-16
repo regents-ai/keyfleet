@@ -5,6 +5,7 @@ import {
   forgetWalletDisconnected,
   replaceActiveEthereumWallet,
   type EthereumProvider,
+  type SwitchChain,
 } from "../js/wallet_actions/connected_wallet"
 
 const signer = "0x1111111111111111111111111111111111111111"
@@ -16,37 +17,33 @@ const review: Review = {
   id: "review-1",
   component_id: "buy-key-order",
   signer,
-  chain: {chain_id: 8453, name: "Base", rpc_url: "https://mainnet.base.org"},
+  chain: {chain_id: 8453},
   steps: [{kind: "transaction", step: "buy", to: fleet, data: "0x1234", value: "0x0"}],
   inputs: {},
 }
 
 type Wallet = {
   provider: EthereumProvider
+  switchChain: SwitchChain
   sent: unknown[]
 }
 
-// A stand-in wallet: on `chainId`, holding `account`, answering each send with
-// `answer` (a hash, or an error it throws).
+// A stand-in wallet: on `chainId`, holding `account`, moved by its own switch,
+// answering each send with `answer` (a hash, or an error it throws).
 function wallet({
-  chainId = "0x2105",
+  chainId = 8453,
   account = signer,
-  switches = true,
   answer = () => hash as unknown,
-}: {chainId?: string; account?: string; switches?: boolean; answer?: () => unknown} = {}): Wallet {
+}: {chainId?: number; account?: string; answer?: () => unknown} = {}): Wallet {
   const sent: unknown[] = []
   let current = chainId
   const provider: EthereumProvider = {
     request: vi.fn(async ({method, params}: {method: string; params?: unknown}) => {
       switch (method) {
         case "eth_chainId":
-          return current
+          return `0x${current.toString(16)}`
         case "eth_accounts":
           return [account]
-        case "wallet_switchEthereumChain":
-          if (!switches) throw Object.assign(new Error("User rejected the switch"), {code: 4001})
-          current = (params as [{chainId: string}])[0].chainId
-          return null
         case "eth_sendTransaction":
           sent.push(params)
           return answer()
@@ -55,7 +52,10 @@ function wallet({
       }
     }) as EthereumProvider["request"],
   }
-  return {provider, sent}
+  const switchChain: SwitchChain = async wanted => {
+    current = wanted
+  }
+  return {provider, switchChain, sent}
 }
 
 function memoryStorage() {
@@ -83,7 +83,7 @@ function pushes() {
 describe("a press sends the server's step from the wallet it was built for", () => {
   it("two presses in a row both reach eth_sendTransaction", async () => {
     const active = wallet()
-    replaceActiveEthereumWallet({address: signer, provider: active.provider})
+    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     const answers = await Promise.all([press(review, "buy", push), press(review, "buy", push)])
@@ -98,8 +98,8 @@ describe("a press sends the server's step from the wallet it was built for", () 
   })
 
   it("switches the wallet to the step's chain before sending", async () => {
-    const active = wallet({chainId: "0x1"})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider})
+    const active = wallet({chainId: 1})
+    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     await press(review, "buy", push)
@@ -110,27 +110,16 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
   it("reports a decline in the wallet as wallet_declined", async () => {
     const active = wallet({answer: () => { throw Object.assign(new Error("User rejected"), {code: 4001}) }})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider})
+    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
 
-  it("sends nothing on the wrong chain when the wallet won't switch", async () => {
-    const active = wallet({chainId: "0x1", switches: false})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider})
-    const {pushed, push} = pushes()
-
-    await press(review, "buy", push)
-
-    expect(active.sent).toHaveLength(0)
-    expect(pushed).toEqual([["step_failed", {step: "buy", reason: "network_mismatch"}]])
-  })
-
   it("sends nothing from a wallet the steps weren't built for", async () => {
     const active = wallet({account: other})
-    replaceActiveEthereumWallet({address: other, provider: active.provider})
+    replaceActiveEthereumWallet({address: other, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     await press(review, "buy", push)
@@ -142,7 +131,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
   it("sends when the wallet names the signer in other letter case", async () => {
     const checksummed = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01"
     const active = wallet({account: checksummed})
-    replaceActiveEthereumWallet({address: checksummed, provider: active.provider})
+    replaceActiveEthereumWallet({address: checksummed, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     await press({...review, signer: checksummed.toLowerCase() as Review["signer"]}, "buy", push)
@@ -153,7 +142,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
   it("sends nothing when the wallet answers for another account", async () => {
     const active = wallet({account: other})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider})
+    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     await press(review, "buy", push)
@@ -172,7 +161,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
   it("sends nothing for a step the server didn't build, or with no steps at all", async () => {
     const active = wallet()
-    replaceActiveEthereumWallet({address: signer, provider: active.provider})
+    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
     await press(review, "approve", push)

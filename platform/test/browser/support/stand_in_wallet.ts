@@ -15,12 +15,13 @@ declare global {
 
 /**
  * Makes a stand-in wallet on Base, holding `address`, Privy's active wallet
- * in the open page, as Privy does once a person picks a wallet. It sends
- * nothing anywhere: each transaction it is asked to send is kept, answered
- * with a new random hash, or declined as a person declining in their wallet
- * app would. The page's scripts are ES modules, so the one that keeps the
- * active wallet is found among those the page's script imports, and is the
- * same module the page's buttons read.
+ * in the open page, as Privy does once a person picks a wallet. Its switch
+ * stands in for Privy's and moves it to any network asked. It sends nothing
+ * anywhere: each transaction it is asked to send is kept, answered with a new
+ * random hash, or declined as a person declining in their wallet app would.
+ * The page's scripts are ES modules, so the one that keeps the active wallet
+ * is found among those the page's script imports, and is the same module the
+ * page's buttons read.
  */
 export async function useStandInWallet(page: Page, address: string, answer: Answer = "send") {
   await page.evaluate(
@@ -37,11 +38,15 @@ export async function useStandInWallet(page: Page, address: string, answer: Answ
         standIn.answer = answer
         window.standInWallet = standIn
 
+        let chainId = 8453
+        const switchChain = async (wanted: number) => {
+          chainId = wanted
+        }
         const provider = {
           async request({method, params}: {method: string; params?: unknown[]}) {
             switch (method) {
               case "eth_chainId":
-                return "0x2105"
+                return `0x${chainId.toString(16)}`
               case "eth_accounts":
                 return [address]
               case "eth_sendTransaction": {
@@ -62,7 +67,7 @@ export async function useStandInWallet(page: Page, address: string, answer: Answ
           },
         }
 
-        module.replaceActiveEthereumWallet({address, provider})
+        module.replaceActiveEthereumWallet({address, provider, switchChain})
         window.dispatchEvent(new CustomEvent("ash:wallet-state"))
         return
       }

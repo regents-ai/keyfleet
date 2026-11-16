@@ -10653,3 +10653,39 @@ removes or renames a field, route or code, or makes an input required.
   and agent file tests (39), the canvas layout unit tests (10), and the new walk once in
   desktop Chromium and once at each phone (3), all passed. Nothing was retried, skipped
   or given longer to wait.
+
+## 2026-11-16: a wallet on another network is asked to switch to Base
+
+- Pressing a wallet button while the wallet is on another network now asks the wallet to
+  switch to Base through Privy's own switch, which also adds Base to a wallet app that
+  doesn't have it. Before, a wallet on a phone showed no switch prompt and the page only
+  said the wallet was on a different network. Every press asks again; nothing is
+  remembered, held back or skipped. The checks before a send stay as they were: the
+  wallet's account, that it is still the same wallet, its network read last of all, and
+  the step sent with Base's chain id.
+- Privy now connects every wallet on Base and offers no other network. Each page names
+  the network in a `wallet-chain-id` tag beside the Privy app tag, filled from the one
+  chain in `:wallet_chains` (`Keyfleet.WalletSteps.chain_id/0`), and the sign-in script
+  finds it in Privy's own list of networks. Privy still loads only when a page needs it,
+  and the pages' security policy needed no change.
+- A switch the person declines leaves "Your wallet declined the switch to Base. Nothing
+  was sent." Any other failed switch, or a wallet still elsewhere when the step is sent,
+  leaves "Your wallet isn't on Base. Change the network to Base in your wallet app, then
+  press again. Nothing was sent." The new reason, `switch_declined`, is counted in the
+  wallet numbers and the visit log, and an agent using the page's tools is told it too.
+- The site's own switch and add-network requests to the wallet are gone. The page now
+  reads only the chain id from a review, no longer the chain's name or public node. The
+  server keeps both: the name for the page's words, the public node because the chain
+  package's review requires one, though nothing reads it now.
+- The shared chain package alone moves to 14a0691, which accepts the new reason; every
+  other shared package stays where it was.
+- The browser walk's stand-in wallet switches to whatever network it is asked.
+- The anvil lab's chain (31337) is not in Privy's list of networks, so Privy does not start
+  in the lab and the lab cannot sign in. That waits on a decision; `docs/anvil-lab.md` is
+  unchanged.
+- Tests: three new send step tests (a switch only off Base, asked again on every press,
+  a declined switch told apart from a failed one), Privy's switch carried beside each
+  wallet, and a fleet page test that a declined and a failed switch each leave their note.
+  The unit tests (475 in 37 files), the fleet page, proposals, visit log, wallet steps and
+  chain client tests (200), and the wallet buttons, wallet Keys and security policy walks
+  in Chromium (19) passed. Nothing was retried or skipped. No migration.

@@ -35,6 +35,7 @@
     <meta :if={vitals_route} name="vitals-route" content={vitals_route} />
     <meta :if={assigns[:session_refused]} name="session-refused" content="true" />
     <meta name="privy-app-id" content={Application.get_env(:keyfleet, :privy, [])[:app_id]} />
+    <meta name="wallet-chain-id" content={Keyfleet.WalletSteps.chain_id()} />
     <meta
       name="privy-bridge-src"
       content={KeyfleetWeb.Endpoint.static_path("/assets/js/privy_bridge.js")}
