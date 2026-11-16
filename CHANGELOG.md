@@ -10561,3 +10561,26 @@ removes or renames a field, route or code, or makes an input required.
   never recorded failed, nor a failed one made; a kept page with a failure is never
   marked succeeded, nor a succeeded one given a failure; and each database rule refuses
   a row written past the record.
+
+## 2026-11-16: the full check runs its gates side by side
+
+- `make check` builds the pages' scripts and styles once, then runs its gates side by
+  side instead of one after another: the platform's checks then its two browser walks in
+  one lane, the graph host's tests then the Elixir suite in another, and the
+  required-fixes, command, sign-in version and contract checks each in their own. Each
+  gate writes its output to `platform/_build/check/<gate>.log`; at the end every log is
+  printed, the failed ones last, then one line per gate. A failing gate still fails the
+  whole check.
+- The browser walk's server has a database of its own, as the phone walks' server
+  already had, so the Elixir suite runs beside both. Nothing is rebuilt while the lanes
+  run.
+- Each gate has a budget about 40% over its time in the check (`CHECK_BUDGETS` in the
+  `Makefile`); a gate over it gets a `SLOW` line, which warns and never fails.
+- `mix precommit` is still the whole platform gate, run in turn, made of the same three
+  parts the check runs side by side.
+- Every test still runs, with the same counts: 1517 in the Elixir suite (21 properties,
+  1496 tests) with 19 left for outside tools, 472 unit tests, 127 in the browser walk,
+  70 in the phone walks, 333 in the graph host and 547 contract tests with 6 skipped.
+  Nothing was retried, skipped, removed or given longer to wait.
+- On a 16-core Mac, the whole check took 647 s before and 444 s after, the second while
+  other sessions' walks held the machine at about twice the load of the first.
