@@ -6,9 +6,6 @@ defmodule KeyfleetWeb.ChainNumbersTest do
 
   import ExUnit.CaptureLog
 
-  alias Ecto.Adapters.SQL.Sandbox
-  alias Keyfleet.ChainHelpers
-  alias Keyfleet.Fleets
   alias KeyfleetWeb.Telemetry
 
   test "a reader's pass sets its lag in blocks and counts the pass" do
@@ -22,19 +19,6 @@ defmodule KeyfleetWeb.ChainNumbersTest do
     labels = [~s(indexer="test_reader"), ~s(chain_id="84532")]
     assert value("health_indexer_lag_blocks", labels) == 3
     assert value("health_indexer_passes_total", labels) == 2
-  end
-
-  test "a fleet stopped at a disagreement is counted until it is cleared" do
-    :ok = Sandbox.checkout(Keyfleet.Repo)
-    Fleets.bootstrap_catalog!()
-
-    Telemetry.count_fleets_stopped()
-    before = value("keyfleet_fleets_stopped", [])
-
-    ChainHelpers.seed_cursor!("fleet_tech_accelerant", rescan_from: 900)
-    Telemetry.count_fleets_stopped()
-
-    assert value("keyfleet_fleets_stopped", []) == before + 1
   end
 
   test "a site's query of its own sends sets each flow's oldest age, 0 when none waits" do

@@ -125,15 +125,13 @@ defmodule Keyfleet.Proposals.Proposal do
       ]
 
       upsert? true
-      upsert_identity :unique_chain_event
+      upsert_identity :unique_number
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
 
       change {Keyfleet.Chain.Changes.RecordOnce,
-              identity: [:transaction_hash, :log_index],
-              number: :proposal_seq,
-              block: :block_number}
+              identity: [:fleet_id, :number], number: :proposal_seq}
     end
 
     # The fleet's highest proposal number recorded so far.
@@ -195,17 +193,20 @@ defmodule Keyfleet.Proposals.Proposal do
       end
     end
 
-    # What was recorded from a stretch of the fleet's blocks, so a second
-    # reading of the same stretch can be checked against it.
+    # What was recorded from a stretch of the fleet's blocks, and from the
+    # `transactions` named wherever it was recorded, so a reading of the
+    # stretch can be checked against it.
     read :recorded_in_blocks do
       public? false
       argument :fleet_id, :string, allow_nil?: false
       argument :from_block, :integer, allow_nil?: false
       argument :to_block, :integer, allow_nil?: false
+      argument :transactions, {:array, :string}, default: []
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and block_number >= ^arg(:from_block) and
-                 block_number <= ^arg(:to_block)
+               fleet_id == ^arg(:fleet_id) and
+                 ((block_number >= ^arg(:from_block) and block_number <= ^arg(:to_block)) or
+                    transaction_hash in ^arg(:transactions))
              )
     end
   end

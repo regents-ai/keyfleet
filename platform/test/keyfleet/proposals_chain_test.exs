@@ -312,29 +312,6 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Chain.get_cursor!(@fleet).proposal_seq == 5
     end
 
-    # A money log read again with other amounts is the chain disagreeing with
-    # the record; gone from a block whose hash changed, it is the same.
-    test "a money record the chain no longer agrees with stops the fleet at its block", %{
-      fleet: fleet
-    } do
-      paid = paid("a", "c", @deployed + 2, 0, 10)
-      split = split_allocated("a", @deployed + 4, 0, [100, 1, 100])
-      StubClient.put_chain(head(@deployed + 10), [paid, split])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      for {logs, opts, block} <- [
-            {[paid("a", "c", @deployed + 2, 0, 9), split], [], @deployed + 2},
-            {[paid, split_allocated("d", @deployed + 4, 0, [100, 1, 100])], [], @deployed + 4},
-            {[paid], [block_hashes: %{(@deployed + 4) => @new_hash}], @deployed + 4}
-          ] do
-        StubClient.put_chain(head(@deployed + 12), logs, opts)
-        capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end)
-        Chain.clear_divergence!(@fleet)
-      end
-
-      assert length(Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 12)) == 2
-    end
-
     # One stretch that cannot be read whole moves nothing, not even the
     # ownership read beside it.
     test "a stretch that cannot be read whole records nothing and holds the cursor", %{
@@ -524,35 +501,6 @@ defmodule Keyfleet.ProposalsChainTest do
       refute_received {:keys_present, _fleet, _token_ids}
     end
 
-    # A piece recorded before the pass stopped the fleet stays recorded, so the
-    # hint still goes out for it.
-    test "a pass that records something and then stops the fleet still says so", %{
-      fleet: fleet
-    } do
-      StubClient.put_chain(head(@deployed + 10), history())
-      assert Scanner.step(fleet, StubClient) == :ok
-      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Proposals.topic(@fleet))
-
-      # Four new logs where the node sends two at most: the first pieces hold
-      # proposal 3 and its vote, the last a second execution of proposal 1.
-      StubClient.put_chain(
-        head(@deployed + 14),
-        history() ++
-          List.flatten([
-            decision(3, @deployed + 11),
-            vote(3, "a", :yes, [1], @deployed + 12, 0),
-            executed(1, "b", @deployed + 13, 0)
-          ]),
-        max_logs: 2
-      )
-
-      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 13} end)
-      assert Proposals.highest_number!(@fleet) == 3
-      assert %{next_block: next_block, rescan_from: stopped_at} = Chain.get_cursor!(@fleet)
-      assert {next_block, stopped_at} == {@deployed + 13, @deployed + 13}
-      assert_received {:proposals_changed, @fleet}
-    end
-
     # A provider refuses an answer larger than it sends at once. The stretch is
     # asked for in halves until each half is answered, and is recorded in
     # order, on the second reading too. Each answered piece is recorded, with
@@ -649,126 +597,58 @@ defmodule Keyfleet.ProposalsChainTest do
     end
   end
 
-  describe "when the chain disagrees" do
-    # A second reading that disagrees with a record stops the fleet at that
-    # block instead of rewriting it, and a stopped fleet is left alone.
-    test "a conflicting proposal, renewal or vote stops the fleet at its block and writes nothing",
-         %{fleet: fleet} do
-      StubClient.put_chain(head(@deployed + 10), history())
-      assert Scanner.step(fleet, StubClient) == :ok
-      recorded = recorded()
-
-      for {logs, block} <- [
-            {conflicting(history(), 1, &with_word(&1, 1, <<9::256>>)), @deployed + 1},
-            {conflicting(history(), 0, &with_word(&1, 0, <<1::256>>)), @deployed + 1},
-            {conflicting(
-               history(),
-               4,
-               &%{&1 | "topics" => List.replace_at(&1["topics"], 2, address_word("e"))}
-             ), @deployed + 4},
-            {conflicting(
-               history(),
-               4,
-               &%{&1 | "topics" => List.replace_at(&1["topics"], 1, hex(<<2::256>>))}
-             ), @deployed + 4},
-            {conflicting(history(), 4, &%{&1 | "blockHash" => @new_hash}), @deployed + 4},
-            {history() ++ decision(2, @deployed + 6), @deployed + 6},
-            {history() ++ [executed(1, "b", @deployed + 7, 0)], @deployed + 7}
-          ] do
-        StubClient.put_chain(head(@deployed + 12), logs)
-
-        assert capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end) =~
-                 "Fleet #{@fleet} stopped: the chain disagrees with the record at block #{block}"
-
-        assert recorded() == recorded
-        assert %{rescan_from: ^block, proposal_seq: 4} = Chain.get_cursor!(@fleet)
-
-        assert writes_during(fn ->
-                 assert Scanner.step(fleet, StubClient) == {:stopped, block}
-               end) == []
-
-        Chain.clear_divergence!(@fleet)
-      end
-    end
-
-    # A recorded event gone from a block whose hash changed is the chain's
-    # history changing; gone from a block whose hash matches, it is the node
-    # answering inconsistently, and the pass is retried.
-    test "a recorded event missing from its block stops the fleet only if the hash changed", %{
-      fleet: fleet
-    } do
-      StubClient.put_chain(head(@deployed + 10), history())
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      for {index, block} <- [{1, @deployed + 1}, {4, @deployed + 4}, {5, @deployed + 5}] do
-        logs = List.delete_at(history(), index)
-        StubClient.put_chain(head(@deployed + 12), logs)
-
-        assert Scanner.step(fleet, StubClient) == {:error, {:log_missing_from_block, block}}
-        assert %{rescan_from: nil, next_block: next_block} = Chain.get_cursor!(@fleet)
-        assert next_block == @deployed + 11
-
-        StubClient.put_chain(head(@deployed + 12), logs, block_hashes: %{block => @new_hash})
-        capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end)
-        Chain.clear_divergence!(@fleet)
-      end
-    end
-  end
-
   describe "when the chain's history changes" do
-    # A vote moved to another place in a block whose hash changed is found
-    # missing from its old place before anything is written, so it is never
-    # counted twice.
-    test "a vote moved within a changed block stops the fleet before it is recorded again", %{
-      fleet: fleet
-    } do
-      StubClient.put_chain(head(@deployed + 10), history())
+    # Every kind of record, read again as it was saved, is kept without a word.
+    test "records read again as saved are kept without a warning", %{fleet: fleet} do
+      logs = history() ++ every_other_kind()
+      StubClient.put_chain(head(@deployed + 10), logs)
       assert Scanner.step(fleet, StubClient) == :ok
-      recorded = recorded()
+      saved = {recorded(), money()}
 
-      moved =
-        conflicting(history(), 4, &%{&1 | "blockHash" => @new_hash, "logIndex" => quantity(1)})
+      StubClient.put_chain(head(@deployed + 400), logs)
+      log = capture_log(fn -> assert Scanner.step(fleet, StubClient) == :ok end)
 
-      StubClient.put_chain(head(@deployed + 12), moved,
-        block_hashes: %{(@deployed + 4) => @new_hash}
-      )
-
-      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 4} end)
-      assert recorded() == recorded
+      refute log =~ "no longer matches"
+      assert {recorded(), money()} == saved
     end
 
-    # Read in pieces, the second reading checks each piece before recording
-    # anything new in it. A vote first seen in an early piece is recorded; the
-    # execution moved in a later piece stops the fleet there and is not
-    # recorded again.
-    test "each piece of the second reading is checked before it is recorded", %{fleet: fleet} do
-      StubClient.put_chain(head(@deployed + 10), history())
-      assert Scanner.step(fleet, StubClient) == :ok
-      recorded = recorded()
+    # A saved proposal, renewal, vote or payment the chain now has otherwise,
+    # or no longer has, keeps its records, and nothing more of its transaction
+    # is saved. It is named once, with its contract, by the pass that reads its
+    # block for the last time. Reading goes on: a cancellation of another
+    # transaction later in the stretch is recorded.
+    for change <- [:proposal, :renewal, :voter, :block_hash, :payment, :gone] do
+      test "a saved #{change} changed keeps its records, is named once and reading goes on", %{
+        fleet: fleet
+      } do
+        logs = history() ++ [paid("a", "c", @deployed + 6, 0, 10)]
+        StubClient.put_chain(head(@deployed + 10), logs)
+        assert Scanner.step(fleet, StubClient) == :ok
+        {records, money} = {recorded(), money()}
 
-      late_vote = vote(1, "b", :no, [2], @deployed + 3, 0)
+        {block, contract, changed} = change(unquote(change), logs)
+        named = String.downcase(transaction(block))
 
-      moved =
-        conflicting(history(), 5, &%{&1 | "blockHash" => @new_hash, "logIndex" => quantity(1)})
+        warnings =
+          for head <- [@deployed + 12, @deployed + 400, @deployed + 401] do
+            StubClient.put_chain(head(head), changed ++ [cancelled(2, "e", @deployed + 8, 0)])
+            log = capture_log(fn -> assert Scanner.step(fleet, StubClient) == :ok end)
+            assert Chain.get_cursor!(@fleet).next_block == head + 1
+            {length(String.split(log, named)) - 1, log =~ contract}
+          end
 
-      StubClient.put_chain(head(@deployed + 10), List.insert_at(moved, 4, late_vote),
-        max_logs: 2,
-        block_hashes: %{(@deployed + 5) => @new_hash}
-      )
-
-      capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 5} end)
-
-      assert [%{block_number: block, log_index: 0, record_seq: 5, choice: :no}] =
-               recorded() -- recorded
-
-      assert block == @deployed + 3
+        assert warnings == [{0, false}, {1, true}, {0, false}]
+        assert [%{block_number: cancelled_at}] = recorded() -- records
+        assert cancelled_at == @deployed + 8
+        assert money() == money
+      end
     end
   end
 
   describe "passes at the same time" do
     # Each pass runs on a connection of its own and commits; the records are
-    # removed when the test ends, as docs/chain-reader.md corrects a record. A
-    # pass that finds the cursor moved on by another ends there, quietly.
+    # removed when the test ends. A pass that finds the cursor moved on by
+    # another ends there, quietly.
     @tag :independent_connections
     test "record each event once, numbered in chain order without gaps", %{fleet: fleet} do
       logs =
@@ -794,130 +674,6 @@ defmodule Keyfleet.ProposalsChainTest do
   end
 
   describe "when the cursor moves during a pass" do
-    # The runbook's correction, made while a pass waits between two pieces of
-    # its forward reading: the pass writes nothing more and leaves the
-    # operator's cursor, and the next pass reads again from the fork.
-    @tag :independent_connections
-    test "a pass leaves a correction made during it", %{fleet: fleet} do
-      read_history(fleet)
-
-      log =
-        with_info_log(fn ->
-          assert interrupted_pass(fleet, &past_first_piece?/0, fn -> correct_from(4) end) ==
-                   :moved
-        end)
-
-      assert log =~ "cursor moved underneath a pass"
-      assert %{next_block: next_block, rescan_from: nil} = Chain.get_cursor!(@fleet)
-      assert next_block == @deployed + 4
-      assert recorded_blocks() == [1, 2]
-
-      StubClient.put_chain(head(@deployed + 140), history() ++ later())
-      assert Scanner.step(fleet, StubClient) == :ok
-      assert recorded_blocks() == [1, 2, 4, 5, 100, 120, 140]
-    end
-
-    # The same correction made while the pass waits in its second reading:
-    # the pass does not record again what the operator removed.
-    @tag :independent_connections
-    test "a pass's second reading leaves a correction made during it", %{fleet: fleet} do
-      read_history(fleet)
-
-      assert interrupted_pass(fleet, &first_request?/0, fn -> correct_from(4) end) == :moved
-      assert %{next_block: next_block, rescan_from: nil} = Chain.get_cursor!(@fleet)
-      assert next_block == @deployed + 4
-      assert recorded_blocks() == [1, 2]
-    end
-
-    # A fleet stopped while a pass runs is not written to by that pass, even
-    # before the operator moves the cursor.
-    @tag :independent_connections
-    test "a pass writes nothing once the fleet is stopped during it", %{fleet: fleet} do
-      read_history(fleet)
-
-      assert interrupted_pass(fleet, &past_first_piece?/0, fn -> stop_at(4) end) == :moved
-      assert %{next_block: next_block, rescan_from: rescan_from} = Chain.get_cursor!(@fleet)
-      assert {next_block, rescan_from} == {@deployed + 76, @deployed + 4}
-      assert recorded_blocks() == [1, 2, 4, 5]
-    end
-
-    # The same in the second reading, which would otherwise record again what
-    # the operator removed.
-    @tag :independent_connections
-    test "a pass's second reading writes nothing once the fleet is stopped", %{fleet: fleet} do
-      read_history(fleet)
-
-      assert interrupted_pass(fleet, &first_request?/0, fn ->
-               stop_at(4)
-               remove_from(4)
-             end) == :moved
-
-      assert %{next_block: next_block, rescan_from: rescan_from} = Chain.get_cursor!(@fleet)
-      assert {next_block, rescan_from} == {@deployed + 11, @deployed + 4}
-      assert recorded_blocks() == [1, 2]
-    end
-
-    # The second reading holds the cursor from its check until its piece
-    # commits, so a stop waits for that piece rather than landing between.
-    @tag :independent_connections
-    test "a stop waits for the piece the second reading holds", %{fleet: fleet} do
-      read_history(fleet)
-      parent = self()
-
-      pass =
-        Task.async(fn ->
-          :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
-          StubClient.put_chain(head(@deployed + 10), history())
-          pause_after_first_hold(parent, fn -> Scanner.step(fleet, StubClient) end)
-        end)
-
-      assert_receive :held, 10_000
-
-      stop =
-        Task.async(fn ->
-          :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
-          stop_at(4)
-        end)
-
-      assert Task.yield(stop, 300) == nil
-      send(pass.pid, :go)
-      assert %{rescan_from: rescan_from} = Task.await(stop, 10_000)
-      assert rescan_from == @deployed + 4
-      assert Task.await(pass, 10_000) == :moved
-    end
-
-    # A pass that began before the fleet was stopped and then finds a
-    # disagreement of its own keeps whichever stop is earlier.
-    @tag :independent_connections
-    test "a fleet stopped twice stays stopped at the earlier block", %{fleet: fleet} do
-      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
-      third = decision(3, @deployed + 14)
-      StubClient.put_chain(head(@deployed + 20), history() ++ third)
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      disagreeing_at = fn offset, logs ->
-        with_log(fn ->
-          interrupted_pass(fleet, &first_request?/0, fn -> stop_at(4) end,
-            head: @deployed + 20,
-            logs: logs,
-            max_logs: nil,
-            block_hashes: %{(@deployed + offset) => @new_hash}
-          )
-        end)
-      end
-
-      assert {{:stopped, stopped_at}, log} = disagreeing_at.(14, history())
-      assert stopped_at == @deployed + 4
-      assert log =~ "at block #{@deployed + 14}. It is stopped at block #{@deployed + 4}."
-      assert Chain.get_cursor!(@fleet).rescan_from == @deployed + 4
-
-      Chain.clear_divergence!(@fleet)
-      without_first = history() -- decision(1, @deployed + 1)
-      assert {{:stopped, stopped_at}, _log} = disagreeing_at.(1, without_first ++ third)
-      assert stopped_at == @deployed + 1
-      assert Chain.get_cursor!(@fleet).rescan_from == @deployed + 1
-    end
-
     # A slow pass whose cursor another pass has since moved on does not move
     # it back.
     @tag :independent_connections
@@ -929,7 +685,7 @@ defmodule Keyfleet.ProposalsChainTest do
         assert Scanner.step(fleet, StubClient) == :ok
       end
 
-      assert interrupted_pass(fleet, &first_request?/0, faster, head: @deployed + 10) == :moved
+      assert interrupted_pass(fleet, faster) == :moved
       assert Chain.get_cursor!(@fleet).next_block == @deployed + 141
       assert recorded_blocks() == [1, 2, 4, 5, 100, 120, 140]
     end
@@ -1104,6 +860,48 @@ defmodule Keyfleet.ProposalsChainTest do
     ])
   end
 
+  # One of each record `history/0` does not hold: a cancellation, an edits
+  # restriction, a Key's ownership, the protocol share, a payment, a daily
+  # split and a claim.
+  defp every_other_kind do
+    [
+      cancelled(2, "e", @deployed + 6, 0),
+      edits_set(7, true, @deployed + 6, 1),
+      ownership(1, "a", @deployed + 7, 0),
+      log(
+        @contract,
+        [@protocol_share, address_word_bytes("f")],
+        <<@max_uint256::256>>,
+        @deployed + 7,
+        1
+      ),
+      paid("a", "c", @deployed + 8, 0, @max_uint256),
+      split_allocated("a", @deployed + 9, 0, [1_000, 10, 100]),
+      claimed("a", "b", "c", @deployed + 9, 1, 50)
+    ]
+  end
+
+  # `logs`, `history/0` and a payment at block 6, with one of them as the
+  # chain now has it: `{its block, the contract it is read from, the logs}`.
+  defp change(:proposal, logs),
+    do: {@deployed + 1, @votes, conflicting(logs, 1, &with_word(&1, 1, <<9::256>>))}
+
+  defp change(:renewal, logs),
+    do: {@deployed + 1, @votes, conflicting(logs, 0, &with_word(&1, 0, <<1::256>>))}
+
+  defp change(:voter, logs) do
+    voter = &%{&1 | "topics" => List.replace_at(&1["topics"], 2, address_word("e"))}
+    {@deployed + 4, @votes, conflicting(logs, 4, voter)}
+  end
+
+  defp change(:block_hash, logs),
+    do: {@deployed + 4, @votes, conflicting(logs, 4, &%{&1 | "blockHash" => @new_hash})}
+
+  defp change(:payment, logs),
+    do: {@deployed + 6, @treasury, List.replace_at(logs, 6, paid("a", "c", @deployed + 6, 0, 9))}
+
+  defp change(:gone, logs), do: {@deployed + 5, @votes, List.delete_at(logs, 5)}
+
   defp conflicting(logs, index, change), do: List.update_at(logs, index, change)
 
   # `log` with its data word `index` replaced by `word`.
@@ -1116,6 +914,8 @@ defmodule Keyfleet.ProposalsChainTest do
 
   defp recorded_in_chain_order,
     do: Enum.sort_by(recorded(), &{&1.block_number, &1.log_index})
+
+  defp money, do: Treasury.recorded_in_blocks!(@fleet, @deployed, @deployed + 100_000)
 
   defp recorded do
     Enum.sort_by(
@@ -1312,13 +1112,6 @@ defmodule Keyfleet.ProposalsChainTest do
     Task.await_many(callers, 30_000)
   end
 
-  # A first pass over `history/0`, committed on this test's own connection.
-  defp read_history(fleet) do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
-    StubClient.put_chain(head(@deployed + 10), history())
-    assert Scanner.step(fleet, StubClient) == :ok
-  end
-
   # A vote, a decision and a vote on it, well after `history/0`.
   defp later do
     List.flatten([
@@ -1328,24 +1121,20 @@ defmodule Keyfleet.ProposalsChainTest do
     ])
   end
 
-  # Runs a pass on a connection of its own and holds it at the first log
-  # request for which `pause?` is true until `during` has run here. The chain
-  # is `history/0` and `later/0` up to block 140, two logs to an answer,
-  # unless `opts` name the `:head`, the `:logs`, `:max_logs` or `:block_hashes`.
-  defp interrupted_pass(fleet, pause?, during, opts \\ []) do
+  # Runs a pass up to block 10 on a connection of its own and holds it at its
+  # first log request until `during` has run here. The chain is `history/0`
+  # and `later/0`, two logs to an answer.
+  defp interrupted_pass(fleet, during) do
     parent = self()
-    head = Keyword.get(opts, :head, @deployed + 140)
-    logs = Keyword.get(opts, :logs, history() ++ later())
 
     pass =
       Task.async(fn ->
         :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
 
-        StubClient.put_chain(head(head), logs,
-          max_logs: Keyword.get(opts, :max_logs, 2),
-          block_hashes: Keyword.get(opts, :block_hashes, %{}),
+        StubClient.put_chain(head(@deployed + 10), history() ++ later(),
+          max_logs: 2,
           observe: fn ->
-            if pause?.() and not Process.get(:paused, false) do
+            if first_request?() and not Process.get(:paused, false) do
               Process.put(:paused, true)
               send(parent, :paused)
               receive do: (:go -> :ok)
@@ -1362,89 +1151,12 @@ defmodule Keyfleet.ProposalsChainTest do
     Task.await(pass, 30_000)
   end
 
-  # Runs `fun`, halting it just after it first locks the cursor, inside that
-  # transaction, until the test says go.
-  defp pause_after_first_hold(parent, fun) do
-    pass = self()
-    handler = "proposals-chain-test-hold"
-
-    :telemetry.attach(
-      handler,
-      [:keyfleet, :repo, :query],
-      fn _event, _measurements, meta, _config ->
-        if self() == pass and meta.query =~ "FOR UPDATE" and not Process.get(:held, false) do
-          Process.put(:held, true)
-          send(parent, :held)
-          receive do: (:go -> :ok)
-        end
-      end,
-      nil
-    )
-
-    try do
-      fun.()
-    after
-      :telemetry.detach(handler)
-    end
-  end
-
   defp first_request?, do: StubClient.log_requests() == []
-
-  defp past_first_piece?, do: Chain.get_cursor!(@fleet).next_block > @deployed + 11
 
   defp recorded_blocks, do: Enum.map(recorded_in_chain_order(), &(&1.block_number - @deployed))
 
-  defp stop_at(offset),
-    do:
-      Chain.flag_divergence!(Chain.get_cursor!(@fleet), %{block: @deployed + offset},
-        actor: %System{}
-      )
-
-  # The fleet stopped at block `offset` and corrected from there as
-  # docs/chain-reader.md describes, then the stop cleared.
-  defp correct_from(offset) do
-    stop_at(offset)
-    remove_from(offset)
-
-    Repo.query!(
-      "UPDATE keyfleet_app.chain_cursors SET next_block = $2 " <>
-        "WHERE fleet_id = $1 AND rescan_from IS NOT NULL",
-      [@fleet, @deployed + offset]
-    )
-
-    Chain.clear_divergence!(@fleet)
-  end
-
-  # The records from block `offset` on removed as docs/chain-reader.md does.
-  defp remove_from(offset) do
-    Repo.transaction(fn ->
-      for table <- @record_tables do
-        Repo.query!("ALTER TABLE keyfleet_app.#{table} DISABLE TRIGGER immutable_#{table}")
-
-        Repo.query!(
-          "DELETE FROM keyfleet_app.#{table} WHERE fleet_id = $1 AND block_number >= $2",
-          [@fleet, @deployed + offset]
-        )
-
-        Repo.query!("ALTER TABLE keyfleet_app.#{table} ENABLE TRIGGER immutable_#{table}")
-      end
-    end)
-  end
-
-  # Info is below the suite's log level; the pass logs its end there.
-  defp with_info_log(fun) do
-    level = Logger.level()
-    Logger.configure(level: :info)
-
-    try do
-      capture_log([level: :info], fun)
-    after
-      Logger.configure(level: level)
-    end
-  end
-
-  # Removes what the passes committed, the way docs/chain-reader.md corrects a
-  # record: the refusing triggers are off only inside this transaction.
+  # Removes what the passes committed: the refusing triggers are off only
+  # inside this transaction.
   defp remove_committed_records do
     Repo.transaction(fn ->
       for table <- @record_tables do

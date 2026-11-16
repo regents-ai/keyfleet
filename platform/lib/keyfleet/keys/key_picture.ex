@@ -6,9 +6,8 @@ defmodule Keyfleet.Keys.KeyPicture do
   the picture; until then the key's metadata shows the Interim Keyfleet
   Access Pass.
 
-  A picture is the Key's name and seed drawn, so it never changes: a Key
-  whose seed an operator corrects after a reorg is shown by its new seed's
-  picture, drawn afresh, and the old one is no longer asked for.
+  A picture is the Key's name and seed drawn, so it never changes, as the
+  reveal it was drawn from is kept as first saved.
 
   Each picture also gets two small pictures: a close-up, kept at
   `close_up_cid`, the small square at the card's middle that the fleet's map

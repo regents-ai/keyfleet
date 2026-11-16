@@ -92,24 +92,19 @@ defmodule Keyfleet.RevealsChainTest do
 
       moved = %{revealed(1, 7, @seed, @deployed + 5, 2) | "blockHash" => @new_hash}
 
-      StubClient.put_chain(head(@deployed + 12), [mint(1, @deployed + 1, 0), moved],
-        block_hashes: %{(@deployed + 3) => @new_hash, (@deployed + 5) => @new_hash}
-      )
+      StubClient.put_chain(head(@deployed + 12), [mint(1, @deployed + 1, 0), moved])
 
       assert Scanner.step(fleet, StubClient) == :ok
-      assert %{rescan_from: nil, next_block: next_block} = Chain.get_cursor!(@fleet)
+      assert %{next_block: next_block} = Chain.get_cursor!(@fleet)
       assert next_block == @deployed + 13
       assert Keys.get_reveal!(@fleet, 1) == recorded
       refute_received {:keys_changed, _fleet, _token_ids}
     end
 
-    # A second, different reveal for a key already revealed is the chain
-    # disagreeing with the record: the recorded reveal's block changed, so the
-    # fleet stops at the earlier of that block and the one the new reveal was
-    # read from, and nothing about the key changes.
-    test "a different reveal for a revealed key stops the fleet and writes nothing", %{
-      fleet: fleet
-    } do
+    # A key is revealed once: a different reveal the chain now has for it, in
+    # the recorded reveal's transaction or in another, leaves the reveal saved
+    # first, and reading goes on.
+    test "a different reveal for a revealed key keeps the reveal saved first", %{fleet: fleet} do
       StubClient.put_chain(head(@deployed + 10), [
         mint(1, @deployed + 1, 0),
         revealed(1, 7, @seed, @deployed + 3, 0)
@@ -118,19 +113,17 @@ defmodule Keyfleet.RevealsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
       recorded = Keys.get_reveal!(@fleet, 1)
 
-      for {reveal, block} <- [
-            {revealed(1, 7, @other_seed, @deployed + 3, 0), @deployed + 3},
-            {revealed(1, 8, @seed, @deployed + 3, 0), @deployed + 3},
-            {revealed(1, 7, @other_seed, @deployed + 6, 0), @deployed + 3}
+      for reveal <- [
+            revealed(1, 7, @other_seed, @deployed + 3, 0),
+            revealed(1, 8, @seed, @deployed + 3, 0),
+            revealed(1, 7, @other_seed, @deployed + 6, 0)
           ] do
         StubClient.put_chain(head(@deployed + 12), [mint(1, @deployed + 1, 0), reveal])
 
-        assert capture_log(fn -> assert Scanner.step(fleet, StubClient) == {:stopped, block} end) =~
-                 "Fleet #{@fleet} stopped: the chain disagrees with the record at block #{block}"
-
+        assert Scanner.step(fleet, StubClient) == :ok
         assert Keys.get_reveal!(@fleet, 1) == recorded
-        assert %{rescan_from: ^block, reveal_seq: 1} = Chain.get_cursor!(@fleet)
-        Chain.clear_divergence!(@fleet)
+        assert %{next_block: next_block, reveal_seq: 1} = Chain.get_cursor!(@fleet)
+        assert next_block == @deployed + 13
       end
     end
   end
@@ -163,8 +156,7 @@ defmodule Keyfleet.RevealsChainTest do
 
       StubClient.put_chain(
         head(@deployed + 12),
-        [mint(1, @deployed + 1, 0), mint(2, @deployed + 2, 0), moved],
-        block_hashes: %{(@deployed + 4) => @new_hash, (@deployed + 6) => @new_hash}
+        [mint(1, @deployed + 1, 0), mint(2, @deployed + 2, 0), moved]
       )
 
       assert Scanner.step(fleet, StubClient) == :ok
@@ -192,6 +184,31 @@ defmodule Keyfleet.RevealsChainTest do
       end
 
       assert %{log_index: 0} = Keys.get_reveal_expiry!(@fleet, 1)
+    end
+  end
+
+  describe "reading again" do
+    # Read again as saved, past the last time their blocks are read, a reveal
+    # and an ended draw wait are kept without a warning.
+    test "reveals and ended draw waits read again as saved are kept without a warning", %{
+      fleet: fleet
+    } do
+      logs = [
+        mint(1, @deployed + 1, 0),
+        mint(2, @deployed + 2, 0),
+        revealed(1, 7, @seed, @deployed + 3, 0),
+        expired(2, @deployed + 4, 0)
+      ]
+
+      StubClient.put_chain(head(@deployed + 10), logs)
+      assert Scanner.step(fleet, StubClient) == :ok
+      saved = {Keys.get_reveal!(@fleet, 1), Keys.get_reveal_expiry!(@fleet, 2)}
+
+      StubClient.put_chain(head(@deployed + 400), logs)
+      log = capture_log(fn -> assert Scanner.step(fleet, StubClient) == :ok end)
+
+      refute log =~ "no longer matches"
+      assert {Keys.get_reveal!(@fleet, 1), Keys.get_reveal_expiry!(@fleet, 2)} == saved
     end
   end
 

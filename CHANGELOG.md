@@ -10561,3 +10561,39 @@ removes or renames a field, route or code, or makes an input required.
   never recorded failed, nor a failed one made; a kept page with a failure is never
   marked succeeded, nor a succeeded one given a failure; and each database rule refuses
   a row written past the record.
+
+## 2026-11-16: the chain reader keeps what it saved first
+
+- Each event the chain reader saves is written once and kept as first saved. When a
+  stretch read again no longer matches what was saved (a transaction moved to another
+  block, its block's hash changed, one of its events changed, or it is gone), the saved
+  records stay, nothing more of that transaction is saved, and the reader logs one
+  warning naming the fleet, the transaction and its contracts, then reads on. The
+  warning comes from the pass that reads that block for the last time, once the reader
+  is 300 blocks past it, so each change is named once.
+- A transaction not saved before is still saved, wherever it sits in the stretch. A new
+  event that would take the place of one already kept (another owner for the same Key
+  ownership, another reveal of a Key or another end of its draw wait, another proposal
+  under a number already used, a second cancellation or execution of a proposal) is
+  not saved; the first one stays.
+- The stop is gone. A change in the chain's history no longer stops a fleet's reading
+  until an operator repairs the record by hand. The stopped state, the release command
+  and mix task that cleared it (`clear-fleet-stop`), the `keyfleet_fleets_stopped`
+  number, the reader's block hash check and the repair steps in `docs/chain-reader.md`
+  are removed. The cursor's `rescan_from` column is read by nothing; dropping it is a
+  migration of its own that waits for approval.
+- An event that cannot be read, or a block the node keeps refusing, still ends the pass
+  with nothing saved from that stretch, and a node that does not answer is still one
+  warning and a minute's wait. The lag number and the "catching up" notice stay.
+- What people and agents see: a fleet whose history changed no longer shows its Key
+  ownership as out of date, so its members keep their rooms and workspace. After such a
+  change, which is rare on Base, pages, rooms and the workspace go by the records kept,
+  which can name an owner, reveal, card or proposal the chain no longer has; a wallet
+  step still reads a Key's holder from the chain when it is pressed.
+- Tests: a saved Key sale moved to another block, in a block whose hash changed,
+  changed or gone keeps its records and history and saves nothing more of its
+  transaction, is named once over three passes, and a later sale in the same stretch is
+  saved with the cursor moving on; the same for a proposal, a renewal, a vote's voter or
+  block hash, a payment and an execution gone; every kind of record read again as saved
+  is kept without a warning; a different reveal for a revealed Key keeps the first; an
+  event that cannot be read still ends the pass with nothing saved.

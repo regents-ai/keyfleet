@@ -81,8 +81,9 @@ defmodule Keyfleet.Chain.Logs do
   Whether `records` can be made after the fleet's highest recorded proposal
   number, `highest`: each new proposal must be the next number, and each vote
   ballot, cancellation and execution must name a proposal recorded by then. A
-  proposal at or below the highest is one read again, which recording
-  compares with the record. Every other record names no proposal.
+  proposal at or below the highest takes a number already recorded, and
+  recording keeps the proposal saved first under it. Every other record names
+  no proposal.
   """
   def in_sequence(records, highest) do
     Enum.reduce_while(records, highest, fn

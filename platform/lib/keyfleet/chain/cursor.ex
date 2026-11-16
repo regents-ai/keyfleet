@@ -4,9 +4,7 @@ defmodule Keyfleet.Chain.Cursor do
   can be trusted right now.
 
   Base makes five blocks a second from Denim (5 November 2026, 18:00 UTC;
-  one every two seconds before it), and nothing here waits for more: ownership is recorded at the head. A later reading that
-  disagrees with what was recorded sets `rescan_from` and stops the fleet
-  there until an operator has corrected the record by hand.
+  one every two seconds before it), and nothing here waits for more: ownership is recorded at the head.
 
   It also numbers the fleet's proposal and budget records (`proposal_seq`),
   its key reveals and ended draw waits (`reveal_seq`), its ownership epochs
@@ -56,11 +54,6 @@ defmodule Keyfleet.Chain.Cursor do
       get? true
     end
 
-    # The fleets stopped at a disagreement until an operator corrects the record.
-    read :stopped do
-      filter expr(not is_nil(rescan_from))
-    end
-
     # Starts reading a fleet at its deployment block; an existing cursor is
     # returned untouched.
     create :open do
@@ -72,50 +65,18 @@ defmodule Keyfleet.Chain.Cursor do
       return_skipped_upsert? true
     end
 
-    # The fleet's cursor while it still stands at `next_block` and the fleet
-    # is not stopped. A pass writes the cursor only through this, so it never
-    # undoes an operator's correction or another pass's progress.
+    # The fleet's cursor while it still stands at `next_block`. A pass writes
+    # the cursor only through this, so it never undoes another pass's progress.
     read :standing do
       argument :fleet_id, :string, allow_nil?: false
       argument :next_block, :integer, allow_nil?: false
-
-      filter expr(
-               fleet_id == ^arg(:fleet_id) and next_block == ^arg(:next_block) and
-                 is_nil(rescan_from)
-             )
+      filter expr(fleet_id == ^arg(:fleet_id) and next_block == ^arg(:next_block))
     end
 
     update :advance do
       public? false
       accept [:next_block, :head_block, :head_block_hash, :observed_at]
       require_attributes [:next_block, :head_block, :head_block_hash, :observed_at]
-    end
-
-    # Stops the fleet at `block`, or keeps an earlier stop, in one update, so
-    # an operator always sees the earliest block where the chain disagreed.
-    update :flag_divergence do
-      public? false
-      accept []
-      argument :block, :integer, allow_nil?: false, constraints: [min: 0]
-
-      change atomic_update(
-               :rescan_from,
-               expr(
-                 if is_nil(rescan_from) or rescan_from > ^arg(:block) do
-                   ^arg(:block)
-                 else
-                   rescan_from
-                 end
-               )
-             )
-    end
-
-    update :clear_divergence do
-      public? false
-      accept []
-      change set_attribute(:rescan_from, nil)
-      # Fresh again only once a new pass has read the chain.
-      change set_attribute(:observed_at, nil)
     end
   end
 
@@ -124,7 +85,7 @@ defmodule Keyfleet.Chain.Cursor do
       authorize_if always()
     end
 
-    policy action([:open, :advance, :flag_divergence, :clear_divergence]) do
+    policy action([:open, :advance]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -142,8 +103,8 @@ defmodule Keyfleet.Chain.Cursor do
     # When the head was last read.
     attribute :observed_at, :utc_datetime_usec, public?: true
 
-    # The block where the chain was found to disagree with the record.
-    attribute :rescan_from, :integer, public?: true, constraints: [min: 0]
+    # Read by nothing; its column goes in the migration that follows.
+    attribute :rescan_from, :integer, select_by_default?: false, constraints: [min: 0]
 
     # The last number given to one of the fleet's proposal, vote, execution,
     # launch, receipt or payment records. It is moved only by `Keyfleet.Chain.take_proposal_seq!/1`.
@@ -191,8 +152,7 @@ defmodule Keyfleet.Chain.Cursor do
     calculate :fresh?,
               :boolean,
               expr(
-                is_nil(rescan_from) and not is_nil(observed_at) and
-                  observed_at > ago(@fresh_seconds, :second) and
+                not is_nil(observed_at) and observed_at > ago(@fresh_seconds, :second) and
                   head_block - next_block < @fresh_blocks
               )
   end

@@ -80,12 +80,9 @@ defmodule Keyfleet.Keys.KeyRevealExpiry do
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
-      # An ended wait is the key's, wherever on the chain it is read.
+      # A key's draw wait ends once: the end saved first is kept.
       change {Keyfleet.Chain.Changes.RecordOnce,
-              identity: [:fleet_id, :token_id],
-              number: :reveal_seq,
-              fields: [],
-              block: :block_number}
+              identity: [:fleet_id, :token_id], number: :reveal_seq}
     end
 
     # The keys whose wait was ended after the fleet's reveal number
@@ -96,6 +93,23 @@ defmodule Keyfleet.Keys.KeyRevealExpiry do
       argument :after_seq, :integer, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
       prepare build(select: [:token_id], sort: [record_seq: :asc])
+    end
+
+    # What was recorded from a stretch of the fleet's blocks, and from the
+    # `transactions` named wherever it was recorded, so a reading of the
+    # stretch can be checked against it.
+    read :recorded_in_blocks do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :from_block, :integer, allow_nil?: false
+      argument :to_block, :integer, allow_nil?: false
+      argument :transactions, {:array, :string}, default: []
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 ((block_number >= ^arg(:from_block) and block_number <= ^arg(:to_block)) or
+                    transaction_hash in ^arg(:transactions))
+             )
     end
   end
 

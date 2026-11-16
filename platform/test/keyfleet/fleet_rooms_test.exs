@@ -73,9 +73,6 @@ defmodule Keyfleet.FleetRoomsTest do
 
       ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
       assert {:error, %Ash.Error.Forbidden{}} = post(writer, "general")
-
-      ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
-      assert {:error, %Ash.Error.Forbidden{}} = post(writer, "open-1")
       assert Enum.all?(Rooms.list_rooms!(@fleet, authorize?: false), &(&1.head_seq == 0))
     end
 
@@ -90,7 +87,7 @@ defmodule Keyfleet.FleetRoomsTest do
       assert Rooms.get_room!(@fleet, "people", authorize?: false).head_seq == 0
       assert {:ok, %{as_key: 1, author_kind: :human}} = post(owner(1), "people")
 
-      ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+      ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
       assert {:error, %Ash.Error.Forbidden{}} = post(owner(1), "people")
     end
   end
