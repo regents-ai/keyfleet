@@ -128,19 +128,37 @@ defmodule Keyfleet.Agents.Upkeep do
   defp can_pay?(_keys, %{pays_own_fee: false}), do: true
   defp can_pay?(_keys, %{marks_left: left}), do: left > 0
 
+  # Each step past pairing is about presence or scheduled check-ins, never
+  # what the agent may read or write (`may`), and the schedule's two are what
+  # Keyfleet has seen arrive, never what the agent has set up on its side.
   defp next_step(%{paired: false}, _keys), do: "Ask your person for a pairing code."
 
   defp next_step(_states, []),
-    do: "Ask your person for a shard of their Key, or to mark it present themselves."
+    do:
+      "For presence only: ask your person for a shard of their Key, or to mark it present " <>
+        "themselves. The may field says what you can do now."
 
-  defp next_step(%{gas: nil}, _keys), do: "The chain didn't answer. Read this again in a minute."
-  defp next_step(%{gas: false}, _keys), do: "Ask your person to send your wallet ETH on Base."
+  defp next_step(%{gas: nil}, _keys),
+    do:
+      "For presence only: the chain didn't answer whether your wallet can pay to mark your " <>
+        "Keys. Read this again in a minute."
+
+  defp next_step(%{gas: false}, _keys),
+    do: "For presence only: ask your person to send your wallet ETH on Base to pay for marks."
 
   defp next_step(%{schedule: false}, _keys),
-    do: "Schedule your daily run, then start it once now."
+    do:
+      "No scheduled check-in has reached Keyfleet yet. Keyfleet sees one when a run your " <>
+        "scheduler starts syncs with run.kind scheduled: schedule your check-ins, then start " <>
+        "one now."
 
-  defp next_step(%{marked: false}, _keys), do: "Mark your Keys present."
-  defp next_step(%{repeated: false}, _keys), do: "Check again after your next scheduled run."
+  defp next_step(%{marked: false}, _keys), do: "For presence only: mark your Keys present."
+
+  defp next_step(%{repeated: false}, _keys),
+    do:
+      "Keyfleet has seen a scheduled check-in, and reads your schedule as working once the " <>
+        "next one arrives on time. Read this again after it."
+
   defp next_step(_states, _keys), do: nil
 
   # A Key needs no mark while its 48 hours run, and while it waits for its

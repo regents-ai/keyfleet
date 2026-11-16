@@ -471,6 +471,57 @@ defmodule KeyfleetWeb.McpConnectorTest do
     end
   end
 
+  # What the live feed sent after a cursor is one read at every door: the
+  # agent's own signed request, /mcp signed by the agent and the connector
+  # answer the same events, oldest first. Input the tool can't take, a cursor
+  # that is no string or a name it hasn't, is refused at /mcp before it runs,
+  # with the signed request's code, as every tool's is (`KeyfleetWeb.ToolErrors`).
+  test "events_missed answers and refuses as its signed request does", c do
+    subject = "did:privy:connector-" <> Ecto.UUID.generate()
+    wallet = new_wallet()
+    Accounts.register_verified!(subject, wallet, [wallet], actor: %Actors.System{})
+    holds!(2, wallet)
+    pair!(subject, c.signer.address)
+    token = connect!(subject, @agent_scopes, c.signer.address)
+    manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+
+    cursor = Keyfleet.Feed.id(DateTime.utc_now())
+
+    holder =
+      Keyfleet.PairingHelpers.agent_for!(%Actors.Human{
+        human_account_id: 1,
+        wallet_addresses: [@owner]
+      })
+
+    posted =
+      for body <- ["The hull is sound", "@Key 2 check the hull"] do
+        Rooms.send_message!(
+          %{fleet_id: @fleet, slug: "general", body: body, idempotency_key: Ecto.UUID.generate()},
+          actor: holder
+        )
+      end
+
+    for input <- [%{"cursor" => cursor}, %{"cursor" => 5}, %{"cursor" => cursor, "after" => "1"}] do
+      http = http_twin(c, manifest["events_missed"], input)
+
+      for over_mcp <- [
+            result(signed_call(c, "events_missed", input)),
+            result(call(token, "events_missed", input, c))
+          ] do
+        if input == %{"cursor" => cursor} do
+          assert http.status == 200
+          assert %{"isError" => false, "structuredContent" => answer} = over_mcp
+          assert answer == http.body
+          assert Enum.map(answer["events"], & &1["id"]) == Enum.map(posted, & &1.id)
+        else
+          assert http.status == 422
+          assert %{"isError" => true, "content" => [%{"text" => text}]} = over_mcp
+          assert Jason.decode!(text)["error"]["code"] == http.body["error"]["code"]
+        end
+      end
+    end
+  end
+
   # A picture is larger than a signed request can carry, so it goes in two
   # steps, as the browser tools send it: the start answers an address on this
   # site, and the upload sends the bytes there as base64.
@@ -740,6 +791,22 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   defp person(subject), do: %RegentAgents.Person{privy_user_id: subject}
+
+  defp holds!(token_id, wallet) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        ownership_epoch: 1,
+        owner_wallet: wallet,
+        block_number: 11,
+        block_hash: "0x" <> String.duplicate("b", 64),
+        transaction_hash: "0x" <> String.duplicate("b", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+  end
 
   # An app connected by `subject`, as consent leaves it: its access token.
   # Given a wallet, the app's hosted identity keeps it.

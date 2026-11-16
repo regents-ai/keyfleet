@@ -4,7 +4,8 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
   standing (`doctor`), its checkpoint (`checkpoint`, `save_checkpoint`), the
   fleet's activity (`activity`), a search of it (`search`), one proposal with its votes (`proposal`),
   whether a request it sent ran (`receipts`), what a pasted address names
-  (`link`) and what a write would do before it is sent (`preview`). Each
+  (`link`), what a write would do before it is sent (`preview`) and what its
+  live feed sent after a cursor (`missed`). Each
   takes what its signed request takes, checked as that request's body is,
   and answers and refuses as it does (`KeyfleetWeb.AgentTools.Run`,
   `KeyfleetWeb.AgentTools.Fleets.Answer`).
@@ -87,6 +88,12 @@ defmodule KeyfleetWeb.AgentTools.Fleets do
       argument :tool, :string, allow_nil?: false, constraints: [max_length: 64, trim?: false]
       argument :input, :map, allow_nil?: false
       run {Run, tool: "writes_preview"}
+    end
+
+    action :missed, :map do
+      description "Your live feed's events after a cursor it gave, up to 100, or a resync."
+      argument :cursor, :string, constraints: [trim?: false, allow_empty?: true]
+      run {Run, tool: "events_missed"}
     end
   end
 

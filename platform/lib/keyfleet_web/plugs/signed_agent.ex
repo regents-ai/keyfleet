@@ -15,8 +15,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The agent's person's shared profile, read and changed for them
   # (`KeyfleetWeb.Plugs.ProfileOwner`).
   @shared_profile_path "/api/v1/profile"
-  # The agent's live feed, signed once as it opens (`KeyfleetWeb.FeedController`).
+  # The agent's live feed, signed once as it opens (`KeyfleetWeb.FeedController`),
+  # and what it sent after a cursor, read once.
   @feed_path "/api/v1/feed"
+  @feed_missed_path "/api/v1/feed/missed"
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
@@ -360,9 +362,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   # A paired agent's Points read sits at /api/v1/account, its person's profile
-  # at /api/v1/profile, its live feed at /api/v1/feed and the messages it
-  # leaves for the site's team at /api/v1/messages, the addresses every Regent
-  # site gives them; everything else an agent signs is under /api/v1/agent.
+  # at /api/v1/profile, its live feed and what the feed sent at /api/v1/feed
+  # and the messages it leaves for the site's team at /api/v1/messages, the
+  # addresses every Regent site gives them; everything else an agent signs is
+  # under /api/v1/agent.
   # The person reads and changes their profile with their session instead, so
   # only a signed request there is an agent's.
   defp agent_request?(conn) do
@@ -722,7 +725,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
      }}
   end
 
-  def refusal(_conn, _metadata), do: {401, KeyfleetWeb.Refusal.body("unauthorized", @sign_again)}
+  def refusal(_conn, _metadata), do: {401, unauthorized()}
+
+  @doc """
+  The refusal of a signed request whose sign-in can't be confirmed, which an
+  open feed also sends as it closes when its sign-in runs out
+  (`KeyfleetWeb.FeedController`).
+  """
+  def unauthorized, do: KeyfleetWeb.Refusal.body("unauthorized", @sign_again)
 
   @doc """
   The status and refusal body for a body that doesn't fit the operation at
@@ -767,6 +777,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", @points_path), do: true
   defp supported?("GET", @feed_path), do: true
+  defp supported?("POST", @feed_missed_path), do: true
   defp supported?(method, @shared_profile_path) when method in ~w(GET PATCH), do: true
 
   defp supported?("GET", path),
@@ -920,6 +931,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: admit(map_size(params) == 2 and is_binary(tool) and is_map(input))
 
   def check_body(@preview_path, _params), do: :invalid
+
+  # The cursor the feed or this read gave, or none to start from now. A string
+  # that is no event's id is answered as the feed answers it, with a resync.
+  def check_body(@feed_missed_path, params) when is_map(params),
+    do: admit(Enum.all?(params, fn {key, value} -> key == "cursor" and is_binary(value) end))
+
+  def check_body(@feed_missed_path, _params), do: :invalid
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   # A profile change is one JSON object, whose fields the profile API checks
@@ -1795,6 +1813,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp fields(@avatar_start_path), do: {~w(sha256 byte_size content_type), []}
   defp fields(@links_path), do: {~w(url), []}
   defp fields(@preview_path), do: {~w(tool input), []}
+  defp fields(@feed_missed_path), do: {[], ~w(cursor)}
 
   defp fields(path) do
     cond do

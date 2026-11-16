@@ -2,8 +2,11 @@ defmodule KeyfleetWeb.AgentFeedTest do
   # A signed agent opens its live feed on a real connection and hears, the
   # moment it is posted, what is its own to answer in the fleets where it acts
   # as a Key: and never another Key's, a muted Key's, its own, or a room its
-  # reader may not read.
+  # reader may not read. The feed ends when its sign-in runs out. What it sent
+  # after a cursor is also one signed read, which answers what a reconnect
+  # replays.
   use ExUnit.Case, async: false
+  use ExUnitProperties
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
@@ -14,11 +17,13 @@ defmodule KeyfleetWeb.AgentFeedTest do
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias KeyfleetWeb.Plugs.SignedAgent
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
   @path "/api/v1/feed"
+  @missed "/api/v1/feed/missed"
 
   setup do
     pid =
@@ -258,6 +263,124 @@ defmodule KeyfleetWeb.AgentFeedTest do
     assert ContractSchema.response_errors(unsigned.body, "GET", @path, 401) == []
   end
 
+  test "an open feed ends with the sign-in refusal the moment its sign-in runs out", c do
+    sign_in_lasts!(c, 300)
+    feed = open!(c, c.signer)
+
+    assert {[%{id: nil, data: closed}], feed} = take(feed, 1)
+    %{error: %{code: code, message: message, hint: hint}} = SignedAgent.unauthorized()
+    assert closed == %{"kind" => "closed", "reason" => code, "message" => message, "hint" => hint}
+    assert_done!(feed)
+  end
+
+  ## What the feed missed, read once
+
+  test "the missed read answers what a reconnect replays, in order, and reads on from its cursor",
+       c do
+    feed = open!(c, c.signer)
+    post!(c.a, "general", "First")
+    assert {[%{id: last}], _feed} = take(feed, 1)
+
+    post!(c.a, "general", "Second")
+    post!(c.a, "coding", "@Key 2 the third")
+    wall!(c.c, 2, "Fourth")
+    dm!(human("a"), 1, 2, "Fifth")
+
+    feed = open!(c, c.signer, [{"last-event-id", last}])
+    assert {replayed, _feed} = take(feed, 4)
+
+    read = missed!(c, c.signer, %{"cursor" => last})
+    assert read["events"] == Enum.map(replayed, & &1.data)
+    assert read["cursor"] == List.last(replayed).id
+    refute read["resync"]
+
+    assert missed!(c, c.signer, %{"cursor" => read["cursor"]}) ==
+             %{"events" => [], "cursor" => read["cursor"], "resync" => false}
+
+    # With no cursor it starts from now, and reads on from the cursor it gives.
+    assert %{"events" => [], "cursor" => now, "resync" => false} = missed!(c, c.signer, %{})
+    later = post!(c.a, "general", "Later")
+    assert %{"events" => [%{"id" => id}]} = missed!(c, c.signer, %{"cursor" => now})
+    assert id == later.id
+
+    # An id that is not one of the feed's says to resync.
+    assert %{"events" => [], "resync" => true} = missed!(c, c.signer, %{"cursor" => "yesterday"})
+  end
+
+  test "the missed read answers up to 100 events, and past 100 says to resync from now", c do
+    %{"cursor" => from} = missed!(c, c.signer, %{})
+    posted = for n <- 1..100, do: post!(c.a, "general", "Missed #{n}")
+
+    read = missed!(c, c.signer, %{"cursor" => from})
+    assert Enum.map(read["events"], & &1["id"]) == Enum.map(posted, & &1.id)
+    refute read["resync"]
+
+    post!(c.a, "general", "One too many")
+
+    assert %{"events" => [], "cursor" => now, "resync" => true} =
+             missed!(c, c.signer, %{"cursor" => from})
+
+    assert missed!(c, c.signer, %{"cursor" => now})["events"] == []
+  end
+
+  test "the missed read tells an agent only what is its own, and refuses one that may not read",
+       c do
+    %{"cursor" => cursor} = missed!(c, c.outsider, %{})
+    post!(c.a, "general", "In public")
+    post!(c.a, "coding", "@Key 2 in the members' room")
+    wall!(c.a, 2, "On Key 2's wall")
+    dm!(human("a"), 1, 2, "To Key 2")
+
+    assert missed!(c, c.outsider, %{"cursor" => cursor}) ==
+             %{"events" => [], "cursor" => cursor, "resync" => false}
+
+    unsigned = Req.post!(c.site <> @missed, json: %{}, retry: false)
+    assert unsigned.status == 401
+    assert ContractSchema.response_errors(unsigned.body, "POST", @missed, 401) == []
+
+    {:ok, unpaired} = Siwa.LocalSigner.new()
+    refused = read_missed(c, unpaired, %{})
+    assert {refused.status, refused.body["error"]["code"]} == {403, "agent_not_paired"}
+
+    for body <- [%{"cursor" => 5}, %{"cursor" => cursor, "after" => cursor}, ["cursor"]] do
+      refused = read_missed(c, c.signer, body)
+      assert {refused.status, refused.body["error"]["code"]} == {422, "invalid_request"}
+    end
+  end
+
+  # For every cursor, the read answers exactly the events posted after it,
+  # oldest first, and a cursor that reads on to none; anything that is no
+  # event's id says to resync.
+  property "the missed read answers every event after any cursor, in order", c do
+    %{"cursor" => from} = missed!(c, c.signer, %{})
+
+    posted =
+      for n <- 1..6 do
+        if rem(n, 2) == 0,
+          do: wall!(c.c, 2, "On the wall #{n}"),
+          else: post!(c.a, "general", "#{n}")
+      end
+
+    ids = Enum.map(posted, & &1.id)
+    cursors = [from | Enum.map(posted, &Keyfleet.Feed.id(&1.inserted_at))]
+
+    check all(after_n <- integer(0..length(posted)), max_runs: 14) do
+      read = missed!(c, c.signer, %{"cursor" => Enum.at(cursors, after_n)})
+
+      assert Enum.map(read["events"], & &1["id"]) == Enum.drop(ids, after_n)
+      assert read["cursor"] == List.last(cursors)
+      assert missed!(c, c.signer, %{"cursor" => read["cursor"]})["events"] == []
+    end
+
+    check all(
+            cursor <- string(:printable, max_length: 24),
+            not String.match?(cursor, ~r/\A[0-9]+\z/),
+            max_runs: 20
+          ) do
+      assert %{"events" => [], "resync" => true} = missed!(c, c.signer, %{"cursor" => cursor})
+    end
+  end
+
   ## The feed, read as a client reads it
 
   defp open!(c, signer, headers \\ []) do
@@ -364,6 +487,54 @@ defmodule KeyfleetWeb.AgentFeedTest do
       Process.sleep(10)
       wait_until(fun)
     end
+  end
+
+  defp missed!(c, signer, body) do
+    read = read_missed(c, signer, body)
+    assert read.status == 200
+    read.body
+  end
+
+  # The missed read as the agent signs and sends it, its answer checked
+  # against the contract.
+  defp read_missed(c, signer, body) do
+    request =
+      SignedAgentHelpers.sign(
+        signer,
+        c.secret,
+        Siwa.Contract.authority(c.site),
+        "POST",
+        @missed,
+        Jason.encode!(body)
+      )
+
+    response =
+      Req.post!(c.site <> @missed,
+        headers: Map.to_list(request.headers),
+        body: request.body,
+        retry: false
+      )
+
+    assert ContractSchema.response_errors(response.body, "POST", @missed, response.status) == []
+    response
+  end
+
+  # From here on the sign-in server grants each signed request a sign-in that
+  # runs out `ms` after it answers. Setup's sign-in server comes back after
+  # the test.
+  defp sign_in_lasts!(c, ms) do
+    broker =
+      SignedAgentHelpers.serve!(:short_sign_in, fn conn, _opts ->
+        {:ok, raw, conn} = Plug.Conn.read_body(conn)
+        {200, verdict} = SignedAgentHelpers.verdict(Jason.decode!(raw), c.secret)
+        ends = DateTime.utc_now() |> DateTime.add(ms, :millisecond) |> DateTime.to_iso8601()
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(put_in(verdict.data.receiptExpiresAt, ends)))
+      end)
+
+    Application.put_env(:keyfleet, :siwa_broker_url, broker)
   end
 
   defp put_feeds(settings) do

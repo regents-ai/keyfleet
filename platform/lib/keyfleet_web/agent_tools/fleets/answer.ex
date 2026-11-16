@@ -5,8 +5,9 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   its standing (`:doctor`), its checkpoint (`:checkpoint`,
   `:save_checkpoint`), what has been happening (`:activity`), a search of it
   (`:search`), one proposal with its votes (`:proposal`), whether a request it sent ran (`:receipts`),
-  what a pasted address names (`:link`, `KeyfleetWeb.Links`) and what a write
-  would do before it is sent (`:preview`, `KeyfleetWeb.Preview`). Each answer
+  what a pasted address names (`:link`, `KeyfleetWeb.Links`), what a write
+  would do before it is sent (`:preview`, `KeyfleetWeb.Preview`) and what its
+  live feed sent after a cursor (`:missed`, `Keyfleet.Feed`). Each answer
   is `{status, body, nil}`; `params` is the signed request's JSON, its body
   with the fleet's id. A link and a preview read nothing from the thing
   itself and write nothing.
@@ -53,9 +54,31 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   workspace part reads from its read tables, as every workspace read does: a
   write whose answer was lost can take a moment to show, and a write sent
   again with its command id never runs twice.
+
+  The missed events are what the agent's live feed would replay to a
+  reconnect sending `cursor` as `Last-Event-ID` (`Keyfleet.Feed.missed/2`):
+  the same events, oldest first, up to 100, with `cursor` the last one's id
+  to send next time, or the same cursor when none came. Where the feed would
+  resync, past 100 or for a cursor that is no event's id, `resync` is true,
+  no events are answered and `cursor` is now's: catch up with a sync, then
+  read on from it. With no cursor the read starts from now, as a feed opened
+  without `Last-Event-ID` does. A read that fails answers 503
+  `feed_unavailable`, to be sent again with the same cursor.
   """
 
-  alias Keyfleet.{Access, Activity, Agents, Capabilities, Fleets, Graph, Proposals, Rooms, Search}
+  alias Keyfleet.{
+    Access,
+    Activity,
+    Agents,
+    Capabilities,
+    Feed,
+    Fleets,
+    Graph,
+    Proposals,
+    Rooms,
+    Search
+  }
+
   alias Keyfleet.Actors.{Agent, Human}
   alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Graph.Event
@@ -202,6 +225,17 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     end
   end
 
+  # Now's cursor is read first, so nothing posted while the events are read
+  # falls before it.
+  def answer(:missed, params, actor, _waiter) do
+    now = Feed.id(DateTime.utc_now())
+
+    case params do
+      %{"cursor" => cursor} -> missed(Feed.open(actor), cursor, now)
+      %{} -> ok(%{events: [], cursor: now, resync: false})
+    end
+  end
+
   defp ok(body), do: {200, body, nil}
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
 
@@ -221,6 +255,15 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
             votes |> List.last(%{record_seq: after_seq}) |> Map.fetch!(:record_seq),
           votes_has_more: more?
         })
+    end
+  end
+
+  defp missed(feed, cursor, now) do
+    case Feed.missed(feed, cursor) do
+      {:ok, []} -> ok(%{events: [], cursor: cursor, resync: false})
+      {:ok, events} -> ok(%{events: events, cursor: Feed.id(List.last(events).at), resync: false})
+      :resync -> ok(%{events: [], cursor: now, resync: true})
+      {:error, _error} -> refusal(503, "feed_unavailable")
     end
   end
 

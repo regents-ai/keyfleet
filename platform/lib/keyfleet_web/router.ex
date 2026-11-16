@@ -386,10 +386,12 @@ defmodule KeyfleetWeb.Router do
   end
 
   # A paired agent's private message for the site's team, at the address every
-  # Regent site gives it. Each request is signed (`KeyfleetWeb.Plugs.SignedAgent`).
+  # Regent site gives it, and the events its live feed sent after a cursor,
+  # read once. Each request is signed (`KeyfleetWeb.Plugs.SignedAgent`).
   scope "/api/v1", KeyfleetWeb do
     pipe_through :api
     post "/messages/:topic", AgentMessageController, :leave
+    post "/feed/missed", FeedController, :missed
   end
 
   scope "/api/v1/agent", KeyfleetWeb do

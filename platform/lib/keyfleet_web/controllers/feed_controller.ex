@@ -15,16 +15,27 @@ defmodule KeyfleetWeb.FeedController do
     `{"kind": "closed", "reason": "replaced"}`. A pairing that ends or changes
     closes it with `"reason": "pairing_changed"`, so the agent reconnects as it
     now is.
+  - The feed ends the moment the sign-in it opened with runs out, with
+    `"reason": "unauthorized"` and the words a signed request is refused with
+    then (`KeyfleetWeb.Plugs.SignedAgent.unauthorized/0`), so the agent signs
+    in again and reconnects. One timer, in this process, waits for that moment.
   - At most `max_open` feeds on one machine; past that the open is refused.
 
   The feed is this request's own process waiting for messages. It holds no
   database connection while it waits: each read takes one and gives it back.
+
+  `POST /api/v1/feed/missed` (`missed/2`) reads once what a reconnect would
+  replay, for an agent that keeps no feed open: the answer of the
+  `events_missed` tool (`KeyfleetWeb.AgentTools.Fleets.Answer`).
   """
 
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Feed
+  alias KeyfleetWeb.AgentReply
+  alias KeyfleetWeb.AgentTools.Fleets.Answer
+  alias KeyfleetWeb.Plugs.SignedAgent
   alias KeyfleetWeb.Refusal
   alias RegentHttp.UnexpectedFailure
 
@@ -44,6 +55,9 @@ defmodule KeyfleetWeb.FeedController do
         Refusal.json(conn, 503, "feed_full")
     end
   end
+
+  def missed(conn, params),
+    do: AgentReply.answer(conn, Answer.answer(:missed, params, conn.assigns.agent_actor, nil))
 
   # Registered first and counted after, so feeds opening together cannot all
   # read a count below the limit and pass.
@@ -69,7 +83,14 @@ defmodule KeyfleetWeb.FeedController do
     Enum.each(fixed, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
     Phoenix.PubSub.broadcast_from(Keyfleet.PubSub, self(), own, :feed_replaced)
 
-    state = listen(%{feed: feed, topics: [], seen: MapSet.new(), timer: keep_alive()})
+    state =
+      listen(%{
+        feed: feed,
+        topics: [],
+        seen: MapSet.new(),
+        timer: keep_alive(),
+        sign_in: sign_in_ends(actor)
+      })
 
     conn =
       conn
@@ -86,6 +107,7 @@ defmodule KeyfleetWeb.FeedController do
     Enum.each(fixed ++ state.topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
     Registry.unregister(@feeds, actor.wallet_address)
     Process.cancel_timer(state.timer)
+    Process.cancel_timer(state.sign_in)
     flush()
     conn
   end
@@ -99,10 +121,9 @@ defmodule KeyfleetWeb.FeedController do
   end
 
   defp catch_up(conn, state, nil), do: {:ok, conn, state}
-  defp catch_up(conn, state, :invalid), do: resync(conn, state)
 
-  defp catch_up(conn, state, since) do
-    case Feed.missed(state.feed, since) do
+  defp catch_up(conn, state, id) do
+    case Feed.missed(state.feed, id) do
       {:ok, events} ->
         with {:ok, conn} <- send_events(conn, events),
              do: {:ok, conn, %{state | seen: MapSet.new(events, & &1.id)}}
@@ -136,12 +157,16 @@ defmodule KeyfleetWeb.FeedController do
         continue(write(conn, ": keep-alive\n\n"), %{state | timer: keep_alive()})
 
       :feed_replaced ->
-        close(conn, state, "replaced")
+        close(conn, state, %{reason: "replaced"})
 
       :agents_changed ->
         if Agent.valid?(state.feed.actor),
           do: loop(conn, state),
-          else: close(conn, state, "pairing_changed")
+          else: close(conn, state, %{reason: "pairing_changed"})
+
+      :sign_in_ended ->
+        %{error: %{code: code, message: message, hint: hint}} = SignedAgent.unauthorized()
+        close(conn, state, %{reason: code, message: message, hint: hint})
     end
   end
 
@@ -160,19 +185,20 @@ defmodule KeyfleetWeb.FeedController do
   defp continue({:ok, conn}, state), do: loop(conn, state)
   defp continue({:error, conn}, state), do: {conn, state}
 
-  defp close(conn, state, reason) do
-    {_sent, conn} = send_data(conn, %{kind: "closed", reason: reason})
+  defp close(conn, state, why) do
+    {_sent, conn} = send_data(conn, Map.put(why, :kind, "closed"))
     {conn, state}
   end
 
   # What was announced after the feed stopped listening, and its last
-  # keep-alive.
+  # keep-alive and sign-in timers.
   defp flush do
     receive do
       %{topic: _, event: _, payload: _} -> flush()
       {:keys_changed, _fleet_id, _token_ids} -> flush()
       {:keys_present, _fleet_id, _token_ids} -> flush()
       :keep_alive -> flush()
+      :sign_in_ended -> flush()
       :feed_replaced -> flush()
       :agents_changed -> flush()
     after
@@ -182,9 +208,7 @@ defmodule KeyfleetWeb.FeedController do
 
   defp send_events(conn, events) do
     Enum.reduce_while(events, {:ok, conn}, fn event, {:ok, conn} ->
-      id = DateTime.to_unix(event.at, :microsecond)
-
-      case send_frame(conn, ["id: ", Integer.to_string(id), "\n"], event) do
+      case send_frame(conn, ["id: ", Feed.id(event.at), "\n"], event) do
         {:ok, conn} -> {:cont, {:ok, conn}}
         failed -> {:halt, failed}
       end
@@ -206,16 +230,20 @@ defmodule KeyfleetWeb.FeedController do
 
   defp keep_alive, do: Process.send_after(self(), :keep_alive, setting(:keep_alive_ms))
 
-  # Nil when none was sent; :invalid for one that is not a feed's id, which
-  # reads as a resync.
+  defp sign_in_ends(%Agent{receipt_expires_at: ends_at}),
+    do:
+      Process.send_after(
+        self(),
+        :sign_in_ended,
+        max(DateTime.diff(ends_at, DateTime.utc_now(), :millisecond), 0)
+      )
+
+  # Nil when none was sent. Sent more than once, its values are read as one,
+  # as HTTP joins a repeated header, which is no event's id.
   defp last_event_id(conn) do
-    with [id] <- get_req_header(conn, "last-event-id"),
-         {microseconds, ""} <- Integer.parse(id),
-         {:ok, since} <- DateTime.from_unix(microseconds, :microsecond) do
-      since
-    else
+    case get_req_header(conn, "last-event-id") do
       [] -> nil
-      _invalid -> :invalid
+      ids -> Enum.join(ids, ", ")
     end
   end
 
