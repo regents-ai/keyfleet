@@ -21,7 +21,8 @@ async function openConnections(page: Page) {
 const refuseConnection = (page: Page) =>
   page.evaluate(() => window.dispatchEvent(new CustomEvent("ash:identity-state", {detail: {error: "failed"}})))
 
-const REFUSAL = "#account-verified-connections-notice"
+const CONNECTIONS = "#account-verified-connections"
+const REFUSAL = `${CONNECTIONS}-notice`
 
 test("a refusal shakes once as it appears, and refusals again and again end at rest", async ({page}) => {
   await openConnections(page)
@@ -36,7 +37,14 @@ test("a refusal shakes once as it appears, and refusals again and again end at r
     await refuseConnection(page)
     await page.waitForTimeout(70)
   }
+  // Each refusal goes to the server, which takes the message away and shows it
+  // again once it has read the connections; each new message starts shaking on
+  // the next frame. The section is marked `phx-hook-loading` until the server
+  // has answered the last refusal, so the message shown after that is the last
+  // one, judged once its shake has begun and ended.
+  await expect(page.locator(CONNECTIONS)).not.toHaveClass(/phx-hook-loading/)
   await expect(page.locator(REFUSAL)).toBeVisible()
+  await expect.poll(() => moved(page, REFUSAL)).toBe(true)
   await expect.poll(() => leftovers(page)).toEqual([])
   expect(await page.locator(REFUSAL).getAttribute("style")).toBeNull()
 })
