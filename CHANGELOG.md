@@ -10530,3 +10530,16 @@ removes or renames a field, route or code, or makes an input required.
 - The docs' contract history line for 35.0.0 names the run-page change that ships with
   it: a `result_url` older than 30 days answers 404 `notebooks_not_found`, with the three
   exceptions.
+
+## 2026-11-15: smart wallets credit Keyfleet's Base Builder Code
+
+- A smart wallet can only credit Keyfleet's Base Builder Code if it adds the code
+  itself. When a wallet says it can do that on Base, each press now hands it Keyfleet's
+  code along with the same step, the way Base asks. The person approves the same request
+  in their wallet as before, and every press still reaches the wallet.
+- With such a wallet the page hears back once the transaction is on Base rather than
+  straight away, so "Sent" can take a few seconds longer to show. If the wallet stops
+  answering, the page says the wallet may have sent it and to check the wallet's
+  activity, as it always has.
+- Nothing changes for any other wallet, including the wallet made at sign-in: it sends
+  exactly as before, with the code already in the step.
