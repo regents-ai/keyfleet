@@ -11,8 +11,8 @@ defmodule Keyfleet.Keys.Metadata do
   its reveal is recorded, or `Status: Never Revealed` for good once the wait
   for its draw is recorded as ended (`Keyfleet.Keys.KeyRevealExpiry`). A Key
   with its card (`Keyfleet.Keys.card_seed/2`) shows the card's traits from the
-  fleet's trait table, which change only if an operator corrects a reveal by
-  hand after a reorg. While its card is being drawn
+  fleet's trait table, which never change, as the records its card comes from
+  are kept as first saved. While its card is being drawn
   (`Keyfleet.Keys.DrawPicture`) it keeps the pass; once the card is kept on
   IPFS, it shows the card and names its IPFS address in `properties`.
   """

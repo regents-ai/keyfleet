@@ -141,9 +141,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
       return_skipped_upsert? true
 
       change {Keyfleet.Chain.Changes.RecordOnce,
-              identity: [:fleet_id, :token_id, :ownership_epoch],
-              block: :block_number,
-              number: :ownership_seq}
+              identity: [:fleet_id, :token_id, :ownership_epoch], number: :ownership_seq}
 
       change Keyfleet.Notebooks.Changes.UpdateRoster
 
@@ -321,17 +319,20 @@ defmodule Keyfleet.Keys.KeyAttachment do
       get? true
     end
 
-    # What was recorded from a stretch of the fleet's blocks, so a second
-    # reading of the same stretch can be checked against it.
+    # What was recorded from a stretch of the fleet's blocks, and from the
+    # `transactions` named wherever it was recorded, so a reading of the
+    # stretch can be checked against it.
     read :recorded_in_blocks do
       public? false
       argument :fleet_id, :string, allow_nil?: false
       argument :from_block, :integer, allow_nil?: false
       argument :to_block, :integer, allow_nil?: false
+      argument :transactions, {:array, :string}, default: []
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and block_number >= ^arg(:from_block) and
-                 block_number <= ^arg(:to_block)
+               fleet_id == ^arg(:fleet_id) and
+                 ((block_number >= ^arg(:from_block) and block_number <= ^arg(:to_block)) or
+                    transaction_hash in ^arg(:transactions))
              )
     end
 

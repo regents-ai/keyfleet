@@ -24,7 +24,6 @@ defmodule Keyfleet.Chain.Client do
               from_block :: non_neg_integer(),
               to_block :: non_neg_integer()
             ) :: {:ok, [map()]} | {:error, term()}
-  @callback get_block_hash(block :: non_neg_integer()) :: {:ok, String.t()} | {:error, term()}
 
   @doc """
   Calls a contract's view function with `data`, the `0x` calldata

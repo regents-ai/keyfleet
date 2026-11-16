@@ -36,16 +36,15 @@ defmodule Keyfleet.ChainTest do
 
   describe "freshness" do
     # Authority from a key is refused unless its ownership was read recently,
-    # all the way to the head, and never found to disagree with the chain.
-    test "ownership is fresh only when read just now, caught up and not stopped" do
+    # all the way to the head.
+    test "ownership is fresh only when read just now and caught up" do
       refute Chain.fresh?(@fleet)
 
       for {attrs, fresh?} <- [
             {%{observed_at: DateTime.add(DateTime.utc_now(), -421, :second)}, false},
             {%{observed_at: DateTime.add(DateTime.utc_now(), -360, :second)}, true},
             {%{head_block: 4_000, next_block: 1_000}, false},
-            {%{}, true},
-            {%{rescan_from: 900}, false}
+            {%{}, true}
           ] do
         ChainHelpers.seed_cursor!(@fleet, attrs)
         assert Chain.fresh?(@fleet) == fresh?, inspect(attrs)
@@ -304,86 +303,17 @@ defmodule Keyfleet.ChainTest do
 
     # A node that has not reached blocks already recorded knows nothing about
     # them; that is not a change in the chain's history.
-    test "a node behind the record neither stops the fleet nor moves it back", %{fleet: fleet} do
+    test "a node behind the record does not move the fleet back", %{fleet: fleet} do
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 8, 0)])
       assert Scanner.step(fleet, StubClient) == :ok
 
       StubClient.put_chain(head(@deployed + 5), [log(1, 1, "a", @deployed + 8, 0)])
 
       assert Scanner.step(fleet, StubClient) == :ok
-      assert Chain.get_cursor!(@fleet).rescan_from == nil
       assert next_block() == @deployed + 11
       assert [%{owner_wallet: owner}] = current_keys()
       assert owner == wallet("a")
       assert Chain.fresh?(@fleet)
-    end
-
-    # A second reading that disagrees with the record stops the fleet at that
-    # block instead of rewriting who holds a key, and a stopped fleet is
-    # neither read nor written until an operator clears it.
-    test "a recorded change that reads differently stops the fleet and nothing is written", %{
-      fleet: fleet
-    } do
-      mint = log(1, 1, "a", @deployed + 3, 0)
-      StubClient.put_chain(head(@deployed + 10), [mint])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      StubClient.put_chain(head(@deployed + 12), [%{mint | "topics" => topics(1, "c")}])
-
-      assert capture_log(fn ->
-               assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 3}
-             end) =~ "bin/clear-fleet-stop #{@fleet}"
-
-      assert [%{owner_wallet: owner}] = current_keys()
-      assert owner == wallet("a")
-      refute Chain.fresh?(@fleet)
-
-      assert writes_during(fn ->
-               assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 3}
-             end) == []
-
-      Chain.clear_divergence!(@fleet)
-      assert Chain.get_cursor!(@fleet).rescan_from == nil
-      refute Chain.fresh?(@fleet)
-    end
-
-    # A recorded change that is gone from a block whose hash has changed is the
-    # chain's history changing.
-    test "a recorded change missing from a block with a new hash stops the fleet", %{
-      fleet: fleet
-    } do
-      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      StubClient.put_chain(head(@deployed + 12), [],
-        block_hashes: %{(@deployed + 3) => @new_hash}
-      )
-
-      capture_log(fn ->
-        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 3}
-      end)
-
-      assert Chain.get_cursor!(@fleet).rescan_from == @deployed + 3
-    end
-
-    # The same change gone from a block whose hash still matches is the node
-    # answering inconsistently: the pass fails and is retried, and nothing moves.
-    test "a recorded change missing from an unchanged block is a failed read, not a stop", %{
-      fleet: fleet
-    } do
-      StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
-      assert Scanner.step(fleet, StubClient) == :ok
-
-      StubClient.put_chain(head(@deployed + 12), [])
-
-      assert Scanner.step(fleet, StubClient) ==
-               {:error, {:log_missing_from_block, @deployed + 3}}
-
-      cursor = Chain.get_cursor!(@fleet)
-      assert cursor.rescan_from == nil
-      assert cursor.next_block == @deployed + 11
-      assert [%{owner_wallet: owner}] = current_keys()
-      assert owner == wallet("a")
     end
 
     # The second reading covers the 300 blocks below the cursor and no more, and
@@ -391,28 +321,71 @@ defmodule Keyfleet.ChainTest do
     test "the second reading spans the last 300 blocks, from the deployment at the earliest", %{
       fleet: fleet
     } do
-      StubClient.put_chain(head(@deployed + 5), [log(1, 1, "a", @deployed, 0)])
+      mint = log(1, 1, "a", @deployed, 0)
+      StubClient.put_chain(head(@deployed + 5), [mint])
       assert Scanner.step(fleet, StubClient) == :ok
 
-      StubClient.put_chain(head(@deployed + 6), [], block_hashes: %{@deployed => @new_hash})
-
-      capture_log(fn ->
-        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed}
-      end)
-
-      Chain.clear_divergence!(@fleet)
-      edge = [log(2, 1, "b", @deployed + 1_700, 0), log(3, 1, "c", @deployed + 1_701, 0)]
-      StubClient.put_chain(head(@deployed + 2_000), [log(1, 1, "a", @deployed, 0) | edge])
+      StubClient.put_chain(head(@deployed + 6), [mint])
       assert Scanner.step(fleet, StubClient) == :ok
-      assert next_block() == @deployed + 2_001
+      assert [{_, _, @deployed, to}, _forward] = StubClient.log_requests()
+      assert to == @deployed + 5
 
-      StubClient.put_chain(head(@deployed + 2_001), [log(1, 1, "a", @deployed, 0)],
-        block_hashes: %{(@deployed + 1_700) => @new_hash, (@deployed + 1_701) => @new_hash}
-      )
+      StubClient.put_chain(head(@deployed + 2_000), [mint])
+      assert Scanner.step(fleet, StubClient) == :ok
 
-      capture_log(fn ->
-        assert Scanner.step(fleet, StubClient) == {:stopped, @deployed + 1_701}
-      end)
+      StubClient.put_chain(head(@deployed + 2_001), [mint])
+      assert Scanner.step(fleet, StubClient) == :ok
+      assert [{_, _, from, to}, _forward] = StubClient.log_requests()
+      assert {from, to} == {@deployed + 1_701, @deployed + 2_000}
+    end
+  end
+
+  describe "when the chain's history changes" do
+    setup do
+      %{
+        fleet:
+          ChainHelpers.deploy!(@fleet, %{manager_address: @contract, deployed_block: @deployed})
+      }
+    end
+
+    # Whatever changed, a saved sale read again keeps its records, and nothing
+    # more of its transaction is saved, not even a sale the chain now puts in
+    # it. The pass reads on: a sale of another transaction later in the same
+    # stretch is recorded and the cursor moves, and every later pass reads on.
+    # The sale is named once, by the pass that reads its block for the last
+    # time.
+    for change <- [:moved, :new_block_hash, :changed, :gone] do
+      test "a saved sale #{change} keeps its records, is named once and reading goes on", %{
+        fleet: fleet
+      } do
+        mint = log(1, 1, "a", @deployed + 3, 0)
+        StubClient.put_chain(head(@deployed + 10), [mint])
+        assert Scanner.step(fleet, StubClient) == :ok
+        saved = recorded()
+        history = Keys.key_history!(@fleet, 1)
+
+        logs = changed(unquote(change), mint) ++ [log(2, 1, "b", @deployed + 7, 0)]
+
+        named =
+          for head <- [@deployed + 12, @deployed + 400, @deployed + 401] do
+            StubClient.put_chain(head(head), logs)
+            log = capture_log(fn -> assert Scanner.step(fleet, StubClient) == :ok end)
+            assert next_block() == head + 1
+            length(String.split(log, String.downcase(mint["transactionHash"]))) - 1
+          end
+
+        assert named == [0, 1, 0]
+        assert [%{block_number: block, token_id: 2}] = recorded() -- saved
+        assert block == @deployed + 7
+        assert Keys.key_history!(@fleet, 1) == history
+
+        assert Enum.map(current_keys(), &{&1.token_id, &1.owner_wallet}) == [
+                 {1, wallet("a")},
+                 {2, wallet("b")}
+               ]
+
+        assert Chain.minted(@fleet) == {:ok, 2}
+      end
     end
   end
 
@@ -645,41 +618,26 @@ defmodule Keyfleet.ChainTest do
   defp letter_for_votes("b"), do: "e"
   defp letter_for_votes(_letter), do: "9"
 
+  # The saved sale's transaction as the chain now has it, with a second sale in
+  # it that was never saved, or gone.
+  defp changed(:moved, mint) do
+    for log <- [log(1, 1, "a", @deployed + 5, 0), log(3, 1, "c", @deployed + 5, 1)],
+        do: %{log | "transactionHash" => mint["transactionHash"]}
+  end
+
+  defp changed(:new_block_hash, mint),
+    do:
+      for(log <- [mint, log(3, 1, "c", @deployed + 3, 1)], do: %{log | "blockHash" => @new_hash})
+
+  defp changed(:changed, mint),
+    do: [%{mint | "data" => word(2)}, log(3, 1, "c", @deployed + 3, 1)]
+
+  defp changed(:gone, _mint), do: []
+
+  defp recorded, do: Keys.recorded_in_blocks!(@fleet, 0, @deployed + 1_000, actor: %System{})
+
   defp current_keys, do: Keys.keys_in_fleet!(@fleet).results
   defp next_block, do: Chain.get_cursor!(@fleet).next_block
-
-  # The statements that changed the database while `fun` ran in this process.
-  defp writes_during(fun) do
-    test_pid = self()
-    handler = "chain-test-writes"
-
-    :telemetry.attach(
-      handler,
-      [:keyfleet, :repo, :query],
-      fn _event, _measurements, meta, _config ->
-        if self() == test_pid and
-             not String.starts_with?(meta.query, ["SELECT", "begin", "commit"]),
-           do: send(test_pid, {:write, meta.query})
-      end,
-      nil
-    )
-
-    try do
-      fun.()
-    after
-      :telemetry.detach(handler)
-    end
-
-    receive_writes([])
-  end
-
-  defp receive_writes(writes) do
-    receive do
-      {:write, query} -> receive_writes([query | writes])
-    after
-      0 -> Enum.reverse(writes)
-    end
-  end
 
   # Points the app's node address at a local server answering each JSON-RPC
   # method with `answer.(method)`: an HTTP status and, for 200, the result.

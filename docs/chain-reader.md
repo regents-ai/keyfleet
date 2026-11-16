@@ -67,9 +67,9 @@ units. Every amount outside ETH and the fleet's own USDC is shown with its
 token's address.
 
 The app records at the head, from the latest block, and never waits for Base's
-`safe` or `finalized` blocks. A change in the chain's history is not repaired
-automatically: the reader stops that fleet and an operator fixes the record by
-hand, as below.
+`safe` or `finalized` blocks. Every record is kept as first saved: a later
+change in the chain's history never changes or removes one and never stops the
+reading, as "Changed history" below describes.
 
 ## How it runs
 
@@ -166,45 +166,48 @@ minute's wait, not a failure.
 
 While a fleet's head was last read more than seven minutes ago (one
 five-minute turn and two retries a minute apart), or its record
-is 3,000 blocks (about ten minutes) or more behind that head, or while it is
-stopped, nobody can post in its rooms or change its workspace; pages still
-load and say the record is catching up.
+is 3,000 blocks (about ten minutes) or more behind that head, nobody can post
+in its rooms or change its workspace; pages still load and say the record is
+catching up.
 
-## What a stop means
+## Changed history
 
-A second reading of the last 300 blocks found an ownership change, reveal,
-proposal, ballot, cancellation, execution, presence, edit restriction, shard
-record, agent-voting setting or money event that reads differently from the
-record, or a recorded one gone from a block whose hash is no longer the
-recorded one. The app logs, at error level, and saves with the site's errors
-(/admin/errors; Fly Sentinel emails the first time this kind of stop appears,
-as `docs/recurring-jobs.md` describes):
+Each pass reads the last 300 blocks again and compares them with what is
+saved, transaction by transaction:
+
+- A transaction with nothing saved yet is new history, and its events are
+  recorded.
+- A transaction already saved records nothing more, wherever the chain now
+  puts it.
+- A saved transaction whose events no longer match its records, because it
+  moved to another block, its block's hash changed, an event changed or it is
+  gone, keeps its records exactly as first saved. The pass carries on with the
+  rest of the stretch, and later passes read on as usual.
+
+That last case is one warning line, given by the pass that reads the
+transaction's block for the last time, the one that moves the cursor more than
+300 blocks past it. It names the transaction and the contracts its records came
+from:
 
 ```
-Fleet <fleet id> stopped: the chain disagrees with the record at block <N>. It is stopped at block <S>. ...
+Fleet <fleet id>: transaction <hash> on <contract addresses> no longer matches the chain; the records saved first are kept.
 ```
 
-and stops reading that fleet. Its cursor keeps `rescan_from = S`, and nothing
-recorded has been changed. `S` is `N`, or an earlier block the fleet was
-already stopped at: a stop only ever moves to an earlier block, so
-`rescan_from` is always the earliest disagreement found. A piece read again
-that disagrees with its record names the earlier of the recorded piece's block
-and the block it was read from, since the recorded one's block is what
-changed. The piece of blocks holding `N` recorded nothing; pieces before it,
-already checked, keep what they recorded. A recorded event missing from a
-block whose hash still matches is a node fault, not a stop: the pass fails
-and is retried.
+A new record that would take the place of one kept is not made either:
+another owner for one of a key's ownership records, another reveal or ended
+draw wait for a key, another proposal under a number, or another cancellation
+or execution of a proposal. Everything worked out from the records (who holds
+each key, how many keys are sold, presence, shards, tallies, a key's card and
+traits) follows the records kept, so none of it ever reflects half of a
+changed transaction.
 
-A reveal is checked by its seed, not by its place on the chain. A key's
-`KeyRevealed` read again from another block, with the same request and seed,
-is the reveal already recorded, and a recorded reveal missing from its block
-is no stop. A `KeyRevealed` for a revealed key with a different seed or request
-stops the fleet at the earlier of the recorded reveal's block and the block it
-was read from, and nothing is recorded. Chainlink VRF draws the seed from the
-request's block, so a change in history deep enough to drop that block can
-bring a different seed; that is a real reorg, corrected as below. A key's
-`RevealExpired` read again from another block is the ended wait already
-recorded, in the same way.
+After such a change the site can show what the chain no longer says: the
+first-saved owner of a key's ownership record, a key's first-saved reveal and
+card, or a first-saved proposal, until a later event replaces it. Rooms and the
+workspace go by the records kept. A step a person sends to the chain from a
+page reads the key's holder from the chain when it is pressed, and the
+treasury's balances are read from the chain every five minutes, so neither
+depends on the records. No record is changed by hand.
 
 ## When a stretch is not read
 
@@ -234,173 +237,13 @@ If the node will not answer even one block, the reason is
 said, and the fleet waits at it; a provider that answers with more logs at
 once is the fix.
 
-## Confirming a real reorg
+## Passes at once
 
-In `psql` on the production database, as a superuser or the role that owns
-the `keyfleet_app` tables:
-
-```sql
-\set fleet 'fibonacci_syndicate'
-
-SELECT DISTINCT block_number, block_hash
-FROM (
-  SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_attachments
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveals
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_reveal_expiries
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.key_presences
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposals
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_votes
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_cancellations
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.proposal_executions
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.edits_restrictions
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.shard_events
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.agent_voting_settings
-  UNION ALL SELECT fleet_id, block_number, block_hash FROM keyfleet_app.treasury_events
-) AS recorded
-WHERE fleet_id = :'fleet'
-  AND block_number >= (SELECT rescan_from - 30 FROM keyfleet_app.chain_cursors WHERE fleet_id = :'fleet')
-ORDER BY block_number;
-```
-
-For each block, ask the chain for its hash now. Ask a second provider, or check
-a block explorer, not only the node that raised the stop: a node that is behind
-on a stale fork reports different hashes too, and correcting from it would
-delete records that are right.
-
-```sh
-cast block <block_number> --field hash --rpc-url <a second Base provider>
-```
-
-The fork is the lowest block whose hash differs from the recorded one; call it
-`F`. If the first block listed already differs, the fork is older: lower the
-`- 30` in the query until the first block listed matches. If every hash matches,
-the chain has not changed and the node answered wrongly: point
-`KEYFLEET_RPC_URL` at another provider, change no records, and clear the stop.
-
-## Correcting the record
-
-Run in one transaction, with `fleet` and `from_block = F` set. Every record of
-that fleet in the eleven tables above at or after `F` is removed, and the
-cursor goes back to `F`, so the reader records the chain's current history
-from there. A shard counts only under its key's current ownership record, so
-shards issued under a removed ownership record stop counting with it. The
-numbered records made again from `F` on get new numbers, higher than any
-removed, so every reader of the list sees them as new. A key whose reveal is
-removed shows as still being revealed until its reveal is read again; a
-picture drawn for the removed seed stays stored but is no longer shown, and a
-new seed gets a picture of its own. The
-balance reading is not part of the history; the next one, a minute later,
-replaces it.
-
-Nothing tells a page already open that records were removed: it keeps showing
-them until it reconnects or is loaded again, and it hears about the records
-made again from `F` as the reader makes them.
-
-A pass that was already running when the fleet stopped cannot undo the
-correction. A pass records each piece, and moves the cursor, only while the
-cursor still stands where that pass left it and the fleet is not stopped;
-otherwise that piece is rolled back and the pass ends quietly, logging at
-info level:
+Two passes of one fleet never both record a piece: each holds the fleet's
+cursor while it compares and records a piece, and a pass that finds the cursor
+moved by another rolls that piece back and ends quietly, logging at info
+level:
 
 ```
-Fleet <fleet id>: the cursor moved underneath a pass that left it at block <N>, or the fleet was stopped; the pass ended and wrote nothing more.
+Fleet <fleet id>: the cursor moved underneath a pass that left it at block <N>; the pass ended and wrote nothing more.
 ```
-
-The first pass after the stop is cleared starts from `F`.
-
-The tables refuse deletes with a row trigger and emptying with a statement
-trigger. Nothing here uses `TRUNCATE`; only the delete triggers are switched off,
-by name, and on again before the commit, so a failure anywhere rolls all of it
-back with the trigger still on. `ALTER TABLE` needs a superuser or the table's
-owner, and it locks new records out of those tables for every fleet until the
-commit, so run the block below in one go and keep it short. Records that
-point at others go first: ballots, cancellations and executions before their
-proposals.
-
-```sql
-\set fleet 'fibonacci_syndicate'
-\set from_block <F>
-
-BEGIN;
-
--- Each table: the row trigger that refuses deletes is off for this
--- statement only, inside this transaction.
-ALTER TABLE keyfleet_app.key_attachments DISABLE TRIGGER immutable_key_epochs;
-DELETE FROM keyfleet_app.key_attachments
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.key_attachments ENABLE TRIGGER immutable_key_epochs;
-
-ALTER TABLE keyfleet_app.key_reveals DISABLE TRIGGER immutable_key_reveals;
-DELETE FROM keyfleet_app.key_reveals
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.key_reveals ENABLE TRIGGER immutable_key_reveals;
-
-ALTER TABLE keyfleet_app.key_reveal_expiries DISABLE TRIGGER immutable_key_reveal_expiries;
-DELETE FROM keyfleet_app.key_reveal_expiries
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.key_reveal_expiries ENABLE TRIGGER immutable_key_reveal_expiries;
-
-ALTER TABLE keyfleet_app.key_presences DISABLE TRIGGER immutable_key_presences;
-DELETE FROM keyfleet_app.key_presences
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.key_presences ENABLE TRIGGER immutable_key_presences;
-
-ALTER TABLE keyfleet_app.proposal_executions DISABLE TRIGGER immutable_proposal_executions;
-DELETE FROM keyfleet_app.proposal_executions
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.proposal_executions ENABLE TRIGGER immutable_proposal_executions;
-
-ALTER TABLE keyfleet_app.proposal_cancellations DISABLE TRIGGER immutable_proposal_cancellations;
-DELETE FROM keyfleet_app.proposal_cancellations
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.proposal_cancellations ENABLE TRIGGER immutable_proposal_cancellations;
-
-ALTER TABLE keyfleet_app.proposal_votes DISABLE TRIGGER immutable_proposal_votes;
-DELETE FROM keyfleet_app.proposal_votes
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.proposal_votes ENABLE TRIGGER immutable_proposal_votes;
-
-ALTER TABLE keyfleet_app.proposals DISABLE TRIGGER immutable_proposals;
-DELETE FROM keyfleet_app.proposals
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.proposals ENABLE TRIGGER immutable_proposals;
-
-ALTER TABLE keyfleet_app.edits_restrictions DISABLE TRIGGER immutable_edits_restrictions;
-DELETE FROM keyfleet_app.edits_restrictions
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.edits_restrictions ENABLE TRIGGER immutable_edits_restrictions;
-
-ALTER TABLE keyfleet_app.shard_events DISABLE TRIGGER immutable_shard_events;
-DELETE FROM keyfleet_app.shard_events
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.shard_events ENABLE TRIGGER immutable_shard_events;
-
-ALTER TABLE keyfleet_app.agent_voting_settings DISABLE TRIGGER immutable_agent_voting_settings;
-DELETE FROM keyfleet_app.agent_voting_settings
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.agent_voting_settings ENABLE TRIGGER immutable_agent_voting_settings;
-
-ALTER TABLE keyfleet_app.treasury_events DISABLE TRIGGER immutable_treasury_events;
-DELETE FROM keyfleet_app.treasury_events
-WHERE fleet_id = :'fleet' AND block_number >= :from_block;
-ALTER TABLE keyfleet_app.treasury_events ENABLE TRIGGER immutable_treasury_events;
-
--- The reader starts again at the fork.
-UPDATE keyfleet_app.chain_cursors
-SET next_block = :from_block
-WHERE fleet_id = :'fleet' AND rescan_from IS NOT NULL;
-
-COMMIT;
-```
-
-## Clearing the stop
-
-```sh
-fly ssh console -C "/app/bin/clear-fleet-stop fibonacci_syndicate"
-```
-
-The running app reads the fleet again on its next pass, from `F`; no restart is
-needed. Clearing the stop also marks the fleet as not read recently, until a
-pass reaches the head again. Owners and members can act again once that pass
-has read the chain. In development the same step is
-`mix keyfleet.clear_fleet_stop <fleet id>`.

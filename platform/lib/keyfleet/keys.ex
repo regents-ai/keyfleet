@@ -57,6 +57,10 @@ defmodule Keyfleet.Keys do
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
       define :reveals_of_keys, action: :of_keys, args: [:fleet_id, :token_ids]
+
+      define :reveals_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
     end
 
     resource Keyfleet.Keys.KeyRevealExpiry do
@@ -70,6 +74,10 @@ defmodule Keyfleet.Keys do
       define :reveal_expiries_recorded_since,
         action: :recorded_since,
         args: [:fleet_id, :after_seq]
+
+      define :reveal_expiries_in_blocks,
+        action: :recorded_in_blocks,
+        args: [:fleet_id, :from_block, :to_block]
     end
 
     resource Keyfleet.Keys.KeyPicture do

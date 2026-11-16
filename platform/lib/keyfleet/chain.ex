@@ -16,8 +16,6 @@ defmodule Keyfleet.Chain do
       define :open_cursor, action: :open
       define :fresh_cursor, action: :fresh, args: [:fleet_id], not_found_error?: false
       define :get_cursor, action: :read, get_by: [:fleet_id], not_found_error?: false
-      define :flag_divergence, action: :flag_divergence
-      define :clear_cursor_divergence, action: :clear_divergence
     end
   end
 
@@ -116,9 +114,9 @@ defmodule Keyfleet.Chain do
 
   @doc """
   Moves the fleet's cursor as `changes` say, in one update that requires the
-  stored cursor still to stand where `cursor` does and the fleet not to be
-  stopped. Returns `{:ok, cursor}`, `{:error, :moved}` when someone else has
-  moved the cursor or stopped the fleet since, or `{:error, error}`.
+  stored cursor still to stand where `cursor` does. Returns `{:ok, cursor}`,
+  `{:error, :moved}` when someone else has moved the cursor since, or
+  `{:error, error}`.
   """
   def advance_cursor(%Cursor{} = cursor, changes) do
     cursor
@@ -139,8 +137,7 @@ defmodule Keyfleet.Chain do
 
   @doc """
   Locks the fleet's cursor until the current transaction ends, if it still
-  stands where `cursor` does and the fleet is not stopped. Returns
-  `{:ok, cursor}` or `{:error, :moved}`.
+  stands where `cursor` does. Returns `{:ok, cursor}` or `{:error, :moved}`.
   """
   def hold_cursor(%Cursor{} = cursor) do
     cursor
@@ -158,19 +155,5 @@ defmodule Keyfleet.Chain do
       fleet_id: cursor.fleet_id,
       next_block: cursor.next_block
     })
-  end
-
-  @doc """
-  Lets a fleet stopped at a disagreement with the chain be read again, from
-  wherever its cursor now stands.
-  """
-  def clear_divergence!(fleet_id) do
-    case get_cursor!(fleet_id) do
-      nil ->
-        raise ArgumentError, "#{fleet_id} has no reading on record, so there is no stop to clear"
-
-      cursor ->
-        clear_cursor_divergence!(cursor, %{}, actor: %System{})
-    end
   end
 end

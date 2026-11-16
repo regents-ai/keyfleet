@@ -1,15 +1,9 @@
 defmodule Keyfleet.Chain.Changes.RecordOnce do
   @moduledoc """
   Makes a record from one chain event exactly once, for an action that
-  upserts on the event's identity and returns the stored row when it skips.
-
-  The event, named by the attributes in `:identity`, is held until commit.
-  Read again, it must match the record already made in every field named in
-  `:fields`, or in every field the changeset sets; a match is accepted and
-  changes nothing, a mismatch is refused as invalid, which the reader takes
-  to mean the chain no longer agrees with the record. With `:block`, the
-  attribute holding the block the record was made from, the refusal carries
-  that block as `recorded_block`.
+  upserts on the identity named by the attributes in `:identity` and changes
+  nothing when it skips. The event is held under that identity until commit,
+  and a record already made under it is kept as first saved.
 
   With `:number`, `:proposal_seq`, `:reveal_seq`, `:ownership_seq` or
   `:shard_seq`, a
@@ -21,11 +15,8 @@ defmodule Keyfleet.Chain.Changes.RecordOnce do
   import Ecto.Query, only: [from: 2]
 
   @impl true
-  def change(changeset, opts, _context) do
-    changeset
-    |> Ash.Changeset.before_action(&hold_and_number(&1, opts))
-    |> Ash.Changeset.after_action(&same_as_recorded(&1, &2, opts))
-  end
+  def change(changeset, opts, _context),
+    do: Ash.Changeset.before_action(changeset, &hold_and_number(&1, opts))
 
   defp hold_and_number(changeset, opts) do
     identity =
@@ -62,27 +53,4 @@ defmodule Keyfleet.Chain.Changes.RecordOnce do
   defp take(:reveal_seq, fleet_id), do: Keyfleet.Chain.take_reveal_seq!(fleet_id)
   defp take(:ownership_seq, fleet_id), do: Keyfleet.Chain.take_ownership_seq!(fleet_id)
   defp take(:shard_seq, fleet_id), do: Keyfleet.Chain.take_shard_seq!(fleet_id)
-
-  defp same_as_recorded(changeset, row, opts) do
-    fields =
-      opts[:fields] ||
-        Map.keys(changeset.attributes) -- Ash.Resource.Info.primary_key(changeset.resource)
-
-    if Enum.all?(fields, &same?(Map.fetch!(row, &1), Map.fetch!(changeset.attributes, &1))) do
-      {:ok, row}
-    else
-      {:error,
-       Ash.Error.Changes.InvalidChanges.exception(
-         fields: fields,
-         message: "conflicts with the record already made from the chain",
-         vars: recorded_block(row, opts[:block])
-       )}
-    end
-  end
-
-  defp recorded_block(_row, nil), do: []
-  defp recorded_block(row, block), do: [recorded_block: Map.fetch!(row, block)]
-
-  defp same?(%Decimal{} = recorded, %Decimal{} = read), do: Decimal.equal?(recorded, read)
-  defp same?(recorded, read), do: recorded == read
 end

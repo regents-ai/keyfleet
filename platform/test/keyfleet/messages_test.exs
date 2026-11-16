@@ -100,7 +100,7 @@ defmodule Keyfleet.MessagesTest do
 
   # Holding a key grants nothing while its ownership may be out of date.
   test "a key holder cannot post while key ownership is being refreshed", %{writer: writer} do
-    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
 
     assert {:error, %Ash.Error.Forbidden{}} = send_as(writer, "general", "Hello", "k-1")
     assert read("general") == []

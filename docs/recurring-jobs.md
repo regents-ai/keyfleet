@@ -17,7 +17,7 @@ has moved" below).
 | Job | When | What it does | Queue | When it fails |
 | --- | --- | --- | --- | --- |
 | `Keyfleet.Chain.Watch` | every five minutes | gives each deployed fleet a history reading and a balance reading | default | No node named while fleets are deployed: saved error, every five minutes |
-| `Keyfleet.Chain.ReadFleet` | one long-lived job per fleet, a pass every five minutes, brought forward to ten seconds when a step sent from the site goes through | records the fleet's history from the chain | chain | A failed pass: saved error (one per worker), retried a minute later, up to 20 times. A stop or another chain: saved error, one per kind (`docs/chain-reader.md`) |
+| `Keyfleet.Chain.ReadFleet` | one long-lived job per fleet, a pass every five minutes, brought forward to ten seconds when a step sent from the site goes through | records the fleet's history from the chain | chain | A failed pass: saved error (one per worker), retried a minute later, up to 20 times. A node on another chain: saved error (`docs/chain-reader.md`) |
 | `Keyfleet.Chain.ReadBalances` | every five minutes, per fleet, and at once after a step sent from the site goes through or the Treasury's read-again icon is pressed | reads the treasury's balances and split figures | chain | saved error, 3 tries; the next turn's reading follows |
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings every project space's members in step with the Keys, and queues a space for any project without one | notebook_hubs | saved error, 20 tries |
@@ -150,8 +150,7 @@ fly ssh console -C "/app/bin/keyfleet rpc 'Oban.retry_job(12345)'"
 ```
 
 A fleet's history job given up after 20 failures needs nothing: the watch
-starts a fresh one within five minutes. A stopped fleet is cleared as
-`docs/chain-reader.md` describes.
+starts a fresh one within five minutes.
 
 ## Stopping and starting again
 

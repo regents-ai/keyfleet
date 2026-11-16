@@ -83,12 +83,9 @@ defmodule Keyfleet.ChainHelpers do
 
   @doc """
   A fleet's cursor read up to block 1_000 just now; `attrs` overrides any of
-  `next_block`, `head_block`, `observed_at` and `rescan_from`.
+  `next_block`, `head_block` and `observed_at`.
   """
   def seed_cursor!(fleet_id, attrs \\ %{}) do
-    attrs = Map.new(attrs)
-    {rescan_from, advance} = Map.pop(attrs, :rescan_from)
-
     {:ok, cursor} =
       %{fleet_id: fleet_id, next_block: 0}
       |> Chain.open_cursor!(actor: %System{})
@@ -100,14 +97,11 @@ defmodule Keyfleet.ChainHelpers do
             head_block_hash: @head_hash,
             observed_at: DateTime.utc_now()
           },
-          advance
+          Map.new(attrs)
         )
       )
 
-    case rescan_from do
-      nil -> cursor
-      block -> Chain.flag_divergence!(cursor, %{block: block}, actor: %System{})
-    end
+    cursor
   end
 
   @doc """

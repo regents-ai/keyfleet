@@ -25,36 +25,31 @@ defmodule Keyfleet.Chain.Scanner do
 
   A piece read for the first time is recorded in one transaction with the
   fleet's cursor moved past it, so the cursor always stands just after the
-  last piece recorded. Every piece, in the second reading too, is recorded
-  only while the cursor still stands where the pass left it and the fleet is
-  not stopped; if an operator's correction or another pass has moved it, the
-  piece is rolled back and the pass ends quietly, leaving the cursor where it
-  now stands. The first piece that cannot be read ends the pass with
-  the cursor there, and the next pass carries on from it: a single block the
-  node will not answer, which is named in the error, or a piece with a
-  malformed or unknown log, a proposal without its author key's renewal, a
-  proposal number skipped, or a vote, cancellation or execution for a
-  proposal not recorded yet. That piece
+  last piece recorded. Every piece, in the second reading too, is compared
+  with what is saved and recorded while the cursor is held where the pass
+  left it; if another pass has moved it, the piece is rolled back and the
+  pass ends quietly, leaving the cursor where it now stands. The first piece
+  that cannot be read ends the pass with the cursor there, and the next pass
+  carries on from it: a single block the node will not answer, which is
+  named in the error, or a piece with a malformed or unknown log, a proposal
+  without its author key's renewal, a proposal number skipped, or a vote,
+  cancellation or execution for a proposal not recorded yet. That piece
   records nothing. Recording is safe to repeat: a record read twice is made
   once and keeps its number. Nothing above the head this pass read is asked
   for, so a node that is behind reads as a shorter pass, never as missing
   history.
 
-  The second reading is how a change in the chain's history shows up. It
-  checks each piece, in chain order, before recording anything new in it:
-  every record made from those blocks must still be there. If it finds a
-  record that disagrees with one already made, or a block whose hash is no
-  longer the one recorded, the fleet is stopped at that block and the error
-  is logged; pieces before it keep what they recorded. A record read again
-  that disagrees with the one already made stops the fleet at the earlier of
-  the block it was read from and the block it was recorded from. A key's
-  reveal is its seed wherever it is read: the same seed read from another
-  block is the same reveal, and a reveal missing from its block is not a
-  disagreement, but a different seed or request for a revealed key is.
-  Nothing recorded is rewritten; an operator corrects the record by hand and
-  then clears the stop, as `docs/chain-reader.md` describes. A recorded event
-  missing from a block whose hash still matches is the node answering
-  inconsistently, so the pass fails and is retried instead.
+  Every record is kept as first saved. Each piece is compared with what is
+  saved, transaction by transaction, before anything in it is recorded. The
+  logs of a transaction with nothing saved yet are new history and are
+  recorded; a transaction already saved records nothing more, wherever the
+  chain now puts it. A new record that would take the place of one kept, such
+  as another owner for an ownership epoch, another reveal of a key or another
+  proposal under a number, is not made. A saved transaction whose logs no
+  longer match its records, because it moved to another block, its block's
+  hash changed, a log changed or it is gone, keeps its records and is named
+  in one warning, with its contracts, by the pass that reads its block for
+  the last time: the one that moves the cursor more than 300 blocks past it.
 
   A pass that made a new proposal or money record says so on
   `Keyfleet.Proposals.topic/1`. One that recorded keys revealed, sold,
@@ -64,8 +59,8 @@ defmodule Keyfleet.Chain.Scanner do
   marked present in the blocks it read for the first time are named in one
   notice of their own there, `{:keys_present, fleet_id, token_ids}`, however
   many marks they came in, so a page reads again only what shows presence.
-  Each is said even if the pass then failed or stopped the fleet, and each is
-  only a hint to read again.
+  Each is said even if the pass then failed, and each is only a hint to read
+  again.
   """
 
   require Logger
@@ -73,7 +68,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.Logs
-  alias Keyfleet.Chain.ReadingStoppedError
+  alias Keyfleet.Chain.MoneyLog
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
@@ -89,40 +84,26 @@ defmodule Keyfleet.Chain.Scanner do
   @doc """
   Runs one pass with `client`.
 
-  Returns `:ok` once the cursor has reached the end of the pass,
-  `{:stopped, block}` while the fleet is stopped at a disagreement, naming
-  the earliest one found, `:moved`
-  when someone else moved the cursor or stopped the fleet during the pass,
-  and
-  `{:error, reason}` when the chain could not be read, in which case the
-  cursor stands just after the last piece recorded. A stopped fleet is not
-  written to.
+  Returns `:ok` once the cursor has reached the end of the pass, `:moved`
+  when someone else moved the cursor during the pass, and `{:error, reason}`
+  when the chain could not be read, in which case the cursor stands just
+  after the last piece recorded.
   """
   def step(%Fleet{} = fleet, client) do
-    case Chain.get_cursor!(fleet.id) do
-      nil ->
-        %{fleet_id: fleet.id, next_block: fleet.deployed_block}
-        |> Chain.open_cursor!(actor: @system)
-        |> then(&scan(fleet, &1, client))
+    cursor =
+      Chain.get_cursor!(fleet.id) ||
+        Chain.open_cursor!(%{fleet_id: fleet.id, next_block: fleet.deployed_block},
+          actor: @system
+        )
 
-      %{rescan_from: nil} = cursor ->
-        scan(fleet, cursor, client)
-
-      %{rescan_from: block} ->
-        {:stopped, block}
-    end
-  end
-
-  defp scan(fleet, cursor, client) do
     result =
       with {:ok, head} <- client.head(),
            {:ok, buyer} <- regent_buyer(fleet, head, client),
            contracts = {fleet, buyer},
-           {:ok, cursor} <- reread(contracts, cursor, head, client),
-           {:ok, _cursor} <- read_forward(contracts, cursor, head, client) do
+           {:ok, pass} <- reread(contracts, %{cursor: cursor, differs: []}, head, client),
+           {:ok, _pass} <- read_forward(contracts, pass, head, client) do
         :ok
       else
-        {:diverged, block} -> stop(fleet, cursor, block)
         {:moved, from_block} -> moved(fleet, from_block)
         {:error, reason} -> {:error, reason}
       end
@@ -151,48 +132,35 @@ defmodule Keyfleet.Chain.Scanner do
     end
   end
 
-  # Each piece is checked against what is recorded before anything new in it
-  # is recorded.
-  defp reread({fleet, _buyer} = contracts, cursor, head, client) do
-    from = max(fleet.deployed_block, cursor.next_block - @rescan_blocks)
-    to = min(cursor.next_block - 1, head.number)
+  # The last 300 blocks recorded, each piece held where the cursor stands.
+  defp reread({fleet, _buyer} = contracts, pass, head, client) do
+    from = max(fleet.deployed_block, pass.cursor.next_block - @rescan_blocks)
+    to = min(pass.cursor.next_block - 1, head.number)
 
-    each_piece(
-      contracts,
-      from,
-      to,
-      client,
-      cursor,
-      &check_and_record(fleet, client, &1, &2, &3, &4)
-    )
-  end
-
-  defp check_and_record(fleet, client, from, to, records, cursor) do
-    with :ok <- still_on_chain(fleet, records, from, to, client),
-         do: write_piece(fleet, records, cursor, &Chain.hold_cursor/1)
+    each_piece(contracts, from, to, client, pass, fn from, to, records, pass ->
+      write_piece(contracts, {from, to, records}, pass, &{:ok, &1})
+    end)
   end
 
   # Each piece moves the cursor past itself as it is recorded.
-  defp read_forward({fleet, _buyer} = contracts, cursor, head, client) do
-    from = cursor.next_block
+  defp read_forward(contracts, pass, head, client) do
+    from = pass.cursor.next_block
     to = min(head.number, from + @max_range - 1)
 
     if to < from do
-      write_piece(fleet, [], cursor, &Chain.advance_cursor(&1, advance(from, head)))
+      with {:ok, cursor} <-
+             write_cursor(pass.cursor, &Chain.advance_cursor(&1, advance(from, head))),
+           do: {:ok, %{pass | cursor: cursor}}
     else
-      each_piece(
-        contracts,
-        from,
-        to,
-        client,
-        cursor,
-        &record_and_move(fleet, head, &1, &2, &3, &4)
-      )
+      each_piece(contracts, from, to, client, pass, fn from, to, records, pass ->
+        write_piece(
+          contracts,
+          {from, to, records},
+          pass,
+          &Chain.advance_cursor(&1, advance(to + 1, head))
+        )
+      end)
     end
-  end
-
-  defp record_and_move(fleet, head, _from, to, records, cursor) do
-    write_piece(fleet, records, cursor, &Chain.advance_cursor(&1, advance(to + 1, head)))
   end
 
   # Reads `from..to` in chain order. A stretch the node will not answer whole
@@ -222,26 +190,30 @@ defmodule Keyfleet.Chain.Scanner do
     end
   end
 
-  # A piece's records and what `to_cursor` does after them, holding or moving
-  # the cursor, are made together or not at all. It is refused, and the piece
-  # rolled back, once the cursor no longer stands where this pass left it or
-  # the fleet has been stopped. A record the database refuses ends the
-  # transaction there and comes back as its changeset.
-  defp write_piece(fleet, records, cursor, to_cursor) do
+  # A piece is compared with what is saved, its new records are made, and
+  # `to_cursor` holds or moves the cursor after them, together or not at all,
+  # with the cursor held from the start so no other pass records anything in
+  # between. It is refused, and the piece rolled back, once the cursor no
+  # longer stands where this pass left it. A record the database refuses ends
+  # the transaction there and comes back as its changeset.
+  defp write_piece({fleet, _buyer} = contracts, {from, to, records}, pass, to_cursor) do
     Keyfleet.Repo.transact(fn ->
-      case record(fleet, records) do
-        :ok -> write_cursor(cursor, to_cursor)
+      with {:ok, _held} <- write_cursor(pass.cursor, &Chain.hold_cursor/1),
+           saved = saved(fleet.id, from, to, records),
+           {fresh, differs} = compare(contracts, records, saved, from..to//1),
+           :ok <- record(fleet, fresh),
+           {:ok, cursor} <- write_cursor(pass.cursor, to_cursor) do
+        {:ok, %{cursor: cursor, differs: pass.differs ++ differs}}
+      else
         failure -> {:error, failure}
       end
     end)
     |> case do
-      {:ok, cursor} ->
-        {:ok, cursor}
+      {:ok, pass} ->
+        {:ok, settle(fleet, pass)}
 
       {:error, %Ash.Changeset{} = refused} ->
-        refused.errors
-        |> Ash.Error.to_error_class()
-        |> failure(Ash.Changeset.get_attribute(refused, :block_number))
+        {:error, Ash.Error.to_error_class(refused.errors)}
 
       {:error, failure} ->
         failure
@@ -252,37 +224,151 @@ defmodule Keyfleet.Chain.Scanner do
   defp write_cursor(cursor, to_cursor) do
     case to_cursor.(cursor) do
       {:ok, cursor} -> {:ok, cursor}
-      {:error, :moved} -> {:error, {:moved, cursor.next_block}}
-      {:error, error} -> {:error, {:error, error}}
+      {:error, :moved} -> {:moved, cursor.next_block}
+      {:error, error} -> {:error, error}
     end
   end
 
-  # A record that conflicts with one already made means the chain no longer
-  # agrees with the record.
+  # Everything saved from blocks `from..to` of the fleet, and from the
+  # transactions of `records` wherever it was saved.
+  defp saved(fleet_id, from, to, records) do
+    transactions = records |> Enum.map(fn {_type, fields} -> fields.transaction_hash end)
+    named = %{transactions: Enum.uniq(transactions)}
+
+    Enum.concat([
+      Keys.recorded_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Keys.reveals_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Keys.reveal_expiries_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Keys.shard_events_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Keys.edits_restrictions_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Keys.agent_voting_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Keys.presences_in_blocks!(fleet_id, from, to, named, actor: @system),
+      Proposals.recorded_in_blocks!(fleet_id, from, to, named.transactions),
+      Treasury.recorded_in_blocks!(fleet_id, from, to, named.transactions)
+    ])
+  end
+
+  # The records read of transactions with nothing saved yet, and each saved
+  # transaction from `blocks` whose logs read now no longer match its
+  # records. A transaction's logs are all in one block.
+  defp compare(contracts, records, saved, blocks) do
+    saved = Enum.group_by(saved, & &1.transaction_hash)
+    read = Enum.group_by(records, fn {_type, fields} -> fields.transaction_hash end)
+
+    fresh =
+      Enum.reject(records, fn {_type, fields} ->
+        Map.has_key?(saved, fields.transaction_hash)
+      end)
+
+    differs =
+      for {transaction, [%{block_number: block} | _rest] = rows} <- saved,
+          block in blocks,
+          not same?(rows, Map.get(read, transaction, [])),
+          do: %{
+            block: block,
+            transaction: transaction,
+            contracts: rows |> Enum.map(&contract(contracts, &1)) |> Enum.uniq()
+          }
+
+    {fresh, differs}
+  end
+
+  # A record of the same kind read now at each saved record's log index, and
+  # no other, with every field the log gives the same, its block and block
+  # hash among them.
+  defp same?(rows, read) do
+    read = Map.new(read, fn {_type, fields} = record -> {fields.log_index, record} end)
+
+    map_size(read) == length(rows) and
+      Enum.all?(rows, fn row ->
+        case Map.fetch(read, row.log_index) do
+          {:ok, {type, fields}} ->
+            type == kind(row) and Enum.all?(fields, &same_field?(row, &1))
+
+          :error ->
+            false
+        end
+      end)
+  end
+
+  # A field read now, cast as the record's attribute is; a proposal number
+  # against the number of the proposal the record names.
+  defp same_field?(%resource{} = row, {field, read}) do
+    saved = Map.fetch!(row, field)
+
+    case Ash.Resource.Info.attribute(resource, field) do
+      nil ->
+        saved == read
+
+      %{type: type, constraints: constraints} ->
+        case Ash.Type.cast_input(type, read, constraints) do
+          {:ok, cast} -> Ash.Type.equal?(type, saved, cast, constraints)
+          _uncast -> false
+        end
+    end
+  end
+
+  defp kind(%Keys.KeyAttachment{}), do: :ownership
+  defp kind(%Keys.KeyReveal{}), do: :reveal
+  defp kind(%Keys.KeyRevealExpiry{}), do: :reveal_expiry
+  defp kind(%Keys.ShardEvent{}), do: :shard
+  defp kind(%Keys.EditsRestriction{}), do: :edits_restriction
+  defp kind(%Keys.AgentVoting{}), do: :agent_voting
+  defp kind(%Keys.Presence{}), do: :presence
+  defp kind(%Proposals.Proposal{}), do: :proposal
+  defp kind(%Proposals.Vote{}), do: :ballot
+  defp kind(%Proposals.Cancellation{}), do: :cancellation
+  defp kind(%Proposals.Execution{}), do: :execution
+  defp kind(%Treasury.Event{}), do: :treasury_event
+
+  # The contract whose log a record was made from.
+  defp contract({fleet, buyer}, %Treasury.Event{kind: kind}) do
+    case MoneyLog.contract(kind) do
+      :fleet -> fleet.manager_address
+      :treasury -> fleet.treasury_address
+      :rewards -> fleet.rewards_address
+      :buyer -> buyer
+    end
+  end
+
+  defp contract({fleet, _buyer}, row) do
+    case kind(row) do
+      kind when kind in [:ownership, :reveal, :reveal_expiry] -> fleet.keys_address
+      kind when kind in [:shard, :agent_voting] -> fleet.shards_address
+      _votes -> fleet.votes_address
+    end
+  end
+
+  # Each saved transaction found no longer matching the chain is named once,
+  # by the pass that reads its block for the last time: once the cursor stands
+  # more than 300 blocks past it, no later pass reads it again. The rest are
+  # found again by this pass's next piece or the next pass.
+  defp settle(fleet, %{cursor: cursor, differs: differs} = pass) do
+    {last, later} = Enum.split_with(differs, &(&1.block < cursor.next_block - @rescan_blocks))
+
+    for %{transaction: transaction, contracts: contracts} <- last do
+      Logger.warning(
+        "Fleet #{fleet.id}: transaction #{transaction} on #{Enum.join(contracts, ", ")} " <>
+          "no longer matches the chain; the records saved first are kept."
+      )
+    end
+
+    %{pass | differs: later}
+  end
+
+  # Each new proposal must be the fleet's next number, and each ballot,
+  # cancellation and execution must name a proposal recorded by then.
   defp record(fleet, records) do
     with :ok <- Logs.in_sequence(records, Proposals.highest_number!(fleet.id)),
          do: Enum.reduce_while(records, :ok, &record_one/2)
   end
 
-  defp record_one({_type, fields} = record, :ok) do
+  defp record_one(record, :ok) do
     case make_record(record) do
       {:ok, _recorded} -> {:cont, :ok}
-      {:error, error} -> {:halt, failure(error, fields.block_number)}
+      {:error, error} -> {:halt, {:error, error}}
     end
   end
-
-  # A record read again that disagrees with the one already made stops the
-  # fleet at the earlier of the two blocks: the recorded one's block changed.
-  defp failure(%Ash.Error.Invalid{errors: errors}, block) do
-    recorded =
-      for %{vars: vars} <- errors,
-          Keyword.has_key?(vars, :recorded_block),
-          do: vars[:recorded_block]
-
-    {:diverged, Enum.min([block | recorded])}
-  end
-
-  defp failure(error, _block), do: {:error, error}
 
   # A refused record is returned rather than rolling back the piece's
   # transaction, which `write_piece/4` undoes as a whole.
@@ -308,33 +394,6 @@ defmodule Keyfleet.Chain.Scanner do
   defp make_record({:agent_voting, setting}), do: Keys.record_agent_voting(setting, @record_opts)
   defp make_record({:presence, presence}), do: Keys.record_presence(presence, @record_opts)
   defp make_record({:treasury_event, event}), do: Treasury.record_event(event, @record_opts)
-
-  # A recorded event the second reading no longer finds means the same only
-  # when its block is no longer the block that was recorded.
-  defp still_on_chain(fleet, records, from, to, client) do
-    seen =
-      MapSet.new(records, fn {_type, fields} -> {fields.transaction_hash, fields.log_index} end)
-
-    fleet.id
-    |> Keys.recorded_in_blocks!(from, to, actor: @system)
-    |> Enum.concat(Keys.shard_events_in_blocks!(fleet.id, from, to, actor: @system))
-    |> Enum.concat(Keys.edits_restrictions_in_blocks!(fleet.id, from, to, actor: @system))
-    |> Enum.concat(Keys.agent_voting_in_blocks!(fleet.id, from, to, actor: @system))
-    |> Enum.concat(Keys.presences_in_blocks!(fleet.id, from, to, actor: @system))
-    |> Enum.concat(Proposals.recorded_in_blocks!(fleet.id, from, to))
-    |> Enum.concat(Treasury.recorded_in_blocks!(fleet.id, from, to))
-    |> Enum.reject(&MapSet.member?(seen, {&1.transaction_hash, &1.log_index}))
-    |> Enum.map(&{&1.block_number, &1.block_hash})
-    |> Enum.uniq()
-    |> Enum.sort()
-    |> Enum.reduce_while(:ok, fn {block, recorded_hash}, :ok ->
-      case client.get_block_hash(block) do
-        {:ok, ^recorded_hash} -> {:halt, {:error, {:log_missing_from_block, block}}}
-        {:ok, _other_hash} -> {:halt, {:diverged, block}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-  end
 
   # The cursor as the pass found it; the records it made moved its numbers on.
   # Every key revealed or whose draw's wait was ended, sold, changing hands,
@@ -416,30 +475,14 @@ defmodule Keyfleet.Chain.Scanner do
   defp since(now, before, read) when now > before, do: read.()
   defp since(_now, _before, _read), do: []
 
-  # Someone else moved the cursor or stopped the fleet during the pass: an
-  # operator's correction, or another pass. The pass leaves the cursor as it
-  # is, and the next pass reads on from wherever it then stands.
+  # Another pass moved the cursor during this one. The pass leaves the cursor
+  # as it is, and the next pass reads on from wherever it then stands.
   defp moved(fleet, from_block) do
     Logger.info(
       "Fleet #{fleet.id}: the cursor moved underneath a pass that left it at block " <>
-        "#{from_block}, or the fleet was stopped; the pass ended and wrote nothing more."
+        "#{from_block}; the pass ended and wrote nothing more."
     )
 
     :moved
-  end
-
-  # A fleet already stopped at an earlier block stays stopped there.
-  defp stop(fleet, cursor, block) do
-    %{rescan_from: stopped_at} =
-      Chain.flag_divergence!(cursor, %{block: block}, actor: @system)
-
-    message =
-      "Fleet #{fleet.id} stopped: the chain disagrees with the record at block #{block}. " <>
-        "It is stopped at block #{stopped_at}. " <>
-        "Correct the record as docs/chain-reader.md describes, then run bin/clear-fleet-stop #{fleet.id}."
-
-    Logger.error(message)
-    ReadingStoppedError.report(message)
-    {:stopped, stopped_at}
   end
 end

@@ -416,7 +416,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   test "a visitor who is not signed in is told who writes and who reads, whatever ownership is doing",
        %{conn: conn} do
     ChainHelpers.deploy!(@fleet)
-    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
 
     {:ok, view, html} = live(conn, @path)
 
@@ -427,7 +427,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   test "a key holder of a live fleet is told a room for keys waits while ownership is refreshed",
        %{conn: conn} do
     ChainHelpers.deploy!(@fleet)
-    ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
+    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
 
     {:ok, _view, html} =
       conn |> signed_in_as(@owner) |> live("/classic/1?room=open-1")

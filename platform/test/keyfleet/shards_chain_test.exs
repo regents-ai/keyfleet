@@ -1,6 +1,8 @@
 defmodule Keyfleet.ShardsChainTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain.{Scanner, StubClient}
   alias Keyfleet.ChainHelpers
@@ -179,6 +181,30 @@ defmodule Keyfleet.ShardsChainTest do
       assert %{token_id: 7, allowed: true, ownership_epoch: 1, record_seq: 1} = on
       assert %{token_id: 7, allowed: false, record_seq: 2} = off
     end
+  end
+
+  describe "reading again" do
+    # Read again as saved, past the last time their blocks are read, shard and
+    # agent voting records are kept without a warning.
+    test "shard records read again as saved are kept without a warning", %{fleet: fleet} do
+      logs = [
+        ownership(7, "a", 1, @deployed + 1, 0),
+        issued(7, "b", in_days(30), 1, @deployed + 2, 0),
+        agent_voting(7, true, 1, @deployed + 2, 1),
+        ended(7, "b", "a", @deployed + 3, 0)
+      ]
+
+      read(fleet, logs, @deployed + 10)
+      saved = shard_records()
+
+      refute capture_log(fn -> read(fleet, logs, @deployed + 400) end) =~ "no longer matches"
+      assert shard_records() == saved
+    end
+  end
+
+  defp shard_records do
+    Keys.shard_events_in_blocks!(@fleet, 0, @deployed + 400, actor: %System{}) ++
+      Keys.agent_voting_in_blocks!(@fleet, 0, @deployed + 400, actor: %System{})
   end
 
   defp read(fleet, logs, head) do

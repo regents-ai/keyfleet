@@ -59,7 +59,7 @@ defmodule Keyfleet.Chain.ReadFleet do
       :ok -> passed(fleet)
       {:error, reason} -> failed(fleet, reason)
       {:cancel, reason} -> {:cancel, reason}
-      _read -> {:snooze, pass_interval()}
+      :moved -> {:snooze, pass_interval()}
     end
   end
 

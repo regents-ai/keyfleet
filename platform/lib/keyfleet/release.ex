@@ -135,20 +135,6 @@ defmodule Keyfleet.Release do
   end
 
   @doc """
-  Lets a fleet stopped at a disagreement with the chain be read again, once
-  the record has been corrected by hand. `bin/clear-fleet-stop <fleet id>`
-  runs it; a running app picks the fleet up on its next pass.
-  """
-  def clear_fleet_stop(fleet_id),
-    do: with_release_repo([], fn _repo -> clear_fleet_stop!(fleet_id) end)
-
-  @doc "Clears the stop through an already running repository, as `clear_fleet_stop/1` does."
-  def clear_fleet_stop!(fleet_id) do
-    Keyfleet.Chain.clear_divergence!(fleet_id)
-    IO.puts("#{fleet_id} will be read again.")
-  end
-
-  @doc """
   Prepares an empty staging database for the first deployment.
 
   Staging owns a disposable database, so it has no copy of the tables this
