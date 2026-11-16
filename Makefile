@@ -21,11 +21,13 @@ CHECK_LANES := "platform-checks platform-walks" platform-suite check-required-fi
 CHECK_GATES := $(CHECK_FIRST) $(subst ",,$(CHECK_LANES))
 CHECK_LOGS := platform/_build/check
 # Each gate's budget in seconds, about 40% over its time in make check on a
-# 16-core Mac (Nov 2026), and 5 s for a gate that takes a second or two. A gate
-# over its budget gets a SLOW line under its own at the end; it never fails the
-# check.
-CHECK_BUDGETS := platform-assets:5 platform-checks:35 platform-walks:380 \
-  platform-suite:620 check-required-fixes:5 check-cli:5 check-siwa-latest:5 check-contracts:215
+# 16-core Mac (Nov 2026), and 5 s for a gate that takes a second or two. The
+# assets' budget holds the compile a change brings (25 s after a changelog
+# entry, which the site serves), and the required fixes' the three answers it
+# waits for from GitHub (2 to 7 s). A gate over its budget gets a SLOW line
+# under its own at the end; it never fails the check.
+CHECK_BUDGETS := platform-assets:35 platform-checks:35 platform-walks:380 \
+  platform-suite:620 check-required-fixes:10 check-cli:5 check-siwa-latest:5 check-contracts:215
 check:
 	@mkdir -p $(CHECK_LOGS) && : > $(CHECK_LOGS)/results
 	@echo "Running $(words $(CHECK_GATES)) gates, $(CHECK_FIRST) first, then the rest side by side; each writes $(CHECK_LOGS)/<gate>.log."
