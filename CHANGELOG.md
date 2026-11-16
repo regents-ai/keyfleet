@@ -10537,3 +10537,26 @@ removes or renames a field, route or code, or makes an input required.
   card's picture failed to draw, the flag that says a draw is under way was
   never let go, and no later card drew. The flag is now let go whatever
   happens; the failure is still reported.
+## 2026-11-15: four records keep only the stages they declare
+
+- A project's stages (active, archived, deleted) and its four moves, and an ENS lookup's
+  stages (pending, done, failed) and its three moves, are each written once, in the
+  record's `state_machine` block (ash_state_machine 0.3.1, new). A move from the wrong
+  stage is refused there; `Keyfleet.Projects.Hold` still checks first and answers as
+  before.
+- The database refuses a row that contradicts itself: a Key's close-up or small card
+  both made and failed, a kept notebook page marked succeeded with a failure recorded,
+  an archived project that no Key holds, and an ENS lookup in any stage but the three.
+  The migration only adds these rules and changes no row or column.
+- Making a small picture or recording that it failed, marking a kept page succeeded and
+  recording a run's failure each leave a row that already holds the other outcome as it
+  is, so the job ends quietly instead of writing both. Before, nothing in the record
+  stopped the second outcome being written over the first.
+- Nothing a person or agent sees changes: every page, answer, tool and wording is the
+  same.
+- Tests: an ENS lookup goes from pending to done, or to failed after its last failed
+  try, and a done or failed one moves again only when asked again; a project moves only
+  along its declared moves and a stale copy is refused as before; a made picture is
+  never recorded failed, nor a failed one made; a kept page with a failure is never
+  marked succeeded, nor a succeeded one given a failure; and each database rule refuses
+  a row written past the record.

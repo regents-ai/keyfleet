@@ -11,6 +11,11 @@ defmodule Keyfleet.Accounts.EnsIdentity do
   `wallet_address` is the wallet the row was read for, so an account whose
   wallet has since changed is never shown the old wallet's name.
 
+  A lookup is pending, done or failed (`lookup_state`), and its moves are
+  declared in the `state_machine` block: asking makes it pending from any
+  stage, and only a pending lookup becomes done or failed. The database holds
+  no other stage.
+
   Lookups run only while the server has an Ethereum endpoint
   (`ETHEREUM_READ_RPC_URL`).
   """
@@ -20,13 +25,33 @@ defmodule Keyfleet.Accounts.EnsIdentity do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [Ash.Notifier.PubSub],
-    extensions: [AshOban]
+    extensions: [AshOban, AshStateMachine]
 
   alias Keyfleet.Accounts.EnsIdentity.LookUp
 
   postgres do
     table "account_ens_identities"
     repo(Keyfleet.Repo)
+    # Every row is written by asking, which names its stage, so the column
+    # keeps no default of its own.
+    migration_defaults(lookup_state: "nil")
+
+    check_constraints do
+      check_constraint(:lookup_state, "account_ens_identities_lookup_state",
+        check: "lookup_state IN ('pending', 'done', 'failed')"
+      )
+    end
+  end
+
+  state_machine do
+    initial_states([:pending])
+    state_attribute(:lookup_state)
+
+    transitions do
+      transition(:request_lookup, from: :*, to: :pending)
+      transition(:look_up, from: :pending, to: :done)
+      transition(:lookup_failed, from: :pending, to: :failed)
+    end
   end
 
   attributes do
@@ -37,6 +62,7 @@ defmodule Keyfleet.Accounts.EnsIdentity do
 
     attribute :lookup_state, :atom,
       allow_nil?: false,
+      default: :pending,
       constraints: [one_of: [:pending, :done, :failed]]
 
     timestamps()
@@ -58,7 +84,7 @@ defmodule Keyfleet.Accounts.EnsIdentity do
 
     create :request_lookup do
       accept [:human_account_id, :wallet_address]
-      change set_attribute(:lookup_state, :pending)
+      change transition_state(:pending)
       change run_oban_trigger(:look_up)
       upsert? true
       upsert_identity :unique_human_account
@@ -68,11 +94,12 @@ defmodule Keyfleet.Accounts.EnsIdentity do
     update :look_up do
       transaction? false
       require_atomic? false
+      change transition_state(:done)
       change LookUp
     end
 
     update :lookup_failed do
-      change set_attribute(:lookup_state, :failed)
+      change transition_state(:failed)
     end
   end
 

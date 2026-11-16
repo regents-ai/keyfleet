@@ -76,6 +76,7 @@ defmodule Keyfleet.MixProject do
       # The code gateway's connection to the fleets' code store.
       {:mint, "~> 1.11"},
       {:ash_oban, "~> 0.10.3"},
+      {:ash_state_machine, "~> 0.3.1"},
       {:igniter, "== 0.8.5", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.14.6"},
       {:regent_privy,

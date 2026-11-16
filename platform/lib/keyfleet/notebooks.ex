@@ -200,11 +200,12 @@ defmodule Keyfleet.Notebooks do
   @doc """
   Records how background run `run_id` failed, `failure` as the hub's record
   of the run names it, on the fleet's copies of the run's page that record
-  none yet (`Keyfleet.Notebooks.SavedOutput`): where it stopped and the hub's
-  sentence for it, `stage` and `message`, never the output excerpt, which the
-  hub shows only to whoever started the run and the notebook's author. A
-  failure once recorded stays. Nil records nothing. A copy that can't be
-  marked is saved with the site's errors; the answer is `:ok` either way.
+  none yet and are not marked succeeded (`Keyfleet.Notebooks.SavedOutput`):
+  where it stopped and the hub's sentence for it, `stage` and `message`, never
+  the output excerpt, which the hub shows only to whoever started the run and
+  the notebook's author. A failure once recorded stays. Nil records nothing.
+  A copy that can't be marked is saved with the site's errors; the answer is
+  `:ok` either way.
   """
   def record_run_failure(_fleet_id, _run_id, nil), do: :ok
 
