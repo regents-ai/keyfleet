@@ -10680,8 +10680,12 @@ removes or renames a field, route or code, or makes an input required.
   reads only the chain id from a review, no longer the chain's name or public node. The
   server keeps both: the name for the page's words and for Privy, the public node for
   Privy on a network it does not list; the chain package's review requires it too.
-- The shared chain package alone moves to 14a0691, which accepts the new reason; every
-  other shared package stays where it was.
+- The shared library pin moves to b921301, which is the commit Keyfleet was on plus one
+  word: the chain package accepts the new reason. Every other shared package is unchanged.
+- The wallet Privy makes at sign-in is moved through the provider the page holds, because
+  Privy's own switch for it only changes Privy's record (the template's 8f28f899). Wallet
+  apps go through Privy's switch. Keyfleet's steps go to one network and Privy's wallet
+  starts on it, so this changes nothing a person sees today.
 - The browser walk's stand-in wallet can start on another network, and its switch moves
   it to the network asked or is declined. Two new walks press Approve from Ethereum
   (network 1): one is switched and sends on Base; the other declines, sends nothing and

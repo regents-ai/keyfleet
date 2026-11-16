@@ -2255,6 +2255,20 @@ describe("Privy session bridge", () => {
       expect(first.switchChain.mock.calls).toEqual([[8453], [8453]])
     })
 
+    // Privy's switch for the wallet it makes only changes Privy's record, so
+    // the held provider is asked to move instead.
+    it("moves the wallet Privy made through the provider the page holds", async () => {
+      const first = ethereumWallet(lower, {walletClientType: "privy", connectorType: "embedded"})
+      await mountedSelection(first)
+
+      await activeEthereumWallet()!.switchChain(8453)
+      expect(first.provider.request).toHaveBeenCalledWith({
+        method: "wallet_switchEthereumChain",
+        params: [{chainId: "0x2105"}],
+      })
+      expect(first.switchChain).not.toHaveBeenCalled()
+    })
+
     it("keeps the selected wallet active through a refresh that only re-allocates it", async () => {
       const first = ethereumWallet(lower)
       const page = await mountedSelection(first)
