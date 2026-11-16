@@ -5,6 +5,9 @@ import type {SentTransaction} from "./fleet_chain"
 /** What the stand-in wallet does with a transaction it is asked to send. */
 export type Answer = "send" | "decline"
 
+/** What the stand-in wallet does when it is asked to switch network. */
+export type SwitchAnswer = "switch" | "decline"
+
 type StandIn = {sent: SentTransaction[]; hashes: string[]; answer: Answer}
 
 declare global {
@@ -14,18 +17,24 @@ declare global {
 }
 
 /**
- * Makes a stand-in wallet on Base, holding `address`, Privy's active wallet
- * in the open page, as Privy does once a person picks a wallet. Its switch
- * stands in for Privy's and moves it to any network asked. It sends nothing
- * anywhere: each transaction it is asked to send is kept, answered with a new
- * random hash, or declined as a person declining in their wallet app would.
- * The page's scripts are ES modules, so the one that keeps the active wallet
- * is found among those the page's script imports, and is the same module the
+ * Makes a stand-in wallet on network `on` (Base unless named), holding
+ * `address`, Privy's active wallet in the open page, as Privy does once a
+ * person picks a wallet. Its switch stands in for Privy's: it moves the wallet
+ * to the network asked, or is declined as a person declining in their wallet
+ * app would. It sends nothing anywhere: each transaction it is asked to send
+ * is kept, answered with a new random hash, or declined the same way. The
+ * page's scripts are ES modules, so the one that keeps the active wallet is
+ * found among those the page's script imports, and is the same module the
  * page's buttons read.
  */
-export async function useStandInWallet(page: Page, address: string, answer: Answer = "send") {
+export async function useStandInWallet(
+  page: Page,
+  address: string,
+  answer: Answer = "send",
+  {on = 8453, switching = "switch"}: {on?: number; switching?: SwitchAnswer} = {},
+) {
   await page.evaluate(
-    async ({address, answer}) => {
+    async ({address, answer, on, switching}) => {
       const script = document.querySelector<HTMLScriptElement>('script[type=module][src*="/assets/js/app"]')!.src
       const source = await (await fetch(script)).text()
       const chunks = [...source.matchAll(/from "(\.\/chunks\/chunk-[A-Z0-9]+\.js)"/g)].map(match => new URL(match[1], script).href)
@@ -38,8 +47,11 @@ export async function useStandInWallet(page: Page, address: string, answer: Answ
         standIn.answer = answer
         window.standInWallet = standIn
 
-        let chainId = 8453
+        let chainId = on
         const switchChain = async (wanted: number) => {
+          if (switching === "decline") {
+            throw Object.assign(new Error("User rejected the request."), {code: 4001})
+          }
           chainId = wanted
         }
         const provider = {
@@ -74,7 +86,7 @@ export async function useStandInWallet(page: Page, address: string, answer: Answ
 
       throw new Error("No page module keeps the active wallet.")
     },
-    {address, answer},
+    {address, answer, on, switching},
   )
 }
 

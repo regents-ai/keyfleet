@@ -16,6 +16,7 @@ import {
 } from "@privy-io/react-auth"
 import React from "react"
 import {createRoot} from "react-dom/client"
+import {defineChain} from "viem"
 
 import {
   AccountAuthFailure,
@@ -1166,6 +1167,25 @@ function AccountBridge({oauthReturn, mode, providerState, publishRequestHandler,
   return null
 }
 
+// The chain the site's wallet buttons send on, as the page's wallet-chain tags
+// name it (the server's `:wallet_chains`). A network in Privy's own list, such
+// as Base, is Privy's entry, so the Privy wallet reads and sends through Privy's
+// own nodes. Any other, such as the anvil lab's, is described from the site's
+// own name and public node, paid in ETH.
+function walletChain() {
+  const meta = (name: string) => document.querySelector<HTMLMetaElement>(`meta[name='${name}']`)!.content
+  const id = Number(meta("wallet-chain-id"))
+  return (
+    SUPPORTED_CHAINS.find(chain => chain.id === id) ??
+    defineChain({
+      id,
+      name: meta("wallet-chain-name"),
+      nativeCurrency: {name: "Ether", symbol: "ETH", decimals: 18},
+      rpcUrls: {default: {http: [meta("wallet-chain-rpc-url")]}},
+    })
+  )
+}
+
 export function startPrivyBridge(
   {mode = "ordinary", signal, readyTimeoutMs = 15_000}: PrivyBridgeStartupOptions = {},
   providerState?: PrivyBridgeProviderState,
@@ -1175,11 +1195,7 @@ export function startPrivyBridge(
     providerState?.appId ??
     document.querySelector<HTMLMetaElement>("meta[name='privy-app-id']")?.content
   if (!appId) return Promise.reject(new Error("Privy app is unavailable"))
-  // The chain the site's wallet buttons send on (the server's `:wallet_chains`),
-  // as Privy's own list of networks describes it.
-  const walletChainId = Number(document.querySelector<HTMLMetaElement>("meta[name='wallet-chain-id']")?.content)
-  const walletChain = SUPPORTED_CHAINS.find(chain => chain.id === walletChainId)
-  if (!walletChain) return Promise.reject(new Error("Privy has no network for the wallet chain"))
+  const chain = walletChain()
   // Read before Privy finishes the return and clears these from the address.
   const oauthReturn = returnedFromOAuth(window.location.search)
   const host = document.createElement("div")
@@ -1253,19 +1269,17 @@ export function startPrivyBridge(
       // account can act. A person always sees Privy's confirm window before their
       // Privy wallet signs.
       //
-      // The site's wallet chain is the only network, taken from Privy's own list
-      // so the Privy wallet reads and sends through Privy's own nodes. The Privy
-      // wallet starts on it. A wallet app on another network is asked to switch
-      // as it connects (Privy leaves MetaMask through WalletConnect alone) and
-      // connects anyway if the person declines; a press asks again before it
-      // sends.
+      // The site's wallet chain is the only network, and the Privy wallet starts
+      // on it. A wallet app on another network is asked to switch as it connects
+      // (Privy leaves MetaMask through WalletConnect alone) and connects anyway if
+      // the person declines; a press asks again before it sends.
       <PrivyProvider
         appId={appId}
         config={{
           appearance: {logo: "/mark.png"},
           embeddedWallets: {showWalletUIs: true, ethereum: {createOnLogin: "users-without-wallets"}},
-          defaultChain: walletChain,
-          supportedChains: [walletChain],
+          defaultChain: chain,
+          supportedChains: [chain],
         }}
       >
         <AccountBridge

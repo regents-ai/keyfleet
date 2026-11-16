@@ -132,9 +132,10 @@ config :keyfleet, Keyfleet.ChainRefresh, readers: [Keyfleet.Chain.Watch]
 
 # The chain a fleet's wallet buttons send on, by the chain id its deployment
 # records, with its name in the page's words. Privy connects every wallet on
-# it and switches to no other (`privy_bridge.tsx`), so it must be a network in
-# Privy's own list. `RegentChain.Review` requires its public `rpc_url`, which
-# nothing reads: Privy adds the network to a wallet from its own list.
+# it and switches to no other (`privy_bridge.tsx`). A network in Privy's own
+# list, such as Base, goes through Privy's own entry and nodes; for any other,
+# such as the anvil lab's, Privy takes this name and public `rpc_url`, and adds
+# the network to a wallet with them. `RegentChain.Review` requires the `rpc_url`.
 config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://mainnet.base.org"}}
 
 # The node the server reads each chain through, by chain id: the steps a

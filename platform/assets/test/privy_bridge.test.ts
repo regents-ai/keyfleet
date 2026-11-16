@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from "vitest"
 import React from "react"
-import type {PrivyEvents} from "@privy-io/react-auth"
+import {SUPPORTED_CHAINS, type PrivyEvents} from "@privy-io/react-auth"
 
 const productionRootRender = vi.hoisted(() => vi.fn())
 const productionRootUnmount = vi.hoisted(() => vi.fn())
@@ -151,9 +151,19 @@ function installAccountBridgeRenderer() {
   }
 }
 
+// The wallet chain the root layout names on every page, here Base.
+const baseChainMeta = {
+  "wallet-chain-id": "8453",
+  "wallet-chain-name": "Base",
+  "wallet-chain-rpc-url": "https://mainnet.base.org",
+}
+
 // The account control is the only evidence of whether a page is signed in, so
 // schedules that turn on it name their marker; the default page shows neither.
-function stubBrowserGlobals(accountMarker: "sign-in" | "profile" | null = null) {
+function stubBrowserGlobals(
+  accountMarker: "sign-in" | "profile" | null = null,
+  chainMeta: Record<string, string> = baseChainMeta,
+) {
   const dispatched: string[] = []
   const listeners = new Map<string, () => void>()
   const reload = vi.fn()
@@ -174,7 +184,8 @@ function stubBrowserGlobals(accountMarker: "sign-in" | "profile" | null = null) 
     body: {append: vi.fn()},
     createElement: () => ({hidden: false, remove: vi.fn()}),
     querySelector: (selector: string) => {
-      if (selector === "meta[name='wallet-chain-id']") return {content: "8453"}
+      const meta = Object.entries(chainMeta).find(([name]) => selector === `meta[name='${name}']`)
+      if (meta) return {content: meta[1]}
       return accountMarker && selector === `#account-control [data-account-target='${accountMarker}']`
         ? {}
         : null
@@ -852,6 +863,37 @@ describe("Privy session bridge", () => {
     })
     expect(productionRootRender.mock.calls[0]?.[0].props.config).not.toHaveProperty("loginMethods")
     void startup.catch(() => undefined)
+  })
+
+  it("hands Privy its own entry for a network it lists, and the site's name and node for one it does not", async () => {
+    const privyConfig = async (chainMeta: Record<string, string>) => {
+      productionRootRender.mockReset()
+      stubBrowserGlobals(null, chainMeta)
+      const startup = bridge.startPrivyBridge({readyTimeoutMs: 1}, {
+        appId: "test-app", authenticated: false, ready: false, walletsReady: false, wallets: [],
+        getAccessToken: async () => null, logout: async () => undefined,
+      })
+      const config = productionRootRender.mock.calls[0]?.[0].props.config
+      await startup.catch(() => undefined)
+      return config
+    }
+
+    const base = await privyConfig(baseChainMeta)
+    expect(base.defaultChain).toBe(SUPPORTED_CHAINS[0])
+    expect(base.supportedChains).toEqual([SUPPORTED_CHAINS[0]])
+
+    const lab = await privyConfig({
+      "wallet-chain-id": "31337",
+      "wallet-chain-name": "Keyfleet lab",
+      "wallet-chain-rpc-url": "http://127.0.0.1:8546",
+    })
+    expect(lab.defaultChain).toMatchObject({
+      id: 31337,
+      name: "Keyfleet lab",
+      nativeCurrency: {name: "Ether", symbol: "ETH", decimals: 18},
+      rpcUrls: {default: {http: ["http://127.0.0.1:8546"]}},
+    })
+    expect(lab.supportedChains).toEqual([lab.defaultChain])
   })
 
   it("keeps background Privy errors silent and non-terminal", () => {

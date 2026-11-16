@@ -18,8 +18,9 @@ direnv exec /Users/sean/Documents/regent/repos/keyfleet/platform scripts/anvil-l
   port (`keyfleet_lab_8546_dev`), which is made new on every start.
 - Ctrl-C stops the site and the chain together. Starting again starts over.
 - Privy must allow `http://localhost:4097` as an origin for the app.
-- The first button you press asks your wallet to add the lab network; say yes. A wallet that
-  can't add a network, such as Zerion, can't use the lab.
+- Privy asks your wallet to add and switch to the lab network as it connects, and a button
+  asks again when you press it on another network; say yes. A wallet that can't add a
+  network, such as Zerion, can't use the lab.
 - A Key's card is drawn by the lab's stand-in for Chainlink VRF, which answers every 20 seconds.
 
 ## Moving time
