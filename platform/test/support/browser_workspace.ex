@@ -10,13 +10,15 @@ defmodule Keyfleet.BrowserWorkspace do
   one does for the requests this site makes: notebooks, their authors and
   code, each notebook's workspace files with their ETags, jobs and their
   runs. A run has finished the first time it is read again, and its page is a
-  short one of its own.
+  short one of its own. `start_hub!/1` starts the hub alone, and
+  `keep_page!/2` gives the fleet a kept run page a member opens.
   """
 
   alias Keyfleet.Graph.{Projector, Projectors, Writer}
-  alias Keyfleet.Projects
+  alias Keyfleet.{Notebooks, Projects}
 
   @project "proj-0123456789abcdef"
+  @pages Path.expand("fixtures/notebook_pages", __DIR__)
 
   @doc """
   Starts the fleet's work graph and its notebook hub, in a process of their
@@ -58,7 +60,12 @@ defmodule Keyfleet.BrowserWorkspace do
     start_hub!(fleet_id)
   end
 
-  defp start_hub!(fleet_id) do
+  @doc """
+  Starts the fleet's stand-in notebook hub, in a process of its own that
+  lives as long as the node does, and records its space as the General
+  project's. Started again, the fleet's notebooks answer from the new one.
+  """
+  def start_hub!(fleet_id) do
     caller = self()
 
     spawn(fn ->
@@ -89,6 +96,25 @@ defmodule Keyfleet.BrowserWorkspace do
     |> Projects.record_space!(@project, actor: %Keyfleet.Actors.System{})
 
     :ok
+  end
+
+  @doc """
+  Keeps the page `name` from test/support/fixtures/notebook_pages as the page
+  of a background run of a notebook of the fleet, made now, as the site keeps
+  a run's page once a member reads the run; answers its address on the
+  fleet's notebook host.
+  """
+  def keep_page!(fleet_id, name) do
+    notebook_id = "nb-" <> random(16)
+    run_id = run_id()
+    saved_at = System.os_time(:millisecond)
+    page = File.read!(Path.join(@pages, name))
+
+    Notebooks.keep_saved_output!(fleet_id, notebook_id, run_id, saved_at, page, true,
+      actor: %Keyfleet.Actors.System{}
+    )
+
+    Notebooks.result_url(fleet_id, notebook_id, run_id, saved_at)
   end
 
   defp await(ready?, tries \\ 300) do
@@ -307,7 +333,7 @@ defmodule Keyfleet.BrowserWorkspace do
 
   defp jobs("POST", [job_id, "runs"], id, conn, request) do
     run = %{
-      "run_id" => "run_" <> random(26, ~c"0123456789ABCDEFGHJKMNPQRSTVWXYZ"),
+      "run_id" => run_id(),
       "status" => "queued",
       "triggered_by" => request.subject
     }
@@ -375,6 +401,9 @@ defmodule Keyfleet.BrowserWorkspace do
 
   defp finished(%{"run_id" => run_id} = run, run_id), do: %{run | "status" => "succeeded"}
   defp finished(run, _run_id), do: run
+
+  # A background run's id, in the hub's own shape.
+  defp run_id, do: "run_" <> random(26, ~c"0123456789ABCDEFGHJKMNPQRSTVWXYZ")
 
   defp random(length, alphabet \\ ~c"0123456789abcdefghijklmnopqrstuvwxyz"),
     do: for(_ <- 1..length, into: "", do: <<Enum.random(alphabet)>>)

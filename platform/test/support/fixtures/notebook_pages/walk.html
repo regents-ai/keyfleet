@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<!--
+  Written by hand for test/browser/kept_page.spec.ts: a notebook's page with
+  its cells already drawn, the way marimo's frontend shows them once it has
+  loaded. A page marimo exports loads that frontend from cdn.jsdelivr.net, so
+  a walk that reads nothing from outside the machine can't draw one; this page
+  holds everything it shows, its slider's script included.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Boat count</title>
+    <style>
+      :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+      body { margin: 0; }
+      main { max-width: 46rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+      section { margin: 0 0 2rem; }
+      pre { margin: 0; padding: 0.75rem; overflow-x: auto; border: 1px solid #8884; border-radius: 6px; }
+      [role="region"] { overflow-x: auto; border: 1px solid #8884; border-radius: 6px; }
+      table { border-collapse: collapse; }
+      th, td { padding: 0.25rem 0.75rem; text-align: right; white-space: nowrap; }
+      th { font-weight: 600; border-bottom: 1px solid #8884; }
+      label { display: block; margin-bottom: 0.25rem; }
+      input { width: 100%; max-width: 20rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section data-cell-id="Hbol">
+        <h1>Boat count</h1>
+        <p>Boats seen in each harbour this morning, read from boats.csv.</p>
+      </section>
+
+      <section data-cell-id="MJUe">
+        <pre>Read 14 harbours from boats.csv
+Boats counted: 214</pre>
+      </section>
+
+      <section data-cell-id="vblA">
+        <div role="region" aria-label="Boats by harbour" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Harbour</th><th>Arklow</th><th>Bantry</th><th>Castletownbere</th><th>Dingle</th>
+                <th>Dunmore East</th><th>Greencastle</th><th>Howth</th><th>Kilmore Quay</th>
+                <th>Killybegs</th><th>Rossaveal</th><th>Schull</th><th>Skerries</th><th>Union Hall</th>
+                <th>Wicklow</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th>Boats</th><td>11</td><td>9</td><td>27</td><td>14</td><td>18</td><td>16</td>
+                <td>22</td><td>12</td><td>31</td><td>15</td><td>7</td><td>10</td><td>13</td><td>9</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section data-cell-id="bkHC">
+        <label for="per-row">Boats a row</label>
+        <input id="per-row" type="range" min="1" max="12" value="4">
+        <p><output id="rows" for="per-row"></output></p>
+      </section>
+
+      <section data-cell-id="lEQa">
+        <h2>Notes</h2>
+        <p>Each harbour was counted once, from the end of its main pier, between six and seven in the morning.</p>
+        <p>Boats on moorings count; boats out of the water on the slipway or in a yard do not.</p>
+        <p>Killybegs and Castletownbere hold most of the larger trawlers, so their counts move least from day to day.</p>
+        <p>Schull and Union Hall fill with visiting yachts in summer; these counts are from a weekday in November.</p>
+        <p>Howth was counted twice by two people, who agreed on 22.</p>
+        <p>The slider above sets how many boats stand in a row when the count is drawn as a picture.</p>
+      </section>
+
+      <section data-cell-id="PKri">
+        <p>Counted by hand on 14 November 2026.</p>
+      </section>
+    </main>
+    <script>
+      const perRow = document.getElementById("per-row")
+      const rows = document.getElementById("rows")
+      const show = () => { rows.value = `${Math.ceil(214 / perRow.valueAsNumber)} rows of ${perRow.value}` }
+      perRow.addEventListener("input", show)
+      show()
+    </script>
+  </body>
+</html>
