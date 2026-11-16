@@ -46,8 +46,6 @@ export type TreeCard = {
   readonly changed: string
   readonly archived: boolean
   readonly folder: string | null
-  /** When a notebook last ran, null when it never has; absent for anything else. */
-  readonly ran?: string | null
 }
 
 export type TreeData = {readonly cards: readonly TreeCard[]; readonly links: readonly TreeLink[]}
@@ -128,10 +126,9 @@ export function createTreeStage(root: HTMLElement): TreeStage {
     el.dataset.tone = card.tone
     el.toggleAttribute("data-archived", card.archived)
     el.querySelector(".tree-card-kind")!.textContent = card.kind
-    const standing = card.ran === undefined ? card.standing : ran(card.ran)
     const badge = el.querySelector<HTMLElement>(".tree-card-standing")!
-    badge.hidden = standing === null
-    badge.lastElementChild!.textContent = standing ?? ""
+    badge.hidden = card.standing === null
+    badge.lastElementChild!.textContent = card.standing ?? ""
     const link = el.querySelector<HTMLAnchorElement>(".tree-card-title")!
     link.textContent = card.title
     link.href = card.href
@@ -143,13 +140,6 @@ export function createTreeStage(root: HTMLElement): TreeStage {
       delete link.dataset.phxLinkState
     }
     el.querySelector(".tree-card-meta")!.textContent = [card.author, card.folder].filter(Boolean).join(" · ")
-  }
-
-  const ran = (at: string | null) => {
-    if (at === null) return "Not run"
-    const clock = localClock(Date.now())
-    const day = clock.label(clock.start(Date.parse(at), "day"), "day")
-    return `Ran ${day === "Today" || day === "Yesterday" ? day.toLowerCase() : day}`
   }
 
   const mark = (el: HTMLElement, id: string) => {

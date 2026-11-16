@@ -45,6 +45,7 @@ export default defineConfig({
     "atlas.spec.ts",
     "worldline.spec.ts",
     "fleet_tour.spec.ts",
+    "kept_page.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

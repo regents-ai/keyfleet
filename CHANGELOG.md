@@ -10624,3 +10624,32 @@ removes or renames a field, route or code, or makes an input required.
   block hash, a payment and an execution gone; every kind of record read again as saved
   is kept without a warning; a different reveal for a revealed Key keeps the first; an
   event that cannot be read still ends the pass with nothing saved.
+
+## 2026-11-16: from the notebooks review: Changed, a kept page walked, two notes
+
+- A notebook whose code, packages or details changed after its newest kept run page now
+  says Changed in the workspace: in Docs' lists for one project and for every project,
+  on Docs' canvas, and among a goal's notebooks. A screen reader hears "Changed since its
+  last run". A notebook with no kept run page, or not changed since, shows nothing new.
+  It is the same rule an agent's notebook list uses (`changed_since`), now one function
+  for both, read from Keyfleet's own copies in one read for the whole list, and nothing
+  more is asked of the notebook host. The canvas's "Not run" and "Ran <day>" badge is gone: it
+  drew the host's last run time, which the host never records.
+- A new browser walk opens a kept notebook page as a member: from the page's address it
+  goes through Keyfleet's notebook sign-in and back, then checks the page's sandbox,
+  that every cell shows and its script runs, that the keys scroll it and reach its table
+  and slider, and that it fits the screen. It runs in desktop Chromium and at an iPhone
+  15's and a Pixel 7's screen. Its page is written by hand, because a real marimo page
+  loads its frontend from the internet and the walk stays on the machine.
+- The guide's notebook page read, in `skill/notebooks.md` and `/docs`, now tells an
+  agent to compare the page's `run_id` with its own run, that whether the code is
+  current is on the run's read (`entry_current`, `bundle_current`), and to stop or open
+  `result_url` while `truncated` is true. The guide stays at 3.33.0.
+- `docs/chain-reader.md` now says what a release that records a new kind of event does
+  to saved history: transactions already saved gain nothing, one in the last 300 blocks
+  holding the new kind is named in the "no longer matches" warning, and older blocks are
+  never read again.
+- Tests: the workspace page and agent notebook tests (116), the runs test (1), the guide
+  and agent file tests (39), the canvas layout unit tests (10), and the new walk once in
+  desktop Chromium and once at each phone (3), all passed. Nothing was retried, skipped
+  or given longer to wait.

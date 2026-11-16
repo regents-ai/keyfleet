@@ -1364,7 +1364,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             "author" => "u_#{account.id}",
             "created_at" => "2026-10-20T09:00:00Z",
             "updated_at" => "2026-10-21T09:00:00Z",
-            "last_run_at" => "2026-10-21T08:00:00Z",
             "tags" => ["folder/plans"]
           },
           %{
@@ -1374,11 +1373,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             "author" => "someone-else",
             "created_at" => "2026-10-19T09:00:00Z",
             "updated_at" => "2026-10-19T09:00:00Z",
-            "last_run_at" => nil,
             "tags" => []
           }
         ]
       end)
+
+      keep_page!(plan, "run_" <> String.duplicate("1", 26), ~U[2026-10-21 08:00:00Z])
 
       task =
         create(@fleet, "task", %{
@@ -1398,7 +1398,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "author" => "Key 2",
                "folder" => "plans",
                "changed" => "2026-10-21T09:00:00Z",
-               "ran" => "2026-10-21T08:00:00Z",
+               "standing" => "Changed",
                "patch" => false
              } = tree_card(tree, plan)
 
@@ -1406,7 +1406,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         "/fleets/#{@fleet}/notebooks/open?" <>
           URI.encode_query(to: Keyfleet.Notebooks.notebook_path(project, price))
 
-      assert %{"author" => "No Key", "ran" => nil, "href" => ^open} = tree_card(tree, price)
+      assert %{"author" => "No Key", "standing" => nil, "href" => ^open} = tree_card(tree, price)
 
       assert %{"kind" => "Task", "title" => "Model the price", "author" => "Key 17"} =
                tree_card(tree, task)
@@ -1434,6 +1434,51 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         assert_raise KeyfleetWeb.NotFoundError, fn ->
           live(conn, @board <> "?place=docs&project=general&" <> query)
         end
+      end
+    end
+
+    # Costly failure: a notebook whose code changed after its last kept run
+    # page, listed as if that page still showed what the code does, would
+    # mislead the member who reads it.
+    test "every list of notebooks marks the ones changed since their newest kept run page",
+         %{conn: conn} do
+      project = "proj-0123456789abcdef"
+      changed = "nb-0123456789abcdef"
+      current = "nb-fedcba9876543210"
+      unrun = "nb-00112233445566ff"
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+
+      hub!(project, fn _query ->
+        for id <- [changed, current, unrun] do
+          %{
+            "id" => id,
+            "title" => id,
+            "description" => "",
+            "created_at" => "2026-10-20T09:00:00Z",
+            "updated_at" => "2026-10-21T09:00:00Z",
+            "tags" => ["goal-#{id_number(goal)}"]
+          }
+        end
+      end)
+
+      keep_page!(changed, "run_" <> String.duplicate("1", 26), ~U[2026-10-21 08:00:00Z])
+      keep_page!(current, "run_" <> String.duplicate("2", 26), ~U[2026-10-21 07:00:00Z])
+      keep_page!(current, "run_" <> String.duplicate("3", 26), ~U[2026-10-21 10:00:00Z])
+      # A page of a version, not of a run, is no run page.
+      keep_page!(unrun, "ver_" <> String.duplicate("0", 26), ~U[2026-10-21 08:00:00Z])
+
+      for {path, list} <- [
+            {@board <> "?place=docs&project=general&view=list", "#workspace-notebook-rows"},
+            {@board <> "?place=docs&view=list", "#workspace-docs-general"},
+            {item_path(goal), "#workspace-goal-notebook-rows"}
+          ] do
+        {:ok, view, _html} = live(conn, path)
+        mark = &~s(#{list} [data-notebook="#{&1}"] [data-changed-since-run])
+
+        assert has_element?(view, mark.(changed))
+        refute has_element?(view, mark.(current))
+        refute has_element?(view, mark.(unrun))
+        assert has_element?(view, ~s(#{list} [data-notebook="#{unrun}"]))
       end
     end
 
@@ -2970,6 +3015,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     @fleet
     |> Keyfleet.Projects.project!(Keyfleet.Projects.general(), actor: %Actors.System{})
     |> Keyfleet.Projects.record_space!(project_id, actor: %Actors.System{})
+  end
+
+  # A page of `notebook` the fleet keeps, made by `source_id` at `at`.
+  defp keep_page!(notebook, source_id, at) do
+    Keyfleet.Notebooks.keep_saved_output!(
+      @fleet,
+      notebook,
+      source_id,
+      DateTime.to_unix(at, :millisecond),
+      "<p>kept</p>",
+      true,
+      actor: %Actors.System{}
+    )
   end
 
   defp hub_answer(conn, _project_id, :down), do: Plug.Conn.send_resp(conn, 503, "")

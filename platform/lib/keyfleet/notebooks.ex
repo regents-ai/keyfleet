@@ -198,6 +198,17 @@ defmodule Keyfleet.Notebooks do
     do: Req.Response.get_header(response, "x-marimohub-run-status") == ["succeeded"]
 
   @doc """
+  Whether a notebook was changed after `page`, a kept page of it, was made,
+  from `updated_at`, when the hub last changed the notebook (ISO 8601): the
+  hub moves a notebook's `updated_at` when its code, packages or details
+  change.
+  """
+  def changed_since?(updated_at, %SavedOutput{saved_at: saved_at}) do
+    {:ok, at, _offset} = DateTime.from_iso8601(updated_at)
+    DateTime.to_unix(at, :millisecond) > saved_at
+  end
+
+  @doc """
   Records how background run `run_id` failed, `failure` as the hub's record
   of the run names it, on the fleet's copies of the run's page that record
   none yet and are not marked succeeded (`Keyfleet.Notebooks.SavedOutput`):
