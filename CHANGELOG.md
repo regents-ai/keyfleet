@@ -10530,3 +10530,10 @@ removes or renames a field, route or code, or makes an input required.
 - The docs' contract history line for 35.0.0 names the run-page change that ships with
   it: a `result_url` older than 30 days answers 404 `notebooks_not_found`, with the three
   exceptions.
+
+## 2026-11-15: a deck's cards keep drawing after one fails
+
+- On a fleet's deck page, cards near the screen draw one at a time. If one
+  card's picture failed to draw, the flag that says a draw is under way was
+  never let go, and no later card drew. The flag is now let go whatever
+  happens; the failure is still reported.

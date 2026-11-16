@@ -136,19 +136,23 @@ export const DeckViewer = {
     const drawNear = async (): Promise<void> => {
       if (drawing) return
       drawing = true
-      while (near.size) {
-        const button: HTMLElement = near.values().next().value!
-        near.delete(button)
-        watch.unobserve(button)
-        const {card} = cards.get(button)!
-        const pixels = await draw(await keyJob(card.key, seedNumber(card.seed), topLine(card)))
-        const picture = new ImageData(new Uint8ClampedArray(pixels), ...DRAWN)
-        const [w, h] = SHOWN
-        const shrunk = await createImageBitmap(picture, {resizeWidth: w, resizeHeight: h, resizeQuality: "high"})
-        button.querySelector<HTMLCanvasElement>("canvas")!.getContext("2d")!.drawImage(shrunk, 0, 0)
-        shrunk.close()
+      // A card whose picture fails to draw is reported and skipped; the cards after it still draw.
+      try {
+        while (near.size) {
+          const button: HTMLElement = near.values().next().value!
+          near.delete(button)
+          watch.unobserve(button)
+          const {card} = cards.get(button)!
+          const pixels = await draw(await keyJob(card.key, seedNumber(card.seed), topLine(card)))
+          const picture = new ImageData(new Uint8ClampedArray(pixels), ...DRAWN)
+          const [w, h] = SHOWN
+          const shrunk = await createImageBitmap(picture, {resizeWidth: w, resizeHeight: h, resizeQuality: "high"})
+          button.querySelector<HTMLCanvasElement>("canvas")!.getContext("2d")!.drawImage(shrunk, 0, 0)
+          shrunk.close()
+        }
+      } finally {
+        drawing = false
       }
-      drawing = false
     }
     const watch = new IntersectionObserver(
       entries => {
