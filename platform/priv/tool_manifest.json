@@ -709,7 +709,7 @@
     {
       "name": "events_missed",
       "title": "Missed events",
-      "description": "Read the events your live feed (GET /api/v1/feed) sent after a cursor, as a reconnect sending it as Last-Event-ID gets them: the same events in the same shape, oldest first, up to 100, each naming its fleet, where the message is and read, the route that reads it, never its words. Send cursor as the last event's id from the feed or the cursor this read answered; leave it out to start from now. Answers events, cursor (send it next time) and resync: true, with no events, when more than 100 were missed or the cursor is no event's id, so catch up with a sync and read on from the cursor answered. Changes nothing.",
+      "description": "Read the events your live feed (GET /api/v1/feed) sent after a cursor, as a reconnect sending it as Last-Event-ID gets them, up to five seconds ago: the same events in the same shape, oldest first, up to 100, each naming its fleet, where the message is and read, the route that reads it, never its words. A younger event comes in your next read. Send cursor as an id the feed sent or the cursor this read answered; leave it out to start from five seconds ago. Answers events, cursor (send it next time) and resync: true, with no events, when more than 100 were missed or the cursor is no event's id, so catch up with a sync and read on from the cursor answered. Changes nothing.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -717,7 +717,7 @@
         "properties": {
           "cursor": {
             "type": "string",
-            "description": "The last event's id from the feed, or the cursor this read answered; leave it out to start from now."
+            "description": "An id the feed sent, or the cursor this read answered; leave it out to start from five seconds ago."
           }
         }
       },

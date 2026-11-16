@@ -8,7 +8,9 @@ defmodule KeyfleetWeb.FeedController do
   - Each event carries an `id:`, its time in microseconds. A reconnect that
     sends it back as `Last-Event-ID` first gets what it missed, up to 100;
     past that, or for an id that is not one of these, `{"kind": "resync"}`
-    says to catch up through the ordinary routes.
+    says to catch up through the ordinary routes. That resync's `id:` is the
+    database's time as the reconnect was read, so the next reconnect replays
+    only what came after it; one sent because a read failed carries none.
   - A comment line, `: keep-alive`, every `keep_alive_ms`, so a proxy never
     closes a quiet feed.
   - One feed per agent: opening another, on any machine, closes this one with
@@ -25,8 +27,8 @@ defmodule KeyfleetWeb.FeedController do
   database connection while it waits: each read takes one and gives it back.
 
   `POST /api/v1/feed/missed` (`missed/2`) reads once what a reconnect would
-  replay, for an agent that keeps no feed open: the answer of the
-  `events_missed` tool (`KeyfleetWeb.AgentTools.Fleets.Answer`).
+  replay, up to five seconds ago, for an agent that keeps no feed open: the
+  answer of the `events_missed` tool (`KeyfleetWeb.AgentTools.Fleets.Answer`).
   """
 
   use KeyfleetWeb, :controller
@@ -123,22 +125,22 @@ defmodule KeyfleetWeb.FeedController do
   defp catch_up(conn, state, nil), do: {:ok, conn, state}
 
   defp catch_up(conn, state, id) do
-    case Feed.missed(state.feed, id) do
-      {:ok, events} ->
+    case Feed.missed(state.feed, id, :now) do
+      {:ok, events, _cursor} ->
         with {:ok, conn} <- send_events(conn, events),
              do: {:ok, conn, %{state | seen: MapSet.new(events, & &1.id)}}
 
-      :resync ->
-        resync(conn, state)
+      {:resync, now} ->
+        resync(conn, state, ["id: ", now, "\n"])
 
       {:error, error} ->
         UnexpectedFailure.log(conn, error)
-        resync(conn, state)
+        resync(conn, state, [])
     end
   end
 
-  defp resync(conn, state) do
-    with {:ok, conn} <- send_data(conn, %{kind: "resync"}), do: {:ok, conn, state}
+  defp resync(conn, state, id_line) do
+    with {:ok, conn} <- send_frame(conn, id_line, %{kind: "resync"}), do: {:ok, conn, state}
   end
 
   # `seen` is what the catch-up sent, which the feed may hear again.

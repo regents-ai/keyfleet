@@ -56,14 +56,18 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   again with its command id never runs twice.
 
   The missed events are what the agent's live feed would replay to a
-  reconnect sending `cursor` as `Last-Event-ID` (`Keyfleet.Feed.missed/2`):
-  the same events, oldest first, up to 100, with `cursor` the last one's id
-  to send next time, or the same cursor when none came. Where the feed would
-  resync, past 100 or for a cursor that is no event's id, `resync` is true,
-  no events are answered and `cursor` is now's: catch up with a sync, then
-  read on from it. With no cursor the read starts from now, as a feed opened
-  without `Last-Event-ID` does. A read that fails answers 503
-  `feed_unavailable`, to be sent again with the same cursor.
+  reconnect sending `cursor` as `Last-Event-ID` (`Keyfleet.Feed.missed/3`),
+  up to the settled moment, five seconds before the database's now: the
+  same events, oldest first, up to 100, with `cursor` the later of the
+  cursor sent and the settled moment, to send next time. A post committed
+  within those five seconds of its id is answered by a later read, never
+  passed. Where the feed would resync, past 100 or for a cursor that is no
+  event's id, `resync` is true, no events are answered and `cursor` is the
+  settled moment's: catch up with a sync, then read on from it. With no
+  cursor the read starts from the settled moment. A failure reading the
+  events or the database's clock answers 503 `feed_unavailable`, to be sent
+  again; a failure reading the agent's place in its fleets is a 500, as on
+  any route.
   """
 
   alias Keyfleet.{
@@ -225,14 +229,10 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     end
   end
 
-  # Now's cursor is read first, so nothing posted while the events are read
-  # falls before it.
   def answer(:missed, params, actor, _waiter) do
-    now = Feed.id(DateTime.utc_now())
-
     case params do
-      %{"cursor" => cursor} -> missed(Feed.open(actor), cursor, now)
-      %{} -> ok(%{events: [], cursor: now, resync: false})
+      %{"cursor" => cursor} -> actor |> Feed.open() |> Feed.missed(cursor, :settled) |> missed()
+      %{} -> missed(with {:ok, cursor} <- Feed.settled(), do: {:ok, [], cursor})
     end
   end
 
@@ -258,14 +258,9 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
     end
   end
 
-  defp missed(feed, cursor, now) do
-    case Feed.missed(feed, cursor) do
-      {:ok, []} -> ok(%{events: [], cursor: cursor, resync: false})
-      {:ok, events} -> ok(%{events: events, cursor: Feed.id(List.last(events).at), resync: false})
-      :resync -> ok(%{events: [], cursor: now, resync: true})
-      {:error, _error} -> refusal(503, "feed_unavailable")
-    end
-  end
+  defp missed({:ok, events, cursor}), do: ok(%{events: events, cursor: cursor, resync: false})
+  defp missed({:resync, cursor}), do: ok(%{events: [], cursor: cursor, resync: true})
+  defp missed({:error, _error}), do: refusal(503, "feed_unavailable")
 
   defp pairing(%Human{}), do: "paired"
   defp pairing(:person_not_here), do: "person_not_here"
