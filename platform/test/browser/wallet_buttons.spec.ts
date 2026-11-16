@@ -219,6 +219,38 @@ test("a press the wallet declines says so, and the next press still reaches the 
   expect(errors).toEqual([])
 })
 
+// A wallet on another network is asked to switch by the press itself, through
+// Privy's own switch, which the stand-in's stands in for.
+test("a wallet on another network is switched to Base by the press, and the step is sent on Base", async ({page}) => {
+  const errors = await openBuying(page)
+  await useStandInWallet(page, me, "send", {on: 1})
+
+  await page.locator("#buy-key-approve").click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [approval] = await sentByStandIn(page)
+  expect(approval.transaction.chainId).toBe("0x2105")
+  expect(approval.transaction.to.toLowerCase()).toBe(usdc)
+  expect(approval.transaction.data.startsWith(approveSelector)).toBe(true)
+  await expect(pressNote(page)).toBeHidden()
+  expect(errors).toEqual([])
+})
+
+test("a switch the wallet declines sends nothing and says so, and the next press still reaches the wallet", async ({page}) => {
+  const errors = await openBuying(page)
+  await useStandInWallet(page, me, "send", {on: 1, switching: "decline"})
+
+  await page.locator("#buy-key-approve").click()
+  await expect(pressNote(page)).toHaveText("Your wallet declined the switch to Base. Nothing was sent.")
+  expect(await sentByStandIn(page)).toEqual([])
+
+  await useStandInWallet(page, me, "send", {on: 1})
+  await page.locator("#buy-key-approve").click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  expect((await sentByStandIn(page))[0].transaction.chainId).toBe("0x2105")
+  await expect(pressNote(page)).toBeHidden()
+  expect(errors).toEqual([])
+})
+
 const bridgePattern = /\/assets\/js\/privy_bridge(?:-[a-f0-9]{32})?\.js\?(?:vsn=d&)?regent_retry=\d+$/
 
 // The Buy panel asks for the wallet Privy holds as the page opens. A visitor

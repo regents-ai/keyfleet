@@ -3,13 +3,26 @@ export type EthereumProvider = {
 }
 
 /**
- * One wallet Privy currently holds: the provider this page sends through,
- * Privy's own way of letting go of it, and whether Privy made it at sign-in
- * (the Regents wallet) rather than it coming from the person's own wallet app.
+ * Privy's own way of moving one wallet to another network, which knows how each
+ * wallet app asks to add a network it lacks. It rejects as the wallet does,
+ * 4001 when the person says no.
  */
-export type ConnectedEthereumWallet = {provider: EthereumProvider; disconnect: () => void; regents: boolean}
+export type SwitchChain = (chainId: number) => Promise<void>
 
-export type SelectedWallet = {address: string; provider: EthereumProvider}
+/**
+ * One wallet Privy currently holds: the provider this page sends through,
+ * Privy's own ways of moving it to another network and of letting go of it,
+ * and whether Privy made it at sign-in (the Regents wallet) rather than it
+ * coming from the person's own wallet app.
+ */
+export type ConnectedEthereumWallet = {
+  provider: EthereumProvider
+  switchChain: SwitchChain
+  disconnect: () => void
+  regents: boolean
+}
+
+export type SelectedWallet = {address: string; provider: EthereumProvider; switchChain: SwitchChain}
 
 // A visitor who chose Disconnect stays disconnected across reloads, whatever
 // the wallet app still reports to Privy afterwards.
@@ -85,7 +98,7 @@ export function connectedEthereumWallet(expectedSigner?: string): SelectedWallet
   const first = connectedWallets.entries().next().value as
     | [string, ConnectedEthereumWallet]
     | undefined
-  return first ? {address: first[0], provider: first[1].provider} : null
+  return first ? {address: first[0], provider: first[1].provider, switchChain: first[1].switchChain} : null
 }
 
 export function selectConnectedEthereumWallet(
@@ -94,7 +107,7 @@ export function selectConnectedEthereumWallet(
 ): SelectedWallet | null {
   const expected = expectedSigner.toLowerCase()
   const selected = wallets.find(([address]) => address.toLowerCase() === expected)
-  return selected ? {address: selected[0], provider: selected[1].provider} : null
+  return selected ? {address: selected[0], provider: selected[1].provider, switchChain: selected[1].switchChain} : null
 }
 
 /**
@@ -103,7 +116,9 @@ export function selectConnectedEthereumWallet(
  * Solana or stale selection is no wallet, never a substitute one.
  */
 export function replaceActiveEthereumWallet(wallet: SelectedWallet | null): void {
-  activeWallet = wallet ? {address: wallet.address.toLowerCase(), provider: wallet.provider} : null
+  activeWallet = wallet
+    ? {address: wallet.address.toLowerCase(), provider: wallet.provider, switchChain: wallet.switchChain}
+    : null
 }
 
 export function activeEthereumWallet(): SelectedWallet | null {

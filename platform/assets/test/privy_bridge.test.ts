@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from "vitest"
 import React from "react"
-import type {PrivyEvents} from "@privy-io/react-auth"
+import {SUPPORTED_CHAINS, type PrivyEvents} from "@privy-io/react-auth"
 
 const productionRootRender = vi.hoisted(() => vi.fn())
 const productionRootUnmount = vi.hoisted(() => vi.fn())
@@ -25,6 +25,7 @@ vi.mock("react-dom/client", () => ({
 
 vi.mock("@privy-io/react-auth", () => ({
   PrivyProvider: "privy-provider",
+  SUPPORTED_CHAINS: [{id: 8453, name: "Base"}],
   usePrivy: () => ({authenticated: false, logout: vi.fn(), ready: true}),
   useWallets: () => ({ready: true, wallets: []}),
   useConnectWallet: (callbacks?: {onSuccess?: (params: unknown) => void}) => {
@@ -150,9 +151,19 @@ function installAccountBridgeRenderer() {
   }
 }
 
+// The wallet chain the root layout names on every page, here Base.
+const baseChainMeta = {
+  "wallet-chain-id": "8453",
+  "wallet-chain-name": "Base",
+  "wallet-chain-rpc-url": "https://mainnet.base.org",
+}
+
 // The account control is the only evidence of whether a page is signed in, so
 // schedules that turn on it name their marker; the default page shows neither.
-function stubBrowserGlobals(accountMarker: "sign-in" | "profile" | null = null) {
+function stubBrowserGlobals(
+  accountMarker: "sign-in" | "profile" | null = null,
+  chainMeta: Record<string, string> = baseChainMeta,
+) {
   const dispatched: string[] = []
   const listeners = new Map<string, () => void>()
   const reload = vi.fn()
@@ -172,10 +183,13 @@ function stubBrowserGlobals(accountMarker: "sign-in" | "profile" | null = null) 
   vi.stubGlobal("document", {
     body: {append: vi.fn()},
     createElement: () => ({hidden: false, remove: vi.fn()}),
-    querySelector: (selector: string) =>
-      accountMarker && selector === `#account-control [data-account-target='${accountMarker}']`
+    querySelector: (selector: string) => {
+      const meta = Object.entries(chainMeta).find(([name]) => selector === `meta[name='${name}']`)
+      if (meta) return {content: meta[1]}
+      return accountMarker && selector === `#account-control [data-account-target='${accountMarker}']`
         ? {}
-        : null,
+        : null
+    },
   })
   vi.stubGlobal("window", {
     addEventListener: (event: string, listener: () => void) => void listeners.set(event, listener),
@@ -233,6 +247,7 @@ function ethereumWallet(
     provider,
     walletClientType,
     connectorType,
+    switchChain: vi.fn(async (_chainId: number) => undefined),
     disconnect: vi.fn(),
     getEthereumProvider: async () => provider,
   }
@@ -850,6 +865,37 @@ describe("Privy session bridge", () => {
     void startup.catch(() => undefined)
   })
 
+  it("hands Privy its own entry for a network it lists, and the site's name and node for one it does not", async () => {
+    const privyConfig = async (chainMeta: Record<string, string>) => {
+      productionRootRender.mockReset()
+      stubBrowserGlobals(null, chainMeta)
+      const startup = bridge.startPrivyBridge({readyTimeoutMs: 1}, {
+        appId: "test-app", authenticated: false, ready: false, walletsReady: false, wallets: [],
+        getAccessToken: async () => null, logout: async () => undefined,
+      })
+      const config = productionRootRender.mock.calls[0]?.[0].props.config
+      await startup.catch(() => undefined)
+      return config
+    }
+
+    const base = await privyConfig(baseChainMeta)
+    expect(base.defaultChain).toBe(SUPPORTED_CHAINS[0])
+    expect(base.supportedChains).toEqual([SUPPORTED_CHAINS[0]])
+
+    const lab = await privyConfig({
+      "wallet-chain-id": "31337",
+      "wallet-chain-name": "Keyfleet lab",
+      "wallet-chain-rpc-url": "http://127.0.0.1:8546",
+    })
+    expect(lab.defaultChain).toMatchObject({
+      id: 31337,
+      name: "Keyfleet lab",
+      nativeCurrency: {name: "Ether", symbol: "ETH", decimals: 18},
+      rpcUrls: {default: {http: ["http://127.0.0.1:8546"]}},
+    })
+    expect(lab.supportedChains).toEqual([lab.defaultChain])
+  })
+
   it("keeps background Privy errors silent and non-terminal", () => {
     const loginOpen = {current: false}
     const showFailure = vi.fn()
@@ -1404,7 +1450,7 @@ describe("Privy session bridge", () => {
     const {dispatched, reload} = stubBrowserGlobals("profile")
     const sessionRequests = stubSessionRequests()
     const wallet = ethereumWallet("0x1111111111111111111111111111111111111111")
-    replaceActiveEthereumWallet({address: wallet.address, provider: wallet.provider})
+    replaceActiveEthereumWallet({address: wallet.address, provider: wallet.provider, switchChain: wallet.switchChain})
 
     const getAccessToken = vi.fn(async () => null)
     const startup = bridge.startPrivyBridge({}, {
@@ -2198,6 +2244,17 @@ describe("Privy session bridge", () => {
       return {...globals, providerState, rerender: () => renderAccountBridge(accountElement)}
     }
 
+    // A press moves the wallet to the step's network through Privy's own switch,
+    // which the bridge carries beside each wallet's provider.
+    it("carries each wallet's own switch beside its provider", async () => {
+      const first = ethereumWallet(lower)
+      await mountedSelection(first)
+
+      await activeEthereumWallet()!.switchChain(8453)
+      await connectedEthereumWallet(lower)!.switchChain(8453)
+      expect(first.switchChain.mock.calls).toEqual([[8453], [8453]])
+    })
+
     it("keeps the selected wallet active through a refresh that only re-allocates it", async () => {
       const first = ethereumWallet(lower)
       const page = await mountedSelection(first)
@@ -2208,15 +2265,15 @@ describe("Privy session bridge", () => {
 
       // Nothing is taken away before the await, so a press here still finds
       // its wallet and Stake hears no change it would reset consent for.
-      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider})
+      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider, switchChain: expect.any(Function)})
       expect(page.dispatched).toEqual(["ash:wallet-state"])
       await until(refresh.held)
-      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider})
+      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider, switchChain: expect.any(Function)})
       expect(page.dispatched).toEqual(["ash:wallet-state"])
 
       refresh.release()
       await until(() => page.dispatched.length === 2)
-      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider})
+      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider, switchChain: expect.any(Function)})
     })
 
     it("lets only the latest refresh publish when an older one finishes late", async () => {
@@ -2236,11 +2293,11 @@ describe("Privy session bridge", () => {
       older.release()
       await settled()
       expect(page.dispatched).toEqual(["ash:wallet-state"])
-      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider})
+      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider, switchChain: expect.any(Function)})
 
       newer.release()
       await until(() => page.dispatched.length === 2)
-      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider})
+      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider, switchChain: expect.any(Function)})
     })
 
     // Address and app identity say the wallet is the same; only the resolved
@@ -2255,7 +2312,7 @@ describe("Privy session bridge", () => {
       page.providerState.activeWallet = refresh.wallet
       page.rerender()
       await until(refresh.held)
-      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider})
+      expect(activeEthereumWallet()).toEqual({address: lower, provider: first.provider, switchChain: expect.any(Function)})
 
       refresh.release()
       await until(() => activeEthereumWallet()?.provider === replacement)
@@ -2428,8 +2485,8 @@ describe("Privy session bridge", () => {
     const first = {request: vi.fn()}
     const expected = {request: vi.fn()}
     const wallets: Array<[string, ConnectedEthereumWallet]> = [
-      ["0x2222222222222222222222222222222222222222", {provider: first, disconnect: vi.fn(), regents: false}],
-      ["0x1111111111111111111111111111111111111111", {provider: expected, disconnect: vi.fn(), regents: false}],
+      ["0x2222222222222222222222222222222222222222", {provider: first, switchChain: vi.fn(), disconnect: vi.fn(), regents: false}],
+      ["0x1111111111111111111111111111111111111111", {provider: expected, switchChain: vi.fn(), disconnect: vi.fn(), regents: false}],
     ]
 
     expect(

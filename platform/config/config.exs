@@ -131,15 +131,17 @@ config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interva
 config :keyfleet, Keyfleet.ChainRefresh, readers: [Keyfleet.Chain.Watch]
 
 # The chain a fleet's wallet buttons send on, by the chain id its deployment
-# records: its name in the page's words, and the public node a wallet adds
-# it with when the wallet doesn't know it yet. The site's own node never
-# reaches a page.
+# records, with its name in the page's words. Privy connects every wallet on
+# it and switches to no other (`privy_bridge.tsx`). A network in Privy's own
+# list, such as Base, goes through Privy's own entry and nodes; for any other,
+# such as the anvil lab's, Privy takes this name and public `rpc_url`, and adds
+# the network to a wallet with them. `RegentChain.Review` requires the `rpc_url`.
 config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://mainnet.base.org"}}
 
 # The node the server reads each chain through, by chain id: the steps a
-# page's wallet sent. A wallet adds a chain with its public `rpc_url` above;
-# the server reads through the node `KEYFLEET_RPC_URL` names when it is set,
-# such as a private node or a lab fork, and this address never reaches a page.
+# page's wallet sent. The server reads through this, never the `rpc_url`
+# above, and through the node `KEYFLEET_RPC_URL` names when it is set, such as
+# a private node or a lab fork; this address never reaches a page.
 config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
 
 # How long an agent's waiting request is held open with nothing new, before

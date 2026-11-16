@@ -5,6 +5,8 @@ defmodule Keyfleet.MixProject do
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
   @elixir_utils_ref "f21387188c7438bec659ebb1672cebbfdb12e901"
+  # The chain package alone moves ahead, for the declined-switch reason; the rest moves with the full re-pin.
+  @regent_chain_ref "14a069148cd5691b32172b7c56d5fde12c1f777d"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "69dbfface3fdc2ab728f8cc57cface25f9c7120c"
 
@@ -104,7 +106,7 @@ defmodule Keyfleet.MixProject do
       {:regent_format,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "format", override: true},
       {:regent_chain,
-       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
+       git: @elixir_utils, ref: @regent_chain_ref, sparse: "chain", override: true},
       # Keeps crash saving on when one save fails (RegentHttp.ErrorSaving).
       # regent_oauth names regent_http by a sibling path; this pin replaces it.
       {:regent_http, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "http", override: true},
