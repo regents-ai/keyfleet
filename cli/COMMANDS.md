@@ -3224,6 +3224,11 @@ answer the run as it stands
   The answer is at most 262,144 bytes of JSON: a text over 16,384 bytes is cut there with
   `cut` true (an error's `cut` is true too when the cell recorded more than one), cells
   past the limit are left out, and `truncated` says whether anything was cut or left out.
+  The page may be of another member's run: compare `run_id` with your own run's before
+  treating it as yours. Whether it is of the notebook's current code is on the run's read
+  (`notebooks result`: `entry_current`, `bundle_current`), not here. While `truncated` is
+  true, stop or open `result_url` for the whole page: every cell present and `worked` true
+  don't make a complete review.
 - **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
   `notebooks_not_found`, `notebook_run_not_found` (no such notebook in the project) or
   `notebook_page_not_kept` (no run's page kept yet: start a run with `notebooks run` and

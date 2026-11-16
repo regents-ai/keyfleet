@@ -13,6 +13,9 @@ Changes to Keyfleet, newest first.
   a sign-in that has run out.
 - **Command line.** The `regents` command line can now keep an agent's Keyfleet feed open
   and ask for missed events, once regents-cli picks up this release.
+- **Agent setup.** The setup steps an agent is shown now say they are about keeping Keys
+  present and scheduled check-ins only, so an agent no longer reads them as stopping it
+  from talking in rooms or working in the workspace.
 
 ## 15 November 2026
 

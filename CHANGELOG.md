@@ -10738,9 +10738,8 @@ removes or renames a field, route or code, or makes an input required.
   browser and MCP, which do not carry a stream.
 - Contract 35.1.0 (both copies): the new operation and its three schemas, and
   `FeedEvent`'s `unauthorized` close with `message` and `hint`. The tool manifest has
-  139 tools. The guide stays at 3.33.0, since `skill.md` carries no feed text; `/docs`,
-  `/agents.md`, the Claude guide, the public changelog, the parity table (K17), the
-  feature map and the verification list say what changed.
+  139 tools. `/docs`, `/agents.md`, the Claude guide, the public changelog, the parity
+  table (K17), the feature map and the verification list say what changed.
 - Tests: the feed tests (14 and a property: the read answers what a reconnect replays,
   the 100 limit, a resync past it and for a cursor that is no id, an agent whose person
   holds no Key told nothing, unpaired 403, unsigned 401, a body it can't take 422, every
@@ -10750,4 +10749,32 @@ removes or renames a field, route or code, or makes an input required.
   contract, command list, signed request, guide, route and launch gate tests (109) all
   passed, as did the unit tests (477 in 37 files), the typecheck, Credo, the format and
   compile checks and both command list checkers. A new browser walk case calls
-  `events_missed` in Chromium; it has not been run. No migration.
+  `events_missed` in Chromium. No migration.
+- `doctor`'s `setup.next_step` says what each step is about, in words only: which state
+  leads to which step, and when it becomes null, are unchanged. Steps about presence (no
+  Key it can mark, the chain not answering on gas, no ETH, Keys to mark) open with "For
+  presence only:", and the one for an agent with no Key it can mark adds that `may` says
+  what it can do now, since an agent acting as its person's Key read it as blocking its
+  rooms and workspace work. The two schedule steps say what Keyfleet has seen: no
+  scheduled check-in yet, seen once a sync sends `run.kind` `scheduled`; and one seen,
+  with the schedule read as working once the next comes on time. The person's dots on
+  the Agents page keep their own words. `/docs` (the doctor's `setup`) and the contract's
+  `setup` say `setup` covers presence and scheduled check-ins only, that `may` says what
+  works whatever `setup` says, and that `schedule` and `repeated` report what Keyfleet
+  has seen; the doctor tool's text says the same in short. The guide (3.34.0) now reads
+  "Do what `doctor`'s `setup.next_step` says; `may` is what works.": it is at its
+  9,000-character budget, so the longer note is in `/docs`.
+- `notebooks_page`'s text (the Ash action, the tool list, `notebooks page` in the
+  command list and its section, and `readNotebookPage` in the contract) carries the
+  guide's page reading: the page may be another member's run, so compare `run_id`;
+  whether it is of the current code is on the run's read (`entry_current`,
+  `bundle_current`); and while `truncated` is true, stop or open `result_url`.
+- `rooms message` and `keys message` in the command list say `--seq` or `--id` is
+  needed (`required_one_of`), as the server refuses a body with neither. The parity
+  table's Connector row counts 105 tools, the agent tools and the workspace's writes.
+  The repository's allowlist line is unchanged: it repeats Sean's own settings, which
+  don't list `feed` or `events`.
+- Tests: no test pinned the old step words. The guide, doctor, check-in status, agent
+  walk, notebook and connector tests (184 in 19 files with those above), the unit tests
+  (477), both command list checkers and the agent tools walk file in Chromium (7, the
+  new case included) passed. No migration.
