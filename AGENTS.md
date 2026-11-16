@@ -19,13 +19,19 @@ signed-in Overview. The [README](README.md) describes the product.
   compile with warnings as errors, format, then the tests that cover what
   changed since `origin/main` (`scripts/check-change.sh`). The platform
   README's "Shipping a change" says how a change goes live.
-- `make check` runs every gate: the platform's `mix precommit` (which ends
-  with the TypeScript typecheck, the unit tests and the browser suite), then the required-fixes check against ash-template
-  (needs `gh auth login`), then the CLI's build, typecheck and tests, then the
-  contracts' `forge fmt --check`, `forge build` and `forge test`.
-  `make check-platform`, `check-required-fixes`, `check-cli` and
-  `check-contracts` run one gate. Set `MIX_TEST_PARTITION` (an empty value uses
-  `keyfleet_test`).
+- `make check` runs every gate, each writing its output to
+  `platform/_build/check/<gate>.log`, then prints every gate's log, the failed
+  ones last, and one line per gate. It builds the platform's assets first, then
+  runs these lanes side by side: the platform's checks (compile with warnings as
+  errors, Credo, Sobelow, the TypeScript typecheck and the unit tests) then its
+  browser walks; the graph host's tests then the ExUnit suite; the
+  required-fixes check against ash-template (needs `gh auth login`); the
+  command descriptions; the SIWA version check; and the contracts'
+  `forge fmt --check`, `forge build`, `forge test` and bytecode check.
+  `make check-platform` runs the platform's whole gate in turn
+  (`mix precommit`); `check-required-fixes`, `check-cli`, `check-siwa-latest`
+  and `check-contracts` run one gate. Set `MIX_TEST_PARTITION` (an empty value
+  uses `keyfleet_test`).
 - `make check-audit-fork` runs the contract audit's proofs on a Base fork pinned
   to one block. It is not part of `make check` and fails without `BASE_RPC_URL`.
 - `make readiness` starts the local development server on a free port with the

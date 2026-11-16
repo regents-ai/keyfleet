@@ -343,20 +343,25 @@ the test database `keyfleet_test`:
 MIX_TEST_PARTITION= make check
 ```
 
-`mix precommit` compiles with warnings as errors, checks unused dependency
+`mix precommit` compiles with warnings as errors and builds the assets, then
+runs three parts in turn. `mix precommit.checks` checks unused dependency
 locks, refuses Hex packages that are retired or carry a security advisory
 (`mix hex.audit`), checks formatting, runs Credo in strict mode and Sobelow, holds the
-compile-connected `xref` graph under its limit, runs the test suite with
-warnings as errors, and verifies the Ash codegen and route handoff are current.
-It ends with the TypeScript typecheck, the Vitest unit suite, the browser
-suite, which starts once the ExUnit suite has finished, and the phone walks.
-`npm run test:browser` runs the browser suite alone.
+compile-connected `xref` graph under its limit, verifies the Ash codegen, the
+usage rules and the route handoff are current, and runs the TypeScript
+typecheck and the Vitest unit suite. `mix precommit.suite` runs the graph
+host's tests, then the test suite with warnings as errors. `mix
+precommit.walks` runs the browser suite, then the phone walks, on the assets
+already built. `make check` builds the assets once, then runs
+`precommit.checks` and `precommit.walks` in one lane beside
+`precommit.suite` in another, each writing to `_build/check/<gate>.log`.
+`npm run test:browser` builds the assets and runs the browser suite alone.
 
 | Command | What it does |
 | --- | --- |
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
-| `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
+| `npm run test:browser` | Builds the assets, then runs the browser suite against a test server and database of its own. |
 | `npm run test:devices` | Builds the assets, then walks the main flows signed out at an iPhone 15's and a Pixel 7's screen, and runs the accessibility check of every main page, light and dark, wide and at a phone's width. |
 | `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, and that use the agent tools the pages register as a signed agent would, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
@@ -367,9 +372,12 @@ before its `_test` ending. Give each test run its own value whenever more than
 one can happen on a machine: `MIX_TEST_PARTITION=_a1b` gives `keyfleet_a1b_test`. Run
 `MIX_ENV=test mix ecto.create` once for a new value; the suite builds the
 schema itself on its first run.
-Never run the ExUnit suite and `npm run test:browser` on the same partition at
-the same time: tests that need real concurrency commit catalog fleets and remove
-them when they end, which can take away fleets the browser server relies on.
+The browser suite's server has a database of its own, the partition's name
+with `_walk` after it (`keyfleet_a1b_walk_test`), and the phone walks' server
+one with `_fleet_map` after it; each is dropped and made afresh as its walk
+starts, so the ExUnit suite runs beside either. The two walks share the port
+`PORT` names (4502 when unset) and `tmp/walk-lines.jsonl`, so they run one
+after the other.
 
 ### Membership check
 

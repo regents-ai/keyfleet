@@ -155,10 +155,10 @@ Run these from the repository root.
 | Command | Runs |
 | --- | --- |
 | `make check-change` | Compile with warnings as errors, format, and the tests that cover changes since `origin/main` |
-| `make check-platform` | The platform's full gate: Credo, Sobelow, ExUnit, TypeScript, Vitest and the browser suite |
+| `make check-platform` | The platform's full gate in turn (`mix precommit`): Credo, Sobelow, ExUnit, TypeScript, Vitest and the browser suite |
 | `make check-contracts` | `forge fmt --check`, `forge build`, `forge test` and the bytecode check |
 | `make check-cli` | The command descriptions against the OpenAPI document (needs uv) |
-| `make check` | Every gate above, plus the shared-library and sign-in version checks |
+| `make check` | Every gate above side by side, plus the shared-library and sign-in version checks; each gate's output is in `platform/_build/check/<gate>.log` |
 
 `make check` reads ash-template, regents-cli and the sign-in library from
 GitHub, so it needs `gh auth login`, and it fails whenever a newer sign-in
