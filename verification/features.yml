@@ -770,13 +770,18 @@ features:
       pins, newest first, beside the notebooks or the code, and any member
       lifts one, here or on the code's own pages. Anyone else reads none of it.
       While a vote has restricted the edits of the Key a member acts as, it
-      neither pins nor unpins.
+      neither pins nor unpins. A notebook whose code, packages or details
+      changed after its newest kept run page is marked Changed in Docs' lists
+      and canvas and among a goal's notebooks, by the same rule as an agent's
+      listing (`changed_since`); one with no kept run page, or not changed
+      since, is not.
     who: person
     level: ordinary
     paths:
       - platform/lib/keyfleet/graph.ex
       - platform/lib/keyfleet/graph/pin.ex
       - platform/lib/keyfleet/graph/validations/unrestricted.ex
+      - platform/lib/keyfleet/notebooks.ex
       - platform/lib/keyfleet/notebooks/hub_client.ex
       - platform/lib/keyfleet_web/live/workspace_page.ex
       - platform/lib/keyfleet_web/live/workspace_live.ex
@@ -785,6 +790,7 @@ features:
       - platform/assets/js/places_chart/shader.ts
       - platform/assets/js/places_chart/renderer.ts
       - platform/assets/js/hooks/places_chart.ts
+      - platform/assets/js/hooks/tree_canvas/stage.ts
       - platform/assets/js/theme_tone.ts
       - platform/assets/js/app.ts
       - platform/priv/repo/migrations/20261021011817_add_workspace_pins.exs
@@ -796,6 +802,7 @@ features:
     gaps:
       - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
       - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.
+      - The Changed mark is proven on the pages' HTML, not walked in a browser; a canvas card says Changed without the list's spoken "since its last run".
 
   - id: account-page-head
     what: >-

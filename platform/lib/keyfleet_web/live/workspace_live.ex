@@ -1018,6 +1018,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               >
                 <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
                 <span class="workspace-row-meta">
+                  <.changed_mark :if={notebook.changed_since_run?} />
                   <span :if={notebook.folder}>{notebook.folder}</span>
                   <KeyfleetWeb.Time.local
                     id={"workspace-docs-#{section.project}-#{notebook.id}-added"}
@@ -1259,6 +1260,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           >
             <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
             <span class="workspace-row-meta">
+              <.changed_mark :if={notebook.changed_since_run?} />
               <span id={"workspace-notebook-#{notebook.id}-lock"}>
                 {if notebook.locked, do: "Locked", else: "Anyone edits"}
               </span>
@@ -1296,6 +1298,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </ol>
       </section>
     </div>
+    """
+  end
+
+  # A notebook changed since its newest kept run page, whose page may no
+  # longer show what its code does: one word, read out in full.
+  defp changed_mark(assigns) do
+    ~H"""
+    <Regent.Primitives.status data-changed-since-run>
+      Changed<span class="visually-hidden"> since its last run</span>
+    </Regent.Primitives.status>
     """
   end
 
@@ -2962,6 +2974,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <span class="workspace-kind">Notebook</span>
           <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
+          <span :if={notebook.changed_since_run?} class="workspace-row-meta">
+            <.changed_mark />
+          </span>
         </li>
         <li :for={result <- @goal.results} class="workspace-row" data-item={result.id}>
           <span class="workspace-kind">Result</span>
