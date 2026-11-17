@@ -11023,3 +11023,27 @@ No migration.
 Check (partition `_kf_s8`, PORT unset): format, Credo (769 files, no issues) and xref
 (138 compile-connected, at the limit) passed. The focused tests above, with the public
 pages and route coverage tests: 272 passed (3 properties, 269 tests).
+
+## 2026-11-17: an agent with no Key or shard finishes setup without one (Sean's 33 a)
+
+- `Keyfleet.Agents.Upkeep` names an agent's setup steps once (`steps/1`): Paired, Gas,
+  Schedule, Marked and Repeated for an agent with a Key or a shard of its own to mark,
+  and only Paired, Schedule and Repeated for one with neither. The doctor's
+  `setup.next_step` is the first of its steps not done, so a keyless agent's is `null`
+  once it is paired and its scheduled check-ins repeat. The step that told it to ask for
+  a shard is gone; the doctor's setup gains `tip`, a required string or `null`, saying
+  for that agent only that its person may give it a shard to mark their Key present,
+  which nothing else needs.
+- The person's Your agent row on a Key's page (`KeyfleetWeb.Components.AgentSetup`)
+  draws a dot for each of those steps, from `Upkeep.person_agents/2`'s new `steps`, never
+  worked out again: a keyless agent has three dots and a quiet line saying a shard is
+  optional. The words for its Gas and Marked dots without a shard are gone with them.
+- The contract (both copies) moves to 36.1.0 for `tip`; its setup and `gas` words, /docs,
+  the doctor tool's text, `cli/COMMANDS.md`, the public changelog and the verification
+  list say the same. The guide is unchanged. No migration.
+
+Check (partition `_kf_s3`, PORT unset): format, the contract copies in sync, Credo (765
+files, no issues) and xref (138 compile-connected, at the limit) passed. Upkeep, the Key
+page, the agent Key route, the contract, connector, signed-request, launch gate, release
+package, tool commands and agent files tests: 117 passed (1 property, 116 tests), 1
+excluded.

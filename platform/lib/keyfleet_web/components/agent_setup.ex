@@ -1,7 +1,10 @@
 defmodule KeyfleetWeb.Components.AgentSetup do
   @moduledoc """
-  The agents a signed-in person has paired, each with the five states its setup
-  ends in as dots, and a line only when its scheduled run has stopped. It takes
+  The agents a signed-in person has paired, each with the states its setup ends
+  in as dots, the ones its doctor names as steps (`Keyfleet.Agents.Upkeep`): an
+  agent with no Key or shard to mark has no gas or marked dot, and a quiet line
+  instead saying a shard is optional. A line also shows when its scheduled run
+  has stopped. It takes
   no room for a person with no agent. Each dot opens a few words saying what it
   is and, when it is not done, how to put it right. The states come from the
   chain reader's records and check-ins (`Keyfleet.Agents.Upkeep`); only gas asks
@@ -61,6 +64,9 @@ defmodule KeyfleetWeb.Components.AgentSetup do
             </Regent.Primitives.tip>
           </li>
         </ul>
+        <p :if={:marked not in agent.steps} class="agent-setup__tip">
+          Optional: give it a shard of your Key and it marks your Keys present for you.
+        </p>
         <p :if={agent.run_missed} class="agent-setup__wrong">{missed(agent.lapses_at)}</p>
       </div>
     </section>
@@ -79,43 +85,43 @@ defmodule KeyfleetWeb.Components.AgentSetup do
   # What gas is asked for: each agent's wallet and how many Keys it marks.
   defp gas_asked(agents), do: Enum.map(agents, &{&1.wallet, &1.key_count})
 
-  # Each state with the words its dot opens: what it is, and how to put it
-  # right when it is not done.
-  defp states(agent, %AsyncResult{} = gas) do
-    paid = gas.result && gas.result[agent.wallet]
+  # Each of the agent's steps (`Keyfleet.Agents.Upkeep`) with the words its
+  # dot opens: what it is, and how to put it right when it is not done.
+  defp states(agent, %AsyncResult{} = gas), do: Enum.map(agent.steps, &state(&1, agent, gas))
 
-    [
-      {"Paired", true, "This agent is paired with your account."},
-      {"Gas", paid, gas_words(paid, agent.key_count, gas.loading)},
-      {"Schedule", agent.schedule, schedule_words(agent.schedule)},
-      {"Marked", agent.marked, marked_words(agent.marked, agent.key_count)},
-      {"Repeated", agent.repeated, repeated_words(agent.repeated)}
-    ]
+  defp state(:paired, _agent, _gas),
+    do: {"Paired", true, "This agent is paired with your account."}
+
+  defp state(:gas, agent, gas) do
+    paid = gas.result && gas.result[agent.wallet]
+    {"Gas", paid, gas_words(paid, gas.loading)}
   end
 
-  defp gas_words(true, _keys, _loading), do: "Its wallet has the ETH on Base to mark your Keys."
-  defp gas_words(false, _keys, _loading), do: "Its wallet is out of ETH. Send it ETH on Base."
+  defp state(:schedule, agent, _gas),
+    do: {"Schedule", agent.schedule, schedule_words(agent.schedule)}
 
-  defp gas_words(nil, 0, _loading),
-    do: "Nothing to pay for until it holds a shard of your Key."
+  defp state(:marked, agent, _gas), do: {"Marked", agent.marked, marked_words(agent.marked)}
 
-  defp gas_words(nil, _keys, loading) when loading in [nil, false],
+  defp state(:repeated, agent, _gas),
+    do: {"Repeated", agent.repeated, repeated_words(agent.repeated)}
+
+  defp gas_words(true, _loading), do: "Its wallet has the ETH on Base to mark your Keys."
+  defp gas_words(false, _loading), do: "Its wallet is out of ETH. Send it ETH on Base."
+
+  defp gas_words(nil, loading) when loading in [nil, false],
     do: "The chain didn’t answer. Reload in a minute."
 
-  defp gas_words(nil, _keys, _loading), do: "Reading its wallet."
+  defp gas_words(nil, _loading), do: "Reading its wallet."
 
   defp schedule_words(true), do: "Its daily run is scheduled."
   defp schedule_words(false), do: "No daily run yet. Ask your agent to schedule one."
 
   # Marked, as `Keyfleet.Agents.Upkeep` reads it, is also true for a Key that
   # waits for its automatic start, which counts in votes only once it comes.
-  defp marked_words(true, _keys),
+  defp marked_words(true),
     do: "Every Key it can mark is present, or waits for its automatic start."
 
-  defp marked_words(false, 0),
-    do: "It holds no shard yet. A shard lets it mark your Keys present."
-
-  defp marked_words(false, _keys),
+  defp marked_words(false),
     do: "A Key it can mark isn’t present. Ask your agent to mark it, or mark it yourself."
 
   defp repeated_words(true), do: "Its daily run keeps arriving on time."

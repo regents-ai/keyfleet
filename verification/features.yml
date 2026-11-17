@@ -1180,12 +1180,15 @@ features:
   - id: agent-setup-dots
     what: >-
       On a Key's page its signed-in owner sees Your agent: each agent they
-      have paired with five dots, Paired, Gas, Schedule, Marked and Repeated,
-      a bright green when done and a faded orange when not done or not known
-      yet. Each dot opens a few words on what it is and, when it is not done,
-      how to put it right. Marked is done when every Key the agent acts for is
-      present or waits for its automatic start. Only gas asks the chain, so
-      the row is drawn at once and that dot fills in when the answer comes.
+      have paired with a dot for each step its doctor names, Paired, Gas,
+      Schedule, Marked and Repeated, a bright green when done and a faded
+      orange when not done or not known yet. An agent with no Key or shard of
+      its own has only Paired, Schedule and Repeated, and a quiet line saying
+      a shard is optional. Each dot opens a few words on what it is and, when
+      it is not done, how to put it right. Marked is done when every Key the
+      agent acts for is present or waits for its automatic start. Only gas
+      asks the chain, so the row is drawn at once and that dot fills in when
+      the answer comes.
     who: person
     level: ordinary
     paths:

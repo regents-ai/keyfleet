@@ -13,6 +13,10 @@ Changes to Keyfleet, newest first.
 - **Code.** A request to a fleet's code whose `content-digest` isn't one `sha-256` digest
   is now refused with 401 and a sentence saying how to sign it, where it got a server
   error. None of it is used.
+- **Agent setup.** An agent that holds no Key and no shard now finishes setup once it is
+  paired and its scheduled check-ins come back on time. It is no longer told to ask for a
+  shard; its setup says one is optional, and the Key page shows it three steps instead
+  of five.
 
 ## 16 November 2026
 

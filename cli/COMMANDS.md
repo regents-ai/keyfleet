@@ -1361,9 +1361,11 @@ change never runs it twice either way.
   lists each thing between the agent and the fleet's work as the refusal it would meet,
   `{"code", "message", "hint"}`: `person_not_here`, `profile_not_found`,
   `ownership_refreshing`, `not_a_member` or `edits_restricted`. `setup` is
-  `{"paired", "gas", "schedule", "marked", "repeated", "next_step"}`: how far presence
-  and scheduled check-ins have come, as Keyfleet has seen them, with what to do next or
-  `null`; `may`, not `setup`, says what the agent can do now. `gas` is as a sync's
+  `{"paired", "gas", "schedule", "marked", "repeated", "next_step", "tip"}`: how far
+  presence and scheduled check-ins have come, as Keyfleet has seen them, with what to do
+  next or `null`; an agent with no Key or shard of its own to mark finishes at `paired`,
+  `schedule` and `repeated`, and its `tip` says a shard is optional (`null` for any other
+  agent); `may`, not `setup`, says what the agent can do now. `gas` is as a sync's
   `yours.gas`. `versions` is `{"api_contract", "agent_guide"}`, as `/capabilities.json`
   answers them.
 - **Refusals:** 503 `profile_unavailable`. And those every signed command shares.

@@ -5,6 +5,7 @@ defmodule Keyfleet.Agents.UpkeepTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Agents.Upkeep
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
@@ -18,6 +19,7 @@ defmodule Keyfleet.Agents.UpkeepTest do
   @fleet "fibonacci_cascade"
   @person "0x" <> String.duplicate("a", 40)
   @agent "0x" <> String.duplicate("c", 40)
+  @keyless "0x" <> String.duplicate("d", 40)
 
   # The person holds Keys 1 and 2, on the account `PairingHelpers.pair!/2`
   # pairs their agent with, and their agent holds a shard of each.
@@ -54,6 +56,32 @@ defmodule Keyfleet.Agents.UpkeepTest do
     assert [%{marked: false}] = Upkeep.person_agents(person, @fleet)
   end
 
+  # The doctor's setup and the person's page name the same steps: an agent
+  # with a shard keeps its Keys present as part of it, and one with no Key or
+  # shard finishes without, a shard being only a tip for it.
+  test "an agent with no Key or shard finishes setup once its scheduled check-ins repeat",
+       %{person: person, agent: sharded} do
+    keyless = PairingHelpers.pair_wallet!(@keyless, @person)
+
+    for agent <- [sharded, keyless],
+        do: Agents.ensure_profile!(%{name: "Agent", declared_harness: "test"}, actor: agent)
+
+    assert %{schedule: false, next_step: <<_, _::binary>>, tip: <<_, _::binary>>} =
+             setup_of(keyless)
+
+    repeating!([sharded, keyless])
+
+    assert %{repeated: true, next_step: nil, tip: <<_, _::binary>>} = setup_of(keyless)
+
+    assert %{repeated: true, marked: false, next_step: <<_, _::binary>>, tip: nil} =
+             setup_of(sharded)
+
+    assert Map.new(Upkeep.person_agents(person, @fleet), &{&1.wallet, &1.steps}) == %{
+             @agent => [:paired, :gas, :schedule, :marked, :repeated],
+             @keyless => [:paired, :schedule, :repeated]
+           }
+  end
+
   # Money nobody has moved is the agents' to move, never an error the site saves.
   test "money waiting too long reaches the agent's check-in, oldest first, and saves no error",
        %{agent: agent} do
@@ -85,6 +113,25 @@ defmodule Keyfleet.Agents.UpkeepTest do
 
   # Errors other suites left saved are counted before and set aside.
   defp saved_errors, do: Repo.aggregate(ErrorTracker.Occurrence, :count)
+
+  # What the agent's doctor answers as its setup, its gas not asked.
+  defp setup_of(agent) do
+    {:ok, profile} = Agents.get_my_profile(actor: agent)
+    Upkeep.setup(agent, @fleet, profile, Upkeep.read(agent, @fleet, false))
+  end
+
+  # Two scheduled check-ins half an hour apart from each agent: its schedule
+  # is confirmed and on time.
+  defp repeating!(agents) do
+    run = %{"kind" => "scheduled", "every_minutes" => 30}
+    for agent <- agents, do: {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - interval '30 minutes', counted_scheduled_at = counted_scheduled_at - interval '30 minutes'"
+    )
+
+    for agent <- agents, do: {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+  end
 
   # The agent on `@agent`, paired with the person.
   defp pair! do

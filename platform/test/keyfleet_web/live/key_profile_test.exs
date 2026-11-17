@@ -827,23 +827,37 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       %{agent: agent, conn: init_test_session(conn, %{human_account_id: account.id})}
     end
 
-    test "a newly paired agent has Paired done, and each other dot says what to do", %{
-      conn: conn
-    } do
+    # With no shard it has nothing to mark or pay for, so it has no Gas or
+    # Marked dot, and a shard is only offered.
+    test "a newly paired agent with no shard has Paired done, and each other dot says what to do",
+         %{conn: conn} do
       {:ok, view, _html} = live(conn, @key_20)
       render_async(view, 3_000)
 
       assert text(view, "#key-agent-setup .agent-setup__name") == "Test agent"
       {states, words} = Enum.unzip(dots(view))
-      assert states == ~w(yes unknown no no no)
+      assert states == ~w(yes no no)
 
       assert words == [
                "Paired. This agent is paired with your account.",
-               "Gas. Nothing to pay for until it holds a shard of your Key.",
                "Schedule. No daily run yet. Ask your agent to schedule one.",
-               "Marked. It holds no shard yet. A shard lets it mark your Keys present.",
                "Repeated. Its daily run hasn’t come back on time yet. Check after its next run."
              ]
+
+      assert has_element?(view, "#key-agent-setup .agent-setup__tip")
+    end
+
+    test "an agent with no shard has every dot done once its run repeats", %{
+      conn: conn,
+      agent: agent
+    } do
+      repeating!(agent)
+
+      {:ok, view, _html} = live(conn, @key_20)
+      render_async(view, 3_000)
+
+      assert [{"yes", _paired}, {"yes", _schedule}, {"yes", _repeated}] = dots(view)
+      assert has_element?(view, "#key-agent-setup .agent-setup__tip")
     end
 
     # Marked reads a Key waiting for its automatic start as needing no mark,
@@ -870,6 +884,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
              ]
 
       refute has_element?(view, "#key-agent-setup .agent-setup__wrong")
+      refute has_element?(view, "#key-agent-setup .agent-setup__tip")
     end
 
     test "an agent out of ETH, with a shard of a lapsed Key, says how to put each right", %{
