@@ -11177,3 +11177,10 @@ a scratch walk that is not kept.
   body, and a command sent to an address Keyfleet no longer serves asks the person to update.
   Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
 - The command line section of the public documents says which Python it runs on (3.12 to 3.14).
+
+## 2026-11-17 — The install line and checker pin name regents-cli 1.10.32
+
+- `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
+  `platform/priv/tool_manifest.json` name regents-cli 1.10.32 (tag commit `a972d344`), the
+  newest release, published while the release before it was being checked. Its tag commit
+  was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
