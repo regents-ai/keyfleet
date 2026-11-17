@@ -10812,44 +10812,49 @@ removes or renames a field, route or code, or makes an input required.
   walk, notebook and connector tests (184 in 19 files with those above), the unit tests
   (477), both command list checkers and the agent tools walk file in Chromium (7, the
   new case included) passed. No migration.
-- Review (an attack file run against this branch in three passes, 16 Nov). The first
+- Review (an attack file run against this branch in four passes, 16 Nov). The first
   proved that following the read's cursor could pass a message for good. An event's id
   is the time its post was written, not committed, and posts in different rooms, walls
   and conversations take no common lock, so a direct message written just before an
   answered post, or in its microsecond, and committed after the read fell behind the
   cursor handed back, the last event's id. The read now reads the database's clock once
   as it starts and answers only events thirty seconds old by it (`@settling_seconds` in
-  `Keyfleet.Feed`). The second proved five seconds too short: the database lets the
-  site's one statement run 15 s and one lock wait 5 s (`Keyfleet.DatabaseConfig`), and a
-  post's transaction writes once more after the row whose time is its id
-  (`Keyfleet.Agents.Changes.NoteContribution`), so the wait is thirty seconds, longer
-  than either; a post whose transaction still takes longer than that to commit can be
-  passed, and a sync covers it. The third proved that the read handed back the cursor
-  sent whenever it was later than the settled moment, as an id the feed sent in the last
-  thirty seconds is, so reading on from that cursor passed a message stamped just before
-  it and saved just after the read. Closed in code: the read always hands back the
-  settled moment, whatever cursor was sent, so such a cursor answers no events and the
-  next read can repeat events the feed sent, told apart by id. Reading on from the
-  cursor the read hands back now passes no post that commits within thirty seconds of
-  its id. Not closed: an id the feed sent more than thirty seconds ago, sent as the
-  cursor, can pass a message still being saved when the feed dropped, as on a reconnect,
-  and a sync covers it. Also found and fixed over the passes: a cursor later than now,
-  such as the year 9999's, answered nothing and the same cursor for ever, and a cursor
-  of any length was read; both now resync at both doors. The 503's words covered any
-  failed read, while a failure reading the agent's place was a 500; the words now name
-  the events and the clock, as the doctor's 503 names the profile. The contract said a
-  resync has no id and so clears `Last-Event-ID`, which a client keeping its last id
-  never does; the resync now carries one. The doctor's schedule steps name the fleet.
-  The second said a schedule works once two scheduled check-ins in a row are on time,
-  which is untrue when the two name different `run.every_minutes`, since a new interval
-  starts confirming again; it now says Keyfleet hasn't confirmed the schedule or the
-  last scheduled check-in is overdue, and to keep the same `run.every_minutes`.
-  `repeated` was described as two scheduled check-ins having confirmed the schedule with
-  the last on time, both true of a lapsed schedule that reads false; the contract and
-  `/docs` now give the rule: the schedule is confirmed and the last scheduled check-in
-  is no older than twice `run.every_minutes` plus 45 minutes. Left as it is: a null
-  cursor is refused 422 by the signed request and read as no cursor by the tool, as
-  every tool's null input is.
+  `Keyfleet.Feed`). The second showed, by reading the code and with no test, that five
+  seconds was too short: the database lets the site's one statement run 15 s and one
+  lock wait 5 s (`Keyfleet.DatabaseConfig`), and a post's transaction writes once more
+  after the row whose time is its id (`Keyfleet.Agents.Changes.NoteContribution`), so
+  the wait is thirty seconds, longer than either; a post whose transaction still takes
+  longer than that to commit can be passed, and a sync covers it. The third proved that
+  the read handed back the cursor sent whenever it was later than the settled moment, as
+  an id the feed sent in the last thirty seconds is, so reading on from that cursor
+  passed a message stamped just before it and saved just after the read. Closed in code:
+  the read always hands back the settled moment, whatever cursor was sent, so such a
+  cursor answers no events and the next read can repeat events the feed sent, told apart
+  by id. Reading on from the cursor the read hands back now passes no post that commits
+  within thirty seconds of its id. Not closed: any id the feed sent, sent as the cursor,
+  can pass a message stamped before it and still being saved when the feed dropped, as
+  on a reconnect, and a sync covers it. The fourth held on the code and found the
+  descriptions' "an older id" false: a feed id younger than thirty seconds can pass such
+  a message too, when it was stamped before the settled moment. Every description now
+  says any id the feed sent shares a reconnect's gap, and that the read resyncs when
+  more than 100 events fall after the cursor, since events the feed already sent can
+  count. Also found and fixed over the passes: a cursor later than now, such as the year
+  9999's, answered nothing and the same cursor for ever, and a cursor of any length was
+  read; both now resync at both doors. The 503's words covered any failed read, while a
+  failure reading the agent's place was a 500; the words now name the events and the
+  clock, as the doctor's 503 names the profile. The contract said a resync has no id and
+  so clears `Last-Event-ID`, which a client keeping its last id never does; the resync
+  now carries one. The doctor's schedule steps name the fleet. The second said a
+  schedule works once two scheduled check-ins in a row are on time, which is untrue when
+  the two name different `run.every_minutes`, since a new interval starts confirming
+  again; it now says Keyfleet hasn't confirmed the schedule or the last scheduled
+  check-in is overdue, and to keep the same `run.every_minutes`. `repeated` was
+  described as two scheduled check-ins having confirmed the schedule with the last on
+  time, both true of a lapsed schedule that reads false; the contract and `/docs` now
+  give the rule: the schedule is confirmed and the last scheduled check-in is no older
+  than twice `run.every_minutes` plus 45 minutes. Left as it is: a null cursor is
+  refused 422 by the signed request and read as no cursor by the tool, as every tool's
+  null input is.
 - Tests for the review: the feed tests (21 and a property), seven new: a message stamped
   before an event, or in its microsecond, and committed after a read is answered by a
   later read; a message stamped just before a feed id younger than thirty seconds and

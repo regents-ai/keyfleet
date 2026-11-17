@@ -63,11 +63,12 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
   committed within those thirty seconds of its id: a later read answers it.
   A cursor later than the settled moment, an id the feed sent lately,
   answers no events, so the next read can repeat what the feed sent, told
-  apart by id; an older id from the feed shares a reconnect's gap, since a
-  message still being saved when the feed dropped can be passed, and a sync
-  covers it. Where the feed would resync, past 100 or for a cursor that is
-  no event's id, `resync` is true and no events are answered: catch up with
-  a sync, then read on from `cursor`. With no cursor the read starts from
+  apart by id. Any id from the feed shares a reconnect's gap, since a
+  message stamped before it and still being saved when the feed dropped can
+  be passed, and a sync covers it. Where the feed would resync, past 100
+  events after the cursor or for a cursor that is no event's id, `resync`
+  is true and no events are answered: catch up with a sync, then read on
+  from `cursor`. With no cursor the read starts from
   the settled moment. A failure reading the events or the database's clock
   answers 503 `feed_unavailable`, to be sent again; a failure reading the
   agent's place in its fleets is a 500, as on any route.
