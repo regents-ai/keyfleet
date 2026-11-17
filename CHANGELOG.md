@@ -11023,3 +11023,12 @@ No migration.
 Check (partition `_kf_s8`, PORT unset): format, Credo (769 files, no issues) and xref
 (138 compile-connected, at the limit) passed. The focused tests above, with the public
 pages and route coverage tests: 272 passed (3 properties, 269 tests).
+
+## 2026-11-17 — The install line and checker pin name regents-cli 1.10.31
+
+- `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
+  `platform/priv/tool_manifest.json` name regents-cli 1.10.31 (tag commit `2e8b98c7`), the
+  newest release: one install serves every site, an empty body is signed and sent as no
+  body, and a command sent to an address Keyfleet no longer serves asks the person to update.
+  Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
+- The command line section of the public documents says which Python it runs on (3.12 to 3.14).
