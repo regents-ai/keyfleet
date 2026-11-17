@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.LaunchSteps do
   @moduledoc """
   How many visits take each step into Keyfleet, counted on this site with
-  nothing saved: the homepage opened (`home`) and its "Watch" pressed
-  (`watch`). Browsers report each step as it happens
+  nothing saved: the homepage opened (`home`) and its "Explore" pressed
+  (`watch`, the name its counts are kept under). Browsers report each step as
+  it happens
   (`assets/js/launch_steps.ts`, taken in by `KeyfleetWeb.LaunchStepsController`)
   and each report adds one to a Prometheus counter `KeyfleetWeb.Telemetry`
   exports. A report names only the step: never a person, an address, a wallet

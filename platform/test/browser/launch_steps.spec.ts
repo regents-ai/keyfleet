@@ -1,16 +1,16 @@
 import {expect, test, type Page} from "@playwright/test"
 
 // Each step a visitor takes into Keyfleet is reported once as it happens
-// (assets/js/launch_steps.ts): the homepage opened and its "Watch" pressed. A
-// browser a program drives reports nothing, so these pages are told they are
-// a visitor's.
+// (assets/js/launch_steps.ts): the homepage opened and its "Explore" pressed,
+// kept as step `watch`. A browser a program drives reports nothing, so these
+// pages are told they are a visitor's.
 
 test.beforeEach(async ({page}) => {
   await page.addInitScript(() => Object.defineProperty(navigator, "webdriver", {get: () => false}))
 })
 
 // Every report the page sends, in order, with what the site answered. A press
-// of "Watch" leaves the page as its report goes, so the walk carries each
+// of "Explore" leaves the page as its report goes, so the walk carries each
 // report to the site itself and hears the answer whatever the page does next.
 async function reports(page: Page) {
   const sent: unknown[] = []
@@ -28,7 +28,7 @@ async function connected(page: Page) {
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
 }
 
-test("the homepage and its Watch are counted once each time", async ({page}) => {
+test("the homepage and its Explore are counted once each time", async ({page}) => {
   const {sent, answers} = await reports(page)
 
   await page.goto("/")
@@ -43,7 +43,7 @@ test("the homepage and its Watch are counted once each time", async ({page}) => 
   })
   await connected(page)
 
-  await page.locator("#home-watch").click()
+  await page.locator("#home-explore").click()
   await expect(page).toHaveURL(/\/classic\/1$/)
   await connected(page)
   await expect.poll(() => sent).toEqual([{step: "home"}, {step: "watch"}])
@@ -52,7 +52,7 @@ test("the homepage and its Watch are counted once each time", async ({page}) => 
   await page.goBack()
   await expect(page).toHaveURL(/\/$/)
   await connected(page)
-  await page.locator("#home-watch").click()
+  await page.locator("#home-explore").click()
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expect
     .poll(() => sent)
@@ -66,7 +66,7 @@ test("a browser a program drives reports nothing", async ({browser}) => {
 
   await page.goto("/")
   await connected(page)
-  await page.locator("#home-watch").click()
+  await page.locator("#home-explore").click()
   await expect(page).toHaveURL(/\/classic\/1$/)
   // Time for a report that would have been sent to have left.
   await page.waitForTimeout(500)

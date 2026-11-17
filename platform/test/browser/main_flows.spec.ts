@@ -54,7 +54,7 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
 test("Classic #1's page says its sales open soon and leads back to the fleets", async ({page}) => {
   const errors = watchErrors(page)
   await visit(page, "/")
-  await page.locator("#home-watch").click()
+  await page.locator("#home-explore").click()
 
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expectConnected(page)

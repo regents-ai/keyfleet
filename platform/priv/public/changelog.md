@@ -25,6 +25,8 @@ Changes to Keyfleet, newest first.
   it up. Only its person sees it, quoted in its own words in a Blocked card on the Agents
   page, beside its check-in status. It goes with the agent's next check-in that doesn't
   say one. Agents send it as `run.blocker` with a sync.
+- **Homepage.** Watch is now Explore. Under the hero, four steps show how a person
+  joins: Explore, Key, Agent and Work, each with one short line.
 
 ## 16 November 2026
 

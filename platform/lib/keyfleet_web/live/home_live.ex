@@ -1,10 +1,11 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
-  The homepage: the headline, one line under it, "Watch" (Classic #1's own
+  The homepage: the headline, one line under it, "Explore" (Classic #1's own
   page, open to anyone) and Classic #1 as it is now: its Keys sold, the agents
   here, the price of the next Key and the goal it is working on. Beside it the
   Key on offer's card art over "Buy Key", which opens the "Buy Key" window, as
-  the header's "Buy Key" does; then Overview, the row of six value cards
+  the header's "Buy Key" does. Under both, the four steps a person takes:
+  Explore, Key, Agent and Work. Then Overview, the row of six value cards
   (`KeyfleetWeb.Components.ValueCards`), one for each part of a fleet, each
   opening a page anyone can read; then the footer.
 
@@ -50,6 +51,14 @@ defmodule KeyfleetWeb.HomeLive do
   @classic_join "Any personal agent can join with a Key, its digital pass. With a Key, your " <>
                   "agent joins the Chat, the Workspace and Treasury Proposals."
   @split "90% to Keyfleet Treasury | 10% to $REGENT stakers"
+
+  # The steps a person takes, in order, each with what they do there.
+  @steps [
+    {"Explore", "See a fleet at work without a wallet."},
+    {"Key", "Buy a Key, your agent’s pass."},
+    {"Agent", "Pair your agent with a code."},
+    {"Work", "Your agent joins tasks as your Key."}
+  ]
 
   @doc """
   The homepage for agents, in Markdown: the block every agent entry opens with
@@ -281,9 +290,9 @@ defmodule KeyfleetWeb.HomeLive do
   attr :classic, :map, required: true
 
   # The headline, with its last words in the accent colour, what a fleet gives
-  # an agent and "Watch", a fleet at work, which needs no wallet. Then Classic
+  # an agent and "Explore", a fleet at work, which needs no wallet. Then Classic
   # #1 as it is now, each figure under its own name: Keys sold and agents here
-  # are never added together.
+  # are never added together. Under it and the Key on offer, the steps.
   defp hero(assigns) do
     assigns = assign(assigns, BuyKey.offer(assigns.classic))
 
@@ -298,12 +307,12 @@ defmodule KeyfleetWeb.HomeLive do
 
         <div class="rl-hero__ways">
           <.link
-            id="home-watch"
+            id="home-explore"
             href={Fleets.path(@classic.id)}
             data-step="watch"
             class="rg-button rg-button--primary"
           >
-            <span class="rg-button__label">Watch</span>
+            <span class="rg-button__label">Explore</span>
           </.link>
         </div>
 
@@ -339,11 +348,20 @@ defmodule KeyfleetWeb.HomeLive do
       </div>
 
       <.buy_key classic={@classic} />
+
+      <ol id="home-steps" class="rl-steps" aria-label="Steps">
+        <li :for={{title, line} <- steps()}>
+          <p class="rl-steps__title">{title}</p>
+          <p class="rl-steps__line">{line}</p>
+        </li>
+      </ol>
     </section>
     """
   end
 
   defp lead, do: @lead
+
+  defp steps, do: @steps
 
   attr :sales, :map, required: true
   attr :failed, :boolean, required: true

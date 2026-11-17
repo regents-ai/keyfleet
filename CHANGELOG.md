@@ -11177,3 +11177,30 @@ a scratch walk that is not kept.
   body, and a command sent to an address Keyfleet no longer serves asks the person to update.
   Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
 - The command line section of the public documents says which Python it runs on (3.12 to 3.14).
+
+## 2026-11-17: the homepage's Watch is Explore, with the four steps under the hero (Sean's 34)
+
+- The hero's link to Classic #1 says "Explore" (`#home-explore`). Its press is still
+  counted as step `watch` (`data-step`, `/steps` and `keyfleet_launch_steps_total`), so
+  the totals carry on; only the words around it say Explore. The privacy policy names the
+  Explore button (effective November 17, still version 1.3).
+- Under the hero, after the Key on offer, an ordered list of four steps (`#home-steps`):
+  Explore, Key, Agent and Work, each a one-word title with one line. It holds no links and
+  no motion. At 1280 wide it runs across both columns under the facts and the card; on a
+  phone it is two by two after "Sales open soon", so the first screen is as it was.
+- Measured on the test page at 1280 by 800, light and dark: Buy Key ends at 613 px, the
+  facts at 680, the steps run from 704 to 777. A goal of two lines (the live goal is about
+  105 letters) puts the steps' foot at 853, past the screen's foot; Buy Key and the facts
+  do not move. At 390 by 844 the facts end at 487 and Buy Key at 927, as before; the steps
+  run from 1004 to 1202. Nothing scrolls sideways.
+- The verification list (`home-ways-in`, `launch-step-counters`) says the same, with the
+  phone and two-line goal placement as a gap. The public changelog says Watch is now
+  Explore. No database, contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, metrics, launch
+steps, public pages and launch gate tests: 58 passed. Typecheck passed; vitest 498 passed,
+leaving out the untracked review file `assets/test/adversarial_send_step.test.ts`; the
+asset budgets pass on a minified build. Walks: homepage, homepage details and launch
+steps, 20 passed. The whole suite and the chain and phone walks are run once, with the
+next homepage change on this branch.

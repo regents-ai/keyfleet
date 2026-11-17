@@ -28,9 +28,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   an agent; the Markdown homepage is the block every agent entry opens
   #   with, then Classic Keyfleet, which says Classic opens soon until it does,
   #   then links its page
-  # - "Watch" opens Classic #1's own page; Classic #1's figures each keep their
-  #   own name: Keys sold out of all, the agents here, the next Key's price
-  #   and the goal it is working on, which links its workspace
+  # - "Explore" opens Classic #1's own page; Classic #1's figures each keep
+  #   their own name: Keys sold out of all, the agents here, the next Key's
+  #   price and the goal it is working on, which links its workspace
+  # - under the hero, the four steps in order, Explore, Key, Agent and Work,
+  #   each a title with one line
   # - launch-gate: internal links stay on the fleets' maps, workspaces,
   #   proposals and treasuries, the account and pairing pages, the public
   #   documents, or anchors that exist
@@ -305,7 +307,26 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
   end
 
-  test "Watch opens Classic #1's page, over Classic #1's figures", %{conn: conn} do
+  test "under the hero, the four steps in order, each a title with one line, none a link",
+       %{conn: conn} do
+    {:ok, _view, html} = live(conn, "/")
+
+    steps =
+      html
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("#home-hero ol#home-steps > li")
+      |> Enum.map(fn step ->
+        step
+        |> LazyHTML.query("p")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+      end)
+
+    assert ["Explore", "Key", "Agent", "Work"] = Enum.map(steps, &hd/1)
+    assert Enum.all?(steps, &match?([_title, line] when line != "", &1))
+    assert attribute(html, "#home-steps a", "href") == []
+  end
+
+  test "Explore opens Classic #1's page, over Classic #1's figures", %{conn: conn} do
     for token_id <- 1..2, do: issue!(@classic, token_id)
     Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
     read_fleets()
@@ -313,13 +334,13 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     {:ok, view, html} = live(conn, "/")
 
-    assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
+    assert attribute(html, "a#home-explore", "href") == ["/classic/1"]
     # Every fleet page draws in another live session, so no link here asks for
     # a live move: it would be refused and loaded whole anyway.
     refute has_element?(view, "main a[data-phx-link]")
-    assert text(view, "#home-watch") == "Watch"
-    # A press is counted by the step it names (assets/js/launch_steps.ts).
-    assert attribute(html, "a#home-watch", "data-step") == ["watch"]
+    assert text(view, "#home-explore") == "Explore"
+    # A press is counted under the step's kept name (assets/js/launch_steps.ts).
+    assert attribute(html, "a#home-explore", "data-step") == ["watch"]
 
     assert text(view, "#home-hero-fleet") == "Classic #1 now"
 
