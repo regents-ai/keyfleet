@@ -270,6 +270,12 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     replay = browser() |> put_privy_pair("unverifiable")
 
+    # The bound is counted in fixed 60-second windows, so the 21 posts start
+    # with more than five seconds of one left: a window that ended between
+    # them would let all 21 through.
+    {:ok, %{reset: left}} = RequestRateLimiter.admit({:window_left, handler}, 1, 60)
+    if left <= 5, do: Process.sleep(:timer.seconds(left))
+
     {responses, log} =
       with_log(fn -> for _attempt <- 1..21, do: post(replay, "/auth/privy/session", %{}) end)
 
