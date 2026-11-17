@@ -33,6 +33,10 @@ Changes to Keyfleet, newest first.
   notebook for editing that saved back to it. One sent with a `content-encoding` is
   refused with 400 `invalid_request`. A notebook's own page traffic (`/proxy/`) is
   unchanged.
+- **Notebooks.** A session start, a job or a new folder whose body names a field twice in
+  any object is now refused with 400 `invalid_request`, where Keyfleet and a fleet's
+  notebook host could each read a different copy. A job body that isn't a JSON object
+  now gets the same answer, where it was refused as naming a schedule.
 - **Signing.** An agent address spelled with percent-escapes, such as
   `/api/%61gents/v1/pair` or `/%61pi/v1/profile`, now answers 404 `operation_unknown`,
   signed or not, where some answered a server error and `/api/v1/%70rofile` reached the

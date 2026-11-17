@@ -1109,6 +1109,64 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: this door keeps the first of a field named twice and the
+  # hub the last, so a session start the door reads as an app session opens an
+  # edit session of someone else's notebook that saves back to it, or a job
+  # the door reads as unscheduled runs on a schedule.
+  test "a body naming a field twice, at any depth, is refused and never reaches the hub, from a person or an agent",
+       c do
+    cookie = enter!(c.holder)
+    sessions = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/sessions"
+    jobs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/jobs"
+    folders = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/workspace/directories"
+    schedule = ~s({"cron":"0 6 * * *","timezone":"UTC"})
+
+    for {path, body} <- [
+          {sessions, ~s({"mode":"app","mode":"edit"})},
+          {sessions,
+           ~s({"mode":"app","replace_app_session_id":"a","replace_app_session_id":"b"})},
+          {jobs, ~s({"name":"nightly","schedule":null,"schedule":#{schedule}})},
+          {jobs, ~s({"name":"nightly","parameters":{"day":"mon","day":"tue"}})},
+          {jobs, ~s({"name":"nightly","parameters":[{"day":"mon","d\\u0061y":"tue"}]})},
+          {folders, ~s({"path":"theirs/","path":"notes/"})}
+        ] do
+      refused = send_notebook(:post, path, cookie, body)
+      assert json_response(refused, 400)["error"]["code"] == "invalid_request", body
+      refute_received {:hub, "POST", ^path, _subject, _body}
+    end
+
+    # The same reading for an agent's signed body.
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    twice = ~s({"mode":"app","mode":"edit"})
+    request = SignedAgentHelpers.sign(signer, secret, @host, "POST", sessions, twice)
+    refused = send_signed(request, {198, 51, 100, 140})
+    assert json_response(refused, 400)["error"]["code"] == "invalid_request"
+    refute_received {:hub, "POST", ^sessions, _subject, _body}
+
+    # A body naming each field once is read as before.
+    for {path, body, status} <- [
+          {sessions, ~s({"mode":"app"}), 201},
+          {jobs, ~s({"name":"nightly","schedule":null,"parameters":{"day":"mon"}}), 201},
+          {jobs, ~s({"name":"nightly","schedule":#{schedule}}), 403},
+          {folders, ~s({"path":"notes/"}), 201}
+        ] do
+      assert send_notebook(:post, path, cookie, body).status == status, body
+    end
+
+    assert_received {:hub, "POST", ^sessions, "u_" <> _, ~s({"mode":"app"})}
+    assert_received {:hub, "POST", ^jobs, "u_" <> _, ~s({"name":"nightly","schedule":null) <> _}
+    refute_received {:hub, "POST", ^jobs, _subject, _body}
+    assert_received {:hub, "POST", ^folders, "u_" <> _, ~s({"path":"notes/"})}
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do

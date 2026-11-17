@@ -68,7 +68,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   `X-Keyfleet-Assertion`, forwarded-identity or SIWA header the client sent,
   and without this site's cookie. A body this door reads, an agent's or any
   sent to the notebook API (`/api/`), reaches the hub labelled as this door
-  read it, and one sent encoded is refused. Answers stream straight back,
+  read it, and one sent encoded is refused, as is one this door decides by
+  that names a field twice (`decoded/1`). Answers stream straight back,
   with only the headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
@@ -610,30 +611,28 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       body == :too_large ->
         Refusal.json(conn, 413, "request_too_large")
 
-      not job_unscheduled?(conn, body) ->
-        Refusal.json(conn, 403, "notebooks_schedules_refused")
-
       true ->
-        case made(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
-          {:ok, {headers, body}, done} ->
-            Req.request(
-              method: conn.method,
-              url: address <> target(conn),
-              headers: headers,
-              body: body,
-              into: :self,
-              raw: true,
-              redirect: false,
-              retry: false,
-              # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-              connect_options: [transport_opts: [inet6: true]],
-              receive_timeout: http_timeout(conn)
-            )
-            |> answered(done)
-            |> answer_back(conn, fleet_id, subject)
-
-          {:error, reason} ->
-            maker_refusal(conn, reason)
+        with :ok <- unscheduled(conn, body),
+             {:ok, {headers, body}, done} <-
+               made(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
+          Req.request(
+            method: conn.method,
+            url: address <> target(conn),
+            headers: headers,
+            body: body,
+            into: :self,
+            raw: true,
+            redirect: false,
+            retry: false,
+            # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+            connect_options: [transport_opts: [inet6: true]],
+            receive_timeout: http_timeout(conn)
+          )
+          |> answered(done)
+          |> answer_back(conn, fleet_id, subject)
+        else
+          {:error, :scheduled} -> Refusal.json(conn, 403, "notebooks_schedules_refused")
+          {:error, reason} -> maker_refusal(conn, reason)
         end
     end
   end
@@ -692,32 +691,63 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # A job runs only when a member starts it: one that names a schedule is
   # refused (clearing a schedule with `null` is not naming one).
-  defp job_unscheduled?(
+  defp unscheduled(
          %Plug.Conn{
            method: "POST",
            path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs"]
          },
          body
        ),
-       do: no_schedule?(body)
+       do: no_schedule(body)
 
-  defp job_unscheduled?(
+  defp unscheduled(
          %Plug.Conn{
            method: "PATCH",
            path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs", _]
          },
          body
        ),
-       do: no_schedule?(body)
+       do: no_schedule(body)
 
-  defp job_unscheduled?(_conn, _body), do: true
+  defp unscheduled(_conn, _body), do: :ok
 
-  defp no_schedule?(body) do
-    case Jason.decode(body) do
-      {:ok, %{} = job} -> is_nil(job["schedule"])
-      _unreadable -> false
+  defp no_schedule(body) do
+    case decoded(body) do
+      {:ok, %{"schedule" => schedule}} when not is_nil(schedule) -> {:error, :scheduled}
+      {:ok, _job} -> :ok
+      unreadable -> unreadable
     end
   end
+
+  # Every body this door reads to decide who may send it is read here, once.
+  # Jason keeps the first of a field named twice and the hub the last, so a
+  # body that names a field twice in any object, at any depth, would be read
+  # two ways: it is refused. Only an object is a body this door reads.
+  defp decoded(body) do
+    case Jason.decode(body, objects: :ordered_objects) do
+      {:ok, %Jason.OrderedObject{} = object} ->
+        if repeats?(object), do: {:error, :invalid}, else: {:ok, plain(object)}
+
+      _unreadable ->
+        {:error, :invalid}
+    end
+  end
+
+  defp repeats?(%Jason.OrderedObject{values: pairs}) do
+    names = Enum.map(pairs, fn {name, _value} -> name end)
+
+    length(Enum.uniq(names)) != length(names) or
+      Enum.any?(pairs, fn {_name, value} -> repeats?(value) end)
+  end
+
+  defp repeats?(values) when is_list(values), do: Enum.any?(values, &repeats?/1)
+  defp repeats?(_value), do: false
+
+  defp plain(%Jason.OrderedObject{values: pairs}),
+    do: Map.new(pairs, fn {name, value} -> {name, plain(value)} end)
+
+  defp plain(values) when is_list(values), do: Enum.map(values, &plain/1)
+  defp plain(value), do: value
 
   ## Makers
 
@@ -864,12 +894,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A start with no body is an edit session.
   defp session_body(""), do: {:ok, %{}}
 
-  defp session_body(body) do
-    case Jason.decode(body) do
-      {:ok, %{} = start} -> {:ok, start}
-      _unreadable -> {:error, :invalid}
-    end
-  end
+  defp session_body(body), do: decoded(body)
 
   # A new file is kept as its writer's; writing over one is its maker's.
   defp file_write(conn, [fleet_id, subject, project_id, notebook_id] = ids, request) do
@@ -892,7 +917,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A new folder is kept as its maker's. It is never removed again when that
   # can't be kept: the hub may answer for one that was there already.
   defp folder_made([fleet_id, subject, _project_id, notebook_id], {_headers, body} = request) do
-    with {:ok, %{"path" => path}} when is_binary(path) <- Jason.decode(body),
+    with {:ok, %{"path" => path}} when is_binary(path) <- decoded(body),
          {:ok, key} <- Makers.folder_key(path) do
       {:ok, request,
        fn
