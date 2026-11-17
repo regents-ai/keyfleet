@@ -9,16 +9,17 @@ test.beforeEach(async ({page}) => {
   await page.addInitScript(() => Object.defineProperty(navigator, "webdriver", {get: () => false}))
 })
 
-// Every report the page sends, in order, with what the site answered.
-function reports(page: Page) {
+// Every report the page sends, in order, with what the site answered. A press
+// of "Watch" leaves the page as its report goes, so the walk carries each
+// report to the site itself and hears the answer whatever the page does next.
+async function reports(page: Page) {
   const sent: unknown[] = []
   const answers: number[] = []
-  page.on("request", request => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === "/steps")
-      sent.push(JSON.parse(request.postData() ?? "null"))
-  })
-  page.on("response", response => {
-    if (new URL(response.url()).pathname === "/steps") answers.push(response.status())
+  await page.context().route("**/steps", async route => {
+    sent.push(JSON.parse(route.request().postData() ?? "null"))
+    const response = await route.fetch()
+    answers.push(response.status())
+    await route.fulfill({response}).catch(() => {})
   })
   return {sent, answers}
 }
@@ -28,7 +29,7 @@ async function connected(page: Page) {
 }
 
 test("the homepage and its Watch are counted once each time", async ({page}) => {
-  const {sent, answers} = reports(page)
+  const {sent, answers} = await reports(page)
 
   await page.goto("/")
   await connected(page)
@@ -61,7 +62,7 @@ test("the homepage and its Watch are counted once each time", async ({page}) => 
 
 test("a browser a program drives reports nothing", async ({browser}) => {
   const page = await browser.newPage()
-  const {sent} = reports(page)
+  const {sent} = await reports(page)
 
   await page.goto("/")
   await connected(page)
