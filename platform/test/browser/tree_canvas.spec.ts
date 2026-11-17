@@ -113,15 +113,17 @@ for (const [width, height] of [
     await expect(page).toHaveURL(/\?view=graph&arrange=author&every=hour$/)
     await expect(page.locator("#workspace-graph-arrange-author")).toHaveAttribute("aria-pressed", "true")
     await expect(page.locator("#workspace-graph-arrange-hour")).toHaveCount(0)
-    await expect.poll(placed).not.toBe(byTime)
     await expect(page.locator(`${tree} [data-tree-headings]`)).toContainText("Key 4")
+    // A card that glides out of sight isn't drawn, so Fit brings it back
+    // before the walk reads where it now stands.
+    await page.locator(`${tree} [data-tree-zoom="fit"]`).click()
+    await expect(task).toBeVisible()
+    await expect.poll(placed).not.toBe(byTime)
 
     // Pressing a card lights it and its whole line, and dims the rest: the
     // goal it delivers on, the finding it produced and the copy made of it,
     // but not the goal's other task. The press is on the card's kind, as its
     // title is a link to the item's page.
-    await page.locator(`${tree} [data-tree-zoom="fit"]`).click()
-    await expect(task).toBeVisible()
     await atRest(task)
     await task.locator(".tree-card-kind").click()
     await expect(surface).toHaveAttribute("data-lighting", "")
