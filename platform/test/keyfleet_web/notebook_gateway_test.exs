@@ -948,6 +948,89 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
            ]
   end
 
+  # Costly failure: a label the signature doesn't cover changes how the hub
+  # reads an agent's body: a JSON body sent as text is read as empty by a
+  # session start the door read as JSON, so a maker check is skipped, or an
+  # encoding label asks whatever reads the body to unpack bytes nobody signed.
+  test "an agent's body reaches the hub typed as this door takes it, never as sent, and an encoded one is refused unread",
+       c do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    test = self()
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    file = "/api/v1/projects/proj-fleet/notebooks/nb-0123456789abcdef/workspace/files"
+
+    # The hub as in every other test, telling this one how each notebook
+    # request's body was labelled.
+    hub =
+      server(fn conn ->
+        {:ok, body, conn} = read_body(conn)
+
+        if String.starts_with?(conn.request_path, notebooks) do
+          labels =
+            for {name, _value} = label <- conn.req_headers,
+                name in ~w(content-type content-encoding),
+                do: label
+
+          send(test, {:labels, conn.method, labels, body})
+          json(conn, 201, %{success: true, data: %{}})
+        else
+          hub_answer(conn, c.holder)
+        end
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => hub})
+    )
+
+    created = ~s({"name":"orbit.py"})
+
+    send_labelled = fn method, path, body, labels ->
+      request = SignedAgentHelpers.sign(signer, secret, @host, method, path, body)
+
+      request.headers
+      |> Map.drop(["content-type"])
+      |> Map.merge(Map.new(labels))
+      |> Enum.reduce(
+        %{build_conn() | host: @host, remote_ip: {198, 51, 100, 139}},
+        fn {name, value}, conn -> put_req_header(conn, name, value) end
+      )
+      |> dispatch(@endpoint, method, path, body || "")
+    end
+
+    encoded =
+      send_labelled.("POST", notebooks, created, [
+        {"content-type", "application/json"},
+        {"content-encoding", "gzip"}
+      ])
+
+    assert json_response(encoded, 400)["error"]["code"] == "invalid_request"
+    refute_received {:broker_payload, _payload}
+    refute_received {:labels, _method, _labels, _body}
+
+    as_json = [{"content-type", "application/json"}]
+    as_file = [{"content-type", "application/octet-stream"}]
+
+    for {method, path, body, labels, heard} <- [
+          {"POST", notebooks, created, [{"content-type", "text/plain"}], as_json},
+          {"PUT", file <> "?path=data.csv&create=true", "a,b\n1,2\n", as_json, as_file},
+          {"GET", notebooks, nil, as_json, []}
+        ] do
+      assert send_labelled.(method, path, body, labels).status == 201
+      sent = body || ""
+      assert_receive {:labels, ^method, ^heard, ^sent}
+    end
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do

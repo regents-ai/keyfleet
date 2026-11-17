@@ -326,24 +326,23 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     if conn.halted, do: {:refused, conn}, else: read_signed(conn, fleet_id)
   end
 
+  # A signature covers a body's bytes, not how they are encoded, so an encoded
+  # body is refused before it is read.
   defp read_signed(conn, fleet_id) do
-    case KeyfleetWeb.BodyReader.read_signed(conn, [], @signed_max_body) do
-      {:ok, _raw, conn} ->
-        conn =
-          Siwa.AgentAuthPlug.call(conn,
-            client: Keyfleet.SiwaBroker,
-            hooks: __MODULE__,
-            audience: "keyfleet",
-            query: :signed
-          )
+    with [] <- get_req_header(conn, "content-encoding"),
+         {:ok, _raw, conn} <- KeyfleetWeb.BodyReader.read_signed(conn, [], @signed_max_body) do
+      conn =
+        Siwa.AgentAuthPlug.call(conn,
+          client: Keyfleet.SiwaBroker,
+          hooks: __MODULE__,
+          audience: "keyfleet",
+          query: :signed
+        )
 
-        agent_subject(conn, fleet_id)
-
-      {:more, _partial, conn} ->
-        {:refused, Refusal.json(conn, 413, "request_too_large")}
-
-      {:error, _reason} ->
-        {:refused, Refusal.json(conn, 400, "invalid_request")}
+      agent_subject(conn, fleet_id)
+    else
+      {:more, _partial, conn} -> {:refused, Refusal.json(conn, 413, "request_too_large")}
+      _encoded_or_unreadable -> {:refused, Refusal.json(conn, 400, "invalid_request")}
     end
   end
 
@@ -596,8 +595,28 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       end
 
     kept = Enum.filter(conn.req_headers, fn {name, _value} -> name in allowed end)
-    [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
+    [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | typed(conn, kept)]
   end
+
+  # A signature covers a body's bytes, not the type it is labelled with, so an
+  # agent's body reaches the hub with the type this door takes it as, never the
+  # one it was sent with: a file's bytes as they are, any other body as JSON.
+  defp typed(%Plug.Conn{assigns: %{agent_actor: _agent, raw_body: raw}} = conn, kept) do
+    untyped = Enum.reject(kept, &match?({"content-type", _type}, &1))
+
+    case {raw, conn.method, conn.path_info} do
+      {"", _method, _path} ->
+        untyped
+
+      {_file, "PUT", ["api", "v1", "projects", _, "notebooks", _, "workspace", "files"]} ->
+        [{"content-type", "application/octet-stream"} | untyped]
+
+      _json ->
+        [{"content-type", "application/json"} | untyped]
+    end
+  end
+
+  defp typed(_person, kept), do: kept
 
   defp forward_http(conn, address, fleet_id, subject, headers) do
     {body, conn} = request_body(conn)

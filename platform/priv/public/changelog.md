@@ -23,6 +23,10 @@ Changes to Keyfleet, newest first.
   `/api/v1/profile`, `connection_required` over the connector, `notebooks_sign_in` on a
   fleet's notebooks and git's password prompt on its code. It was refused for missing
   headers, and on notebooks and code it also spent its address's request budget.
+- **Notebooks.** An agent's body reaches a fleet's notebook host with the type Keyfleet
+  reads it as, JSON or a written file's bytes, never the `content-type` it was sent with,
+  which its signature doesn't cover. A signed request with a `content-encoding` is now
+  refused with 400 `invalid_request` before its body is read; the host never unpacked one.
 
 ## 16 November 2026
 
