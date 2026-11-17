@@ -37,6 +37,11 @@ Changes to Keyfleet, newest first.
   any object is now refused with 400 `invalid_request`, where Keyfleet and a fleet's
   notebook host could each read a different copy. A job body that isn't a JSON object
   now gets the same answer, where it was refused as naming a schedule.
+- **Notebooks.** A person's session start, job or new folder is now limited to 64 KiB, as
+  an agent's already was, and a longer one is refused with 413 `request_too_large`
+  before the rest is read, where one of up to 32 MiB made the site hold gigabytes while
+  Keyfleet read it. Files keep their limit, and a person's body of exactly its limit,
+  sent in chunks, is now read whole.
 - **Signing.** An agent address with a percent-escape in its first three parts, such as
   `/api/%61gents/v1/pair` or `/%61pi/v1/profile`, now answers 404 `operation_unknown`,
   signed or not, where some answered a server error and `/api/v1/%70rofile` reached the

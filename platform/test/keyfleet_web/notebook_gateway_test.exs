@@ -1167,6 +1167,58 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_received {:hub, "POST", ^folders, "u_" <> _, ~s({"path":"notes/"})}
   end
 
+  # Costly failure: reading a body to decide who may send it costs the site
+  # many times the body's length, gigabytes for one person's largest body.
+  test "a person's body this door decodes is read no further than an agent's, and every other body as far as before",
+       c do
+    cookie = enter!(c.holder)
+    mine = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000002"
+    jobs = mine <> "/jobs"
+    limit = 64 * 1024
+    job = fn length -> ~s({"name":") <> String.duplicate("a", length - 11) <> ~s("}) end
+
+    for {method, path} <- [
+          {:post, mine <> "/sessions"},
+          {:post, jobs},
+          {:patch, jobs <> "/job-mine"},
+          {:post, mine <> "/workspace/directories"}
+        ] do
+      refused = send_notebook(method, path, cookie, job.(limit + 1))
+      assert json_response(refused, 413)["error"]["code"] == "request_too_large", path
+      refute_received {:hub, _method, ^path, _subject, _body}
+    end
+
+    whole = job.(limit)
+    assert send_notebook(:post, jobs, cookie, whole).status == 201
+    assert_received {:hub, "POST", ^jobs, "u_" <> _, ^whole}
+
+    # Served on a real port, so a body arrives in chunks as it does from a browser.
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+
+    chunked =
+      for body <- [whole, whole <> " "] do
+        Req.post!(site <> jobs,
+          headers: %{
+            "host" => @host,
+            "cookie" => "__Host-kf_notebooks=" <> cookie,
+            "content-type" => "application/json"
+          },
+          body: Stream.map([body], & &1),
+          retry: false
+        ).status
+      end
+
+    assert chunked == [201, 413]
+    assert_receive {:hub, "POST", ^jobs, "u_" <> _, ^whole}
+    refute_received {:hub, "POST", ^jobs, _subject, _body}
+
+    file = String.duplicate("a", 1024 * 1024)
+    files = mine <> "/workspace/files"
+    written = send_notebook(:put, files <> "?path=big.csv&create=true", cookie, file)
+    assert written.status == 200
+    assert_received {:hub, "PUT", ^files, "u_" <> _, ^file}
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do

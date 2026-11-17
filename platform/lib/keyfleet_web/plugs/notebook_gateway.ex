@@ -69,7 +69,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   and without this site's cookie. A body this door reads, an agent's or any
   sent to the notebook API (`/api/`), reaches the hub labelled as this door
   read it, and one sent encoded is refused, as is one this door decides by
-  that names a field twice (`decoded/1`). Answers stream straight back,
+  that names a field twice (`decoded/1`) or is longer than an agent's body may
+  be (`body_limit/1`). Answers stream straight back,
   with only the headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
@@ -993,15 +994,36 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp request_body(conn), do: read_capped(conn)
 
+  # A read asks for one byte past the limit: a body sent in chunks that fills a
+  # read exactly comes back unfinished (`KeyfleetWeb.BodyReader.read_signed/3`).
   defp read_capped(conn) do
-    cap = Notebooks.config()[:max_request_bytes]
+    limit = body_limit(conn)
 
-    case read_body(conn, length: cap, read_length: min(cap, 1_000_000)) do
-      {:ok, body, conn} -> {body, conn}
+    case read_body(conn, length: limit + 1, read_length: min(limit + 1, 1_000_000)) do
+      {:ok, body, conn} when byte_size(body) <= limit -> {body, conn}
+      {:ok, _longer, conn} -> {:too_large, conn}
       {:more, _partial, conn} -> {:too_large, conn}
       {:error, _reason} -> {:too_large, conn}
     end
   end
+
+  # A body this door decodes to decide who may send it (`decoded/1`) is read no
+  # further than an agent's: decoding costs many times its length. Every other
+  # body is read up to the hub's own limit.
+  defp body_limit(%Plug.Conn{
+         method: method,
+         path_info: ["api", "v1", "projects", _project, "notebooks", _notebook | rest]
+       }) do
+    case {method, rest} do
+      {"POST", ["sessions"]} -> @signed_max_body
+      {"POST", ["jobs"]} -> @signed_max_body
+      {"PATCH", ["jobs", _job]} -> @signed_max_body
+      {"POST", ["workspace", "directories"]} -> @signed_max_body
+      _undecoded -> Notebooks.config()[:max_request_bytes]
+    end
+  end
+
+  defp body_limit(_conn), do: Notebooks.config()[:max_request_bytes]
 
   defp stream_back({:error, error}, conn, fleet_id, _subject) do
     HubSilentError.report(
