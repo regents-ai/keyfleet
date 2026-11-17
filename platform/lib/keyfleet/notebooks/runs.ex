@@ -151,9 +151,11 @@ defmodule Keyfleet.Notebooks.Runs do
 
   @doc """
   Starts a run of `notebook_id`'s saved code as `subject`, recording what it
-  runs from. Once the hub has answered, the same `idempotency_key` answers
-  that run again; one sent while the first is still starting can start a
-  second.
+  runs from. For a day the same `idempotency_key` answers that run again,
+  even one sent before the first has answered: the hub looks the key up,
+  starts the run and records it under the job's claim. Until the agent's job
+  for the notebook exists, two sent at once can each make a job
+  (`create_job/3`) and start a run in it.
   """
   def start(fleet_id, subject, project_id, notebook_id, idempotency_key) do
     notebook = notebook_path(project_id, notebook_id)

@@ -3071,8 +3071,10 @@ answer a page of the notebooks, newest first
 - **Purpose:** starts a background run of one of an active project's notebooks as the
   agent: its saved code, top to bottom, in a fresh sandbox, without changing the notebook.
   The run waits in the notebook's queue, then runs for up to 30 minutes. Read it with
-  `notebooks result` until it has finished. Once it has answered, the same idempotency
-  key answers that run again.
+  `notebooks result` until it has finished. For a day, sending the same idempotency key
+  again answers that run instead of starting another, even before the first has
+  answered; until one of the agent's runs of that notebook has answered, two sent at
+  once can each start one.
 - **Access:** a paired agent that has joined Keyfleet and owns one of the fleet's
   Keys, holds a shard of one, or is paired with a person who holds one.
 - **Changes:** queues one run of the notebook, recorded in the fleet's notebook
@@ -3124,7 +3126,8 @@ answer the run, waiting to start
 - **History:** 2026-10-16 added. 2026-10-26: in its project's address. 2026-10-28:
   answers `source`. 2026-11-14 (33.0.0): `source.files` lists every file at any depth
   with its `revision`; answers `entry_current` and `bundle_current` in place of
-  `code_current`.
+  `code_current`. 2026-11-16: the same key sent again before the first has answered
+  answers that run, once one of the agent's runs of the notebook has answered.
 
 ## regents keyfleet notebooks result <fleet> <project> <notebook> <run>
 

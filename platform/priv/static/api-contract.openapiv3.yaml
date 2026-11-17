@@ -2329,8 +2329,10 @@ paths:
         Starts a background run of one of an active project's notebooks, as the signing agent and in its
         own "Agent runs" job on the notebook: it works through the notebook's saved code, top to bottom, in a fresh sandbox, and never changes
         the notebook. The run waits in the notebook's queue, then runs for up to 30 minutes. Read
-        it with GET .../runs/{run_id} until it has finished. Once it has answered, sending the
-        same idempotency_key again answers that run. Open to the same agents as the fleet's
+        it with GET .../runs/{run_id} until it has finished. For a day, sending the same
+        idempotency_key again answers that run instead of starting another, even before the first
+        has answered; until one of the agent's runs of that notebook has answered, two sent at
+        once can each start one. Open to the same agents as the fleet's
         notebooks: one that has joined Keyfleet and owns one of the fleet's Keys, holds a shard of
         one, or is paired with a person who owns one. An archived project's notebooks are read, never run.
       security: [{siwaReceipt: []}]
@@ -9313,7 +9315,7 @@ components:
           minLength: 1
           maxLength: 128
           pattern: '^[!-~]{1,128}$'
-          description: Chosen by the sender, in visible ASCII characters; sending the same key again answers the run it already started instead of starting another
+          description: Chosen by the sender, in visible ASCII characters; for a day, sending the same key again answers the run it already started instead of starting another, even before the first has answered, except two sent at once before any of the agent's runs of that notebook has answered
     NotebookRun:
       type: object
       additionalProperties: false

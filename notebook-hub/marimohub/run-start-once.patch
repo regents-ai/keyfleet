@@ -1,0 +1,121 @@
+diff --git a/packages/api/src/jobs/operations.ts b/packages/api/src/jobs/operations.ts
+index 329f0bc2..b348c8d3 100644
+--- a/packages/api/src/jobs/operations.ts
++++ b/packages/api/src/jobs/operations.ts
+@@ -133,6 +133,39 @@ export async function triggerJobRun(
+ 	request: { requestId?: string; method: string; path: string },
+ 	signal?: AbortSignal,
+ 	replay?: { scope: string; key?: string },
++) {
++	return withJobRunEnqueue(
++		deps,
++		target,
++		job,
++		body,
++		request,
++		async (enqueue) => {
++			if (!replay?.key) return enqueue();
++			// Keep lookup, enqueue, and recording under the same distributed job claim.
++			let created: JobRun | undefined;
++			const runId = await idempotentOperation(deps, replay.scope, replay.key, async () => {
++				created = await enqueue();
++				return created.run_id;
++			});
++			return created ?? withAbortSignal(loadJobRun(deps, job, runId), signal);
++		},
++		signal,
++	);
++}
++
++/**
++ * Runs `work` under the job's claim, handing it the enqueue of one manual run, so
++ * a replay's lookup and record around that enqueue hold the same claim.
++ */
++export async function withJobRunEnqueue<T>(
++	deps: ApiDeps,
++	target: AuthorizedNotebook,
++	job: JobDefinition,
++	body: z.infer<typeof TriggerRunBody> | undefined,
++	request: { requestId?: string; method: string; path: string },
++	work: (enqueue: () => Promise<JobRun>) => Promise<T>,
++	signal?: AbortSignal,
+ ) {
+ 	const { project, notebook, user } = target;
+ 	return deps.services.jobRuns.withJobMutation(job, async () => {
+@@ -175,14 +208,7 @@ export async function triggerJobRun(
+ 			);
+ 			return run;
+ 		};
+-		if (!replay?.key) return enqueue();
+-		// Keep lookup, enqueue, and recording under the same distributed job claim.
+-		let created: JobRun | undefined;
+-		const runId = await idempotentOperation(deps, replay.scope, replay.key, async () => {
+-			created = await enqueue();
+-			return created.run_id;
+-		});
+-		return created ?? withAbortSignal(loadJobRun(deps, job, runId), signal);
++		return work(enqueue);
+ 	});
+ }
+ 
+diff --git a/packages/api/src/routes/jobs.test.ts b/packages/api/src/routes/jobs.test.ts
+index 7e7d3a3f..463740a0 100644
+--- a/packages/api/src/routes/jobs.test.ts
++++ b/packages/api/src/routes/jobs.test.ts
+@@ -261,6 +261,18 @@ describe('Job routes', () => {
+ 		expect(await expectPage(await request('GET', `${base()}/${job.id}/runs`))).toHaveLength(1);
+ 	});
+ 
++	it('starts one run for concurrent triggers with the same Idempotency-Key', async () => {
++		const job = await createJob();
++		const headers = { 'idempotency-key': 'trigger-once' };
++		const [a, b] = await Promise.all(
++			[0, 1].map(async () =>
++				expectOk<any>(await request('POST', `${base()}/${job.id}/runs`, undefined, headers), 201),
++			),
++		);
++		expect(b).toEqual(a);
++		expect(await expectPage(await request('GET', `${base()}/${job.id}/runs`))).toHaveLength(1);
++	});
++
+ 	it('cancels an active run and destroys its sandbox', async () => {
+ 		const job = await createJob();
+ 		const queued = await expectOk<any>(await request('POST', `${base()}/${job.id}/runs`), 201);
+diff --git a/packages/api/src/routes/jobs.ts b/packages/api/src/routes/jobs.ts
+index b90fb7b9..99d071f0 100644
+--- a/packages/api/src/routes/jobs.ts
++++ b/packages/api/src/routes/jobs.ts
+@@ -25,7 +25,7 @@ import {
+ 	loadJobRun,
+ 	createNotebookJob,
+ 	updateNotebookJob,
+-	triggerJobRun,
++	withJobRunEnqueue,
+ 	runReader,
+ } from '../jobs/operations';
+ import { idempotentCreate } from '../idempotency';
+@@ -421,18 +421,12 @@ app.openapi(triggerRun, async (c) => {
+ 	const { pid, nid, jid } = c.req.valid('param');
+ 	const target = await loadAuthorizedJob(c, pid, nid, jid, 'notebook.write');
+ 	const body = c.req.valid('json');
+-	const data = await idempotentCreate(
+-		c,
+-		'POST /projects/{pid}/notebooks/{nid}/jobs/{jid}/runs',
+-		async () =>
+-			toPublicJobRun(
+-				await triggerJobRun(deps, target, target.job, body, {
+-					requestId: c.get('requestId'),
+-					method: c.req.method,
+-					path: c.req.path,
+-				}),
+-				runReader(target, target.job),
+-			),
++	const request = { requestId: c.get('requestId'), method: c.req.method, path: c.req.path };
++	// Keep lookup, enqueue, and recording under the same distributed job claim.
++	const data = await withJobRunEnqueue(deps, target, target.job, body, request, (enqueue) =>
++		idempotentCreate(c, 'POST /projects/{pid}/notebooks/{nid}/jobs/{jid}/runs', async () =>
++			toPublicJobRun(await enqueue(), runReader(target, target.job)),
++		),
+ 	);
+ 	return c.json({ success: true, data }, 201);
+ });

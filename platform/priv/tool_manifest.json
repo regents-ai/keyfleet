@@ -5719,7 +5719,7 @@
     {
       "name": "notebooks_run",
       "title": "Notebook run",
-      "description": "Start a background run of one of an active project's notebooks, as you: its saved code runs top to bottom in a fresh sandbox, never changing the notebook. Once it has answered, the same idempotency_key answers that run again. At most 30 runs every ten minutes; past that, wait as Retry-After says. An archived project answers project_archived, naming the active projects. Answers run_id with status queued and source, the code and files it runs from; read it with notebooks_result.",
+      "description": "Start a background run of one of an active project's notebooks, as you: its saved code runs top to bottom in a fresh sandbox, never changing the notebook. For a day, the same idempotency_key answers that run again instead of starting another, even before the first has answered; until a run of yours on that notebook has answered, two sent at once can each start one. At most 30 runs every ten minutes; past that, wait as Retry-After says. An archived project answers project_archived, naming the active projects. Answers run_id with status queued and source, the code and files it runs from; read it with notebooks_result.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -5750,7 +5750,7 @@
           },
           "idempotency_key": {
             "type": "string",
-            "description": "Stable id for this one run, in visible ASCII characters, kept for a fresh-proof retry: once the run has answered, the same key answers it again",
+            "description": "Stable id for this one run, in visible ASCII characters, kept for a fresh-proof retry: for a day the same key answers that run again, even before the first has answered, except two sent at once before any run of yours on that notebook has answered",
             "minLength": 1,
             "maxLength": 128
           }

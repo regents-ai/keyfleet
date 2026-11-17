@@ -21,6 +21,9 @@ Changes to Keyfleet, newest first.
 - **Agent setup.** The setup steps an agent is shown now say they are about keeping Keys
   present and scheduled check-ins only, so an agent no longer reads them as stopping it
   from talking in rooms or working in the workspace.
+- **Notebook runs.** An agent that starts a notebook run, then sends the same start again
+  before hearing back, now gets that run instead of a second one. The one exception is
+  an agent's first run of a notebook: two sent at the same moment can still start two.
 
 ## 15 November 2026
 

@@ -90,6 +90,11 @@ RUN git apply /tmp/workspace-revision.patch
 # ran from in one read.
 COPY marimohub/workspace-listing.patch /tmp/workspace-listing.patch
 RUN git apply /tmp/workspace-listing.patch
+# A run start with an Idempotency-Key looks the key up, enqueues and records the run
+# under the job's claim, so two identical starts sent at once make one run and both
+# answer it.
+COPY marimohub/run-start-once.patch /tmp/run-start-once.patch
+RUN git apply /tmp/run-start-once.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
@@ -110,8 +115,8 @@ RUN cd examples/cloudflare-worker && pnpm exec vp test run src/index.test.ts
 # workspace-listing.patch notebook route tests, with the API description they add to.
 RUN cd packages/api && pnpm exec vp test run src/routes/sessions.appPool.test.ts src/routes/admin.machines.test.ts src/routes/notebooks.test.ts src/openapi.spec.test.ts
 # The python-check.patch pyproject tests, the run-failure.patch redaction, run
-# record, access and generated-description tests, and the run-page-status.patch
-# route test.
+# record, access and generated-description tests, the run-page-status.patch route
+# test and the run-start-once.patch concurrent start test.
 RUN cd packages/core && pnpm exec vp test run src/services/runtime/marimoLaunch.test.ts src/services/jobs/ src/schema.test.ts src/specs/internal-schemas.spec.test.ts
 RUN cd packages/api && pnpm exec vp test run src/routes/jobs.test.ts src/mcp/jobs.test.ts
 RUN cd packages/client && pnpm exec vp test run src/schema.drift.test.ts
