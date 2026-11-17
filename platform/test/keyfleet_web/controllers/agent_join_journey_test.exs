@@ -151,6 +151,42 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     refute_receive {:broker_payload, _}
   end
 
+  # Costly failure: a body of exactly its operation's limit, sent in chunks
+  # with no length, is refused as too large.
+  test "a body of exactly its limit is read whole however it arrives, and one byte more is refused",
+       c do
+    limit = KeyfleetWeb.Plugs.SignedAgent.body_limit(@path)
+    exact = @body <> String.duplicate(" ", limit - byte_size(@body))
+    over = exact <> " "
+    pieces = [binary_part(exact, 0, 100), binary_part(exact, 100, limit - 100)]
+
+    answers =
+      for {bytes, sent} <- [
+            {exact, exact},
+            {exact, Stream.map([exact], & &1)},
+            {exact, Stream.map(pieces, & &1)},
+            {over, over},
+            {over, Stream.map([over], & &1)}
+          ] do
+        outcome(send_request(c, %{signed(c, bytes) | body: sent}))
+      end
+
+    assert answers == [
+             {200, nil},
+             {200, nil},
+             {200, nil},
+             {413, "request_too_large"},
+             {413, "request_too_large"}
+           ]
+
+    exact_digest = digest(exact)
+
+    for _read_whole <- 1..3,
+        do: assert_receive({:broker_payload, %{"body_digest" => ^exact_digest}})
+
+    refute_receive {:broker_payload, _}
+  end
+
   test "a profile update body changed after signing is refused", c do
     request = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
     response = send_request(c, %{request | body: ~s({"name":"Changed"})})

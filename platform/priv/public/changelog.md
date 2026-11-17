@@ -13,6 +13,10 @@ Changes to Keyfleet, newest first.
 - **Code.** A request to a fleet's code whose `content-digest` isn't one `sha-256` digest
   is now refused with 401 and a sentence saying how to sign it, where it got a server
   error. None of it is used.
+- **Signing.** A signed body of exactly its limit, sent in chunks with no `content-length`,
+  is now read whole on this site, at the shared pairing addresses, over the connector and
+  on a fleet's notebooks, where it was refused as too large. One byte more is still
+  refused.
 
 ## 16 November 2026
 

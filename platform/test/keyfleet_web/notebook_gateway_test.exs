@@ -892,6 +892,62 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: an agent's body of exactly the limit, sent in chunks with
+  # no length, is refused as too large.
+  test "a signed body of exactly 64 KiB reaches the hub however it arrives, and one byte more is refused" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!(wallet)
+      )
+
+    subject = Notebooks.agent_subject(profile.id)
+    # Served on a real port, so a body arrives in chunks as it does from an agent.
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    created = ~s({"name":"orbit.py"})
+    exact = created <> String.duplicate(" ", 64 * 1024 - byte_size(created))
+    over = exact <> " "
+
+    answers =
+      for {bytes, sent} <- [
+            {exact, exact},
+            {exact, Stream.map([exact], & &1)},
+            {over, over},
+            {over, Stream.map([over], & &1)}
+          ] do
+        request = SignedAgentHelpers.sign(signer, secret, @host, "POST", notebooks, bytes)
+
+        answer =
+          Req.post!(site <> notebooks,
+            headers: Map.put(request.headers, "host", @host),
+            body: sent,
+            retry: false
+          )
+
+        forwarded =
+          receive do
+            {:hub, "POST", ^notebooks, ^subject, forwarded} -> forwarded == exact
+          after
+            0 -> :none
+          end
+
+        {answer.status, answer.body["error"]["code"], forwarded}
+      end
+
+    assert answers == [
+             {201, nil, true},
+             {201, nil, true},
+             {413, "request_too_large", :none},
+             {413, "request_too_large", :none}
+           ]
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do

@@ -11,13 +11,30 @@ defmodule KeyfleetWeb.BodyReader do
   @agent_body_limit 4096
 
   def read_body(%Plug.Conn{path_info: ["api", "agents", "v1" | _rest]} = conn, options),
-    do: Siwa.AgentAuthPlug.read_body(conn, options, @agent_body_limit)
+    do: read_signed(conn, options, @agent_body_limit)
 
   def read_body(%Plug.Conn{path_info: ["mcp"]} = conn, options) do
     if Siwa.AgentAuthPlug.signed_request?(conn),
-      do: Siwa.AgentAuthPlug.read_body(conn, options, Keyword.fetch!(options, :length)),
+      do: read_signed(conn, options, Keyword.fetch!(options, :length)),
       else: RegentIdentity.BodyReader.read_body(conn, options)
   end
 
   def read_body(conn, options), do: RegentIdentity.BodyReader.read_body(conn, options)
+
+  @doc """
+  Reads a signed request's body with the shared SIWA reader, which keeps the
+  exact bytes in `conn.assigns.raw_body`: `{:ok, body, conn}` for a body of at
+  most `limit` bytes however it arrives, `{:more, body, conn}` for a longer
+  one, or `{:error, reason}`.
+
+  A read asks for one byte past `limit`. A body sent in chunks that fills a
+  read exactly comes back unfinished, so a read of `limit` bytes can't tell a
+  body of exactly the limit from a longer one.
+  """
+  def read_signed(conn, options, limit) do
+    case Siwa.AgentAuthPlug.read_body(conn, options, limit + 1) do
+      {:ok, body, conn} when byte_size(body) > limit -> {:more, body, conn}
+      read -> read
+    end
+  end
 end

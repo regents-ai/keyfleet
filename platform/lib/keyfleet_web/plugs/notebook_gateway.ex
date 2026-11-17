@@ -327,7 +327,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp read_signed(conn, fleet_id) do
-    case read_body_signed(conn) do
+    case KeyfleetWeb.BodyReader.read_signed(conn, [], @signed_max_body) do
       {:ok, _raw, conn} ->
         conn =
           Siwa.AgentAuthPlug.call(conn,
@@ -342,18 +342,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       {:more, _partial, conn} ->
         {:refused, Refusal.json(conn, 413, "request_too_large")}
 
-      :too_large ->
-        {:refused, Refusal.json(conn, 413, "request_too_large")}
-
       {:error, _reason} ->
         {:refused, Refusal.json(conn, 400, "invalid_request")}
     end
-  end
-
-  defp read_body_signed(conn) do
-    Siwa.AgentAuthPlug.read_body(conn, [], @signed_max_body)
-  rescue
-    Plug.Parsers.RequestTooLargeError -> :too_large
   end
 
   defp agent_subject(%Plug.Conn{halted: true} = conn, _fleet_id), do: {:refused, conn}

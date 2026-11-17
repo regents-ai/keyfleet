@@ -407,9 +407,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
       {:more, _raw, conn} ->
         too_large(conn)
-
-      :too_large ->
-        too_large(conn)
     end
   end
 
@@ -503,11 +500,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # The shared reader keeps the exact bytes the signature covers, and no more
   # than the operation takes.
-  defp read_signed(conn) do
-    Siwa.AgentAuthPlug.read_body(conn, [], body_limit(conn.request_path))
-  rescue
-    Plug.Parsers.RequestTooLargeError -> :too_large
-  end
+  defp read_signed(conn),
+    do: KeyfleetWeb.BodyReader.read_signed(conn, [], body_limit(conn.request_path))
 
   # The raw body is signed, through its content digest, and checked against
   # it before anything is read from it; `accept/3` then reads it. An empty body
