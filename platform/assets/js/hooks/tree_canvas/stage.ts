@@ -173,6 +173,8 @@ export function createTreeStage(root: HTMLElement): TreeStage {
     // A focused card stays until focus leaves it, while it is still there.
     if (cards.has(id) && el.contains(document.activeElement)) return
     el.hidden = true
+    // A spare card is no item's until it is filled again.
+    delete el.dataset.id
     placed.delete(id)
     spare.push(el)
   }

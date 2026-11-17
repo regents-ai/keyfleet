@@ -11168,3 +11168,12 @@ Browser walks: the whole chain project, 139 walks, passed twice, before and afte
 phone line; `atlas` alone, 1 passed; the default project, 127 passed. Pictures of the
 card at 1280 and 390 wide, light and dark, with one agent and with eight, were taken by
 a scratch walk that is not kept.
+
+## 2026-11-17 — The install line and checker pin name regents-cli 1.10.31
+
+- `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
+  `platform/priv/tool_manifest.json` name regents-cli 1.10.31 (tag commit `2e8b98c7`), the
+  newest release: one install serves every site, an empty body is signed and sent as no
+  body, and a command sent to an address Keyfleet no longer serves asks the person to update.
+  Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
+- The command line section of the public documents says which Python it runs on (3.12 to 3.14).
