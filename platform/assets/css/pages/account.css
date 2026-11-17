@@ -419,6 +419,12 @@ div.verified-connections__notice p {
   background: var(--color-surface);
 }
 
+/* Schedule, while it shows, stands above the agents. */
+.account-agents {
+  display: grid;
+  gap: var(--space-3);
+}
+
 /* On a Key card, the logo of an agent's harness is the shared picture the
    Agents page shows, on its white tile in both themes, a little smaller than
    the agent's own picture beside it. Unlayered, so its size wins over the

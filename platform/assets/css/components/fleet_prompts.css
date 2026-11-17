@@ -1,13 +1,14 @@
 /* Pair and Mark present under a fleet's tabs: one row, side by side when
-   both show, with the pairing box opening under it. With neither showing it
-   takes no room. Unlayered, as the shared button styles are. */
+   both show, with the pairing box opening under it, and Schedule under that.
+   With nothing showing, a Schedule put away included, it takes no room.
+   Unlayered, as the shared button styles are. */
 .fleet-prompts {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
 }
 
-.fleet-prompts:has(> *) {
+.fleet-prompts:has(> :not([hidden])) {
   padding: var(--space-2) var(--rg-panel-padding);
   border-block-end: 1px solid var(--color-border);
 }

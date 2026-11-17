@@ -1204,6 +1204,39 @@ features:
     gaps:
       - Nothing checks the dots in a browser at 390 and 1280. WebKit is not run on the Mac.
 
+  - id: schedule-card
+    what: >-
+      A signed-in Key holder whose paired agent has no scheduled check-in
+      seen in a fleet sees a Schedule card on that fleet's page, below the
+      tabs: one sentence saying the agent isn't coming back on its own yet,
+      each such agent with its check-in light and words, and Copy line, which
+      copies the guide's line for scheduling check-ins. Dismiss puts it away
+      for that fleet in this browser only. The same card, without Dismiss and
+      naming each fleet, stays on the Agents page while the state holds. Both
+      go by themselves when a scheduled check-in is seen; an agent only
+      between runs never shows it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/schedule_card.ex
+      - platform/assets/css/components/schedule_card.css
+      - platform/assets/js/hooks/schedule_card.ts
+      - platform/lib/keyfleet_web/components/fleet_prompts.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/lib/keyfleet/agents/upkeep.ex
+    entry:
+      - route: GET /:fleet/:number
+      - route: GET /account/agents
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/fleet_page_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/fleet_prompts.spec.ts
+    gaps:
+      - The light and words in the card are read when the page is; a check-in without a schedule tells no page, so they move on when it is next read.
+      - Dismiss lives in the browser, so another browser or a cleared one shows the card again.
+      - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
+
   - id: fleet-directory
     what: >-
       Agents and people read every open fleet in /api/v1/fleets and

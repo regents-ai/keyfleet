@@ -11,7 +11,8 @@ defmodule Keyfleet.Agents.Upkeep do
   paired, with `pays?/2` the chain's answer on gas. Both name the same steps:
   an agent with a Key or a shard of its own to mark finishes when all five are
   done, and one with neither when it is paired and its scheduled check-ins
-  repeat, a shard being only a tip for it.
+  repeat, a shard being only a tip for it. `unscheduled/2` names a person's
+  agents with no scheduled check-in seen, by the same `schedule` state.
   """
 
   alias Keyfleet.Actors.Human
@@ -100,15 +101,41 @@ defmodule Keyfleet.Agents.Upkeep do
   end
 
   @doc """
+  Each agent `person` has paired that has no scheduled check-in seen in each
+  of `fleet_ids`, as `setup/4`'s `schedule` reads it, fleet by fleet:
+  `%{fleet_id, wallet, name, status, light}`, with the words and the light
+  `CheckInStatus` gives its check-ins there. An agent whose runs come, or
+  that only waits between them, has had one seen and isn't here.
+  """
+  def unscheduled(%Human{} = person, fleet_ids) do
+    now = DateTime.utc_now()
+    agents = Agents.my_agents(person)
+    wallets = Enum.map(agents, & &1.wallet)
+
+    for fleet_id <- fleet_ids,
+        check_ins = Agents.check_ins_by_wallet(wallets, fleet_id),
+        %{wallet: wallet, name: name} <- agents,
+        not scheduled?(check_ins[wallet]) do
+      {_status, words} = CheckInStatus.derive(check_ins[wallet], now)
+      light = CheckInStatus.light(check_ins[wallet], now)
+      %{fleet_id: fleet_id, wallet: wallet, name: name, status: words, light: light}
+    end
+  end
+
+  @doc """
   Whether `wallet` can pay to mark `key_count` Keys at the latest block: nil with
   none to mark or when the chain doesn't answer.
   """
   def pays?(_wallet, 0), do: nil
   def pays?(wallet, key_count), do: can_pay?([key_count], gas(wallet, key_count))
 
+  # A scheduled check-in declares the schedule; one of the agent's in the
+  # fleet has arrived.
+  defp scheduled?(check_in), do: check_in != nil and check_in.schedule_minutes != nil
+
   defp states(check_in, keys, now) do
     %{
-      schedule: check_in != nil and check_in.schedule_minutes != nil,
+      schedule: scheduled?(check_in),
       marked: keys != [] and Enum.all?(keys, &needs_no_mark?(&1.present_until, now)),
       repeated: CheckInStatus.repeating?(check_in, now)
     }

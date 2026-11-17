@@ -980,6 +980,25 @@ defmodule KeyfleetWeb.ShellLiveTest do
       assert %{token_id: 1} = Keys.identity(astra, @fleet)
     end
 
+    # Unlike a fleet's page, the Agents page can't put it away; the agent's
+    # scheduled check-in reaches the open page itself.
+    test "Schedule names an agent with no scheduled check-in seen in the person's fleet", c do
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
+
+      assert has_element?(view, "#account-agents-schedule li", "Astra")
+      assert has_element?(view, ~s(#account-agents-schedule li a[href="/classic/1"]))
+      refute has_element?(view, "#account-agents-schedule[hidden]")
+      refute has_element?(view, "#account-agents-schedule [data-dismiss]")
+
+      agent = agent!(@agent)
+      Keyfleet.Agents.ensure_profile!(%{name: "Astra", declared_harness: "test"}, actor: agent)
+      run = %{"kind" => "scheduled", "every_minutes" => 1440}
+      {:ok, _check_in} = Keyfleet.Agents.check_in(agent, @fleet, run)
+      render(view)
+
+      refute has_element?(view, "#account-agents-schedule")
+    end
+
     test "once an agent pairs, the pairing window leads to putting it on a Key", c do
       {view, _html} = open_account(c.conn, c.account, "/account/agents")
       html = view |> element("#shell-pairing-box") |> render_change(%{"harness" => "codex"})

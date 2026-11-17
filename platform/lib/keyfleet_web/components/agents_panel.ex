@@ -9,7 +9,10 @@ defmodule KeyfleetWeb.AgentsPanel do
   name, which the person may change, and Unpair, which asks first in the site's
   confirm window. Beside each agent are the Keys it is on and those it holds a
   shard of, or, with none, Assign a Key, which leads to Your Keys on the
-  Account page (`KeyfleetWeb.AgentKeys`).
+  Account page (`KeyfleetWeb.AgentKeys`). Above them, Schedule
+  (`KeyfleetWeb.Components.ScheduleCard`) names each agent with no scheduled
+  check-in seen in a fleet where the person holds a Key, for as long as that
+  lasts; unlike a fleet's page, it can't be put away here.
 
   Pairing immediately lets an agent do what `Keyfleet.Capabilities.may/0`
   lists, which the list's tip and the agent's view show the person. Pairing is
@@ -22,8 +25,13 @@ defmodule KeyfleetWeb.AgentsPanel do
   """
   use KeyfleetWeb, :live_component
 
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Agents.ActivityReading
+  alias Keyfleet.Agents.Upkeep
   alias Keyfleet.Capabilities
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
+  alias KeyfleetWeb.Components.ScheduleCard
   alias KeyfleetWeb.Live.Session
   alias Regent.Primitives, as: P
   alias RegentAgents.{Harness, HumanBacking, PairedAgent, Person}
@@ -144,6 +152,13 @@ defmodule KeyfleetWeb.AgentsPanel do
   def render(assigns) do
     ~H"""
     <div class="account-agents">
+      <ScheduleCard.card
+        :if={@schedule != []}
+        id={"#{@id}-schedule"}
+        class="account-agents__schedule"
+        agents={@schedule}
+        fleets?
+      />
       <Regent.Account.agents
         id={@id}
         agents={rows(@agents, @lights, @now)}
@@ -339,6 +354,19 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   defp keys(_account, :unavailable), do: %{}
 
+  # Each agent with no scheduled check-in seen in a fleet where the person
+  # holds a Key, the fleets in the site's order.
+  defp schedule(account) do
+    person = Human.for_account(account)
+
+    held =
+      person.wallet_addresses
+      |> Keys.keys_held_everywhere!(actor: person)
+      |> MapSet.new(& &1.fleet_id)
+
+    Upkeep.unscheduled(person, for(%{id: id} <- Fleets.catalog(), id in held, do: id))
+  end
+
   defp agent_keys_of(:unavailable, _agent), do: :unavailable
   defp agent_keys_of(keys, agent), do: keys[agent.id]
 
@@ -356,6 +384,7 @@ defmodule KeyfleetWeb.AgentsPanel do
         agents: agents,
         lights: lights(agents, now),
         keys: keys(socket.assigns.account, agents),
+        schedule: schedule(socket.assigns.account),
         now: now
       )
 

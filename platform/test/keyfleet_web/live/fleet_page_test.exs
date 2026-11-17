@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors
+  alias Keyfleet.Agents
   alias Keyfleet.Agents.Here
   alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
@@ -1137,6 +1138,40 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       refute has_element?(view, "#fleet-prompts-pair")
       refute has_element?(view, "#fleet-prompts-pairing")
+    end
+
+    # Drawn hidden, for its hook to show unless it was put away in this
+    # browser; the scheduled check-in reaches the open page itself.
+    test "Schedule shows while the person's agent has no scheduled check-in seen here" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+
+      assert has_element?(
+               view,
+               ~s(#fleet-prompts-schedule[hidden][phx-hook=ScheduleCard][data-kept-as="keyfleet:schedule:#{@fleet}"])
+             )
+
+      assert has_element?(view, "#fleet-prompts-schedule li", "Test agent")
+      assert has_element?(view, "#fleet-prompts-schedule [data-dismiss]")
+
+      {:ok, _check_in} = Agents.check_in(agent, @fleet, %{"kind" => "session"})
+      render(view)
+      assert has_element?(view, "#fleet-prompts-schedule")
+
+      run = %{"kind" => "scheduled", "every_minutes" => 1440}
+      {:ok, _check_in} = Agents.check_in(agent, @fleet, run)
+      render(view)
+      refute has_element?(view, "#fleet-prompts-schedule")
+    end
+
+    test "a holder with no agent sees no Schedule", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      render_async(view, 3_000)
+
+      assert has_element?(view, "#fleet-prompts-pair")
+      refute has_element?(view, "#fleet-prompts-schedule")
     end
   end
 

@@ -11047,3 +11047,28 @@ files, no issues) and xref (138 compile-connected, at the limit) passed. Upkeep,
 page, the agent Key route, the contract, connector, signed-request, launch gate, release
 package, tool commands and agent files tests: 117 passed (1 property, 116 tests), 1
 excluded.
+
+## 2026-11-17: a Schedule card for a person whose agent isn't checking in on a schedule (Sean's 35 a)
+
+- `Keyfleet.Agents.Upkeep.unscheduled/2` names a person's agents with no scheduled
+  check-in seen in each fleet given, by the same `schedule` state the setup dots use,
+  with the check-in light and words `CheckInStatus` already gives. An agent only between
+  runs has a schedule and is never named.
+- `KeyfleetWeb.Components.ScheduleCard` draws it: a Schedule panel with one sentence,
+  each such agent's light and words, and Copy line holding the guide's line for
+  scheduling check-ins (its words for each check-in come from `PairingBox.check_in/0`,
+  so the two never drift). The fleet page's prompts (`FleetPrompts`) show it below the
+  tabs for a Key holder, with Dismiss: the `ScheduleCard` hook keeps that in the browser
+  per fleet and the card is sent hidden until the hook has read it, so a put-away card
+  never flashes. The Agents page (`AgentsPanel`) keeps the same card above the agents,
+  naming each fleet, without Dismiss. Both go when a scheduled check-in is seen, as that
+  already tells the person's pages. No database change.
+- The public changelog and the verification list (`schedule-card`) say the same. No
+  contract change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(770 files, no issues) and xref (138 compile-connected, at the limit) passed. The fleet
+page, shell, Key page and Upkeep tests: 166 passed. Browser walks `fleet_prompts` and
+`account_agents`: 9 passed. Typecheck passed; vitest 573 passed, and its 14 failures are
+the untracked review file `assets/test/adversarial_send_step.test.ts` (13) and
+`key_map_state` timing out under load (passes alone, 13 of 13).

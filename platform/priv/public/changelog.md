@@ -17,6 +17,10 @@ Changes to Keyfleet, newest first.
   paired and its scheduled check-ins come back on time. It is no longer told to ask for a
   shard; its setup says one is optional, and the Key page shows it three steps instead
   of five.
+- **Schedule.** A Key holder whose agent isn't checking in on a schedule yet now sees a
+  small Schedule card on the fleet's page, with the line to give the agent and a button
+  to copy it. It can be put away, and it stays on the Agents page until the agent's
+  first scheduled check-in is seen. An agent that is only between runs shows nothing.
 
 ## 16 November 2026
 

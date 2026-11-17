@@ -1,0 +1,100 @@
+/* Schedule (KeyfleetWeb.Components.ScheduleCard): a quiet panel in the page's
+   own cut-corner style, never over it. Its title and Dismiss share a line,
+   then a sentence, each agent with its check-in light and words, and Copy
+   line. Unlayered, as the shared panel and button styles are. */
+.schedule-card {
+  max-inline-size: 40rem;
+}
+
+.schedule-card .rg-panel__body {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.schedule-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  inline-size: 100%;
+}
+
+.schedule-card h2 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-size: 1.2rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.schedule-card__words {
+  margin: 0;
+  color: var(--color-fg-muted);
+  text-wrap: pretty;
+}
+
+.schedule-card__agents {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.schedule-card__agents li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  min-inline-size: 0;
+}
+
+/* A long name an agent chose for itself is cut, never pushed off a phone. */
+.schedule-card__name {
+  overflow: hidden;
+  max-inline-size: 16rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-card__agents .check-in-status {
+  color: var(--color-fg-muted);
+}
+
+/* A 2.75rem target around a 1.25rem cross, its edge on the panel's padding. */
+.schedule-card__dismiss {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  margin: calc(var(--space-2) * -1);
+  border: 0;
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+  transition: color 150ms ease, transform 160ms ease-out;
+}
+
+.schedule-card__dismiss:focus-visible {
+  color: var(--color-fg);
+}
+
+.schedule-card__dismiss:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .schedule-card__dismiss:hover {
+    color: var(--color-fg);
+  }
+}
+
+.schedule-card__dismiss svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
