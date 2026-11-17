@@ -358,7 +358,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @impl Plug
   def call(conn, _opts) do
-    if agent_request?(conn), do: authenticate(conn), else: conn
+    cond do
+      escaped_agent_address?(conn) -> escaped(conn)
+      agent_request?(conn) -> authenticate(conn)
+      true -> conn
+    end
   end
 
   # A paired agent's Points read sits at /api/v1/account, its person's profile
@@ -366,21 +370,42 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # and the messages it leaves for the site's team at /api/v1/messages, the
   # addresses every Regent site gives them; everything else an agent signs is
   # under /api/v1/agent.
+  @agent_prefixes [
+    ["api", "v1", "agent"],
+    ["api", "v1", "account"],
+    ["api", "v1", "feed"],
+    ["api", "v1", "messages"]
+  ]
+
   # The person reads and changes their profile with their session instead, so
   # only a signed request there is an agent's.
   defp agent_request?(conn) do
-    case Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) do
-      ["api", "v1", "profile"] ->
-        KeyfleetWeb.BodyReader.signed?(conn)
-
-      first ->
-        first in [
-          ["api", "v1", "agent"],
-          ["api", "v1", "account"],
-          ["api", "v1", "feed"],
-          ["api", "v1", "messages"]
-        ]
+    case Enum.take(conn.path_info, 3) do
+      ["api", "v1", "profile"] -> KeyfleetWeb.BodyReader.signed?(conn)
+      first -> first in @agent_prefixes
     end
+  end
+
+  # The router reads an address with its percent-escapes undone, but a
+  # forward (`/api/v1/profile`, the shared pairing addresses at
+  # `/api/agents/v1`) and every check here read it as it came. So an agent
+  # address spelled with escapes is no operation's, signed or not.
+  defp escaped_agent_address?(conn) do
+    first = Enum.take(conn.path_info, 3)
+    decoded = Enum.map(first, &URI.decode/1)
+
+    decoded != first and
+      decoded in [["api", "v1", "profile"], ["api", "agents", "v1"] | @agent_prefixes]
+  end
+
+  defp escaped(conn) do
+    send_refusal(
+      conn,
+      404,
+      KeyfleetWeb.Refusal.operation_unknown(
+        "Send the address as it is written, without percent-escapes."
+      )
+    )
   end
 
   # An address no operation has, a method its operation doesn't take and a

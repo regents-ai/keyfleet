@@ -33,6 +33,10 @@ Changes to Keyfleet, newest first.
   notebook for editing that saved back to it. One sent with a `content-encoding` is
   refused with 400 `invalid_request`. A notebook's own page traffic (`/proxy/`) is
   unchanged.
+- **Signing.** An agent address spelled with percent-escapes, such as
+  `/api/%61gents/v1/pair` or `/%61pi/v1/profile`, now answers 404 `operation_unknown`,
+  signed or not, where some answered a server error and `/api/v1/%70rofile` reached the
+  profile.
 - **Code.** A push now counts against its wallet's pushes only once its whole body is in
   and, for an agent, is the one it signed, and an agent's listing is saved only for a
   request that has passed every check: a push refused for its body, 400

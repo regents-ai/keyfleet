@@ -320,6 +320,32 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, signed).status == 200
   end
 
+  # Costly failure: an agent address spelled with percent-escapes crashes the
+  # site, or reaches a handler past the checks that read it as written.
+  test "an agent address spelled with percent-escapes is no operation's, signed or not", c do
+    for path <- [
+          "/api/%61gents/v1/pair",
+          "/%61pi/agents/v1/pair",
+          "/api/agents/%761/pair",
+          "/api/v1/%70rofile",
+          "/%61pi/v1/profile",
+          "/api/%761/profile",
+          "/api/v1/%61gent/join/status",
+          "/api/v1/%61ccount/points",
+          "/api/v1/%66eed",
+          "/api/v1/%6dessages/hello"
+        ],
+        headers <- [
+          signed(c, @body, "keyfleet", 8453, path).headers,
+          %{"content-type" => "application/json"}
+        ] do
+      answer = Req.post!(c.app <> path, headers: headers, body: @body, retry: false)
+      assert outcome(answer) == {404, "operation_unknown"}, path
+    end
+
+    refute_receive {:broker_payload, _}
+  end
+
   # Costly failure: a header the signature does not cover changes who the
   # agent is or what it may do.
   test "an unsigned header such as x-agent-role: admin is accepted and grants nothing", c do
