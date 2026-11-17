@@ -88,8 +88,8 @@ check-cli:
 	uv run --no-project scripts/check_command_docs.py
 	uv run --no-project --with "regents-cli[check] @ git+https://github.com/regents-ai/regents-cli@$(REGENTS_CLI_REV)" \
 	  python -m regents_cli.check_commands cli/commands.json platform/priv/public/openapi.json platform/priv/static/api-contract.openapiv3.yaml
-# Fails until the pins name the newest regents-cli release and SIWA library change
-# (scripts/check-siwa-latest.sh). Needs `gh auth login`.
+# Fails until the pins name the newest regents-cli release and the SIWA library
+# as it is on elixir-utils main (scripts/check-siwa-latest.sh). Needs `gh auth login`.
 check-siwa-latest:
 	scripts/check-siwa-latest.sh $(REGENTS_CLI_REV)
 check-contracts:

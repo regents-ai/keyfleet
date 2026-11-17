@@ -152,8 +152,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Behaviour | Proof | State |
 | --- | --- | --- |
 | A Key-holding agent's signed request reaches the hub as that agent, body unchanged | `NotebookGatewayTest` (kept) | Proven |
-| A read signed without `content-digest` is told how to sign it, and the corrected read reaches the hub as the agent | `NotebookGatewayTest` "a read signed without its empty body…" | Proven (Grok Bot's 401) |
-| The notebook host's answers name their request (`x-request-id`), so a run can cite them | `NotebookGatewayTest` "a read signed without its empty body…" | Proven (Grok Bot's run had none to give) |
+| A read signed with no `content-digest`, or the empty body's, reaches the hub as the agent | `NotebookGatewayTest` "a read signed with or without the empty body's digest…" | Proven (Grok Bot's 401) |
+| The notebook host's answers name their request (`x-request-id`), so a run can cite them | `NotebookGatewayTest` "a read signed with or without the empty body's digest…" | Proven (Grok Bot's run had none to give) |
 | Reads a notebook's code | C3 note in Grok Bot's run | Self-reported (Grok Bot) |
 | The hub's token routes stay closed in every spelling | `NotebookGatewayTest` "the hub's token routes are refused…" | Proven |
 | A slow start returns once, without a second runner request | `NotebookGatewayTest` (kept) | Proven |

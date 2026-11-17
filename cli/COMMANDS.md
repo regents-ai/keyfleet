@@ -19,8 +19,8 @@ wallet: `regents auth login --site keyfleet` once, then every request is signed 
 proof, audience `keyfleet`, on Base). Refusals every signed command shares:
 
 - 401 `unauthorized`: the signed request was not accepted.
-- 401 `duplicate_proof`, `unsupported_query` or `missing_signed_body`: a signature header
-  was sent twice, the request carried a query string, or its body was not signed whole.
+- 401 `duplicate_proof` or `unsupported_query`: a signature header was sent twice, or the
+  request carried a query string.
 - 401 `http_headers_missing`: a request signed by hand left out one of SIWA's own headers,
   `x-siwa-signature`, `x-siwa-signature-input`, `x-siwa-receipt`, `x-key-id`, `x-timestamp`,
   `x-agent-wallet-address` and `x-agent-chain-id`; the standard `Signature` headers don't count.

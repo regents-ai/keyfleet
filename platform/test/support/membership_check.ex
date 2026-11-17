@@ -589,7 +589,7 @@ defmodule Keyfleet.MembershipCheck do
     do: signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet_id}/graph/changes", "{}")
 
   # Git as an agent runs it through the signing helper: every request to the
-  # code host signed with the agent's own key, an empty body included.
+  # code host signed with the agent's own key.
   defp agent_git(c, agent, fleet_id) do
     path = "/#{fleet_id}.git/info/refs?service=git-upload-pack"
     host = Code.config()[:host]
@@ -597,7 +597,6 @@ defmodule Keyfleet.MembershipCheck do
     send_request(c, "GET", host, path, headers, nil)
   end
 
-  # On the notebook host a GET signs the empty body too.
   defp notebooks(c, agent, fleet_id) do
     host = Notebooks.host(fleet_id)
     headers = signed_headers(c, agent, host, "GET", "/", "")

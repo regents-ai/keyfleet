@@ -40,9 +40,6 @@ defmodule KeyfleetWeb.Refusal do
     "json_required" =>
       {"A signed request here carries a JSON body, or none.",
        "Send a POST with content-type: application/json and a JSON body, {} when there is nothing to say. Send a GET with no body."},
-    "missing_signed_body" =>
-      {"Send the body as JSON, signed with the rest of the request.",
-       "Sign the request again with its whole body, then send it again."},
     "siwa_request_failed" =>
       {"The sign-in service could not be reached.", "Try again in a moment."},
     "feed_full" =>

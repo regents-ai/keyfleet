@@ -312,6 +312,32 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     end
   end
 
+  # Costly failure: a body other than the one a signature declares is acted
+  # on, or a read signed with no content-digest, or the empty body's, is refused.
+  test "a request carries the body its content-digest declares, none declaring the empty body",
+       c do
+    SignedAgentHelpers.start_real_broker!(self(), c.secret)
+    authority = Siwa.Contract.authority(c.app)
+    other = String.replace(@body, "Wallet agent", "Other agent")
+    misfit = {422, "invalid_request"}
+    missing = {401, "http_headers_missing"}
+    unbound = {401, "http_body_binding_invalid"}
+
+    for {method, path, body, answers} <- [
+          {"GET", "/api/v1/agent/shards", @body,
+           [{200, nil}, {200, nil}, missing, misfit, unbound, unbound]},
+          {"POST", @path, @body, [misfit, misfit, missing, {200, nil}, unbound, unbound]}
+        ] do
+      cases =
+        SignedAgentHelpers.body_cases(c.signer, c.secret, authority, method, path, body, other)
+
+      sent = for {_name, request} <- cases, do: outcome(send_signed(c, request))
+      assert {method, sent} == {method, answers}
+
+      SignedAgentHelpers.assert_reported_bytes!(cases)
+    end
+  end
+
   test "malformed broker principals cannot become product actors", c do
     wallet = c.signer.address
 
@@ -502,6 +528,21 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
         retry: false,
         redirect: false
       )
+
+  defp send_signed(c, request),
+    do:
+      Req.request!(
+        method: request.method |> String.downcase() |> String.to_existing_atom(),
+        url: c.app <> request.path,
+        headers: request.headers,
+        body: request.body,
+        retry: false,
+        redirect: false
+      )
+
+  # The answer's status and the code a refusal names.
+  defp outcome(%{status: status, body: %{"error" => %{"code" => code}}}), do: {status, code}
+  defp outcome(%{status: status}), do: {status, nil}
 
   defp server(id, plug), do: SignedAgentHelpers.serve!(id, plug)
 

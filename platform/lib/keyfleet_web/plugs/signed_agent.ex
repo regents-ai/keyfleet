@@ -397,7 +397,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp read_and_verify(%{body_params: %Plug.Conn.Unfetched{}} = conn) do
     case read_signed(conn) do
       {:ok, "", %{method: "GET"} = conn} ->
-        verify(%{conn | assigns: Map.delete(conn.assigns, :raw_body)})
+        verify(conn)
 
       {:ok, _raw, conn} ->
         verify_json(conn)
@@ -510,14 +510,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   # The raw body is signed, through its content digest, and checked against
-  # it before anything is read from it; `accept/3` then reads it. The shared
-  # plug forwards only the signed headers, so any other header changes nothing.
+  # it before anything is read from it; `accept/3` then reads it. An empty body
+  # is the same request as none. The shared plug forwards only the signed
+  # headers, so any other header changes nothing.
   defp verify(conn) do
     Siwa.AgentAuthPlug.call(conn,
       client: Keyfleet.SiwaBroker,
       hooks: __MODULE__,
-      audience: "keyfleet",
-      body: if(conn.method == "GET", do: :if_present, else: :always)
+      audience: "keyfleet"
     )
   end
 
@@ -599,9 +599,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # Only a request whose signature verified is told what is wrong with its
   # body, and nothing it asks for is acted on until the body fits. A read
   # carries no body.
-  defp take_body(%{method: "GET", assigns: assigns} = conn)
-       when not is_map_key(assigns, :raw_body),
-       do: {:ok, %{conn | body_params: %{}, params: %{}}}
+  defp take_body(%{method: "GET", assigns: %{raw_body: ""}} = conn),
+    do: {:ok, %{conn | body_params: %{}, params: %{}}}
 
   defp take_body(%{method: "GET"}), do: {:error, %{reason: :body_does_not_fit}}
 

@@ -16,7 +16,8 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
     * An agent signs every request with its own sign-in (SIWA, as on
       `/api/v1/agent`): its method, its path with the query, and the
-      `content-digest` it declares for its exact body, an empty one included.
+      `content-digest` it declares for its exact body; one without it declares
+      the empty body.
       The sign-in server checks the signature before any of the body is read.
       The agent is then let in by what its own wallet holds or by its pairing
       with a holder, checked on every request.

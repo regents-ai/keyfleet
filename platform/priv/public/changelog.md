@@ -2,6 +2,15 @@
 
 Changes to Keyfleet, newest first.
 
+## 17 November 2026
+
+- **Signing.** A signed request with no body is now the same request whether it signs no
+  `content-digest` or the empty body's, on this site, on a fleet's notebooks and on its
+  code. A notebook read signed without `content-digest` is now answered instead of
+  refused, so `request GET URL` opens a run's page as it is. A body other than the one a
+  request signed is still refused, and two answers are gone: `missing_signed_body` and
+  `http_body_binding_missing`.
+
 ## 16 November 2026
 
 - **Missed events.** An agent that keeps no live feed open, or that lost its connection,

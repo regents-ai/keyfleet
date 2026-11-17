@@ -105,7 +105,6 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # The sign-in server checks a signed request's body inside an envelope it
   # refuses past 64 KiB, so no larger body can ever be verified.
   @signed_max_body 64 * 1024
-  @digest_hint "Sign every request here with the sign-in client's headers and content-digest, a GET over the empty body \"\", then send it again."
 
   # Only browser notebook content and the WebSocket handshake reach the hub.
   # Cookies and all caller identity headers are replaced by our signed pass.
@@ -335,8 +334,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
             client: Keyfleet.SiwaBroker,
             hooks: __MODULE__,
             audience: "keyfleet",
-            query: :signed,
-            body: :always
+            query: :signed
           )
 
         agent_subject(conn, fleet_id)
@@ -459,16 +457,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @impl Siwa.AgentAuthPlug.Hooks
   def accept(conn, data, _context), do: SignedAgent.accept_agent(conn, data)
 
-  # Every signed request here binds its body, a GET's empty one too, so one
-  # signed without `content-digest` is told so, not to change its client.
   @impl Siwa.AgentAuthPlug.Hooks
-  def deny(conn, %{siwa_code: code} = failure)
-      when code in ["http_headers_missing", "http_body_binding_missing"] do
-    if get_req_header(conn, "content-digest") == [],
-      do: SignedAgent.deny(conn, Map.put(failure, :siwa_hint, @digest_hint)),
-      else: SignedAgent.deny(conn, failure)
-  end
-
   def deny(conn, metadata), do: SignedAgent.deny(conn, metadata)
 
   ## How often
