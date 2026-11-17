@@ -1031,6 +1031,84 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: a person's session start labelled as text is read by this
+  # door as an app session, so no maker is checked, and by the hub as an edit
+  # session of someone else's notebook that saves back to it.
+  test "a person's body sent to the notebook API reaches the hub labelled as this door reads it, runtime traffic as sent, and an encoded one is refused unread",
+       c do
+    test = self()
+
+    hub =
+      server(fn conn ->
+        {:ok, body, conn} = read_body(conn)
+
+        labels =
+          for {name, _value} = label <- conn.req_headers,
+              name in ~w(content-type content-encoding),
+              do: label
+
+        send(test, {:labels, conn.method, conn.request_path, labels, body})
+        hub_answer(conn, c.holder)
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => hub})
+    )
+
+    cookie = enter!(c.holder)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    theirs = notebooks <> "/nb-0000000000000001"
+    mine = notebooks <> "/nb-0000000000000002"
+    kernel = "/proxy/edge/api/kernel/run"
+
+    send_labelled = fn method, path, body, labels ->
+      labels
+      |> Enum.reduce(%{build_conn() | host: @host}, fn {name, value}, conn ->
+        put_req_header(conn, name, value)
+      end)
+      |> put_req_header("cookie", "__Host-kf_notebooks=" <> cookie)
+      |> dispatch(@endpoint, method, path, body)
+    end
+
+    encoded =
+      send_labelled.("POST", notebooks, :zlib.gzip(~s({"title":"orbit"})), [
+        {"content-type", "application/json"},
+        {"content-encoding", "gzip"}
+      ])
+
+    assert json_response(encoded, 400)["error"]["code"] == "invalid_request"
+    refute_received {:labels, "POST", ^notebooks, _labels, _body}
+
+    as_json = [{"content-type", "application/json"}]
+    as_text = [{"content-type", "text/plain"}]
+    as_form = [{"content-type", "application/x-www-form-urlencoded"}]
+
+    for {method, path, body, labels, status, heard} <- [
+          {"GET", mine, "", as_json, 200, {[], ""}},
+          {"POST", theirs <> "/sessions", ~s({"mode":"app"}), as_text, 201,
+           {as_json, ~s({"mode":"app"})}},
+          {"POST", theirs <> "/sessions", "", as_text, 201,
+           {as_json, ~s({"edit_intent":"temporary"})}},
+          {"POST", mine <> "/sessions", ~s({"mode":"edit"}), as_json, 201,
+           {as_json, ~s({"mode":"edit"})}},
+          {"PATCH", mine <> "/source", ~s({"code":"x = 1"}), as_json, 200,
+           {as_json, ~s({"code":"x = 1"})}},
+          {"POST", mine <> "/jobs/job-mine/runs", "{}", as_json, 201, {as_json, "{}"}},
+          {"PUT", mine <> "/workspace/files?path=data.csv&create=true", "a,b\n1,2\n",
+           [{"content-type", "text/csv"}], 200,
+           {[{"content-type", "application/octet-stream"}], "a,b\n1,2\n"}},
+          {"POST", kernel, ~s({"cellIds":[]}), as_json, 200, {as_json, ~s({"cellIds":[]})}},
+          {"POST", kernel, "a=1&b=2", as_form, 200, {as_form, "a=1&b=2"}}
+        ] do
+      assert send_labelled.(method, path, body, labels).status == status
+      bare = path |> String.split("?") |> hd()
+      {labels_heard, body_heard} = heard
+      assert_receive {:labels, ^method, ^bare, ^labels_heard, ^body_heard}
+    end
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do

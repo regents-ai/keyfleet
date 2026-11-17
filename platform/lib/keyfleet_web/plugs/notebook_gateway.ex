@@ -66,8 +66,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   What reaches the hub carries a pass for that person or agent
   (`Keyfleet.Notebooks.Pass`) in place of any `Authorization`,
   `X-Keyfleet-Assertion`, forwarded-identity or SIWA header the client sent,
-  and without this site's cookie. Answers stream straight back, with only the
-  headers a notebook page needs (`@kept_response`). A WebSocket
+  and without this site's cookie. A body this door reads, an agent's or any
+  sent to the notebook API (`/api/`), reaches the hub labelled as this door
+  read it, and one sent encoded is refused. Answers stream straight back,
+  with only the headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
 
@@ -595,33 +597,16 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       end
 
     kept = Enum.filter(conn.req_headers, fn {name, _value} -> name in allowed end)
-    [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | typed(conn, kept)]
+    [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
   end
-
-  # A signature covers a body's bytes, not the type it is labelled with, so an
-  # agent's body reaches the hub with the type this door takes it as, never the
-  # one it was sent with: a file's bytes as they are, any other body as JSON.
-  defp typed(%Plug.Conn{assigns: %{agent_actor: _agent, raw_body: raw}} = conn, kept) do
-    untyped = Enum.reject(kept, &match?({"content-type", _type}, &1))
-
-    case {raw, conn.method, conn.path_info} do
-      {"", _method, _path} ->
-        untyped
-
-      {_file, "PUT", ["api", "v1", "projects", _, "notebooks", _, "workspace", "files"]} ->
-        [{"content-type", "application/octet-stream"} | untyped]
-
-      _json ->
-        [{"content-type", "application/json"} | untyped]
-    end
-  end
-
-  defp typed(_person, kept), do: kept
 
   defp forward_http(conn, address, fleet_id, subject, headers) do
     {body, conn} = request_body(conn)
 
     cond do
+      body == :encoded ->
+        Refusal.json(conn, 400, "invalid_request")
+
       body == :too_large ->
         Refusal.json(conn, 413, "request_too_large")
 
@@ -629,7 +614,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 403, "notebooks_schedules_refused")
 
       true ->
-        case made(conn, fleet_id, subject, {headers, body}) do
+        case made(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
           {:ok, {headers, body}, done} ->
             Req.request(
               method: conn.method,
@@ -652,6 +637,30 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         end
     end
   end
+
+  # The hub reads a body by its label, and this door reads an agent's body, and
+  # anything sent to the notebook API, as JSON or a written file's bytes
+  # whatever its label. So such a body reaches the hub labelled as this door
+  # read it, never as it was sent. A person's runtime traffic, under `/proxy/`
+  # and `/surface-proxy/`, keeps its own labels.
+  defp typed(conn, headers, body) do
+    if Map.has_key?(conn.assigns, :agent_actor) or match?(["api" | _], conn.path_info),
+      do: Enum.reject(headers, &match?({"content-type", _type}, &1)) ++ label(conn, body),
+      else: headers
+  end
+
+  defp label(_conn, ""), do: []
+
+  defp label(
+         %Plug.Conn{
+           method: "PUT",
+           path_info: ["api", "v1", "projects", _, "notebooks", _, "workspace", "files"]
+         },
+         _file
+       ),
+       do: [{"content-type", "application/octet-stream"}]
+
+  defp label(_conn, _json), do: [{"content-type", "application/json"}]
 
   # When what the hub made can't keep its maker (`done`), the person is told
   # to try again instead of the hub's answer.
@@ -687,28 +696,26 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
          %Plug.Conn{
            method: "POST",
            path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs"]
-         } = conn,
+         },
          body
        ),
-       do: no_schedule?(conn, body)
+       do: no_schedule?(body)
 
   defp job_unscheduled?(
          %Plug.Conn{
            method: "PATCH",
            path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs", _]
-         } = conn,
+         },
          body
        ),
-       do: no_schedule?(conn, body)
+       do: no_schedule?(body)
 
   defp job_unscheduled?(_conn, _body), do: true
 
-  defp no_schedule?(conn, body) do
-    with [] <- get_req_header(conn, "content-encoding"),
-         {:ok, %{} = job} <- Jason.decode(body) do
-      is_nil(job["schedule"])
-    else
-      _ -> false
+  defp no_schedule?(body) do
+    case Jason.decode(body) do
+      {:ok, %{} = job} -> is_nil(job["schedule"])
+      _unreadable -> false
     end
   end
 
@@ -825,7 +832,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # starter does; editing another member's notebook opens a sandbox of one's
   # own that saves nothing (the hub's temporary sandbox).
   defp session_start(conn, ids, {_headers, body} = request) do
-    with {:ok, start} <- session_body(conn, body) do
+    with {:ok, start} <- session_body(body) do
       case start do
         %{"mode" => "app", "replace_app_session_id" => session_id} ->
           only_maker(:session, ids, [session_id], request)
@@ -855,11 +862,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # A start with no body is an edit session.
-  defp session_body(conn, body) do
-    with [] <- get_req_header(conn, "content-encoding"),
-         {:ok, %{} = start} <- if(body == "", do: {:ok, %{}}, else: Jason.decode(body)) do
-      {:ok, start}
-    else
+  defp session_body(""), do: {:ok, %{}}
+
+  defp session_body(body) do
+    case Jason.decode(body) do
+      {:ok, %{} = start} -> {:ok, start}
       _unreadable -> {:error, :invalid}
     end
   end
@@ -950,7 +957,18 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # An agent's body was read to check its signature.
   defp request_body(%Plug.Conn{assigns: %{raw_body: raw}} = conn), do: {raw, conn}
 
-  defp request_body(conn) do
+  # This door reads what the notebook API is sent to decide who may send it,
+  # and never unpacks a body: an encoded one is refused unread.
+  defp request_body(%Plug.Conn{path_info: ["api" | _]} = conn) do
+    case get_req_header(conn, "content-encoding") do
+      [] -> read_capped(conn)
+      _encoded -> {:encoded, conn}
+    end
+  end
+
+  defp request_body(conn), do: read_capped(conn)
+
+  defp read_capped(conn) do
     cap = Notebooks.config()[:max_request_bytes]
 
     case read_body(conn, length: cap, read_length: min(cap, 1_000_000)) do

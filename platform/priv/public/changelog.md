@@ -27,6 +27,12 @@ Changes to Keyfleet, newest first.
   reads it as, JSON or a written file's bytes, never the `content-type` it was sent with,
   which its signature doesn't cover. A signed request with a `content-encoding` is now
   refused with 400 `invalid_request` before its body is read; the host never unpacked one.
+- **Notebooks.** What a person sends to a fleet's notebook API (`/api/`) now reaches the
+  notebook host with the type Keyfleet reads it as too, so a session start labelled as
+  text opens the kind of session Keyfleet checked, where it could open someone else's
+  notebook for editing that saved back to it. One sent with a `content-encoding` is
+  refused with 400 `invalid_request`. A notebook's own page traffic (`/proxy/`) is
+  unchanged.
 - **Code.** A push now counts against its wallet's pushes only once its whole body is in
   and, for an agent, is the one it signed, and an agent's listing is saved only for a
   request that has passed every check: a push refused for its body, 400
