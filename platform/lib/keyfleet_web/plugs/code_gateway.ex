@@ -42,9 +42,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   (`Keyfleet.Limits`) is refused with 429: before its body is read when the
   allowance is already spent, or once it is in when another push took the last
   place meanwhile. One is spent only once the body is in and is the one
-  signed; an agent's listing is saved only for a request sent on to the
-  store, so a request refused for its body spends no push and saves no
-  listing. When the store reports changes done,
+  signed; an agent's listing is saved only for a request that has passed
+  every check, so a request refused for its body spends no push and saves no
+  listing, and one the store then fails still spends and saves. When the store reports changes done,
   each branch or tag moved, up to `@recorded` of them, is recorded for the
   fleet's workspace, under the project and the key and, for an agent, the
   agent too. A store that cannot be reached, stops mid-exchange, answers with

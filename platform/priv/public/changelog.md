@@ -29,9 +29,9 @@ Changes to Keyfleet, newest first.
   refused with 400 `invalid_request` before its body is read; the host never unpacked one.
 - **Code.** A push now counts against its wallet's pushes only once its whole body is in
   and, for an agent, is the one it signed, and an agent's listing is saved only for a
-  request sent on to the code: a push refused for its body, 400 `code_body_not_signed`,
-  413 or a body that stops arriving, counts for nothing and saves nothing, where it used
-  up a push. A push past the allowance is still refused with 429.
+  request that has passed every check: a push refused for its body, 400
+  `code_body_not_signed`, 413 or a body that stops arriving, counts for nothing and saves
+  nothing, where it used up a push. A push past the allowance is still refused with 429.
 
 ## 16 November 2026
 

@@ -539,8 +539,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @doc """
   Admits the agent a verified answer names as `accept_agent/2` does, but
   saves nothing: the code gateway saves its listing
-  (`Keyfleet.Agents.save_listing/1`) only for a request it sends on, once the
-  body proved to be the one signed.
+  (`Keyfleet.Agents.save_listing/1`) only for a request that has passed every
+  check, once the body proved to be the one signed.
   """
   def admit_agent(conn, data) do
     with {:ok, actor} <- actor(conn, data), do: admit(conn, actor)
