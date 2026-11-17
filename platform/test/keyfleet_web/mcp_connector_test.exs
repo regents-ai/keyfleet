@@ -346,6 +346,92 @@ defmodule KeyfleetWeb.McpConnectorTest do
       assert refused.body["error"]["code"] == "http_signature_invalid"
     end
 
+    # Costly failure: a call runs on a body other than the one its signature
+    # declares.
+    test "a call carries the body its content-digest declares, none declaring the empty body",
+         c do
+      pair!(account!(), c.signer.address)
+      SignedAgentHelpers.start_real_broker!(self(), c.secret)
+
+      cases =
+        SignedAgentHelpers.body_cases(
+          c.signer,
+          c.secret,
+          Siwa.Contract.authority(c.app),
+          "POST",
+          "/mcp",
+          Jason.encode!(rpc("tools/list")),
+          Jason.encode!(rpc("ping"))
+        )
+
+      answers =
+        for {_name, request} <- cases do
+          answer =
+            Req.post!(c.app <> "/mcp",
+              headers: Map.drop(request.headers, ["cookie", "authorization"]),
+              body: request.body,
+              retry: false
+            )
+
+          {answer.status, outcome(answer.body)}
+        end
+
+      unbound = {401, "http_body_binding_invalid"}
+
+      # An empty call is signed in, and the connector answers it as no
+      # JSON-RPC request (-32600).
+      assert answers == [
+               {200, -32_600},
+               {200, -32_600},
+               {401, "http_headers_missing"},
+               {200, :tools},
+               unbound,
+               unbound
+             ]
+
+      SignedAgentHelpers.assert_reported_bytes!(cases)
+    end
+
+    # Costly failure: a content-digest the site can't read, or a signature
+    # header sent twice, crashes the connector or runs the call.
+    test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused",
+         c do
+      SignedAgentHelpers.start_real_broker!(self(), c.secret)
+      authority = Siwa.Contract.authority(c.app)
+      body = Jason.encode!(rpc("tools/list"))
+      digest = Siwa.Contract.body_component()
+
+      unreadable =
+        SignedAgentHelpers.sign_digest(
+          c.signer,
+          c.secret,
+          authority,
+          "POST",
+          "/mcp",
+          "not-a-digest"
+        )
+
+      signed = SignedAgentHelpers.sign(c.signer, c.secret, authority, "POST", "/mcp", body)
+
+      answers =
+        for headers <- [
+              Map.to_list(unreadable.headers),
+              [{digest, signed.headers[digest]} | Map.to_list(signed.headers)]
+            ] do
+          answer =
+            Req.post!(c.app <> "/mcp",
+              headers:
+                Enum.reject(headers, fn {name, _value} -> name in ~w(cookie authorization) end),
+              body: body,
+              retry: false
+            )
+
+          {answer.status, outcome(answer.body)}
+        end
+
+      assert answers == [{401, "http_body_binding_invalid"}, {401, "duplicate_proof"}]
+    end
+
     test "an answer whose pairing ends while the tool runs is replaced", c do
       subject = account!()
       agent = pair!(subject, c.signer.address)
@@ -944,6 +1030,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   defp result(%{"result" => result}), do: result
+
+  # What a signed call was answered: the code a refusal names, or what it reached.
+  defp outcome(%{"error" => %{"code" => code}}), do: code
+  defp outcome(%{"result" => %{"tools" => [_ | _]}}), do: :tools
+  defp outcome(answer), do: answer
 
   # A tool's refusal of an app that hasn't paired: the error alone, no data.
   defp not_paired?(%{

@@ -160,8 +160,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     Siwa.AgentAuthPlug.call(conn,
       client: Keyfleet.SiwaBroker,
       hooks: __MODULE__,
-      audience: "keyfleet",
-      body: :always
+      audience: "keyfleet"
     )
   end
 

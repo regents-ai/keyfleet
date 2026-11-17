@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 35.1.0
+  version: 36.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -4953,7 +4953,7 @@ components:
       type: apiKey
       in: header
       name: x-siwa-receipt
-      description: A SIWA wallet receipt for audience keyfleet, signed in on Base or Ethereum; a smart wallet signs in on Base. The request also carries its HTTP message signature (x-siwa-signature, x-siwa-signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once.
+      description: A SIWA wallet receipt for audience keyfleet, signed in on Base or Ethereum; a smart wallet signs in on Base. The request also carries its HTTP message signature (x-siwa-signature, x-siwa-signature-input, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id, and content-digest when it has a body), each exactly once.
   headers:
     RateLimitPolicy:
       description: The budget this request counted against, as "policy";q=requests;w=window seconds
@@ -5165,8 +5165,7 @@ components:
       description: >-
         unauthorized: the signed request was missing or invalid; nothing about the request was
         trusted. duplicate_proof: a signature header was sent more than once. unsupported_query:
-        the request carried a query string, which a signed request here never takes.
-        missing_signed_body: the body was not JSON signed with the rest of the request. When the
+        the request carried a query string, which a signed request here never takes. When the
         sign-in server refuses or fails the request, the answer is its status and its own code,
         message and hint, such as 409 request_replayed. smart_wallet_on_ethereum: a smart wallet signed in on Ethereum; it signs in on Base
         instead.
@@ -6246,7 +6245,7 @@ components:
               description: >-
                 Keyfleet's own code, or the sign-in server's own refusal code (from
                 http_headers_missing to request_replayed), passed on with its status.
-              enum: [unauthorized, duplicate_proof, unsupported_query, missing_signed_body, smart_wallet_on_ethereum, siwa_request_failed, request_too_large, out_of_range, invalid_request, http_headers_missing, http_signature_invalid, http_signature_input_invalid, http_required_components_missing, http_body_binding_missing, http_body_binding_invalid, receipt_invalid, receipt_binding_mismatch, signature_invalid, wallet_audience_disabled, request_replayed, activity_record_failed, request_replay_failed, signature_lookup_failed, sign_in_refused, agent_not_paired, pairing_unavailable, not_open_yet]
+              enum: [unauthorized, duplicate_proof, unsupported_query, smart_wallet_on_ethereum, siwa_request_failed, request_too_large, out_of_range, invalid_request, http_headers_missing, http_signature_invalid, http_signature_input_invalid, http_required_components_missing, http_body_binding_invalid, receipt_invalid, receipt_binding_mismatch, signature_invalid, wallet_audience_disabled, request_replayed, activity_record_failed, request_replay_failed, signature_lookup_failed, sign_in_refused, agent_not_paired, pairing_unavailable, not_open_yet]
             message: {type: string}
             hint: {type: string}
     WorkspaceError:

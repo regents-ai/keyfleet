@@ -6,14 +6,28 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   import ExUnit.Assertions
   import Plug.Conn
 
+  @client_hint "Update your sign-in client, then send the request again."
+
   @doc """
   Starts the sign-in server under the calling test and points Keyfleet at it.
   Each request's payload reaches `test` as `{:broker_payload, payload}`.
   """
-  def start_broker!(test, secret) do
+  def start_broker!(test, secret),
+    do: start_broker!(:broker, test, &verdict(&1, secret))
+
+  @doc """
+  Starts a sign-in server that refuses as the real one does, with the status,
+  code and message `Siwa.Contract.refusal/1` gives each reason, and points
+  Keyfleet at it. Each request's payload reaches `test` as
+  `{:broker_payload, payload}`.
+  """
+  def start_real_broker!(test, secret),
+    do: start_broker!(:real_broker, test, &real_verdict(&1, secret))
+
+  defp start_broker!(id, test, verdict) do
     old = Application.get_env(:keyfleet, :siwa_broker_url)
     ExUnit.Callbacks.on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
-    url = serve!(:broker, &verify(&1, &2, test, secret))
+    url = serve!(id, &verify(&1, &2, test, verdict))
     Application.put_env(:keyfleet, :siwa_broker_url, url)
     url
   end
@@ -81,14 +95,77 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
     request
   end
 
-  defp verify(conn, _opts, test, secret) do
+  @doc """
+  `method path` signed as `sign/8` signs it with no body, but declaring the
+  empty body's `content-digest`, as a client that signs every request over
+  its body signs a read. The library's own signer leaves that header out.
+  """
+  def sign_empty_digest(signer, secret, authority, method, path),
+    do:
+      sign_digest(
+        signer,
+        secret,
+        authority,
+        method,
+        path,
+        Siwa.RequestAuth.content_digest_for_body("")
+      )
+
+  @doc """
+  `method path` signed as `sign/8` signs it with no body, but with `digest` as
+  its signed `content-digest`, whatever that says.
+  """
+  def sign_digest(signer, secret, authority, method, path, digest) do
+    signed = sign(signer, secret, authority, method, path, "{}")
+    headers = Map.put(signed.headers, Siwa.Contract.body_component(), digest)
+    {:ok, message} = Siwa.RequestAuth.signing_message(%{signed | headers: headers})
+    {:ok, "0x" <> hex} = Siwa.LocalSigner.sign_message(signer, message)
+
+    signature =
+      "#{Siwa.Contract.label()}=:#{hex |> Base.decode16!(case: :mixed) |> Base.encode64()}:"
+
+    %{signed | body: "", headers: Map.put(headers, Siwa.Contract.signature_header(), signature)}
+  end
+
+  @doc """
+  The six ways a signed request's `content-digest` and the body that arrives
+  can meet, in this order, each as `{case, request}` with `request.body` the
+  bytes to send: `body` is a real body, and `other` a different one.
+  """
+  def body_cases(signer, secret, authority, method, path, body, other) do
+    sign = &sign(signer, secret, authority, method, path, &1)
+
+    [
+      no_digest_no_body: sign.(nil),
+      empty_digest_no_body: sign_empty_digest(signer, secret, authority, method, path),
+      no_digest_real_body: %{sign.(nil) | body: body},
+      real_digest_matching_body: sign.(body),
+      real_digest_no_body: %{sign.(body) | body: ""},
+      real_digest_different_body: %{sign.(body) | body: other}
+    ]
+    |> Enum.map(fn {name, request} -> {name, %{request | body: request.body || ""}} end)
+  end
+
+  @doc """
+  Asserts the sign-in server heard, for each of `cases` in turn, the digest
+  of exactly the bytes sent: none for the empty body.
+  """
+  def assert_reported_bytes!(cases) do
+    for {name, %{body: body}} <- cases do
+      assert_receive {:broker_payload, payload}
+      digest = if body == "", do: nil, else: Siwa.content_digest_for_body(body)
+      assert payload["body_digest"] == digest, "#{name}"
+    end
+  end
+
+  defp verify(conn, _opts, test, verdict) do
     assert conn.request_path == "/api/shared/siwa/http-verify"
     assert get_req_header(conn, "x-siwa-audience") == ["keyfleet"]
     {:ok, raw, conn} = read_body(conn)
     assert byte_size(raw) <= 65_536
     payload = Jason.decode!(raw)
     send(test, {:broker_payload, payload})
-    {status, body} = verdict(payload, secret)
+    {status, body} = verdict.(payload)
     answer(conn, status, body)
   end
 
@@ -117,16 +194,31 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   (`Keyfleet.BrowserAgents`).
   """
   def verdict(payload, secret) do
-    case Siwa.verify_authenticated_request(siwa_request(payload),
-           secret: secret,
-           audience: "keyfleet",
-           wallet_audiences: ["keyfleet"],
-           authorities: [payload["authority"]]
-         ) do
+    case check(payload, secret) do
       {:ok, verified} -> granted(verified, payload)
       {:error, _} -> {401, %{error: refusal()}}
     end
   end
+
+  defp real_verdict(payload, secret) do
+    case check(payload, secret) do
+      {:ok, verified} ->
+        granted(verified, payload)
+
+      {:error, reason} ->
+        {status, code, message} = Siwa.Contract.refusal(reason)
+        {status, %{error: %{code: code, message: message, hint: @client_hint}}}
+    end
+  end
+
+  defp check(payload, secret),
+    do:
+      Siwa.verify_authenticated_request(siwa_request(payload),
+        secret: secret,
+        audience: "keyfleet",
+        wallet_audiences: ["keyfleet"],
+        authorities: [payload["authority"]]
+      )
 
   @doc """
   The sign-in server's `{200, verdict}` for `payload` once it has verified it.
@@ -162,6 +254,9 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
        }
      }}
   end
+
+  @doc "The hint `start_real_broker!/2`'s sign-in server gives with each refusal."
+  def client_hint, do: @client_hint
 
   # The sign-in server's refusal of a request whose signature does not hold.
   def refusal do

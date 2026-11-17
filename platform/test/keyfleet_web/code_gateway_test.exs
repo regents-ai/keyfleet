@@ -247,6 +247,99 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     assert spooled() == []
   end
 
+  # Costly failure: an agent's request reaches the store with a body other
+  # than the one its signature declares.
+  test "an agent's request reaches the store only with the body its content-digest declares, none declaring the empty body" do
+    agent = key_holding_agent!(5)
+    SignedAgentHelpers.start_real_broker!(self(), agent.secret)
+    pack = :crypto.strong_rand_bytes(1_000)
+    not_signed = {400, :none}
+
+    # A GET reaches the store with no body, whatever it carried.
+    for {method, path, forwarded} <- [
+          {"GET", "/#{@fleet}.git/info/refs?service=git-upload-pack", ""},
+          {"POST", "/#{@fleet}.git/git-receive-pack", pack}
+        ] do
+      cases =
+        SignedAgentHelpers.body_cases(agent.signer, agent.secret, @host, method, path, pack, "x")
+
+      answers =
+        for {_name, request} <- cases do
+          answer =
+            Enum.reduce(
+              request.headers,
+              %{build_conn() | host: @host, remote_ip: {198, 51, 100, 141}},
+              fn {name, value}, conn -> put_req_header(conn, name, value) end
+            )
+            |> dispatch(@endpoint, method, path, request.body)
+
+          if answer.status == 400,
+            do: assert(answer.resp_body =~ "doesn't match what its signature covers")
+
+          reached =
+            receive do
+              {:store, ^method, _path, _claims, body} -> body
+            after
+              0 -> :none
+            end
+
+          {answer.status, reached}
+        end
+
+      assert {method, answers} ==
+               {method,
+                [{200, ""}, {200, ""}, not_signed, {200, forwarded}, not_signed, not_signed]}
+    end
+  end
+
+  # Costly failure: a content-digest the site can't read crashes the code
+  # host, or lets a body through.
+  test "a content-digest that isn't one sha-256 digest, or comes twice, is refused in plain words and reaches nothing" do
+    agent = key_holding_agent!(6)
+    path = "/#{@fleet}.git/git-receive-pack"
+    pack = :crypto.strong_rand_bytes(1_000)
+    digest = Siwa.content_digest_for_body(pack)
+    sha512 = "sha-512=:" <> Base.encode64(:crypto.hash(:sha512, pack)) <> ":"
+
+    unreadable =
+      for value <- [
+            "not-a-digest",
+            sha512,
+            digest <> ", " <> sha512,
+            String.replace_suffix(digest, "=:", ":"),
+            String.replace_prefix(digest, "sha-256", "SHA-256")
+          ] do
+        request =
+          SignedAgentHelpers.sign_digest(agent.signer, agent.secret, @host, "POST", path, value)
+
+        Map.to_list(request.headers)
+      end
+
+    signed = SignedAgentHelpers.sign(agent.signer, agent.secret, @host, "POST", path, pack)
+    twice = [{"content-digest", digest} | Map.to_list(signed.headers)]
+
+    answers =
+      for headers <- unreadable ++ [twice] do
+        answer =
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 142}, req_headers: headers}
+          |> dispatch(@endpoint, :post, path, pack)
+
+        {answer.status, get_resp_header(answer, "content-type"), answer.resp_body}
+      end
+
+    words = fn code ->
+      %{error: %{message: message, hint: hint}} = KeyfleetWeb.Refusal.body(code)
+      {401, ["text/plain; charset=utf-8"], message <> "\n" <> hint <> "\n"}
+    end
+
+    assert answers ==
+             List.duplicate(words.("invalid_content_digest"), 5) ++ [words.("duplicate_proof")]
+
+    refute_received {:broker_payload, _payload}
+    refute_received {:store, _method, _path, _claims, _body}
+    assert spooled() == []
+  end
+
   # Costly failure: bytes changed after an agent signed them reach the store
   # under its name.
   property "a body differing from the signed one by any byte reaches nothing, and its file is gone" do

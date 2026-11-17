@@ -10919,3 +10919,107 @@ whole API package (2,450 passed, 1 skipped) passed. Format, the contract copies 
 Credo (769 files), the focused tests (95: 1 property, 94 tests, 1 excluded) and both
 command list checkers passed. No image build, no deployed hub, no local end-to-end run.
 No migration.
+
+## 2026-11-17: a request with no body is one request, with or without the empty body's digest
+
+- Keyfleet takes elixir-utils `2ebfd300` (branch `eu/empty-body-on-b921-1117`), the old pin
+  `b9213015` plus the SIWA library's new rule: the body a request declares is its
+  `content-digest`, or the empty body when it has none, and the body the site read is the
+  digest it reports, or the empty body when it reports none; the two must be equal. All 13
+  elixir-utils packages move together under one `@elixir_utils_ref`.
+- The doors no longer pass a body option to the library (`body: :always` at the notebook
+  host and the connector, `:if_present` or `:always` at the main door); the code host
+  keeps `body: :declared`. The main door keeps the empty body it read instead of dropping
+  it before the sign-in check, and a GET is let through only with that empty body. The
+  notebook host's own hint to sign a read over the empty body, and the refusal branch that
+  added it, are gone.
+- `missing_signed_body` is gone from Keyfleet's refusals: the main door and the notebook
+  host read the whole body themselves before the sign-in check (413 past their limits), the
+  connector takes only JSON, which the endpoint reads whole through the library's reader,
+  and the code host declares its body, so nothing reaches it. The shared door
+  (`/api/agents/v1`) answers with the shared library's own refusals and keeps it.
+- Before (origin/main `bfc86656`, run by test with the old pin) and after, at each door,
+  for: no digest and no body; the empty body's digest and no body; no digest and a body; a
+  digest and its body; a digest and no body; a digest and another body:
+  - Main door GET: 200, 401 `http_body_binding_missing`, 401 `http_headers_missing`, 422,
+    401 `http_body_binding_missing`, 401 `http_body_binding_invalid`; now 200, 200, 401
+    `http_headers_missing`, 422, 401 `http_body_binding_invalid`, 401
+    `http_body_binding_invalid`.
+  - Main door POST: 401 `http_headers_missing`, 422, 401 `http_headers_missing`, 200, 401
+    `http_body_binding_invalid` twice; now 422, 422, then the same.
+  - Notebook host GET and POST: 401 `http_headers_missing` (with the host's own hint),
+    200 or 201, 401 `http_headers_missing`, 200 or 201, 401 `http_body_binding_invalid`
+    twice; now the first is 200 or 201 and reaches the hub with no body, the rest the
+    same.
+  - Connector: 401 `http_headers_missing`, then 200 with JSON-RPC -32600, 401
+    `http_headers_missing`, 200, 401 `http_body_binding_invalid` twice; now the first is
+    200 with JSON-RPC -32600 too.
+  - Code host GET and POST: a server error (the old library's `missing_content_digest`
+    has no refusal here), 200, a server error, 200, 400 `code_body_not_signed` twice; now
+    200, 200, 400 `code_body_not_signed`, 200, 400 twice. The code host's code is
+    unchanged.
+- Words: `/docs` (sign-in, the code host, the notebook host and its refusals, and a dated
+  36.0.0 line), the notebooks part of the guide (`request GET URL` without `--body ''`),
+  `cli/COMMANDS.md`, both contract copies (36.0.0: `missing_signed_body` and
+  `http_body_binding_missing` leave the agent error codes, the security scheme names
+  `content-digest` only for a body), the feature map and the public changelog. The
+  notebook read test is renamed for what it now proves and stays in the suite, but leaves
+  `platform/test/KEPT_TESTS.md`: its line there is no longer true, and a new one joins
+  only when Sean agrees. Guide 3.34.0 stays, as for earlier edits of the notebooks part
+  alone.
+- Tests: each door has a table test of the six cases above, signed for real and checked
+  by a stand-in sign-in server that refuses as the real one does
+  (`SignedAgentHelpers.start_real_broker!/2`, moved from the notebook tests), which also
+  shows the digest each door reports is of the bytes that arrived. The SIWA property test
+  models the new rule, and no body and the empty body replay each other.
+- `scripts/check-siwa-latest.sh` compares `siwa/siwa-elixir/apps/siwa` at the pin with
+  the same folder on elixir-utils main, file for file, as ash-template's `896717d0` does,
+  instead of asking for main's newest SIWA commit in the pin's history, which a narrow
+  pin never holds. Keyfleet's three site lines at its top stay.
+- Not done here: the live sign-in server's library is not checked, and the regents-cli
+  git helper's own signing is described as before.
+
+Check (partition `_kf_s8`, PORT unset): format, Credo (769 files, no issues), xref
+(138 compile-connected, at the limit), `make check-required-fixes`, `make check-siwa-latest`
+and `make check-cli` passed. The focused tests (signed agent, the three journeys, agent
+files, both gateways, the connector, security, contract, guides, shared pairing,
+unpaired, notebook files, launch gate and tool commands: 245, 3 properties and 242
+tests), every other test file that signs requests (323, 2 properties and 321 tests) and
+the public pages and route coverage tests (38) passed. No browser walks, no full check.
+No migration.
+
+## 2026-11-17: the code host refuses a content-digest it can't read, in words
+
+- At the code host, a signed request whose `content-digest` isn't one `sha-256` digest
+  (another form, `sha-512`, two digests in one header, the digest without its padding,
+  `SHA-256` in capitals) crashed the site: the shared sign-in plug refuses it as
+  `invalid_content_digest`, which had no words in `KeyfleetWeb.Refusal`, so a `KeyError`
+  answered 500 with the site's HTML error page (each of the five, by test, before the
+  fix). It now answers 401 in plain text, a sentence and how to sign it, as the plug's
+  other refusals do there. The sign-in server is not asked, nothing reaches the store and
+  no file is left.
+- The library's refusals on a `body: :declared` route: `duplicate_proof`,
+  `unsupported_query` (never at the code host, which signs its query), `declared_body_read`
+  and `invalid_content_digest`, then the sign-in server's own, passed on with their
+  status. `declared_body_read` comes only from a body read before the plug, and the code
+  host's gateway runs before anything reads a body (`KeyfleetWeb.Endpoint`): a JSON body
+  sent over a real socket reached the store unread. It keeps no words, so a site that one
+  day read the body first fails with a server error and reaches nothing.
+- The main door, the notebook host and the connector report the digest of the bytes they
+  read, so a `content-digest` they can't read goes to the sign-in server, which refuses it
+  (401 `http_body_binding_invalid`). Their plug refusals are `duplicate_proof`,
+  `unsupported_query` and `missing_signed_body`, the last unreachable since each reads the
+  whole body first. A test at each door shows the refusal, and a header sent twice
+  answering `duplicate_proof` at the notebook host and the connector (the main door's test
+  of it already stood).
+- `/docs` "Code": every refusal there is plain text, a sign-in refusal included (the page
+  said JSON, which it never was), and 401 answers a `content-digest` that isn't one
+  `sha-256` digest. One line in the public changelog. The contract describes no code host
+  answer, so its version stays.
+- The notebook read test leaves `platform/test/KEPT_TESTS.md` (see the entry above). The
+  51 in its opening paragraph counts the 13 October list, which never held that row, so
+  it stands.
+
+Check (partition `_kf_s8`, PORT unset): format, Credo (769 files, no issues) and xref
+(138 compile-connected, at the limit) passed. The focused tests above, with the public
+pages and route coverage tests: 272 passed (3 properties, 269 tests).

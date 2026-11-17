@@ -21,7 +21,6 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   @other_host "fibonacci-cascade.notebooks.localhost"
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
-  @client_hint "Update your sign-in client, then send the request again."
 
   setup context do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -760,9 +759,13 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     assert {extra.status, extra.resp_body} == {plain.status, plain.resp_body}
 
+    # A read signs no content-digest; the sign-in server hears every other
+    # signed header and nothing else.
+    signed_headers = Siwa.Contract.forwarded_headers() -- [Siwa.Contract.body_component()]
+
     for _sent <- 1..2 do
       assert_receive {:broker_payload, %{"headers" => forwarded}}
-      assert Enum.sort(Map.keys(forwarded)) == Enum.sort(Siwa.Contract.forwarded_headers())
+      assert Enum.sort(Map.keys(forwarded)) == Enum.sort(signed_headers)
     end
   end
 
@@ -801,13 +804,13 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   # Costly failure: an agent that signs a notebook read the way it signs a
-  # read on the site is told to change its client, which can't help, and
-  # never reads a notebook's code (Grok Bot, 18 October 2026); and, its
-  # answers naming no request, can't cite either one (Grok Bot, 19 October).
-  test "a read signed without its empty body is told to sign over it, and then reads a notebook's code" do
+  # read on the site, with no content-digest, is refused and never reads a
+  # notebook's code (Grok Bot, 18 October 2026); and, its answers naming no
+  # request, can't cite either one (Grok Bot, 19 October).
+  test "a read signed with or without the empty body's digest reads a notebook's code, and names its request" do
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
-    real_refusals!(secret)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
     wallet = String.downcase(signer.address)
     epoch!(2, 1, wallet)
 
@@ -819,36 +822,114 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     subject = Notebooks.agent_subject(profile.id)
     code = "/api/v1/projects/proj-fleet/notebooks/nb-0123456789abcdef/content"
 
-    [unbound, bound] =
-      for body <- [nil, ""] do
-        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", code, body)
+    for request <- [
+          SignedAgentHelpers.sign(signer, secret, @host, "GET", code, nil),
+          SignedAgentHelpers.sign_empty_digest(signer, secret, @host, "GET", code)
+        ] do
+      read = send_signed(request, {198, 51, 100, 132})
+      assert read.status == 200
+      assert [_named] = get_resp_header(read, "x-request-id")
+      assert_receive {:hub, "GET", ^code, ^subject, ""}
+    end
+  end
 
-        Enum.reduce(
-          request.headers,
-          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 132}},
-          fn {name, value}, conn -> put_req_header(conn, name, value) end
+  # Costly failure: a notebook request whose body is not the one its signature
+  # declares reaches the hub, or a request signed with no body is refused.
+  test "a signed request reaches the hub only with the body its content-digest declares, none declaring the empty body" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!(wallet)
+      )
+
+    subject = Notebooks.agent_subject(profile.id)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    body = ~s({"name":"orbit.py"})
+
+    for {method, path, ok} <- [{"GET", "/", 200}, {"POST", notebooks, 201}] do
+      cases =
+        SignedAgentHelpers.body_cases(
+          signer,
+          secret,
+          @host,
+          method,
+          path,
+          body,
+          ~s({"name":"x.py"})
         )
-        |> dispatch(@endpoint, :get, code, "")
+
+      answers =
+        for {name, request} <- cases do
+          answer = send_signed(request, {198, 51, 100, 136})
+
+          forwarded =
+            receive do
+              {:hub, ^method, ^path, ^subject, forwarded} -> forwarded
+            after
+              0 -> :none
+            end
+
+          {name, answer.status, error_code(answer), forwarded}
+        end
+
+      SignedAgentHelpers.assert_reported_bytes!(cases)
+
+      assert {method, answers} ==
+               {method,
+                [
+                  {:no_digest_no_body, ok, nil, ""},
+                  {:empty_digest_no_body, ok, nil, ""},
+                  {:no_digest_real_body, 401, "http_headers_missing", :none},
+                  {:real_digest_matching_body, ok, nil, body},
+                  {:real_digest_no_body, 401, "http_body_binding_invalid", :none},
+                  {:real_digest_different_body, 401, "http_body_binding_invalid", :none}
+                ]}
+    end
+  end
+
+  # Costly failure: a content-digest the site can't read, or a signature
+  # header sent twice, crashes the notebook host or reaches the hub.
+  test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    body = ~s({"name":"orbit.py"})
+    digest = Siwa.Contract.body_component()
+
+    unreadable =
+      SignedAgentHelpers.sign_digest(signer, secret, @host, "POST", notebooks, "not-a-digest")
+
+    signed = SignedAgentHelpers.sign(signer, secret, @host, "POST", notebooks, body)
+
+    answers =
+      for headers <- [
+            Map.to_list(unreadable.headers),
+            [{digest, signed.headers[digest]} | Map.to_list(signed.headers)]
+          ] do
+        answer =
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 137}, req_headers: headers}
+          |> dispatch(@endpoint, :post, notebooks, body)
+
+        {answer.status, error_code(answer)}
       end
 
-    assert %{"code" => "http_headers_missing", "hint" => hint} =
-             json_response(unbound, 401)["error"]
-
-    assert hint =~ "content-digest"
-    refute hint == @client_hint
-    assert bound.status == 200
-    for answer <- [unbound, bound], do: assert([_named] = get_resp_header(answer, "x-request-id"))
-    assert_receive {:hub, "GET", ^code, ^subject, ""}
-    refute_received {:hub, "GET", ^code, _subject, _body}
+    assert answers == [{401, "http_body_binding_invalid"}, {401, "duplicate_proof"}]
+    refute_received {:hub, _method, _path, _subject, _body}
   end
 
   # Costly failure: an agent handed its run's result_url can't read the page
-  # it cites (Pira, 14 November 2026): signed over the empty body, a read of
-  # it answers Keyfleet's own copy, and one signed without that is told how.
-  test "an agent reads its run's saved page at result_url with a read signed over the empty body" do
+  # it cites (Pira, 14 November 2026): a read of it, signed with or without
+  # the empty body's digest, answers Keyfleet's own copy.
+  test "an agent reads its run's saved page at result_url with a signed read" do
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
-    real_refusals!(secret)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
     wallet = String.downcase(signer.address)
     epoch!(2, 1, wallet)
 
@@ -865,23 +946,13 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     %URI{host: @host, path: page} = URI.parse(Notebooks.result_url(@fleet, notebook, run_id, 1))
 
-    [unbound, bound] =
-      for body <- [nil, ""] do
-        request = SignedAgentHelpers.sign(signer, secret, @host, "GET", page, body)
+    for request <- [
+          SignedAgentHelpers.sign(signer, secret, @host, "GET", page, nil),
+          SignedAgentHelpers.sign_empty_digest(signer, secret, @host, "GET", page)
+        ] do
+      assert html_response(send_signed(request, {198, 51, 100, 134}), 200) == "<p>kept</p>"
+    end
 
-        Enum.reduce(
-          request.headers,
-          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 134}},
-          fn {name, value}, conn -> put_req_header(conn, name, value) end
-        )
-        |> dispatch(@endpoint, :get, page, "")
-      end
-
-    assert %{"code" => "http_headers_missing", "hint" => hint} =
-             json_response(unbound, 401)["error"]
-
-    refute hint == @client_hint
-    assert html_response(bound, 200) == "<p>kept</p>"
     refute_received {:hub, "GET", ^page, _subject, _body}
   end
 
@@ -892,7 +963,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
        c do
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
-    real_refusals!(secret)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
     wallet = String.downcase(signer.address)
     epoch!(2, 1, wallet)
 
@@ -944,21 +1015,20 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   test "a signed read missing a header other than content-digest gets the sign-in server's own refusal" do
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
-    real_refusals!(secret)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
     epoch!(2, 1, String.downcase(signer.address))
     code = "/api/v1/projects/proj-fleet/notebooks/nb-0123456789abcdef/content"
-    request = SignedAgentHelpers.sign(signer, secret, @host, "GET", code, "")
-    assert Map.has_key?(request.headers, "content-digest")
+    request = SignedAgentHelpers.sign_empty_digest(signer, secret, @host, "GET", code)
 
     refused =
-      Enum.reduce(
-        Map.delete(request.headers, "x-timestamp"),
-        %{build_conn() | host: @host, remote_ip: {198, 51, 100, 133}},
-        fn {name, value}, conn -> put_req_header(conn, name, value) end
+      send_signed(
+        %{request | headers: Map.delete(request.headers, "x-timestamp")},
+        {198, 51, 100, 133}
       )
-      |> dispatch(@endpoint, :get, code, "")
 
-    assert %{"code" => "http_headers_missing", "hint" => @client_hint} =
+    hint = SignedAgentHelpers.client_hint()
+
+    assert %{"code" => "http_headers_missing", "hint" => ^hint} =
              json_response(refused, 401)["error"]
 
     refute_received {:hub, _method, _path, _subject, _body}
@@ -1118,36 +1188,23 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     |> dispatch(@endpoint, :post, "/api/v1/projects/proj-fleet/notebooks", body)
   end
 
-  # A sign-in server that refuses as the real one does: each refusal's own
-  # code and message, with the hint it gives every client.
-  defp real_refusals!(secret) do
-    old = Application.get_env(:keyfleet, :siwa_broker_url)
-    on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
+  # A request an agent signed, sent from `remote_ip`, its own client address,
+  # so the budget it spends is not one another test spent first.
+  defp send_signed(request, remote_ip) do
+    Enum.reduce(
+      request.headers,
+      %{build_conn() | host: @host, remote_ip: remote_ip},
+      fn {name, value}, conn -> put_req_header(conn, name, value) end
+    )
+    |> dispatch(@endpoint, request.method, request.path, request.body || "")
+  end
 
-    url =
-      SignedAgentHelpers.serve!(:broker, fn conn, _opts ->
-        {:ok, raw, conn} = read_body(conn)
-        payload = Jason.decode!(raw)
-
-        {status, body} =
-          case Siwa.verify_authenticated_request(SignedAgentHelpers.siwa_request(payload),
-                 secret: secret,
-                 audience: "keyfleet",
-                 wallet_audiences: ["keyfleet"],
-                 authorities: [payload["authority"]]
-               ) do
-            {:ok, verified} ->
-              SignedAgentHelpers.granted(verified, payload)
-
-            {:error, reason} ->
-              {status, code, message} = Siwa.Contract.refusal(reason)
-              {status, %{error: %{code: code, message: message, hint: @client_hint}}}
-          end
-
-        json(conn, status, body)
-      end)
-
-    Application.put_env(:keyfleet, :siwa_broker_url, url)
+  # The code a refusal names, or nil for an answer that is not one.
+  defp error_code(conn) do
+    case Jason.decode(conn.resp_body) do
+      {:ok, %{"error" => %{"code" => code}}} -> code
+      _answer -> nil
+    end
   end
 
   ## The hub

@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
 
     * a SIWA signature verifies for the one method, path, body and wallet it
       was signed for, once, and every single change to any of them is refused
-      for that change's own reason.
+      for that change's own reason. No body and the empty body are one body.
 
   The probes prove the site hands the sign-in server the request as it
   arrived; these prove what the sign-in server's checks then guarantee.
@@ -46,7 +46,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
 
         assert {:ok, %{address: address}} = verify(signed, c.secret)
         assert String.downcase(address) == String.downcase(c.signer.address)
-        assert verify(signed, c.secret) == {:error, :replayed_request}
+        assert verify(%{signed | body: same_body(body)}, c.secret) == {:error, :replayed_request}
       end
     end
   end
@@ -64,7 +64,7 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
     one_of([
       map(filter(member_of(@methods), &(&1 != method)), &{:method, &1}),
       map(filter(path(), &(&1 != path)), &{:path, &1}),
-      map(filter(body(), &(&1 != body)), &{:body, &1}),
+      map(filter(body(), &(to_string(&1) != to_string(body))), &{:body, &1}),
       map(binary(length: 20), &{:wallet, "0x" <> Base.encode16(&1, case: :lower)}),
       constant(:signer)
     ])
@@ -94,9 +94,13 @@ defmodule KeyfleetWeb.Security.OutsideDepsPropertyTest do
   defp refusal({field, _}, _body) when field in [:method, :path], do: :signature_lookup_failed
   defp refusal(:signer, _body), do: :signature_lookup_failed
   defp refusal({:wallet, _}, _body), do: :receipt_binding_mismatch
-  defp refusal({:body, nil}, _signed), do: :request_body_required
-  defp refusal({:body, _body}, nil), do: :missing_signed_headers
+  defp refusal({:body, _body}, signed) when signed in [nil, ""], do: :missing_signed_headers
   defp refusal({:body, _body}, _signed), do: :content_digest_mismatch
+
+  # No body and the empty body are one request, so either replays the other.
+  defp same_body(nil), do: ""
+  defp same_body(""), do: nil
+  defp same_body(body), do: body
 
   # The request as the site hands it to the sign-in server: its headers and
   # the digest of the body that arrived.
