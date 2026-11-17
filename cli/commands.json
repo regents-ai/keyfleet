@@ -3442,7 +3442,7 @@
       },
       {
         "command": "notebooks run <fleet> <project> <notebook>",
-        "description": "Start a background run of one of an active project's notebooks as the agent: its saved code, top to bottom, in a fresh sandbox, without changing the notebook. It answers source, the sha256 of the code and the files it runs from. Read it with notebooks result until it has finished. Once it has answered, the same idempotency key answers that run again. Refusals include 404 notebook_run_not_found (no such notebook), 409 project_archived (the project is read only; the answer names the active ones) and 429 notebook_runs_full (the notebook has 20 runs waiting).",
+        "description": "Start a background run of one of an active project's notebooks as the agent: its saved code, top to bottom, in a fresh sandbox, without changing the notebook. It answers source, the sha256 of the code and the files it runs from. Read it with notebooks result until it has finished. For a day, sending the same idempotency key again answers that run instead of starting another, even before the first has answered; until one of the agent's runs of that notebook has answered, two sent at once can each start one. Refusals include 404 notebook_run_not_found (no such notebook), 409 project_archived (the project is read only; the answer names the active ones) and 429 notebook_runs_full (the notebook has 20 runs waiting).",
         "operation_id": "startNotebookRun",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/runs/start",
@@ -3480,7 +3480,7 @@
             "in": "body",
             "field": "idempotency_key",
             "required": true,
-            "description": "Up to 128 visible ASCII characters you choose. Sending the same key again answers the run it already started instead of starting another."
+            "description": "Up to 128 visible ASCII characters you choose. For a day, sending the same key again answers the run it already started instead of starting another, even before the first has answered, except two sent at once before any of the agent's runs of that notebook has answered."
           }
         ]
       },

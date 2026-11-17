@@ -69,7 +69,9 @@ them to the hub. That part is built separately, in `platform/`.
     file's stored ETag and writes a file sent with `If-Match` only while it
     still has that ETag (below);
   - `workspace-listing.patch`, which names each listed file's stored ETag and
-    lists every file at any depth when asked (below).
+    lists every file at any depth when asked (below);
+  - `run-start-once.patch`, which makes two identical run starts sent at once
+    with one `Idempotency-Key` start one run (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -412,6 +414,22 @@ its listed ID.
   its revision, and once more when the finished run is read, to say whether
   the notebook's files are still those. At the pin the listing went one folder
   deep and named no ETag.
+- **A run starts once per key (`run-start-once.patch`).**
+  `POST /api/v1/projects/{pid}/notebooks/{nid}/jobs/{jid}/runs` with an
+  `Idempotency-Key` now looks the key up, starts the run and records it while
+  holding the job's claim, which every run start of that job takes. At the pin
+  only the start held the claim, so two identical requests sent at once both
+  missed the lookup and started two runs. Now the second waits for the claim
+  and answers the first's run, the same 201 body. One that cannot get the
+  claim in 200 tries, 25 ms apart with a store read each (at least five
+  seconds), answers 503 `SERVICE_UNAVAILABLE` and starts nothing; sent again
+  with the same key, it answers the first's run. What is stored and where is
+  as at the pin, so a key recorded before the patch answers the same, the
+  same key with another body is still refused, and a request without a key
+  is unchanged. The hub's MCP tool `run_job` already worked this way. Job
+  creation (`POST .../jobs`) holds no claim, so two first-ever run starts that
+  each make Keyfleet's job for the agent can still make two jobs and a run in
+  each.
 - **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
   integrations hold data-source settings and their secrets for notebooks.
   Keyfleet's gateway never opens their routes and nothing in Keyfleet makes

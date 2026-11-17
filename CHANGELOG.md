@@ -10872,3 +10872,50 @@ removes or renames a field, route or code, or makes an input required.
   cursor. The focused files (191 tests in 19), Credo, the format, compile and xref
   checks, both command list checkers and the agent tools walk file in Chromium (7)
   passed. Contract 35.1.0 and guide 3.34.0 stay. No migration.
+
+## 2026-11-16: two identical notebook run starts sent at once start one run
+
+- A notebook run start (`notebooks_run`, `POST .../notebooks/NOTEBOOK_ID/runs/start`) sent
+  again with the same `idempotency_key` before the first had answered could start a
+  second run: the hub's run trigger looked the key up, started the run and recorded it
+  as three separate steps, so two requests at once both missed the key. The hub's MCP
+  `run_job` already did all three under the job's claim; the REST trigger now does the
+  same. The second request waits for the claim and answers the first's run, the same 201
+  body. A start with no key, the stored record, its scope, the payload check and the
+  older-scope check are unchanged.
+- The hub change is one new patch, `notebook-hub/marimohub/run-start-once.patch` (3
+  files, 53 lines in and 21 out), applied last in `notebook-hub/hub/Dockerfile`, with
+  its README entries. `triggerJobRun` keeps its shape for MCP and hands its enqueue to
+  the new `withJobRunEnqueue`, which the REST route wraps around `idempotentCreate`.
+  `notebook-hub/scripts/workspace.sh` reads the patch list from the Dockerfile and needs
+  no change. The new hub test, "starts one run for concurrent triggers with the same
+  Idempotency-Key" in `routes/jobs.test.ts`, failed 5 of 5 on the unfixed code (two
+  different `run_id`s) and passed 10 of 10 with the patch; the image build runs it.
+- While the claim is held, a request tries 200 times 25 ms apart, each with a store
+  read, so at least five seconds (5.2 s on the in-memory store), then answers 503
+  `SERVICE_UNAVAILABLE` "Job is busy; retry the operation", which the site answers as
+  503 `notebooks_unavailable`. Unchanged. A replay of a recorded key now waits for the
+  claim too, and for a job being deleted answers 404, as MCP's does.
+- Not closed: before the agent's "Agent runs" job on a notebook exists, two first
+  starts sent at once each make a job (`create_job/3`; the hub's job creation holds no
+  claim and makes a new job each time) and start a run in it. No claim fits: the job
+  claim needs the job's id, and the notebook's claim is for source changes and editor
+  admission. Closing it needs a job creation claim per notebook in the hub, or one job
+  per name. The words say so.
+- Words: the run-start descriptions in both contract copies, the tool manifest,
+  `cli/commands.json`, `cli/COMMANDS.md`, `/docs` and the `Runs.start/5` doc said the key
+  answers again only once the first has answered; they now say that for a day it
+  answers that run even before the first has answered, with the first-run exception.
+  The feature map, the verification list and the public changelog gain the change.
+  Descriptions only: contract 35.1.0 and guide 3.34.0 stay.
+- Release order: the hub image first, then the site. The hub image tag becomes
+  `626ec14-a4d3105`; the five fleet configs and the hub README still name
+  `626ec14-5a00d7a`, left for the image build and release.
+
+Check (partition `_kf_s8`, PORT unset): in a workspace rebuilt from the pin with all 17
+patches, `vp check` on the 4 changed files, the api and core type checks, the api jobs,
+MCP jobs and idempotency tests (134), the core jobs and idempotency tests (244) and the
+whole API package (2,450 passed, 1 skipped) passed. Format, the contract copies check,
+Credo (769 files), the focused tests (95: 1 property, 94 tests, 1 excluded) and both
+command list checkers passed. No image build, no deployed hub, no local end-to-end run.
+No migration.

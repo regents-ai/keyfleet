@@ -931,6 +931,7 @@ features:
       - The notebooks list (POST .../projects/{project}/notebooks/list) pages 50 at a time, newest first, with cursor and has_more; proven here against a stand-in hub that pages its notebooks by cursor as the hub does, not yet against a real notebook host.
       - Each listed notebook's state is its newest kept run page, whoever ran it, read from Keyfleet's copies alone; changed_since compares the hub's updated_at, which marimohub 626ec14 moves on a change to the notebook's code, packages or details but not its other files. Proven here against a stand-in hub; a copy kept before failures were recorded answers error null until its run is read again.
       - A notebook's page (GET .../notebooks/{notebook_id}/page) answers its newest kept run page's cells, read from the marimo session inside the page; proven against pages marimo 0.25.2 exported, kept as fixtures, and a stand-in hub, not yet against pages from the real notebook host's marimo.
+      - Two run starts sent at once with one idempotency_key start one run, as run-start-once.patch makes the hub do; proven by the hub's own routes/jobs.test.ts, not against a deployed hub. Before the agent's first run of a notebook has answered, two sent at once can each make a job and start a run in it: the hub's job creation holds no claim.
       - Not yet run by a real agent.
 
   - id: shared-projects-and-notebook-locks
