@@ -37,7 +37,7 @@ Changes to Keyfleet, newest first.
   any object is now refused with 400 `invalid_request`, where Keyfleet and a fleet's
   notebook host could each read a different copy. A job body that isn't a JSON object
   now gets the same answer, where it was refused as naming a schedule.
-- **Signing.** An agent address spelled with percent-escapes, such as
+- **Signing.** An agent address with a percent-escape in its first three parts, such as
   `/api/%61gents/v1/pair` or `/%61pi/v1/profile`, now answers 404 `operation_unknown`,
   signed or not, where some answered a server error and `/api/v1/%70rofile` reached the
   profile.

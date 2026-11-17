@@ -388,8 +388,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # The router reads an address with its percent-escapes undone, but a
   # forward (`/api/v1/profile`, the shared pairing addresses at
-  # `/api/agents/v1`) and every check here read it as it came. So an agent
-  # address spelled with escapes is no operation's, signed or not.
+  # `/api/agents/v1`) and every check here read it as it came. So an address
+  # whose first three parts name an agent prefix only once their escapes are
+  # undone is no operation's, signed or not. An escape further on is an
+  # ordinary part of the path, for whatever answers it.
   defp escaped_agent_address?(conn) do
     first = Enum.take(conn.path_info, 3)
     decoded = Enum.map(first, &URI.decode/1)
