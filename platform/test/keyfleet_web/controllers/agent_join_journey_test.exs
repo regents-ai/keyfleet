@@ -338,6 +338,30 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     end
   end
 
+  # Costly failure: a content-digest the site can't read crashes the site, or
+  # is taken for its body's.
+  test "a content-digest that isn't one sha-256 digest gets the sign-in server's refusal", c do
+    SignedAgentHelpers.start_real_broker!(self(), c.secret)
+    authority = Siwa.Contract.authority(c.app)
+
+    sent =
+      for {method, path, body} <- [{"GET", "/api/v1/agent/shards", ""}, {"POST", @path, @body}] do
+        request =
+          SignedAgentHelpers.sign_digest(
+            c.signer,
+            c.secret,
+            authority,
+            method,
+            path,
+            "not-a-digest"
+          )
+
+        outcome(send_signed(c, %{request | body: body}))
+      end
+
+    assert sent == List.duplicate({401, "http_body_binding_invalid"}, 2)
+  end
+
   test "malformed broker principals cannot become product actors", c do
     wallet = c.signer.address
 

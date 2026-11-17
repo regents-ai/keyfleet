@@ -537,6 +537,11 @@ defmodule KeyfleetWeb.Refusal do
     "code_body_not_signed" =>
       {"This request doesn't match what its signature covers, so none of it was used.",
        "Send it again."},
+    # The shared sign-in plug's own refusal, which only the code host meets: it
+    # reads the content-digest itself rather than the body.
+    "invalid_content_digest" =>
+      {"This request's content-digest isn't one sha-256 digest, so none of it was used.",
+       "Sign it again with content-digest set once to sha-256=:BASE64: of its exact body, or with none when it has no body. See \"Code\" at https://keyfleet.ai/docs."},
     "commit_unknown" =>
       {"This project's code has no commit by that hash.",
        "Name a commit by its full hash (40 or 64 lowercase hex characters). code_commits lists the project's history."},

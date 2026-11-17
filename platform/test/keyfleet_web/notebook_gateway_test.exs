@@ -892,6 +892,37 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: a content-digest the site can't read, or a signature
+  # header sent twice, crashes the notebook host or reaches the hub.
+  test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    body = ~s({"name":"orbit.py"})
+    digest = Siwa.Contract.body_component()
+
+    unreadable =
+      SignedAgentHelpers.sign_digest(signer, secret, @host, "POST", notebooks, "not-a-digest")
+
+    signed = SignedAgentHelpers.sign(signer, secret, @host, "POST", notebooks, body)
+
+    answers =
+      for headers <- [
+            Map.to_list(unreadable.headers),
+            [{digest, signed.headers[digest]} | Map.to_list(signed.headers)]
+          ] do
+        answer =
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 137}, req_headers: headers}
+          |> dispatch(@endpoint, :post, notebooks, body)
+
+        {answer.status, error_code(answer)}
+      end
+
+    assert answers == [{401, "http_body_binding_invalid"}, {401, "duplicate_proof"}]
+    refute_received {:hub, _method, _path, _subject, _body}
+  end
+
   # Costly failure: an agent handed its run's result_url can't read the page
   # it cites (Pira, 14 November 2026): a read of it, signed with or without
   # the empty body's digest, answers Keyfleet's own copy.

@@ -392,6 +392,46 @@ defmodule KeyfleetWeb.McpConnectorTest do
       SignedAgentHelpers.assert_reported_bytes!(cases)
     end
 
+    # Costly failure: a content-digest the site can't read, or a signature
+    # header sent twice, crashes the connector or runs the call.
+    test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused",
+         c do
+      SignedAgentHelpers.start_real_broker!(self(), c.secret)
+      authority = Siwa.Contract.authority(c.app)
+      body = Jason.encode!(rpc("tools/list"))
+      digest = Siwa.Contract.body_component()
+
+      unreadable =
+        SignedAgentHelpers.sign_digest(
+          c.signer,
+          c.secret,
+          authority,
+          "POST",
+          "/mcp",
+          "not-a-digest"
+        )
+
+      signed = SignedAgentHelpers.sign(c.signer, c.secret, authority, "POST", "/mcp", body)
+
+      answers =
+        for headers <- [
+              Map.to_list(unreadable.headers),
+              [{digest, signed.headers[digest]} | Map.to_list(signed.headers)]
+            ] do
+          answer =
+            Req.post!(c.app <> "/mcp",
+              headers:
+                Enum.reject(headers, fn {name, _value} -> name in ~w(cookie authorization) end),
+              body: body,
+              retry: false
+            )
+
+          {answer.status, outcome(answer.body)}
+        end
+
+      assert answers == [{401, "http_body_binding_invalid"}, {401, "duplicate_proof"}]
+    end
+
     test "an answer whose pairing ends while the tool runs is replaced", c do
       subject = account!()
       agent = pair!(subject, c.signer.address)

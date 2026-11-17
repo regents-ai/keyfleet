@@ -10962,9 +10962,11 @@ No migration.
   36.0.0 line), the notebooks part of the guide (`request GET URL` without `--body ''`),
   `cli/COMMANDS.md`, both contract copies (36.0.0: `missing_signed_body` and
   `http_body_binding_missing` leave the agent error codes, the security scheme names
-  `content-digest` only for a body), the feature map, the kept tests list (the notebook
-  read test is renamed for what it now proves) and the public changelog. Guide 3.34.0
-  stays, as for earlier edits of the notebooks part alone.
+  `content-digest` only for a body), the feature map and the public changelog. The
+  notebook read test is renamed for what it now proves and stays in the suite, but leaves
+  `platform/test/KEPT_TESTS.md`: its line there is no longer true, and a new one joins
+  only when Sean agrees. Guide 3.34.0 stays, as for earlier edits of the notebooks part
+  alone.
 - Tests: each door has a table test of the six cases above, signed for real and checked
   by a stand-in sign-in server that refuses as the real one does
   (`SignedAgentHelpers.start_real_broker!/2`, moved from the notebook tests), which also
@@ -10985,3 +10987,39 @@ unpaired, notebook files, launch gate and tool commands: 245, 3 properties and 2
 tests), every other test file that signs requests (323, 2 properties and 321 tests) and
 the public pages and route coverage tests (38) passed. No browser walks, no full check.
 No migration.
+
+## 2026-11-17: the code host refuses a content-digest it can't read, in words
+
+- At the code host, a signed request whose `content-digest` isn't one `sha-256` digest
+  (another form, `sha-512`, two digests in one header, the digest without its padding,
+  `SHA-256` in capitals) crashed the site: the shared sign-in plug refuses it as
+  `invalid_content_digest`, which had no words in `KeyfleetWeb.Refusal`, so a `KeyError`
+  answered 500 with the site's HTML error page (each of the five, by test, before the
+  fix). It now answers 401 in plain text, a sentence and how to sign it, as the plug's
+  other refusals do there. The sign-in server is not asked, nothing reaches the store and
+  no file is left.
+- The library's refusals on a `body: :declared` route: `duplicate_proof`,
+  `unsupported_query` (never at the code host, which signs its query), `declared_body_read`
+  and `invalid_content_digest`, then the sign-in server's own, passed on with their
+  status. `declared_body_read` comes only from a body read before the plug, and the code
+  host's gateway runs before anything reads a body (`KeyfleetWeb.Endpoint`): a JSON body
+  sent over a real socket reached the store unread. It keeps no words, so a site that one
+  day read the body first fails with a server error and reaches nothing.
+- The main door, the notebook host and the connector report the digest of the bytes they
+  read, so a `content-digest` they can't read goes to the sign-in server, which refuses it
+  (401 `http_body_binding_invalid`). Their plug refusals are `duplicate_proof`,
+  `unsupported_query` and `missing_signed_body`, the last unreachable since each reads the
+  whole body first. A test at each door shows the refusal, and a header sent twice
+  answering `duplicate_proof` at the notebook host and the connector (the main door's test
+  of it already stood).
+- `/docs` "Code": every refusal there is plain text, a sign-in refusal included (the page
+  said JSON, which it never was), and 401 answers a `content-digest` that isn't one
+  `sha-256` digest. One line in the public changelog. The contract describes no code host
+  answer, so its version stays.
+- The notebook read test leaves `platform/test/KEPT_TESTS.md` (see the entry above). The
+  51 in its opening paragraph counts the 13 October list, which never held that row, so
+  it stands.
+
+Check (partition `_kf_s8`, PORT unset): format, Credo (769 files, no issues) and xref
+(138 compile-connected, at the limit) passed. The focused tests above, with the public
+pages and route coverage tests: 272 passed (3 properties, 269 tests).

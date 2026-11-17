@@ -292,6 +292,54 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     end
   end
 
+  # Costly failure: a content-digest the site can't read crashes the code
+  # host, or lets a body through.
+  test "a content-digest that isn't one sha-256 digest, or comes twice, is refused in plain words and reaches nothing" do
+    agent = key_holding_agent!(6)
+    path = "/#{@fleet}.git/git-receive-pack"
+    pack = :crypto.strong_rand_bytes(1_000)
+    digest = Siwa.content_digest_for_body(pack)
+    sha512 = "sha-512=:" <> Base.encode64(:crypto.hash(:sha512, pack)) <> ":"
+
+    unreadable =
+      for value <- [
+            "not-a-digest",
+            sha512,
+            digest <> ", " <> sha512,
+            String.replace_suffix(digest, "=:", ":"),
+            String.replace_prefix(digest, "sha-256", "SHA-256")
+          ] do
+        request =
+          SignedAgentHelpers.sign_digest(agent.signer, agent.secret, @host, "POST", path, value)
+
+        Map.to_list(request.headers)
+      end
+
+    signed = SignedAgentHelpers.sign(agent.signer, agent.secret, @host, "POST", path, pack)
+    twice = [{"content-digest", digest} | Map.to_list(signed.headers)]
+
+    answers =
+      for headers <- unreadable ++ [twice] do
+        answer =
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 142}, req_headers: headers}
+          |> dispatch(@endpoint, :post, path, pack)
+
+        {answer.status, get_resp_header(answer, "content-type"), answer.resp_body}
+      end
+
+    words = fn code ->
+      %{error: %{message: message, hint: hint}} = KeyfleetWeb.Refusal.body(code)
+      {401, ["text/plain; charset=utf-8"], message <> "\n" <> hint <> "\n"}
+    end
+
+    assert answers ==
+             List.duplicate(words.("invalid_content_digest"), 5) ++ [words.("duplicate_proof")]
+
+    refute_received {:broker_payload, _payload}
+    refute_received {:store, _method, _path, _claims, _body}
+    assert spooled() == []
+  end
+
   # Costly failure: bytes changed after an agent signed them reach the store
   # under its name.
   property "a body differing from the signed one by any byte reaches nothing, and its file is gone" do

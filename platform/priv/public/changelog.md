@@ -10,6 +10,9 @@ Changes to Keyfleet, newest first.
   refused, so `request GET URL` opens a run's page as it is. A body other than the one a
   request signed is still refused, and two answers are gone: `missing_signed_body` and
   `http_body_binding_missing`.
+- **Code.** A request to a fleet's code whose `content-digest` isn't one `sha-256` digest
+  is now refused with 401 and a sentence saying how to sign it, where it got a server
+  error. None of it is used.
 
 ## 16 November 2026
 

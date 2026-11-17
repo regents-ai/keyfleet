@@ -100,10 +100,24 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   empty body's `content-digest`, as a client that signs every request over
   its body signs a read. The library's own signer leaves that header out.
   """
-  def sign_empty_digest(signer, secret, authority, method, path) do
+  def sign_empty_digest(signer, secret, authority, method, path),
+    do:
+      sign_digest(
+        signer,
+        secret,
+        authority,
+        method,
+        path,
+        Siwa.RequestAuth.content_digest_for_body("")
+      )
+
+  @doc """
+  `method path` signed as `sign/8` signs it with no body, but with `digest` as
+  its signed `content-digest`, whatever that says.
+  """
+  def sign_digest(signer, secret, authority, method, path, digest) do
     signed = sign(signer, secret, authority, method, path, "{}")
-    empty = Siwa.RequestAuth.content_digest_for_body("")
-    headers = Map.put(signed.headers, Siwa.Contract.body_component(), empty)
+    headers = Map.put(signed.headers, Siwa.Contract.body_component(), digest)
     {:ok, message} = Siwa.RequestAuth.signing_message(%{signed | headers: headers})
     {:ok, "0x" <> hex} = Siwa.LocalSigner.sign_message(signer, message)
 
