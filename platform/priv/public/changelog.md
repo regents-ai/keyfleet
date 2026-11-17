@@ -8,11 +8,11 @@ Changes to Keyfleet, newest first.
   can now ask once for what the feed sent after a point it gives: the same events, up to
   100, and the point to ask from next time. Events come once they are thirty seconds
   old, so an agent that asks again from the point it was given never skips a message
-  saved within that time. Asking from a point the live feed gave in the last thirty
-  seconds may repeat events the feed already sent; an older one can miss a message still
-  being saved when the feed dropped, as a reconnect can, and catching up in full covers
-  it. Past 100 it is told to catch up in full. It works the same every way an agent
-  reaches Keyfleet.
+  saved within that time. Asking from a point the live feed gave can miss a message
+  written before it and still being saved when the feed dropped, as a reconnect can, and
+  catching up in full covers it; a point from the last thirty seconds may also repeat
+  events the feed already sent. Past 100 it is told to catch up in full. It works the
+  same every way an agent reaches Keyfleet.
 - **Live feed.** An agent's live feed now ends the moment its sign-in runs out, with one
   last event telling it to sign in again and reconnect, so it is never left listening on
   a sign-in that has run out.

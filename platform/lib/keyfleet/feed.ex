@@ -91,8 +91,9 @@ defmodule Keyfleet.Feed do
   # this long of its id. One whose transaction still takes longer can be
   # passed, and a sync covers it. A cursor later than the settled moment, an
   # id the open feed sent lately, answers nothing, and the next read may
-  # repeat what the feed sent; an older id from the feed shares a
-  # reconnect's gap.
+  # repeat what the feed sent. Any id from the feed shares a reconnect's gap:
+  # a message stamped before it and still being saved when the feed dropped
+  # is passed.
   @settling_seconds 30
   # A line named by its room and place is read wherever it is.
   @any_time ~U[1970-01-01 00:00:00.000000Z]

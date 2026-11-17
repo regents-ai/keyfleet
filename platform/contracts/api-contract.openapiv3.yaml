@@ -326,11 +326,12 @@ paths:
         moment's, whatever cursor was sent: send it next time, and reading on from it passes no
         post that commits within thirty seconds of its id. A cursor later than the settled moment,
         such as an id the feed sent in the last thirty seconds, answers no events, so the next
-        read can repeat events the feed already sent; an event's id tells a repeat apart. An older
-        id the feed sent shares a reconnect's gap: a message still being saved when the feed
-        dropped can be passed, and a sync covers it. Past 100, or for a cursor that is no event's
-        id, one later than now included, resync is true and no events come: catch up with a sync,
-        then read on from the cursor answered. With no cursor the read starts from the settled
+        read can repeat events the feed already sent; an event's id tells a repeat apart. Any id
+        the feed sent shares a reconnect's gap: a message stamped before it and still being saved
+        when the feed dropped can be passed, and a sync covers it. When more than 100 events fall
+        after the cursor, or for a cursor that is no event's id, one later than now included,
+        resync is true and no events come: catch up with a sync, then read on from the cursor
+        answered. With no cursor the read starts from the settled
         moment. Nothing is written. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
@@ -7444,7 +7445,7 @@ components:
           type: string
           pattern: '^\d+$'
           description: The cursor to send next time, always the settled moment's, whatever cursor was sent.
-        resync: {type: boolean, description: "true when more than 100 were missed or the cursor is no event's id: catch up with a sync, then read on from cursor."}
+        resync: {type: boolean, description: "true when more than 100 events fall after the cursor or the cursor is no event's id: catch up with a sync, then read on from cursor."}
     MissedEventsUnavailableError:
       type: object
       additionalProperties: false

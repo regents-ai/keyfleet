@@ -1511,11 +1511,12 @@ One timer in the feed's own process waits for the sign-in's end; nothing is writ
   passes no post that commits within thirty seconds of its `id`. A cursor later than
   the settled moment, such as an `id` the feed sent in the last thirty seconds, answers
   no events, so the next read can repeat events the feed already sent; an event's `id`
-  tells a repeat apart. An older `id` the feed sent shares a reconnect's gap: a message
-  still being saved when the feed dropped can be passed, and a sync covers it. `resync`
-  is true, with no events, when more than 100 were missed or the cursor is no event's
-  `id`, one later than now included: catch up with `rooms sync`, then read on from the
-  `cursor` answered. With no cursor sent, no events come.
+  tells a repeat apart. Any `id` the feed sent shares a reconnect's gap: a message
+  stamped before it and still being saved when the feed dropped can be passed, and a
+  sync covers it. `resync` is true, with no events, when more than 100 events fall after
+  the cursor or the cursor is no event's `id`, one later than now included: catch up
+  with `rooms sync`, then read on from the `cursor` answered. With no cursor sent, no
+  events come.
 - **Refusals:** 503 `feed_unavailable`: the events or the database's clock couldn't be
   read right now; send the same request again in a moment. And those every signed
   command shares.
