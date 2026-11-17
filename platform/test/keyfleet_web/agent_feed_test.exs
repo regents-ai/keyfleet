@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.AgentFeedTest do
   # as a Key: and never another Key's, a muted Key's, its own, or a room its
   # reader may not read. The feed ends when its sign-in runs out. What it sent
   # after a cursor is also one signed read, which answers what a reconnect
-  # replays once it is five seconds old.
+  # replays once it is thirty seconds old.
   use ExUnit.Case, async: false
   use ExUnitProperties
 
@@ -288,10 +288,10 @@ defmodule KeyfleetWeb.AgentFeedTest do
 
   ## What the feed missed, read once
 
-  # The read answers only events five seconds old by the database's clock;
+  # The read answers only events thirty seconds old by the database's clock;
   # the tests make their events older instead of waiting (`age!/0`).
 
-  test "the missed read answers what a reconnect replays, in order, once five seconds old", c do
+  test "the missed read answers what a reconnect replays, in order, once thirty seconds old", c do
     feed = open!(c, c.signer)
     post!(c.a, "general", "First")
     assert {[%{id: last}], _feed} = take(feed, 1)
@@ -324,11 +324,11 @@ defmodule KeyfleetWeb.AgentFeedTest do
   end
 
   test "with no cursor, or nothing new, the cursor answered is the settled moment", c do
-    before = database_now()
+    before = database_clock()
     assert %{"events" => [], "cursor" => from, "resync" => false} = missed!(c, c.signer, %{})
     assert_settled(from, before)
 
-    before = database_now()
+    before = database_clock()
 
     assert %{"events" => [], "cursor" => cursor, "resync" => false} =
              missed!(c, c.signer, %{"cursor" => earlier(from)})
@@ -336,7 +336,7 @@ defmodule KeyfleetWeb.AgentFeedTest do
     assert_settled(cursor, before)
   end
 
-  test "an event younger than five seconds waits for the next read", c do
+  test "an event younger than thirty seconds waits for the next read", c do
     %{"cursor" => from} = missed!(c, c.signer, %{})
     young = post!(c.a, "general", "Young")
 
@@ -361,7 +361,7 @@ defmodule KeyfleetWeb.AgentFeedTest do
   end
 
   test "a cursor later than now is no event's id, read once or sent on a reconnect", c do
-    for future <- [Feed.id(DateTime.add(database_now(), 3600)), "253402300799999999"] do
+    for future <- [Feed.id(DateTime.add(database_clock(), 3600)), "253402300799999999"] do
       assert %{"events" => [], "cursor" => cursor, "resync" => true} =
                missed!(c, c.signer, %{"cursor" => future})
 
@@ -493,16 +493,11 @@ defmodule KeyfleetWeb.AgentFeedTest do
   end
 
   # `cursor` is the database's now, read between `before` and this check,
-  # less five seconds.
+  # less the settling time.
   defp assert_settled(cursor, before) do
-    settled = fn at -> at |> DateTime.add(-5) |> Feed.id() |> micros() end
+    settled = fn at -> at |> DateTime.add(-Feed.settling_seconds()) |> Feed.id() |> micros() end
     assert micros(cursor) >= settled.(before)
-    assert micros(cursor) <= settled.(database_now())
-  end
-
-  defp database_now do
-    %{rows: [[now]]} = Repo.query!("SELECT clock_timestamp()")
-    now
+    assert micros(cursor) <= settled.(database_clock())
   end
 
   defp ids(read), do: Enum.map(read["events"], & &1["id"])

@@ -214,10 +214,10 @@ test("an agent that keeps no feed open reads what was posted for it after a curs
   const start = await callSigned(page, agent, "events_missed", {})
   expect(start).toMatchObject({ok: true, status: 200, data: {events: [], resync: false}})
 
-  // The read answers a post once it is five seconds old, so the post is
-  // written that much earlier instead of the walk waiting. It starts five
+  // The read answers a post once it is thirty seconds old, so the post is
+  // written that much earlier instead of the walk waiting. It starts thirty
   // seconds back too, so what was said just before it may come as well.
-  const speaker = sayInPublicEarlier(fleet, wallet(), said("The dock opens at dawn."), 5)
+  const speaker = sayInPublicEarlier(fleet, wallet(), said("The dock opens at dawn."))
 
   type Missed = {kind: string; room: string; as_key: number}
   const heard = (answer: Answer) => answer.data.events.map((event: Missed) => [event.kind, event.room, event.as_key])

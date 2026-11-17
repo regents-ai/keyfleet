@@ -27,7 +27,7 @@ defmodule KeyfleetWeb.FeedController do
   database connection while it waits: each read takes one and gives it back.
 
   `POST /api/v1/feed/missed` (`missed/2`) reads once what a reconnect would
-  replay, up to five seconds ago, for an agent that keeps no feed open: the
+  replay, up to thirty seconds ago, for an agent that keeps no feed open: the
   answer of the `events_missed` tool (`KeyfleetWeb.AgentTools.Fleets.Answer`).
   """
 

@@ -154,11 +154,13 @@ defmodule Keyfleet.Agents.Upkeep do
 
   defp next_step(%{marked: false}, _keys), do: "For presence only: mark your Keys present."
 
+  # Not repeating is exactly one of these two (`CheckInStatus.repeating?/2`);
+  # a new interval clears the confirmation (`Changes.ScheduledCheckIn`).
   defp next_step(%{repeated: false}, _keys),
     do:
-      "Keyfleet reads your schedule as working when two scheduled check-ins in a row " <>
-        "have reached it on time for this fleet and the next isn't overdue. That isn't so " <>
-        "now: read this again after your next check-in."
+      "Keyfleet hasn't confirmed your schedule for this fleet, or your last scheduled " <>
+        "check-in is more than twice run.every_minutes plus 45 minutes old. Keep checking " <>
+        "in with the same run.every_minutes, and read this again after your next check-in."
 
   defp next_step(_states, _keys), do: nil
 

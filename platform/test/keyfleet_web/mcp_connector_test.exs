@@ -475,7 +475,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
   # What the live feed sent after a cursor is one read at every door: the
   # agent's own signed request, /mcp signed by the agent and the connector
   # answer the same events, oldest first, each with the cursor of its own
-  # settled moment, five seconds before it read. The posts are made older
+  # settled moment, thirty seconds before it read. The posts are made older
   # instead of the test waiting (`Keyfleet.FeedHelpers`). Input the tool
   # can't take, a cursor that is no string or a name it hasn't, is refused at
   # /mcp before it runs, with the signed request's code, as every tool's is
@@ -489,7 +489,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
     token = connect!(subject, @agent_scopes, c.signer.address)
     manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
 
-    from = Keyfleet.Feed.id(DateTime.utc_now())
+    from = Keyfleet.Feed.id(FeedHelpers.database_clock())
 
     holder =
       Keyfleet.PairingHelpers.agent_for!(%Actors.Human{
