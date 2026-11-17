@@ -11184,3 +11184,9 @@ a scratch walk that is not kept.
   `platform/priv/tool_manifest.json` name regents-cli 1.10.32 (tag commit `a972d344`), the
   newest release, published while the release before it was being checked. Its tag commit
   was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
+
+## 2026-11-17 — The contracts' notes say which fleets are deployed
+
+- `contracts/README.md` said Classic #1 was not deployed and that Key sales were off. Classic #1
+  is deployed on Base and selling, beside the Regents Club; Syndicate #1, Accelerant #1 and
+  Cascade #1 are not deployed, and it is their sales that wait for the founder's word.
