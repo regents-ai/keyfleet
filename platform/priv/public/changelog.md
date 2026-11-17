@@ -17,6 +17,12 @@ Changes to Keyfleet, newest first.
   is now read whole on this site, at the shared pairing addresses, over the connector and
   on a fleet's notebooks, where it was refused as too large. One byte more is still
   refused.
+- **Signing.** A request is signed only when it carries `x-siwa-signature` or
+  `x-siwa-signature-input`. One that carries other SIWA headers, such as `content-digest`
+  alone, now gets the answer an unsigned request gets: `authentication_required` at
+  `/api/v1/profile`, `connection_required` over the connector, `notebooks_sign_in` on a
+  fleet's notebooks and git's password prompt on its code. It was refused for missing
+  headers, and on notebooks and code it also spent its address's request budget.
 
 ## 16 November 2026
 

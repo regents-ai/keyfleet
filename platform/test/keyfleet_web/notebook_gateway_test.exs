@@ -1090,6 +1090,41 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, _path, _subject, _body}
   end
 
+  # Costly failure: a request that carries a content-digest but no signature is
+  # taken for an agent's, spends its address's budget, asks the sign-in server,
+  # and turns a person opening a shared link away instead of sending them to
+  # sign in.
+  test "a request with SIWA headers but no signature is answered as an unsigned one, and spends nothing" do
+    SignedAgentHelpers.start_real_broker!(self(), :crypto.strong_rand_bytes(32))
+    budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
+    Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+    body = ~s({"name":"orbit.py"})
+
+    send_unsigned = fn method, path, headers ->
+      %{
+        build_conn()
+        | host: @host,
+          remote_ip: {198, 51, 100, 138},
+          req_headers: [{"content-type", "application/json"} | headers]
+      }
+      |> dispatch(@endpoint, method, path, body)
+    end
+
+    for unsigned <- [
+          [{"content-digest", Siwa.content_digest_for_body(body)}],
+          [{"x-key-id", @holder_wallet}, {"x-timestamp", "1"}]
+        ],
+        _again <- 1..2 do
+      refused = send_unsigned.(:post, "/api/v1/projects/proj-fleet/notebooks", unsigned)
+      assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
+      assert send_unsigned.(:get, "/", unsigned).status == 303
+    end
+
+    refute_received {:broker_payload, _payload}
+    refute_received {:hub, _method, _path, _subject, _body}
+  end
+
   # Costly failure: an agent whose person ended its pairing keeps working in
   # the fleet's notebooks through a connection it already had open.
   test "an agent's open notebook connection closes when its person ends the pairing" do

@@ -371,7 +371,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp agent_request?(conn) do
     case Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) do
       ["api", "v1", "profile"] ->
-        Siwa.AgentAuthPlug.signed_request?(conn)
+        KeyfleetWeb.BodyReader.signed?(conn)
 
       first ->
         first in [

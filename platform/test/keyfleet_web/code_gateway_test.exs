@@ -115,6 +115,37 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, _method, _path, _claims, _body}
   end
 
+  # Costly failure: a request that carries a content-digest but no signature is
+  # taken for an agent's: git is never asked for a password, the sign-in server
+  # is asked instead, and its address's budget is spent.
+  test "a request with SIWA headers but no signature is asked for a password, as git without one is, and spends nothing" do
+    SignedAgentHelpers.start_real_broker!(self(), :crypto.strong_rand_bytes(32))
+    budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
+    Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+
+    for unsigned <- [
+          [{"content-digest", Siwa.content_digest_for_body("0000")}],
+          [{"x-key-id", @holder_wallet}, {"x-timestamp", "1"}]
+        ],
+        _again <- 1..2 do
+      asked =
+        %{
+          build_conn()
+          | host: @host,
+            remote_ip: {198, 51, 100, 143},
+            req_headers: [{"content-type", "application/x-git-receive-pack-request"} | unsigned]
+        }
+        |> dispatch(@endpoint, :post, "/#{@fleet}.git/git-receive-pack", "0000")
+
+      assert asked.status == 401
+      assert get_resp_header(asked, "www-authenticate") == [~s(Basic realm="Keyfleet code")]
+    end
+
+    refute_received {:broker_payload, _payload}
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
   # Costly failure: a holder reaches a store address beyond git's own, where a
   # pass would let them make, list or read other repositories.
   test "only git's three requests reach the store", c do

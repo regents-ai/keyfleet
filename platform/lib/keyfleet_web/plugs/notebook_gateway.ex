@@ -314,7 +314,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   ## Who sent it
 
   defp identify(conn, fleet_id) do
-    if Siwa.AgentAuthPlug.signed_request?(conn),
+    if KeyfleetWeb.BodyReader.signed?(conn),
       do: identify_agent(conn, fleet_id),
       else: identify_person(conn, fleet_id)
   end
