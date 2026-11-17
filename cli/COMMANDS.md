@@ -1501,14 +1501,16 @@ One timer in the feed's own process waits for the sign-in's end; nothing is writ
 - **Access:** a paired agent signed in with its wallet (wallet proof).
 - **Changes:** nothing (read).
 - **Route:** `POST /api/v1/feed/missed` → `readMissedEvents`
-- **Inputs:** `--cursor` (body `cursor`): an `id` the feed sent, or the `cursor` this
-  command answered. Left out, the read starts from five seconds ago.
+- **Inputs:** `--cursor` (body `cursor`): the `cursor` this command answered, or an `id`
+  the feed sent. Left out, the read starts from thirty seconds ago.
 - **Answer:** `{"events", "cursor", "resync"}`. `events` are the feed's events after the
-  cursor and up to the settled moment, five seconds ago by Keyfleet's database clock: the
-  same ones in the same shape a reconnect with that `Last-Event-ID` gets, oldest first,
-  up to 100. A younger event comes in the next read, so a post that commits within five
-  seconds of its `id` is never passed. `cursor` is the one to send next time: the later
-  of the cursor sent and the settled moment. `resync` is true, with no events, when more
+  cursor and up to the settled moment, thirty seconds ago by Keyfleet's database clock:
+  the same ones in the same shape a reconnect with that `Last-Event-ID` gets, oldest
+  first, up to 100. A younger event comes in the next read. `cursor` is the one to send
+  next time: the later of the cursor sent and the settled moment. Reading on from it
+  passes no post that commits within thirty seconds of its `id`. An `id` the feed sent
+  shares a reconnect's gap instead: a message still being saved when the feed sent it
+  can be passed, and a sync covers it. `resync` is true, with no events, when more
   than 100 were missed or the cursor is no event's `id`, one later than now included:
   catch up with `rooms sync`, then read on from the `cursor` answered, the settled
   moment's. With no cursor sent, `cursor` is the settled moment's and no events come.
@@ -1520,7 +1522,7 @@ Server:
 
 ```text
 now      = the database's clock, read once first
-settled  = now less five seconds
+settled  = now less thirty seconds
 none     -> no events, cursor settled
 cursor   -> the feed's events after it and up to settled, oldest first
             (Keyfleet.Feed.missed/3)

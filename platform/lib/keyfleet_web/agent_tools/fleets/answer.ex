@@ -57,17 +57,19 @@ defmodule KeyfleetWeb.AgentTools.Fleets.Answer do
 
   The missed events are what the agent's live feed would replay to a
   reconnect sending `cursor` as `Last-Event-ID` (`Keyfleet.Feed.missed/3`),
-  up to the settled moment, five seconds before the database's now: the
+  up to the settled moment, thirty seconds before the database's now: the
   same events, oldest first, up to 100, with `cursor` the later of the
-  cursor sent and the settled moment, to send next time. A post committed
-  within those five seconds of its id is answered by a later read, never
-  passed. Where the feed would resync, past 100 or for a cursor that is no
-  event's id, `resync` is true, no events are answered and `cursor` is the
-  settled moment's: catch up with a sync, then read on from it. With no
-  cursor the read starts from the settled moment. A failure reading the
-  events or the database's clock answers 503 `feed_unavailable`, to be sent
-  again; a failure reading the agent's place in its fleets is a 500, as on
-  any route.
+  cursor sent and the settled moment, to send next time. Reading on from
+  that cursor passes no post committed within those thirty seconds of its
+  id: a later read answers it. A cursor taken from the feed shares a
+  reconnect's gap instead, since a message still being saved when the feed
+  sent its last event can be passed; a sync covers it. Where the feed would
+  resync, past 100 or for a cursor that is no event's id, `resync` is true,
+  no events are answered and `cursor` is the settled moment's: catch up
+  with a sync, then read on from it. With no cursor the read starts from the
+  settled moment. A failure reading the events or the database's clock
+  answers 503 `feed_unavailable`, to be sent again; a failure reading the
+  agent's place in its fleets is a 500, as on any route.
   """
 
   alias Keyfleet.{

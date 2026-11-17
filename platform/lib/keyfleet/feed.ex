@@ -84,9 +84,14 @@ defmodule Keyfleet.Feed do
   @missed_limit 100
   # An event's id is the time its post was written, not the time it was
   # committed, so one committed late can come in behind a later one. The
-  # missed events' read answers only events this old, by the database's
-  # clock, and a post committed within this long of its id is never passed.
-  @settling_seconds 5
+  # missed events' read answers only events this old by the database's clock:
+  # longer than the database lets one statement (15 s) or lock wait (5 s) run
+  # (`Keyfleet.DatabaseConfig`), so a reader that sends back the cursor the
+  # read handed it is never passed a post committed within this long of its
+  # id. One whose transaction still takes longer can be passed, and a sync
+  # covers it. A cursor taken from the open feed is an event's id, later than
+  # the settled moment, so it shares a reconnect's gap.
+  @settling_seconds 30
   # A line named by its room and place is read wherever it is.
   @any_time ~U[1970-01-01 00:00:00.000000Z]
 
@@ -166,9 +171,9 @@ defmodule Keyfleet.Feed do
   @doc """
   Every event after the one whose id is `id`, oldest first, up to a moment
   read once from the database's clock: now for a reconnect (`:now`), whose
-  open feed hears the rest, and the settled moment, five seconds before now,
-  for the missed events' read (`:settled`). With them comes the cursor to
-  read on from, the later of `id` and that moment.
+  open feed hears the rest, and the settled moment, thirty seconds before
+  now, for the missed events' read (`:settled`). With them comes the cursor
+  to read on from, the later of `id` and that moment.
 
   `{:resync, cursor}`, with that moment's id, when there are more than a
   reconnect gets, or for an id that is no event's: anything but 1 to 20
@@ -193,6 +198,10 @@ defmodule Keyfleet.Feed do
   @doc "The settled moment's id: where the missed events' read starts with no cursor."
   @spec settled() :: {:ok, String.t()} | {:error, term()}
   def settled, do: with({:ok, now} <- now(), do: {:ok, id(until(now, :settled))})
+
+  @doc "How old, in seconds by the database's clock, an event is before the missed events' read answers it."
+  @spec settling_seconds() :: pos_integer()
+  def settling_seconds, do: @settling_seconds
 
   # The clock every event's id is read from.
   defp now do

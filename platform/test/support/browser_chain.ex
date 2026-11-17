@@ -42,6 +42,8 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Chain.Scanner
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.Feed
+  alias Keyfleet.FeedHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
@@ -450,14 +452,15 @@ defmodule Keyfleet.BrowserChain do
 
   @doc """
   Sells the fleet's next key to `owner`, who said `body` in the Public room
-  `seconds` ago: the missed events' read answers a post only once it is five
-  seconds old (`Keyfleet.Feed`), so a walk writes its post older instead of
-  waiting. Returns the key's number.
+  the missed events' settling time ago by the database's clock: the read
+  answers a post only once it is that old (`Keyfleet.Feed.settling_seconds/0`),
+  so a walk writes its post older instead of waiting. A read started before
+  this, from its settled moment, answers it. Returns the key's number.
   """
-  def say_earlier!(fleet_id, owner, body, seconds) do
+  def say_earlier!(fleet_id, owner, body) do
     Rooms.bootstrap_rooms!([fleet_id])
     token_id = sell!(fleet_id, owner)
-    at = DateTime.add(DateTime.utc_now(), -seconds)
+    at = DateTime.add(FeedHelpers.database_clock(), -Feed.settling_seconds())
     happen!(fleet_id, %{key: token_id, owner: owner, at: at}, {:post, "general", body}, [])
     token_id
   end

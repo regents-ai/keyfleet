@@ -319,16 +319,17 @@ paths:
       summary: Read the events the live feed sent after a cursor.
       description: >-
         Answers once what the live feed (getFeed) would replay to a reconnect sending cursor as
-        Last-Event-ID, up to the settled moment, five seconds before now by Keyfleet's database
+        Last-Event-ID, up to the settled moment, thirty seconds before now by Keyfleet's database
         clock: the same FeedEvents, oldest first, up to 100, from every open fleet where the agent
         acts as a Key, each naming where the message is and the route that reads it, never its
-        words. A younger event comes in a later read, so a post that commits within five seconds
-        of its id is never passed. cursor is an id the feed sent, or the cursor this read
-        answered; the answer's cursor is the later of the cursor sent and the settled moment, to
-        send next time. Past 100, or for a cursor that is no event's id, one later than now
-        included, resync is true and no events come: catch up with a sync, then read on from the
-        cursor answered, the settled moment's. With no cursor the read starts from the settled
-        moment. Nothing is written. The body is at most 4096 bytes.
+        words. A younger event comes in a later read. The answer's cursor is the later of the
+        cursor sent and the settled moment: send it next time, and a post that commits within
+        thirty seconds of its id is never passed. An id the feed sent may be sent as cursor too,
+        but it shares a reconnect's gap: a message still being saved when the feed sent that id
+        can be passed, and a sync covers it. Past 100, or for a cursor that is no event's id, one
+        later than now included, resync is true and no events come: catch up with a sync, then
+        read on from the cursor answered, the settled moment's. With no cursor the read starts
+        from the settled moment. Nothing is written. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       requestBody:
@@ -7426,7 +7427,7 @@ components:
       properties:
         cursor:
           type: string
-          description: An id the feed sent, or the cursor this read answered; left out, the read starts from the settled moment, five seconds ago.
+          description: The cursor this read answered, or an id the feed sent, which shares a reconnect's gap; left out, the read starts from the settled moment, thirty seconds ago.
     MissedEvents:
       type: object
       additionalProperties: false
@@ -7435,7 +7436,7 @@ components:
         events:
           type: array
           maxItems: 100
-          description: The events after the cursor and up to the settled moment, five seconds ago, oldest first, as the feed sends them; none when resync is true.
+          description: The events after the cursor and up to the settled moment, thirty seconds ago, oldest first, as the feed sends them; none when resync is true.
           items: {$ref: "#/components/schemas/FeedEvent"}
         cursor:
           type: string

@@ -1571,7 +1571,7 @@ features:
       sign-in it opened with runs out, with a closed event saying unauthorized.
       The same replay is one read, POST /api/v1/feed/missed (events_missed at
       /mcp, in WebMCP and the connector, events missed in the command list):
-      the events after a cursor and up to five seconds ago by the database's
+      the events after a cursor and up to thirty seconds ago by the database's
       clock, up to 100, the cursor to send next, or resync.
     who: agent
     level: ordinary
@@ -1602,7 +1602,7 @@ features:
       - platform/test/keyfleet_web/mcp_connector_test.exs
       - platform/test/browser/agent_tools.spec.ts
     gaps:
-      - A reconnect replays by posting time, up to now; a post whose transaction commits after a later post's could in principle be passed over, as with the sync's mentions cursor. Not seen in tests, not proven against. The missed read no longer shares the reconnect's late-commit gap, except for a post whose transaction takes longer than five seconds to commit: it answers only events five seconds old by the database's clock, and its tests prove a message stamped before the last answered event, or in the same microsecond, is answered by a later read.
+      - A reconnect replays by posting time, up to now; a post whose transaction commits after a later post's could in principle be passed over, as with the sync's mentions cursor. Not seen in tests, not proven against. The missed read answers only events thirty seconds old by the database's clock, longer than the database lets one statement or lock wait run, so a reader that reads on from the cursor it hands back does not share that gap; its tests prove a message stamped before the last answered event, or in the same microsecond, is answered by a later read. Two gaps stay, and a sync covers both: a post whose transaction still takes longer than thirty seconds to commit can be passed, and a cursor that is an id the feed sent shares the reconnect's gap, since a message still being saved when the feed sent that id can be passed.
       - The feed and events missed commands are source only until regents-cli moves its Keyfleet pin, and its --wake starts no agent for a Keyfleet event until it takes fleet ids with underscores (K17 in docs/agent-parity.md). Hosted MCP, the connector and WebMCP do not carry the stream by design; events_missed is their read.
       - Not yet run by a real agent.
 
