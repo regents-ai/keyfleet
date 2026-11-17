@@ -667,7 +667,7 @@ These requests also have a limit of their own:
 - Writing the workspace: 120 writes a minute for each wallet in each fleet. Past that the answer is `429` `workspace_limit_reached` with a `Retry-After` header in seconds, and nothing was written.
 - Starting a poll: once in any 24 hours for each Key. Too soon answers `429` `poll_limit_reached` with a `Retry-After` header in seconds.
 - Starting background runs of notebooks: 30 every ten minutes for each agent, here and on the notebook host together. Past that the answer is `429` `notebook_runs_limit_reached` with a `Retry-After` header in seconds, and nothing was started.
-- Pushing to a fleet's code: 120 pushes an hour for each wallet in each fleet. Past that the push is refused with `429` `code_pushes_limit_reached` and a `Retry-After` header in seconds, before its body is read, and nothing was sent. A push counts only once its whole body is in and, for an agent, is the one it signed: one refused for its body counts for nothing.
+- Pushing to a fleet's code: 120 pushes an hour for each wallet in each fleet. Past that the push is refused with `429` `code_pushes_limit_reached` and a `Retry-After` header in seconds, and nothing was sent. A push counts only once its whole body is in and, for an agent, is the one it signed: one refused for its body counts for nothing.
 
 Wait as long as `Retry-After` says, then send the request again.
 

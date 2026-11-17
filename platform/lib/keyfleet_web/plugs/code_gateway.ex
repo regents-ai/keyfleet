@@ -39,10 +39,12 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of
   any sign-in, with only the headers git's exchange needs. The store's answer
   streams back. A push past `:code_pushes` for the wallet it is sent as
-  (`Keyfleet.Limits`) is refused before its body is read, and one is spent
-  only once the body is in and is the one signed; an agent's listing is saved
-  only for a request sent on to the store, so a request refused for its body
-  spends no push and saves no listing. When the store reports changes done,
+  (`Keyfleet.Limits`) is refused with 429: before its body is read when the
+  allowance is already spent, or once it is in when another push took the last
+  place meanwhile. One is spent only once the body is in and is the one
+  signed; an agent's listing is saved only for a request sent on to the
+  store, so a request refused for its body spends no push and saves no
+  listing. When the store reports changes done,
   each branch or tag moved, up to `@recorded` of them, is recorded for the
   fleet's workspace, under the project and the key and, for an agent, the
   agent too. A store that cannot be reached, stops mid-exchange, answers with
@@ -213,8 +215,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   # Each push spends the allowance of the wallet it is sent as in the fleet
   # (`Keyfleet.Keys.identity/2`), so a person and the agents pushing as their
   # Key share one; copying the code spends none. `limits` is `Limits.check/2`
-  # before the body is read, so a push past the allowance is refused unread,
-  # and `Limits.admit/2` once the body is in and is the one signed.
+  # before the body is read, so a push past an allowance already spent is
+  # refused unread, and `Limits.admit/2` once the body is in and is the one
+  # signed, which refuses one whose last place another push took meanwhile.
   defp pushes(
          %Plug.Conn{method: "POST", path_info: [_repository, "git-receive-pack"]},
          fleet_id,

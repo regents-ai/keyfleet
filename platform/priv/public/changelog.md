@@ -31,7 +31,7 @@ Changes to Keyfleet, newest first.
   and, for an agent, is the one it signed, and an agent's listing is saved only for a
   request sent on to the code: a push refused for its body, 400 `code_body_not_signed`,
   413 or a body that stops arriving, counts for nothing and saves nothing, where it used
-  up a push. A push past the allowance is still refused with 429 before its body is read.
+  up a push. A push past the allowance is still refused with 429.
 
 ## 16 November 2026
 
