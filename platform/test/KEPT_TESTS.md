@@ -106,6 +106,7 @@ each proves.
 
 | Test | Module | Protects |
 | --- | --- | --- |
+| a read signed with or without the empty body's digest reads a notebook's code, and names its request | `KeyfleetWeb.NotebookGatewayTest` | A notebook read signed with no `content-digest`, or the empty body's, reaches the hub as the agent, and each answer names its request (Sean, 40 a, 17 Nov 2026). |
 | an item an agent added names the agent beside its Key, on the board and on its page | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents added a workspace item. |
 | a workspace read names each agent behind what it answers, by the wallet its change carries | `KeyfleetWeb.AgentGraphJourneyTest` | An agent reading the workspace back learns which agent created an item and which made each change, by name and wallet, as the pages show it. |
 | a push an agent sent names the agent beside its Key, on the board and on the commit | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents pushed code. |
