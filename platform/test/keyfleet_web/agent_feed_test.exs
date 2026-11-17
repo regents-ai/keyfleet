@@ -302,9 +302,13 @@ defmodule KeyfleetWeb.AgentFeedTest do
     dm!(human("a"), 1, 2, "Fifth")
 
     # An id from the open feed is later than the settled moment: nothing yet,
-    # and the same cursor back.
-    assert missed!(c, c.signer, %{"cursor" => last}) ==
-             %{"events" => [], "cursor" => last, "resync" => false}
+    # and the settled moment's cursor back.
+    before = database_clock()
+
+    assert %{"events" => [], "cursor" => settled, "resync" => false} =
+             missed!(c, c.signer, %{"cursor" => last})
+
+    assert_settled(settled, before)
 
     age!()
     last = earlier(last)
@@ -352,6 +356,33 @@ defmodule KeyfleetWeb.AgentFeedTest do
     {room_post, late, read} = committed_after_read!(c, -1)
     assert ids(read) == [late.id, room_post.id]
     assert missed!(c, c.signer, %{"cursor" => read["cursor"]})["events"] == []
+  end
+
+  # An agent whose feed dropped reads at once from the feed's last id,
+  # younger than the settling time, and a direct message written a
+  # microsecond before that event is saved after the read. The read hands
+  # back the settled moment, not the id, so reading on answers the message,
+  # with the feed's own event again, told apart by its id.
+  test "a message stamped just before a young feed id and saved after a read from it is answered by a later read",
+       c do
+    feed = open!(c, c.signer)
+    room_post = post!(c.a, "general", "Sent by the feed")
+    assert {[%{id: last, data: %{"id" => sent}}], feed} = take(feed, 1)
+    assert sent == room_post.id
+    Req.cancel_async_response(feed.response)
+
+    before = database_clock()
+
+    assert %{"events" => [], "cursor" => cursor, "resync" => false} =
+             missed!(c, c.signer, %{"cursor" => last})
+
+    assert_settled(cursor, before)
+
+    late = dm!(human("a"), 1, 2, "Written before the feed's event, saved after the read")
+    backdate_dm!(late.id, DateTime.add(room_post.inserted_at, -1, :microsecond))
+    age!()
+
+    assert ids(missed!(c, c.signer, %{"cursor" => earlier(cursor)})) == [late.id, room_post.id]
   end
 
   test "two events in the same microsecond are both answered", c do

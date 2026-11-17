@@ -322,14 +322,16 @@ paths:
         Last-Event-ID, up to the settled moment, thirty seconds before now by Keyfleet's database
         clock: the same FeedEvents, oldest first, up to 100, from every open fleet where the agent
         acts as a Key, each naming where the message is and the route that reads it, never its
-        words. A younger event comes in a later read. The answer's cursor is the later of the
-        cursor sent and the settled moment: send it next time, and a post that commits within
-        thirty seconds of its id is never passed. An id the feed sent may be sent as cursor too,
-        but it shares a reconnect's gap: a message still being saved when the feed sent that id
-        can be passed, and a sync covers it. Past 100, or for a cursor that is no event's id, one
-        later than now included, resync is true and no events come: catch up with a sync, then
-        read on from the cursor answered, the settled moment's. With no cursor the read starts
-        from the settled moment. Nothing is written. The body is at most 4096 bytes.
+        words. A younger event comes in a later read. The answer's cursor is always the settled
+        moment's, whatever cursor was sent: send it next time, and reading on from it passes no
+        post that commits within thirty seconds of its id. A cursor later than the settled moment,
+        such as an id the feed sent in the last thirty seconds, answers no events, so the next
+        read can repeat events the feed already sent; an event's id tells a repeat apart. An older
+        id the feed sent shares a reconnect's gap: a message still being saved when the feed
+        dropped can be passed, and a sync covers it. Past 100, or for a cursor that is no event's
+        id, one later than now included, resync is true and no events come: catch up with a sync,
+        then read on from the cursor answered. With no cursor the read starts from the settled
+        moment. Nothing is written. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       requestBody:
@@ -7427,7 +7429,7 @@ components:
       properties:
         cursor:
           type: string
-          description: The cursor this read answered, or an id the feed sent, which shares a reconnect's gap; left out, the read starts from the settled moment, thirty seconds ago.
+          description: The cursor this read answered, or an id the feed sent; left out, the read starts from the settled moment, thirty seconds ago.
     MissedEvents:
       type: object
       additionalProperties: false
@@ -7441,7 +7443,7 @@ components:
         cursor:
           type: string
           pattern: '^\d+$'
-          description: The cursor to send next time; the later of the cursor sent and the settled moment, or the settled moment's with resync or no cursor sent.
+          description: The cursor to send next time, always the settled moment's, whatever cursor was sent.
         resync: {type: boolean, description: "true when more than 100 were missed or the cursor is no event's id: catch up with a sync, then read on from cursor."}
     MissedEventsUnavailableError:
       type: object
@@ -8487,7 +8489,7 @@ components:
             gas: {type: [boolean, "null"], description: "Whether its wallet can pay to mark its Keys present; null when the chain didn't answer"}
             schedule: {type: boolean, description: "Whether a scheduled check-in, which declares the schedule, has reached Keyfleet"}
             marked: {type: boolean, description: "Whether no Key it can mark needs a mark: each is present, or waits for its automatic start, which comes by itself"}
-            repeated: {type: boolean, description: "Whether Keyfleet has seen two scheduled check-ins confirm the schedule, and the last came on time"}
+            repeated: {type: boolean, description: "Whether the schedule is confirmed and the last scheduled check-in is no older than twice run.every_minutes plus 45 minutes"}
             next_step: {type: [string, "null"], description: "What to do next for presence or scheduled check-ins; null once all five are true"}
         gas: {$ref: "#/components/schemas/WalletGas"}
         versions:

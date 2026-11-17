@@ -10716,18 +10716,17 @@ removes or renames a field, route or code, or makes an input required.
 ## 2026-11-16: missed events on every agent door, and the feed ends with its sign-in
 
 - `POST /api/v1/feed/missed` with an optional `{"cursor"}` (`readMissedEvents`, the
-  `events_missed` tool at `/mcp`, in WebMCP and through the connector, and the
-  `events missed` command) reads once what the live feed sent after a cursor: the same
-  events a reconnect sending it as `Last-Event-ID` gets, in the same shape and order, up
-  to 100, up to the settled moment, thirty seconds before the database's clock reads now,
-  with `cursor`, the later of the cursor sent and the settled moment, to send next time,
-  and `resync`. Past 100, or for a cursor that is no event's id, `resync` is true, no
-  events come and `cursor` is the settled moment's; with no cursor the read starts from
-  the settled moment. It is one Ash action (`KeyfleetWeb.AgentTools.Fleets` `:missed`),
-  whose answer the signed request runs too, and it reads with the feed's own
-  `Keyfleet.Feed.missed/3`. A failure reading the events or the database's clock
-  answers 503 `feed_unavailable`; one reading the agent's place in its fleets is a 500,
-  as on any route. Nothing is written.
+  `events_missed` tool at `/mcp`, in WebMCP and through the connector, and the `events
+  missed` command) reads once what the live feed sent after a cursor: the same events a
+  reconnect sending it as `Last-Event-ID` gets, in the same shape and order, up to 100,
+  up to the settled moment, thirty seconds before the database's clock reads now, with
+  `cursor`, always the settled moment, to send next time, and `resync`. Past 100, or for
+  a cursor that is no event's id, `resync` is true, no events come and `cursor` is the
+  settled moment's; with no cursor the read starts from the settled moment. It is one
+  Ash action (`KeyfleetWeb.AgentTools.Fleets` `:missed`), whose answer the signed
+  request runs too, and it reads with the feed's own `Keyfleet.Feed.missed/3`. A failure
+  reading the events or the database's clock answers 503 `feed_unavailable`; one reading
+  the agent's place in its fleets is a 500, as on any route. Nothing is written.
 - The feed and the read share one rule for an id: 1 to 20 digits naming a moment no
   later than the database's now. A `Last-Event-ID` with a sign, such as `-5`, more than
   20 digits, or a time later than now resyncs as every other id that is not the feed's
@@ -10786,45 +10785,58 @@ removes or renames a field, route or code, or makes an input required.
   walk, notebook and connector tests (184 in 19 files with those above), the unit tests
   (477), both command list checkers and the agent tools walk file in Chromium (7, the
   new case included) passed. No migration.
-- Review (an attack file run against this branch, 16 Nov). Proven and closed for a
-  reader that reads on from the cursor the read hands back: following it could pass a
-  message for good. An event's id is the time its post was written, not committed, and
-  posts in different rooms, walls and conversations take no common lock, so a direct
-  message written just before an answered post, or in its microsecond, and committed
-  after the read fell behind the cursor handed back, the last event's id. The read now
-  reads the database's clock once as it starts, answers only events thirty seconds old
-  by it (`@settling_seconds` in `Keyfleet.Feed`) and hands back the later of the cursor
-  sent and that moment. Thirty seconds is longer than the database lets the site's one
-  statement (15 s) or lock wait (5 s) run (`Keyfleet.DatabaseConfig`); five was too
-  short, since a post's transaction writes once more after the row whose time is its id
-  (`Keyfleet.Agents.Changes.NoteContribution`). A post whose transaction still takes
-  longer than thirty seconds to commit can be passed, and a sync covers it. Not closed:
-  a cursor that is an id the feed sent is an event's id, later than the settled moment,
-  so a message still being saved when the feed sent it can be passed, as on a reconnect,
-  and a sync covers it; the read's descriptions now promise only the cursor it handed
-  back. A cursor later than now, such as the year 9999's, answered nothing and the same
-  cursor for ever, and a cursor of any length was read; both now resync at both doors.
-  The 503's words covered any failed read, while a failure reading the agent's place was
-  a 500; the words now name the events and the clock, as the doctor's 503 names the
-  profile. The contract said a resync has no id and so clears `Last-Event-ID`, which a
-  client keeping its last id never does; the resync now carries one. The doctor's
-  schedule steps name the fleet. The second said a schedule works once two scheduled
-  check-ins in a row are on time, which is untrue when the two name different
-  `run.every_minutes`, since a new interval starts confirming again; it now says
-  Keyfleet hasn't confirmed the schedule or the last scheduled check-in is overdue, and
-  to keep the same `run.every_minutes`. Left as it is: a null cursor is refused 422 by
-  the signed request and read as no cursor by the tool, as every tool's null input is.
-- Tests for the review: the feed tests (20 and a property), six new: a message stamped
+- Review (an attack file run against this branch in three passes, 16 Nov). The first
+  proved that following the read's cursor could pass a message for good. An event's id
+  is the time its post was written, not committed, and posts in different rooms, walls
+  and conversations take no common lock, so a direct message written just before an
+  answered post, or in its microsecond, and committed after the read fell behind the
+  cursor handed back, the last event's id. The read now reads the database's clock once
+  as it starts and answers only events thirty seconds old by it (`@settling_seconds` in
+  `Keyfleet.Feed`). The second proved five seconds too short: the database lets the
+  site's one statement run 15 s and one lock wait 5 s (`Keyfleet.DatabaseConfig`), and a
+  post's transaction writes once more after the row whose time is its id
+  (`Keyfleet.Agents.Changes.NoteContribution`), so the wait is thirty seconds, longer
+  than either; a post whose transaction still takes longer than that to commit can be
+  passed, and a sync covers it. The third proved that the read handed back the cursor
+  sent whenever it was later than the settled moment, as an id the feed sent in the last
+  thirty seconds is, so reading on from that cursor passed a message stamped just before
+  it and saved just after the read. Closed in code: the read always hands back the
+  settled moment, whatever cursor was sent, so such a cursor answers no events and the
+  next read can repeat events the feed sent, told apart by id. Reading on from the
+  cursor the read hands back now passes no post that commits within thirty seconds of
+  its id. Not closed: an id the feed sent more than thirty seconds ago, sent as the
+  cursor, can pass a message still being saved when the feed dropped, as on a reconnect,
+  and a sync covers it. Also found and fixed over the passes: a cursor later than now,
+  such as the year 9999's, answered nothing and the same cursor for ever, and a cursor
+  of any length was read; both now resync at both doors. The 503's words covered any
+  failed read, while a failure reading the agent's place was a 500; the words now name
+  the events and the clock, as the doctor's 503 names the profile. The contract said a
+  resync has no id and so clears `Last-Event-ID`, which a client keeping its last id
+  never does; the resync now carries one. The doctor's schedule steps name the fleet.
+  The second said a schedule works once two scheduled check-ins in a row are on time,
+  which is untrue when the two name different `run.every_minutes`, since a new interval
+  starts confirming again; it now says Keyfleet hasn't confirmed the schedule or the
+  last scheduled check-in is overdue, and to keep the same `run.every_minutes`.
+  `repeated` was described as two scheduled check-ins having confirmed the schedule with
+  the last on time, both true of a lapsed schedule that reads false; the contract and
+  `/docs` now give the rule: the schedule is confirmed and the last scheduled check-in
+  is no older than twice `run.every_minutes` plus 45 minutes. Left as it is: a null
+  cursor is refused 422 by the signed request and read as no cursor by the tool, as
+  every tool's null input is.
+- Tests for the review: the feed tests (21 and a property), seven new: a message stamped
   before an event, or in its microsecond, and committed after a read is answered by a
-  later read; a cursor later than now resyncs at the read and at a reconnect; with no
-  cursor or nothing new the cursor is the settled moment; an event younger than thirty
-  seconds waits for the next read; and a 21-digit cursor resyncs at both. A reconnect
-  from a resync's id replays only what came after it. The tests make their events older
-  instead of waiting: `Keyfleet.FeedHelpers` moves them back twice the settling time,
-  read from `Keyfleet.Feed.settling_seconds/0`, and the walk's case writes its post the
-  settling time back (`Keyfleet.BrowserChain.say_earlier!/3`). That post and the
-  connector test's starting cursor take their time from the database's clock, as every
-  event's id does. The connector test compares the events at every door, each with its
-  own settled cursor. The focused files (190 tests in 19), Credo, the format, compile
-  and xref checks, both command list checkers and the agent tools walk file in Chromium
-  (7) passed. Contract 35.1.0 and guide 3.34.0 stay. No migration.
+  later read; a message stamped just before a feed id younger than thirty seconds and
+  saved after a read from that id is answered by a later read; a cursor later than now
+  resyncs at the read and at a reconnect; with no cursor or nothing new the cursor is
+  the settled moment; an event younger than thirty seconds waits for the next read; and
+  a 21-digit cursor resyncs at both. A reconnect from a resync's id replays only what
+  came after it, and a feed id younger than thirty seconds answers no events and the
+  settled moment. The tests make their events older instead of waiting:
+  `Keyfleet.FeedHelpers` moves them back twice the settling time, read from
+  `Keyfleet.Feed.settling_seconds/0`, and the walk's case writes its post the settling
+  time back (`Keyfleet.BrowserChain.say_earlier!/3`). That post and the connector test's
+  starting cursor take their time from the database's clock, as every event's id does.
+  The connector test compares the events at every door, each with its own settled
+  cursor. The focused files (191 tests in 19), Credo, the format, compile and xref
+  checks, both command list checkers and the agent tools walk file in Chromium (7)
+  passed. Contract 35.1.0 and guide 3.34.0 stay. No migration.
