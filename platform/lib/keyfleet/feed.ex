@@ -86,11 +86,13 @@ defmodule Keyfleet.Feed do
   # committed, so one committed late can come in behind a later one. The
   # missed events' read answers only events this old by the database's clock:
   # longer than the database lets one statement (15 s) or lock wait (5 s) run
-  # (`Keyfleet.DatabaseConfig`), so a reader that sends back the cursor the
-  # read handed it is never passed a post committed within this long of its
-  # id. One whose transaction still takes longer can be passed, and a sync
-  # covers it. A cursor taken from the open feed is an event's id, later than
-  # the settled moment, so it shares a reconnect's gap.
+  # (`Keyfleet.DatabaseConfig`). It always hands back the settled moment, so
+  # a reader that reads on from it is never passed a post committed within
+  # this long of its id. One whose transaction still takes longer can be
+  # passed, and a sync covers it. A cursor later than the settled moment, an
+  # id the open feed sent lately, answers nothing, and the next read may
+  # repeat what the feed sent; an older id from the feed shares a
+  # reconnect's gap.
   @settling_seconds 30
   # A line named by its room and place is read wherever it is.
   @any_time ~U[1970-01-01 00:00:00.000000Z]
@@ -169,11 +171,12 @@ defmodule Keyfleet.Feed do
   def id(%DateTime{} = at), do: at |> DateTime.to_unix(:microsecond) |> Integer.to_string()
 
   @doc """
-  Every event after the one whose id is `id`, oldest first, up to a moment
-  read once from the database's clock: now for a reconnect (`:now`), whose
-  open feed hears the rest, and the settled moment, thirty seconds before
-  now, for the missed events' read (`:settled`). With them comes the cursor
-  to read on from, the later of `id` and that moment.
+  Every event after the one whose id is `id` and no later than a moment read
+  once from the database's clock, oldest first: now for a reconnect
+  (`:now`), whose open feed hears the rest, and the settled moment, thirty
+  seconds before now, for the missed events' read (`:settled`). With them
+  comes that moment's id, the cursor to read on from, whatever `id` was; an
+  `id` later than the moment answers no events.
 
   `{:resync, cursor}`, with that moment's id, when there are more than a
   reconnect gets, or for an id that is no event's: anything but 1 to 20
@@ -187,7 +190,7 @@ defmodule Keyfleet.Feed do
 
       with {:ok, since} <- since(id, now),
            {:ok, events} <- between(feed, since, until) do
-        {:ok, events, id(Enum.max([since, until], DateTime))}
+        {:ok, events, id(until)}
       else
         :resync -> {:resync, id(until)}
         error -> error

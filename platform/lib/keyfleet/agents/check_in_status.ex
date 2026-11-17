@@ -75,8 +75,9 @@ defmodule Keyfleet.Agents.CheckInStatus do
   end
 
   @doc """
-  Whether scheduled check-ins are repeating at `now`: two have confirmed the
-  schedule and the last came on time, whatever a conversation is doing.
+  Whether scheduled check-ins are repeating at `now`: the schedule is
+  confirmed and the last scheduled check-in is no older than twice its
+  interval plus 45 minutes, whatever a conversation is doing.
   """
   def repeating?(nil, _now), do: false
 
