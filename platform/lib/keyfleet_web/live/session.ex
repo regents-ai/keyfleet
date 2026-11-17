@@ -9,6 +9,8 @@ defmodule KeyfleetWeb.Live.Session do
   alias KeyfleetWeb.ClientAddress
 
   @public_root "/"
+  # Written by the Schedule card's hook (`assets/js/hooks/schedule_card.ts`).
+  @schedule_cookie "keyfleet_schedule"
 
   @doc """
   What the render knew, signed into the static LiveView token. The token is
@@ -20,7 +22,10 @@ defmodule KeyfleetWeb.Live.Session do
   handshake session, so they can never stand in for the authority the socket
   connected with. The page keeps the client key of the request that drew it
   (`KeyfleetWeb.ClientAddress.client_key/1`), which the Agent Message form
-  counts its messages against.
+  counts its messages against. It keeps what the browser's Schedule cookie
+  said, so a fleet's page is drawn with its Schedule, or without it when the
+  browser put it away, from the first paint
+  (`KeyfleetWeb.Components.ScheduleCard.put_away/1`).
   """
   def render_context(conn) do
     conn.assigns.current_lineage
@@ -30,7 +35,8 @@ defmodule KeyfleetWeb.Live.Session do
       "visit" => conn.assigns.visit,
       "arrival" => conn.assigns[:arrival],
       "gpc" => conn.assigns.gpc,
-      "client_key" => conn |> ClientAddress.key() |> ClientAddress.client_key()
+      "client_key" => conn |> ClientAddress.key() |> ClientAddress.client_key(),
+      "schedule_put_away" => Map.get(conn.req_cookies, @schedule_cookie, "")
     })
   end
 

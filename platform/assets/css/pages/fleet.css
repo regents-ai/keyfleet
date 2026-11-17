@@ -1165,7 +1165,9 @@
 }
 
 /* While rooms lie below the list's foot, a "…" stands there; it fades as the
-   list reaches its end, and a list with nothing below never shows it. */
+   list reaches its end, and a list with nothing below never shows it. It is
+   gone 2px before the very end, as a wheel can leave a list that sits a
+   fraction of a pixel down the page one pixel short of it. */
 @keyframes fleet-more-below {
   0%, 85% { opacity: 1; }
   100% { opacity: 0; }
@@ -1193,6 +1195,7 @@
       opacity: 0;
       animation: fleet-more-below linear both;
       animation-timeline: --fleet-channels;
+      animation-range-end: calc(100% - 2px);
     }
   }
 

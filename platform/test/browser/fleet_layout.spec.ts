@@ -86,10 +86,11 @@ for (const [width, height] of [
 // The footer is one short row. A Key holder's channel list holds every room
 // and runs past its foot: a "…" stands there until the last room shows, and
 // scrolling on past the last room carries on down the page to the footer.
-// Scrolling over the left menu moves the page too. Sean, 30 October 2026. The
-// Key is sold, and the rooms opened, on a fleet of its own, so the Classic
-// fleet stays unsold. The new holder's Pair and Mark present stand above the
-// hall, so the walk brings the channel list into view before scrolling over it.
+// Scrolling over the left menu moves the page too, wheel after wheel to the
+// footer, however far down it is. Sean, 30 October 2026. The Key is sold, and
+// the rooms opened, on a fleet of its own, so the Classic fleet stays unsold.
+// The new holder's Pair, Mark present and Schedule stand above the hall, so
+// the walk brings the channel list into view before scrolling over it.
 test("the footer is one short row, reached from the channel list and the left menu", async ({page}) => {
   prepareFleet("fibonacci_cascade")
   sayInPublic("fibonacci_cascade", "0x1111111111111111111111111111111111111111", "Hello.")
@@ -133,8 +134,10 @@ test("the footer is one short row, reached from the channel list and the left me
   await page.locator("#shell-sidebar").evaluate(el => el.scrollTo(0, el.scrollHeight))
   const sidebar = (await page.locator("#shell-sidebar").boundingBox())!
   await page.mouse.move(sidebar.x + sidebar.width / 2, sidebar.y + sidebar.height - 20)
-  await page.mouse.wheel(0, 400)
-  await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1)
+  await expect(async () => {
+    await page.mouse.wheel(0, 400)
+    expect(await scroller.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThanOrEqual(1)
+  }).toPass()
 })
 
 // A list with every room in view never shows the "…".

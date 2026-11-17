@@ -52,7 +52,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorldlineLive
   }
 
-  alias KeyfleetWeb.Components.{AgentSetup, BuyKey, FleetPrompts, Reading}
+  alias KeyfleetWeb.Components.{AgentSetup, BuyKey, FleetPrompts, Reading, ScheduleCard}
   alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
@@ -77,7 +77,11 @@ defmodule KeyfleetWeb.ShellLive do
   @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
   @impl true
-  def mount(_params, %{"client_key" => client_key}, socket) do
+  def mount(
+        _params,
+        %{"client_key" => client_key, "schedule_put_away" => schedule_put_away},
+        socket
+      ) do
     {:ok,
      socket
      |> follow_mutes()
@@ -98,6 +102,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> assign(
        route_spec: nil,
        client_key: client_key,
+       schedule_put_away: ScheduleCard.put_away(schedule_put_away),
        shell_instance: System.unique_integer([:positive, :monotonic]),
        get_key: get_key?(),
        load_failed?: false,
@@ -163,7 +168,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> follow_agents(current_account(socket.assigns.access_context))}
   end
 
-  # A page drawn before its token carried the client key loads once more.
+  # A page drawn before its token carried the client key and the Schedule
+  # cards put away loads once more.
   def mount(_params, session, socket), do: {:ok, Session.render_again(socket, session)}
 
   # A page that couldn't be loaded may have started listening to what it was
@@ -415,6 +421,12 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp press("close_buy_key", _params, socket),
     do: {:noreply, socket |> SharedFigures.follow(:buy_key, []) |> assign(:buy_key, nil)}
+
+  # The browser's Schedule cards put away, as its cookie says now: a fleet's
+  # Schedule just put away, or one put away since the page was requested
+  # (`assets/js/hooks/schedule_card.ts`).
+  defp press("schedule_put_away", %{"put_away" => cookie}, socket),
+    do: {:noreply, assign(socket, :schedule_put_away, ScheduleCard.put_away(cookie))}
 
   defp press(event, params, socket) when event in @workspace_events,
     do: WorkspaceLive.handle_event(event, params, socket)
@@ -861,6 +873,7 @@ defmodule KeyfleetWeb.ShellLive do
           who={@streams.fleet_who}
           now={FleetLive.now_shown(@activity)}
           pass_note={@pass_note}
+          schedule_put_away={@schedule_put_away}
           quotes={@quotes}
           room={@room}
           posts={@streams.posts}

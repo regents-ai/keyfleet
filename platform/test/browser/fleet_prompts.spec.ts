@@ -176,8 +176,10 @@ test("a new owner pairs an agent and marks their idle Key present from the top o
 // Astra, paired above, has had no scheduled check-in seen. Schedule sits in
 // the page under the tabs, Copy line gives the guide's line, whose address
 // answers, and Dismiss puts it away on this fleet's page in this browser,
-// across a reload. The Agents page keeps it, with no Dismiss, until Astra's
-// run checks in, and then it goes from both by itself.
+// across a reload. The Agents page keeps Astra's row for this fleet, with no
+// Dismiss, until Astra's run checks in here, and then it goes by itself, as
+// the card on the fleet's page does. Astra may be named for another fleet the
+// person holds a Key in too, so the walk names the row by agent and fleet.
 test("Schedule gives the line to schedule check-ins, goes when put away, and stays on the Agents page until one is seen", async ({page}) => {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
@@ -190,7 +192,9 @@ test("Schedule gives the line to schedule check-ins, goes when put away, and sta
   const card = page.locator("#fleet-prompts-schedule")
   await expect(card).toBeVisible()
   await expect(card.getByRole("heading", {name: "Schedule"})).toBeVisible()
-  await expect(card.locator("li", {hasText: "Astra"})).toContainText("Hasn’t checked in")
+  const who = card.locator(".schedule-card__who")
+  await expect(who).toContainText("Astra")
+  await expect(who).toContainText("Hasn’t checked in")
   const tabs = (await page.locator(".fleet-bar").boundingBox())!
   expect((await card.boundingBox())!.y).toBeGreaterThanOrEqual(tabs.y + tabs.height)
   await expect(page.locator("dialog[open]")).toHaveCount(0)
@@ -204,17 +208,17 @@ test("Schedule gives the line to schedule check-ins, goes when put away, and sta
   expect((await page.request.get(guide)).status()).toBe(200)
 
   await card.getByRole("button", {name: "Dismiss"}).click()
-  await expect(card).toBeHidden()
+  await expect(card).toHaveCount(0)
   await page.reload()
+  await expect(card).toHaveCount(0)
   await connected(page)
-  await expect(card).toBeAttached()
-  await expect(card).toBeHidden()
+  await expect(card).toHaveCount(0)
 
   await page.goto("/account/agents")
   await connected(page)
   const kept = page.locator("#account-agents-schedule")
   await expect(kept).toBeVisible()
-  const row = kept.locator("li", {hasText: "Astra"})
+  const row = kept.locator(`li[data-fleet="${fleet}"]`, {hasText: "Astra"})
   await expect(row).toContainText("Classic #1")
   await expect(row).toContainText("Hasn’t checked in")
   await expect(kept.getByRole("button", {name: "Copy line"})).toBeVisible()
@@ -228,8 +232,11 @@ test("Schedule gives the line to schedule check-ins, goes when put away, and sta
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
   await page.setViewportSize({width: 1280, height: 720})
 
+  // With nothing put away, the fleet's page shows no Schedule once Astra's
+  // run has checked in.
   checkInDaily(astra, fleet)
-  await expect(kept).toHaveCount(0)
+  await expect(row).toHaveCount(0)
+  await page.context().clearCookies({name: "keyfleet_schedule"})
   await page.goto("/classic/1")
   await connected(page)
   await expect(card).toHaveCount(0)

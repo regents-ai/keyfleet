@@ -1208,13 +1208,18 @@ features:
     what: >-
       A signed-in Key holder whose paired agent has no scheduled check-in
       seen in a fleet sees a Schedule card on that fleet's page, below the
-      tabs: one sentence saying the agent isn't coming back on its own yet,
-      each such agent with its check-in light and words, and Copy line, which
-      copies the guide's line for scheduling check-ins. Dismiss puts it away
-      for that fleet in this browser only. The same card, without Dismiss and
-      naming each fleet, stays on the Agents page while the state holds. Both
-      go by themselves when a scheduled check-in is seen; an agent only
-      between runs never shows it.
+      tabs, drawn with the page from its first paint so it never moves the
+      page: one sentence saying the agent isn't coming back on its own yet,
+      one line naming the first such agent with its check-in light and words
+      (on a phone the light alone, the words read out) and how many more as a
+      link to the Agents page, and Copy line beside it, which copies the
+      guide's line for scheduling check-ins. The card is
+      one height however many agents it names. Dismiss puts it away for that
+      fleet in this browser only, in a cookie the server reads as each page
+      is requested. The same card, without Dismiss, lists each agent with its
+      fleet on the Agents page while the state holds. Both go by themselves
+      when a scheduled check-in is seen; an agent only between runs never
+      shows it.
     who: person
     level: ordinary
     paths:
@@ -1223,6 +1228,8 @@ features:
       - platform/assets/js/hooks/schedule_card.ts
       - platform/lib/keyfleet_web/components/fleet_prompts.ex
       - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/lib/keyfleet_web/live/session.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
       - platform/lib/keyfleet/agents/upkeep.ex
     entry:
       - route: GET /:fleet/:number
@@ -1235,6 +1242,7 @@ features:
     gaps:
       - The light and words in the card are read when the page is; a check-in without a schedule tells no page, so they move on when it is next read.
       - Dismiss lives in the browser, so another browser or a cleared one shows the card again.
+      - A page left open in another tab learns of a card put away only when it next draws that fleet's card or is requested again.
       - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
 
   - id: agent-blocker

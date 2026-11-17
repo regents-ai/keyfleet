@@ -985,7 +985,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     test "Schedule names an agent with no scheduled check-in seen in the person's fleet", c do
       {view, _html} = open_account(c.conn, c.account, "/account/agents")
 
-      assert has_element?(view, "#account-agents-schedule li", "Astra")
+      assert has_element?(view, ~s(#account-agents-schedule li[data-fleet="#{@fleet}"]), "Astra")
       assert has_element?(view, ~s(#account-agents-schedule li a[href="/classic/1"]))
       refute has_element?(view, "#account-agents-schedule[hidden]")
       refute has_element?(view, "#account-agents-schedule [data-dismiss]")

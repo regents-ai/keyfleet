@@ -30,7 +30,7 @@ import {animate, createScope, type JSAnimation, type Scope} from "animejs"
 
 import {createCanvasIsland} from "../canvas_island"
 import {watchTheme} from "../theme"
-import {cardSpot, grow, holeAround, mixBox, mixSpot, noHole, pieces, underFoot, type Box, type Spot} from "../tour/place"
+import {cardSpot, EDGE, grow, holeAround, mixBox, mixSpot, noHole, pieces, ROOM, underFoot, type Box, type Spot} from "../tour/place"
 import type {TourPicture, TourRenderer} from "../tour/renderer"
 import {
   BASE,
@@ -96,6 +96,20 @@ function boxOf(part: Element): Box {
     rect = words.getBoundingClientRect()
   }
   return {x: rect.left, y: rect.top, w: rect.width, h: rect.height}
+}
+
+/**
+ * Scrolls a part into view with room round it for its ring, which would
+ * otherwise be cut off where the part meets the screen's edge. The part's
+ * own style is as it was once the scroll is set.
+ */
+function bringIntoView(part: Element, block: ScrollLogicalPosition) {
+  const styled = part as HTMLElement | SVGElement
+  const style = styled.getAttribute("style")
+  styled.style.scrollMargin = `${ROOM + EDGE}px`
+  styled.scrollIntoView({block, inline: "nearest"})
+  if (style === null) styled.removeAttribute("style")
+  else styled.setAttribute("style", style)
 }
 
 const windowOpen = () => document.querySelector("dialog[open]") !== null
@@ -311,11 +325,11 @@ export function createTour(root: HTMLElement): TourController {
     if (!opening) say.textContent = `${step.title}. ${step.text} Step ${at + 1} of ${current.steps.length}.`
 
     const part = partFor(step)
-    part?.scrollIntoView({block: "nearest", inline: "nearest"})
+    if (part) bringIntoView(part, "nearest")
     // A phone's card docks along the screen's foot: a part it would lie over
     // is brought up to the middle of the screen.
     if (part && phone.matches && underFoot(holeAround(boxOf(part)), cardSize(), view())) {
-      part.scrollIntoView({block: "center", inline: "nearest"})
+      bringIntoView(part, "center")
     }
     observe(part)
 

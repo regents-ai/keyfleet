@@ -14,9 +14,11 @@ defmodule KeyfleetWeb.Components.FleetPrompts do
 
   Under them, Schedule (`KeyfleetWeb.Components.ScheduleCard`) shows while an
   agent the person paired has no scheduled check-in seen here. Its person may
-  put it away for this fleet, which only their browser remembers (the
-  `ScheduleCard` hook); until the hook has read that it stays hidden, so a
-  card put away never shows for a moment.
+  put it away for this fleet, which only their browser remembers, in a cookie
+  the `ScheduleCard` hook writes. The page passes `schedule_put_away?`, read
+  from that cookie as the page was requested and kept as the hook says, so a
+  card shows from the first paint or not at all and never moves the page
+  once drawn.
 
   The page sends `changed: true` when the person's agents, the fleet's Keys or
   a step sent from the page change, and all three are read again. It sends
@@ -119,14 +121,14 @@ defmodule KeyfleetWeb.Components.FleetPrompts do
         start={Fleets.path(@fleet.fleet_id)}
       />
       <ScheduleCard.card
-        :if={@schedule != []}
+        :if={@schedule != [] and not @schedule_put_away?}
         id={"#{@id}-schedule"}
         class="fleet-prompts__schedule"
         agents={@schedule}
-        hidden
+        page={:fleet}
         phx-hook="ScheduleCard"
         phx-mounted={JS.ignore_attributes(["hidden"])}
-        data-kept-as={"keyfleet:schedule:#{@fleet.fleet_id}"}
+        data-fleet={@fleet.fleet_id}
       >
         <:dismiss>
           <button type="button" class="schedule-card__dismiss" aria-label="Dismiss" data-dismiss>

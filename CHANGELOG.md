@@ -11114,3 +11114,57 @@ folders): 1,546 passed (22 properties, 1,524 tests), 19 excluded, none failed. B
 walks `account_agents` and `fleet_prompts`: 10 passed. Typecheck passed; vitest 574
 passed, and its 13 failures are the untracked review file
 `assets/test/adversarial_send_step.test.ts`.
+
+## 2026-11-17: Schedule keeps one small height and never moves the page; three walks mended
+
+The release check's chain walks, where the signed-in holder has seven paired agents with
+no scheduled check-in, found the fleet page's Schedule card about 420 px tall, and three
+walks broken by it.
+
+- The fleet page's card (`ScheduleCard`, `page={:fleet}`) is one height however many
+  agents it names: title and Dismiss, the sentence, then one line with the first agent's
+  name, light and words and "and N more" linking to the Agents page, with Copy line
+  beside it, or under it on a phone. A long name is cut first, down to its first letters,
+  then a long state. Where the line is too narrow for both and how many more (under
+  26rem, as on a phone), the light leads the name and the state's words are kept for
+  screen readers alone (a container query on the card's foot). With one agent or eight
+  it is 199 px tall at 1280 wide and 221 px at 390. The Agents page (`page={:agents}`) still lists each agent with its fleet, and each
+  row now names its fleet (`data-fleet`).
+- It no longer moves the page as it shows. It was drawn hidden and shown by its hook once
+  the page connected, pushing the hall down. The server now draws it, or leaves it out,
+  from the first paint: Dismiss writes the fleets put away to the cookie
+  `keyfleet_schedule` (fleet ids joined by dots, a year, `SameSite=Lax`), which
+  `Live.Session.render_context/1` carries into the page's token, and `ShellLive` keeps
+  them as `schedule_put_away` and tells the fleet page whether its card is put away. The
+  hook hides the card at once and sends the page what the cookie says now
+  (`schedule_put_away`), which takes the card away; a card drawn later for a fleet put
+  away since the page was requested, from another tab or after a reconnect, is hidden
+  before it paints and sent the same way. A page whose token predates this loads once
+  more, as one without a client key already does.
+- The guided tour brings a part into view with room for its ring, the ring's 8 px as a
+  scroll margin while it scrolls, so a part at the screen's foot is ringed whole. The
+  holder's Intro step was brought flush to the foot below the tall card, and its ring cut
+  short by about 6 px.
+- The channel list's "…" is gone 2 px before the very end (`animation-range-end`). A
+  wheel can leave a list sitting a fraction of a pixel down the page one pixel short of
+  its end, where the "…" stayed at 2% opacity; the compact card left the list so.
+- Walks: the footer walk's left-menu half wheels until the page's end, where one 400 px
+  wheel assumed the page was at most 400 px from it (the page did move 400 px; 103 were
+  left). The Schedule walk names the Agents page row by agent and fleet, as Astra can be
+  named for two fleets; expects the card gone, not hidden, once put away; and clears the
+  cookie before checking the card goes by itself once Astra's run checks in. The fleet
+  page tests check the first paint holds the card, and that the cookie and the page's
+  event keep it away; the session gate tests name the token's new key.
+- The verification list (`schedule-card`) says the same. No database or contract change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(770 files, no issues) and xref (138 compile-connected, at the limit) passed. Fleet page,
+shell, session gate and account tests: 136 passed. The whole suite, run in three parts
+(`test/keyfleet`, `test/keyfleet_web` and its folders): 1,547 passed (22 properties,
+1,525 tests), 19 excluded, none failed. Typecheck passed; vitest 498 passed, leaving out
+the untracked review file `assets/test/adversarial_send_step.test.ts`; the asset budgets
+pass on a minified build (the unminified test build's CSS is over its 60 KiB line).
+Browser walks: the whole chain project, 139 walks, passed twice, before and after the
+phone line; `atlas` alone, 1 passed; the default project, 127 passed. Pictures of the
+card at 1280 and 390 wide, light and dark, with one agent and with eight, were taken by
+a scratch walk that is not kept.

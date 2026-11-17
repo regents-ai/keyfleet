@@ -162,7 +162,7 @@ defmodule KeyfleetWeb.AgentsPanel do
         id={"#{@id}-schedule"}
         class="account-agents__schedule"
         agents={@schedule}
-        fleets?
+        page={:agents}
       />
       <.blocked :if={@blocked != []} id={"#{@id}-blocked"} agents={@blocked} />
       <Regent.Account.agents

@@ -1,6 +1,7 @@
 /* Pair and Mark present under a fleet's tabs: one row, side by side when
    both show, with the pairing box opening under it, and Schedule under that.
-   With nothing showing, a Schedule put away included, it takes no room.
+   With nothing showing, a Schedule hidden as it is put away included, it
+   takes no room.
    Unlayered, as the shared button styles are. */
 .fleet-prompts {
   display: grid;
