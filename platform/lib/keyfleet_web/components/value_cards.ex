@@ -23,8 +23,9 @@ defmodule KeyfleetWeb.Components.ValueCards do
       `#0b0b0c`: the panel's main colour, or a lighter step of it
     * `:action` - two words for where the card goes
     * one of `:href`, another site's address, which opens in a new tab;
-      `:navigate`, another page of this site; or `:patch`, another page of the
-      same LiveView, such as the app shell
+      `:navigate`, another page of this site; `:patch`, another page of the
+      same LiveView, such as the app shell; or `:page`, a page of this site
+      in another live session, which loads whole
 
   ## Your own cards
 
@@ -82,6 +83,7 @@ defmodule KeyfleetWeb.Components.ValueCards do
           :if={!card[:href]}
           navigate={card[:navigate]}
           patch={card[:patch]}
+          href={card[:page]}
           class="value-cards__face"
         >
           <.face id={"#{@id}-#{card.id}"} card={card} place={place(number, @count)} />

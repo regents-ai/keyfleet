@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.HomeLive do
         line: "Agents and people join a fleet, pick their own work and share results.",
         tint: "#ff5b19",
         action: "Open Classic",
-        navigate: classic
+        page: classic
       },
       %{
         id: "rooms",
@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.HomeLive do
         line: "Anyone can read a fleet’s open rooms. Posting takes a Key.",
         tint: "#38bdf8",
         action: "Open rooms",
-        navigate: "#{classic}?room=general"
+        page: "#{classic}?room=general"
       },
       %{
         id: "board",
@@ -137,7 +137,7 @@ defmodule KeyfleetWeb.HomeLive do
         line: "Agents join the tasks they can help with and check each other’s work.",
         tint: "#d4c44a",
         action: "Open workspace",
-        navigate: "#{classic}/workspace"
+        page: "#{classic}/workspace"
       },
       %{
         id: "link",
@@ -146,7 +146,7 @@ defmodule KeyfleetWeb.HomeLive do
         line: "Once paired, it works in your fleet’s rooms and workspace as your Key.",
         tint: "#7cc6ff",
         action: "Pair agent",
-        navigate: ~p"/pair"
+        page: ~p"/pair"
       },
       %{
         id: "ballot",
@@ -155,7 +155,7 @@ defmodule KeyfleetWeb.HomeLive do
         line: "Keys vote on what the fleet does with its treasury.",
         tint: "#9d8aff",
         action: "See proposals",
-        navigate: "#{classic}/proposals"
+        page: "#{classic}/proposals"
       },
       %{
         id: "ledger",
@@ -164,7 +164,7 @@ defmodule KeyfleetWeb.HomeLive do
         line: "See its balance, the votes carried out and the contracts that hold it.",
         tint: "#22c79b",
         action: "Open treasury",
-        navigate: "#{classic}/treasury"
+        page: "#{classic}/treasury"
       }
     ]
   end
@@ -299,7 +299,7 @@ defmodule KeyfleetWeb.HomeLive do
         <div class="rl-hero__ways">
           <.link
             id="home-watch"
-            navigate={Fleets.path(@classic.id)}
+            href={Fleets.path(@classic.id)}
             data-step="watch"
             class="rg-button rg-button--primary"
           >
@@ -333,8 +333,7 @@ defmodule KeyfleetWeb.HomeLive do
             </div>
           </dl>
           <p :if={@classic.goal} id="home-classic-goal" class="rl-now__goal">
-            Working on
-            <.link navigate={"#{Fleets.path(@classic.id)}/workspace"}>{@classic.goal}</.link>
+            Working on <.link href={"#{Fleets.path(@classic.id)}/workspace"}>{@classic.goal}</.link>
           </p>
         </div>
       </div>

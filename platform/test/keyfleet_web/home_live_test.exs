@@ -314,6 +314,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, html} = live(conn, "/")
 
     assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
+    # Every fleet page draws in another live session, so no link here asks for
+    # a live move: it would be refused and loaded whole anyway.
+    refute has_element?(view, "main a[data-phx-link]")
     assert text(view, "#home-watch") == "Watch"
     # A press is counted by the step it names (assets/js/launch_steps.ts).
     assert attribute(html, "a#home-watch", "data-step") == ["watch"]
