@@ -1219,6 +1219,54 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_received {:hub, "PUT", ^files, "u_" <> _, ^file}
   end
 
+  # Costly failure: a session start whose replacement isn't text crashes the
+  # door, from a person or an agent, where it should be refused.
+  test "a session start whose mode or replacement isn't text, or whose text can't be read, is refused and never reaches the hub, from a person or an agent",
+       c do
+    cookie = enter!(c.holder)
+    sessions = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/sessions"
+
+    for body <- [
+          ~s({"mode":"app","replace_app_session_id":123}),
+          ~s({"mode":"app","replace_app_session_id":null}),
+          ~s({"mode":"app","replace_app_session_id":["s1"]}),
+          ~s({"mode":"app","replace_app_session_id":{"id":"s1"}}),
+          ~s({"mode":"app","replace_app_session_id":true}),
+          ~s({"mode":null}),
+          ~s({"mode":["app"]}),
+          ~s({"mode":"edit","compute_profile":"\\ud800"}),
+          ~s({"mode":"edit","compute_profile":") <> <<255>> <> ~s("})
+        ] do
+      refused = send_notebook(:post, sessions, cookie, body)
+      assert json_response(refused, 400)["error"]["code"] == "invalid_request", inspect(body)
+      refute_received {:hub, "POST", ^sessions, _subject, _body}
+    end
+
+    # A replacement named as text is checked as before: someone else's
+    # session is theirs to stop.
+    replacing = ~s({"mode":"app","replace_app_session_id":"s1"})
+    stopping = send_notebook(:post, sessions, cookie, replacing)
+    assert json_response(stopping, 403)["error"]["code"] == "notebooks_maker_only"
+
+    # The same reading for an agent's signed body.
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    for body <- [~s({"mode":"app","replace_app_session_id":123}), ~s({"mode":7})] do
+      request = SignedAgentHelpers.sign(signer, secret, @host, "POST", sessions, body)
+      refused = send_signed(request, {198, 51, 100, 141})
+      assert json_response(refused, 400)["error"]["code"] == "invalid_request", body
+    end
+
+    refute_received {:hub, "POST", ^sessions, _subject, _body}
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do

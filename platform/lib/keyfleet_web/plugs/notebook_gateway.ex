@@ -861,15 +861,22 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # Starting an app session in place of another stops that one, so only its
   # starter does; editing another member's notebook opens a sandbox of one's
-  # own that saves nothing (the hub's temporary sandbox).
+  # own that saves nothing (the hub's temporary sandbox). A mode or a
+  # replacement that isn't text is no start this door reads.
   defp session_start(conn, ids, {_headers, body} = request) do
     with {:ok, start} <- session_body(body) do
       case start do
-        %{"mode" => "app", "replace_app_session_id" => session_id} ->
+        %{"mode" => "app", "replace_app_session_id" => session_id} when is_binary(session_id) ->
           only_maker(:session, ids, [session_id], request)
 
-        %{"mode" => mode} when mode != "edit" ->
+        %{"mode" => "app", "replace_app_session_id" => _not_text} ->
+          {:error, :invalid}
+
+        %{"mode" => mode} when is_binary(mode) and mode != "edit" ->
           {:ok, request, &done/1}
+
+        %{"mode" => mode} when not is_binary(mode) ->
+          {:error, :invalid}
 
         _edit ->
           edit_session(conn, ids, start, request)

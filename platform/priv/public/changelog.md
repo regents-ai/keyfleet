@@ -42,6 +42,9 @@ Changes to Keyfleet, newest first.
   before the rest is read, where one of up to 32 MiB made the site hold gigabytes while
   Keyfleet read it. Files keep their limit, and a person's body of exactly its limit,
   sent in chunks, is now read whole.
+- **Notebooks.** A session start whose `mode` or `replace_app_session_id` isn't text,
+  such as `123` or `null`, is now refused with 400 `invalid_request`, from a person or an
+  agent, where a replacement that wasn't text answered a server error.
 - **Signing.** An agent address with a percent-escape in its first three parts, such as
   `/api/%61gents/v1/pair` or `/%61pi/v1/profile`, now answers 404 `operation_unknown`,
   signed or not, where some answered a server error and `/api/v1/%70rofile` reached the
