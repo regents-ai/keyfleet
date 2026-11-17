@@ -12,9 +12,13 @@ defmodule Keyfleet.Agents.CheckIn do
   also keeps when the agent last did something here, and what: a post, a task
   joined, forked or handed in, a review, another workspace write, a notebook edit or a push.
 
+  A check-in may also say, in the agent's own words, what is blocking it
+  (`blocker`), kept until its next check-in, which clears it unless it says
+  one again. Only the agent and the person it checked in for read it.
+
   Every time is the database's, and each kind of write happens at most once a
   minute (a contribution of a new kind at once), in one statement that inserts the row or updates it. Anyone may
-  read; only the agent itself writes its own rows.
+  read the rest; only the agent itself writes its own rows.
 
   A scheduled check-in that is written tells the open pages of the agent's
   person, and only theirs, once it commits: `:agents_changed` on
@@ -30,6 +34,18 @@ defmodule Keyfleet.Agents.CheckIn do
   alias Keyfleet.Agents.CheckInStatus
 
   @contribution_kinds [:post, :task, :submit, :review, :workspace, :notebook, :code]
+
+  # What blocks the agent: one line of plain text, read at a glance beside its
+  # check-in, so no longer than a short post (280 characters) and with no
+  # control or invisible characters and no line breaks. It is trimmed, and an
+  # empty line is none.
+  @blocker [max_length: 280, match: ~r/\A[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*\z/u]
+
+  @doc "Whether a check-in takes `line` as what blocks the agent (`blocker`)."
+  def blocker?(line) when is_binary(line),
+    do: match?({:ok, _line}, Ash.Type.apply_constraints(Ash.Type.String, line, @blocker))
+
+  def blocker?(_line), do: false
 
   postgres do
     table "agent_check_ins"
@@ -74,15 +90,35 @@ defmodule Keyfleet.Agents.CheckIn do
       prepare build(load: [:last_seen_at])
     end
 
+    # What these agents last said was blocking them, in each fleet where they
+    # said something, for the person they checked in for, the latest first.
+    read :blocked do
+      argument :wallets, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
+
+      filter expr(
+               acting_agent_wallet in ^arg(:wallets) and
+                 beneficiary_privy_user_id == ^actor(:privy_user_id) and not is_nil(blocker)
+             )
+
+      prepare build(sort: [last_check_in_at: :desc])
+    end
+
     # A check-in from an agent in a conversation.
     create :check_in_session do
       change Keyfleet.Agents.Changes.RecordAuthority
       change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       public? false
       accept [:agent_profile_id, :fleet_id]
+      argument :blocker, :string
 
       upsert? true
-      upsert_fields [:acting_agent_wallet, :beneficiary_privy_user_id, :agent_pairing_id]
+
+      upsert_fields [
+        :blocker,
+        :acting_agent_wallet,
+        :beneficiary_privy_user_id,
+        :agent_pairing_id
+      ]
 
       upsert_condition expr(
                          is_nil(last_session_at) or
@@ -94,6 +130,8 @@ defmodule Keyfleet.Agents.CheckIn do
                        )
 
       return_skipped_upsert? true
+
+      change set_attribute(:blocker, arg(:blocker))
 
       change atomic_set(
                :last_check_in_at,
@@ -130,10 +168,13 @@ defmodule Keyfleet.Agents.CheckIn do
           max: CheckInStatus.schedule_minutes().last
         ]
 
+      argument :blocker, :string
+
       upsert? true
 
       upsert_fields [
         :schedule_minutes,
+        :blocker,
         :acting_agent_wallet,
         :beneficiary_privy_user_id,
         :agent_pairing_id
@@ -151,6 +192,7 @@ defmodule Keyfleet.Agents.CheckIn do
       return_skipped_upsert? true
 
       change set_attribute(:schedule_minutes, arg(:every_minutes))
+      change set_attribute(:blocker, arg(:blocker))
       change Keyfleet.Agents.Changes.ScheduledCheckIn, only_when_valid?: true
     end
 
@@ -221,8 +263,31 @@ defmodule Keyfleet.Agents.CheckIn do
       authorize_if always()
     end
 
+    policy action(:blocked) do
+      authorize_if actor_attribute_equals(:role, :person)
+    end
+
     policy action([:check_in_session, :check_in_scheduled, :note_contribution]) do
       authorize_if Keyfleet.Agents.Checks.OwnProfile
+    end
+  end
+
+  field_policies do
+    # The agent's own words on what blocks it: for the agent itself, and for
+    # the person it checked in for, signed in as themselves.
+    field_policy :blocker do
+      authorize_if expr(
+                     ^actor(:role) == :agent and acting_agent_wallet == ^actor(:wallet_address)
+                   )
+
+      authorize_if expr(
+                     ^actor(:role) == :person and
+                       beneficiary_privy_user_id == ^actor(:privy_user_id)
+                   )
+    end
+
+    field_policy :* do
+      authorize_if always()
     end
   end
 
@@ -250,6 +315,10 @@ defmodule Keyfleet.Agents.CheckIn do
     attribute :last_contribution_kind, :atom,
       public?: true,
       constraints: [one_of: @contribution_kinds]
+
+    # What the agent said was blocking it at its last check-in, nil when it
+    # said nothing.
+    attribute :blocker, :string, public?: true, constraints: @blocker
 
     # Every scheduled check-in it has made here.
     attribute :scheduled_check_ins, :integer,

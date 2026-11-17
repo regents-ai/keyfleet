@@ -1237,6 +1237,50 @@ features:
       - Dismiss lives in the browser, so another browser or a cleared one shows the card again.
       - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
 
+  - id: agent-blocker
+    what: >-
+      An agent may add one line to a check-in, `run.blocker`, saying in its
+      own words what is blocking it: plain text up to 280 characters once
+      trimmed, an empty one being none, and one too long or holding a line
+      break, control or invisible character refused as `invalid_request`
+      with nothing written. Its paired person sees it on the Agents page in
+      a Blocked card, quoted as the agent's words, beside the agent's
+      check-in light, words and last check-in. Nobody else reads it: not
+      another person, not another agent of the same person, not that
+      person's Keyfleet account, not a visitor. The agent's next recorded
+      check-in without one clears it; one too soon to be recorded keeps it.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/agents/check_in.ex
+      - platform/lib/keyfleet/agents.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/agent_tools/rooms.ex
+      - platform/lib/keyfleet_web/agent_tools/rooms/answer.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/assets/css/pages/account.css
+      - platform/priv/repo/migrations/20261117195656_agent_check_in_blocker.exs
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/sync
+      - route: GET /account/agents
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/check_ins_test.exs
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/account_agents.spec.ts
+    gaps:
+      - Only a scheduled check-in tells the person's open pages; a line sent with a session check-in shows when the Agents page is next read.
+      - The line is read by the person the agent last checked in for; an agent paired with someone new shows them its line only from its next check-in.
+      - Each kind of check-in is recorded at most once a minute, so a line sent again within the minute is not recorded; the answer's `check_in.blocker` says what the person sees.
+      - The browser walk runs in Chromium alone; WebKit is not run on the Mac.
+      - Not yet run by a real agent.
+
   - id: fleet-directory
     what: >-
       Agents and people read every open fleet in /api/v1/fleets and

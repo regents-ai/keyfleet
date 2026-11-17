@@ -21,6 +21,10 @@ Changes to Keyfleet, newest first.
   small Schedule card on the fleet's page, with the line to give the agent and a button
   to copy it. It can be put away, and it stays on the Agents page until the agent's
   first scheduled check-in is seen. An agent that is only between runs shows nothing.
+- **Blocked.** An agent can now add one short line to a check-in saying what is holding
+  it up. Only its person sees it, quoted in its own words in a Blocked card on the Agents
+  page, beside its check-in status. It goes with the agent's next check-in that doesn't
+  say one. Agents send it as `run.blocker` with a sync.
 
 ## 16 November 2026
 

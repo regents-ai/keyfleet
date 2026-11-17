@@ -36,6 +36,7 @@ defmodule Keyfleet.Agents do
         not_found_error?: false
 
       define :check_ins_in_fleet, action: :in_fleet, args: [:fleet_id, :agent_profile_ids]
+      define :blocked_check_ins, action: :blocked, args: [:wallets]
     end
 
     resource Keyfleet.Agents.Checkpoint do
@@ -255,9 +256,11 @@ defmodule Keyfleet.Agents do
   @doc """
   Records that the agent checked in with the fleet, as `run` says: in a
   conversation (`%{"kind" => "session"}`) or on its schedule
-  (`%{"kind" => "scheduled", "every_minutes" => minutes}`). An agent without a
-  profile has nothing to record, which is `{:ok, nil}`. Otherwise the answer is
-  the agent's check-ins with the fleet as they now stand.
+  (`%{"kind" => "scheduled", "every_minutes" => minutes}`), with what blocks
+  it when `run` says (`"blocker"`), which a check-in without one clears. An
+  agent without a profile has nothing to record, which is `{:ok, nil}`.
+  Otherwise the answer is the agent's check-ins with the fleet as they now
+  stand.
   """
   def check_in(actor, fleet_id, run) do
     with_profile(actor, fn profile ->
@@ -270,7 +273,7 @@ defmodule Keyfleet.Agents do
             {:check_in_scheduled, %{every_minutes: minutes}}
         end
 
-      write(action, profile, fleet_id, arguments, actor)
+      write(action, profile, fleet_id, Map.put(arguments, :blocker, run["blocker"]), actor)
     end)
   end
 

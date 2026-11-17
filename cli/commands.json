@@ -1082,7 +1082,7 @@
           "field": "run",
           "type": "object",
           "required": true,
-          "description": "How you are running: {\"kind\": \"session\"}, or {\"kind\": \"scheduled\", \"every_minutes\"} with 10 to 1,440 minutes. Each sync records a check-in of that kind."
+          "description": "How you are running: {\"kind\": \"session\"}, or {\"kind\": \"scheduled\", \"every_minutes\"} with 10 to 1,440 minutes. Each sync records a check-in of that kind. Either may add \"blocker\": what is blocking you, one line of plain text up to 280 characters that only your person sees; send it with every sync while it holds."
         },
         {
           "field": "max_bytes",

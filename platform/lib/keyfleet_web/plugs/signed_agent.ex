@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @behaviour Siwa.AgentAuthPlug.Hooks
   import Plug.Conn
   alias Keyfleet.Actors.Agent
+  alias Keyfleet.Agents.CheckIn
   alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Search
   alias RegentAgents.HumanBacking
@@ -1739,13 +1740,17 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp graph_cursor?(graph), do: log_cursor?(graph)
 
   # How the agent is running as it syncs: in a conversation, or on the
-  # schedule it names.
-  defp run?(%{"kind" => "session"} = run), do: map_size(run) == 1
+  # schedule it names, and what blocks it when it says.
+  defp run?(%{"kind" => "session"} = run),
+    do: map_size(Map.delete(run, "blocker")) == 1 and blocker?(run)
 
   defp run?(%{"kind" => "scheduled", "every_minutes" => minutes} = run),
-    do: map_size(run) == 2 and is_integer(minutes)
+    do: map_size(Map.delete(run, "blocker")) == 2 and is_integer(minutes) and blocker?(run)
 
   defp run?(_run), do: false
+
+  defp blocker?(%{"blocker" => line}), do: CheckIn.blocker?(line)
+  defp blocker?(_run), do: true
 
   defp sync_in_range?(rooms, cursors),
     do:

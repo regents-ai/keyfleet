@@ -522,7 +522,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
     end
   end
 
-  # An agent without a profile has no check-ins recorded.
+  # An agent without a profile has no check-ins recorded. What it said blocks
+  # it is read back as its person sees it.
   defp check_in_json(nil), do: nil
 
   defp check_in_json(check_in) do
@@ -535,7 +536,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms.Answer do
       light: CheckInStatus.light(check_in, now),
       last_check_in_at: check_in.last_check_in_at,
       schedule_minutes: check_in.schedule_minutes,
-      schedule_confirmed: check_in.schedule_confirmed_at != nil
+      schedule_confirmed: check_in.schedule_confirmed_at != nil,
+      blocker: check_in.blocker
     }
   end
 

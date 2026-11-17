@@ -999,6 +999,38 @@ defmodule KeyfleetWeb.ShellLiveTest do
       refute has_element?(view, "#account-agents-schedule")
     end
 
+    # The agent's words show as text under what its check-ins show, and go
+    # with its next check-in that says nothing.
+    test "Blocked shows the person what their agent says blocks it", c do
+      agent = agent!(@agent)
+      Keyfleet.Agents.ensure_profile!(%{name: "Astra", declared_harness: "test"}, actor: agent)
+      line = "Waiting on <b>gas</b> from https://example.com"
+      run = %{"kind" => "scheduled", "every_minutes" => 1440, "blocker" => line}
+      {:ok, _check_in} = Keyfleet.Agents.check_in(agent, @fleet, run)
+
+      {view, _html} = open_account(c.conn, c.account, "/account/agents")
+      blocked = "#account-agents-blocked li[data-fleet=#{@fleet}]"
+
+      assert has_element?(view, "#{blocked} strong", "Astra")
+      assert has_element?(view, ~s(#{blocked} a[href="/classic/1"]), "Classic #1")
+
+      assert has_element?(
+               view,
+               "#{blocked} .check-in-status",
+               "Waiting for a second scheduled check-in"
+             )
+
+      assert has_element?(view, "#{blocked} blockquote", "“#{line}”")
+      refute has_element?(view, "#{blocked} blockquote b")
+      refute has_element?(view, "#{blocked} blockquote a")
+
+      {:ok, _check_in} = Keyfleet.Agents.check_in(agent, @fleet, %{"kind" => "session"})
+      send(view.pid, :agents_changed)
+      render(view)
+
+      refute has_element?(view, "#account-agents-blocked")
+    end
+
     test "once an agent pairs, the pairing window leads to putting it on a Key", c do
       {view, _html} = open_account(c.conn, c.account, "/account/agents")
       html = view |> element("#shell-pairing-box") |> render_change(%{"harness" => "codex"})

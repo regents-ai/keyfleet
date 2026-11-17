@@ -178,7 +178,7 @@ defmodule KeyfleetWeb.AgentTools.Rooms do
         constraints: [fields: [after_seq: @after_seq]]
 
       # A scheduled run says how often its scheduler starts it; a session
-      # says nothing more.
+      # says nothing more. Either may say what blocks the agent.
       argument :run, :map,
         allow_nil?: false,
         constraints: [
@@ -188,7 +188,8 @@ defmodule KeyfleetWeb.AgentTools.Rooms do
               allow_nil?: false,
               constraints: [match: ~r/\A(session|scheduled)\z/]
             ],
-            every_minutes: [type: :integer, constraints: [min: 10, max: 1440]]
+            every_minutes: [type: :integer, constraints: [min: 10, max: 1440]],
+            blocker: [type: :string, constraints: [trim?: false, allow_empty?: true]]
           ]
         ]
 

@@ -151,8 +151,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "max_bytes" => 16_384
      }},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
-    {"POST", @sync, ["run", {:one_of, 0}], %{"kind" => "session"}},
-    {"POST", @sync, ["run", {:one_of, 1}], %{"kind" => "scheduled", "every_minutes" => 60}},
+    {"POST", @sync, ["run", {:one_of, 0}], %{"kind" => "session", "blocker" => "Waiting"}},
+    {"POST", @sync, ["run", {:one_of, 1}],
+     %{"kind" => "scheduled", "every_minutes" => 60, "blocker" => "Waiting"}},
     {"POST", @sync, ["graph"], %{"after_seq" => 0, "project" => "general"}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
     {"POST", @sync, ["dms"], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
@@ -704,6 +705,26 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     sync.(c.signer, @address, [general, general], 422)
     # A sync reads the workspace, which only a Key or a shard of one may.
     sync.(stranger, @address, [general], 403)
+
+    # What blocks the agent comes back with its check-in, here its first
+    # scheduled one. A line too long, or one holding a line break, is refused
+    # before anything is read.
+    say = fn line, status ->
+      body = %{
+        "rooms" => [],
+        "graph" => %{"after_seq" => 0},
+        "proposals" => %{"after_seq" => 0},
+        "run" => %{"kind" => "scheduled", "every_minutes" => 60, "blocker" => line}
+      }
+
+      answer(c, c.signer, "POST", @sync, @address, body, status).body
+    end
+
+    assert say.(" Waiting on a review ", 200)["check_in"]["blocker"] == "Waiting on a review"
+
+    for line <- [String.duplicate("a", 281), "Waiting\non a review", nil] do
+      assert say.(line, 422)["error"]["code"] == "invalid_request"
+    end
 
     # Following a Key's wall, and naming one not sold yet.
     wall = fn token_id, status ->

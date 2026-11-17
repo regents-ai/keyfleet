@@ -11072,3 +11072,45 @@ page, shell, Key page and Upkeep tests: 166 passed. Browser walks `fleet_prompts
 `account_agents`: 9 passed. Typecheck passed; vitest 573 passed, and its 14 failures are
 the untracked review file `assets/test/adversarial_send_step.test.ts` (13) and
 `key_map_state` timing out under load (passes alone, 13 of 13).
+
+## 2026-11-17: an agent says what blocks it, for its person alone (Sean's 36 a)
+
+- A check-in may carry `run.blocker`, one line in the agent's own words saying what is
+  blocking it, with either kind of run. `Keyfleet.Agents.CheckIn` keeps it in the new
+  nullable `blocker` column: plain text up to 280 characters once trimmed (counted in
+  characters), an empty one being none. The agent's next recorded check-in sets it again
+  or clears it; one skipped as too soon (each kind at most once a minute) changes nothing.
+- One rule (`CheckIn.blocker?/1`, the attribute's own constraints) decides a good line.
+  The signed door's shape check (`SignedAgent`) uses it, so a line over 280 characters
+  or holding a line break, control or invisible character answers 422 `invalid_request`
+  over signed HTTP and through the connector's `fleets_sync` alike, before the sync
+  waits and with nothing written. The connector passes the line through as sent.
+- Only two read it, by field policy: the agent itself, and its paired person signed in
+  as themselves (the person its last check-in was for). Another person, another agent of
+  the same person, that person's Keyfleet account, a reader with no actor and a read
+  through the agent's profile get a forbidden field. `Keyfleet.Agents.blocked_check_ins/2`
+  (`:blocked`, persons only) gives a person their agents' lines.
+- The Agents page (`AgentsPanel`) shows a Blocked card while any line holds: each
+  agent's name, fleet, check-in light and words and last check-in, then its line quoted
+  as its own words, drawn as text. The shared agents list from regent_ui has no place
+  beside its last check-in, so the card stands on its own under Schedule.
+- The sync answer's `check_in` gains `blocker`, what the person sees. Contract 36.2.0
+  (both copies): `Blocker`, the run's two shapes, the 422 words and the answer. The tool
+  list, `cli/commands.json`, `cli/COMMANDS.md`, /docs and `docs/agent-parity.md` say the
+  same. The guide (3.35.0) says to put it in each sync while blocked, in the place of
+  "don't repeat it until it changes", to stay under 9,000 characters. The public
+  changelog and the verification list (`agent-blocker`) say the same. regents-cli needs
+  no code change, as `rooms sync` passes `run` on as sent; its pinned
+  `platforms/keyfleet/` copies need a refresh.
+- Migration `20261117195656_agent_check_in_blocker` adds one nullable `text` column,
+  `keyfleet_app.agent_check_ins.blocker`, and nothing else; down removes it.
+
+Check (partition `_kf_s3`, PORT unset): format, the contract copies in sync, compile
+with warnings as errors, Credo (770 files, no issues) and xref (138 compile-connected, at
+the limit) passed. Check-ins, signed requests, connector, contract, tool commands, agent
+files, release package and shell tests: 96 passed (1 property, 95 tests), 1 excluded.
+The whole suite, run in three parts (`test/keyfleet`, `test/keyfleet_web` and its
+folders): 1,546 passed (22 properties, 1,524 tests), 19 excluded, none failed. Browser
+walks `account_agents` and `fleet_prompts`: 10 passed. Typecheck passed; vitest 574
+passed, and its 13 failures are the untracked review file
+`assets/test/adversarial_send_step.test.ts`.

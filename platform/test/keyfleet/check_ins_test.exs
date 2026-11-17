@@ -118,6 +118,112 @@ defmodule Keyfleet.CheckInsTest do
              }
   end
 
+  # What an agent says blocks it is for itself and its person: not another
+  # person, not another agent of the same person, not that person's Keyfleet
+  # account, and not a read with no one signed in, nor one through the agent's
+  # profile.
+  test "what an agent says blocks it reaches its person and nobody else" do
+    person_wallet = person_wallet()
+    {actor, profile} = agent("e", "Echo", person_wallet)
+    {sibling, _profile} = agent("f", "Fox", person_wallet)
+    {other, _profile} = agent("c", "Able")
+    line = "Waiting for my person to send gas on Base"
+    blocked = %{"kind" => "session", "blocker" => line}
+
+    assert {:ok, %{blocker: ^line}} = Agents.check_in(actor, @fleet, blocked)
+
+    person = %RegentAgents.Person{privy_user_id: actor.privy_user_id}
+
+    assert [%{blocker: ^line, fleet_id: @fleet}] =
+             Agents.blocked_check_ins!([actor.wallet_address], actor: person)
+
+    assert Agents.blocked_check_ins!([actor.wallet_address],
+             actor: %RegentAgents.Person{privy_user_id: other.privy_user_id}
+           ) == []
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Agents.blocked_check_ins([actor.wallet_address], actor: actor)
+
+    account = %Actors.Human{human_account_id: actor.human_account_id}
+
+    for reader <- [other, sibling, account, nil] do
+      assert %Ash.ForbiddenField{} =
+               Agents.get_check_in!(profile.id, @fleet, actor: reader).blocker
+    end
+
+    assert Agents.get_check_in!(profile.id, @fleet, actor: actor).blocker == line
+    assert Agents.get_check_in!(profile.id, @fleet, actor: person).blocker == line
+
+    assert [%{check_ins: [%{blocker: %Ash.ForbiddenField{}}]}] =
+             Agents.agents_by_wallets!([actor.wallet_address], load: [:check_ins])
+  end
+
+  # The line lasts until the agent's next check-in that is written, of
+  # either kind; one too soon to be written keeps it.
+  test "a check-in without a blocker clears it, one too soon keeps it", %{
+    actor: actor,
+    profile: profile
+  } do
+    scheduled = %{"kind" => "scheduled", "every_minutes" => 30}
+
+    assert {:ok, %{blocker: "Stuck"}} =
+             Agents.check_in(actor, @fleet, Map.put(scheduled, "blocker", "Stuck"))
+
+    assert {:ok, %{blocker: "Stuck"}} = Agents.check_in(actor, @fleet, scheduled)
+
+    earlier!(30)
+    assert {:ok, %{blocker: nil}} = Agents.check_in(actor, @fleet, scheduled)
+
+    assert {:ok, %{blocker: "Still stuck"}} =
+             Agents.check_in(actor, @fleet, %{"kind" => "session", "blocker" => "Still stuck"})
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_session_at = last_session_at - interval '2 minutes'"
+    )
+
+    assert {:ok, %{blocker: nil}} = Agents.check_in(actor, @fleet, %{"kind" => "session"})
+    assert Agents.get_check_in!(profile.id, @fleet, actor: actor).blocker == nil
+  end
+
+  # One line of plain text, up to 280 characters once trimmed: an empty one is
+  # none, and one too long or holding a control character, an invisible one or
+  # a line break is refused and changes nothing.
+  test "a blocker is trimmed, an empty one is none, and a bad one is refused", %{
+    actor: actor,
+    profile: profile
+  } do
+    session = fn line -> %{"kind" => "session", "blocker" => line} end
+
+    assert {:ok, %{blocker: "Waiting on review"}} =
+             Agents.check_in(actor, @fleet, session.("  Waiting on review \n"))
+
+    for line <- [
+          String.duplicate("a", 281),
+          "Waiting\non review",
+          "Waiting on\u0007 review",
+          "Waiting​ on review"
+        ] do
+      assert {:error, %Ash.Error.Invalid{}} = Agents.check_in(actor, @fleet, session.(line))
+      refute CheckIn.blocker?(line)
+    end
+
+    assert Agents.get_check_in!(profile.id, @fleet, actor: actor).blocker == "Waiting on review"
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_session_at = last_session_at - interval '2 minutes'"
+    )
+
+    long = String.duplicate("é", 280)
+    assert CheckIn.blocker?(long)
+    assert {:ok, %{blocker: ^long}} = Agents.check_in(actor, @fleet, session.(" #{long} "))
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_session_at = last_session_at - interval '2 minutes'"
+    )
+
+    assert {:ok, %{blocker: nil}} = Agents.check_in(actor, @fleet, session.("   "))
+  end
+
   # As if the last scheduled check-in came `minutes` earlier.
   defp earlier!(minutes) do
     Repo.query!(
@@ -153,7 +259,7 @@ defmodule Keyfleet.CheckInsTest do
 
   defp person_wallet, do: "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
 
-  defp agent(character, name) do
+  defp agent(character, name, person_wallet \\ person_wallet()) do
     actor =
       PairingHelpers.pair!(
         %Actors.Agent{
@@ -162,7 +268,7 @@ defmodule Keyfleet.CheckInsTest do
           verification_method: :eoa_recovery,
           audience: "keyfleet"
         },
-        [person_wallet()]
+        [person_wallet]
       )
 
     profile =

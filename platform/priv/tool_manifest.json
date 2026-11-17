@@ -360,6 +360,11 @@
                 "type": "integer",
                 "minimum": 10,
                 "maximum": 1440
+              },
+              "blocker": {
+                "type": "string",
+                "maxLength": 280,
+                "description": "Optional: what is blocking you, in your own words, which only your person sees beside this check-in. One line of plain text, up to 280 characters. Send it with every sync while it holds; a check-in without it clears it."
               }
             },
             "oneOf": [
