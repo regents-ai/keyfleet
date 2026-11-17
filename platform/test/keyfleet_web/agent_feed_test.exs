@@ -33,6 +33,9 @@ defmodule KeyfleetWeb.AgentFeedTest do
       Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    # Every test here posts as the same agent and Key, one of them 101 times,
+    # and the hourly post allowance is counted across the whole suite.
+    :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
     Fleets.bootstrap_catalog!()
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
