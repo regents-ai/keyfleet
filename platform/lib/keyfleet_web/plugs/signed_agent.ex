@@ -526,17 +526,34 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def accept(conn, data, _context) do
     with {:ok, actor} <- actor(conn, data),
          {:ok, conn} <- take_body(conn),
-         do: admit(conn, actor)
+         do: conn |> admit(actor) |> listed()
   end
 
   @doc """
   Admits the agent a verified answer names without reading the request's
-  body. The notebook gateway carries that body to the fleet's hub as it
-  came, and the hub checks it.
+  body, and saves its listing. The notebook gateway carries that body to the
+  fleet's hub as it came, and the hub checks it.
   """
-  def accept_agent(conn, data) do
+  def accept_agent(conn, data), do: conn |> admit_agent(data) |> listed()
+
+  @doc """
+  Admits the agent a verified answer names as `accept_agent/2` does, but
+  saves nothing: the code gateway saves its listing
+  (`Keyfleet.Agents.save_listing/1`) only for a request it sends on, once the
+  body proved to be the one signed.
+  """
+  def admit_agent(conn, data) do
     with {:ok, actor} <- actor(conn, data), do: admit(conn, actor)
   end
+
+  # A listing that could not be saved is logged there and saved by the agent's
+  # next request; this request goes on.
+  defp listed({:ok, %{assigns: %{agent_actor: agent}}} = admitted) do
+    _saved_or_logged = Keyfleet.Agents.save_listing(agent)
+    admitted
+  end
+
+  defp listed(refused), do: refused
 
   # The fields Keyfleet acts on; anything else the sign-in server says is
   # its own. The agent's page in the agent registry and the World ID person
@@ -618,9 +635,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Agent.authenticated?(actor) ->
         case Keyfleet.Agents.with_pairing(actor) do
           {:ok, paired} ->
-            # A listing that could not be saved is logged there and saved by
-            # the agent's next request; this request goes on.
-            _saved_or_logged = Keyfleet.Agents.save_listing(paired)
             {:ok, assign(conn, :agent_actor, paired)}
 
           {:error, :not_paired} ->

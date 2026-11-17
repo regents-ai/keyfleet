@@ -38,10 +38,13 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of
   any sign-in, with only the headers git's exchange needs. The store's answer
-  streams back. Each push spends `:code_pushes` for the wallet it is sent as
-  (`Keyfleet.Limits`), before its body is read. When the store reports changes
-  done, each branch or tag moved, up to `@recorded` of them, is recorded for
-  the fleet's workspace, under the project and the key and, for an agent, the
+  streams back. A push past `:code_pushes` for the wallet it is sent as
+  (`Keyfleet.Limits`) is refused before its body is read, and one is spent
+  only once the body is in and is the one signed; an agent's listing is saved
+  only for a request sent on to the store, so a request refused for its body
+  spends no push and saves no listing. When the store reports changes done,
+  each branch or tag moved, up to `@recorded` of them, is recorded for the
+  fleet's workspace, under the project and the key and, for an agent, the
   agent too. A store that cannot be reached, stops mid-exchange, answers with
   a fault of its own or refuses the pass is saved with the site's errors
   (`Keyfleet.Code.StoreDownError`).
@@ -120,7 +123,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
          {:project, {:ok, %Project{} = project}} <- {:project, project(repository)},
          {:open, :ok} <- {:open, open(project, need)},
          {:owner, {:ok, owner}} <- {:owner, Code.owner(repository)},
-         {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)},
+         {:pushes, :ok} <- {:pushes, pushes(conn, fleet_id, holder, &Limits.check/2)},
          {:body, {:ok, conn, body}} <- {:body, spool(conn)} do
       check = fn -> reported(fleet_id, current_holder(fleet_id, subject, actor)) end
 
@@ -136,12 +139,16 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   # A body may take far longer to arrive than a pass lasts, and meanwhile the
   # key may change hands and the project be archived or deleted, so both are
-  # read again once the body is in and the pass is made then.
+  # read again once the body is in and the pass is made then. Only a request
+  # that gets this far spends a push or saves an agent's listing.
   defp send_checked(conn, project, path, need, check, body, actor) do
     with {:holder, {:ok, %{} = holder}} <- {:holder, check.()},
          {:allowed, :ok} <- {:allowed, allowed(holder, need)},
          {:project, {:ok, %Project{} = project}} <- {:project, project(project.repository)},
-         {:open, :ok} <- {:open, open(project, need)} do
+         {:open, :ok} <- {:open, open(project, need)},
+         {:pushes, :ok} <- {:pushes, pushes(conn, project.fleet_id, holder, &Limits.admit/2)} do
+      _saved_or_logged = listed(actor)
+
       forward(conn, project.repository, path, pass(project.repository, holder, need), body, fn
         response -> sent(conn, project, holder, actor, body.head, response)
       end)
@@ -205,15 +212,21 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   # Each push spends the allowance of the wallet it is sent as in the fleet
   # (`Keyfleet.Keys.identity/2`), so a person and the agents pushing as their
-  # Key share one; copying the code spends none.
-  defp spend_push(
+  # Key share one; copying the code spends none. `limits` is `Limits.check/2`
+  # before the body is read, so a push past the allowance is refused unread,
+  # and `Limits.admit/2` once the body is in and is the one signed.
+  defp pushes(
          %Plug.Conn{method: "POST", path_info: [_repository, "git-receive-pack"]},
          fleet_id,
-         holder
+         holder,
+         limits
        ),
-       do: Limits.admit(:code_pushes, {fleet_id, holder.wallet})
+       do: limits.(:code_pushes, {fleet_id, holder.wallet})
 
-  defp spend_push(_conn, _fleet_id, _holder), do: :ok
+  defp pushes(_conn, _fleet_id, _holder, _limits), do: :ok
+
+  defp listed(%Keyfleet.Actors.Agent{} = agent), do: Keyfleet.Agents.save_listing(agent)
+  defp listed(_person), do: :ok
 
   # When the store took a push, what it moved is recorded under the holder,
   # and an agent's push as its latest contribution.
@@ -394,7 +407,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   # Only who sent it is checked here; whether they may use the code comes next.
   @impl Siwa.AgentAuthPlug.Hooks
-  def accept(conn, data, _context), do: SignedAgent.accept_agent(conn, data)
+  def accept(conn, data, _context), do: SignedAgent.admit_agent(conn, data)
 
   # Every refusal on the code address is the one plain shape below, a sign-in
   # refused included.

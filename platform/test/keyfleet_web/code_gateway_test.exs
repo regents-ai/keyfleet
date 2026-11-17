@@ -393,6 +393,47 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     end
   end
 
+  # Costly failure: a push refused because its body isn't the one it signed
+  # still uses up its wallet's pushes, so the agent's next, good push is
+  # refused, and saves its listing as though the push had been taken.
+  test "a push refused for its body spends no push and saves no listing; one taken does both" do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+    Application.put_env(
+      :keyfleet,
+      :limits,
+      Keyword.put(limits, :code_pushes, limit: 1, window_seconds: 3600)
+    )
+
+    # Other tests may push in this window; start unspent.
+    :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
+    put_code(max_pack_bytes: 100_000)
+    agent = key_holding_agent!(7)
+    listing = "https://www.8004scan.io/agents/base/97609"
+    listing_broker!(agent.secret, listing)
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Pusher", declared_harness: "local"},
+      actor: agent.actor
+    )
+
+    listed = fn -> Keyfleet.Agents.get_my_profile!(actor: agent.actor).registry_url end
+    push = "/#{@fleet}.git/git-receive-pack"
+
+    assert signed(agent, push, "0000", "0001").status == 400
+    assert listed.() == nil
+
+    assert signed(agent, push, "0000").status == 200
+    assert_receive {:store, "POST", _path, _claims, "0000"}
+    assert listed.() == listing
+
+    # A push past the allowance is refused before its body is read, so one
+    # past the size limit too is told it is past the allowance.
+    past = :binary.copy(<<0>>, 100_001)
+    assert signed(agent, push, past).status == 429
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
   # Costly failure: one push fills the site's disk or memory.
   test "a push past the limit is refused with 413, reaches nothing, and its file is gone", c do
     put_code(max_pack_bytes: 100_000)
@@ -606,6 +647,26 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     actor = Keyfleet.PairingHelpers.pair_wallet!(wallet)
     epoch!(token_id, 1, wallet)
     %{signer: signer, secret: secret, wallet: wallet, actor: actor}
+  end
+
+  # A sign-in server that names `listing` as the agent's page in the agent
+  # registry, in place of the one `key_holding_agent!/1` started.
+  defp listing_broker!(secret, listing) do
+    old = Application.get_env(:keyfleet, :siwa_broker_url)
+    on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
+
+    broker =
+      SignedAgentHelpers.serve!(:listing_broker, fn conn, _opts ->
+        {:ok, raw, conn} = read_body(conn)
+        {200, verdict} = SignedAgentHelpers.verdict(Jason.decode!(raw), secret)
+        listed = put_in(verdict, [:data, :agentRegistration], %{"registryUrl" => listing})
+
+        conn
+        |> put_resp_content_type("application/json")
+        |> send_resp(200, Jason.encode!(listed))
+      end)
+
+    Application.put_env(:keyfleet, :siwa_broker_url, broker)
   end
 
   # `signed` is what the agent signed; `sent` is what arrives. Each agent

@@ -27,7 +27,26 @@ defmodule Keyfleet.Accounts.RequestRateLimiter do
     sweep(window_seconds, bucket)
     row = {window_seconds, key, bucket}
     count = :ets.update_counter(@table, row, {2, 1}, {row, 0})
+    answer(count, limit, window_seconds, bucket, now)
+  end
 
+  @doc "What `admit/3` would answer for `key` now, spending none of its budget."
+  @spec check(term(), pos_integer(), pos_integer()) ::
+          {:ok, budget()} | {:error, :rate_limited, budget()}
+  def check(key, limit, window_seconds) do
+    now = System.monotonic_time(:second)
+    bucket = Integer.floor_div(now, window_seconds)
+
+    spent =
+      case :ets.lookup(@table, {window_seconds, key, bucket}) do
+        [{_row, count}] -> count
+        [] -> 0
+      end
+
+    answer(spent + 1, limit, window_seconds, bucket, now)
+  end
+
+  defp answer(count, limit, window_seconds, bucket, now) do
     budget = %{
       limit: limit,
       remaining: max(limit - count, 0),
