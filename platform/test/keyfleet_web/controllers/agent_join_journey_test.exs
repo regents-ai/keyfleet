@@ -187,6 +187,26 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     refute_receive {:broker_payload, _}
   end
 
+  # Costly failure: over HTTP/2 one frame carries more than a read asks for,
+  # and the agent is answered with the site's error page, not its refusal.
+  test "over HTTP/2, a body past its limit in one frame gets the door's own too-large refusal",
+       c do
+    limit = KeyfleetWeb.Plugs.SignedAgent.body_limit(@path)
+    over = @body <> String.duplicate(" ", 4 * limit)
+    request = signed(c, over)
+
+    answer =
+      Req.post!(c.app <> request.path,
+        headers: request.headers,
+        body: over,
+        retry: false,
+        connect_options: [protocols: [:http2]]
+      )
+
+    assert outcome(answer) == {413, "request_too_large"}
+    refute_receive {:broker_payload, _}
+  end
+
   test "a profile update body changed after signing is refused", c do
     request = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
     response = send_request(c, %{request | body: ~s({"name":"Changed"})})

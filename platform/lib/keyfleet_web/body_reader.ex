@@ -37,17 +37,21 @@ defmodule KeyfleetWeb.BodyReader do
   @doc """
   Reads a signed request's body with the shared SIWA reader, which keeps the
   exact bytes in `conn.assigns.raw_body`: `{:ok, body, conn}` for a body of at
-  most `limit` bytes however it arrives, `{:more, body, conn}` for a longer
+  most `limit` bytes however it arrives, `{:more, partial, conn}` for a longer
   one, or `{:error, reason}`.
 
   A read asks for one byte past `limit`. A body sent in chunks that fills a
   read exactly comes back unfinished, so a read of `limit` bytes can't tell a
-  body of exactly the limit from a longer one.
+  body of exactly the limit from a longer one. Over HTTP/2 one frame can carry
+  more than a read asks for, which the shared reader refuses by raising: that
+  body is longer too, and `partial` is empty.
   """
   def read_signed(conn, options, limit) do
     case Siwa.AgentAuthPlug.read_body(conn, options, limit + 1) do
       {:ok, body, conn} when byte_size(body) > limit -> {:more, body, conn}
       read -> read
     end
+  rescue
+    Plug.Parsers.RequestTooLargeError -> {:more, "", conn}
   end
 end
