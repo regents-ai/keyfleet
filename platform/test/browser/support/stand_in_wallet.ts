@@ -59,8 +59,6 @@ export async function useStandInWallet(
             switch (method) {
               case "eth_chainId":
                 return `0x${chainId.toString(16)}`
-              case "eth_accounts":
-                return [address]
               case "eth_sendTransaction": {
                 if (standIn.answer === "decline") {
                   throw Object.assign(new Error("User rejected the request."), {code: 4001})

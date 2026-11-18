@@ -11190,3 +11190,43 @@ a scratch walk that is not kept.
 - `contracts/README.md` said Classic #1 was not deployed and that Key sales were off. Classic #1
   is deployed on Base and selling, beside the Regents Club; Syndicate #1, Accelerant #1 and
   Cascade #1 are not deployed, and it is their sales that wait for the founder's word.
+
+## 2026-11-17 — Every wallet press reaches the wallet, and asks to switch to Base first
+
+The template's 8011292d ("Wallet presses: no account check, a prompt to switch network"),
+ported for Sean's wallet ruling. Its 8f28f899 (Privy's own wallet switching through the
+provider the page holds) was already here from de15c661b.
+
+- `platform/assets/js/wallet_actions/send_step.ts`: `sendStep` and `signStep` take the
+  wallet Privy has active, which `press` in `platform/assets/js/hooks/onchain_steps.ts` reads
+  once per press. Gone: the account read compared with the signer, the network read after the
+  switch and again before the send, and the check that Privy had not swapped the wallet during
+  the press. A wallet on another chain is asked to switch on every press, through its own
+  switch, and once that resolves the same press sends or signs. A declined switch (4001) is
+  `switch_declined`, any other failed switch `network_mismatch`; either sends nothing, and the
+  next press asks again. `wallet_unavailable` now means only that no wallet answered.
+- The smart-wallet send path is unchanged: the capability question with its two-second limit,
+  the builder-code suffix, `wallet_sendCalls` and its wait, and the plain transaction when the
+  wallet can't append. Both sends carry the step's chain.
+- `platform/lib/keyfleet_web/wallet/onchain_steps.ex`: the notes for a wallet that didn't
+  answer, a declined switch and a failed switch say what happened and what to do, naming Base.
+  The signed-out, no-wallet-open and unlinked-wallet notes stay; the server still builds the
+  steps for a linked wallet only.
+- `platform/assets/test/send_step.test.ts` mirrors the template's tests: a wallet answering for
+  another account sends and signs; each press off Base asks to switch, then sends; a declined
+  or failed switch sends nothing and the next press asks again; the step goes as built; no
+  active wallet sends nothing. The first two fail on the code before this change.
+  `onchain_steps.test.ts` and `send_calls.test.ts` lose the cases and assertions of the removed
+  checks, the fleet page test and the declined-switch walk read the new notes, and the walks'
+  stand-in wallet no longer answers an account read.
+- `verification/features.yml` (`wallet-network-switch`) says the same. No database, contract or
+  agent-visible change, so no version bump.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors (585 files),
+Credo (771 files, no issues) and xref (within the 138 compile-connected limit) passed.
+Typecheck passed leaving out the untracked review file
+`platform/assets/test/adversarial_send_step.test.ts`, whose two errors are its own calls in
+the old shape; vitest 497 passed, leaving out that file. Wallet step, fleet page, proposals,
+telemetry and visit log tests: 202 passed. The whole suite: 1,562 passed (22 properties, 1,540
+tests), 19 excluded. The asset budgets pass on a minified build. Browser walks: homepage and
+launch, 22 passed; the whole chain project, 139 passed; the device walks, 72 passed.

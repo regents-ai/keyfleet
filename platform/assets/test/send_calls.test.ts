@@ -71,8 +71,6 @@ function wallet({
       switch (method) {
         case "eth_chainId":
           return "0x2105"
-        case "eth_accounts":
-          return [signer]
         case "wallet_getCapabilities":
           return capabilities()
         case "wallet_sendCalls":
@@ -88,14 +86,11 @@ function wallet({
     },
   }
   const sends = () => requests.filter(({method}) => method === "eth_sendTransaction" || method === "wallet_sendCalls")
-  // The request made just before each send.
-  const beforeSends = () =>
-    requests.flatMap((request, index) => (sends().includes(request) ? [requests[index - 1].method] : []))
-  return {provider, requests, sends, beforeSends, statusReads}
+  return {provider, requests, sends, statusReads}
 }
 
 const send = (provider: EthereumProvider, sent: TransactionStep = step) =>
-  sendStep(base, signer, sent, () => ({address: signer, provider, switchChain}), () => {})
+  sendStep(base, signer, sent, {address: signer, provider, switchChain}, () => {})
 
 function memoryStorage() {
   const values = new Map<string, string>()
@@ -146,7 +141,6 @@ describe("a wallet that appends the builder code itself gets the step as one cal
     expect(active.requests.filter(({method}) => method === "wallet_getCallsStatus")).toEqual([
       {method: "wallet_getCallsStatus", params: ["0xbatch1"]},
     ])
-    expect(active.beforeSends()).toEqual(["eth_chainId"])
   })
 
   it("takes a code the wallet reports for every chain, under 0x0", async () => {
@@ -189,7 +183,6 @@ describe("every other wallet gets the step as a transaction, as before", () => {
 
     expect(await send(active.provider)).toBe(sentHash)
     expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
-    expect(active.beforeSends()).toEqual(["eth_chainId"])
   })
 
   it("a wallet that never says what it can do gets one eth_sendTransaction two seconds on", async () => {
@@ -203,7 +196,6 @@ describe("every other wallet gets the step as a transaction, as before", () => {
 
     expect(await sent).toBe(sentHash)
     expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
-    expect(active.beforeSends()).toEqual(["eth_chainId"])
   })
 
   it("a wallet that appends the code gets one eth_sendTransaction when its calls could not be followed here", async () => {
@@ -214,11 +206,10 @@ describe("every other wallet gets the step as a transaction, as before", () => {
     try {
       const fresh = await import("../js/wallet_actions/send_step")
       const active = wallet({capabilities: () => onBase})
-      const selected = () => ({address: signer, provider: active.provider, switchChain})
+      const selected = {address: signer, provider: active.provider, switchChain}
 
       expect(await fresh.sendStep(base, signer, step, selected, () => {})).toBe(sentHash)
       expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
-      expect(active.beforeSends()).toEqual(["eth_chainId"])
     } finally {
       vi.doUnmock("viem/actions")
       vi.resetModules()
@@ -232,7 +223,7 @@ describe("every other wallet gets the step as a transaction, as before", () => {
     try {
       const fresh = await import("../js/wallet_actions/send_step")
       const active = wallet({capabilities: () => onBase})
-      const selected = () => ({address: signer, provider: active.provider, switchChain})
+      const selected = {address: signer, provider: active.provider, switchChain}
 
       const sent = fresh.sendStep(base, signer, step, selected, () => {})
       await vi.advanceTimersByTimeAsync(1_999)

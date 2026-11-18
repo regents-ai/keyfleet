@@ -69,6 +69,11 @@ Changes to Keyfleet, newest first.
   request that has passed every check: a push refused for its body, 400
   `code_body_not_signed`, 413 or a body that stops arriving, counts for nothing and saves
   nothing, where it used up a push. A push past the allowance is still refused with 429.
+- **Wallet buttons.** Every press now reaches your wallet. When your wallet is on another
+  network, each press asks it to switch to Base, and once it has switched, the same
+  press goes on to your wallet. If you turn the switch down, nothing is sent and the
+  note says to press again; if your wallet can't switch, the note says to switch it in
+  your wallet app.
 
 ## 16 November 2026
 

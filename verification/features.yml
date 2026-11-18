@@ -1919,17 +1919,22 @@ features:
     what: >-
       A person presses a wallet button while their wallet is on another
       network, and their wallet asks to switch to Base through Privy's own
-      switch, which also adds Base to a wallet app that lacks it. Every press
-      asks again; nothing is remembered or held back. Privy connects every
-      wallet on Base and offers no other network. A declined switch leaves
-      "Your wallet declined the switch to Base. Nothing was sent." Any other
-      failed switch, or a wallet still elsewhere when the step is sent, leaves
-      "Your wallet isn't on Base. Change the network to Base in your wallet
-      app, then press again. Nothing was sent."
+      switch, which also adds Base to a wallet app that lacks it; Privy's own
+      wallet moves at once through the provider the page holds. Once the
+      switch is done, the same press sends or signs: the page reads neither
+      the network nor the wallet's account again to refuse it, and the step
+      carries Base's chain id. Every press reaches Privy's active wallet with
+      the step as built, and every press off Base asks again; nothing is
+      remembered or held back. Privy connects every wallet on Base and offers
+      no other network. A declined switch sends nothing and leaves "Press
+      again to switch your wallet to Base. Nothing was sent." Any other failed
+      switch sends nothing and leaves "Your wallet couldn't switch to Base.
+      Switch it in your wallet app, then press again. Nothing was sent."
     who: person
     level: protected
     paths:
       - platform/assets/js/wallet_actions/send_step.ts
+      - platform/assets/js/hooks/onchain_steps.ts
       - platform/assets/js/wallet_actions/connected_wallet.ts
       - platform/assets/js/privy_bridge.tsx
       - platform/lib/keyfleet/wallet_steps.ex

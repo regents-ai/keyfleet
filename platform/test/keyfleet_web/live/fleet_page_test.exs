@@ -822,8 +822,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       press_fails!(view, "wallet_unavailable")
 
-      assert text(view, "#buy-key-order-press-note") =~
-               "Check it's unlocked and open on 0xaaaa..aaaa"
+      assert text(view, "#buy-key-order-press-note") =~ "didn't answer"
     end
 
     # Costly failure: a press on the wallet panel is acted on for a sign-in

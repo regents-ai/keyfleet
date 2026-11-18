@@ -9,7 +9,6 @@ import {
 } from "../js/wallet_actions/connected_wallet"
 
 const signer = "0x1111111111111111111111111111111111111111"
-const other = "0x2222222222222222222222222222222222222222"
 const fleet = "0x3333333333333333333333333333333333333333"
 const hash = `0x${"ab".repeat(32)}`
 
@@ -28,13 +27,12 @@ type Wallet = {
   sent: unknown[]
 }
 
-// A stand-in wallet: on `chainId`, holding `account`, moved by its own switch,
-// answering each send with `answer` (a hash, or an error it throws).
+// A stand-in wallet: on `chainId`, moved by its own switch, answering each
+// send with `answer` (a hash, or an error it throws).
 function wallet({
   chainId = 8453,
-  account = signer,
   answer = () => hash as unknown,
-}: {chainId?: number; account?: string; answer?: () => unknown} = {}): Wallet {
+}: {chainId?: number; answer?: () => unknown} = {}): Wallet {
   const sent: unknown[] = []
   let current = chainId
   const provider: EthereumProvider = {
@@ -42,8 +40,6 @@ function wallet({
       switch (method) {
         case "eth_chainId":
           return `0x${current.toString(16)}`
-        case "eth_accounts":
-          return [account]
         case "eth_sendTransaction":
           sent.push(params)
           return answer()
@@ -80,7 +76,7 @@ function pushes() {
   return {pushed, push: (event: string, payload: unknown) => void pushed.push([event, payload])}
 }
 
-describe("a press sends the server's step from the wallet it was built for", () => {
+describe("a press sends the server's step through the active wallet", () => {
   it("two presses in a row both reach eth_sendTransaction", async () => {
     const active = wallet()
     replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
@@ -115,40 +111,6 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
     expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
-  })
-
-  it("sends nothing from a wallet the steps weren't built for", async () => {
-    const active = wallet({account: other})
-    replaceActiveEthereumWallet({address: other, provider: active.provider, switchChain: active.switchChain})
-    const {pushed, push} = pushes()
-
-    await press(review, "buy", push)
-
-    expect(active.sent).toHaveLength(0)
-    expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
-  })
-
-  it("sends when the wallet names the signer in other letter case", async () => {
-    const checksummed = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01"
-    const active = wallet({account: checksummed})
-    replaceActiveEthereumWallet({address: checksummed, provider: active.provider, switchChain: active.switchChain})
-    const {pushed, push} = pushes()
-
-    await press({...review, signer: checksummed.toLowerCase() as Review["signer"]}, "buy", push)
-
-    expect(active.sent).toHaveLength(1)
-    expect(pushed).toEqual([["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}]])
-  })
-
-  it("sends nothing when the wallet answers for another account", async () => {
-    const active = wallet({account: other})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
-    const {pushed, push} = pushes()
-
-    await press(review, "buy", push)
-
-    expect(active.sent).toHaveLength(0)
-    expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
   })
 
   it("sends nothing when no wallet is active", async () => {

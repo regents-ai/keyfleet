@@ -240,7 +240,7 @@ test("a switch the wallet declines sends nothing and says so, and the next press
   await useStandInWallet(page, me, "send", {on: 1, switching: "decline"})
 
   await page.locator("#buy-key-approve").click()
-  await expect(pressNote(page)).toHaveText("Your wallet declined the switch to Base. Nothing was sent.")
+  await expect(pressNote(page)).toHaveText("Press again to switch your wallet to Base. Nothing was sent.")
   expect(await sentByStandIn(page)).toEqual([])
 
   await useStandInWallet(page, me, "send", {on: 1})
