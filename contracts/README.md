@@ -596,17 +596,17 @@ per contract. Measured with `forge build --sizes`:
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
 | `KeyfleetClubClaims` | 3,687 | 3,910 |
-| `KeyfleetFactory` | 6,387 | 41,277 |
-| `KeyfleetKeys` | 12,743 | 14,301 |
+| `KeyfleetFactory` | 6,405 | 41,754 |
+| `KeyfleetKeys` | 13,202 | 14,760 |
 | `KeyfleetManager` | 16,383 | 18,376 |
 | `KeyfleetManagerDeployer` | 18,866 | 18,997 |
 | `KeyfleetRegentBuyer` | 8,098 | 9,832 |
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
-| `KeyfleetTradingFactory` | 4,993 | 34,972 |
-| `KeyfleetTradingManager` | 8,480 | 9,915 |
-| `KeyfleetTradingManagerDeployer` | 10,405 | 10,536 |
+| `KeyfleetTradingFactory` | 4,993 | 35,038 |
+| `KeyfleetTradingManager` | 8,530 | 9,981 |
+| `KeyfleetTradingManagerDeployer` | 10,471 | 10,602 |
 | `KeyfleetTradingTreasury` | 5,737 | 6,886 |
 | `KeyfleetTradingTreasuryDeployer` | 7,376 | 7,507 |
 | `KeyfleetTreasury` | 11,951 | 14,050 |
@@ -1621,6 +1621,9 @@ joining requirements (`RequirementNotMet`; the same three kinds and meaning as
 every fleet's) and the close (`SalesEnded`) stop a sale. The creator's key 1 is
 not checked against the requirements.
 
+`FIRST_PRICE` keeps the price key 1 sold for, which never changes; `price` is
+the next key's.
+
 Only the creator may call `setPrice` (1 to 1,000,000,000,000 USDC), `setStep`
 (0 to 10,000) and `setProfile`, which also asks marketplaces to fetch the
 fleet's metadata again; each emits its event (`PriceSet`, `StepSet`,
@@ -1698,9 +1701,9 @@ Nothing shared calls a Trading Fleet's manager for anything it lacks:
   the daily payback.
 - Any token but USDC sent to the treasury, and USDC sent straight to the ledger,
   stays where it is for good.
-- `script/RecordKeyfleets.s.sol` checks every fleet in the collection against
-  the existing factory and refuses a Trading Fleet (`FleetNotBound(fleetId,
-  "manager")`), so it cannot write a deployed record once one exists.
+- The deployed record lists a Trading Fleet's step, trading wallet and close as
+  they stand at the block it reads; the creator may change the first two at any
+  time, and the record is not rewritten when they do.
 - Trading Fleets take fleet numbers and Accelerant numbers from the same counts
   as every fleet. Once the keeper records a deck for one, each of its keys draws
   through the collection's randomness subscription, which the Regents Safe pays
@@ -1788,6 +1791,43 @@ without six decimals, a zero keeper and a zero trait table hash.
   does not own (`VrfSubscriptionNotOwnedByRegentsSafe`). It lists every fleet
   in the collection's registry, so it can be rerun at any time to add fleets
   created since.
+
+  A fleet whose manager is not where the existing factory places its fleets'
+  managers is recorded as a Trading Fleet only if its manager names a trading
+  factory the collection lists, that trading factory reads this system's
+  collection, shard record, USDC and REGENT revenue staking
+  (`FleetNotBound(fleetId, "tradingFactory")` otherwise), and its manager,
+  treasury and ledger are where that trading factory places them, hold code and
+  point at each other (`"manager"`, `"preset"`, `"treasury"` or `"rewards"`
+  otherwise). A manager that does not name a factory is refused as
+  `"manager"`, as before. Its entry under `fleets`, keyed by fleet number like
+  every other, has 24 fields: `type` `"trading"`; `collectionType`
+  `"accelerant"` and `typeNumber`, the type and number the collection
+  registered it under (always 2 or more, since Accelerant #1 is founding fleet
+  3); `tradingFactory` and `tradingFactoryCodeHash`; `firstPrice`, `stepBps`,
+  `dailyPaybackBps`, `keyCap` (zero for none), `closedAt` (zero while open) and
+  `tradingWallet` (zero until named); `deckHash` and `deckSize` (zero until the
+  keeper records a deck); `manager`, `treasury` and `rewards`, each with its
+  `…CodeHash`; `name`, `description`, `imageLink`; `requirements`
+  (`merkleRoot`, `nft`, `token`, `tokenMin`); and `stakingSourceTag`, the tag
+  its paybacks' staking deposits carry. It has no `startPrice`,
+  `accelerantStepPercent`, `votes`, `protocolShareTag` or `splitAssets`. Every
+  other fleet's entry, and every other part of the record, is written exactly
+  as before Trading Fleets existed.
+- `script/DeployTradingFactory.s.sol` deploys `KeyfleetTradingFactory` on the
+  live system and writes nothing. It sends one transaction from one account,
+  about 7.4 million gas; the trading factory's constructor deploys its three
+  deployers. It finds the existing factory in the deployment step's latest
+  broadcast on the chain and refuses one with no code (`FactoryMissing`) or
+  whose Safe, REGENT revenue staking or USDC is not the manifest's
+  (`FactoryMismatch(field)`). It then runs the Safe's
+  `KeyfleetKeys.addFactory(tradingFactory)` call from the Safe's address
+  against the run's copy of the chain, so a call that would revert stops it
+  with the collection's own error, and prints the call, as its target, value
+  and data and as a Safe Transaction Builder batch, for the Safe's signers to
+  load, check and sign. It does not make that call. The address it prints is
+  the one its simulation gives for the deploying account; the signers check it
+  against the broadcast's receipt before signing.
 - `script/AnvilLab.s.sol` is no part of a release. It puts the system with
   its five founding fleets on a plain local anvil for the anvil tests in `platform/`
   (`mix test.external`), with stand-in USDC, WETH, REGENT, a USDC/WETH pool and
@@ -1817,12 +1857,8 @@ without six decimals, a zero keeper and a zero trait table hash.
   Every step refuses any chain but 31337 (`WrongChain`).
 
 The scripts' cores take and return values, so the suite runs the real
-deployment, the real Safe steps and the real record against local stand-ins
-without touching a file.
-
-No script deploys `KeyfleetTradingFactory` or writes the Safe's `addFactory`
-call for it yet; `test/fork/KeyfleetTradingFork.t.sol` does both on a fork
-only.
+deployment, the real Safe steps, the real record and the real trading factory
+deployment against local stand-ins without touching a file.
 
 ### Deploy-day checklist
 
@@ -1990,10 +2026,10 @@ fleets of 1, 100 and 10,000 keys, all counting:
 
 | Call | 1 key | 100 keys | 10,000 keys |
 | --- | --- | --- | --- |
-| `create`, with key 1 | 5,349,073 | 5,331,997 | 5,331,997 |
-| `purchase`, the next key | 199,474 | 182,374 | 182,374 |
+| `create`, with key 1 | 5,359,239 | 5,342,163 | 5,342,163 |
+| `purchase`, the next key | 199,452 | 182,352 | 182,352 |
 | `payback` by the creator, the fleet's first | 368,053 | 330,893 | 378,553 |
-| `runDailyPayback`, a later payback | 177,768 | 211,808 | 259,468 |
+| `runDailyPayback`, a later payback | 177,746 | 211,786 | 259,446 |
 
 Only `matureKeys`, a binary search over mint times read twice a payback, grows
 with the number of keys; the suite checks that 10,000 keys cost less than
@@ -2007,10 +2043,15 @@ four keys:
 
 | Call | Gas |
 | --- | --- |
-| `create`, with key 1 | 5,311,316 |
-| `purchase`, key 3 | 208,109 |
+| `create`, with key 1 | 5,321,482 |
+| `purchase`, key 3 | 208,087 |
 | `payback` by the creator, the fleet's first | 354,027 |
-| `runDailyPayback`, a later payback | 205,352 |
+| `runDailyPayback`, a later payback | 205,330 |
+
+Deploying the trading factory itself is one transaction of about 7.4 million
+gas: `forge script script/DeployTradingFactory.s.sol` on a fork of Base,
+without `--broadcast`, sets its gas limit at 9,640,913, Forge's estimate with
+its usual 30% margin.
 
 ## Checks
 
@@ -2025,8 +2066,8 @@ deployers, the manager, the Regents Club's gifts and claims, the
 purchase money and the REGENT buyer, the protocol share and money sent to a
 fleet, the treasury's payments and advances, the daily split, the launch token,
 the rewards ledger, votes and proposal topics, carrying out proposals, presence,
-shards, signed messages, Lit, the deployment, Safe-step and record scripts,
-the anvil lab, and Trading Fleets (the factory, sales, the treasury and its
+shards, signed messages, Lit, the deployment, Safe-step, record and trading
+factory deployment scripts, the anvil lab, and Trading Fleets (the factory, sales, the treasury and its
 paybacks, and the unchanged rewards ledger, in `test/KeyfleetTrading*.t.sol`). `test/fork/BaseForkLab.t.sol` runs the Base-fork lab on a fork. Shared set-up is in `test/helpers` and the stand-ins in
 `test/mocks`.
 
@@ -2078,11 +2119,15 @@ themselves unless `BASE_RPC_URL` is set:
   and runs only with `--isolate`.
 - `KeyfleetTradingFork.t.sol` runs a Trading Fleet on the live collection as
   deployed, with real USDC and REGENT revenue staking: on the fork only, it acts
-  as the Regents Safe to create the founding fleets still missing, step the
-  phases to the last with the release's Safe steps and add the trading factory,
+  as the Regents Safe to create the founding fleets still missing and step the
+  phases to the last with the release's Safe steps, deploys the trading factory
+  with `DeployTradingFactory` and makes the Safe's call that script prints,
   then creates a fleet, sells keys, trades out and back, pays back by the
   creator and daily into real staking, claims, passes key 1, closes and pays
   back everything, and holds every payback while the Safe has staking paused.
+  It also runs the record over the live system with a Trading Fleet in it,
+  after handing the VRF subscription to the Safe and listing the collection on
+  the fork, as the record requires for any fleet past the founding ones.
   With `--isolate` its gas lines are the figures in [Trading
   Fleets](#trading-fleets-1).
 

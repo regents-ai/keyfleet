@@ -1,17 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetShards} from "../src/KeyfleetShards.sol";
+import {KeyfleetTradingFactory} from "../src/KeyfleetTradingFactory.sol";
+import {KeyfleetTradingManager} from "../src/KeyfleetTradingManager.sol";
+import {KeyfleetTradingTreasury} from "../src/KeyfleetTradingTreasury.sol";
+import {IKeyfleetFactory} from "../src/KeyfleetWiring.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockToken} from "./mocks/MockToken.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
+import {DeployTradingFactory} from "../script/DeployTradingFactory.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
+import {KeyfleetSafeSteps} from "../script/KeyfleetSafeSteps.s.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
 import {KeyfleetScriptFixture} from "./helpers/KeyfleetScriptFixture.sol";
 
@@ -23,12 +31,49 @@ contract OtherFactory {
     }
 }
 
+/// @dev A manager that names a trading factory without being one of its fleets'.
+contract Impostor {
+    address public immutable FACTORY;
+
+    constructor(address factory) {
+        FACTORY = factory;
+    }
+}
+
+/// @dev A factory the Safe adds, which registers an `Impostor` naming `trading` as a fleet's
+/// manager.
+contract ImpostorFactory {
+    function register(KeyfleetKeys collection, address trading) external {
+        collection.registerFleet(
+            KeyfleetPresets.Preset.FleetTechAccelerant, address(new Impostor(trading)), bytes32(0), 0
+        );
+    }
+}
+
+/// @dev The existing factory of another system, as a trading factory reads it: this system's
+/// collection, shard record and staking, but another USDC.
+contract ElsewhereFactory {
+    KeyfleetKeys public immutable KEYS;
+    KeyfleetShards public immutable SHARDS;
+    IERC20 public immutable USDC;
+    IRegentRevenueStaking public immutable REGENT_STAKING;
+
+    constructor(KeyfleetFactory like, IERC20 usdc) {
+        KEYS = like.KEYS();
+        SHARDS = like.SHARDS();
+        USDC = usdc;
+        REGENT_STAKING = like.REGENT_STAKING();
+    }
+}
+
 contract RecordKeyfleetsTest is KeyfleetScriptFixture {
     RecordKeyfleets private recorder;
+    DeployTradingFactory private tradingScript;
 
     function setUp() public {
         _setUpScripts();
         recorder = new RecordKeyfleets();
+        tradingScript = new DeployTradingFactory();
     }
 
     /// @dev The record publishes the system and each founding fleet as the chain reports them:
@@ -253,6 +298,135 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         recorder.record(manifest, _summary(deployed));
     }
 
+    // --- Trading Fleets ------------------------------------------------------
+
+    /// @dev A Trading Fleet is recorded as one: its type and number in the collection, its trading
+    /// factory, its terms as they stand, its deck, its three contracts with their code hashes, its
+    /// profile, its requirements and its staking tag.
+    function test_recordListsATradingFleetAsATradingFleet() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        (KeyfleetFactory deployed, KeyfleetTradingFactory trading) = _withTradingFactory(manifest);
+        KeyfleetTradingFactory.TradingTerms memory terms = _tradingTerms();
+        terms.requirements.token = address(regent);
+        terms.requirements.tokenMin = 5e18;
+        KeyfleetTradingManager fleet = _createTrading(trading, terms);
+        KeyfleetTradingTreasury treasury = fleet.TREASURY();
+        address wallet = makeAddr("trading wallet");
+        vm.startPrank(creator);
+        fleet.setStep(800);
+        treasury.setTradingWallet(wallet);
+        vm.stopPrank();
+
+        string memory json = recorder.record(manifest, _summary(deployed));
+
+        assertEq(fleet.FLEET_ID(), 7, "after the Cascade");
+        string memory entry = ".fleets.7";
+        assertEq(vm.parseJsonKeys(json, entry).length, 24, "Twenty-four fields");
+        assertEq(vm.parseJsonString(json, string.concat(entry, ".type")), "trading", "Marked as a Trading Fleet");
+        assertEq(vm.parseJsonString(json, string.concat(entry, ".collectionType")), "accelerant", "Registered type");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".typeNumber")), 2, "Accelerant #2");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".tradingFactory")), address(trading), "Factory");
+        assertEq(
+            vm.parseJsonBytes32(json, string.concat(entry, ".tradingFactoryCodeHash")),
+            address(trading).codehash,
+            "Factory code"
+        );
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".firstPrice")), 25e6, "First price");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".stepBps")), 800, "Step as it stands");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".dailyPaybackBps")), 50, "Daily payback");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".keyCap")), 40, "Key cap");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".closedAt")), 0, "Open");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".tradingWallet")), wallet, "Trading wallet");
+        assertEq(vm.parseJsonBytes32(json, string.concat(entry, ".deckHash")), bytes32(0), "No deck yet");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".deckSize")), 0, "No deck yet");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".manager")), address(fleet), "Manager");
+        assertEq(vm.parseJsonBytes32(json, string.concat(entry, ".managerCodeHash")), address(fleet).codehash, "Code");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".treasury")), address(treasury), "Treasury");
+        assertEq(
+            vm.parseJsonBytes32(json, string.concat(entry, ".treasuryCodeHash")), address(treasury).codehash, "Code"
+        );
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".rewards")), address(fleet.REWARDS()), "Ledger");
+        assertEq(
+            vm.parseJsonBytes32(json, string.concat(entry, ".rewardsCodeHash")),
+            address(fleet.REWARDS()).codehash,
+            "Code"
+        );
+        assertEq(vm.parseJsonString(json, string.concat(entry, ".name")), "Trading fleet", "Name");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".requirements.token")), address(regent), "Token");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".requirements.tokenMin")), 5e18, "Token amount");
+        assertEq(
+            vm.parseJsonBytes32(json, string.concat(entry, ".stakingSourceTag")),
+            treasury.STAKING_SOURCE_TAG(),
+            "Staking tag"
+        );
+
+        vm.prank(creator);
+        treasury.close();
+        json = recorder.record(manifest, _summary(deployed));
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".closedAt")), block.timestamp, "Closed");
+    }
+
+    /// @dev A Trading Fleet adds its own entry and changes nothing else the record writes.
+    function test_aTradingFleetLeavesEveryOtherEntryAsItWas() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        (KeyfleetFactory deployed, KeyfleetTradingFactory trading) = _withTradingFactory(manifest);
+        string memory before = recorder.record(manifest, _summary(deployed));
+
+        _createTrading(trading, _tradingTerms());
+        string memory later = recorder.record(manifest, _summary(deployed));
+
+        string[] memory rootKeys = vm.parseJsonKeys(later, "$");
+        assertEq(rootKeys.length, vm.parseJsonKeys(before, "$").length, "The same sections");
+        for (uint256 index = 0; index < rootKeys.length; ++index) {
+            if (_same(rootKeys[index], "fleets")) continue;
+            string memory key = string.concat(".", rootKeys[index]);
+            assertEq(vm.parseJson(later, key), vm.parseJson(before, key), rootKeys[index]);
+        }
+        assertEq(vm.parseJsonKeys(before, ".fleets").length, 6, "Six fleets before");
+        assertEq(vm.parseJsonKeys(later, ".fleets").length, 7, "One more after");
+        for (uint256 fleetId = 1; fleetId <= 6; ++fleetId) {
+            string memory key = string.concat(".fleets.", vm.toString(fleetId));
+            assertEq(vm.parseJson(later, key), vm.parseJson(before, key), key);
+        }
+    }
+
+    /// @dev A fleet whose manager names the listed trading factory but is not where that factory
+    /// places its fleets' managers is not recorded.
+    function test_recordRefusesAManagerTheTradingFactoryDidNotPlace() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        (KeyfleetFactory deployed, KeyfleetTradingFactory trading) = _withTradingFactory(manifest);
+        KeyfleetKeys collection = deployed.KEYS();
+        ImpostorFactory impostors = new ImpostorFactory();
+        vm.prank(safe);
+        collection.addFactory(address(impostors));
+        impostors.register(collection, address(trading));
+
+        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.FleetNotBound.selector, 7, "manager"));
+        recorder.record(manifest, _summary(deployed));
+    }
+
+    /// @dev A Trading Fleet of a trading factory built on another system's existing factory, even
+    /// one the Safe added, is not recorded.
+    function test_recordRefusesATradingFactoryOfAnotherSystem() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        (KeyfleetFactory deployed,) = _withTradingFactory(manifest);
+        KeyfleetKeys collection = deployed.KEYS();
+        MockToken otherUsdc = new MockToken("Other USD", "OUSD");
+        KeyfleetTradingFactory elsewhere =
+            new KeyfleetTradingFactory(IKeyfleetFactory(address(new ElsewhereFactory(deployed, otherUsdc))));
+        vm.prank(safe);
+        collection.addFactory(address(elsewhere));
+        KeyfleetTradingFactory.TradingTerms memory terms = _tradingTerms();
+        otherUsdc.mint(creator, terms.firstPrice);
+        vm.startPrank(creator);
+        otherUsdc.approve(address(elsewhere), terms.firstPrice);
+        elsewhere.create(terms);
+        vm.stopPrank();
+
+        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.FleetNotBound.selector, 7, "tradingFactory"));
+        recorder.record(manifest, _summary(deployed));
+    }
+
     /// @dev On Base the record lists the system only while the Regents Safe owns the subscription,
     /// so nobody else can remove the collection or cancel the subscription.
     function test_recordOnBaseRefusesASubscriptionTheRegentsSafeDoesNotOwn() public {
@@ -373,6 +547,58 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         KeyfleetManager.Requirements memory anyone;
         vm.prank(creator);
         deployed.createFleet(_terms(KeyfleetPresets.Preset.FleetTechClassic, 10e6, anyone));
+    }
+
+    /// @dev The system with its founding fleets and every phase open, a Cascade `creator` created,
+    /// and the trading factory deployed by its script and added to the collection by the Safe's
+    /// call.
+    function _withTradingFactory(KeyfleetManifest.Manifest memory manifest)
+        private
+        returns (KeyfleetFactory deployed, KeyfleetTradingFactory trading)
+    {
+        deployed = _deployListed(manifest);
+        _found(manifest, deployed);
+        while (deployed.KEYS().phase() < deployed.KEYS().FINAL_PHASE()) {
+            _openPhase(manifest, deployed);
+        }
+        KeyfleetManager.Requirements memory anyone;
+        usdc.mint(creator, 25e6);
+        vm.startPrank(creator);
+        usdc.approve(address(deployed), 25e6);
+        deployed.createFleet(_terms(KeyfleetPresets.Preset.FibonacciCascade, 25e6, anyone));
+        vm.stopPrank();
+
+        trading = tradingScript.deploy(manifest, deployed);
+        KeyfleetSafeSteps.SafeCall[] memory calls = new KeyfleetSafeSteps.SafeCall[](1);
+        calls[0] = tradingScript.addFactoryCall(trading);
+        _make(calls, manifest.bindings.safe);
+    }
+
+    /// @dev Terms of 25 USDC first, a 5% step, a 0.5% daily payback and 40 Keys, open to anyone.
+    function _tradingTerms() private view returns (KeyfleetTradingFactory.TradingTerms memory terms) {
+        terms.profile = _profile("Trading fleet");
+        terms.firstPrice = 25e6;
+        terms.stepBps = 500;
+        terms.dailyPaybackBps = 50;
+        terms.keyCap = 40;
+        terms.deadline = block.timestamp;
+    }
+
+    /// @dev Creates a Trading Fleet as `creator`, who pays its first price.
+    function _createTrading(KeyfleetTradingFactory trading, KeyfleetTradingFactory.TradingTerms memory terms)
+        private
+        returns (KeyfleetTradingManager)
+    {
+        usdc.mint(creator, terms.firstPrice);
+        vm.startPrank(creator);
+        usdc.approve(address(trading), terms.firstPrice);
+        (uint256 fleetId,) = trading.create(terms);
+        vm.stopPrank();
+        return KeyfleetTradingManager(trading.KEYS().managerOf(fleetId));
+    }
+
+    function _same(string memory a, string memory b) private pure returns (bool) {
+        return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
     function _summary(KeyfleetFactory deployed) private pure returns (KeyfleetManifest.BroadcastSummary memory) {

@@ -121,6 +121,7 @@ contract KeyfleetTradingFactoryTest is KeyfleetTradingFixture {
         assertEq(usdc.balanceOf(creator), 0);
         assertEq(usdc.balanceOf(address(trading)), 0);
         assertEq(usdc.balanceOf(address(fleet)), 0);
+        assertEq(fleet.FIRST_PRICE(), FIRST_PRICE);
         assertEq(fleet.price(), FIRST_PRICE + FIRST_PRICE * STEP_BPS / 10_000);
         assertEq(fleet.stepBps(), STEP_BPS);
         assertEq(rewards.cohortSize(0), 1);
@@ -298,6 +299,7 @@ contract KeyfleetTradingFactoryTest is KeyfleetTradingFixture {
         cap = bound(cap, 0, keys.MAX_KEY_NUMBER());
         _createTrading(_tradingTerms(firstPrice, stepBps, dailyBps, cap));
         assertEq(usdc.balanceOf(address(treasury)), firstPrice);
+        assertEq(fleet.FIRST_PRICE(), firstPrice);
         assertEq(fleet.KEY_CAP(), cap);
         assertEq(treasury.DAILY_PAYBACK_BPS(), dailyBps);
         assertEq(fleet.price(), fleet.raised(firstPrice, stepBps));

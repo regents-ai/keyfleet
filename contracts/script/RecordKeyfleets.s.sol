@@ -8,6 +8,9 @@ import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "../src/KeyfleetRegentBuyer.sol";
+import {KeyfleetTradingFactory} from "../src/KeyfleetTradingFactory.sol";
+import {KeyfleetTradingManager} from "../src/KeyfleetTradingManager.sol";
+import {KeyfleetTradingTreasury} from "../src/KeyfleetTradingTreasury.sol";
 import {V4PoolKey} from "../src/interfaces/IUniswapV4PoolManager.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
@@ -26,6 +29,13 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// than the manifest's, and missing VRF ownership/consumer setup when any recorded Key needs a
 /// draw. Fixed founding decks can be recorded with setup deferred. Run after the intended fleets exist, and again
 /// whenever the record should list the fleets created since.
+///
+/// A fleet whose manager is not where the factory places its fleets' managers is recorded as a
+/// Trading Fleet, `"type": "trading"`, only if its manager names a trading factory the collection
+/// lists, that trading factory reads this system's collection, shard record, USDC and REGENT
+/// revenue staking, and its three contracts are the ones that trading factory places for it and
+/// point at each other; otherwise the record refuses it. Every other fleet's entry, and everything
+/// else the record writes, is the same as before Trading Fleets existed.
 ///
 /// `record` takes values and returns JSON, so the suite runs it against systems deployed in the
 /// test; `run` is the only part that reads or writes a file or reads the environment.
@@ -166,6 +176,47 @@ contract RecordKeyfleets is KeyfleetManifest {
         }
     }
 
+    /// @dev Fleet `fleetId` is a Trading Fleet: its manager names a trading factory the collection
+    /// lists, that factory reads this system's collection, shard record, USDC and REGENT revenue
+    /// staking, and its three contracts are where that factory places them, hold code and point at
+    /// each other, the collection and the fleet. A manager that does not name a factory, the way a
+    /// trading manager does, is refused as the fleet's manager.
+    function _requireTradingFleetBound(KeyfleetFactory factory, KeyfleetKeys keys, uint256 fleetId)
+        private
+        view
+        returns (KeyfleetTradingManager manager)
+    {
+        KeyfleetKeys.Fleet memory fleet = keys.fleet(fleetId);
+        manager = KeyfleetTradingManager(fleet.manager);
+        (bool answered, bytes memory named) = address(manager).staticcall(abi.encodeCall(manager.FACTORY, ()));
+        _bound(answered && named.length == 32, fleetId, "manager");
+        KeyfleetTradingFactory trading = KeyfleetTradingFactory(abi.decode(named, (address)));
+        _bound(keys.isFactory(address(trading)), fleetId, "tradingFactory");
+        _bound(trading.KEYS() == keys && trading.SHARDS() == factory.SHARDS(), fleetId, "tradingFactory");
+        _bound(
+            trading.USDC() == factory.USDC() && trading.REGENT_STAKING() == factory.REGENT_STAKING(),
+            fleetId,
+            "tradingFactory"
+        );
+        (address managerAt, address treasury, address rewards) = trading.predict(fleetId);
+        _bound(
+            fleet.manager == managerAt && manager.FLEET_ID() == fleetId && manager.KEYS() == keys, fleetId, "manager"
+        );
+        _bound(fleet.preset == trading.PRESET(), fleetId, "preset");
+        _bound(address(manager.TREASURY()) == treasury && treasury.code.length != 0, fleetId, "treasury");
+        _bound(address(manager.REWARDS()) == rewards && rewards.code.length != 0, fleetId, "rewards");
+        _bound(
+            manager.TREASURY().MANAGER() == manager && address(manager.TREASURY().REWARDS()) == rewards,
+            fleetId,
+            "treasury"
+        );
+        _bound(
+            address(manager.REWARDS().MANAGER()) == managerAt && address(manager.REWARDS().TREASURY()) == treasury,
+            fleetId,
+            "rewards"
+        );
+    }
+
     function _match(bool matches, string memory field) private pure {
         if (!matches) revert RecordedMismatch(field);
     }
@@ -174,7 +225,8 @@ contract RecordKeyfleets is KeyfleetManifest {
         if (!bound) revert FleetNotBound(fleetId, part);
     }
 
-    /// @dev Every fleet the collection has, keyed by its number.
+    /// @dev Every fleet the collection has, keyed by its number: the factory's own fleets, and the
+    /// Trading Fleets, whose managers are not where the factory places its fleets' managers.
     function _fleetsJson(Manifest memory manifest, KeyfleetFactory factory, KeyfleetKeys keys)
         private
         returns (string memory fleets)
@@ -184,8 +236,11 @@ contract RecordKeyfleets is KeyfleetManifest {
         uint256 count = keys.fleetCount();
         for (uint256 fleetId = 1; fleetId <= count; ++fleetId) {
             if (!keys.fleetExists(fleetId)) continue;
-            KeyfleetManager manager = _requireFleetBound(manifest, factory, keys, fleetId);
-            fleets = vm.serializeString(object, vm.toString(fleetId), _fleetJson(keys, fleetId, manager));
+            (address managerAt,,,) = factory.predict(fleetId);
+            string memory fleet = keys.fleet(fleetId).manager == managerAt
+                ? _fleetJson(keys, fleetId, _requireFleetBound(manifest, factory, keys, fleetId))
+                : _tradingFleetJson(keys, fleetId, _requireTradingFleetBound(factory, keys, fleetId));
+            fleets = vm.serializeString(object, vm.toString(fleetId), fleet);
         }
     }
 
@@ -216,6 +271,45 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(object, "requirements", _requirementsJson(fleetId, manager.requirements()));
         vm.serializeBytes32(object, "protocolShareTag", manager.TREASURY().PROTOCOL_SHARE_TAG());
         return vm.serializeAddress(object, "splitAssets", manager.TREASURY().splitAssets());
+    }
+
+    /// @dev One Trading Fleet, `"type": "trading"`: the type and number the collection registered
+    /// it under, its trading factory, its terms, its deck, its three contracts with their code
+    /// hashes, its profile, its joining requirements and the tag its paybacks' staking deposits
+    /// carry. The first price, daily payback and Key cap never change; the step, the trading wallet
+    /// and the close are as they stand at the block the record reads.
+    function _tradingFleetJson(KeyfleetKeys keys, uint256 fleetId, KeyfleetTradingManager manager)
+        private
+        returns (string memory)
+    {
+        KeyfleetKeys.Fleet memory fleet = keys.fleet(fleetId);
+        KeyfleetTradingTreasury treasury = manager.TREASURY();
+        string memory object = string.concat("fleet-", vm.toString(fleetId));
+        vm.serializeString(object, "type", "trading");
+        vm.serializeString(object, "collectionType", _typeKey(fleet.preset));
+        vm.serializeUint(object, "typeNumber", fleet.typeNumber);
+        vm.serializeAddress(object, "tradingFactory", manager.FACTORY());
+        vm.serializeBytes32(object, "tradingFactoryCodeHash", manager.FACTORY().codehash);
+        vm.serializeUint(object, "firstPrice", manager.FIRST_PRICE());
+        vm.serializeUint(object, "stepBps", manager.stepBps());
+        vm.serializeUint(object, "dailyPaybackBps", treasury.DAILY_PAYBACK_BPS());
+        vm.serializeUint(object, "keyCap", manager.KEY_CAP());
+        vm.serializeUint(object, "closedAt", treasury.closedAt());
+        vm.serializeAddress(object, "tradingWallet", treasury.tradingWallet());
+        vm.serializeBytes32(object, "deckHash", fleet.deckHash);
+        vm.serializeUint(object, "deckSize", fleet.deckSize);
+        vm.serializeAddress(object, "manager", address(manager));
+        vm.serializeBytes32(object, "managerCodeHash", address(manager).codehash);
+        vm.serializeAddress(object, "treasury", address(treasury));
+        vm.serializeBytes32(object, "treasuryCodeHash", address(treasury).codehash);
+        vm.serializeAddress(object, "rewards", address(manager.REWARDS()));
+        vm.serializeBytes32(object, "rewardsCodeHash", address(manager.REWARDS()).codehash);
+        KeyfleetManager.Profile memory profile = manager.profile();
+        vm.serializeString(object, "name", profile.name);
+        vm.serializeString(object, "description", profile.description);
+        vm.serializeString(object, "imageLink", profile.imageLink);
+        vm.serializeString(object, "requirements", _requirementsJson(fleetId, manager.requirements()));
+        return vm.serializeBytes32(object, "stakingSourceTag", treasury.STAKING_SOURCE_TAG());
     }
 
     function _requirementsJson(uint256 fleetId, KeyfleetManager.Requirements memory requirements)

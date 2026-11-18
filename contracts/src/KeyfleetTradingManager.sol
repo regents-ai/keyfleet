@@ -71,6 +71,8 @@ contract KeyfleetTradingManager is ReentrancyGuardTransient {
     /// @notice The most Keys this fleet sells, Key 1 included, as the creator set it; zero for none
     /// beyond the collection's own limit. It never changes.
     uint256 public immutable KEY_CAP;
+    /// @notice The price Key 1 was sold for, the creator's first price. It never changes.
+    uint256 public immutable FIRST_PRICE;
 
     /// @notice Keys minted so far. Key numbers are `1..totalMinted`.
     uint256 public totalMinted;
@@ -148,6 +150,7 @@ contract KeyfleetTradingManager is ReentrancyGuardTransient {
         if (wiring.keyCap > KEYS.MAX_KEY_NUMBER()) revert KeyCapInvalid(wiring.keyCap);
         KEY_CAP = wiring.keyCap;
         _checkPrice(wiring.firstPrice);
+        FIRST_PRICE = wiring.firstPrice;
         price = wiring.firstPrice;
         _checkStep(wiring.stepBps);
         stepBps = wiring.stepBps;

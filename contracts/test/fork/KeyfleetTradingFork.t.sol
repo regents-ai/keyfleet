@@ -15,16 +15,19 @@ import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetTradingFactory} from "../../src/KeyfleetTradingFactory.sol";
 import {KeyfleetTradingManager} from "../../src/KeyfleetTradingManager.sol";
 import {KeyfleetTradingTreasury} from "../../src/KeyfleetTradingTreasury.sol";
-import {IKeyfleetFactory} from "../../src/KeyfleetWiring.sol";
+import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {DeployTradingFactory} from "../../script/DeployTradingFactory.s.sol";
 import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
+import {RecordKeyfleets} from "../../script/RecordKeyfleets.s.sol";
 import {IRegentRevenueStakingViews} from "./KeyfleetBaseFork.t.sol";
 
 /// @dev A Trading Fleet on the live Keyfleet collection, on a fork of Base at its latest block: the
 /// real collection and its factory as deployed, real USDC and real REGENT revenue staking. On the
 /// fork only, the Regents Safe's address creates the founding fleets still missing and steps the
-/// phases with the release's own Safe steps, then adds the trading factory to the collection.
-/// Nothing is signed or sent to Base.
+/// phases with the release's own Safe steps; the trading factory is deployed by
+/// `DeployTradingFactory` and the Safe's address makes the call that script prints. Nothing is
+/// signed or sent to Base.
 ///
 /// It runs only when `BASE_RPC_URL` is set in the environment and skips itself otherwise; the URL is
 /// never printed:
@@ -79,9 +82,9 @@ contract KeyfleetTradingForkTest is Test {
             vm.warp(block.timestamp + 1);
         }
 
-        trading = new KeyfleetTradingFactory(IKeyfleetFactory(address(FLEETS)));
-        vm.prank(SAFE);
-        COLLECTION.addFactory(address(trading));
+        DeployTradingFactory deployer = new DeployTradingFactory();
+        trading = deployer.deploy(manifest, FLEETS);
+        _asSafe(deployer.addFactoryCall(trading));
     }
 
     /// @dev The live system is what the trading factory is built for, and it reads every binding
@@ -220,6 +223,52 @@ contract KeyfleetTradingForkTest is Test {
     /// @dev The gas of the call just made, which is the whole transaction's under `--isolate`.
     function _logGas(string memory call) private view {
         console2.log(string.concat("gas on the fork, real USDC and staking: ", call), vm.lastCallGas().gasTotalUsed);
+    }
+
+    /// @dev The record of the live system lists the Trading Fleet as one beside the live fleets.
+    /// A fleet past the founding ones is recorded only while the Regents Safe owns the VRF
+    /// subscription and the collection is on it, so on the fork the subscription's owner hands it to
+    /// the Safe and the Safe lists the collection first.
+    function test_theRecordListsTheTradingFleetBesideTheLiveFleets() public {
+        KeyfleetTradingManager fleet = _create();
+        _subscriptionToTheSafe();
+        RecordKeyfleets recorder = new RecordKeyfleets();
+
+        string memory json = recorder.record(
+            recorder.readManifest("base"), KeyfleetManifest.BroadcastSummary({factory: FLEETS, deploymentBlock: 1})
+        );
+
+        string memory entry = string.concat(".fleets.", vm.toString(fleet.FLEET_ID()));
+        assertEq(vm.parseJsonString(json, string.concat(entry, ".type")), "trading", "Marked as a Trading Fleet");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".tradingFactory")), address(trading), "Factory");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".manager")), address(fleet), "Manager");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".treasury")), address(fleet.TREASURY()), "Treasury");
+        assertEq(vm.parseJsonAddress(json, string.concat(entry, ".rewards")), address(fleet.REWARDS()), "Ledger");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".firstPrice")), 25e6, "First price");
+        assertEq(vm.parseJsonUint(json, string.concat(entry, ".dailyPaybackBps")), 50, "Daily payback");
+        string[5] memory types = ["classic", "syndicate", "accelerant", "cascade", "regentsClub"];
+        for (uint256 fleetId = 1; fleetId <= 5; ++fleetId) {
+            assertEq(
+                vm.parseJsonString(json, string.concat(".fleets.", vm.toString(fleetId), ".type")),
+                types[fleetId - 1],
+                "Founding fleet as before"
+            );
+        }
+    }
+
+    /// @dev On the fork only: the subscription's owner hands it to the Regents Safe, which accepts
+    /// it and lists the collection.
+    function _subscriptionToTheSafe() private {
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = COLLECTION.randomness();
+        (,,, address owner,) = coordinator.getSubscription(subscriptionId);
+        if (owner != SAFE) {
+            vm.prank(owner);
+            coordinator.requestSubscriptionOwnerTransfer(subscriptionId, SAFE);
+            vm.prank(SAFE);
+            coordinator.acceptSubscriptionOwnerTransfer(subscriptionId);
+        }
+        vm.prank(SAFE);
+        coordinator.addConsumer(subscriptionId, address(COLLECTION));
     }
 
     /// @dev While its owner, the Regents Safe, has staking paused, every payback reverts and nothing

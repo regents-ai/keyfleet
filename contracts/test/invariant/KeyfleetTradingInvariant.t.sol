@@ -152,12 +152,12 @@ contract TradingHandler is Test {
 
     function nameWallet(uint256 callerSeed, uint256 walletSeed) external {
         address caller = _caller(callerSeed, 3, 4);
-        address wallet = _wallets[walletSeed % 2];
+        address picked = _wallets[walletSeed % 2];
         bool ok = caller == _fleet.creator();
         vm.prank(caller);
-        try _treasury.setTradingWallet(wallet) {
+        try _treasury.setTradingWallet(picked) {
             if (!ok) _breach("someone other than Key 1's holder named the trading wallet");
-            if (_treasury.tradingWallet() != wallet) _breach("the wrong trading wallet was named");
+            if (_treasury.tradingWallet() != picked) _breach("the wrong trading wallet was named");
         } catch {
             if (ok) _breach("the creator could not name the trading wallet");
         }
@@ -166,16 +166,16 @@ contract TradingHandler is Test {
     function sendToTrading(uint256 callerSeed, uint256 amount) external {
         address caller = _caller(callerSeed, 3, 4);
         address creatorNow = _fleet.creator();
-        address wallet = _treasury.tradingWallet();
+        address named = _treasury.tradingWallet();
         uint256 balance = _balance();
         amount = bound(amount, 0, balance + 1);
-        bool ok = caller == creatorNow && !closed && wallet != address(0) && amount != 0 && amount <= balance;
-        uint256 walletBefore = wallet == address(0) ? 0 : _usdc.balanceOf(wallet);
+        bool ok = caller == creatorNow && !closed && named != address(0) && amount != 0 && amount <= balance;
+        uint256 walletBefore = named == address(0) ? 0 : _usdc.balanceOf(named);
         vm.prank(caller);
         try _treasury.sendToTrading(amount) {
             if (caller != creatorNow) _breach("someone other than Key 1's holder sent USDC to trading");
             if (!ok) _breach("a refused trading send went through");
-            if (_usdc.balanceOf(wallet) != walletBefore + amount) _breach("the wallet got other than the amount");
+            if (_usdc.balanceOf(named) != walletBefore + amount) _breach("the wallet got other than the amount");
             if (_balance() != balance - amount) _breach("a trading send took other than the amount");
             toWallets += amount;
         } catch {
@@ -193,12 +193,12 @@ contract TradingHandler is Test {
             returnsIn += amount;
             return;
         }
-        address wallet = _wallets[walletSeed % 2];
+        address picked = _wallets[walletSeed % 2];
         profit = bound(profit, 0, 5_000e6);
-        _usdc.mint(wallet, profit);
+        _usdc.mint(picked, profit);
         walletProfit += profit;
-        amount = bound(amount, 0, _usdc.balanceOf(wallet));
-        vm.prank(wallet);
+        amount = bound(amount, 0, _usdc.balanceOf(picked));
+        vm.prank(picked);
         _usdc.transfer(address(_treasury), amount);
         walletReturned += amount;
         returnsIn += amount;
@@ -206,9 +206,9 @@ contract TradingHandler is Test {
 
     /// @dev A trading wallet loses part of what it holds trading.
     function loseTrading(uint256 walletSeed, uint256 amount) external {
-        address wallet = _wallets[walletSeed % 2];
-        amount = bound(amount, 0, _usdc.balanceOf(wallet));
-        vm.prank(wallet);
+        address picked = _wallets[walletSeed % 2];
+        amount = bound(amount, 0, _usdc.balanceOf(picked));
+        vm.prank(picked);
         _usdc.transfer(address(0xdead), amount);
         walletReturned += amount;
     }
@@ -274,14 +274,14 @@ contract TradingHandler is Test {
 
     /// @dev An actor claims for every Key they hold, and their own credit.
     function claim(uint256 actorSeed) external {
-        address actor = _actor(actorSeed);
+        address claimer = _actor(actorSeed);
         uint256 minted = _fleet.totalMinted();
         uint256[] memory held = new uint256[](minted);
         uint256 count;
-        uint256 owed = _rewards.credits(address(_usdc), actor);
+        uint256 owed = _rewards.credits(address(_usdc), claimer);
         for (uint256 n = 1; n <= minted; ++n) {
             uint256 tokenId = _keys.tokenIdOf(_fleet.FLEET_ID(), n);
-            if (_keys.ownerOf(tokenId) != actor) continue;
+            if (_keys.ownerOf(tokenId) != claimer) continue;
             held[count++] = tokenId;
             owed += _rewards.accrued(address(_usdc), tokenId);
         }
@@ -290,11 +290,11 @@ contract TradingHandler is Test {
         }
         address[] memory assets = new address[](1);
         assets[0] = address(_usdc);
-        uint256 before = _usdc.balanceOf(actor);
-        vm.prank(actor);
+        uint256 before = _usdc.balanceOf(claimer);
+        vm.prank(claimer);
         try _rewards.claim(held, assets) returns (uint256[] memory paid) {
             if (owed == 0) _breach("a claim with nothing owed went through");
-            if (paid[0] != owed || _usdc.balanceOf(actor) != before + owed) _breach("a claim paid other than owed");
+            if (paid[0] != owed || _usdc.balanceOf(claimer) != before + owed) _breach("a claim paid other than owed");
             claimed += owed;
         } catch {
             if (owed != 0) _breach("a claim with something owed was refused");

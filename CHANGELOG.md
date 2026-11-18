@@ -11735,3 +11735,29 @@ step's report).
   brief says and not yet confirmed by the founder. `script/RecordKeyfleets.s.sol`
   refuses a Trading Fleet, so it must change before the first one is created. No script
   deploys the trading factory or writes the Safe's `addFactory` call yet.
+
+## 2026-11-18 — Trading Fleets: the deployed record and the trading factory's deployment
+
+- Founder's answers, kept as built: 1% of every payback goes to REGENT revenue staking,
+  the daily one included ("1% of the total USDC goes to regent staking whenever there is a
+  payback"), and a creator may set any price, lower ones included ("the creator can freely
+  set the price of keys"). Whether Trading Fleets stay in the one key collection is still
+  open.
+- `script/RecordKeyfleets.s.sol` now records a Trading Fleet instead of refusing it. It
+  checks the fleet against its trading factory: the collection lists that factory, the
+  factory is built on this system, and the fleet's manager, treasury and ledger are the
+  ones that factory placed and point at each other. The entry is marked `"type":
+  "trading"` and lists the three contracts and the terms: first price, step, daily
+  payback, Key cap, when it closed and the trading wallet. What the record writes for
+  every other fleet is unchanged, byte for byte: the script before and after wrote the
+  same 56,202 bytes for five records, on a local system and on a fork of Base at block
+  59,010,837, from the live fleets to all five founding fleets and open fleets.
+- New `script/DeployTradingFactory.s.sol` deploys the trading factory in one transaction
+  of about 7.4 million gas and prints the Regents Safe's `addFactory` call for the signers.
+  It was only dry-run on a fork of Base; nothing was sent.
+- `KeyfleetTradingManager.FIRST_PRICE` keeps the price Key 1 sold for, for the record.
+- The site's reader of the deployed record is unchanged and skips Trading Fleet entries;
+  teaching it to read them is a later job.
+- The contract size table in `contracts/README.md` now matches the build; the rows for the
+  existing factory and the key collection were out of date. Every existing contract still
+  compiles to the same bytes.
