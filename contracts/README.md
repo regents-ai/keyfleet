@@ -8,7 +8,11 @@ Every key of every fleet is a token of one ERC-721 collection, `KeyfleetKeys`,
 named "Keyfleet" with the symbol KEYFLEET. Each fleet is four contracts the
 factory creates for it: a `KeyfleetManager` that sells its keys and keeps its
 profile, a `KeyfleetVotes` controller, a `KeyfleetTreasury` and a
-`KeyfleetRewards` ledger. A key counts only in its own fleet.
+`KeyfleetRewards` ledger. A key counts only in its own fleet. A Trading Fleet,
+made by a second factory, is three contracts instead: a
+`KeyfleetTradingManager` that sells its keys, a `KeyfleetTradingTreasury` its
+creator trades from and pays back from, and the same `KeyfleetRewards` ledger
+(see [Trading Fleets](#trading-fleets)).
 
 | Contract | How many | What it holds |
 | --- | --- | --- |
@@ -22,13 +26,18 @@ profile, a `KeyfleetVotes` controller, a `KeyfleetTreasury` and a
 | `KeyfleetVotes` | one per fleet | Presence, proposals and ballots |
 | `KeyfleetTreasury` | one per fleet | The fleet's free capital; makes approved proposals' exact calls; runs the daily split |
 | `KeyfleetRewards` | one per fleet | What each key and each wallet is owed |
+| `KeyfleetTradingFactory` | one | Nothing of value; creates Trading Fleets in the same collection |
+| three trading deployers | one each | Nothing; each holds one Trading Fleet contract's creation code (the third is another `KeyfleetRewardsDeployer`) |
+| `KeyfleetTradingManager` | one per Trading Fleet | The price of the next key, the step, the key cap, keys minted, name, description, image link, joining requirements |
+| `KeyfleetTradingTreasury` | one per Trading Fleet | The fleet's USDC, the trading wallet, the daily payback rate, its last run, when the fleet closed |
 
 `KeyfleetPresets` is a pure library holding every price, supply and
 purchase-split rule, with Classic's price table in the generated
 `KeyfleetClassicPrices`. `KeyfleetPresence` is the presence queue, a library
 inlined into `KeyfleetVotes`. No contract has an administrator, an upgrade path,
 a pause, a burn, a proxy or a `delegatecall`, and no contract has a setter for
-any price, supply, split, rate bound, route or royalty.
+any price, supply, split, rate bound, route or royalty, except that the holder of
+a Trading Fleet's key 1 sets that fleet's price and step.
 
 ## Status
 
@@ -595,6 +604,11 @@ per contract. Measured with `forge build --sizes`:
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
+| `KeyfleetTradingFactory` | 4,993 | 34,972 |
+| `KeyfleetTradingManager` | 8,480 | 9,915 |
+| `KeyfleetTradingManagerDeployer` | 10,405 | 10,536 |
+| `KeyfleetTradingTreasury` | 5,737 | 6,886 |
+| `KeyfleetTradingTreasuryDeployer` | 7,376 | 7,507 |
 | `KeyfleetTreasury` | 11,951 | 14,050 |
 | `KeyfleetTreasuryDeployer` | 14,540 | 14,671 |
 | `KeyfleetVotes` | 19,574 | 21,188 |
@@ -1545,6 +1559,153 @@ a record, not a token: it cannot be moved, sold or approved, it carries no
 money, and its wallet can never move the key, issue shards of it or switch its
 agent voting.
 
+## Trading Fleets
+
+A Trading Fleet is a fleet whose creator trades its money and pays it back to
+its keys, as the founder decided on 18 November 2026. Nothing of it is deployed.
+It lives in the same `KeyfleetKeys` collection as every other fleet, created by
+a second factory, `KeyfleetTradingFactory`, which the Regents Safe would add
+with `KeyfleetKeys.addFactory`. Its creator is whoever holds its key 1 at the
+moment of each call, read from the collection and never stored, so whoever
+takes key 1 takes the fleet.
+
+### Creation
+
+`KeyfleetTradingFactory` is constructed with the existing `KeyfleetFactory`'s
+address and reads the collection, the shard record, USDC and REGENT revenue
+staking from it; it has no other setting and no owner. Its constructor deploys
+its three deployers: `KeyfleetTradingManagerDeployer`,
+`KeyfleetTradingTreasuryDeployer` and its own `KeyfleetRewardsDeployer`, the
+same contract every fleet's ledger comes from.
+
+`create(terms)` is for anyone once the collection's last phase has opened
+(`CreationClosed(phase)` before) and up to the terms' deadline (`Expired`).
+`TradingTerms` names the profile and joining requirements (the same shapes and
+limits as every fleet's), the first key's price (1 to 1,000,000,000,000 USDC),
+the step (0 to 10,000 hundredths of a percent, so 0 to 100%), the guaranteed
+daily payback (10 to 200 hundredths of a percent, 0.1% to 2% a day), an optional
+key cap (zero for none beyond the collection's own limit) and the deadline. In
+one transaction it registers the fleet with the collection, with no deck;
+deploys its manager, treasury and ledger with CREATE2, salt = the fleet number,
+holding the wiring in transient storage at
+`keccak256("keyfleet.trading_factory.wiring")` as the existing factory does;
+writes the profile and requirements; emits `TradingFleetCreated(fleetId,
+creator, typeNumber, manager, treasury, rewards, firstPrice, stepBps,
+dailyPaybackBps, keyCap, profile, requirements)`; takes the first price from the
+creator straight into the treasury; and sells key 1 to the creator. Each
+contract checks its own terms as it is deployed: the manager the price
+(`PriceInvalid`), step (`StepInvalid`), cap (`KeyCapInvalid`), profile
+(`ProfileInvalid`) and requirements (`RequirementsInvalid`), the treasury the
+daily payback (`DailyPaybackInvalid`). Any failure undoes the whole creation.
+`create` is locked, so key 1's `onERC721Received` cannot create another fleet
+from inside it. Key 1 waits for its draw until the keeper records a deck, as on
+every fleet created in phase 4.
+
+The collection has five fixed fleet types and no Trading type, so every Trading
+Fleet is registered as `FleetTechAccelerant` and takes the next Accelerant
+number, counted together with the Accelerant fleets. The collection's
+`FleetRegistered` event names the factory that registered each fleet; that, or
+`TradingFleetCreated`, is how a Trading Fleet is told apart.
+
+### Sales
+
+`KeyfleetTradingManager.purchase(receiver, maxPrice, deadline, proof)` has the
+same shape as every fleet's: it reads the price and takes it in the same call,
+so a price the creator changes in the same block never takes more than
+`maxPrice` (`PriceAboveMax`). All of it goes straight to the treasury; nothing
+is taken and nothing is converted. After every sale the price rises by the step,
+rounded down, and never above `MAX_PRICE`, one trillion USDC: from any price of
+at least 1 USDC, any step above zero raises it by at least 100 atomic units, and
+no product can overflow. Keys sell in order. The key cap (`SoldOut`), the
+joining requirements (`RequirementNotMet`; the same three kinds and meaning as
+every fleet's) and the close (`SalesEnded`) stop a sale. The creator's key 1 is
+not checked against the requirements.
+
+Only the creator may call `setPrice` (1 to 1,000,000,000,000 USDC), `setStep`
+(0 to 10,000) and `setProfile`, which also asks marketplaces to fetch the
+fleet's metadata again; each emits its event (`PriceSet`, `StepSet`,
+`ProfileChanged`), and each stays open after the close. Every key is enrolled
+in the ledger as it is minted, and `onKeyMoved` settles a key's earnings to its
+outgoing owner before every transfer, as every fleet's manager does, with no
+votes. `matureKeys()` counts the keys minted at least two days ago, which are
+keys 1 to that number, by a binary search over the collection's mint times.
+
+### Paybacks
+
+`KeyfleetTradingTreasury` holds USDC only and takes no ETH. Only the creator may
+name the trading wallet (`setTradingWallet`, `TradingWalletNamed`), send any
+amount of the USDC held to it while the fleet is open (`sendToTrading`,
+`SentToTrading(wallet, amount)`; `NoTradingWallet`, `FleetClosed`,
+`AboveBalance`), start a payback of any amount (`payback`) and close the fleet,
+once (`close`, `Closed`). USDC comes back by a plain transfer to the treasury
+from anyone; no function is needed. Nothing else moves USDC out of the
+treasury.
+
+Every payback runs one routine. 1% of its amount, rounded up, goes into REGENT
+revenue staking through `depositUSDC`, tagged `keccak256("keyfleet.trading_payback")`
+with the fleet's manager as the source reference, through an exact approval the
+deposit uses up (`StakingDepositFailed` if staking takes anything else or leaves
+an approval). The rest is shared equally among the keys that count: the same
+whole amount per key goes to the ledger and is added with `fundSplit`, while
+`splitInProgress()` is true for that call only. What does not divide evenly
+stays in the treasury. With no key that counts (`NoKeysCount`), or too little
+for one unit per key (`PaybackTooSmall`), the payback reverts and nothing moves.
+`PaidBack(by, kind, amount, staked, perKey, keys)` says who started it and
+whether it was the creator's, the daily one or one after the close.
+
+Anyone may run the guaranteed daily payback, `runDailyPayback`: the fleet's
+daily rate times the USDC held at that moment, rounded down, once a day has
+passed since its last run, or since key 1's mint before its first run
+(`DailyNotDue(dueAt)`; `nextDailyAt()` reads it), the same rule as every fleet's
+daily split. A day nobody runs it is not made up, and a run that reverts uses up
+nothing.
+
+Once the fleet is closed, no key is sold and nothing goes to the trading wallet
+again, and anyone may pay back everything the treasury holds with `paybackAll`,
+again and again as USDC comes back. The creator's payback and the daily one keep
+working too. From the close on, every payback waits until every minted key
+counts (`KeysMaturing(counting, minted)`), at most two days after the last sale,
+so a key bought just before the close shares in what its money is part of.
+
+### The ledger and shared contracts
+
+A Trading Fleet's ledger is `KeyfleetRewards` exactly as compiled for every
+fleet. It reads the trading factory's `wiring()`, in the shape every fleet's
+contracts read, with no voting controller and no Accelerant step; the manager's
+`matureKeys()`; and the treasury's `splitInProgress()`. As on every fleet, an
+agent with an active shard may claim for a key's holder.
+`test/KeyfleetTradingRewards.t.sol` proves it end to end.
+
+Nothing shared calls a Trading Fleet's manager for anything it lacks:
+
+- `KeyfleetKeys` calls a fleet's manager only through `onKeyMoved`, which the
+  trading manager answers, and reads a fleet's type only when registering it.
+  It lets a fleet's manager alone mint its keys and refresh its metadata.
+- `KeyfleetRegentBuyer` reaches only managers that queued themselves with
+  `enqueue`; a Trading Fleet never does, so it is never reached.
+- `KeyfleetClubClaims` serves fleet 5, the Regents Club, only.
+- `KeyfleetShards` reads only the collection.
+
+### Limits
+
+- While the Regents Safe has REGENT revenue staking paused, every payback
+  reverts, the daily one included, and the creator still controls the money.
+- The daily payback is a share of what the treasury holds at the run. The
+  creator may send everything to the trading wallet first, and then the day's
+  payback is a share of nothing.
+- If key 1 goes to an address that can never act, no one can ever close the
+  fleet, name or change the trading wallet, or send to it; anyone may still run
+  the daily payback.
+- Any token but USDC sent to the treasury, and USDC sent straight to the ledger,
+  stays where it is for good.
+- `script/RecordKeyfleets.s.sol` checks every fleet in the collection against
+  the existing factory and refuses a Trading Fleet (`FleetNotBound(fleetId,
+  "manager")`), so it cannot write a deployed record once one exists.
+- Trading Fleets take fleet numbers and Accelerant numbers from the same counts
+  as every fleet. Once the keeper records a deck for one, each of its keys draws
+  through the collection's randomness subscription, which the Regents Safe pays
+  for, as for every fleet created in phase 4.
+
 ## Deployment scripts
 
 The system is deployed once per chain. Fleets are then created through the
@@ -1658,6 +1819,10 @@ without six decimals, a zero keeper and a zero trait table hash.
 The scripts' cores take and return values, so the suite runs the real
 deployment, the real Safe steps and the real record against local stand-ins
 without touching a file.
+
+No script deploys `KeyfleetTradingFactory` or writes the Safe's `addFactory`
+call for it yet; `test/fork/KeyfleetTradingFork.t.sol` does both on a fork
+only.
 
 ### Deploy-day checklist
 
@@ -1816,6 +1981,37 @@ forge test --match-contract KeyfleetBaseGasTest --isolate -vv
 The coordinator's charge for each answer, paid in ETH from the subscription, is
 not in these figures; it is about half a US cent per key (see Status).
 
+### Trading Fleets
+
+Measured on 18 November 2026, each figure the whole transaction, the 21,000 base
+and the call data included, every call run as a transaction of its own
+(`--isolate`). Over stand-ins (`test/KeyfleetTradingGas.t.sol`), against
+fleets of 1, 100 and 10,000 keys, all counting:
+
+| Call | 1 key | 100 keys | 10,000 keys |
+| --- | --- | --- | --- |
+| `create`, with key 1 | 5,349,073 | 5,331,997 | 5,331,997 |
+| `purchase`, the next key | 199,474 | 182,374 | 182,374 |
+| `payback` by the creator, the fleet's first | 368,053 | 330,893 | 378,553 |
+| `runDailyPayback`, a later payback | 177,768 | 211,808 | 259,468 |
+
+Only `matureKeys`, a binary search over mint times read twice a payback, grows
+with the number of keys; the suite checks that 10,000 keys cost less than
+100,000 gas more than one. The 1-key fleet is the suite's first, so its
+creation, purchase and payback also make the stand-in staking's and USDC's
+first writes.
+
+On a fork of Base at its latest block (`test/fork/KeyfleetTradingFork.t.sol`,
+run with `--isolate`), with real USDC and REGENT revenue staking, on a fleet of
+four keys:
+
+| Call | Gas |
+| --- | --- |
+| `create`, with key 1 | 5,311,316 |
+| `purchase`, key 3 | 208,109 |
+| `payback` by the creator, the fleet's first | 354,027 |
+| `runDailyPayback`, a later payback | 205,352 |
+
 ## Checks
 
 Run `make check-contracts` from the repository root. It runs, in `contracts/`,
@@ -1829,15 +2025,19 @@ deployers, the manager, the Regents Club's gifts and claims, the
 purchase money and the REGENT buyer, the protocol share and money sent to a
 fleet, the treasury's payments and advances, the daily split, the launch token,
 the rewards ledger, votes and proposal topics, carrying out proposals, presence,
-shards, signed messages, Lit, the deployment, Safe-step and record scripts and
-the anvil lab. `test/fork/BaseForkLab.t.sol` runs the Base-fork lab on a fork. Shared set-up is in `test/helpers` and the stand-ins in
+shards, signed messages, Lit, the deployment, Safe-step and record scripts,
+the anvil lab, and Trading Fleets (the factory, sales, the treasury and its
+paybacks, and the unchanged rewards ledger, in `test/KeyfleetTrading*.t.sol`). `test/fork/BaseForkLab.t.sol` runs the Base-fork lab on a fork. Shared set-up is in `test/helpers` and the stand-ins in
 `test/mocks`.
 
 `test/invariant/` holds the handler-based invariant suites, which `forge test`
 runs with the rest: the collection (founding and open fleets on one collection,
-the Regents Club's gifts, and the phases), the money of the founding Cascade and Accelerant fleets, the electorate, presence, and segregation
-(random approved batches never lower protected money). The presence suite runs
+the Regents Club's gifts, and the phases), the money of the founding Cascade and Accelerant fleets, the electorate, presence, segregation
+(random approved batches never lower protected money), and a Trading Fleet's
+money and authority. The presence suite runs
 256 runs, and the fleet, electorate and segregation suites 256 runs × depth 100.
+The Trading Fleet suite runs 32 runs × depth 100 every day and 256 runs × depth
+100 under the `deep` profile.
 The two collection suites run short every day, 24 runs × depth 80 and
 24 runs × depth 40; the `deep` profile runs them at 256 runs × depth 100:
 
@@ -1847,14 +2047,15 @@ cd contracts && FOUNDRY_PROFILE=deep forge test --match-path test/invariant/Keyf
 
 `script/check_bytecode.sh` disassembles the deployed code of the collection, the
 factory, its four deployers, the REGENT buyer, the shard record, the Regents Club
-claims contract and a fleet's four contracts with `cast disassemble` and walks it from its entry point,
+claims contract, a fleet's four contracts, the trading factory, its two trading
+deployers and a Trading Fleet's manager and treasury with `cast disassemble` and walks it from its entry point,
 following every jump target the code pushes, and fails if any of them can reach
 `DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT`. Bytes nothing jumps to, such as
 the Classic price table stored at the end of the manager's code, are data and
 are not judged. Foundry must be installed (forge 1.8.6); the compiler may be
 downloaded on first use.
 
-Tests need no RPC, apart from the five suites in `test/fork/`, which skip
+Tests need no RPC, apart from the six suites in `test/fork/`, which skip
 themselves unless `BASE_RPC_URL` is set:
 
 - `KeyfleetBaseFork.t.sol` deploys the system from the committed Base manifest
@@ -1875,6 +2076,15 @@ themselves unless `BASE_RPC_URL` is set:
   Regents Safe to open it.
 - `KeyfleetBaseGas.t.sol` gives the figures in [On a fork of Base](#on-a-fork-of-base)
   and runs only with `--isolate`.
+- `KeyfleetTradingFork.t.sol` runs a Trading Fleet on the live collection as
+  deployed, with real USDC and REGENT revenue staking: on the fork only, it acts
+  as the Regents Safe to create the founding fleets still missing, step the
+  phases to the last with the release's Safe steps and add the trading factory,
+  then creates a fleet, sells keys, trades out and back, pays back by the
+  creator and daily into real staking, claims, passes key 1, closes and pays
+  back everything, and holds every payback while the Safe has staking paused.
+  With `--isolate` its gas lines are the figures in [Trading
+  Fleets](#trading-fleets-1).
 
 Run them one suite at a time, as a public endpoint may refuse a burst of
 requests.

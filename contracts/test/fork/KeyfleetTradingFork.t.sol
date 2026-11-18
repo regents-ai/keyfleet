@@ -30,6 +30,10 @@ import {IRegentRevenueStakingViews} from "./KeyfleetBaseFork.t.sol";
 /// never printed:
 ///
 ///     forge test --match-contract KeyfleetTradingForkTest -vv
+///
+/// It logs the gas of a purchase, a creator's payback and a daily payback. Those are whole
+/// transactions, the 21,000 base and the call data included and every account cold, only when Forge
+/// runs each call as a transaction of its own; add `--isolate` for the figures to quote.
 contract KeyfleetTradingForkTest is Test {
     /// @dev The live collection and the factory that deployed it, read from Base on 18 November 2026.
     KeyfleetKeys private constant COLLECTION = KeyfleetKeys(0xaBC959B463542497639adA57388c65D05AB34A30);
@@ -120,11 +124,8 @@ contract KeyfleetTradingForkTest is Test {
     /// @dev Alice and Bob buy Keys 2 to 4.
     function _sell(KeyfleetTradingManager fleet) private {
         _buy(fleet, ALICE);
-        vm.cool(address(fleet));
-        vm.cool(address(fleet.TREASURY()));
-        vm.cool(address(fleet.REWARDS()));
         _buy(fleet, BOB);
-        console2.log("purchase gas on the fork, cold, real USDC:", _lastGas);
+        _logGas("purchase, Key 3");
         _buy(fleet, BOB);
         assertEq(fleet.totalMinted(), 4);
         assertEq(COLLECTION.revealRequestedAt(_key(fleet, 2)), 0, "no deck yet, so no draw is asked for");
@@ -151,11 +152,9 @@ contract KeyfleetTradingForkTest is Test {
         uint256 staked = Math.mulDiv(amount, 100, 10_000, Math.Rounding.Ceil);
         perKey = (amount - staked) / 4;
         vm.recordLogs();
-        _coolPayback(treasury);
-        uint256 before = gasleft();
         vm.prank(CREATOR);
         treasury.payback(amount);
-        console2.log("creator's payback gas on the fork, cold, four Keys:", before - gasleft());
+        _logGas("payback by the creator, the fleet's first, four Keys");
         assertEq(staking.totalUsdcReceived() - receivedBefore, staked, "1% counted as revenue by staking");
         _assertDeposit(treasury, fleet, staked);
         assertEq(usdc.allowance(address(treasury), STAKING), 0, "no approval left");
@@ -169,11 +168,9 @@ contract KeyfleetTradingForkTest is Test {
         uint256 daily = usdc.balanceOf(address(treasury)) * treasury.DAILY_PAYBACK_BPS() / 10_000;
         uint256 staked = Math.mulDiv(daily, 100, 10_000, Math.Rounding.Ceil);
         perKey = (daily - staked) / 4;
-        _coolPayback(treasury);
-        uint256 before = gasleft();
         vm.prank(ALICE);
         treasury.runDailyPayback();
-        console2.log("daily payback gas on the fork, cold, four Keys:", before - gasleft());
+        _logGas("runDailyPayback, a later payback, four Keys");
         assertEq(staking.totalUsdcReceived() - receivedBefore, staked, "the daily 1% too");
         assertEq(usdc.allowance(address(treasury), STAKING), 0, "no approval left");
     }
@@ -220,10 +217,9 @@ contract KeyfleetTradingForkTest is Test {
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(BASE_USDC), "the ledger holds what it owes");
     }
 
-    function _coolPayback(KeyfleetTradingTreasury treasury) private {
-        vm.cool(address(treasury));
-        vm.cool(address(treasury.REWARDS()));
-        vm.cool(STAKING);
+    /// @dev The gas of the call just made, which is the whole transaction's under `--isolate`.
+    function _logGas(string memory call) private view {
+        console2.log(string.concat("gas on the fork, real USDC and staking: ", call), vm.lastCallGas().gasTotalUsed);
     }
 
     /// @dev While its owner, the Regents Safe, has staking paused, every payback reverts and nothing
@@ -249,8 +245,6 @@ contract KeyfleetTradingForkTest is Test {
         treasury.payback(10e6);
     }
 
-    uint256 private _lastGas;
-
     function _create() private returns (KeyfleetTradingManager fleet) {
         KeyfleetTradingFactory.TradingTerms memory terms;
         terms.profile = KeyfleetManager.Profile("A trading fleet", "Trades its pot.", "");
@@ -263,6 +257,7 @@ contract KeyfleetTradingForkTest is Test {
         usdc.approve(address(trading), terms.firstPrice);
         vm.prank(CREATOR);
         (uint256 fleetId,) = trading.create(terms);
+        _logGas("create, with Key 1");
         fleet = KeyfleetTradingManager(COLLECTION.managerOf(fleetId));
     }
 
@@ -271,10 +266,8 @@ contract KeyfleetTradingForkTest is Test {
         deal(BASE_USDC, buyer, price);
         vm.prank(buyer);
         usdc.approve(address(fleet), price);
-        uint256 before = gasleft();
         vm.prank(buyer);
         fleet.purchase(buyer, price, block.timestamp, new bytes32[](0));
-        _lastGas = before - gasleft();
     }
 
     function _key(KeyfleetTradingManager fleet, uint256 keyNumber) private view returns (uint256) {

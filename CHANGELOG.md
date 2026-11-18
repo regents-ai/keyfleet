@@ -11713,3 +11713,25 @@ another wallet opens, no note after a person's refused press and a quick switch,
 log's "ok" for a refused press, a wallet app that never answers, the lost line gone at the
 next redraw, a claim not followed across a move away and back, no handler for a signature
 step's report).
+
+## 2026-11-18 — Trading Fleets, written and tested, not deployed
+
+- New contracts on branch `kf/trading-fleet-1118` (8e5a882d8): `KeyfleetTradingFactory`,
+  `KeyfleetTradingManager`, `KeyfleetTradingTreasury`, their two deployers and the shared
+  wiring file. A Trading Fleet lives in the existing key collection, made by a second
+  factory the Regents Safe would add. Its creator is whoever holds its Key 1 at the
+  moment, sets its price and step, trades its USDC from a wallet they name, and pays it
+  back to the Keys that count, 1% of every payback to REGENT revenue staking. Anyone may
+  run a guaranteed daily payback of 0.1% to 2% of what the treasury holds, fixed at
+  creation. Once closed, it sells no Key, sends nothing to trade, and anyone may pay back
+  everything it holds.
+- The rewards ledger is the existing `KeyfleetRewards`, unchanged. Every existing
+  contract compiles to the same bytes as before (31 contracts compared).
+- Tests (fbcbc51ba, baa772719): the factory, sales, the treasury and the ledger's reuse,
+  with fuzzing; seven invariants; gas at 1, 100 and 10,000 Keys; and a fork of Base that
+  runs a Trading Fleet on the live collection with real USDC and staking.
+  `script/check_bytecode.sh` now checks the new contracts too.
+- Open: whether the 1% to staking applies to the daily payback too is built as the
+  brief says and not yet confirmed by the founder. `script/RecordKeyfleets.s.sol`
+  refuses a Trading Fleet, so it must change before the first one is created. No script
+  deploys the trading factory or writes the Safe's `addFactory` call yet.

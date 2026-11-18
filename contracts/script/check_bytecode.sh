@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Refuses a build in which the collection, the factory and its deployers, the REGENT buyer, the
-# shard record, the Regents Club claims contract or any of a fleet's four contracts can reach
+# shard record, the Regents Club claims contract, any of a fleet's four contracts, the Trading Fleet
+# factory and its deployers, or a Trading Fleet's sales contract or treasury can reach
 # DELEGATECALL, CALLCODE or SELFDESTRUCT. Each contract's deployed code is disassembled with `cast disassemble`, which steps
 # over push data, and walked from its entry point: straight on until an instruction that ends the
 # path, and into every JUMPDEST whose offset reachable code pushes as a constant, which is how
@@ -13,7 +14,8 @@ cd "$(dirname "$0")/.."
 status=0
 for contract in KeyfleetKeys KeyfleetFactory KeyfleetManagerDeployer KeyfleetVotesDeployer \
   KeyfleetTreasuryDeployer KeyfleetRewardsDeployer KeyfleetRegentBuyer KeyfleetShards KeyfleetClubClaims \
-  KeyfleetManager KeyfleetVotes KeyfleetTreasury KeyfleetRewards; do
+  KeyfleetManager KeyfleetVotes KeyfleetTreasury KeyfleetRewards KeyfleetTradingFactory \
+  KeyfleetTradingManagerDeployer KeyfleetTradingTreasuryDeployer KeyfleetTradingManager KeyfleetTradingTreasury; do
   code=$(forge inspect "$contract" deployedBytecode)
   found=$(cast disassemble "$code" | awk '
     function hex(s,    i, n, c) {
