@@ -11220,25 +11220,11 @@ a scratch walk that is not kept.
 - The door now collects once its checks are done, whatever they found, before it waits
   for the hub (`checked/4`), and `SignedAgent.take_body/1` once it has decoded. With the
   reviewers' round-four proofs, 1,150 deep jobs at once peak at 496 MiB (4,030 before),
-  235 on closing connections (1,261), 1,150 files at 542 (638), and 150 deep jobs waiting
-  on a slow hub hold 128 MiB (542). A request holds about 41 KiB once answered (3,475 at
-  the door and 2,476 on the agent API before). The collection costs about 8 µs a request.
+  235 each on a connection of its own to a hub taking 100 ms (1,261), 1,150 files at 542
+  (638), and 150 deep jobs waiting on a slow hub hold 128 MiB (542). A request holds about
+  41 KiB once answered (3,475 at the door and 2,476 on the agent API before). The
+  collection costs about 8 µs a request.
 - Bandit's option to collect after every request collects only once the answer is sent,
   so a request waiting for the hub kept its megabytes; decoding in a short-lived process
   copies the decoded body back (about 512 KiB for a deep one) and splits each check across
   processes. Nothing is accepted or refused differently; no contract change.
-
-## 2026-11-17 — The notebook door closes the connection when it answers before the body
-
-- To keep a connection after an answer, Bandit 1.15.0 reads on through the rest of the
-  request's body, up to 8,000,000 bytes, a megabyte at a time with 15 s for each, and
-  holds what it reads. So a refusal the notebook door gave before reading the body (no
-  sign-in, a refused route, a body over its cap) still read and held up to 8 MB of it.
-- Until the door has read a request's whole body (the sign-in form, a signed body, a
-  capped body), its answer carries `connection: close` (`close_until_read/1`, taken off by
-  `body_read/1`), so Bandit closes at once and reads nothing more. Over HTTP/2 Bandit
-  leaves the header out and resets that one stream; the connection serves on.
-- Thousand Island closes without draining, so a client still sending its body usually
-  gets a reset before it reads the answer: with a 1 MiB body 0 of 40 heard the refusal,
-  with 8 MB 7 of 40, where all 40 did before; 2 KiB and 64 KiB bodies were all heard.
-  `/docs` and the public changelog say so. No contract change.

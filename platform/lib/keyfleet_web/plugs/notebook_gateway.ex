@@ -70,10 +70,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   sent to the notebook API (`/api/`), reaches the hub labelled as this door
   read it, and one sent encoded is refused, as is one this door decides by
   that names a field twice (`decoded/1`) or is longer than an agent's body may
-  be (`body_limit/1`). An answer given before the whole body is read, a
-  refusal above all, closes the connection (`close_until_read/1`). Answers
-  stream straight back, with only the headers a notebook page needs
-  (`@kept_response`). A WebSocket
+  be (`body_limit/1`). Answers stream straight back,
+  with only the headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
 
@@ -205,24 +203,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   @impl Plug
   def call(conn, _opts) do
-    if Notebooks.notebook_host?(conn.host),
-      do: conn |> close_until_read() |> serve() |> halt(),
-      else: conn
+    if Notebooks.notebook_host?(conn.host), do: conn |> serve() |> halt(), else: conn
   end
-
-  # Until this door has read a request's whole body, its answer closes the
-  # connection, so a refusal ends the request: kept open, the web server would
-  # read on through up to 8 MB more of the body to throw it away, waiting up to
-  # 15 seconds for each megabyte. Over HTTP/2 the web server leaves the header
-  # out and resets that one request's stream instead.
-  defp close_until_read(conn) do
-    if get_req_header(conn, "transfer-encoding") != [] or
-         get_req_header(conn, "content-length") not in [[], ["0"]],
-       do: put_resp_header(conn, "connection", "close"),
-       else: conn
-  end
-
-  defp body_read(conn), do: delete_resp_header(conn, "connection")
 
   defp serve(conn) do
     if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?() do
@@ -249,7 +231,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp route(%Plug.Conn{method: "POST", request_path: @enter} = conn, fleet_id) do
-    %{body_params: form} = conn = conn |> Plug.Parsers.call(@enter_form) |> body_read()
+    %{body_params: form} = conn = Plug.Parsers.call(conn, @enter_form)
     to = form["to"]
 
     cond do
@@ -354,7 +336,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     with [] <- get_req_header(conn, "content-encoding"),
          {:ok, _raw, conn} <- KeyfleetWeb.BodyReader.read_signed(conn, [], @signed_max_body) do
       conn =
-        Siwa.AgentAuthPlug.call(body_read(conn),
+        Siwa.AgentAuthPlug.call(conn,
           client: Keyfleet.SiwaBroker,
           hooks: __MODULE__,
           audience: "keyfleet",
@@ -1119,7 +1101,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     limit = body_limit(conn)
 
     case read_body(conn, length: limit + 1, read_length: min(limit + 1, 1_000_000)) do
-      {:ok, body, conn} when byte_size(body) <= limit -> {body, body_read(conn)}
+      {:ok, body, conn} when byte_size(body) <= limit -> {body, conn}
       {:ok, _longer, conn} -> {:too_large, conn}
       {:more, _partial, conn} -> {:too_large, conn}
       {:error, _reason} -> {:too_large, conn}
