@@ -7,10 +7,14 @@ defmodule KeyfleetWeb.BodyReaderTest do
 
   alias KeyfleetWeb.SignedAgentHelpers
 
+  # Each address's limit, as its parser gives it to the reader.
+  @limits %{"/api/agents/v1/pair" => 4096, "/mcp" => 700 * 1024}
+
   setup do
     reader =
       SignedAgentHelpers.serve!(:reader, fn conn, _opts ->
-        {read, body, conn} = KeyfleetWeb.BodyReader.read_body(conn, length: 1_000_000)
+        options = [length: Map.fetch!(@limits, conn.request_path)]
+        {read, body, conn} = KeyfleetWeb.BodyReader.read_body(conn, options)
         Plug.Conn.send_resp(conn, 200, "#{read} #{byte_size(body)}")
       end)
 
@@ -21,7 +25,7 @@ defmodule KeyfleetWeb.BodyReaderTest do
        c do
     signed = [{Siwa.Contract.signature_input_header(), "sig1=()"}]
 
-    for {path, limit} <- [{"/api/agents/v1/pair", 4096}, {"/mcp", 1_000_000}] do
+    for {path, limit} <- @limits do
       exact = String.duplicate(" ", limit)
       over = exact <> " "
       pieces = [binary_part(exact, 0, 100), binary_part(exact, 100, limit - 100)]

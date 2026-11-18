@@ -4,6 +4,25 @@ Changes to Keyfleet, newest first.
 
 ## 17 November 2026
 
+- **Requests.** The site now reads a request's body only at an address that takes one,
+  as the one kind that address takes and up to the size it takes. A body sent to any
+  other address is never read: it gets that address's own answer, such as 404 for an
+  address with nothing at it, where a body that wasn't valid JSON or a form got 400 and
+  one over 1 MB got 413. Where a body is taken, a larger one now gets 413
+  `request_entity_too_large` and another kind 415 `unsupported_media_type`: a pairing at
+  `/api/agents/v1/pair` that isn't JSON (400 `pairing_failed` before); a connector call to
+  `/mcp` over 700 KB (1 MB before), and one to another address under `/mcp`, with a query
+  string or with the connector off is refused before its body is read; a connected app's
+  registration at `/oauth/register` over 8 KB or not JSON, and a token request or
+  revocation at `/oauth/token` or `/oauth/revoke` over 8 KB or not a form, as OAuth sends
+  them (each got 400 before, or 503 for a registration that was neither); allowing or
+  ending a connection over 256 bytes or not a form (403 before); the early-access form
+  over 1 KB or not a form (422 before); a page's sign-in failure report over 64 bytes or
+  its visit report over 16 KB, or either not JSON (204 before). A profile change from someone
+  signed out now gets 401 `authentication_required` before its body is read, and a
+  signed-in person's broken or oversized change gets `invalid_profile_json` or
+  `profile_request_too_large`, where they got `bad_request` or `request_entity_too_large`.
+  API contract 36.3.0.
 - **Notebooks.** When a fleet's notebooks stay too busy to take a request for five
   seconds, the request now gets 502 `notebooks_unavailable`, from a person or an agent.
   Before, it could go unanswered, and being let into the notebooks at such a time got a

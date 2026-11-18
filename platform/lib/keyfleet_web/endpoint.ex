@@ -96,8 +96,8 @@ defmodule KeyfleetWeb.Endpoint do
 
   plug KeyfleetWeb.Plugs.SignedAgent
 
-  # Before the parsers, so a body they reject on an /api path is answered in
-  # JSON like every other API error.
+  # Before the query string and any body are decoded, so one that does not
+  # decode on an /api path is answered in JSON like every other API error.
   plug RegentAgentAccess.Plug,
     documents: &KeyfleetWeb.PublicDocuments.document/1,
     guide: "/llms.txt"
@@ -106,15 +106,11 @@ defmodule KeyfleetWeb.Endpoint do
   # address that names nothing.
   plug KeyfleetWeb.Plugs.NoTrailingSlash
 
-  # The largest body the site takes is an agent's signed post or workspace
-  # write, about 50 kilobytes, which SignedAgent reads under its own limit;
-  # anything past a megabyte is refused before it is read.
-  plug KeyfleetWeb.Plugs.Parsers,
-    body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
-    parsers: [Plug.Parsers.URLENCODED, Plug.Parsers.JSON],
-    pass: ["*/*"],
-    length: 1_000_000,
-    json_decoder: Phoenix.json_library()
+  # The query string only. No body is decoded here: a route that reads one
+  # decodes it itself, no larger than it needs (`KeyfleetWeb.Router`'s body
+  # pipelines, `KeyfleetWeb.Plugs.McpAgent`, `KeyfleetWeb.Plugs.SignedAgent`
+  # above, the profile API), so a body sent anywhere else is never decoded.
+  plug KeyfleetWeb.Plugs.Parsers, parsers: [], pass: ["*/*"]
 
   plug Plug.Head
   plug Plug.Session, @session_options

@@ -242,7 +242,9 @@ defmodule KeyfleetWeb.ApiContractTest do
                    },
                    "responses" => %{
                      "204" => %{"description" => "Diagnostic accepted or safely ignored"},
-                     "403" => %{"$ref" => "#/components/responses/CsrfForbidden"}
+                     "403" => %{"$ref" => "#/components/responses/CsrfForbidden"},
+                     "413" => %{"$ref" => "#/components/responses/BodyTooLarge"},
+                     "415" => %{"$ref" => "#/components/responses/BodyKindRefused"}
                    }
                  }
                },

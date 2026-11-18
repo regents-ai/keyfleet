@@ -21,9 +21,8 @@ defmodule KeyfleetWeb.VitalsController do
   alias Keyfleet.Accounts.RequestRateLimiter
   alias KeyfleetWeb.{ClientAddress, Vitals}
 
-  # A report is about 250 bytes, so a body past a kilobyte is not one. The
-  # browser sends it as text/plain, which the endpoint's parsers leave unread,
-  # so this limit is the only read.
+  # A report is about 250 bytes, so a body past a kilobyte is not one. Nothing
+  # decodes a body before this route, so this limit is the only read.
   @body_limit 1024
 
   # Reports per client address each minute. A page view sends one, so this is

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 36.2.1
+  version: 36.3.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -524,6 +524,8 @@ paths:
       responses:
         "204": {description: Diagnostic accepted or safely ignored}
         "403": {$ref: "#/components/responses/CsrfForbidden"}
+        "413": {$ref: "#/components/responses/BodyTooLarge"}
+        "415": {$ref: "#/components/responses/BodyKindRefused"}
   /auth/privy/session:
     post:
       operationId: createPrivyBrowserSession
@@ -4518,6 +4520,8 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/SharedAgentError"}
+        "413": {$ref: "#/components/responses/BodyTooLarge"}
+        "415": {$ref: "#/components/responses/BodyKindRefused"}
         "503": {$ref: "#/components/responses/SharedAgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SharedSignInRefusal"}
@@ -5008,6 +5012,10 @@ components:
             properties: {ok: {type: boolean, const: true}}
     CsrfForbidden:
       description: CSRF token was absent or invalid
+    BodyTooLarge:
+      description: request_entity_too_large, the body is larger than this address takes; it was not read
+    BodyKindRefused:
+      description: unsupported_media_type, the body is not the one kind this address takes; it was not read
     Profile:
       description: The verified account's profile
       content:

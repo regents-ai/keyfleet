@@ -1,28 +1,25 @@
 defmodule KeyfleetWeb.BodyReader do
   @moduledoc """
-  The endpoint's body reader. A shared agent request (`/api/agents/v1`) is read
-  by the shared SIWA plug's reader, which keeps the exact bytes the agent signed
-  and refuses more than 4096 of them. A signed request to the MCP address
-  (`/mcp`) is read the same way, up to the parsers' own limit, so
-  `KeyfleetWeb.Plugs.McpAgent` can check the signature against those bytes.
-  Every other body is read as `RegentIdentity.BodyReader` reads it.
+  The body reader of the two addresses that decode a body an agent may have
+  signed, each up to its parser's `:length`. A shared agent request
+  (`/api/agents/v1`, the router's `:agent_pairing`) is read by the shared SIWA
+  plug's reader, which keeps the exact bytes the agent signed. A signed request
+  to the MCP address (`/mcp`, `KeyfleetWeb.Plugs.McpAgent`) is read the same
+  way, so McpAgent can check the signature against those bytes; an unsigned
+  one is read as any body is.
 
   `signed?/1` is how every address that takes both signed and unsigned
   requests tells them apart.
   """
 
-  @agent_body_limit 4096
-
   def read_body(%Plug.Conn{path_info: ["api", "agents", "v1" | _rest]} = conn, options),
-    do: read_signed(conn, options, @agent_body_limit)
+    do: read_signed(conn, options, Keyword.fetch!(options, :length))
 
-  def read_body(%Plug.Conn{path_info: ["mcp"]} = conn, options) do
+  def read_body(conn, options) do
     if signed?(conn),
       do: read_signed(conn, options, Keyword.fetch!(options, :length)),
-      else: RegentIdentity.BodyReader.read_body(conn, options)
+      else: Plug.Conn.read_body(conn, options)
   end
-
-  def read_body(conn, options), do: RegentIdentity.BodyReader.read_body(conn, options)
 
   @doc """
   Whether `conn` is signed: it carries `x-siwa-signature` or

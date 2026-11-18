@@ -11272,3 +11272,37 @@ a scratch walk that is not kept.
 - A collection after an ordinary page costs 1 to 22 µs (a small job 2 µs; the docs page,
   which holds 7 MiB until then, 85 µs). Tests serve the site with the same setting through
   `SignedAgentHelpers.serve_site!/1`. Nothing is answered differently; no contract change.
+
+## 2026-11-17 — A body is decoded only where a route reads it
+
+- The endpoint decoded every POST, PUT, PATCH and DELETE body that was JSON or a form, up
+  to 1 MB, on any address, signed in or not, before the router answered. In the
+  reviewers' door-load proof 378, 100 anonymous connections each sending a 781 KiB JSON
+  list to `/` peaked at 2,862 MiB and held 2,423 MiB a second later; the same lists to an
+  address with nothing at it peaked at 3,029 MiB. A 975 KiB form of 130,000 empty keys is
+  worse: 100 of them to `/` peaked at 8,098 MiB and held 7,158.
+- The endpoint now reads only the query string (`KeyfleetWeb.Plugs.Parsers` with no
+  parsers). Each route that reads a body decodes it in its own router pipeline, as the one
+  kind it takes (`pass: []`, so another kind is 415) and no larger than it needs: the
+  early-access form 1 KiB, allowing or ending a connection 256 bytes, an app's
+  registration 8 KiB of JSON and its token requests and revocations 8 KiB forms
+  (RegentOAuth refuses more than 8 KiB of either), an agent's pairing 4 KiB of JSON, a
+  page's visit report 16 KiB and its sign-in failure 64 bytes. `KeyfleetWeb.BodyReader`
+  takes each signed read's limit from its parser. `McpAgent` decodes a connector call
+  itself, up to 700 KiB (a 512 KiB picture as base64, 699,052 bytes, is the largest call),
+  once the address, method, query string, origin and kind have passed. The profile API
+  decodes a change itself, up to 8 KiB, once its owner is known. The signed agent API, the
+  notebook door, `/vitals`, `/steps` and a picture's upload read their own, as before. A
+  query string stays within Bandit's 10,000-byte request line.
+- After: the same 100 lists to `/` peak at 8 MiB, to an address with nothing at it 78 (the
+  bodies themselves, unread), and the forms 97; held a second later is the unread bodies
+  until Bandit collects, 0 with production's setting. Proof 378 as written passes: 83 MiB
+  peak, 78 held after a second, 0 after 17.
+- Every changed answer is in the public changelog; contract 36.3.0 adds the 413 and 415
+  of an agent's pairing and of a sign-in failure report. `BodyLimitsTest` sends, through
+  a real port, bodies that would be refused if decoded to five addresses that read none,
+  and to each route that reads one a body of exactly its size, one byte more and one of
+  another kind; `ProfileApiTest` checks the profile API's own refusals and that a
+  signed-out change is refused before its body is read.
+- Still open: a connector call is decoded before its token or signature is checked, so
+  100 calls of 700 KiB lists with a made-up bearer token peak at 951 MiB (924 before).

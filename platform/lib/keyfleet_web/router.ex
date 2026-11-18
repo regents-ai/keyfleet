@@ -25,6 +25,67 @@ defmodule KeyfleetWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # The endpoint decodes no body. A route that reads one decodes it in one of
+  # these, as the one kind it takes and no larger than it needs; any other kind
+  # is refused with 415, a larger one with 413. A route without one, and an
+  # address with no route, never has its body decoded.
+
+  # The early-access form: its forms token, an email address of up to 254
+  # bytes, each up to three once encoded, and the empty trap field.
+  pipeline :early_form do
+    plug KeyfleetWeb.Plugs.Parsers, parsers: [Plug.Parsers.URLENCODED], pass: [], length: 1024
+  end
+
+  # Allowing or cancelling a connection, and ending one: a forms token and a
+  # 43-character key or a client's id.
+  pipeline :consent_form do
+    plug KeyfleetWeb.Plugs.Parsers, parsers: [Plug.Parsers.URLENCODED], pass: [], length: 256
+  end
+
+  # A connected app's registration, which RegentOAuth takes up to 8 KB of.
+  pipeline :oauth_registration do
+    plug KeyfleetWeb.Plugs.Parsers,
+      parsers: [Plug.Parsers.JSON],
+      pass: [],
+      length: 8192,
+      json_decoder: Jason
+  end
+
+  # A token request or revocation, a form as OAuth sends it, which RegentOAuth
+  # takes up to 8 KB of.
+  pipeline :oauth_form do
+    plug KeyfleetWeb.Plugs.Parsers, parsers: [Plug.Parsers.URLENCODED], pass: [], length: 8192
+  end
+
+  # An agent's pairing, the one body the shared agent address reads, kept as
+  # signed (`KeyfleetWeb.BodyReader`).
+  pipeline :agent_pairing do
+    plug KeyfleetWeb.Plugs.Parsers,
+      body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
+      parsers: [Plug.Parsers.JSON],
+      pass: [],
+      length: 4096,
+      json_decoder: Jason
+  end
+
+  # Up to 20 visit lines, each naming a page by its path (visit_log.ts).
+  pipeline :visit_report do
+    plug KeyfleetWeb.Plugs.Parsers,
+      parsers: [Plug.Parsers.JSON],
+      pass: [],
+      length: 16 * 1024,
+      json_decoder: Jason
+  end
+
+  # One sign-in failure's name, such as {"reason":"session_exchange"}.
+  pipeline :sign_in_failure do
+    plug KeyfleetWeb.Plugs.Parsers,
+      parsers: [Plug.Parsers.JSON],
+      pass: [],
+      length: 64,
+      json_decoder: Jason
+  end
+
   # The profile API's owner: the person signed in here, with the forms token on a
   # change, or the person a paired agent acts for (KeyfleetWeb.Plugs.ProfileOwner).
   pipeline :profile_owner do
@@ -243,7 +304,7 @@ defmodule KeyfleetWeb.Router do
   end
 
   scope "/", KeyfleetWeb do
-    pipe_through :early
+    pipe_through [:early_form, :early]
     get "/early", EarlyController, :show
     post "/early", EarlyController, :create
   end
@@ -281,7 +342,7 @@ defmodule KeyfleetWeb.Router do
   # An agent pairs with a person's Regent account, and checks in on it, the
   # same way on every Regent site. Pairing grants nothing here.
   scope "/" do
-    pipe_through :api
+    pipe_through [:api, :agent_pairing]
     forward "/api/agents/v1", RegentAgents.HTTP
   end
 
@@ -293,13 +354,21 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/oauth-protected-resource", OAuthController, :resource_metadata
     get "/.well-known/oauth-protected-resource/mcp", OAuthController, :resource_metadata
     get "/.well-known/oauth-authorization-server", OAuthController, :server_metadata
-    post "/oauth/register", OAuthController, :register, log: false
-    post "/oauth/token", OAuthController, :token, log: false
-    post "/oauth/revoke", OAuthController, :revoke, log: false
   end
 
   scope "/oauth", KeyfleetWeb do
-    pipe_through :browser
+    pipe_through [:api, :oauth_registration]
+    post "/register", OAuthController, :register, log: false
+  end
+
+  scope "/oauth", KeyfleetWeb do
+    pipe_through [:api, :oauth_form]
+    post "/token", OAuthController, :token, log: false
+    post "/revoke", OAuthController, :revoke, log: false
+  end
+
+  scope "/oauth", KeyfleetWeb do
+    pipe_through [:consent_form, :browser]
     get "/authorize", OAuthController, :authorize, log: false
     post "/authorize", OAuthController, :approve, log: false
     get "/connections", OAuthController, :connections, log: false
@@ -325,8 +394,9 @@ defmodule KeyfleetWeb.Router do
   # (`KeyfleetWeb.Endpoint.connector_rate_limit/0`), since every person's
   # Claude calls from the same servers. It answers 404 while the connector is
   # off. Nothing is kept between requests. Tool calls carry pairing codes, so
-  # nothing is logged. No `:accepts`: the endpoint has parsed the JSON, and a
-  # GET for an event stream must be answered 405 by McpAgent, not 406 here.
+  # nothing is logged. No `:accepts`: McpAgent decodes the JSON once its
+  # address, method, origin and kind pass, and a GET for an event stream must
+  # be answered 405 by McpAgent, not 406 here.
   pipeline :mcp do
     plug KeyfleetWeb.Plugs.McpAgent
   end
@@ -591,14 +661,23 @@ defmodule KeyfleetWeb.Router do
     end
 
     get "/auth/csrf", PrivySessionController, :csrf
-    post "/auth/privy/failure", PrivySessionController, :failure
-    post "/visit-log", VisitLogController, :create, log: false
     post "/auth/privy/session", PrivySessionController, :create
     get "/auth/session", PrivySessionController, :show
     delete "/auth/privy/session", PrivySessionController, :delete
 
     # A Key holder's way into the fleet's notebooks, or to one saved output.
     get "/fleets/:fleet_id/notebooks/open", NotebookOpenController, :open
+  end
+
+  # The page's own reports, read once the forms token in their header passed.
+  scope "/", KeyfleetWeb do
+    pipe_through [:browser, :sign_in_failure]
+    post "/auth/privy/failure", PrivySessionController, :failure
+  end
+
+  scope "/", KeyfleetWeb do
+    pipe_through [:browser, :visit_report]
+    post "/visit-log", VisitLogController, :create, log: false
   end
 
   # The pages drawn in the product shell, with the harbour's sea behind them.

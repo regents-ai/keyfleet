@@ -3,7 +3,9 @@ defmodule KeyfleetWeb.ProfileApiTest do
   # owner KeyfleetWeb.Plugs.ProfileOwner names, every answer held to the contract:
   # - a person signed in here reads it and, with the forms token, saves their
   #   public name, which reads back; a change without the token is refused and
-  #   changes nothing; signed out, a read and a change are refused;
+  #   changes nothing; signed out, a read and a change are refused, the
+  #   change before its body is read, and the owner's broken or oversized
+  #   change is refused with the profile API's own code;
   # - a person who signed in before sign-in made profiles has none, and saves
   #   once they sign in again;
   # - an agent the person paired reads and saves it for them; one paired with a
@@ -55,6 +57,22 @@ defmodule KeyfleetWeb.ProfileApiTest do
              |> with_forms_token()
              |> change(%{display_name: "Nobody"})
              |> answer(401)
+  end
+
+  test "a change's body is read only for its owner, who is told when it is broken or too large" do
+    signed_in = sign_in()
+    oversized = Jason.encode!(%{display_name: String.duplicate("a", 8192)})
+
+    for {body, status, code} <- [
+          {"{", 400, "invalid_profile_json"},
+          {oversized, 413, "profile_request_too_large"}
+        ] do
+      assert %{"error" => %{"code" => ^code}} =
+               signed_in |> again() |> with_forms_token() |> send_change(body) |> answer(status)
+
+      assert %{"error" => %{"code" => "authentication_required"}} =
+               build_conn() |> send_change(body) |> answer(401)
+    end
   end
 
   test "a person who signed in before sign-in made profiles saves once they sign in again" do
@@ -184,10 +202,12 @@ defmodule KeyfleetWeb.ProfileApiTest do
 
   defp read(conn), do: get(conn, @path)
 
-  defp change(conn, body) do
+  defp change(conn, body), do: send_change(conn, Jason.encode!(body))
+
+  defp send_change(conn, raw) do
     conn
     |> put_req_header("content-type", "application/json")
-    |> patch(@path, Jason.encode!(body))
+    |> patch(@path, raw)
   end
 
   defp signed(signer, secret, method, body) do

@@ -13,8 +13,9 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   - a page from another site (any `Origin` but this site's own, `null`
     included) is refused (`origin_not_allowed`); a request with no `Origin`, as
     MCP clients send, goes on;
-  - a body that is not JSON is refused (`unsupported_media_type`), and so is a
-    JSON-RPC batch (`batch_not_supported`).
+  - a body that is not JSON is refused (`unsupported_media_type`). Only then
+    is it decoded, up to 700 KiB, and a JSON-RPC batch is refused
+    (`batch_not_supported`).
 
   Then the request carries a connected app's token (`Authorization: Bearer`),
   one this site gave for `/mcp` with the identity permission, as `RegentOAuth`
@@ -80,6 +81,16 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   alias KeyfleetWeb.Plugs.SignedAgent
   alias KeyfleetWeb.PublicDocuments
 
+  # The largest call is a picture's upload: 512 KiB as base64, 699,052 bytes,
+  # and the rest of the call beside it.
+  @body [
+    body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
+    parsers: [Plug.Parsers.JSON],
+    pass: [],
+    length: 700 * 1024,
+    json_decoder: Jason
+  ]
+
   @impl true
   def init(opts), do: opts
 
@@ -106,13 +117,17 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
       not json?(conn) ->
         refuse(conn, "unsupported_media_type")
 
-      is_list(conn.body_params["_json"]) ->
-        refuse(conn, "batch_not_supported")
-
       true ->
-        caller(conn)
+        conn
+        |> KeyfleetWeb.Plugs.Parsers.call(KeyfleetWeb.Plugs.Parsers.init(@body))
+        |> one_call()
     end
   end
+
+  defp one_call(%{body_params: %{"_json" => batch}} = conn) when is_list(batch),
+    do: refuse(conn, "batch_not_supported")
+
+  defp one_call(conn), do: caller(conn)
 
   @doc false
   def account(conn), do: conn.private.mcp_principal.subject

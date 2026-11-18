@@ -17,9 +17,8 @@ defmodule KeyfleetWeb.LaunchStepsController do
   alias Keyfleet.Accounts.RequestRateLimiter
   alias KeyfleetWeb.{ClientAddress, LaunchSteps}
 
-  # A report is under 50 bytes, so a body past 256 is not one. The browser
-  # sends it as text/plain, which the endpoint's parsers leave unread, so this
-  # limit is the only read.
+  # A report is under 50 bytes, so a body past 256 is not one. Nothing decodes
+  # a body before this route, so this limit is the only read.
   @body_limit 256
 
   # Reports per client address each minute. A visit sends a few, so this
