@@ -11485,11 +11485,18 @@ nothing at the next reconnect.
 
 - Merged origin/main at 2fd9f4407, the homepage release, into `kf/wallet-press-1118` as
   2577309ec, so the third review and the release check run on what will ship. Only this
-  file, `platform/priv/public/changelog.md` and `verification/features.yml` conflicted, each
-  where both sides added entries in the same place; both sides' entries are kept, main's
-  first. The agent contract stays at main's 36.2.0 and the agent guide at main's 3.35.0:
-  the browser agent's new answers are the page tools' refusals, which neither describes,
-  and their shape and codes are as they were.
+  file and `platform/priv/public/changelog.md` conflicted, each where both sides added
+  entries at the end of 17 November; both sides' entries are kept, main's first.
+  `verification/features.yml` merged on its own. The merge also reworded three of the
+  branch's own statements so they claim only what holds: this file's first wallet entry,
+  titled "Every wallet press reaches the wallet, and asks to switch to Base first", is now
+  "Wallet presses: no account check, and a wallet off Base is asked to switch first"; the
+  public wallet entry no longer opens with "Every press now reaches your
+  wallet"; and the `wallet-network-switch` row's "Every press reaches Privy's active
+  wallet" now reads "A press the server has built steps for reaches Privy's active wallet
+  with the step as built". The agent contract stays at main's 36.2.0 and the agent guide
+  at main's 3.35.0: the browser agent's new answers are the page tools' refusals, which
+  neither describes, and their shape and codes are as they were.
 - A press whose wallet fails mid-send while the page is offline. The press then reports
   `send_unconfirmed`, and the report can't reach the server. With LiveView 1.2.13 a hook's
   push while offline settles rather than rejecting, so the press answers that the server
@@ -11515,3 +11522,45 @@ tests), 19 excluded. Browser suite 128 of 128, with `--grep-invert adversarial_`
 the two review specs' 20 walks; devices 72 of 72; chain walks in Chromium 146 of 146, the
 new walk among them. The 16 Firefox and WebKit walks of the Key profile did not start, as
 neither browser is installed on the Mac.
+
+## 2026-11-17 — Wallet presses after the review's third round
+
+- Found: making a press that sent nothing wait for the server's answer to its
+  `step_failed` report (3d1479c31) broke what the browser's own agent hears, four ways. A
+  move to another page while that answer was on its way left the agent's call open for
+  good. A connection lost between the report and the answer kept the agent waiting 30
+  seconds, then told it the wallet's answer was unknown, about a press the wallet had
+  declined. Offline, all seven reasons read to the agent as a lost connection with the
+  wallet's answer unknown, though for six of them the page knows nothing was sent. Online,
+  a report whose panel had left the page read as a lost connection.
+- Changed (1215900c2): a press answers the agent at once from what the page knows, as at
+  c41f17083. The report is told and not waited for, `step_failed` no longer replies, and
+  `platform/assets/js/page_tools.ts` says each reason in words for the agent, meaning what
+  the server's notes say. The case that started round two stays: a press the server
+  refuses to prepare (the account doesn't link the open wallet, or no wallet is open as
+  the server knows it) already waits for the answer to `prepare_and_send`, so that answer
+  carries the note the press's report then leaves, and the agent hears exactly that note.
+  The walk for an unlinked wallet still checks it, and fails when the hook drops the note.
+  Offline, a send that may have gone answers the agent that the wallet may have sent it.
+  A kept test checks a press answers without waiting on its report.
+- Changed (2da4fdd87): a signature step the wallet may have made is reported as
+  `sign_unconfirmed`, as the template's `failure/3` does, so its note says "Your wallet may
+  have signed this" and the agent hears that the wallet may have signed it; the counted and
+  logged reasons take it in. The template's `wallet_refused` is not taken: it needs a shared
+  library move Keyfleet has not made. No Keyfleet page builds a signature step today.
+- Words: the merge entry above said three files conflicted; two did, and it now says how
+  the merge reworded three of the branch's statements. The public "Browser agents" entry
+  says only what holds after this round: the agent hears the person's note when a wallet
+  the account doesn't link is open. The offline walk's regression row credited a review
+  that had not happened; it now credits the question asked at the merge.
+- Not built, as asked: the older wait when the page moves away while a press is still
+  asking the server for its steps; which note shows when two presses fail close together;
+  and the round-two list (an answer that arrives offline, a prompt confirmed before the
+  rebuild, a form panel's first round trip, a claim across a navigation).
+
+On 1215900c2, the review's round-three proofs: its findings at lines 247, 303, 326 and
+351 pass, and both unit findings (lines 147 and 178). HELD 1 and HELD 5 now fail only on
+words: they expect the server's "Your wallet declined this…" where the agent now hears
+"The wallet declined this…". CHECK 6a and 6b now fail as they should: the note no longer
+rides on `step_failed`'s answer, and a report that fails offline no longer turns a possible
+send into "nothing was sent".

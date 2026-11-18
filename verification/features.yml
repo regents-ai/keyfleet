@@ -2003,8 +2003,11 @@ features:
         from: Keyfleet chief's second review of kf/wallet-press-1118, 17 November 2026
         test: platform/test/browser/wallet_buttons.spec.ts
       - id: R-20261117-offline-press-never-nothing-sent
-        from: Keyfleet chief's third review of kf/wallet-press-1118, 17 November 2026
+        from: Keyfleet chief's question at the merge of the homepage release into kf/wallet-press-1118, 17 November 2026
         test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261117-agent-answered-at-once
+        from: Keyfleet chief's third review of kf/wallet-press-1118 (fe425e59a), 17 November 2026
+        test: platform/assets/test/onchain_steps.test.ts
     gaps:
       - The walks press from another network with a stand-in wallet whose switch stands in for Privy's; a real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release.
       - The anvil lab's network, which Privy does not list, reaches Privy with the site's own name and node (a unit test checks this); the lab needs a real Privy sign-in, so it is not walked end to end, and it has not been tried by hand since this change.

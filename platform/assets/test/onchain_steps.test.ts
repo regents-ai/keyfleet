@@ -113,6 +113,21 @@ describe("a press sends the server's step through the active wallet", () => {
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
 
+  // A press answers from what the wallet did, at once, whatever becomes of its
+  // report: offline, on a page left behind, or never answered at all.
+  it("answers at once, without waiting on its report to the server", async () => {
+    const active = wallet({answer: () => { throw Object.assign(new Error("User rejected"), {code: 4001}) }})
+    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
+    const unanswered = () => new Promise<never>(() => {})
+
+    const answered = await Promise.race([
+      press(review, "buy", unanswered),
+      new Promise(resolve => setTimeout(() => resolve("still waiting"), 200)),
+    ])
+
+    expect(answered).toEqual({reason: "wallet_declined"})
+  })
+
   it("sends nothing when no wallet is active", async () => {
     const {pushed, push} = pushes()
 
