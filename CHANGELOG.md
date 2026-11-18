@@ -12487,3 +12487,160 @@ step's report).
   - The Worldline filter's too-long note is its unreadable one, "Enter a Key number or a
     0x address."
   - The wallet panel holds a hidden proposal kind's fields to their most too.
+
+## 2026-11-18 — A hidden kind's fields, boxes counted as their rules count, the address rules
+
+- Round nine (ed76ba133) found one medium fault and several low ones.
+  - Proofs R9 Q6 (exs and browser): the wallet panel held every proposal field to its
+    most, a launch's image link too while a decision was chosen, so a decision was
+    refused and the wallet never asked.
+  - Proof R9 Q1 (browser): the early-access box was `type="email"`, which counts the
+    spaces before an address toward its `maxlength` and sends the address without them,
+    so an address the box cut was kept.
+  - Proofs R9 Q2: words of 3,999 letters and a line end (4,001 units, 3,999 bytes once
+    trimmed) were refused on the page though `VoteSteps` takes them; ten poll choices of
+    100 emoji each were cut to five by a box of 1,102 units.
+  - Proof R9 Q5: an address with a name and password before the host and a long `#`
+    part never went live (`new URL(location.href)` lacks the name, so the write-back
+    named another address and threw); `#%E0` never went live (`decodeURIComponent`
+    threw in `hashTarget/0`).
+  - Proof R9 Q4: the page tool's answer to a press refused for a field said "This can't
+    be sent as it stands", not the line's words; half an emoji in a field dropped the
+    live connection.
+- 1ad085669 `VoteSteps.fields/1` names the fields each kind is built from; the proposal is
+  read from those alone, and the panel holds only those to their most. No other wallet
+  form has kind-dependent fields (Buy's Unlimited is one box read by every Buy).
+- 491e2d0af The early-access box is `type="text"` with `inputmode="email"`,
+  `autocomplete="email"`, `autocapitalize="none"` and `spellcheck="false"`, so the
+  site receives what the box held and measures it before trimming, as before.
+- 92955d1f9 `prepare_and_send` hands a press over only when the review holds that step
+  and it is not blocked. Otherwise it refuses at once; the note is the line's own words
+  when the built steps name a problem with the form (`form_problem/1`), and the wallet
+  note as before when they don't, or when the line says nothing (Buy sold out). A form
+  whose build found a problem was handed over with no steps before, and the browser
+  said the general note.
+- b779e5884 The panel holds only its own fields to a count before building
+  (`@page_rules`: a Key and a target 20, a share, recipient, rate, amount and wallet 100,
+  days 10, a Keys list 1,000). A proposal's words and a launch's fields keep their boxes
+  (bytes, two more) and are refused by `VoteSteps`, which trims first and counts bytes,
+  with the same `{:too_long, name, bytes}` and note. A poll's choices box is 2,011 (ten
+  choices of 100 two-unit letters and nine line ends, two more) and the page's own count
+  is gone: the poll's rule refuses more. The showcase's two title boxes are 162 (80 emoji,
+  two more), its sample form's own count is gone, and its quantity is the action's rule
+  alone. `KeyfleetWeb.BoxLimit`'s moduledoc says which boxes follow which.
+- 4aa5d0d05 assets/js/app.ts writes back `"/." + location.pathname + location.search`.
+  Measured in Chromium at addresses with and without a name, and with paths `/a`, `//a`
+  and `///a`: it is read against the document's own address, so it keeps the name and
+  password, `/.` is dropped, and nothing throws. A bare `?` is dropped too. Both other
+  ways threw at one of these.
+- 83fe998a1 assets/js/account_menu.ts reads a `#` part through `fragmentId/1`, whose
+  `try` holds only `decodeURIComponent`; one that spells no text names nothing. Used by
+  `hashTarget/0` and by the link press.
+- 65ade21aa assets/js/tool_input.ts refuses a string with a lone surrogate
+  (`/\p{Surrogate}/u`): "text has a broken character in it, such as half an emoji." The
+  page tools and the public reads pass it.
+- Every box with a limit from `KeyfleetWeb.BoxLimit`, and where the site's count differs:
+  - a proposal's words and a launch's fields: bytes once trimmed against the box's
+    units; bytes are never fewer, so the longest the steps take fits, and the steps'
+    rule refuses more (b779e5884);
+  - a poll's choices: letters per choice once trimmed against units, now 2,011
+    (b779e5884); the showcase's title: letters once trimmed, now 162 (b779e5884);
+  - an amount, a wallet, days and a Keys list: the signed API counts `String.length`
+    (graphemes), the page UTF-16 units before trimming. A value of letters past U+FFFF,
+    or joined emoji, counts more units than graphemes, so the page can refuse what the
+    API takes; these hold digits, addresses and lists of numbers, which count the same;
+  - a Key, a target, a share, a rate and a recipient: the page's own most, room for any
+    such value written out; the steps have none;
+  - the Pass 20, the Worldline filter 100 and a post's numbers 20: the page's own;
+  - a page's address 512: the page counts units before trimming, the signed API bytes
+    untrimmed, the action none; a value the API takes is never more units;
+  - the early-access address 254: the controller counts units before trimming, the
+    signup's rule bytes once trimmed; spaces before an address count, so an address
+    the box cut is always over the most and refused.
+- Corrected, in the entry above:
+  - "Chromium's `maxlength` never splits a letter": it never keeps half of a UTF-16 pair,
+    but a letter made of several characters can be cut between them, as a family emoji
+    was cut to two of its people (proof R9 Q1). Whatever it cut is still over the most
+    and refused.
+  - "A field over its most is refused before any step is built": now only the panel's
+    own fields; a proposal's words and a launch's fields are refused by the steps.
+  - "a poll's choices 1,100" and "the showcase's title 80 and quantity 3": 2,009 (box
+    2,011), 160 (box 162), and the quantity has no count of the page's own.
+  - "The same check serves the public reads and the signed tools": the public reads call
+    `inputProblem/2`; the signed tools call their own `validateInput` in
+    assets/vendor/regent_agent_access/signed_tools.ts, which also counts `value.length`
+    but takes numbers, objects and arrays, which `inputProblem/2` refuses, so sharing it
+    would change what they accept. The words are corrected rather than the code.
+  - "app.ts writes back the page's own whole address ... (`new URL(location.href)`)":
+    it writes back the path and query, as above.
+  - The round-eight "Not covered" items for ten poll choices of 100 emoji, words padded
+    past 4,000 units, a hidden kind's fields, and the showcase's step title are fixed.
+  - The public changelog's 18 November entry, edited in place: "Early access", "Live
+    pages" (which boxes follow the rule and that the rest are unchanged for now, the
+    address rules, and no showcase quantity, which no public page has), "Wallet buttons"
+    and "Browser agents". config/config.exs says which boxes follow the rule.
+- Tests, each failing with its fix undone:
+  - `ProposalsPageTest` "a field of a kind not chosen never holds a press of the chosen
+    kind back" (every kind), "words and launch fields at the most once trimmed, with a
+    line end or spaces after, are sent", and "a press the form can't be built from is
+    answered with the line above the buttons"; `PollsPageTest` "ten choices of 100 emoji
+    each fit the box and start a poll; what the box cut is refused"; `ShowcaseTest` "a
+    title of 80 emoji fits the sample's boxes and is taken whole";
+  - test/browser/early_page.spec.ts "an address its box cut after the spaces before it
+    is refused and never kept; one that fits is";
+  - test/browser/live_limits.spec.ts "a page at an address with a name before its host
+    goes live ..." and "a page opened with a #fragment that spells no text goes live,
+    and a link to one breaks nothing";
+  - assets/test/page_tools.test.ts "refuses a field holding half an emoji before
+    anything is sent, and presses whole ones".
+  - `ProposalsPageTest` "a link or words a box cut are refused" now finds the cut words'
+    review with no steps, as the steps refuse them, where the panel built none.
+- The round-nine proofs, run as the reviewer left them:
+  - test/keyfleet_web/adversarial_door_round9_test.exs: 5 of 6 pass. "R9 Q2: words at
+    3,999 letters with a line end after them" fails on its own last line, which asks
+    for an empty line above the buttons: the line now shows the decision's summary ("A
+    decision; nothing moves. Voting closes ..."), no note, and the builder takes the
+    words, so what it set out to show is fixed.
+  - test/browser/adversarial_round9.spec.ts: 12 of 14 pass. "R9 Q7: a room post pasted
+    past its box" fails, as a room's box is one of those unchanged for now (below). "R9
+    Q6: a decision proposed after a launch's image link was cut" fails, and so does its
+    own control, the same decision with the image box emptied: the walk's stand-in chain
+    (test/support/browser_chain.ex) answers neither `treasuryOpensAt()` nor
+    `sweepExpired(uint256)`, so every proposal on that chain reads as "Can’t reach the
+    network right now" and no wallet is asked, whatever the image box holds. The same
+    press on the server proof's chain reaches the wallet (`%{send: "propose"}`).
+- Not covered:
+  - Boxes with no limit from `KeyfleetWeb.BoxLimit` keep the one they had, unchanged for
+    now: a room's, a direct message's and a Key's profile 4,000; a project's title 60,
+    short name 32 and description 160; a poll's question 200, notes 2,000 and reason
+    500; an agent's message 2,000 and 200; the fleet search, 1,000 and 42. Where that is
+    the site's own most, a paste cut there may be taken cut (proof R9 Q7, a room post),
+    and where the site counts letters, as for a poll's question, notes and reason, the
+    box counts an emoji as two, so text of emoji is cut at half what the site takes.
+  - Where a field's rule trims first (a proposal's words and a launch's fields, a poll's
+    choices, the showcase's title), a cut that falls in the spaces or blank lines the
+    rule leaves out leaves a value the rule takes.
+  - The page's own counts are made before trimming, so a Key, an amount or another such
+    value padded with spaces past its most is refused on the page only; the early-access
+    address counts its spaces by design.
+  - An amount, a wallet, days and a Keys list are counted in units on the page and in
+    graphemes by the signed API.
+  - The showcase's quantity box (5) can cut 000050 to 00005, which the action takes as
+    5; the showcase is not a public page.
+  - The signed tools keep their own check and do not refuse half an emoji; they go over
+    HTTP, not the live connection.
+  - The notes say "characters" for the words and a launch's fields, which the site
+    counts in bytes once trimmed.
+  - A refused field drops the panel's figures until the form changes, as an unread chain
+    does.
+  - A proposal's words and a launch's fields are refused by the steps in the order they
+    read them, so an image link the box cut is named only once the words are written
+    and the chain is read; until then the line says the proposal is empty, or that the
+    network can't be reached. Either way nothing is sent.
+  - No browser walk presses Propose through to the wallet: the walk's stand-in chain
+    answers neither `treasuryOpensAt()` nor `sweepExpired(uint256)`. The server tests
+    cover that press.
+  - The Worldline filter's too-long note is its unreadable one.
+  - The poll form's largest message, a start with every box full of three-byte letters,
+    is worked out at about 38,000 bytes (4,211 units at nine characters each), under
+    52,000; it was not measured.

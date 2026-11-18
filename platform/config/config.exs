@@ -432,11 +432,15 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   # which carries both addresses and the first page's token (50,309 bytes),
   # and the proposal form typed to every field's limit in letters of three
   # bytes, which a form's change writes as nine characters each (49,738).
-  # Every text field has a browser limit (`maxlength`, two more than the site
-  # takes, `KeyfleetWeb.BoxLimit`), a page's tools take no more than the site
-  # does, counted as a box counts (`priv/tool_manifest.json`), a value is
-  # drawn back no longer than its box (`KeyfleetWeb.WalletPanel`), and a page
-  # drops a #fragment of over 256 characters before it joins (`assets/js/app.ts`).
+  # Every text field has a browser limit (`maxlength`): the wallet buttons'
+  # fields, a poll's choices, the Pass, the Worldline filter, a post's numbers,
+  # a page's address and the showcase's sample take the longest value the site
+  # takes from them and two more (`KeyfleetWeb.BoxLimit`), and every other box
+  # keeps the site's own most, unchanged for now. A page's tools take no more
+  # than the site does, counted as a box counts (`priv/tool_manifest.json`), a
+  # value is drawn back no longer than its box (`KeyfleetWeb.WalletPanel`), and
+  # a page drops a #fragment of over 256 characters before it joins
+  # (`assets/js/app.ts`).
   # KeyfleetWeb.LiveMessageLimitTest and the proposals page's test measure them.
   http: [
     http_1_options: [gc_every_n_keepalive_requests: 1],

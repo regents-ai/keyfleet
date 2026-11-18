@@ -4,22 +4,29 @@ Changes to Keyfleet, newest first.
 
 ## 18 November 2026
 
-- **Early access.** The email field takes 256 characters, and an address over 254, the
-  most one can have, is refused with a note saying it is too long, so whatever is pasted
-  into it is answered by the form and an address the field cut short is never kept.
+- **Early access.** The email field takes 256 characters, any spaces before the address
+  counting, and an address over 254, the most one can have, is refused with a note saying
+  it is too long, so whatever is pasted into it is answered by the form and an address
+  the field cut short is never kept. It still brings up the email keyboard on phones.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000
   bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message
   a page sends, rounded up: the first message of a page reached by a link from one opened
   at the longest address the site takes, 50,309 bytes, and the proposal form with every
-  box full, 49,738. Every text box now stops two characters past the most the site takes
-  from it, an emoji counting as two there, and the site refuses anything longer than that
-  most with a note naming what is too long, so text a box cut short is never taken as it
-  was cut. A page opened at an address whose part after `#` is over 256 characters drops
-  that part, whatever its path, and goes live. The boxes for a Key's number, a post's
-  number, a pass and a quantity now take digits as text, with the number keyboard on
-  phones, and no longer have arrows; a post number below 1 or with decimals, or a
-  quantity out of range, gets a note saying what is wrong with it. A browser on a network
-  that blocks websockets no longer gets live pages.
+  box full, 49,738. The boxes of the wallet buttons' forms, a poll's choices, a pass,
+  the Worldline filter, a post's numbers, a page's address and the early-access email now
+  hold the longest value the site takes from them, an emoji counting as two there, and
+  two characters more. The site refuses anything longer than it takes with a note naming
+  what is too long, so text one of these boxes cut short is not taken as it was cut,
+  unless the cut fell in spaces or blank lines the site leaves out. A proposal's words
+  and a launch's fields are measured as the site keeps them, without the spaces and line
+  ends around them, and ten poll choices of 100 emoji each fit their box. Every other box
+  is unchanged for now. A page opened at an address whose part after `#` is over 256
+  characters drops that part, whatever the rest of the address, and goes live; so does a
+  page whose part after `#` can't be read as text.
+  The boxes for a Key's number, a post's number and a pass now take digits as text, with
+  the number keyboard on phones, and no longer have arrows; a post number below 1 or with
+  decimals gets a note saying what is wrong with it. A browser on a network that blocks
+  websockets no longer gets live pages.
 - **Requests.** A body no address reads, or the rest of one an address refused, is now
   read in small pieces and thrown away before the answer is sent, up to 8 MB, and the
   answer then closes the connection. A body sent with its length is waited for until ten
@@ -51,7 +58,8 @@ Changes to Keyfleet, newest first.
   "Invalid Request" error before. A token's scheme is now read in any case, `bearer` as
   `Bearer`, as HTTP allows; any other case was asked to connect.
 - **Wallet buttons.** A press now goes to the wallet that was open when you pressed it,
-  even if you open another one before your wallet asks you to approve.
+  even if you open another one before your wallet asks you to approve. A proposal is
+  never held back by what is still in the boxes of a kind you didn't choose.
 - **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
   can't send that press, for example because a wallet your account doesn't link is open,
   the agent hears the note that appears beside the button. If you switch wallets at that
@@ -59,8 +67,12 @@ Changes to Keyfleet, newest first.
   the agent sends that is longer than the site takes from that field is refused, naming
   the field and its most characters, counted as the page's box counts them, an emoji as
   two, and nothing is sent. The site still counts a proposal's words and a launch's
-  fields in bytes, an emoji as four, and its note says which is too long. The public reads
-  offered to it refuse a field longer than their description allows in the same way,
+  fields in bytes, an emoji as four, and its note says which is too long. When a press
+  can't be sent because of what is in the form, the agent now hears the same words the
+  page shows above the buttons, naming the field and what it takes. A field holding half
+  an emoji is refused before anything is sent, saying it has a broken character, and the
+  page and what you typed stay as they were. The public reads offered to it refuse a
+  field longer than their description allows, or holding half an emoji, in the same way,
   before asking the site.
 
 ## 17 November 2026
