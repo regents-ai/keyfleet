@@ -28,6 +28,9 @@ export function inputProblem(input: unknown, schema: Schema): string | null {
   for (const [key, value] of Object.entries(input)) {
     const {enum: choices, maxLength} = schema.properties[key]
     if (typeof value !== "string") return `${key} must be a string.`
+    // Half of an emoji's pair of units, alone, is no letter at all: the page's
+    // live connection can't carry it, so nothing is sent.
+    if (/\p{Surrogate}/u.test(value)) return `${key} has a broken character in it, such as half an emoji.`
     if (choices && !choices.includes(value)) return `${key} must be one of ${choices.join(", ")}.`
     // Counted as the page's box counts it, in UTF-16 units: an emoji is two.
     if (maxLength !== undefined && value.length > maxLength) {

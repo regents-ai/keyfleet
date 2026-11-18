@@ -62,6 +62,36 @@ it("refuses a proposal longer than the page's own field takes, as the field coun
   leaving.abort()
 })
 
+// Costly failure: half an emoji in a field is no text the page's live
+// connection can carry, so the press drops the connection and the person's form.
+it("refuses a field holding half an emoji before anything is sent, and presses whole ones", async () => {
+  const offered: ModelContextTool[] = []
+  vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
+  const {offerPageTool} = await import("../js/page_tools")
+
+  const button = {dataset: {onchainStep: "propose"}, disabled: false}
+  const root = {dataset: {webmcpTool: "proposals_create"}, querySelectorAll: () => [button]}
+  const press = vi.fn(async () => ({transaction_hash: hash}))
+  const leaving = offerPageTool(root as unknown as HTMLElement, press)!
+  const proposal = (fields: Record<string, string>) => offered[0].execute({kind: "decision", key: "7", text: "Hire", ...fields}, {})
+  // An emoji's two units, each alone.
+  const high = "😀"[0]
+  const low = "😀"[1]
+
+  const broken: Record<string, string>[] = [{text: `Hire ${high}`}, {text: `${low} a designer`}, {key: `7${high}`}]
+  for (const fields of broken) {
+    expect(await proposal(fields)).toMatchObject({
+      ok: false,
+      error: {code: "invalid_input", message: `${Object.keys(fields)[0]} has a broken character in it, such as half an emoji.`},
+    })
+  }
+  expect(press).not.toHaveBeenCalled()
+
+  expect(await proposal({text: "Hire 😀"})).toMatchObject({ok: true, transaction_hash: hash})
+  expect(press).toHaveBeenCalledWith(button, {kind: "decision", key: "7", text: "Hire 😀"})
+  leaving.abort()
+})
+
 it("answers a press the server refused to prepare with the note it sent", async () => {
   const offered: ModelContextTool[] = []
   vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
