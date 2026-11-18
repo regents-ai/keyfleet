@@ -13115,3 +13115,30 @@ step's report).
 - No fact in the reply or on the page names "too long" itself: the reply carries the
   reason, the cause and the note's words, and an empty proposal or an unreadable Key is
   `step_unknown` with `cause: "values"` too.
+
+## 2026-11-18 — Safari's count of a box's line breaks is not walked here
+
+- Round eleven asked whether WebKit counts each line break in a multi-line box as two,
+  which would cut a paste with many blank lines short of the site's longest and have it
+  taken cut. Not run: no tracked config walks test/browser/live_limits.spec.ts in
+  WebKit (platform/playwright.chain.config.ts's `webkit` project runs
+  key_profile.spec.ts only; platform/playwright.devices.config.ts runs Chromium only,
+  its iPhone 15 included, and says Safari's own engine is checked by people), and
+  WebKit is not in this machine's Playwright browsers (Chromium only). Nothing was
+  installed. Left open.
+- The earlier rounds' proofs, run again after round eleven's commits: every server
+  proof that fails now failed too with the server files this round changed put back as
+  a3ae4db06 has them, or fails as the entries above say (R8 Q2, R8 Q4 twice, R9 Q2,
+  R10 Q2, R11 Q1 and R11 Q2 twice), but one: "R6 Q1: LiveView's long-poll and websocket
+  addresses decode a deep message from anyone", which failed once, its 1 MB frame's
+  send finding the socket already closed, and passed run alone. Browser proofs:
+  adversarial_round8.spec.ts 3 of 3 pass, adversarial_round9.spec.ts 13 of 14 (R9 Q7,
+  as before), adversarial_round10.spec.ts 2 of 4, as the entry above says.
+- Corrected, in the entries above:
+  - "Two proposal tests check the kind of refusal": the second test is "a field of a
+    kind not chosen never holds a press of the chosen kind back", not "a kind's own box
+    filled past its end".
+  - The round-ten entry's "Not covered" item "An agent's Buy REGENT press whose values
+    match the form's uses the steps the page holds, and clears the form's amount once
+    the wallet has it, as the person's press does": since 860ae3e51 it uses those steps
+    and leaves the form's amount as it is.
