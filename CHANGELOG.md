@@ -11913,3 +11913,13 @@ step's report).
   what seeding it does: in one go it binds every fleet in it that is the first of its type,
   opens their rooms and prints each, leaves a fleet the record does not hold yet as it is, and
   takes a newer record after the Safe creates more founding fleets. The commands use that file.
+
+## 2026-11-18 — Phase 4 named beside the trading factory's approval
+
+- The entry "The trading factory's approval waits for the Safe's randomness subscription" above
+  says anyone may create a Trading Fleet once the trading factory is approved. That holds only
+  from phase 4, the collection's last, when anyone may also create a fleet through the factory.
+  `docs/deployment.md`, `docs/chain-reader.md`, `contracts/README.md` and
+  `DeployTradingFactory`'s own notes now say so, and the order on Base is the subscription
+  handed to the Safe and the collection listed on it before the Safe opens phase 4 or approves a
+  trading factory. The phase step does not check the subscription; the guide says the signers do.

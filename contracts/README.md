@@ -1894,14 +1894,14 @@ latest broadcast there.
   (`CollectionMismatch(field)`); one that collection does not list as a factory
   (`FactoryNotListed(factory, collection)`); and one whose own Safe, REGENT
   revenue staking or USDC is not the manifest's (`FactoryMismatch(field)`).
-  Anyone may create a Trading Fleet once the Safe approves the trading factory,
-  and one Trading Fleet stops the record for every fleet while the randomness
-  subscription is not ready for drawn Keys, so it prepares the Safe's call only
-  once the chain shows it is: it refuses, on Base, a subscription anyone but
-  the Regents Safe owns (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then,
-  on every chain, one that does not list the collection
-  (`CollectionNotVrfConsumer(collection)`), and the run stops before anything
-  is sent. It then runs the Safe's
+  Once the Safe approves the trading factory, anyone may create a Trading Fleet
+  in the collection's last phase, and one Trading Fleet stops the record for
+  every fleet while the randomness subscription is not ready for drawn Keys,
+  so it prepares the Safe's call only once the chain shows it is: it refuses,
+  on Base, a subscription anyone but the Regents Safe owns
+  (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then, on every chain, one
+  that does not list the collection (`CollectionNotVrfConsumer(collection)`),
+  and the run stops before anything is sent. It then runs the Safe's
   `KeyfleetKeys.addFactory(tradingFactory)` call from the Safe's address
   against the run's copy of the chain, so a call that would revert stops it
   with the collection's own error, and prints the call, as its target, value

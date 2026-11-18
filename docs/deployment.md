@@ -355,10 +355,11 @@ fleets created since: it lists every fleet in the collection's registry.
   and, on Base, one whose owner is not the Regents Safe
   (`VrfSubscriptionNotOwnedByRegentsSafe`). This refusal stops the whole
   record, every founding fleet with it, not only the fleet that needs a draw,
-  and anyone can create such a fleet once a trading factory is approved or
-  phase 4 is open. So on Base the subscription's owner hands it to the Safe and
-  the Safe accepts it and lists the collection first, and only after that does
-  the Safe approve a trading factory or open phase 4.
+  and from phase 4, the collection's last, anyone can create such a fleet,
+  through the factory or through a trading factory the Safe has approved. So on
+  Base the subscription's owner hands it to the Safe and the Safe accepts it
+  and lists the collection first, and only after that does the Safe open phase
+  4 or approve a trading factory.
 
 ### What the record step writes
 
@@ -448,7 +449,10 @@ phase 2, and all five for phase 3. Phase 1 opens only Regents Club gifts.
 Phase 2 opens Classic #1 sales. Phase 3 opens Syndicate #1, Accelerant #1
 and Cascade #1 sales together. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
-else moves a phase.
+else moves a phase. One such fleet stops the record step for every fleet while
+the Regents Safe does not own the randomness subscription or it does not list
+the collection (step 5), so the signers sign phase 4 only once both hold; this
+step does not check them.
 
 ## Step 7: Regents Club gifts
 
@@ -541,8 +545,9 @@ name, symbol, metadata links or trait table is not the manifest's
 staking or USDC is not the manifest's (`FactoryMismatch(field)`).
 
 The trading factory can register no fleet until the Regents Safe calls
-`addFactory(<trading factory>)` on the collection, and from then on anyone may
-create a Trading Fleet through it. The script prepares that call only once the
+`addFactory(<trading factory>)` on the collection, and from then on, in the
+collection's last phase, anyone may create a Trading Fleet through it. The
+script prepares that call only once the
 chain shows the randomness subscription ready for those fleets: it stops,
 before anything is sent, on Base while anyone but the Regents Safe owns the
 subscription (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every
@@ -571,8 +576,9 @@ collection or, on Base, the Regents Safe does not own it, a single Trading
 Fleet stops the record step for every fleet, the founding ones included. The
 order on Base is therefore: the subscription's owner asks to hand it to the
 Safe (step 1), the Safe accepts it and lists the collection (step 3), and only
-then do the signers sign the trading factory's `addFactory` call, which the
-script will not prepare before.
+then do the signers open phase 4 and sign the trading factory's `addFactory`
+call, which the script will not prepare before. The phase step does not check
+the subscription; the signers do.
 
 ## The trait table
 

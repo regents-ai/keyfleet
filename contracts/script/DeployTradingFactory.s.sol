@@ -23,12 +23,12 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// REGENT revenue staking and USDC.
 ///
 /// The trading factory can register nothing until the Safe calls `KeyfleetKeys.addFactory` with
-/// its address, and from then on anyone may create a Trading Fleet through it. Every Trading Fleet
-/// is a fleet past the five founding ones, and one such fleet stops the record step for every fleet
-/// while the collection's randomness subscription does not list the collection or, on Base, the
-/// Regents Safe does not own it. So the call is prepared only once the chain shows both: on Base a
-/// subscription another account owns is refused first, then on every chain one that does not list
-/// the collection, and the run stops before anything is sent.
+/// its address, and from then on, in the collection's last phase, anyone may create a Trading Fleet
+/// through it. Every Trading Fleet is a fleet past the five founding ones, and one such fleet stops
+/// the record step for every fleet while the collection's randomness subscription does not list the
+/// collection or, on Base, the Regents Safe does not own it. So the call is prepared only once the
+/// chain shows both: on Base a subscription another account owns is refused first, then on every
+/// chain one that does not list the collection, and the run stops before anything is sent.
 ///
 /// This script does not make that call: it runs it once from the Safe's address against this run's
 /// copy of the chain, so a call that would revert stops the script with the collection's own
