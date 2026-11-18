@@ -1107,37 +1107,34 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
     end
 
-    # The words and a launch's fields are measured as the site keeps them,
-    # trimmed: words of 3,999 letters and the line end a paste brings are 4,001
-    # as typed, which their box takes, and 3,999 kept.
-    test "words and launch fields at the most once trimmed, with a line end or spaces after, are sent",
+    # The words and a launch's fields are measured as typed, before anything
+    # is trimmed, against the most the steps keep of them. Words of 3,999
+    # letters and the line end a browser sends for a typed line break, one
+    # character, are 4,000 and sent; the most with a space or a line end after
+    # is longer, and refused.
+    test "words and launch fields at their most are sent, and a space or line end more is refused",
          %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, [7], @holder)
       ChainViews.put!(list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000))
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
       active!(view, "#propose-action", @holder)
 
-      decision = %{
-        "kind" => "decision",
-        "key" => "7",
-        "text" => String.duplicate("a", 3_999) <> "\r\n"
-      }
+      decision = %{"kind" => "decision", "key" => "7", "text" => String.duplicate("a", 4_000)}
 
       launch = %{
         "kind" => "launch",
         "key" => "7",
         "text" => "Launch the coin",
-        "name" => String.duplicate("n", 64) <> "  ",
-        "symbol" => "FLT",
-        "description" => String.duplicate("d", 512) <> "\n",
-        "website" => "https://example.com",
-        "image" => "https://example.com/coin.png"
+        "name" => String.duplicate("n", 64),
+        "symbol" => String.duplicate("F", 16),
+        "description" => String.duplicate("d", 511) <> "\n",
+        "website" => "https://example.com/" <> String.duplicate("w", 256 - 20),
+        "image" => "https://example.com/" <> String.duplicate("i", 256 - 20)
       }
 
-      for form <- [decision, launch] do
+      press = fn form ->
         view |> form("#propose-action-form", form) |> render_change()
         render_async(view, @async_wait)
-        refute text(view, "#propose-action-line") =~ "too long"
 
         view
         |> with_target("#propose-action")
@@ -1146,25 +1143,33 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
           "step" => "propose",
           "address" => @holder
         })
+      end
 
+      for form <- [
+            decision,
+            %{decision | "text" => String.duplicate("a", 3_999) <> "\n"},
+            launch
+          ] do
+        press.(form)
         assert_reply(view, %{send: "propose"})
       end
 
-      # A letter more is past what the site keeps, and said.
-      view
-      |> form("#propose-action-form", %{decision | "text" => String.duplicate("a", 4_001)})
-      |> render_change()
-
-      render_async(view, @async_wait)
-
-      assert text(view, "#propose-action-line") ==
-               "The proposal is too long: 4000 characters at most."
+      for form <- [
+            %{decision | "text" => String.duplicate("a", 4_000) <> "\n"},
+            %{decision | "text" => " " <> String.duplicate("a", 4_000)},
+            %{launch | "name" => launch["name"] <> " "},
+            %{launch | "image" => "  " <> launch["image"]}
+          ] do
+        press.(form)
+        assert_reply(view, %{note: _refused})
+      end
     end
 
     # Costly failure: a paste the browser cut at its box is proposed cut, a
     # link that leads elsewhere or words missing their end, and the chain
     # keeps it. A box takes more than the site does, so what it cut is
-    # refused with a note and nothing can be sent from it.
+    # refused with a note and nothing can be sent from it, spaces or blank
+    # lines before it included.
     test "a link or words a box cut are refused with a note, and leave nothing to send",
          %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, [7], @holder)
@@ -1199,11 +1204,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         binary_part(paste, 0, String.to_integer(box))
       end
 
+      link = "https://example.com/" <> String.duplicate("coin/", 60) <> "coin.png"
+      words = String.duplicate("Launch the fleet's coin. ", 200)
+
       for {name, paste, note} <- [
-            {:image, "https://example.com/" <> String.duplicate("coin/", 60) <> "coin.png",
-             "The image link is too long: 256 characters at most."},
-            {:text, String.duplicate("Launch the fleet's coin. ", 200),
-             "The proposal is too long: 4000 characters at most."}
+            {:image, link, "The image link is too long: 256 characters at most."},
+            {:image, "  " <> link, "The image link is too long: 256 characters at most."},
+            {:text, words, "The proposal is too long: 4000 characters at most."},
+            {:text, "\n\n" <> words, "The proposal is too long: 4000 characters at most."}
           ] do
         view |> form("#propose-action-form", launch) |> render_change()
         render_async(view, @async_wait)
@@ -1212,13 +1220,17 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         cut = Keyword.put(launch, name, as_cut.(name, paste))
         view |> form("#propose-action-form", cut) |> render_change()
         render_async(view, @async_wait)
+        assert text(view, "#propose-action-line") == note
 
-        assert_push_event(view, "onchain-steps:review", %{
-          component_id: "propose-action",
-          review: %{steps: []}
+        view
+        |> with_target("#propose-action")
+        |> render_hook("prepare_and_send", %{
+          "form" => Map.new(cut, fn {field, value} -> {"#{field}", value} end),
+          "step" => "propose",
+          "address" => @holder
         })
 
-        assert text(view, "#propose-action-line") == note
+        assert_reply(view, %{note: ^note})
       end
     end
 

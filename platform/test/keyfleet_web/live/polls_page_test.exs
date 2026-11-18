@@ -113,7 +113,8 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
 
   # A poll's rule counts a choice's letters, an emoji as one; its box counts
   # an emoji as two. The box holds ten choices of 100 emoji each, and what it
-  # cuts of a longer paste the rule refuses, with its note.
+  # cuts of a longer paste is refused, with the rule's note, blank lines or
+  # spaces in it included.
   test "ten choices of 100 emoji each fit the box and start a poll; what the box cut is refused",
        %{conn: conn} do
     {:ok, view, _html} = live(signed_in_as(conn, @starter), @list)
@@ -143,6 +144,16 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
 
     assert start.(kept.(typed <> "\nAnother")) =~
              "Give 2 to 10 different choices, each up to 100 characters."
+
+    # Blank lines between the choices, or spaces before each, and the box
+    # cuts the last one short: ten choices the rule would take, refused.
+    for pasted <- [Enum.join(choices, "\n\n"), Enum.map_join(choices, "\n", &("  " <> &1))] do
+      assert kept.(pasted) != pasted
+      start.(kept.(pasted))
+      assert has_element?(view, "#polls-start-form")
+    end
+
+    assert Polls.list_polls!(@fleet, actor: human(@starter)) == []
 
     assert kept.(typed) == typed
     start.(kept.(typed))

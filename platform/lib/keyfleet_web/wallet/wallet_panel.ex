@@ -44,10 +44,10 @@ defmodule KeyfleetWeb.WalletPanel do
 
   Buttons name their step with `data-onchain-step` and sit outside the form;
   fields that feed the steps carry `data-onchain-input` with the name they
-  are built from, and a text field is `box/1` long: a value longer than the
-  site takes from it is refused, and said, by the steps' own rule for a
-  proposal's words and a launch's fields, and before anything is built for
-  every other field (`KeyfleetWeb.BoxLimit`). Signed out, a button also carries
+  are built from, and a text field is `box/1` long: a value longer as typed
+  than the site takes from it is refused, and said, before anything is built
+  (`KeyfleetWeb.BoxLimit`); the steps' own rules may refuse more once they
+  have trimmed it. Signed out, a button also carries
   `data-account-target="sign-in"`, so its press opens sign-in instead.
 
   When a step sent from it goes through, the chain is read again
@@ -358,27 +358,20 @@ defmodule KeyfleetWeb.WalletPanel do
   def box(name), do: BoxLimit.maxlength(Map.fetch!(boxes(), name))
 
   # The longest value the site takes from each box a group's form may have,
-  # by its field's name. A proposal's text fields hold what
-  # `Keyfleet.WalletSteps.VoteSteps` keeps of them, which it counts in bytes
-  # once trimmed and refuses past that itself; a letter is never fewer bytes
-  # than UTF-16 units, so the longest it keeps fits the box. The others are
-  # the page's own, counted in UTF-16 units as typed: an amount, a wallet,
-  # days and a Keys list as the signed API takes them, and room for any Key's
-  # number and any share, rate or address written out.
-  @page_rules [
-    key: 20,
-    target: 20,
-    share: 100,
-    recipient: 100,
-    rate: 100,
-    amount: 100,
-    wallet: 100,
-    days: 10,
-    keys: 1_000
-  ]
+  # in UTF-16 units as typed, by its field's name: a proposal's text fields
+  # as many units as the bytes `Keyfleet.WalletSteps.VoteSteps` keeps of them
+  # once trimmed (a letter is never fewer bytes than units, so the longest it
+  # keeps fits, and it refuses more itself); an amount, a wallet, days and a
+  # Keys list as the signed API takes them; and room for any Key's number and
+  # any share, rate or address written out. Each field the steps are built
+  # from is held to it before they are built (`read/1`).
+  defp longest do
+    [key: 20, target: 20] ++
+      VoteSteps.field_bytes() ++
+      [share: 100, recipient: 100, rate: 100, amount: 100, wallet: 100, days: 10, keys: 1_000]
+  end
 
-  defp boxes,
-    do: Map.new(VoteSteps.field_bytes() ++ @page_rules, fn {name, most} -> {"#{name}", most} end)
+  defp boxes, do: Map.new(longest(), fn {name, units} -> {"#{name}", units} end)
 
   # Each value as its box keeps it, so none is drawn back longer than its
   # box: one the page gave first, and one an agent or any other sender put
@@ -394,10 +387,9 @@ defmodule KeyfleetWeb.WalletPanel do
     end)
   end
 
-  # The first field the page holds to its own rule, in the order above,
-  # holding more than that rule takes.
+  # The first field, in the order above, holding more than the site takes.
   defp too_long(inputs) do
-    Enum.find_value(@page_rules, fn {name, units} ->
+    Enum.find_value(longest(), fn {name, units} ->
       if inputs |> Map.get("#{name}", "") |> BoxLimit.too_long?(units),
         do: {:too_long, name, units}
     end)
@@ -513,8 +505,8 @@ defmodule KeyfleetWeb.WalletPanel do
     }
   end
 
-  # A box the steps are built from holding more than the page's own rule for
-  # it takes is refused, and said, before any step is built from the form.
+  # A box the steps are built from holding more than the site takes from it
+  # is refused, and said, before any step is built from the form.
   defp build_steps!(request) do
     case too_long(read(request)) do
       nil ->

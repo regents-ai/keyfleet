@@ -713,8 +713,12 @@ defmodule KeyfleetWeb.ShowcaseLive do
     """
   end
 
-  def handle_event("create_sample", %{"sample" => params}, socket),
-    do: create_sample(socket, params)
+  def handle_event("create_sample", %{"sample" => params}, socket) do
+    case title_too_long(params) do
+      nil -> create_sample(socket, params)
+      note -> {:noreply, assign(socket, errors: [note], form: to_form(params, as: :sample))}
+    end
+  end
 
   def handle_event("create_item", _, socket) do
     params = %{title: "Workshop item #{length(socket.assigns.empty_items) + 1}", quantity: 1}
@@ -745,19 +749,12 @@ defmodule KeyfleetWeb.ShowcaseLive do
     do: {:noreply, assign(socket, step_editing: false, step_errors: [])}
 
   def handle_event("save_step", %{"step" => params}, socket) do
-    # Reuse the local sample action's title validation, never a product resource.
-    case Sample
-         |> Ash.Changeset.for_create(:create, Map.take(params, ["title"]))
-         |> Ash.create() do
-      {:ok, item} ->
-        {:noreply, assign(socket, step_title: item.title, step_editing: false, step_errors: [])}
+    case title_too_long(params) do
+      nil ->
+        save_step(socket, params)
 
-      {:error, error} ->
-        {:noreply,
-         assign(socket,
-           step_errors: [Exception.message(error)],
-           step_form: to_form(params, as: :step)
-         )}
+      note ->
+        {:noreply, assign(socket, step_errors: [note], step_form: to_form(params, as: :step))}
     end
   end
 
@@ -793,6 +790,23 @@ defmodule KeyfleetWeb.ShowcaseLive do
      )}
   end
 
+  defp save_step(socket, params) do
+    # Reuse the local sample action's title validation, never a product resource.
+    case Sample
+         |> Ash.Changeset.for_create(:create, Map.take(params, ["title"]))
+         |> Ash.create() do
+      {:ok, item} ->
+        {:noreply, assign(socket, step_title: item.title, step_editing: false, step_errors: [])}
+
+      {:error, error} ->
+        {:noreply,
+         assign(socket,
+           step_errors: [Exception.message(error)],
+           step_form: to_form(params, as: :step)
+         )}
+    end
+  end
+
   defp create_sample(socket, params) do
     changeset = Ash.Changeset.for_create(Sample, :create, params)
 
@@ -818,6 +832,17 @@ defmodule KeyfleetWeb.ShowcaseLive do
   defp sample_longest("quantity"), do: 3
 
   defp sample_box(name), do: BoxLimit.maxlength(sample_longest(name))
+
+  # A title longer as typed than its box's longest is refused before the
+  # action is asked, which may refuse more once it has trimmed it.
+  defp title_too_long(%{"title" => title}) when is_binary(title) do
+    longest = sample_longest("title")
+
+    if BoxLimit.too_long?(title, longest),
+      do: "Title: at most #{longest} characters, an emoji counting as two."
+  end
+
+  defp title_too_long(_params), do: nil
 
   defp capability_samples do
     [

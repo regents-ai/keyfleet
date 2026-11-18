@@ -1,3 +1,5 @@
+import {keccak_256} from "@noble/hashes/sha3.js"
+import {bytesToHex, utf8ToBytes} from "@noble/hashes/utils.js"
 import {expect, test, type Locator, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {prepareFleet, sellKey} from "./support/fleet_chain"
@@ -183,8 +185,8 @@ test("a proposal pasted past every field's limit keeps the page live, and the si
 })
 
 // Costly failure: a field a box cut, still in that box once the kind is changed
-// to a decision, holds the decision back, and no wallet is asked. A rate is
-// held to the page's own count, and a launch's image link to the launch's.
+// to a decision, holds the decision back, and no wallet is asked. A rate and a
+// launch's image link are each held to their box's count.
 test("a rate and a launch's image link too long, left in their hidden boxes, never hold back a decision; the launch is refused", async ({
   page,
 }) => {
@@ -252,5 +254,78 @@ test("a rate and a launch's image link too long, left in their hidden boxes, nev
   expect(transaction.to.toLowerCase()).toBe(votesContract)
   expect(transaction.data.startsWith(proposeFor(key))).toBe(true)
   expect(transaction.data.endsWith(builderCode)).toBe(true)
+  expect(errors).toEqual([])
+})
+
+// Costly failure: a paste that starts with blank lines or spaces, cut by its
+// box, loses its end, and the wallet is asked to sign what is left. A box is
+// measured as typed, spaces and line ends included, so what it cut is refused,
+// while the longest words the site takes, a line break inside them, reach the
+// wallet whole.
+test("words and an image link pasted after blank lines or spaces past their box ask no wallet; the longest words do", async ({
+  page,
+}) => {
+  const errors = pageErrors(page)
+  const key = sellKey(fleet, me)
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto("/syndicate/1/proposals")
+  await live(page)
+  await useStandInWallet(page, me)
+
+  const form = page.locator("#propose-action-form")
+  const line = page.locator("#propose-action-line")
+  const pressNote = page.locator("#propose-action-press-note")
+  const press = page.locator('#propose-action [data-onchain-step="propose"]')
+  const text = form.locator('[name="text"]')
+  const image = form.locator('[name="image"]')
+  const wordsTooLong = "The proposal is too long: 4000 characters at most."
+  const linkTooLong = "The image link is too long: 256 characters at most."
+  const link = `https://example.com/${"coin/".repeat(60)}coin.png`
+  // Pasted as a person pastes, once the page has opened the box for the kind chosen.
+  const paste = async (box: Locator, value: string) => {
+    await expect(box.locator("xpath=ancestor-or-self::*[@inert]")).toHaveCount(0)
+    await box.fill("")
+    await box.focus()
+    await expect(box).toBeFocused()
+    await page.keyboard.insertText(value)
+  }
+
+  await form.locator('[name="key"]').fill(String(key))
+  await paste(text, `\n\n${"w".repeat(4_030)}`)
+  await expect(text).toHaveJSProperty("value", `\n\n${"w".repeat(4_000)}`)
+  await expect(line).toHaveText(wordsTooLong)
+  await press.click()
+  await expect(pressNote).toHaveText(wordsTooLong)
+
+  await form.locator('[name="kind"]').selectOption("launch")
+  for (const [name, value] of [
+    ["text", "Launch the fleet's coin"],
+    ["name", "Fleet Coin"],
+    ["symbol", "FLT"],
+    ["description", "The fleet's own token"],
+    ["website", "https://example.com"],
+  ]) {
+    await form.locator(`[name="${name}"]`).fill(value)
+  }
+  await paste(image, `  ${link}`)
+  await expect(image).toHaveJSProperty("value", `  ${link.slice(0, 256)}`)
+  await expect(line).toHaveText(linkTooLong)
+  await press.click()
+  await expect(pressNote).toHaveText(linkTooLong)
+  expect(await sentByStandIn(page)).toEqual([])
+
+  // 3,999 letters and a line break, which reaches the site as one character.
+  const longest = `${"w".repeat(1_999)}\n${"w".repeat(2_000)}`
+  await form.locator('[name="kind"]').selectOption("decision")
+  await paste(text, longest)
+  await expect(text).toHaveJSProperty("value", longest)
+  await expect(line).toContainText("A decision; nothing moves.")
+  await press.click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [{transaction}] = await sentByStandIn(page)
+  expect(transaction.to.toLowerCase()).toBe(votesContract)
+  expect(transaction.data.startsWith(proposeFor(key))).toBe(true)
+  // The words' hash follows the Key in the call (VoteSteps.content_hash/1).
+  expect(transaction.data.slice(10 + 64, 10 + 128)).toBe(bytesToHex(keccak_256(utf8ToBytes(longest))))
   expect(errors).toEqual([])
 })

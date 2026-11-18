@@ -9,19 +9,20 @@ defmodule KeyfleetWeb.BoxLimit do
   therefore takes two units more than the longest value the site takes from
   it (`maxlength/1`), room for one more letter of any kind.
 
-  Most boxes' values the site refuses when longer than that longest, counted
-  the same way and before anything is trimmed (`too_long?/2`), with a note
-  saying so: whatever such a box cut is longer than that, so it is refused
-  and said, never taken as if it had been typed. Where the rule a value
-  meets counts otherwise once it has trimmed it, in letters or in bytes (a
-  proposal's words and a launch's fields, a poll's choices), the longest is
-  the most that rule takes written in UTF-16 units, so the longest value it
-  takes fits its box, and the rule alone refuses more, with its note. What
-  such a box cut is refused too, unless the cut fell in spaces or blank
-  lines the rule trims away.
+  The site refuses a value longer than that longest, counted the same way
+  and as it was typed, before anything is trimmed (`too_long?/2`), with a
+  note saying so: whatever a box cut is longer than that, so it is refused
+  and said, never taken as if it had been typed. Where a field's own rule
+  counts otherwise once it has trimmed a value, in letters or in bytes (a
+  proposal's words and a launch's fields, a poll's choices, the showcase's
+  titles), the longest is the most that rule takes written in UTF-16 units,
+  so the longest value it takes fits its box; the rule still runs
+  afterwards, and may refuse more with its own note. A value at exactly the
+  longest with a space or a line end after it is therefore refused as too
+  long.
 
-  `kept/2` is what such a box keeps of a value, for a value the site draws
-  into one itself.
+  `kept/2` is what a box keeps of a value, for a value the site draws into
+  one itself.
   """
 
   @doc "The `maxlength` of the box whose longest value is `longest` UTF-16 units."

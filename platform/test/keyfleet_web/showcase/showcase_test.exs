@@ -136,10 +136,24 @@ defmodule KeyfleetWeb.ShowcaseTest do
   end
 
   # The action counts a title's letters, an emoji as one; its boxes count an
-  # emoji as two.
-  test "a title of 80 emoji fits the sample's boxes and is taken whole" do
+  # emoji as two. What a box cut is refused, spaces before it included.
+  test "a title of 80 emoji fits the sample's boxes and is taken whole; one a box cut is not" do
     {:ok, view, _html} = live(local_conn(), "/showcase")
     title = String.duplicate("🦊", 80)
+    spaced = String.duplicate(" ", 150) <> "A sample title"
+
+    cut = box_keeps(view, "#sample-form [name='sample[title]']", spaced)
+    assert cut != spaced
+
+    refute view
+           |> form("#sample-form", sample: %{title: cut, quantity: "2"})
+           |> render_submit() =~ "× 2"
+
+    view |> element("button[phx-click=edit_step]") |> render_click()
+    cut = box_keeps(view, "#step-form [name='step[title]']", spaced)
+    view |> form("#step-form", step: %{title: cut}) |> render_submit()
+    assert has_element?(view, "#step-form")
+    view |> element("#step-form button", "Cancel") |> render_click()
 
     typed = box_keeps(view, "#sample-form [name='sample[title]']", title)
 
