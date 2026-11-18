@@ -113,8 +113,8 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
 
   # A poll's rule counts a choice's letters, an emoji as one; its box counts
   # an emoji as two. The box holds ten choices of 100 emoji each, and what it
-  # cuts of a longer paste is refused, with the rule's note, blank lines or
-  # spaces in it included.
+  # keeps of a longer paste, blank lines or spaces in it included, is past
+  # the most the site takes and refused.
   test "ten choices of 100 emoji each fit the box and start a poll; what the box cut is refused",
        %{conn: conn} do
     {:ok, view, _html} = live(signed_in_as(conn, @starter), @list)
@@ -142,12 +142,13 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     # A choice more, of which the box keeps the first letter: eleven choices.
     assert kept.(typed <> "\nAnother") == typed <> "\nA"
 
-    assert start.(kept.(typed <> "\nAnother")) =~
-             "Give 2 to 10 different choices, each up to 100 characters."
-
-    # Blank lines between the choices, or spaces before each, and the box
-    # cuts the last one short: ten choices the rule would take, refused.
-    for pasted <- [Enum.join(choices, "\n\n"), Enum.map_join(choices, "\n", &("  " <> &1))] do
+    # That, or blank lines between the choices, or spaces before each, and
+    # the box cuts the last one short: refused.
+    for pasted <- [
+          typed <> "\nAnother",
+          Enum.join(choices, "\n\n"),
+          Enum.map_join(choices, "\n", &("  " <> &1))
+        ] do
       assert kept.(pasted) != pasted
       start.(kept.(pasted))
       assert has_element?(view, "#polls-start-form")
@@ -159,6 +160,51 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     start.(kept.(typed))
     refute has_element?(view, "#polls-start-form")
     assert [%{choices: ^choices}] = Polls.list_polls!(@fleet, actor: human(@starter))
+  end
+
+  # Costly failure: choices typed past the box's longest are told the poll's
+  # rule, which ten choices of 100 letters keep, so the person cuts choices
+  # that were fine. The page marks no kind on its note, so the test tells the
+  # two notes apart and reads the box's longest in the one for too long.
+  test "choices typed past the box's longest are refused as too long, not as breaking the rule",
+       %{conn: conn} do
+    {:ok, view, _html} = live(signed_in_as(conn, @starter), @list)
+    choices = for n <- 1..10, do: String.duplicate(<<0x1F600 + n::utf8>>, 100)
+
+    [box] =
+      view
+      |> element("#polls-start-form textarea[name='poll[choices]']")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("maxlength")
+
+    longest = String.to_integer(box) - 2
+
+    note = fn choices ->
+      view
+      |> form("#polls-start-form",
+        poll: %{question: "Which one next?", choices: choices, notes: "", minutes: "30"}
+      )
+      |> render_submit()
+
+      view |> element("#polls-start-choices-errors") |> render() |> LazyHTML.from_fragment()
+    end
+
+    # Ten choices the rule takes, a blank line between the first two: one
+    # unit past the box's longest.
+    [first | rest] = choices
+    over = first <> "\n\n" <> Enum.join(rest, "\n")
+    assert BoxLimit.too_long?(over, longest)
+    refute BoxLimit.too_long?(Enum.join(choices, "\n"), longest)
+
+    too_long = note.(over) |> LazyHTML.text()
+    # Eleven short choices: within the box, past the rule.
+    broken = note.(Enum.map_join(1..11, "\n", &"Choice #{&1}")) |> LazyHTML.text()
+
+    assert too_long != "" and broken != ""
+    assert too_long != broken
+    assert too_long =~ Integer.to_string(longest)
+    assert Polls.list_polls!(@fleet, actor: human(@starter)) == []
   end
 
   defp start! do

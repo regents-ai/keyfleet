@@ -12970,3 +12970,27 @@ step's report).
     none is known here.
   - An address typed with only ideographic dots in its host (例え。テスト) is refused as
     before: the attribute's rule wants an ASCII dot after the @ as typed.
+
+## 2026-11-18 — Poll choices past their box are refused as too long
+
+- Round eleven (a3ae4db06): ten choices of 100 emoji with a blank line between two are
+  2,010 units against the box's 2,009, and `PollsLive` refused them under the choices
+  box with the poll's rule, "Give 2 to 10 different choices, each up to 100
+  characters.", which those choices keep. The refusal now carries the box's own note,
+  "The choices are too long: 2009 characters at most.", as every other limited box
+  does; its form error is marked as a length error (`validation: :length`), and the
+  choices box shows that error's words where a rule's error shows the rule.
+- Tests (`PollsPageTest`): "choices typed past the box's longest are refused as too
+  long, not as breaking the rule" (the 2,010 units above; the note differs from the one
+  eleven short choices get and gives the box's longest, read from the box's own
+  `maxlength`; no poll starts), failing with the old refusal back. "ten choices of 100
+  emoji each fit the box ..." no longer matches the rule's sentence for eleven choices
+  the box cut: what the box keeps of that paste is 2,011 units, past the box, and it is
+  now one of the pastes it checks are refused.
+- Corrected, in the entries above: 6b3079ec1's "more is refused with the too-long note.
+  ... `PollsLive` refuses choices past it before the poll's rule is asked": `PollsLive`
+  refused them with the rule's note until this entry.
+- The round-eleven proof "R11 Q1: ten choices of 100 emoji with one blank line between
+  two, typed whole" (test/keyfleet_web/adversarial_door_round11_test.exs :628) still
+  fails where it asks that the poll start: as round eleven's brief says, anything typed
+  past the box's longest is refused, blank lines included, now with the too-long note.

@@ -49,8 +49,8 @@ defmodule KeyfleetWeb.PollsLive do
   @look_again_ms 5_000
   # The longest choices a poll's rule takes, in the UTF-16 units a box
   # counts (`KeyfleetWeb.BoxLimit`): ten of 100 letters, each letter an
-  # emoji of two units, one per line. More, as typed, is refused before the
-  # rule is asked, and the rule may refuse more.
+  # emoji of two units, one per line. More, as typed, is refused as too long
+  # before the rule is asked, and the rule may refuse more.
   @longest_choices 10 * 100 * 2 + 9
 
   attr :page, :any, required: true, doc: "the polls as read, or `:unreadable`"
@@ -852,11 +852,11 @@ defmodule KeyfleetWeb.PollsLive do
       )
       when is_map(params) do
     if choices_too_long?(params) do
-      {:noreply,
-       assign(socket,
-         poll_form: form(params, choices: {"breaks its rule", []}),
-         polls_notice: nil
-       )}
+      too_long =
+        {"The choices are too long: #{@longest_choices} characters at most.",
+         [validation: :length, kind: :max, count: @longest_choices]}
+
+      {:noreply, assign(socket, poll_form: form(params, choices: too_long), polls_notice: nil)}
     else
       case act(:start, page, params, ShellLive.human_actor(socket)) do
         {:ok, poll} ->
@@ -983,8 +983,13 @@ defmodule KeyfleetWeb.PollsLive do
 
   defp choices_too_long?(_params), do: false
 
-  # A box whose rule a submitted poll broke says the rule.
-  defp errors(field, rule), do: if(field.errors == [], do: [], else: [rule])
+  # A box typed past its longest says so; one whose rule a submitted poll
+  # broke says the rule.
+  defp errors(field, rule) do
+    for {message, opts} <- field.errors,
+        uniq: true,
+        do: if(opts[:validation] == :length, do: message, else: rule)
+  end
 
   @doc """
   A closed poll's result in words: the choice with the most votes, the
