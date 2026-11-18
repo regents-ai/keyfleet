@@ -42,7 +42,9 @@ Changes to Keyfleet, newest first.
   string or with the connector off is refused before its body is read; a connected app's
   registration at `/oauth/register` over 8 KB or not JSON, and a token request or
   revocation at `/oauth/token` or `/oauth/revoke` over 8 KB or not a form, as OAuth sends
-  them (each got 400 before, or 503 for a registration that was neither); allowing or
+  them (over 8 KB, each got 400 before; a registration sent as a form got 201, and a
+  token request or revocation sent as JSON 200, where all three now get 415; a
+  registration that was neither got 503); allowing or
   ending a connection over 256 bytes or not a form (403 before); the early-access form
   over 4 KB or not a form (422 before); a page's sign-in failure report over 64 bytes or
   its visit report over 22 KB, or either not JSON (204 before). A profile change from someone

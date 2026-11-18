@@ -11583,3 +11583,33 @@ a scratch walk that is not kept.
 - Left as before: more than one space after the scheme. RFC 6750 allows it
   (`"Bearer" 1*SP b64token`); the token is then read with the extra spaces in front, and
   refused.
+
+## 2026-11-18 — Corrections to four entries above
+
+- "A large file write is let go once answered" (17 Nov) said `SignedAgent.take_body/1`'s
+  collection made a waiting request hold more, not less. One case was measured, and it is
+  not a rule: in a scratch test since deleted (a copy of the reviewers' door-load proofs
+  with one case added, run on 17 Nov with the collection and without), 100 agents each
+  adding a 24,562-byte notebook file while a stand-in hub held it a second held 263 KiB of
+  heap each with it and 162 without, the site 54 MiB against 43. The reviewers' round-six
+  proof 537 finds a large sync (2,000 direct-message cursors, 62,999 bytes) holding about
+  1.1 MB while it waits; run here, 50 of them held 1,264 KiB each, and 914 once collected
+  mid-wait, as the removed collection would have left them.
+- The same entry's 85 µs is one collection timed alone, after one docs page. Under load
+  the reviewers' round-six proof 378 found the docs page 4 to 5% slower at the median with
+  50 kept-open connections when Bandit collects after every request than after every
+  fifth. Run here: 235.1 and 236.6 ms against 231.8 and 234.4 ms, 1 to 2% slower; one
+  connection at a time, 21.2 to 21.9 ms either way.
+- "The connector checks who is calling before it decodes a call" (18 Nov) said
+  `McpConnectorTest` fails without the change on its first case, "a made-up token's body
+  answered 400". Its first case is the call with no token: its body `{` was answered 400,
+  where it is now 401 `connection_required`.
+- Added to "Known limits of the notebook door's streamed answers" (17 Nov): a hub that
+  sends a body with a 204 or 304 answer, or with its answer to a HEAD, which HTTP says
+  carries none, gets the member or agent 502 `notebooks_unavailable`, and the hub's
+  failure is saved. The cause is Mint, the HTTP library under the site's client (Req, over
+  Finch): it reads those bytes as data nobody asked for and fails the request
+  (`{:unexpected_data, ...}`), whether the door asks Req for the answer whole or as it
+  arrives. Main does the same (the reviewers' round-six proof 418; the client libraries
+  are the same versions in `mix.lock`). A hub that follows HTTP never sends it. Accepted
+  as it is.
