@@ -126,23 +126,26 @@ minute's wait, not a failure.
    The site also reads what a page's wallet buttons sent through this node
    (`:chain_nodes`); unset, it reads them from Base's public node.
 
-2. Bind the fleet to its deployment. Each fleet is deployed and recorded on its
-   own, so this runs once per fleet. Copy the deployed manifest that
-   `RecordKeyfleets` wrote for it onto a machine (`fly ssh sftp shell`, then
-   `put contracts/deployments/base.classic.deployed.json /tmp/base.classic.deployed.json`)
+2. Bind the fleets to the deployment. `RecordKeyfleets` writes one record for
+   the whole system and every fleet in the collection,
+   `contracts/deployments/base.deployed.json`, and rewrites it each time it
+   runs. Copy it onto a machine (`fly ssh sftp shell`, then
+   `put contracts/deployments/base.deployed.json /tmp/base.deployed.json`)
    and run:
 
    ```sh
-   fly ssh console -C "/app/bin/seed-deployment /tmp/base.classic.deployed.json"
+   fly ssh console -C "/app/bin/seed-deployment /tmp/base.deployed.json"
    ```
 
-   It binds that fleet alone, opens its six fixed rooms and five open rooms,
-   and prints the fleet with its contract and first block. This is what puts
-   the fleet's keys on sale, and it opens a fleet the site showed as coming
-   soon. Every other fleet is left as it is. Running it again with the same
-   manifest changes nothing; a manifest naming other contracts for a bound
-   fleet is refused and changes nothing. In development the same step is
-   `mix keyfleet.seed_deployment ../contracts/deployments/<name>.<fleet>.deployed.json`.
+   In one go it binds every fleet in the record that is the first of its type,
+   opens each one's six fixed rooms and five open rooms, and prints each with
+   its fleet number, contract and first block. This is what puts those fleets'
+   keys on sale, and it opens a fleet the site showed as coming soon. A fleet
+   the record does not hold yet is left as it is: once the Safe has created
+   more founding fleets, run the record step again and seed the newer record.
+   Running it again with the same record changes nothing; a record naming
+   other contracts for a bound fleet is refused and changes nothing. In development the same step is
+   `mix keyfleet.seed_deployment ../contracts/deployments/base.deployed.json`.
 
    A Trading Fleet's entry in the record (`"type": "trading"`) is left out:
    seeding binds only the first fleet of each of the five fleet types

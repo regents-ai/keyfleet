@@ -11904,3 +11904,12 @@ step's report).
   Safe to own the subscription; on a fork of Base the run stops while another account owns it.
   The trading fork tests hand the subscription to the Safe before the approval.
 - Every existing contract still compiles to the same bytes. Nothing was deployed, signed or sent.
+
+## 2026-11-18 — The site's seeding guide names the one record
+
+- `docs/chain-reader.md` no longer describes a record per fleet
+  (`base.classic.deployed.json`), which the record step never wrote. It names the one record,
+  `contracts/deployments/base.deployed.json`, for the whole system and every fleet, and says
+  what seeding it does: in one go it binds every fleet in it that is the first of its type,
+  opens their rooms and prints each, leaves a fleet the record does not hold yet as it is, and
+  takes a newer record after the Safe creates more founding fleets. The commands use that file.
