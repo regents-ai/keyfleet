@@ -495,11 +495,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   # Costly failure: a caller that hasn't proved who it is has its body
-  # decoded, so a made-up token buys the memory of decoding 700 KiB, once for
+  # decoded, so a made-up token buys the memory of decoding 742 KiB, once for
   # each connection it holds open.
   test "a call's body is decoded only once its caller is proved", c do
     token = connect!(account!(), @identity_scope)
-    too_long = Jason.encode!(%{"x" => String.duplicate("a", 700 * 1024)})
+    too_long = Jason.encode!(%{"x" => String.duplicate("a", 742 * 1024)})
     bodies = ["{", "[]", "1", "", too_long]
     json = [{"content-type", "application/json"}]
 
@@ -779,6 +779,30 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     assert %{"structuredContent" => %{"profile" => %{"avatar_url" => ^avatar}}} =
              result(call(token, "agents_profile", %{}, c))
+
+    # The largest picture fits the connector's call in base64 lines of 64
+    # ending in CRLF, the most an encoder's breaks add to it.
+    largest =
+      picture <> :binary.copy(<<0>>, Keyfleet.Agents.Avatar.max_bytes() - byte_size(picture))
+
+    assert %{"isError" => false, "structuredContent" => %{"upload_url" => largest_url}} =
+             result(
+               call(
+                 token,
+                 "agents_avatar_start",
+                 %{
+                   declared
+                   | "sha256" => :sha256 |> :crypto.hash(largest) |> Base.encode16(case: :lower),
+                     "byte_size" => byte_size(largest)
+                 },
+                 c
+               )
+             )
+
+    lines = Regex.scan(~r/.{1,64}/, Base.encode64(largest)) |> Enum.map_join(&(hd(&1) <> "\r\n"))
+
+    assert %{"isError" => false} =
+             upload.(%{bytes | "upload_url" => largest_url} |> Map.put("bytes_base64", lines))
 
     assert %{"isError" => false, "structuredContent" => %{"avatar_url" => nil}} =
              result(call(token, "agents_avatar_remove", %{}, c))

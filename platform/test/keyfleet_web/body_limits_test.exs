@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.BodyLimitsTest do
       {"/oauth/authorize", @form, 256, []},
       {"/oauth/connections/revoke", @form, 256, []},
       {"/api/agents/v1/pair", @json, 4096, []},
-      {"/mcp", @json, 700 * 1024, signed},
+      {"/mcp", @json, 742 * 1024, signed},
       {"/visit-log", @json, 16 * 1024, session},
       {"/auth/privy/failure", @json, 64, session}
     ]

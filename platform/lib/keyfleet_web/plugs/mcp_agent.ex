@@ -33,7 +33,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   - A request with neither is refused (`connection_required`) with its body
     unread.
 
-  A body is read whole, up to 716,800 bytes (700 KiB), and kept as it came
+  A body is read whole, up to 759,808 bytes (742 KiB), and kept as it came
   (`KeyfleetWeb.BodyReader.read_signed/3`): a longer one is refused with 413
   (`request_entity_too_large`), and one that can't be read with 400
   (`bad_request`). Its call must be one JSON object: a JSON-RPC batch is
@@ -96,9 +96,13 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   alias KeyfleetWeb.Plugs.SignedAgent
   alias KeyfleetWeb.PublicDocuments
 
-  # The largest call is a picture's upload: 512 KiB as base64, 699,052 bytes,
-  # and the rest of the call beside it.
-  @body_limit 700 * 1024
+  # The largest call is a picture's upload: 512 KiB as base64 is 699,052
+  # bytes, which the picture tool also takes broken into lines, skipping the
+  # breaks. In lines of 64, the shortest an encoder writes (PEM; MIME writes
+  # 76), that is 10,923 lines, each ending in a CRLF that JSON writes as
+  # `\r\n`, four bytes: 699,052 + 43,692 = 742,744. 742 KiB leaves 17,064
+  # for the rest of the call.
+  @body_limit 742 * 1024
 
   @impl true
   def init(opts), do: opts

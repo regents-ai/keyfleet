@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.BodyReaderTest do
 
   # Each address's limit: the shared agent address reads through its parser
   # (`read_body/2`), the connector's address itself (`read_signed/3`).
-  @limits %{"/api/agents/v1/pair" => 4096, "/mcp" => 700 * 1024}
+  @limits %{"/api/agents/v1/pair" => 4096, "/mcp" => 742 * 1024}
 
   setup do
     reader =

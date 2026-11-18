@@ -11505,3 +11505,19 @@ a scratch walk that is not kept.
   the name, a wait beside a fault) and finds the last two saved and the first not; with
   the old rule it finds none saved. Proof 490 passes, and the Roster job's wait is still
   saved once, where it happened.
+
+## 2026-11-18 — The connector's limit fits the largest picture however its lines break
+
+- `/mcp` took bodies up to 716,800 bytes (700 KiB), which fit the largest picture's
+  base64, 699,052 bytes for 512 KiB, on one line. The picture tool also takes base64
+  broken into lines (`Base.decode64/2` with `ignore: :whitespace`), and in the
+  reviewers' round-six proof 1313 the same picture in lines of 76 came to 717,668 bytes
+  with LF and 736,064 with CRLF, both refused with 413.
+- `KeyfleetWeb.Plugs.McpAgent` now takes up to 759,808 bytes (742 KiB). In lines of 64,
+  the shortest an encoder writes (PEM; MIME writes 76), the picture is 10,923 lines,
+  each ending in a CRLF that JSON writes as `\r\n`, four bytes: 699,052 + 43,692 =
+  742,744, leaving 17,064 bytes for the rest of the call. Lines shorter than 64, or
+  other spaces added inside the base64, can still pass the limit.
+- The connector test's picture tools now also set the largest picture sent that way,
+  which the 700 KiB limit refused with 413. The public changelog's 17 and 18 November
+  lines say 742 KB, where they said 700 KB; neither has been released.

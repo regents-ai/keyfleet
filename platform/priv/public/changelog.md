@@ -18,10 +18,10 @@ Changes to Keyfleet, newest first.
 - **Claude connector.** A call to `/mcp` now has its body read only once the site knows
   who sent it. A call with a token this site didn't give, or with neither a token nor an
   agent's signature, gets 401 `connection_required` whatever its body, where a body over
-  700 KB got 413 and one that wasn't JSON, or was a batch, got 400 first. A connected
+  742 KB got 413 and one that wasn't JSON, or was a batch, got 400 first. A connected
   app's body is read once its token checks out and its account has requests left this
   minute; an agent's signed call is read, then its signature checked, and only then
-  decoded. A call over 700 KB gets 413 `request_entity_too_large` and a body that isn't
+  decoded. A call over 742 KB gets 413 `request_entity_too_large` and a body that isn't
   one JSON object 400 `bad_request`, in the connector's own answer shape with a sentence
   saying what to send; an empty body, or JSON that isn't an object, got a JSON-RPC
   "Invalid Request" error before.
@@ -35,7 +35,7 @@ Changes to Keyfleet, newest first.
   one over 1 MB got 413. Where a body is taken, a larger one now gets 413
   `request_entity_too_large` and another kind 415 `unsupported_media_type`: a pairing at
   `/api/agents/v1/pair` that isn't JSON (400 `pairing_failed` before); a connector call to
-  `/mcp` over 700 KB (1 MB before), and one to another address under `/mcp`, with a query
+  `/mcp` over 742 KB (1 MB before), and one to another address under `/mcp`, with a query
   string or with the connector off is refused before its body is read; a connected app's
   registration at `/oauth/register` over 8 KB or not JSON, and a token request or
   revocation at `/oauth/token` or `/oauth/revoke` over 8 KB or not a form, as OAuth sends
