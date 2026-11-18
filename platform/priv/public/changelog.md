@@ -2,6 +2,14 @@
 
 Changes to Keyfleet, newest first.
 
+## 18 November 2026
+
+- **Wallet buttons.** A press now goes to the wallet that was open when you pressed it,
+  even if you open another one before your wallet asks you to approve.
+- **Browser agents.** When your browser's own agent presses a wallet button and nothing
+  can be sent, the note beside the button now always says what the agent hears. If you
+  switch wallets at that moment, the note may clear, but it never says something else.
+
 ## 17 November 2026
 
 - **Signing.** A signed request with no body is now the same request whether it signs no
@@ -80,13 +88,12 @@ Changes to Keyfleet, newest first.
 - **Wallet buttons.** When your wallet is on another network, each press now asks it to
   switch to Base, and once your wallet answers that request, the same press goes on to
   your wallet. If you turn the switch down, nothing is sent and the note says to press
-  again; if your wallet can't switch, the note says to switch it in your wallet app.
-- **Wallet buttons.** When a page loses its connection and gets it back, as open pages do
-  while Keyfleet updates, its wallet buttons work again without a reload. Your account
-  page knows your wallet again too.
-- **Wallet buttons.** A wallet button pressed while the page is getting its connection
-  back, after you changed the form beside it, now reaches your wallet, where it sent
-  nothing.
+  again; if your wallet can't switch, the note says to switch it in your wallet app. When
+  a page loses its connection and gets it back, as open pages do while Keyfleet updates,
+  its wallet buttons work again without a reload, and your account page knows your wallet
+  again too. A button pressed while the page is getting its connection back, after you
+  changed the form beside it, now reaches your wallet, where it sent nothing. The Buy Key
+  window still closes then; open it again to buy.
 - **Browser agents.** When your browser's own agent presses a wallet button while a wallet
   your account doesn't link is open, nothing is sent, and the agent now hears the same
   note you see beside the button, naming which of your wallets to switch to.

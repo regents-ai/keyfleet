@@ -11538,9 +11538,12 @@ neither browser is installed on the Mac.
   `platform/assets/js/page_tools.ts` says each reason in words for the agent, meaning what
   the server's notes say. The case that started round two stays: a press the server
   refuses to prepare (the account doesn't link the open wallet, or no wallet is open as
-  the server knows it) already waits for the answer to `prepare_and_send`, so that answer
-  carries the note the press's report then leaves, and the agent hears exactly that note.
-  The walk for an unlinked wallet still checks it, and fails when the hook drops the note.
+  the server knows it) already waits for the answer to `prepare_and_send`, and that answer
+  carries the server's note, which the agent hears. The press's report then left a note of
+  its own beside the buttons, written for the wallet open by then, so a switch in between
+  could show the person other words than the agent heard; round four made the refusal the
+  one writer. The walk for an unlinked wallet still checks it, and fails when the hook
+  drops the note.
   Offline, a send that may have gone answers the agent that the wallet may have sent it.
   A kept test checks a press answers without waiting on its report.
 - Changed (2da4fdd87): a signature step the wallet may have made is reported as
@@ -11584,7 +11587,9 @@ send into "nothing was sent".
   before. Keyfleet's hook asks whenever it holds no steps for the button, not only when a
   form changed, and every Keyfleet group is a `WalletPanel`, which answers the ask, so the
   template's open case (a button with no form, pressed after a reconnect before its steps
-  come back, sends nothing) does not arise here. `KeyfleetWeb.OnchainSteps` needed no
+  come back, sends nothing) does not arise once the page is back. It still arises while
+  LiveView sends the form back, in the Buy Key window, as the walks below show.
+  `KeyfleetWeb.OnchainSteps` needed no
   change. The hook never asks with no wallet open, so `prepare_and_send` no longer refuses
   for "no wallet open as the server knows it"; its test now covers an unlinked wallet and a
   step the chain holds back.
@@ -11593,7 +11598,8 @@ send into "nothing was sent".
   run: it asks, gets steps, reaches the wallet and is followed to Done, as before this
   change. Claim, while LiveView still sends the Key page's form back: the hook still holds
   its old steps and sends from them; it reaches the wallet and shows as not this page's
-  step (round two's line 413, unchanged). Holding no steps then, it asks, and now reaches
+  step, unchanged (round two's walk at line 413 shows the same for a paired agent's
+  one-press Issue shard). Holding no steps then, it asks, and now reaches
   the wallet and is followed; before this change it sent nothing. Approve and Buy Key: the
   page comes back with the Buy Key window closed; reopened, a press the moment the window
   is back reaches the wallet and is followed. While LiveView still sends the form back, the
@@ -11618,3 +11624,52 @@ Chromium 147 of 147, the new walk among them, and the 16 Firefox and WebKit walk
 profile did not start, as neither browser is installed on the Mac. The review's round-three
 proofs are as on 1215900c2. Round two's walk at line 476 now passes, and its line 413 still
 fails, as above.
+
+## 2026-11-18 — Wallet presses after the review's fourth round
+
+- Found: a refused ask had two writers for its note. `prepare_and_send` answered with the
+  note for the wallet the press named, and the hook's `step_failed` report then left a note
+  written for the wallet open by then. A switch between the two showed the person words the
+  browser's agent never heard.
+- Changed (402702eb3): the refusal is the one writer. `KeyfleetWeb.WalletPanel` sets the
+  note beside the buttons, counts the failure (`step_unknown`) and replies with that same
+  note; the hook reports nothing more for a refused ask. A kept walk in
+  `platform/test/browser/wallet_buttons.spec.ts` races it: the agent's claim from an
+  unlinked wallet is refused while the person opens the account's wallet before the answer
+  is back, and the page never shows words the agent did not hear (the switch may clear the
+  note, so the person may see none). With the hook's report put back, the walk fails. The
+  connection relay it uses (`platform/test/browser/support/held_connection.ts`) is shared
+  with the shard walk.
+- Changed (0776f86f7), as ash-template ef4074c4: `press(review, name, wallet, push)` takes
+  the wallet the click handler read at the press, on both paths, with and without an ask.
+  Steps that come back from an ask go to that wallet even when another opened meanwhile.
+  No re-read, no gate, no comparison with the signer. A new test fails with the wallet read
+  again inside `press`.
+- On the agent's path: `platform/assets/js/page_tools.ts` answers `ok: true` and "Sent from
+  the wallet. The page shows when it lands." for any hash the wallet returns, before the
+  server checks it; `RegentChain.Outcome` marks a hash from another sender "not this step"
+  only on the page. So the agent hears "Sent" for such a press. After 0776f86f7 it is still
+  possible from held steps: a press that doesn't ask sends the steps the page holds, built
+  for the wallet the server last heard, through the wallet open at the press, with `from`
+  set to the steps' signer; a wallet that sends from its own account anyway returns a hash
+  from another sender. An asked press can no longer cross wallets. Reported, not built.
+- Not built: the Buy Key window kept open across a rejoin. Shape (a), the window naming its
+  fleet in the connection's params and both pages opening it at mount, keeps it open, but
+  a press made while LiveView still sends the forms back carries the page's component
+  numbers from before the rejoin. The window opened after the page loaded, so the fresh
+  server numbers it, and the parts after it, differently: on `/classic/1` the window's
+  panel goes from 4 to 3 and 4 becomes the pairing box; on a Key page, 5 to 3, and 5
+  becomes a part of the fleet's prompts. An ask in that moment reached the pairing box on
+  `/classic/1`, which crashed the page's process (the walk saw the server's error and one
+  more rejoin), and the prompts on a Key page; either way nothing reached the wallet and
+  the person saw no note. Held steps reached the wallet, and their reports went to the same
+  wrong part. The homepage's numbers match and its press worked. Shape (b), the window in the address, draws it at
+  mount too and shifts the numbers the same way. Without either, such an ask reaches no
+  part and nothing is sent, as before. Reported to the Keyfleet chief with what a fix takes.
+- Words: the round-three entry no longer says the agent hears exactly the note the report
+  leaves; round two's line 413 is a paired agent's Issue shard, not Claim; "does not arise
+  here" now says it still arises in the Buy Key window. `verification/features.yml` no
+  longer says a press asked while the page gets its connection back is built for the open
+  wallet in the Buy Key window. The public 17 November entry has one Wallet buttons line,
+  which says the Buy Key window still closes then, and an 18 November entry says what
+  changed for customers.
