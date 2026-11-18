@@ -13071,3 +13071,24 @@ step's report).
   time; `PublicPagesControllerTest` finds the record in the site map.
 - Not done: the page doesn't hear a turn; a season settled while it is open shows
   when it is opened again.
+
+## 2026-11-18 — A walk locks a pick on the Season panel and reads the record
+
+- `platform/test/browser/seasons.spec.ts`, in the tracked walks
+  (`playwright.chain.config.ts`, kept out of `playwright.config.ts`), at 390 and 1280
+  wide: a Key holder signed in reads the season under way (SOL-USD at $143.27, Key 1,
+  the last season's +10.00% with the crown kept) and its picks, locks ETH-USD with a
+  reason and is told "Locked.", then Record opens `/syndicate/1/seasons`: 24h
+  +114.36% over 8 seasons, nine settled rows, and the ninth opening to its one pick
+  with its +5.00% and reason. Neither page scrolls sideways and nothing on them fails.
+  `Keyfleet.BrowserChain.seasons!/2` plays the seasons through the domain thirty hours
+  ahead of the clock, since a Key picks only before its season starts, then moves
+  every season back to its own time.
+- The walk server starts again. Its list of products a pick may name
+  (`Keyfleet.Seasons.CoinList`) is read as the server starts, where nothing stood in
+  for Coinbase, so the read raised, the reader restarted until the application shut
+  down, and every walk in `playwright.chain.config.ts` waited out its three minutes.
+  In that server only (config/runtime.exs, the browser-test branch) Coinbase is now
+  answered by `Keyfleet.BrowserCoinbase`: SOL-USD and ETH-USD beside USDC.
+- On the record, a product's name no longer breaks at its hyphen on a phone
+  ("SOL-" over "USD"): the table's cells stay on one line, the picks under a row wrap.

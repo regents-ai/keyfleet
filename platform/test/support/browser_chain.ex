@@ -62,6 +62,8 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.Seasons
+  alias Keyfleet.Seasons.Season
   alias Keyfleet.SharedReading
   alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
@@ -671,6 +673,94 @@ defmodule Keyfleet.BrowserChain do
     Count.count(fleet_id, today ++ september)
     Jason.encode!(%{busiest: hd(tasks)})
   end
+
+  @doc """
+  Gives the fleet seasons to look at, as its turns would have left them:
+  nine settled, the first down by half and the next eight up a tenth each,
+  `owner`'s Key picking ETH-USD in the ninth with a reason; the tenth under
+  way, holding SOL-USD with Key 1 its captain and `owner`'s pick in it; and
+  the eleventh taking picks. The products open to picks are the server's own
+  Coinbase's (`Keyfleet.BrowserCoinbase`): USDC, SOL-USD and ETH-USD.
+  """
+  def seasons!(fleet_id, owner) do
+    # A Key picks only before its season starts, so the seasons are played
+    # thirty hours ahead of the clock and then moved back to their own time:
+    # the tenth under way since the boundary just passed.
+    ahead = 30
+    start = DateTime.add(Seasons.boundary(DateTime.utc_now()), ahead - 27, :hour)
+
+    for number <- 1..9 do
+      season = open_season!(fleet_id, number, start)
+      if number == 9, do: settled_pick!(fleet_id, owner)
+      close = if number == 1, do: Decimal.new(50), else: Decimal.new(110)
+
+      season
+      |> update!(:lock, %{
+        holding: "SOL-USD",
+        captain_key: 1,
+        holding_open_price: Decimal.new(100)
+      })
+      |> update!(:settle, %{
+        holding_close_price: close,
+        holding_result: Decimal.sub(Decimal.div(close, 100), 1)
+      })
+    end
+
+    running = open_season!(fleet_id, 10, start)
+
+    fleet_id
+    |> Seasons.pick!(10, %{product: "SOL-USD", reason: "Momentum"}, actor: holder(owner))
+    |> update!(:open, %{open_price: Decimal.new("143.27")})
+
+    update!(running, :lock, %{
+      holding: "SOL-USD",
+      captain_key: 1,
+      holding_open_price: Decimal.new("143.27")
+    })
+
+    open_season!(fleet_id, 11, start)
+
+    Repo.update_all(
+      from(season in "seasons",
+        where: season.fleet_id == ^fleet_id,
+        update: [
+          set: [
+            starts_at: fragment("? - make_interval(hours => ?)", season.starts_at, ^ahead),
+            ends_at: fragment("? - make_interval(hours => ?)", season.ends_at, ^ahead)
+          ]
+        ]
+      ),
+      [],
+      prefix: "keyfleet_app"
+    )
+
+    FleetNow.read(fleet_id)
+    :ok
+  end
+
+  # `owner`'s pick in the ninth season, ETH-USD up 5% over it.
+  defp settled_pick!(fleet_id, owner) do
+    fleet_id
+    |> Seasons.pick!(9, %{product: "ETH-USD", reason: "Gas is cheap"}, actor: holder(owner))
+    |> update!(:open, %{open_price: Decimal.new(2_000)})
+    |> update!(:close, %{close_price: Decimal.new(2_100), result: Decimal.new("0.05")})
+  end
+
+  # Season `number`, three hours after the one before it from `start`.
+  defp open_season!(fleet_id, number, start) do
+    starts_at = DateTime.add(start, 3 * (number - 1), :hour)
+
+    Season
+    |> Ash.Changeset.for_create(
+      :open,
+      %{fleet_id: fleet_id, number: number, starts_at: starts_at},
+      actor: @system
+    )
+    |> Ash.create!()
+  end
+
+  defp update!(record, action, attributes),
+    do: record |> Ash.Changeset.for_update(action, attributes, actor: @system) |> Ash.update!()
 
   defp counted!(fleet_id) do
     case Fill.batch(fleet_id) do

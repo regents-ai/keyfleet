@@ -1835,6 +1835,7 @@ features:
       - live: KeyfleetWeb.ShellLive
     proofs:
       - platform/test/keyfleet_web/live/season_panel_test.exs
+      - platform/test/browser/seasons.spec.ts
     gaps:
       - No price moves on the panel while a season runs; results appear when it settles.
 
@@ -1868,6 +1869,7 @@ features:
       - platform/test/keyfleet_web/live/seasons_page_test.exs
       - platform/test/keyfleet/seasons/rules_test.exs
       - platform/test/keyfleet_web/route_catalog_test.exs
+      - platform/test/browser/seasons.spec.ts
     gaps:
       - Read as the page opens and as More asks; a season settled while the page is open shows when it is opened again.
 

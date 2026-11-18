@@ -81,6 +81,12 @@
   font-weight: 400;
 }
 
+/* A product's name stays whole ("SOL-USD", never "SOL-" over "USD"); the
+   picks under a row wrap as text does. */
+.seasons-table td:not([colspan]) {
+  white-space: nowrap;
+}
+
 .seasons-table__figure {
   font-variant-numeric: tabular-nums;
   text-align: end;
