@@ -11,10 +11,15 @@ defmodule KeyfleetWeb.EarlyController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Accounts.RequestRateLimiter
-  alias KeyfleetWeb.{ClientAddress, PublicDocuments}
+  alias KeyfleetWeb.{BoxLimit, ClientAddress, PublicDocuments}
+
+  # The longest address a signup keeps (`Keyfleet.Early.Signup`), as typed
+  # (`KeyfleetWeb.BoxLimit`).
+  @longest_email 254
 
   @joined "You're on the list. We'll email you when Keyfleet opens."
   @unreadable "Enter an email address, like name@example.com."
+  @too_long "That address is too long: #{@longest_email} characters at most."
   @too_many "Too many tries from here. Wait a few minutes and try again."
   @not_saved "We couldn't save that just now. Try again in a moment."
 
@@ -31,14 +36,18 @@ defmodule KeyfleetWeb.EarlyController do
   defp sign_up(conn, %{"website" => trap}) when is_binary(trap) and trap != "", do: joined(conn)
 
   defp sign_up(conn, %{"email" => email}) when is_binary(email) do
-    case Keyfleet.Early.sign_up(email) do
-      {:ok, _signup} -> joined(conn)
-      {:error, %Ash.Error.Invalid{}} -> unreadable(conn, email)
-      {:error, failure} -> not_saved(conn, email, failure)
+    if BoxLimit.too_long?(email, @longest_email) do
+      refuse(conn, email, @too_long)
+    else
+      case Keyfleet.Early.sign_up(email) do
+        {:ok, _signup} -> joined(conn)
+        {:error, %Ash.Error.Invalid{}} -> refuse(conn, email, @unreadable)
+        {:error, failure} -> not_saved(conn, email, failure)
+      end
     end
   end
 
-  defp sign_up(conn, _params), do: unreadable(conn, "")
+  defp sign_up(conn, _params), do: refuse(conn, "", @unreadable)
 
   # The address stays in the box, so trying again is one press.
   defp not_saved(conn, email, failure) do
@@ -51,8 +60,8 @@ defmodule KeyfleetWeb.EarlyController do
 
   defp joined(conn), do: conn |> put_flash(:info, @joined) |> redirect(to: ~p"/early")
 
-  defp unreadable(conn, email),
-    do: conn |> put_status(:unprocessable_entity) |> page(email: email, error: @unreadable)
+  defp refuse(conn, email, words),
+    do: conn |> put_status(:unprocessable_entity) |> page(email: email, error: words)
 
   defp limited(conn, params, retry_after) do
     conn
@@ -79,7 +88,11 @@ defmodule KeyfleetWeb.EarlyController do
   defp typed(_params), do: ""
 
   defp page(conn, assigns) do
-    assigns = Keyword.merge([email: "", error: nil, refused: nil], assigns)
+    assigns =
+      Keyword.merge(
+        [email: "", error: nil, refused: nil, email_box: BoxLimit.maxlength(@longest_email)],
+        assigns
+      )
 
     conn
     |> put_resp_header("cache-control", "no-store")
@@ -138,7 +151,7 @@ defmodule KeyfleetWeb.EarlyHTML do
                 id={field.id}
                 type="email"
                 name="email"
-                maxlength="254"
+                maxlength={@email_box}
                 value={@email}
                 autocomplete="email"
                 inputmode="email"

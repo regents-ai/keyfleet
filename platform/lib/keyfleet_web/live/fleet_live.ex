@@ -88,6 +88,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Search
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.AtlasLive
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.BuyKey
   alias KeyfleetWeb.Components.Count
@@ -584,7 +585,7 @@ defmodule KeyfleetWeb.FleetLive do
           id="fleet-entry-pass-number"
           name="pass"
           inputmode="numeric"
-          maxlength="20"
+          maxlength={BoxLimit.maxlength(FleetPage.longest_key())}
           required
         />
         <Regent.Primitives.button type="submit" variant="secondary">Open its Key</Regent.Primitives.button>
@@ -1483,8 +1484,13 @@ defmodule KeyfleetWeb.FleetLive do
   # Why the Pass number sent opened no Key.
   defp pass_note(pass) when is_binary(pass) do
     case Integer.parse(pass) do
-      {number, ""} -> "No Key for Pass #{number}"
-      _not_a_number -> "Enter a Pass number"
+      {number, ""} ->
+        if BoxLimit.too_long?(pass, FleetPage.longest_key()),
+          do: "That Pass number is too long",
+          else: "No Key for Pass #{number}"
+
+      _not_a_number ->
+        "Enter a Pass number"
     end
   end
 

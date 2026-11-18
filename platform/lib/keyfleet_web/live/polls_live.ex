@@ -34,6 +34,7 @@ defmodule KeyfleetWeb.PollsLive do
   alias Keyfleet.Polls
   alias Keyfleet.Polls.Poll
   alias KeyfleetWeb.ActivityLines
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
@@ -46,6 +47,9 @@ defmodule KeyfleetWeb.PollsLive do
   @lengths [1, 5, 10, 15, 30, 45, 60]
   # A poll page that couldn't be read again looks again after this long.
   @look_again_ms 5_000
+  # The longest choices the form takes, as typed (`KeyfleetWeb.BoxLimit`):
+  # ten of the longest, one per line, with room to spare.
+  @longest_choices 1_100
 
   attr :page, :any, required: true, doc: "the polls as read, or `:unreadable`"
   attr :form, Phoenix.HTML.Form, default: nil, doc: "the form starting a poll"
@@ -132,7 +136,7 @@ defmodule KeyfleetWeb.PollsLive do
               id={field.id}
               name={@form[:choices].name}
               rows="4"
-              maxlength="1100"
+              maxlength={choices_box()}
               required
               aria-invalid={field.aria_invalid}
               aria-describedby={field.described_by != "" && field.described_by}
@@ -845,12 +849,20 @@ defmodule KeyfleetWeb.PollsLive do
         %{assigns: %{polls: %{kind: :list} = page}} = socket
       )
       when is_map(params) do
-    case act(:start, page, params, ShellLive.human_actor(socket)) do
-      {:ok, poll} ->
-        {:noreply, push_patch(socket, to: poll_path(poll.fleet_id, poll.id))}
+    if choices_too_long?(params) do
+      {:noreply,
+       assign(socket,
+         poll_form: form(params, choices: {"breaks its rule", []}),
+         polls_notice: nil
+       )}
+    else
+      case act(:start, page, params, ShellLive.human_actor(socket)) do
+        {:ok, poll} ->
+          {:noreply, push_patch(socket, to: poll_path(poll.fleet_id, poll.id))}
 
-      {:error, error} ->
-        {:noreply, form_refused(socket, params, error)}
+        {:error, error} ->
+          {:noreply, form_refused(socket, params, error)}
+      end
     end
   end
 
@@ -961,6 +973,13 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   defp choices(_missing), do: []
+
+  defp choices_box, do: BoxLimit.maxlength(@longest_choices)
+
+  defp choices_too_long?(%{"choices" => text}) when is_binary(text),
+    do: BoxLimit.too_long?(text, @longest_choices)
+
+  defp choices_too_long?(_params), do: false
 
   # A box whose rule a submitted poll broke says the rule.
   defp errors(field, rule), do: if(field.errors == [], do: [], else: [rule])

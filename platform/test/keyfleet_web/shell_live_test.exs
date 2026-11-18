@@ -1107,6 +1107,31 @@ defmodule KeyfleetWeb.ShellLiveTest do
       assert has_element?(view, "#key-shard-renew-#{@agent}")
       assert has_element?(view, "#key-issue-pair[data-pair-open]", "Pair New Agent")
     end
+
+    # Costly failure: a list of many Keys pasted past its box is cut mid-number,
+    # and the press turns agent voting on for a Key that was never typed. The
+    # box takes more than the site does, so a list it cut is refused instead.
+    test "a Keys list its box cut is refused as too long, and one it holds whole is read", c do
+      view = open_key(c.conn, c.account, "/classic/1/keys/1")
+      form = "#key-agent-voting-action-form"
+      line = "#key-agent-voting-action-line"
+      paste = Enum.map_join(1..300, ",", &Integer.to_string(5_000 + &1 * 7))
+
+      [box] =
+        view
+        |> element(~s(#{form} [name="keys"]))
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.attribute("maxlength")
+
+      view |> form(form, keys: binary_part(paste, 0, String.to_integer(box))) |> render_change()
+      render_async(view)
+      assert has_element?(view, line, "The list of Keys is too long: 1000 characters at most.")
+
+      view |> form(form, keys: "1") |> render_change()
+      render_async(view)
+      refute has_element?(view, line, "too long")
+    end
   end
 
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()

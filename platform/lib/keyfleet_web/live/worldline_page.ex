@@ -97,6 +97,7 @@ defmodule KeyfleetWeb.WorldlinePage do
 
   alias KeyfleetWeb.{
     ActivityLines,
+    BoxLimit,
     DirectoryMD,
     KeyLinks,
     PollsLive,
@@ -213,20 +214,26 @@ defmodule KeyfleetWeb.WorldlinePage do
   Whose events a filter's words ask for: a Key by its number ("19", "Key 19",
   "#19" or "Key 1,234"), as `{:key, 19}`, or a wallet (0x and 40 hexadecimal
   digits, in any case), as `{:wallet, wallet}` in lower case. Blank asks for
-  everyone's, as nil; anything else is `:error`.
+  everyone's, as nil; anything else is `:error`, and so are words longer
+  than `longest_filter/0`.
   """
   @spec by(String.t()) :: {:ok, by()} | :error
   def by(words) do
+    too_long? = BoxLimit.too_long?(words, longest_filter())
     words = String.trim(words)
     key = Regex.run(~r/\A(?:key\s*)?#?\s*([1-9][0-9]{0,17})\z/i, String.replace(words, ",", ""))
 
     cond do
+      too_long? -> :error
       words == "" -> {:ok, nil}
       Regex.match?(~r/\A0x[0-9a-f]{40}\z/i, words) -> {:ok, {:wallet, String.downcase(words)}}
       key -> {:ok, {:key, key |> List.last() |> String.to_integer()}}
       true -> :error
     end
   end
+
+  @doc "The longest filter the Worldline reads (`KeyfleetWeb.BoxLimit`)."
+  def longest_filter, do: 100
 
   @doc "The sources the reader `read_as` names reads of the fleet's worldline."
   @spec sources(String.t(), keyword()) :: [source()]

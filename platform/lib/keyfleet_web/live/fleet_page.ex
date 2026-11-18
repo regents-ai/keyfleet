@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.FleetPage do
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Metadata
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.KeyMap
 
@@ -44,11 +45,24 @@ defmodule KeyfleetWeb.FleetPage do
       do: %{token_id: progress.next_token_id, price: progress.next_price}
   end
 
-  @doc "A key in the address that isn't one the map shows is no choice at all."
+  @doc """
+  The longest Key or Pass number the page reads, from its address or the
+  Pass box (`KeyfleetWeb.BoxLimit`).
+  """
+  def longest_key, do: 20
+
+  @doc """
+  A key in the address, or a Pass typed, that isn't one the map shows is no
+  choice at all, and nor is one longer than `longest_key/0`.
+  """
   def chosen_key(progress, key) when is_binary(key) do
     case Integer.parse(key) do
-      {token_id, ""} -> if KeyMap.choosable?(progress, token_id), do: token_id
-      _not_a_number -> nil
+      {token_id, ""} ->
+        if not BoxLimit.too_long?(key, longest_key()) and KeyMap.choosable?(progress, token_id),
+          do: token_id
+
+      _not_a_number ->
+        nil
     end
   end
 

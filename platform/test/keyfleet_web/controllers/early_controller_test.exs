@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
 
   @joined "You're on the list. We'll email you when Keyfleet opens."
   @unreadable "Enter an email address, like name@example.com."
+  @too_long "That address is too long: 254 characters at most."
   @too_many "Too many tries from here. Wait a few minutes and try again."
 
   setup do
@@ -115,14 +116,26 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   # error page in place of the form's own words.
   test "the most the field takes, in letters the form encodes longest, is answered by the form" do
     page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
-    assert page |> LazyHTML.query("#early-email") |> LazyHTML.attribute("maxlength") == ["254"]
+    [most] = page |> LazyHTML.query("#early-email") |> LazyHTML.attribute("maxlength")
 
     # Three bytes each, nine characters each once the form encodes them.
-    longest = String.duplicate("€", 254)
+    longest = String.duplicate("€", String.to_integer(most))
     page = %{"email" => longest} |> sign_up() |> html_response(422) |> LazyHTML.from_document()
 
-    assert text(page, "#early-email-errors") == @unreadable
+    assert text(page, "#early-email-errors") == @too_long
     assert emails() == []
+  end
+
+  # Costly failure: an address cut by the field to one that reads as an
+  # address is kept, and nobody hears from the address that was pasted.
+  test "an address the field cut is refused as too long, and one it holds whole is kept" do
+    cut = "ada@example.com" <> String.duplicate(" ", 240)
+    assert %{"email" => cut} |> sign_up() |> html_response(422) =~ "too long"
+    assert emails() == []
+
+    kept = String.duplicate("a", 240) <> "@example.com"
+    assert redirected_to(sign_up(%{"email" => kept})) == "/early"
+    assert emails() == [kept]
   end
 
   test "a filled-in trap field gets the same answer and keeps nothing" do

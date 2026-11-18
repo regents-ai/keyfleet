@@ -108,6 +108,32 @@ defmodule KeyfleetWeb.ShowcaseTest do
              "No provider request"
   end
 
+  test "the sample's quantity says what is wrong with it, and one its box cut is refused" do
+    {:ok, view, _html} = live(local_conn(), "/showcase")
+
+    [box] =
+      view
+      |> element("#sample-form [name='sample[quantity]']")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("maxlength")
+
+    for {typed, note} <- [
+          {binary_part("10000", 0, String.to_integer(box)), "Quantity: at most 3 characters."},
+          {"0", "must be greater than 0"},
+          {"-3", "must be greater than 0"},
+          {"1.5", "is invalid"}
+        ] do
+      html =
+        view
+        |> form("#sample-form", sample: %{title: "Demo record", quantity: typed})
+        |> render_submit()
+
+      assert html =~ note
+      refute html =~ "Demo record ×"
+    end
+  end
+
   test "active component inventory names exported functions and their attributes" do
     for {module, names} <- Catalog.registry() do
       Code.ensure_loaded!(module)

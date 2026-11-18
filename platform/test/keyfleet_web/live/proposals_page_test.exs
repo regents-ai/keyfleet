@@ -1024,6 +1024,67 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert text(view, "#propose-action-line") == "From 0.1% to 2%."
     end
 
+    # Costly failure: a paste the browser cut at its box is proposed cut, a
+    # link that leads elsewhere or words missing their end, and the chain
+    # keeps it. A box takes more than the site does, so what it cut is
+    # refused with a note and nothing can be sent from it.
+    test "a link or words a box cut are refused with a note, and leave nothing to send",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+
+      ChainViews.put!(
+        list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000),
+        balances: %{@treasury => 10 ** 18}
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      launch = [
+        kind: "launch",
+        key: "7",
+        text: "Launch the fleet's coin",
+        name: "Fleet Coin",
+        symbol: "FLT",
+        description: "The fleet's own token",
+        website: "https://example.com",
+        image: "https://example.com/coin.png"
+      ]
+
+      as_cut = fn name, paste ->
+        [box] =
+          view
+          |> element(~s(#propose-action-form [name="#{name}"]))
+          |> render()
+          |> LazyHTML.from_fragment()
+          |> LazyHTML.attribute("maxlength")
+
+        binary_part(paste, 0, String.to_integer(box))
+      end
+
+      for {name, paste, note} <- [
+            {:image, "https://example.com/" <> String.duplicate("coin/", 60) <> "coin.png",
+             "The image link is too long: 256 characters at most."},
+            {:text, String.duplicate("Launch the fleet's coin. ", 200),
+             "The proposal is too long: 4000 characters at most."}
+          ] do
+        view |> form("#propose-action-form", launch) |> render_change()
+        render_async(view, @async_wait)
+        assert_push_event(view, "onchain-steps:review", %{review: %{steps: [%{step: "propose"}]}})
+
+        cut = Keyword.put(launch, name, as_cut.(name, paste))
+        view |> form("#propose-action-form", cut) |> render_change()
+        render_async(view, @async_wait)
+
+        assert_push_event(view, "onchain-steps:review", %{
+          component_id: "propose-action",
+          review: nil
+        })
+
+        assert text(view, "#propose-action-line") == note
+      end
+    end
+
     # Costly failure: the site's largest form, typed to its fields' limits, is
     # more than a live page's socket reads, so the page closes, loses what was
     # typed and joins again, as it does for an agent's press of the same form.

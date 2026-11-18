@@ -32,7 +32,7 @@ defmodule KeyfleetWeb.WorldlineLive do
     only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4, stream_insert: 4]
 
   alias Keyfleet.Fleets
-  alias KeyfleetWeb.{PageRead, PollsLive, ShellLive, WorkspacePage, WorldlinePage}
+  alias KeyfleetWeb.{BoxLimit, PageRead, PollsLive, ShellLive, WorkspacePage, WorldlinePage}
 
   # How many of each source's events a read takes: the picture's, the
   # list's, and a read of what was just heard.
@@ -110,7 +110,7 @@ defmodule KeyfleetWeb.WorldlineLive do
       heard: [],
       by: by,
       asked: params["by"],
-      typed: if(wrong?, do: params["by"], else: typed(by)),
+      typed: if(wrong?, do: unread(params["by"]), else: typed(by)),
       wrong?: wrong?,
       legend: legend(fleet_id, read_as)
     }
@@ -155,6 +155,10 @@ defmodule KeyfleetWeb.WorldlineLive do
   defp typed(nil), do: ""
   defp typed({:key, key}), do: "Key #{key}"
   defp typed({:wallet, wallet}), do: wallet
+
+  # Words that name nothing, from the address or the field, as far as the
+  # field keeps them.
+  defp unread(words), do: BoxLimit.kept(words, WorldlinePage.longest_filter())
 
   defp read_newest(socket, %{fleet_id: fleet_id, show: show} = worldline, read_as) do
     case PageRead.run("worldline", fn ->
@@ -227,7 +231,7 @@ defmodule KeyfleetWeb.WorldlineLive do
         {:noreply, push_patch(socket, to: worldline_path(worldline.fleet_id, worldline.show, by))}
 
       :error ->
-        {:noreply, assign(socket, :worldline, %{worldline | typed: words, wrong?: true})}
+        {:noreply, assign(socket, :worldline, %{worldline | typed: unread(words), wrong?: true})}
     end
   end
 
@@ -372,7 +376,7 @@ defmodule KeyfleetWeb.WorldlineLive do
               id={field.id}
               name="by"
               type="search"
-              maxlength="100"
+              maxlength={BoxLimit.maxlength(WorldlinePage.longest_filter())}
               value={@worldline.typed}
               placeholder="Key 19 or 0x…"
               autocomplete="off"

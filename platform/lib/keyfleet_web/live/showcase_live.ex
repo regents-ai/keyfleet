@@ -1,6 +1,7 @@
 defmodule KeyfleetWeb.ShowcaseLive do
   @moduledoc "Loopback-only component workshop. Demo state lives in this LiveView."
   use KeyfleetWeb, :live_view
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.Showcase.{Catalog, Sample, Utilities}
   alias Regent.Primitives, as: P
   alias Regent.Structure, as: S
@@ -548,7 +549,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       <input
                         id={field.id}
                         name="sample[title]"
-                        maxlength="80"
+                        maxlength={sample_box("title")}
                         value={@form[:title].value}
                         aria-invalid={field.aria_invalid}
                         aria-describedby={field.described_by}
@@ -558,7 +559,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                         id={field.id}
                         name="sample[quantity]"
                         inputmode="numeric"
-                        maxlength="3"
+                        maxlength={sample_box("quantity")}
                         value={@form[:quantity].value}
                       />
                     </P.field><P.button type="submit">Run create action</P.button>
@@ -713,20 +714,9 @@ defmodule KeyfleetWeb.ShowcaseLive do
   end
 
   def handle_event("create_sample", %{"sample" => params}, socket) do
-    changeset = Ash.Changeset.for_create(Sample, :create, params)
-
-    case Ash.create(changeset) do
-      {:ok, record} ->
-        {:noreply,
-         assign(socket,
-           records: [record | socket.assigns.records],
-           errors: [],
-           form: to_form(params, as: :sample)
-         )}
-
-      {:error, error} ->
-        {:noreply,
-         assign(socket, errors: [Exception.message(error)], form: to_form(params, as: :sample))}
+    case sample_too_long(params) do
+      nil -> create_sample(socket, params)
+      words -> {:noreply, assign(socket, errors: [words], form: to_form(params, as: :sample))}
     end
   end
 
@@ -805,6 +795,40 @@ defmodule KeyfleetWeb.ShowcaseLive do
        identities: identities,
        connection_notice: %{tone: :info, message: "Fixture updated. No provider request."}
      )}
+  end
+
+  defp create_sample(socket, params) do
+    changeset = Ash.Changeset.for_create(Sample, :create, params)
+
+    case Ash.create(changeset) do
+      {:ok, record} ->
+        {:noreply,
+         assign(socket,
+           records: [record | socket.assigns.records],
+           errors: [],
+           form: to_form(params, as: :sample)
+         )}
+
+      {:error, error} ->
+        {:noreply,
+         assign(socket, errors: [Exception.message(error)], form: to_form(params, as: :sample))}
+    end
+  end
+
+  # The longest value each of the sample form's boxes takes, as typed
+  # (`KeyfleetWeb.BoxLimit`): the action's longest title, and 100.
+  defp sample_longest("title"), do: 80
+  defp sample_longest("quantity"), do: 3
+
+  defp sample_box(name), do: BoxLimit.maxlength(sample_longest(name))
+
+  defp sample_too_long(params) do
+    Enum.find_value([{"title", "Title"}, {"quantity", "Quantity"}], fn {name, label} ->
+      typed = params[name]
+
+      if is_binary(typed) and BoxLimit.too_long?(typed, sample_longest(name)),
+        do: "#{label}: at most #{sample_longest(name)} characters."
+    end)
   end
 
   defp capability_samples do

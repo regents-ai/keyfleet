@@ -31,9 +31,9 @@ defmodule KeyfleetWeb.Router do
   # address with no route, never has its body decoded.
 
   # The early-access form: its forms token, 56 characters, the email field,
-  # which takes 254 characters (`maxlength`), each a letter of up to three
-  # bytes that the form encodes as nine, 2,286, the empty trap field and the
-  # names, 2,370 in all: whatever a person pastes is answered by the form.
+  # which takes 256 characters (`maxlength`), each a letter of up to three
+  # bytes that the form encodes as nine, 2,304, the empty trap field and the
+  # names, 2,388 in all: whatever a person pastes is answered by the form.
   pipeline :early_form do
     plug KeyfleetWeb.Plugs.Parsers, parsers: [Plug.Parsers.URLENCODED], pass: [], length: 4096
   end

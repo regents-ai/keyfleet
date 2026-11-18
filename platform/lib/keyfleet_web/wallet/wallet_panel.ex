@@ -44,7 +44,9 @@ defmodule KeyfleetWeb.WalletPanel do
 
   Buttons name their step with `data-onchain-step` and sit outside the form;
   fields that feed the steps carry `data-onchain-input` with the name they
-  are built from. Signed out, a button also carries
+  are built from, and a text field is `box/1` long: a value longer than the
+  site takes from it is refused, and said, before anything is built
+  (`KeyfleetWeb.BoxLimit`). Signed out, a button also carries
   `data-account-target="sign-in"`, so its press opens sign-in instead.
 
   When a step sent from it goes through, the chain is read again
@@ -56,6 +58,8 @@ defmodule KeyfleetWeb.WalletPanel do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Proposals
   alias Keyfleet.WalletSteps
+  alias Keyfleet.WalletSteps.VoteSteps
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.OnchainSteps
   alias KeyfleetWeb.WalletWords
@@ -75,7 +79,7 @@ defmodule KeyfleetWeb.WalletPanel do
   @read_only_for_visitors [:run_split, :present, :launch_upkeep]
 
   @doc "Whether the steps built for the group name `step`."
-  def has_step?(%{built: %{review: review}}, step), do: Review.find(review, step) != nil
+  def has_step?(%{built: %{review: %{} = review}}, step), do: Review.find(review, step) != nil
   def has_step?(_panel, _step), do: false
 
   @doc "The figures the group's steps were built from, or an empty map before."
@@ -190,7 +194,7 @@ defmodule KeyfleetWeb.WalletPanel do
 
     # What was typed stays; a field the page gives later starts from the
     # value it gives.
-    inputs = Map.merge(Map.get(assigns, :inputs, %{}), socket.assigns.inputs)
+    inputs = assigns |> Map.get(:inputs, %{}) |> Map.merge(socket.assigns.inputs) |> kept()
     socket = socket |> assign(Map.delete(assigns, :inputs)) |> assign(inputs: inputs)
     socket = if moved?, do: drop_built(socket), else: socket
 
@@ -343,7 +347,49 @@ defmodule KeyfleetWeb.WalletPanel do
           into: %{},
           do: {name, params[name]}
 
-    assign(socket, inputs: Map.merge(socket.assigns.inputs, typed))
+    assign(socket, inputs: socket.assigns.inputs |> Map.merge(typed) |> kept())
+  end
+
+  @doc """
+  The `maxlength` of the box for the form field `name`: two more than the
+  longest value the site takes from it (`KeyfleetWeb.BoxLimit`).
+  """
+  def box(name), do: BoxLimit.maxlength(Map.fetch!(boxes(), name))
+
+  # The longest value the site takes from each box a group's form may have,
+  # in UTF-16 units, by its field's name: a proposal's text fields as
+  # `Keyfleet.WalletSteps.VoteSteps` keeps them; an amount, a wallet, days
+  # and a Keys list as the signed API takes them; and room for any Key's
+  # number and any share, rate or address written out. Each is held to it
+  # before anything is built from the form, wherever the group shows it.
+  defp longest do
+    [key: 20, target: 20] ++
+      VoteSteps.field_bytes() ++
+      [share: 100, recipient: 100, rate: 100, amount: 100, wallet: 100, days: 10, keys: 1_000]
+  end
+
+  defp boxes, do: Map.new(longest(), fn {name, units} -> {"#{name}", units} end)
+
+  # Each value as its box keeps it, so none is drawn back longer than its
+  # box: one the page gave first, and one an agent or any other sender put
+  # in the form, as a browser keeps a paste.
+  defp kept(inputs) do
+    boxes = boxes()
+
+    Map.new(inputs, fn {name, value} ->
+      case boxes do
+        %{^name => units} -> {name, BoxLimit.kept(value, units)}
+        _no_box -> {name, value}
+      end
+    end)
+  end
+
+  # The first field, in the order above, holding more than the site takes.
+  defp too_long(inputs) do
+    Enum.find_value(longest(), fn {name, units} ->
+      if inputs |> Map.get("#{name}", "") |> BoxLimit.too_long?(units),
+        do: {:too_long, name, units}
+    end)
   end
 
   # The steps follow the wallet that may send them and the form. The figures
@@ -447,16 +493,24 @@ defmodule KeyfleetWeb.WalletPanel do
     }
   end
 
-  defp build_steps!(request),
-    do:
-      WalletSteps.build_steps!(
-        request.fleet_id,
-        request.flow,
-        request.signer,
-        request.component_id,
-        request.params,
-        actor: request.actor
-      )
+  # A box holding more than the site takes from it is refused, and said,
+  # before any step is built from the form.
+  defp build_steps!(request) do
+    case too_long(request.params.inputs) do
+      nil ->
+        WalletSteps.build_steps!(
+          request.fleet_id,
+          request.flow,
+          request.signer,
+          request.component_id,
+          request.params,
+          actor: request.actor
+        )
+
+      problem ->
+        %{review: nil, figures: %{}, problem: problem}
+    end
+  end
 
   defp show(socket, built) do
     review = if built.review && built.review.signer == socket.assigns.signer, do: built.review
