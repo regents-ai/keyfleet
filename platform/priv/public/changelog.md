@@ -92,8 +92,8 @@ Changes to Keyfleet, newest first.
   a page loses its connection and gets it back, as open pages do while Keyfleet updates,
   its wallet buttons work again without a reload, and your account page knows your wallet
   again too. A button pressed while the page is getting its connection back, after you
-  changed the form beside it, now reaches your wallet, where it sent nothing. The Buy Key
-  window still closes then; open it again to buy.
+  changed the form beside it, now reaches your wallet; before, that press sent nothing.
+  The Buy Key window still closes then; open it again to buy.
 - **Browser agents.** When your browser's own agent presses a wallet button while a wallet
   your account doesn't link is open, nothing is sent, and the agent now hears the same
   note you see beside the button, naming which of your wallets to switch to.
