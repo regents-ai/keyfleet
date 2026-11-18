@@ -12319,3 +12319,17 @@ step's report).
   plain runs and under each summary flag, cut, with a suite printed twice, and against real Forge
   output for a fork suite failing at a refused local endpoint, plain and under `--summary`,
   `-q`, `--json` and `--junit`. No contract changed.
+
+## 2026-11-18 — The test runner lists a Base fork suite that failed and skipped as failed only
+
+- `contracts/script/run_tests.sh` listed a suite in `test/fork/` holding one failing and one
+  skipping test twice, under `Base fork proofs: FAILED in` and again under `Skipped, so not in
+  this result`, in every print mode. Such a suite is now listed once, as failed, as the script's
+  header already said. A suite outside `test/fork/` is never listed as failed, so one there that
+  failed and skipped is still listed once, as skipped; Forge's own output and exit status show
+  its failure.
+- The script's header and the README's "Checks" paragraph say so.
+- Checked with real Forge in a scratch project holding such a suite, a passing fork suite and a
+  local suite that fails and skips: plain, `--summary`, `--summary --detailed`, `--summary --md`
+  and `-vv` each list the failing fork suite once, as failed; `--json`, `--junit` and `-q` say
+  NOT RUN as before. No contract changed.

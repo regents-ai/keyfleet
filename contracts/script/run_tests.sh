@@ -4,11 +4,11 @@
 # passing and none skipped, which failed, every suite in which a test skipped itself, and "Base
 # fork proofs: NOT RUN" when no Base fork suite ran, whatever the reason: no BASE_RPC_URL, a filter
 # that left them out or a skip. A suite counts only once its own "Suite result" line closes its
-# block, and each is listed once: a suite that failed in any block is listed as failed only, and
-# one that skipped in any block is not listed as ran. A run Forge did not finish, stopped by a
-# signal or cut off before its closing summary (the "Ran N test suites" line, or with `--summary`
-# the table headed "| Test Suite"), says so and nothing else, and never exits 0. A pass is
-# therefore never read as including them. It reads neither the arguments nor the environment and
+# block, and each is listed once: a Base fork suite that failed in any block is listed as failed
+# only, even when a test in it also skipped, and one that skipped in any block is not listed as
+# ran. A run Forge did not finish, stopped by a signal or cut off before its closing summary (the
+# "Ran N test suites" line, or with `--summary` the table headed "| Test Suite"), says so and
+# nothing else, and never exits 0. A pass is therefore never read as including them. It reads neither the arguments nor the environment and
 # never fails for want of an endpoint; its own closing lines name no endpoint, though Forge's
 # output, passed through above them, can, inside an endpoint's error message.
 #
@@ -51,7 +51,7 @@ suites=$(sed $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$log" | awk '
   suite != "" && /^\[FAIL/ { failed = 1 }
   suite != "" && /^\[SKIP/ { skipped = 1 }
   END {
-    for (s in skip) print "skipped " s
+    for (s in skip) if (!(s in fail)) print "skipped " s
     for (s in fail) print "failed " s
     for (s in pass) if (!(s in fail) && !(s in skip)) print "ran " s
     if (suite != "" || cut || (seen && !summary)) print "unfinished"

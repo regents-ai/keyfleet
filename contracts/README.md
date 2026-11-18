@@ -2219,8 +2219,9 @@ printed alone, which suites in `test/fork/` ran with every test passing and
 none skipped, which failed (`Base fork proofs: FAILED in`), every suite in
 which a test skipped itself, and `Base fork proofs: NOT RUN` when no suite in
 `test/fork/` ran. A suite counts only once its own `Suite result` line closes
-its block, and each suite is listed once: one that failed in any block only as
-failed, and one that skipped in any block never as ran. A run Forge did not
+its block, and each suite is listed once: one in `test/fork/` that failed in
+any block only as failed, even when a test in it also skipped, and one that
+skipped in any block never as ran. A run Forge did not
 finish, stopped by a signal or cut off before its closing summary (the `Ran N
 test suites` line, or with `--summary` the table headed `| Test Suite`), says
 `Forge did not finish this run` and nothing else, and never passes. Without
