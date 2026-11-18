@@ -21,8 +21,8 @@ interface IVRFProvingKeys {
 }
 
 /// @notice The input manifest every deployment step shares: its shape, its reader, the refusals
-/// that hold before anything is deployed, sent or recorded, and the reader of the deployment's
-/// broadcast.
+/// that hold before anything is deployed, sent or recorded, and what the deployment step
+/// established: on Base, the first release pinned here; on any other chain, its broadcast there.
 /// @dev A manifest file holds what the whole system is deployed with, once per chain, and the
 /// deck and profile of each of the five founding fleets. `parseManifest` and `parseBroadcast` take
 /// JSON text and `readManifest` and `readBroadcast` are the only parts that open a file, so the
@@ -80,6 +80,16 @@ abstract contract KeyfleetManifest is Script {
     /// @notice The fixed metadata base on Base: each key's metadata on keyfleet.ai (Sean, KF-SOL-5).
     string public constant BASE_METADATA_BASE = "https://keyfleet.ai/metadata/keys/";
 
+    /// @notice The Keyfleet factory Base's first release created, the fifth of its five
+    /// transactions, read from Base on 18 November 2026.
+    address public constant BASE_KEYFLEET_FACTORY = 0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7;
+    /// @notice The live Keyfleet collection on Base, the factory's first creation, read from Base on
+    /// 18 November 2026.
+    address public constant BASE_KEYFLEET_COLLECTION = 0xaBC959B463542497639adA57388c65D05AB34A30;
+    /// @notice The lowest block any of Base's first release's five transactions landed in: the
+    /// manager deployer's creation. The factory's own creation landed in block 52,398,362.
+    uint256 public constant BASE_DEPLOYMENT_BLOCK = 52_396_666;
+
     /// @notice One founding fleet's creation inputs.
     /// @param preset Its type.
     /// @param deckHash `keccak256` of its deck file, byte for byte.
@@ -102,10 +112,10 @@ abstract contract KeyfleetManifest is Script {
         FoundingFleet[5] founding;
     }
 
-    /// @notice What the deployment step's broadcast establishes.
-    /// @param factory The factory the broadcast created.
-    /// @param deploymentBlock The lowest block any of the broadcast's transactions landed in, so a
-    /// reader starting there sees every event of the system from its first block.
+    /// @notice What the deployment step established.
+    /// @param factory The factory it created.
+    /// @param deploymentBlock The lowest block any of its transactions landed in, so a reader
+    /// starting there sees every event of the system from its first block.
     struct BroadcastSummary {
         KeyfleetFactory factory;
         uint256 deploymentBlock;
@@ -127,6 +137,15 @@ abstract contract KeyfleetManifest is Script {
     /// @notice Reads `deployments/<manifestName>.json`.
     function readManifest(string memory manifestName) public view returns (Manifest memory) {
         return parseManifest(vm.readFile(string.concat("deployments/", manifestName, ".json")));
+    }
+
+    /// @notice What the deployment step established on this chain: on Base, the first release's
+    /// factory and first block pinned above; on any other chain, its latest broadcast there.
+    function readDeployment() public view returns (BroadcastSummary memory) {
+        if (block.chainid == BASE_CHAIN_ID) {
+            return BroadcastSummary(KeyfleetFactory(BASE_KEYFLEET_FACTORY), BASE_DEPLOYMENT_BLOCK);
+        }
+        return readBroadcast();
     }
 
     /// @notice Reads the deployment step's latest broadcast on this chain.

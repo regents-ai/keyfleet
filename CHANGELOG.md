@@ -11823,3 +11823,28 @@ step's report).
   release's broadcast file, since the record also takes the release's first block from it.
 - Every existing contract still compiles to the same bytes (31 compared). Nothing was deployed,
   signed or sent.
+
+## 2026-11-18 — Base's first release pinned for every later step
+
+- What Base's first release fixed for good now sits in one place, `script/KeyfleetManifest.sol`:
+  the factory `0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7`, the collection
+  `0xaBC959B463542497639adA57388c65D05AB34A30` and the deployment block 52,396,666. The record,
+  the Safe steps and the trading factory's deployment all take the factory, and the record the
+  block, from it on Base, so none of them needs the release's broadcast file there any more. On
+  every other chain each still reads that chain's own deployment broadcast.
+- The deployment block is the record's own definition, the lowest block any of the release's
+  transactions landed in, read from Base's public endpoint: the release's five creations (the four
+  deployers, then the factory) came from one account with nonces 50 to 54, in blocks 52,396,666
+  to 52,398,362, each succeeded, each address is the one its nonce gives, and the factory names the
+  first four as its deployers. The lowest is the manager deployer's creation; the collection was
+  created with the factory, 1,696 blocks later. The record written at release time, kept outside
+  the repository, has the same block, factory, deployers and code hashes.
+- The Base record is unchanged: at one block of a Base fork, the previous record script reading a
+  broadcast file rebuilt from those five transactions and the new one with no file write
+  byte-for-byte identical records.
+- New fork tests run the record's and the Safe steps' whole run on Base with no broadcast file.
+  They never overwrite a record or Safe batch already there and remove what they write; for that,
+  `foundry.toml` lets the scripts read as well as write `deployments/base.deployed.json` and
+  `deployments/safe`.
+- Every existing contract still compiles to the same bytes (31 compared). Nothing was deployed,
+  signed or sent.

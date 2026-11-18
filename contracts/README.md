@@ -1791,6 +1791,17 @@ reverts with `NotBasePin(field)`:
 The contracts themselves refuse the rest: an address with no code, a USDC
 without six decimals, a zero keeper and a zero trait table hash.
 
+What Base's first release fixed for good is pinned in
+`script/KeyfleetManifest.sol` too, as read back from Base: the factory
+`0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7`, its first creation the collection
+`0xaBC959B463542497639adA57388c65D05AB34A30`, and the deployment block
+52,396,666, the lowest block any of the release's five transactions landed in
+(the manager deployer's creation; the factory's own landed in 52,398,362).
+Every step after the deployment takes the factory, and the record also the
+deployment block, from `readDeployment`: on Base these pins, so a step on Base
+needs no file but the manifest; on any other chain, the deployment step's
+latest broadcast there.
+
 - `script/DeployKeyfleets.s.sol` deploys the system and writes nothing. It sends
   five transactions from one account through `script/KeyfleetSystem.sol`: the
   four deployers, each told the factory's address before it exists (the
@@ -1810,8 +1821,9 @@ without six decimals, a zero keeper and a zero trait table hash.
   does not answer the NFT receiver check with exactly its selector, when the
   Pass has no holder, or when `KEYFLEET_CLUB_TO_CLAIMS`, a comma-separated list
   of key numbers, names the key); any other
-  step reverts with `UnknownStep`. It finds the factory in the deployment step's latest
-  broadcast on the chain. On Base it runs every call from the Safe's address
+  step reverts with `UnknownStep`. It takes the factory from `readDeployment`:
+  on Base the first release's pinned factory, elsewhere the deployment step's
+  latest broadcast on the chain. On Base it runs every call from the Safe's address
   against the chain's current state, stopping at the first call that would
   revert, then writes each call as its own Safe Transaction Builder file,
   `deployments/safe/<manifest>.<step>.json` (`founding-fleet-1` to
@@ -1822,9 +1834,12 @@ without six decimals, a zero keeper and a zero trait table hash.
   has unlocked.
 - `script/RecordKeyfleets.s.sol` reads the system and every fleet back from the
   chain, checks them against the manifest, and writes
-  `deployments/<manifest>.deployed.json`. It refuses a failed or unfinished
-  broadcast (`BroadcastIncomplete`, `BroadcastReceiptFailed`,
-  `FactoryNotInBroadcast`), a factory with no code (`FactoryMissing`), any
+  `deployments/<manifest>.deployed.json`. It takes the factory and the
+  deployment block from `readDeployment`: on Base the first release's pins,
+  elsewhere the deployment step's latest broadcast on the chain, where it
+  refuses a failed or unfinished broadcast (`BroadcastIncomplete`,
+  `BroadcastReceiptFailed`, `FactoryNotInBroadcast`). It refuses a factory with
+  no code (`FactoryMissing`), any
   system value that differs from the manifest (`RecordedMismatch(field)`: the
   Safe, keeper, factory, name, symbol, metadata base, collection metadata
   address, randomness, trait table hash, shard record, staking, Autolaunch, the
@@ -1863,14 +1878,13 @@ without six decimals, a zero keeper and a zero trait table hash.
 - `script/DeployTradingFactory.s.sol` deploys `KeyfleetTradingFactory` on the
   live system and writes nothing. It sends one transaction from one account,
   about 7.4 million gas; the trading factory's constructor deploys its three
-  deployers. On Base the existing factory is the live one at
-  `0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7`, pinned in the script beside the
-  live collection, so a run on Base needs no file but the manifest; on any
-  other chain it is the one the deployment step's latest broadcast on that
-  chain created. Before deploying anything it proves that factory is the
-  factory of the live collection: it refuses one with no code
-  (`FactoryMissing`); on Base, one whose collection is not the live one at
-  `0xaBC959B463542497639adA57388c65D05AB34A30`, pinned in the script
+  deployers. It takes the existing factory from `readDeployment`: on Base the
+  first release's, pinned in `script/KeyfleetManifest.sol`, so a run on Base
+  needs no file but the manifest; on any other chain the one the deployment
+  step's latest broadcast on that chain created. Before deploying anything it
+  proves that factory is the factory of the live collection: it refuses one
+  with no code (`FactoryMissing`); on Base, one whose collection is not the
+  pinned live one at `0xaBC959B463542497639adA57388c65D05AB34A30`
   (`CollectionNotPinned(collection)`); on every chain, one whose collection's
   Safe, name, symbol, metadata links or trait table is not the manifest's
   (`CollectionMismatch(field)`); one that collection does not list as a factory
@@ -2209,6 +2223,17 @@ themselves unless `BASE_RPC_URL` is set:
   whole `run` on Base as it stands, with no broadcast record: it finds the
   pinned live factory, deploys the trading factory, and prints the Safe's
   `addFactory` call for that trading factory on the live collection.
+- `KeyfleetReleaseFork.t.sol` runs the record's and the Safe steps' whole
+  `run` on Base as it stands, with no broadcast record: it checks the first
+  release's pins against the live system, that the record written has the
+  pinned factory and deployment block and is the record `record` gives for
+  them, and that the founding-fleets step writes one Safe batch per founding
+  fleet still missing, each a call to the pinned factory. Each run writes into
+  `deployments/` as a real one does, so the test first requires that
+  `deployments/base.deployed.json` and those batch files are not there, never
+  overwriting a real one, and removes what the run wrote. For that,
+  `foundry.toml` lets scripts and tests read as well as write
+  `deployments/base.deployed.json` and `deployments/safe`.
 
 Run them one suite at a time, as a public endpoint may refuse a burst of
 requests.

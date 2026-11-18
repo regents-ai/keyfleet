@@ -17,9 +17,10 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
 /// @notice The last step: reads the system and every fleet back from the chain, checks them
 /// against the input manifest, and writes the published deployment record.
-/// @dev Nothing here is taken on trust from the other steps. The deployment step's broadcast names
-/// the factory and the blocks its transactions landed in; every other address and value is read
-/// from the chain through the factory. The supply, price and split constants are the ones this
+/// @dev Nothing here is taken on trust from the other steps. What the deployment step established
+/// names the factory and the first block its transactions landed in (on Base, the first release
+/// pinned in `KeyfleetManifest`; on any other chain, the deployment step's broadcast there); every
+/// other address and value is read from the chain through the factory. The supply, price and split constants are the ones this
 /// script was compiled with from `KeyfleetPresets`, and the runtime code hash of every contract is
 /// recorded so each can be re-verified against its deployed code.
 ///
@@ -40,7 +41,7 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// `record` takes values and returns JSON, so the suite runs it against systems deployed in the
 /// test; `run` is the only part that reads or writes a file or reads the environment.
 contract RecordKeyfleets is KeyfleetManifest {
-    /// @notice The broadcast's factory has no code on this chain.
+    /// @notice The deployment's factory has no code on this chain.
     error FactoryMissing(address factory);
     /// @notice A value on chain differs from the manifest.
     error RecordedMismatch(string field);
@@ -51,11 +52,11 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// @notice On Base, the VRF subscription is owned by someone other than the Regents Safe.
     error VrfSubscriptionNotOwnedByRegentsSafe(address owner);
 
-    /// @notice Reads the manifest named by `KEYFLEET_MANIFEST` and the deployment's broadcast, and
-    /// writes `deployments/<manifestName>.deployed.json`.
+    /// @notice Reads the manifest named by `KEYFLEET_MANIFEST` and what the deployment step
+    /// established (`readDeployment`), and writes `deployments/<manifestName>.deployed.json`.
     function run() external {
         string memory manifestName = vm.envString("KEYFLEET_MANIFEST");
-        string memory deployed = record(readManifest(manifestName), readBroadcast());
+        string memory deployed = record(readManifest(manifestName), readDeployment());
         vm.writeJson(deployed, string.concat("deployments/", manifestName, ".deployed.json"));
     }
 

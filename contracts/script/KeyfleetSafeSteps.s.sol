@@ -51,12 +51,13 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     error UnknownStep(string step);
 
     /// @notice Runs the step named by `KEYFLEET_STEP` for the manifest named by `KEYFLEET_MANIFEST`,
-    /// on the factory the deployment step's latest broadcast on this chain created.
+    /// on the factory `readDeployment` gives: on Base, the first release's; on any other chain, the
+    /// one the deployment step's latest broadcast there created.
     function run() external {
         string memory manifestName = vm.envString("KEYFLEET_MANIFEST");
         string memory step = vm.envString("KEYFLEET_STEP");
         Manifest memory manifest = readManifest(manifestName);
-        KeyfleetFactory factory = readBroadcast().factory;
+        KeyfleetFactory factory = readDeployment().factory;
 
         SafeCall[] memory calls;
         if (_equal(step, "founding-fleets")) {

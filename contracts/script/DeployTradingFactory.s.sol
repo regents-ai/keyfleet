@@ -14,13 +14,13 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// the Regents Safe's call that lets it register fleets.
 /// @dev One transaction from one account: the trading factory, whose constructor reads the
 /// collection, the shard record, USDC and REGENT revenue staking from the existing factory and
-/// deploys its own three deployers. The existing factory is, on Base, the live one pinned here
-/// beside the live collection, so a run on Base needs no file but the manifest; on any other chain
-/// it is the one the deployment step's latest broadcast on that chain created. Nothing is deployed
-/// until it is proven to be the live one: its collection is the live collection (on Base, the
-/// address pinned here; on every chain, the manifest's Safe, name, symbol, metadata links and trait
-/// table), that collection lists it as a factory, and it has the manifest's Safe, REGENT revenue
-/// staking and USDC.
+/// deploys its own three deployers. The existing factory is the one `readDeployment` gives: on
+/// Base, the first release's, pinned in `KeyfleetManifest`, so a run on Base needs no file but the
+/// manifest; on any other chain, the one the deployment step's latest broadcast there created.
+/// Nothing is deployed until it is proven to be the live one: its collection is the live collection
+/// (on Base, the pinned collection; on every chain, the manifest's Safe, name, symbol, metadata
+/// links and trait table), that collection lists it as a factory, and it has the manifest's Safe,
+/// REGENT revenue staking and USDC.
 ///
 /// The trading factory can register nothing until the Safe calls `KeyfleetKeys.addFactory` with
 /// its address. This script does not make that call: it runs it once from the Safe's address
@@ -33,13 +33,6 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// so the suite runs them against systems deployed in the test; `run` is the only part that reads a
 /// file or an environment variable.
 contract DeployTradingFactory is KeyfleetManifest {
-    /// @notice The live Keyfleet collection on Base, deployed by the release and read from Base on
-    /// 18 November 2026.
-    address public constant BASE_KEYFLEET_COLLECTION = 0xaBC959B463542497639adA57388c65D05AB34A30;
-    /// @notice The live Keyfleet factory on Base, read from Base on 18 November 2026: the collection
-    /// is its first creation, it names that collection, and the collection lists it as a factory.
-    address public constant BASE_KEYFLEET_FACTORY = 0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7;
-
     /// @notice The existing factory has no code on this chain.
     error FactoryMissing(address factory);
     /// @notice On Base, the existing factory's collection is not the live one.
@@ -51,9 +44,9 @@ contract DeployTradingFactory is KeyfleetManifest {
     /// @notice The existing factory's `field` differs from the manifest's.
     error FactoryMismatch(string field);
 
-    /// @notice Reads the manifest named by `KEYFLEET_MANIFEST`, takes the existing factory (on Base
-    /// the pinned one, elsewhere the deployment step's broadcast), deploys the trading factory and
-    /// prints the Safe's call adding it to the collection.
+    /// @notice Reads the manifest named by `KEYFLEET_MANIFEST`, takes the existing factory from
+    /// `readDeployment`, deploys the trading factory and prints the Safe's call adding it to the
+    /// collection.
     /// @dev Signing is the caller's business (`--ledger` or `--trezor`); this script never reads a
     /// private key. The printed address is the one this run's simulation gives; the signers check
     /// it against the broadcast's receipt before they sign.
@@ -61,8 +54,7 @@ contract DeployTradingFactory is KeyfleetManifest {
     /// @return call The Safe's call it printed.
     function run() external returns (KeyfleetTradingFactory trading, KeyfleetSafeSteps.SafeCall memory call) {
         Manifest memory manifest = readManifest(vm.envString("KEYFLEET_MANIFEST"));
-        KeyfleetFactory factory =
-            block.chainid == BASE_CHAIN_ID ? KeyfleetFactory(BASE_KEYFLEET_FACTORY) : readBroadcast().factory;
+        KeyfleetFactory factory = readDeployment().factory;
 
         vm.startBroadcast();
         trading = deploy(manifest, factory);
