@@ -12236,3 +12236,13 @@ step's report).
 - The Safe-step suite checks that the calls to phases 3 and 4, and only they, name the balance.
   `_subscriptionChecks` is now `pure`, which clears the compiler's warning on it. No contract
   changed.
+
+## 2026-11-18 — The guide names a separate keeper wallet before the trading factory is approved
+
+- `docs/deployment.md` adds one step to the Trading Fleets section's order on Base and to "What
+  the Safe does": before the trading factory is approved, the Regents Safe names a separate
+  keeper wallet with `setKeeper(<keeper wallet>)` on the collection, and Trading Fleets' staking
+  shares are sent by that keeper directly (`sendToStaking()` on each fleet's treasury), so that
+  sends do not each need a Safe transaction. On Base the collection's keeper is today the Regents
+  Safe itself.
+- The guide only; no script or contract changed.

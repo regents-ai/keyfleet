@@ -682,6 +682,11 @@ phase 3 is opened (step 6), and only after that handover does the trading
 factory's deployment run and do the signers sign its `addFactory` call.
 Neither the steps to phases 3 and 4 nor this script prepares its call before.
 
+Before the trading factory is approved, the Safe also names a separate keeper
+wallet with `setKeeper(<keeper wallet>)` on the collection, and Trading Fleets'
+staking shares are sent by that keeper directly (`sendToStaking()` on each
+fleet's treasury), so that sends do not each need a Safe transaction.
+
 ## The trait table
 
 `traitTableHash` is `keccak256` of the trait table file itself, byte for byte.
@@ -880,9 +885,11 @@ The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, owns the
 randomness subscription and REGENT revenue staking. In the release it adds the
 collection to the subscription, creates the five founding fleets, moves the
 phase when the founder says sales open, and gives the Regents Club keys, each
-only to the holder of its Pass or to the claims contract. Later it may replace
-the keeper or allow a newer factory for new fleets; existing fleets never
-change. It receives the 2.5% resale royalty. It has no vote, claim or price in
+only to the holder of its Pass or to the claims contract. Before it approves
+the trading factory, it names a separate keeper wallet (`setKeeper`), and
+Trading Fleets' staking shares are sent by that keeper directly, so that sends
+do not each need a Safe transaction. Later it may replace the keeper or allow
+a newer factory for new fleets; existing fleets never change. It receives the 2.5% resale royalty. It has no vote, claim or price in
 any fleet, cannot mint any other key or move any key, and cannot move a fleet's
 money.
 
