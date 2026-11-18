@@ -133,6 +133,8 @@ defmodule Keyfleet.MixProject do
       {:req, "== 0.7.5"},
       # Reads an agent picture's format and size from its first bytes.
       {:ex_image_info, "~> 1.0"},
+      # Writes an early-access address's host in ASCII (Keyfleet.Early.Signup).
+      {:idna, "~> 7.1"},
       # Cuts each Key card's small close-up out of its picture (libvips).
       {:vix, "~> 0.42.0"},
       {:bandit, "~> 1.14 and >= 1.14.1"},

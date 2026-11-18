@@ -182,6 +182,61 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert emails() == ["ada@example.com"]
   end
 
+  # Costly failure: one person is on the list twice, under the Unicode and
+  # the ASCII spelling of one host, and the Unicode one may not be mailable.
+  test "a host is kept in its ASCII form, so both spellings of an address are one entry" do
+    for {typed, client} <- [
+          {"ada@bücher.de", "198.51.100.41"},
+          {"Ada@BÜCHER.DE", "198.51.100.42"},
+          {"ada@xn--bcher-kva.de", "198.51.100.43"}
+        ] do
+      assert redirected_to(sign_up(%{"email" => typed}, client)) == "/early"
+    end
+
+    assert emails() == ["ada@xn--bcher-kva.de"]
+  end
+
+  test "a host with ß keeps its ß, apart from the same host written with ss" do
+    assert redirected_to(sign_up(%{"email" => "ada@faß.de"}, "198.51.100.44")) == "/early"
+    assert redirected_to(sign_up(%{"email" => "ada@fass.de"}, "198.51.100.45")) == "/early"
+
+    assert Enum.sort(emails()) == ["ada@fass.de", "ada@xn--fa-hia.de"]
+  end
+
+  test "a host that can't be written in ASCII is not an address" do
+    for {typed, client} <- [
+          {"ada@☃.net", "198.51.100.51"},
+          {"ada@" <> <<0x0301::utf8>> <> "a.com", "198.51.100.52"},
+          {"ada@" <> String.duplicate("a", 64) <> ".com", "198.51.100.53"},
+          {"ada@foo_bar.com", "198.51.100.54"},
+          # An empty first part, which the ASCII rules would drop, keeping
+          # another address.
+          {"ada@.bücher.de", "198.51.100.55"},
+          {"ada@bücher..de", "198.51.100.56"},
+          {"ada@example.com.", "198.51.100.59"}
+        ] do
+      page =
+        %{"email" => typed} |> sign_up(client) |> html_response(422) |> LazyHTML.from_document()
+
+      assert text(page, "#early-email-errors") == @unreadable
+    end
+
+    assert emails() == []
+  end
+
+  # The 254 bytes hold the address as stored, as well as as typed.
+  test "an address that fits as typed but not once its host is in ASCII is refused" do
+    over = String.duplicate("a", 238) <> "@bücher.de"
+    page = %{"email" => over} |> sign_up("198.51.100.57") |> html_response(422)
+
+    assert page |> LazyHTML.from_document() |> text("#early-email-errors") == @unreadable
+    assert emails() == []
+
+    fits = String.duplicate("a", 237) <> "@bücher.de"
+    assert redirected_to(sign_up(%{"email" => fits}, "198.51.100.58")) == "/early"
+    assert emails() == [String.duplicate("a", 237) <> "@xn--bcher-kva.de"]
+  end
+
   test "a filled-in trap field gets the same answer and keeps nothing" do
     conn = sign_up(%{"email" => "bot@example.com", "website" => "https://spam.example"})
 

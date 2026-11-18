@@ -2,10 +2,11 @@ defmodule Keyfleet.Early.Signup do
   @moduledoc """
   One address on the early-access list.
 
-  An address is stored trimmed and lowercased, so each one is on the list once
-  whatever its case, and one with a character inside it that shows as nothing
-  or as a space is refused. Leaving an address that is already there changes
-  nothing.
+  An address is stored trimmed and lowercased, with its host in ASCII form
+  (`Keyfleet.Early.Signup.StoredEmail`), so each one is on the list once
+  whatever its case or the spelling of its host, and one with a character
+  inside it that shows as nothing or as a space is refused. Leaving an address
+  that is already there changes nothing.
   """
   use Ash.Resource,
     domain: Keyfleet.Early,
@@ -28,13 +29,7 @@ defmodule Keyfleet.Early.Signup do
       # zero-width space.
       validate match(:email, ~r/\A[^\s\p{Cc}\p{DI}]+\z/u)
 
-      # An address that failed its check is nil here and stays refused.
-      change fn changeset, _context ->
-        Ash.Changeset.update_change(changeset, :email, fn
-          email when is_binary(email) -> String.downcase(email)
-          nil -> nil
-        end)
-      end
+      change Keyfleet.Early.Signup.StoredEmail
 
       upsert? true
       upsert_identity :unique_email
@@ -62,7 +57,7 @@ defmodule Keyfleet.Early.Signup do
 
     # One @ with something on both sides, a dot in the domain and no spaces. The
     # pattern reads bytes (it has no `u` flag), so its lookahead holds an
-    # address to 254 bytes.
+    # address to 254 bytes: once trimmed as typed, and again as stored.
     attribute :email, :string,
       allow_nil?: false,
       public?: true,

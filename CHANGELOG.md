@@ -12835,3 +12835,52 @@ step's report).
   - An agent's Buy REGENT press whose values match the form's uses the steps the page
     holds, and clears the form's amount once the wallet has it, as the person's press
     does.
+
+## 2026-11-18 — The early-access host is stored in its ASCII form
+
+- The chief's ruling on round ten's question: store the host by the rules browsers use
+  today, UTS #46, non-transitional, with STD3 rules. `Keyfleet.Early.Signup.StoredEmail`
+  replaces the action's inline change: it lowercases the part before the @, as the
+  action did, and writes the host with `:idna.encode(host, [:uts46, :std3_rules])`
+  (idna 7.1.0, already in platform/mix.lock for ens_elixir, now declared in
+  platform/mix.exs). The library's own answers, run here: bücher.de, BÜCHER.DE and
+  xn--bcher-kva.de are all xn--bcher-kva.de; faß.de is xn--fa-hia.de and fass.de stays
+  fass.de; ß.de is xn--zca.de; example.com and Example.COM are example.com. The identity
+  is on the stored address, so the Unicode and ASCII spellings of one address are one
+  entry. No table, column or row changed.
+- A host the library refuses is not an address, answered with the ordinary "Enter an
+  email address" note. The library answers a refusal by exiting, which the change
+  catches. Among what it refuses: a letter IDNA 2008 does not allow in a host (☃.net, an
+  emoji), a part starting with an accent, a part of more than 63 characters, and, being
+  STD3, any ASCII character but letters, digits and hyphens (foo_bar.com), a part that
+  starts or ends with a hyphen, and one with two hyphens third and fourth that is not a
+  valid `xn--` label. A host with an empty part (.bücher.de, bücher..de, example.com.)
+  is refused before the library is asked: it drops an empty first part without a word,
+  which would store another address (`.a.com` came back `a.com`).
+- The length: the page counts 254 UTF-16 units as typed (`KeyfleetWeb.EarlyController`,
+  the too-long note), and the attribute's rule 254 bytes, once trimmed as typed and
+  again as stored, since the change sets the stored address through
+  `force_change_attribute/3`, which applies the attribute's constraints again. An
+  address that fits as typed but is over 254 bytes once its host is in ASCII is refused
+  with the ordinary note.
+- Tests (`EarlyControllerTest`), each failing with the old change back: "a host is kept
+  in its ASCII form, so both spellings of an address are one entry"; "a host with ß
+  keeps its ß, apart from the same host written with ss"; "a host that can't be written
+  in ASCII is not an address"; "an address that fits as typed but not once its host is
+  in ASCII is refused". An ordinary ASCII address is stored as before: "a new address is
+  kept and the page says so" (Ada@Example.com as ada@example.com) and the longest-address
+  tests pass unchanged.
+- Corrected, in the entry above: the "Not covered" item "Storing the early-access host
+  in its ASCII form" is built. The public changelog says nothing about the host and is
+  unchanged.
+- Not covered:
+  - Some hosts a browser takes are refused: the library applies IDNA 2008's own letter
+    rules as well as UTS #46's, so ☃.net and 😀.com, which the web's address rules
+    write as xn--n3h.net and xn--e28h.com (measured with Node's `URL`, which follows the
+    same standard as Chromium), are refused. Those address rules also leave STD3 off and
+    take foo_bar.com and ab--cd.com, which the chief's STD3 rules refuse.
+  - ASCII addresses the old pattern took and these rules refuse (an underscore or an
+    empty part in the host, a hyphen at either end of a part, a part over 63
+    characters) are now refused; addresses already on the list are not changed.
+  - An address over 254 bytes once its host is in ASCII is told "Enter an email
+    address", not that it is too long.
