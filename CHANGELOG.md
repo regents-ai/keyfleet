@@ -12994,3 +12994,109 @@ step's report).
   two, typed whole" (test/keyfleet_web/adversarial_door_round11_test.exs :628) still
   fails where it asks that the poll start: as round eleven's brief says, anything typed
   past the box's longest is refused, blank lines included, now with the too-long note.
+
+## 2026-11-18 — An agent's press leaves the person's side of the page alone, and the words made true
+
+- Round eleven (a3ae4db06) found that an agent's press still reached the person's side
+  of the page. Proof R11 Q3 (test/keyfleet_web/adversarial_door_round11_test.exs): a
+  refused agent press wrote its note above the person's buttons ("Not your Key", or the
+  too-long note for a rate while the person's form was a decision), and it stayed until
+  the wallet answered the person's next press. Proof
+  assets/test/adversarial_round11_agent_press.test.ts: with no wallet open, the hook
+  reported the agent's press as the person's, with the agent's values, so the person's
+  typed Buy REGENT amount was cleared and on Propose the agent's words were saved as if
+  the person had pressed. No page-script test held the hook to asking when the agent's
+  values equal the person's and the person's button is held back. The agent's hints
+  told it to wait for the chain even when its own values were why.
+- 860ae3e51 An agent's press leaves the person's side of the page alone, in every
+  outcome:
+  - `WalletPanel`'s `prepare_for_agent` counts a refusal and puts it only in the reply;
+    the note above the buttons, the form, the held steps and the buttons stay as they
+    were. The person's own refused press writes the note, as before.
+  - Everything the agent's press reports (`step_pressed`, `step_sent`, `step_failed`)
+    carries `agent: true`, the event names unchanged so the visit log reads as before.
+    The panel saves no words, clears no Buy REGENT amount, and writes or lets go of no
+    note for it (`OnchainSteps.sent/2` lets go of the note for the person's own send
+    only). The agent's proposal sent from steps the page already holds has its words
+    saved, its own words, those being the form's.
+  - assets/js/hooks/onchain_steps.ts: with no wallet open no wallet is asked, so the
+    press is not reported as pressed at all, the person's or the agent's; it reports
+    only that no wallet answered. The person's press with no wallet open therefore no
+    longer clears their Buy REGENT amount or saves their words. The agent's press after
+    the server built its steps is not reported again, the server having done what
+    hearing it does.
+  - The refusal reply now says which kind of fact is why: `cause: "values"` when a
+    value the steps were built from is the reason (a Key the wallet can't vote, the
+    wallet itself, an amount above what is owed or held, a field too long or otherwise
+    unusable), `"state"` when the chain's or the site's state alone is (too new, not
+    open yet, sold out, nothing queued, approve first, not recorded and the rest). A
+    blocked reason is `"values"` only when the field it concerns is among what the
+    press sent: a cancel's "Not your Key" is `"state"`, its Key not being a value of
+    the call. assets/js/page_tools.ts gives the hint by the cause: change the call for
+    `"values"`; call again once the state changes for a blocked `"state"`; the
+    step-unknown hint otherwise.
+  - Nothing new is blocked, deferred, queued or deduplicated.
+- Tests, each failing with its fix undone: `ProposalsPageTest` "an agent's press leaves
+  the note above the person's buttons, whatever it comes to"; the agent's
+  `step_pressed` leaving the Buy REGENT amount in "a press of Buy REGENT clears its
+  amount"; the agent's cancel answered `cause: "state"` in "only whoever may vote its
+  key can cancel a proposal"; assets/test/onchain_steps.test.ts "asks for its steps
+  when its values are the person's and their button is held back, so the held steps
+  never reach the wallet" (fails with the disabled check in `pressWith` removed), "tells
+  the server nothing as the person when no wallet is open", "sends from the steps the
+  page holds when its values match them, and says each report is the agent's",
+  "reports a decline in the wallet as the agent's" and "a press with no wallet open:
+  reports only that no wallet answered"; assets/test/page_tools.test.ts "hints by what
+  the server says is why"; test/browser/wallet_buttons.spec.ts's two agent claim walks,
+  renamed, and test/browser/live_limits.spec.ts's agent proposal walk, now checking
+  that no note shows for the agent's press.
+- Wording made true:
+  - `KeyfleetWeb.BoxLimit`'s moduledoc, and the public changelog's "Live pages": the
+    cost the chief accepted is a space or a blank line typed anywhere around or between
+    what a value at its most holds, such as a blank line between two poll choices, not
+    only after it.
+  - The public changelog's 18 November entry, edited in place: "Wallet buttons" says a
+    press with no wallet open now leaves what was typed in the form; "Browser agents"
+    says the agent hears why in the page's words, that whatever comes of its press the
+    person's note, form and typing stay as they were, that it is told to change what it
+    sent or to try again once the network changes by which is why, and that a press
+    refused for what it sent shows nothing on the person's page. The sentences "the
+    note may clear, but it never says something else", "and the note says them too" and
+    "the words the page would show above the buttons" are gone.
+  - The comment in assets/js/hooks/onchain_steps.ts on when the server hears a press
+    says that with no wallet open nothing is saved and the form keeps what was typed.
+- Corrected, in the entries above:
+  - 6b3079ec1's "The cost, the chief's ruling: a value at exactly the longest with a
+    space or line end after it is refused as too long": with a space or a blank line
+    anywhere around or between what it holds.
+  - ff6838ac9's "and saves a proposal's words as its steps are handed over; the form,
+    and the steps and figures the page shows, stay as they were": true with a wallet
+    open; with none open the hook asks the server nothing, and since 860ae3e51 nothing
+    is saved and nothing of the person's changes. Its "page_tools.ts ... its blocked hint
+    is 'Nothing was sent: the chain's state makes this call certain to fail now. Call
+    again once that changes.'": that hint is now only for a blocked press whose cause is
+    the state.
+  - ff6838ac9's "Nothing new is blocked: the only steps refused are those `blocked/2`
+    names, whose buttons are disabled": an agent's press is judged on its own values,
+    so a step `blocked/2` names for those values is refused while the person's button
+    may be pressable, and a press whose steps can't be built from them is refused as
+    `step_unknown`; nothing is refused that `blocked/2` or the building of the steps
+    does not name. And ff6838ac9's "the note above the buttons shows them": for the
+    person's own press only, since 860ae3e51.
+  - The round-ten entry's account of test/browser/adversarial_round10.spec.ts, out of
+    date since 6f02540b0 and 860ae3e51, run again now (2 of 4 pass, R10 Q3 and R10 Q4):
+    "R10 Q2: the early-access box" fails where it asks that every honest address be
+    taken. The longest address it builds, typed, and with a line end after it, is now
+    refused as not an address, its last part being over 63 characters, which no host
+    has; with a tab, a space or a no-break space around it, after three spaces, and
+    after ten, it is refused as too long, by the chief's ruling. r10@bücher.de is
+    stored as r10@xn--bcher-kva.de. "R10 Q5" fails only on its check that the agent
+    hears what stands beside the person's button: the agent's press with a Key that
+    isn't its person's is answered "blocked", "Not your Key", with the hint to change
+    the call, no wallet is asked, and the note above the buttons stays empty; the
+    person's form holds their own Key, so nothing stands beside their button.
+- The round-eleven proofs for the agent's press, run as the reviewer left them: the
+  three R11 Q3 tests and R11 Q4 in test/keyfleet_web/adversarial_door_round11_test.exs
+  pass, "what the person's page shows after the agent's refused presses" among them,
+  which failed before 860ae3e51; both tests in
+  assets/test/adversarial_round11_agent_press.test.ts pass.

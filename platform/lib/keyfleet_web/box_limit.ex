@@ -19,8 +19,9 @@ defmodule KeyfleetWeb.BoxLimit do
   titles), the longest is the most that rule takes written in UTF-16 units,
   so the longest value it takes fits its box; the rule still runs
   afterwards, and may refuse more with its own note. A value at exactly the
-  longest with a space or a line end after it is therefore refused as too
-  long.
+  longest is therefore refused as too long once a space or a blank line is
+  typed anywhere around or between what it holds, such as a blank line
+  between two of a poll's choices, though the rule would leave it out.
 
   `kept/2` is what a box keeps of a value, for a value the site draws into
   one itself.

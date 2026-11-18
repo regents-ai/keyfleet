@@ -26,11 +26,13 @@ Changes to Keyfleet, newest first.
   two characters more. Everything typed in one of these boxes counts, spaces and line
   ends included, and the site refuses anything longer than it takes with a note naming
   what is too long, so text one of these boxes cut short is never taken as it was cut.
-  A value at the very most with a space or line end after it is refused as too long; a
-  line break typed inside it counts as one character. Ten poll choices of 100 emoji each
-  fit their box. Every other box is unchanged for now. A page opened at an address whose
-  part after `#` is over 256 characters drops that part, whatever the rest of the
-  address, and goes live; so does a page whose part after `#` can't be read as text.
+  A value at the very most is refused as too long once a space or a blank line is typed
+  anywhere around or between what it holds, such as a blank line between two poll
+  choices; a line break typed inside it counts as one character. Ten poll choices of 100
+  emoji each fit their box. Every other box is unchanged for now. A page opened at an
+  address whose part after `#` is over 256 characters drops that part, whatever the rest
+  of the address, and goes live; so does a page whose part after `#` can't be read as
+  text.
   The boxes for a Key's number, a post's number and a pass now take digits as text, with
   the number keyboard on phones, and no longer have arrows; a post number below 1 or with
   decimals gets a note saying what is wrong with it. A browser on a network that blocks
@@ -70,22 +72,24 @@ Changes to Keyfleet, newest first.
   never held back by what is still in the boxes of a kind you didn't choose. A press
   made just before its button showed why the network makes it certain to fail, such as
   Sold out, now says so in those same words, where it said only that it couldn't be sent
-  as it stood.
+  as it stood. A press made with no wallet open sends nothing, says so, and now leaves
+  what you typed in the form.
 - **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
   can't send that press, for example because a wallet your account doesn't link is open,
-  the agent hears the note that appears beside the button. If you switch wallets at that
-  moment, the note may clear, but it never says something else. What the agent sends is
-  judged on its own, with anything it leaves out taken from your form: a proposal it
-  makes with its own Key reaches your wallet even while your form names a Key you can't
-  propose with, and your form stays as you left it. When the network makes the agent's
+  the agent hears why, in the page's own words for it. Whatever comes of the agent's
+  press, your side of the page stays as it was: the note above your buttons, your form
+  and what you typed. What the agent sends is judged on its own, with anything it leaves
+  out taken from your form: a proposal it makes with its own Key reaches your wallet even
+  while your form names a Key you can't propose with. When the network makes the agent's
   press certain to fail, such as with a Key that isn't yours, it hears the few words the
-  page shows beside the button for that, and the note says them too. A proposal or an
-  amount the agent sends that is longer than the site takes from that field is refused,
-  naming the field and its most characters, counted as the page's box counts them, an
-  emoji as two, and nothing is sent. The site still counts a proposal's words and a
+  page shows beside a button for that. It is told to change what it sent when that is
+  why, and to try again once the network changes when only the network is. A proposal
+  or an amount the agent sends that is longer than the site takes from that field is
+  refused, naming the field and its most characters, counted as the page's box counts
+  them, an emoji as two, and nothing is sent. The site still counts a proposal's words and a
   launch's fields in bytes, an emoji as four, and its note says which is too long. When
-  a press can't be sent because of what the agent sent, it now hears the words the page
-  would show above the buttons for that, naming the field and what it takes. A field
+  a press can't be sent because of what the agent sent, it now hears what is wrong,
+  naming the field and what it takes, and nothing shows on your page for it. A field
   holding half an emoji is refused before anything is sent, saying it has a broken
   character, and the page and what you typed stay as they were. The public reads
   offered to it refuse a field longer than their description allows, or holding half an

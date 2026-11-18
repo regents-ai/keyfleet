@@ -106,7 +106,9 @@ export const OnchainSteps: Hook = {
       // The server hears the press, and the form it was made from, just before
       // the wallet does and once its steps are built from that form: a
       // proposal's words are saved then. The press never waits on this. With
-      // no wallet open no wallet is asked, so the press is not heard.
+      // no wallet open no wallet is asked, so the press is not heard: no words
+      // are saved and the form keeps what was typed, the person's press or the
+      // agent's.
       const heard = () => tell("step_pressed", {step: name, form})
 
       try {
