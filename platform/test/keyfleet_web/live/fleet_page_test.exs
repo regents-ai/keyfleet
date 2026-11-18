@@ -827,7 +827,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
           end
         end)
 
-      assert {[mismatch, blocked], [{:buy, "step_unknown"}, {:buy, "step_unknown"}]} = replies
+      assert {[mismatch, blocked], [{:buy, "step_unknown"}, {:buy, "blocked"}]} = replies
       assert %{reason: "step_unknown", note: "Your wallet is on " <> _} = mismatch
       assert blocked == %{reason: "blocked", note: text(view, "#buy-key-button-why")}
     end

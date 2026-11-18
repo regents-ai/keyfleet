@@ -12884,3 +12884,22 @@ step's report).
     characters) are now refused; addresses already on the list are not changed.
   - An address over 254 bytes once its host is in ASCII is told "Enter an email
     address", not that it is too long.
+
+## 2026-11-18 — A held-back press is counted as blocked
+
+- A press the wallet panel refused because the chain's state makes its step certain to
+  fail was counted in `[:keyfleet, :wallet, :failure]` with reason `step_unknown`, like
+  a press whose steps could not be built. `WalletPanel`'s `refuse/2` now counts it
+  under the reason it answers with, `blocked`, and `KeyfleetWeb.Telemetry` counts
+  `blocked` among its fixed reasons. The event and the series
+  (`health_wallet_send_failures_total`, tags `flow` and `reason`) are unchanged; only
+  the `reason` label gains a value. Fly Sentinel's Site health tile sums every reason,
+  so its count is unchanged.
+- Test: `FleetPageTest` "a refused press shows the note it is answered with, and counts
+  it once" counts the wallet-mismatch press as `step_unknown` and the held-back Buy as
+  `blocked`; it fails with the old count back.
+- Corrected, in the round-ten entry: the "Not covered" item "The telemetry counts every
+  refused press as `step_unknown`, a blocked one too" is fixed.
+- Not covered: fly-sentinel's docs/metrics-contract.md lists the `reason` values of
+  `health_wallet_send_failures_total` and does not yet name `blocked`; that file is in
+  the fly-sentinel repository, not changed here.

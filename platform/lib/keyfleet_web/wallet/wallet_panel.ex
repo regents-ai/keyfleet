@@ -596,7 +596,7 @@ defmodule KeyfleetWeb.WalletPanel do
   # agent hears what the person reads. The page reports nothing more for this
   # press.
   defp refuse(socket, {reason, note}) do
-    KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
+    KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, reason)
     {:reply, %{reason: reason, note: note}, assign(socket, press_note: note)}
   end
 
