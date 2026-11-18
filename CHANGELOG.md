@@ -13188,3 +13188,84 @@ step's report).
     underscore or an emoji in it, or an IP address in brackets) can't join" was not true
     of a bare IP address, which joins; the public changelog now names only what is
     refused.
+
+## 2026-11-18 — Round twelve: the lost line is the person's, two refusal causes made true, the host's dots after the @, the poll note's number
+
+- Round twelve (d01bd443c) found nothing at medium or above on round eleven's six
+  commits (860ae3e51 to d01bd443c), and nine low findings. Two stay as they are, by the
+  brief: a proposal pressed from a wallet the account doesn't link, with a value too
+  long, is answered `cause: "values"` for the value first and `"state"` once the value
+  is fixed; and the dot's look-alikes, and letters and digits drawn like it, are taken
+  as other addresses. A poll's too-long note keeps the box's own count as its unit.
+  The words the reviewer found false are made true in the entry above.
+- 1986350df The line saying the page lost its connection (`data-onchain-lost`) speaks
+  for the person's own presses alone: assets/js/hooks/onchain_steps.ts's `pressWith`
+  hides it at the person's press only, and `lostPress/3` shows it for the person's lost
+  press only. An agent's lost press answers `connection_lost` in its own answer, and
+  its `press.unsent` report carries `agent: true`, like everything else its press tells
+  the server (assets/js/visit_log.ts's line type gains that field). `VisitLogController`
+  keeps a line's name, place and outcome only, so the server's line for it reads as
+  before. The person's press shows and hides the line as before; nothing is blocked,
+  deferred, queued or deduplicated.
+- c35d20588 Two refusal causes: a Buy REGENT that no whole USDC from 1 up gets through
+  (`{:too_big, nil}`, "Can’t buy REGENT right now") answers `cause: "state"`, where it
+  answered `"values"`; a Yes or Abstain while the proposal takes only No (`:only_no`)
+  answers `"values"`, the choice pressed being why, where it answered `"state"`.
+  `WalletPanel`'s `held_cause/2` and `typed_for/1`; a Too big now with an amount to try
+  still answers `"values"`.
+- 334528b6d The host's three other dots (U+3002, U+FF0E, U+FF61) are taken after the
+  last @ only: a lookahead at the start of `Keyfleet.Early.Signup`'s one rule says none
+  of them has an @ after it, so before the @ they are refused as not an address, with
+  the ordinary "Enter an email address" note. It stays one expression, not a module of
+  its own. Nothing else the allow-list takes or refuses changed; no row is touched.
+- c3f9b6285 The poll's too-long note groups its thousands as the site's other numbers
+  are (`Keyfleet.Fleets.Rules.grouped/1`): "The choices are too long: 2,009 characters
+  at most."
+- The public changelog's 18 November entry, edited in place: "Browser agents" says the
+  lost line stays as it was too, and that the agent hears the connection was lost; and
+  gives the two causes as examples. "Early access" says the other dots a Japanese or
+  Chinese keyboard types are taken after the @ and refused before it. "Live pages" says
+  poll choices past their box are told 2,009 characters at most.
+- Tests: assets/test/onchain_steps.test.ts "answers that the page lost its connection,
+  shows the person nothing, and reports the press as the agent's", "leaves the lost line
+  the person's own press showed" and, for the person's own press, which did not
+  change, "shows it when the press can't reach the server, and hides it at their next
+  press";
+  `ProposalsPageTest` "the agent's Buy REGENT that no amount gets through is held back
+  for the state" (1 and 3 USDC) and "while a proposal takes only No, the agent's other
+  choices are held back for the choice" (its No goes to the wallet); `Keyfleet.EarlyTest`
+  "the host's three other dots are taken after the @ only"; `PollsPageTest` "choices
+  typed past the box's longest are refused as too long, not as breaking the rule" now
+  finds the box's longest written as the site writes numbers.
+- The round-twelve proofs, run as the reviewer left them:
+  - test/keyfleet_web/adversarial_door_round12_test.exs: 4 of 9 pass. Both "R12 Q2"
+    tests for the causes fixed here pass, as do "R12 Q5: hosts the words name" and "a
+    broken byte". "R12 Q3: look-alikes of the dot before the @" fails on the look-alikes
+    that stay (U+A4F8, two Arabic zeros, the katakana and Catalan middle dots, the
+    Tibetan tsheg); the three host dots it types before the @ are now refused. "R12 Q3:
+    the dot's look-alike inside the host" fails as that ruling says. "R12 Q5: an IP
+    address after the @, without brackets" fails: a bare IP address joins, and the
+    public changelog now says so by naming only what is refused. "R12 Q2: a proposal
+    from a wallet the account doesn't link" fails as that ruling says. "R12 Q4" fails
+    where it asks the note to count as the person does (1,010); the note gives the box's
+    count, now written 2,009.
+  - assets/test/adversarial_round12_agent_press.test.ts: 3 of 4 pass, all three for the
+    lost line. "R12 Q2 ... the hint tells it a value it sent is why" fails because its
+    stand-in server answers `cause: "values"` for "Can’t buy REGENT right now", which the
+    panel no longer sends for it (`ProposalsPageTest` above checks the panel's real
+    reply, `"state"`). The type check reports that file's line 129 (a string where an
+    address type is wanted), the only type error in the tree.
+- The round-eleven proofs: assets/test/adversarial_round11_agent_press.test.ts, 2 of 2
+  pass; test/keyfleet_web/adversarial_door_round11_test.exs, 7 of 10, failing as the
+  entries above say (R11 Q1 and R11 Q2 twice).
+- Checks: the tracked server tests for the areas touched (`Keyfleet.EarlyTest`,
+  `EarlyControllerTest`, `FleetPageTest`, `KeyProfileTest`, `PollsPageTest`,
+  `ProposalsPageTest`, `VisitLogTest`) 230 of 230; every page-script test, 521 of 522,
+  the one failing being R12 Q2's above; test/browser/wallet_buttons.spec.ts and
+  early_page.spec.ts in Chromium, 22 of 22; format, Credo strict on the touched files
+  and a compile with warnings as errors, clean.
+- Corrected, in the entries above:
+  - "An early-access address holds only what an address may hold": its three other dots
+    a host may be typed with are taken after the @ only since 334528b6d.
+  - "Poll choices past their box are refused as too long": its note now reads "2,009
+    characters at most", since c3f9b6285.

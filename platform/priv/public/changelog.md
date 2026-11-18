@@ -11,11 +11,12 @@ Changes to Keyfleet, newest first.
   short is never kept; a 254-character address with a space before or after it is refused
   too. An address may hold letters, accents and digits in any script, the few signs some
   languages write inside a domain name, such as the middle dot of Catalan's l·l, and the
-  dot, the @ and the punctuation email allows, such as + or '. Anything else, such as a
-  character that shows as nothing or a space of any kind inside the address, is refused
-  as not an address. An address with an underscore or an emoji after the @, or an IP
-  address in brackets there, can't join. It still brings up the email keyboard on
-  phones.
+  dot, the @ and the punctuation email allows, such as + or '. The other dots a Japanese
+  or Chinese keyboard types, such as 。, are taken after the @, where they count as the
+  dot of a domain name, and refused before it. Anything else, such as a character that
+  shows as nothing or a space of any kind inside the address, is refused as not an
+  address. An address with an underscore or an emoji after the @, or an IP address in
+  brackets there, can't join. It still brings up the email keyboard on phones.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000
   bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message
   a page sends, rounded up: the first message of a page reached by a link from one opened
@@ -29,10 +30,10 @@ Changes to Keyfleet, newest first.
   A value at the very most is refused as too long once a space or a blank line is typed
   anywhere around or between what it holds, such as a blank line between two poll
   choices; a line break typed inside it counts as one character. Ten poll choices of 100
-  emoji each fit their box. Every other box is unchanged for now. A page opened at an
-  address whose part after `#` is over 256 characters drops that part, whatever the rest
-  of the address, and goes live; so does a page whose part after `#` can't be read as
-  text.
+  emoji each fit their box; choices past it are told they are too long, 2,009 characters
+  at most. Every other box is unchanged for now. A page opened at an address whose part
+  after `#` is over 256 characters drops that part, whatever the rest of the address, and
+  goes live; so does a page whose part after `#` can't be read as text.
   The boxes for a Key's number, a post's number and a pass now take digits as text, with
   the number keyboard on phones, and no longer have arrows; a post number below 1 or with
   decimals gets a note saying what is wrong with it. A browser on a network that blocks
@@ -77,16 +78,20 @@ Changes to Keyfleet, newest first.
 - **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
   can't send that press, for example because a wallet your account doesn't link is open,
   the agent hears why, in the page's own words for it. Whatever comes of the agent's
-  press, your side of the page stays as it was: the note below your buttons, your form
-  and what you typed. What the agent sends is judged on its own, with anything it leaves
-  out taken from your form: a proposal it makes with its own Key reaches your wallet even
-  while your form names a Key you can't propose with. When the network makes the agent's
+  press, your side of the page stays as it was: the note below your buttons, the line
+  saying the page lost its connection, your form and what you typed. When the page can't
+  reach Keyfleet with the agent's press, the agent hears that the connection was lost;
+  that line shows only for your own presses. What the agent sends is judged on its own,
+  with anything it leaves out taken from your form: a proposal it makes with its own Key
+  reaches your wallet even while your form names a Key you can't propose with. When the network makes the agent's
   press certain to fail, such as with a Key that isn't yours, it hears the few words the
   page shows beside a button for that. It is told to change what it sent when that is
-  why, and to try again once the network changes when only the network is. A proposal
-  or an amount the agent sends that is longer than the site takes from that field is
-  refused, naming the field and its most characters, counted as the page's box counts
-  them, an emoji as two, and nothing is sent. The site still counts a proposal's words and a
+  why, and to try again once the network changes when only the network is: a Yes or
+  Abstain on a proposal that takes only No is told to change its choice, and a Buy
+  REGENT that no amount from 1 USDC up can make go through right now is told to try
+  again once that changes. A proposal or an amount the agent sends that is longer than
+  the site takes from that field is refused, naming the field and its most characters,
+  counted as the page's box counts them, an emoji as two, and nothing is sent. The site still counts a proposal's words and a
   launch's fields in bytes, an emoji as four, and its note says which is too long. When
   a press can't be sent because of what the agent sent, it now hears what is wrong,
   naming the field and what it takes, and nothing shows on your page for it. A field
