@@ -1661,6 +1661,56 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
              Notebooks.newest_run_outputs(@fleet, ["nb-0000000000000003"], actor: %System{})
   end
 
+  # Costly failure: a request refused before its body is read keeps its
+  # connection, and the web server reads on through megabytes of the body only
+  # to throw them away, holding them meanwhile.
+  test "a refusal before the body is read closes the connection, and over HTTP/2 ends only that request",
+       c do
+    port = URI.parse(SignedAgentHelpers.serve!(:site, @endpoint)).port
+    jobs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000002/jobs"
+    stated = "content-length: #{64 * 1024 * 1024}"
+
+    # No sign-in, and a 64 MiB body stated but not yet sent.
+    unread = raw_send(port, "POST", jobs, [stated], "")
+    assert {401, %{"connection" => "close"}} = raw_answer(unread)
+    assert :gen_tcp.recv(unread, 0, 2_000) == {:error, :closed}
+
+    # A body read whole and then refused leaves the connection for the next request.
+    cookie = "cookie: __Host-kf_notebooks=" <> enter!(c.holder)
+    twice = ~s({"name":"a","name":"b"})
+    read = raw_send(port, "POST", jobs, [cookie, "content-length: #{byte_size(twice)}"], twice)
+    assert {400, first} = raw_answer(read)
+    refute Map.has_key?(first, "connection")
+    :ok = :gen_tcp.send(read, request_head("GET", "/", [cookie]))
+    assert {200, _headers} = raw_answer(read)
+
+    # Over HTTP/2 the refusal ends its own stream, and the connection serves on.
+    {:ok, h2} =
+      Mint.HTTP.connect(:http, "127.0.0.1", port,
+        protocols: [:http2],
+        hostname: @host,
+        mode: :passive
+      )
+
+    {:ok, h2, refused} =
+      Mint.HTTP.request(h2, "POST", jobs, [{"content-type", "application/json"}], :stream)
+
+    {:ok, h2} = Mint.HTTP.stream_request_body(h2, refused, :binary.copy("a", 16_384))
+    {h2, parts} = h2_parts(h2, refused, [])
+    assert [401] = for({:status, ^refused, status} <- parts, do: status)
+    assert [] = for({:headers, ^refused, headers} <- parts, {"connection", _} <- headers, do: 1)
+
+    {:ok, h2, next} = Mint.HTTP.request(h2, "GET", "/", [], nil)
+    {h2, parts} = h2_parts(h2, next, [])
+    assert [303] = for({:status, ^next, status} <- parts, do: status)
+
+    # The refused request's stream was reset: no more of its body can be sent.
+    assert {:error, h2, %Mint.HTTPError{reason: :unknown_request_to_stream}} =
+             Mint.HTTP.stream_request_body(h2, refused, "more")
+
+    Mint.HTTP.close(h2)
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do
@@ -1778,6 +1828,52 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       )
 
     socket
+  end
+
+  # A request sent to the site on a socket of its own, kept open.
+  defp raw_send(port, method, path, headers, body) do
+    {:ok, socket} = :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false])
+    :ok = :gen_tcp.send(socket, [request_head(method, path, headers), body])
+    socket
+  end
+
+  defp request_head(method, path, headers),
+    do: [
+      "#{method} #{path} HTTP/1.1\r\nhost: #{@host}\r\ncontent-type: application/json\r\n",
+      Enum.map(headers, &[&1, "\r\n"]),
+      "\r\n"
+    ]
+
+  # One answer read off `socket`: its status and headers, its body read past.
+  defp raw_answer(socket, acc \\ "") do
+    case :binary.split(acc, "\r\n\r\n") do
+      [head, rest] ->
+        [status_line | lines] = String.split(head, "\r\n")
+
+        headers =
+          Map.new(lines, &List.to_tuple(String.split(String.downcase(&1), ": ", parts: 2)))
+
+        length = String.to_integer(Map.get(headers, "content-length", "0"))
+
+        if byte_size(rest) < length,
+          do: {:ok, _rest} = :gen_tcp.recv(socket, length - byte_size(rest), 5_000)
+
+        {status_line |> String.split(" ") |> Enum.at(1) |> String.to_integer(), headers}
+
+      [_partial] ->
+        {:ok, data} = :gen_tcp.recv(socket, 0, 5_000)
+        raw_answer(socket, acc <> data)
+    end
+  end
+
+  # What an HTTP/2 connection hears of request `ref` until it ends.
+  defp h2_parts(conn, ref, parts) do
+    if Enum.any?(parts, &(match?({:done, ^ref}, &1) or match?({:error, ^ref, _}, &1))) do
+      {conn, parts}
+    else
+      {:ok, conn, more} = Mint.HTTP.recv(conn, 0, 5_000)
+      h2_parts(conn, ref, parts ++ more)
+    end
   end
 
   # The code a refusal names, or nil for an answer that is not one.

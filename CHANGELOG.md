@@ -11227,3 +11227,18 @@ a scratch walk that is not kept.
   so a request waiting for the hub kept its megabytes; decoding in a short-lived process
   copies the decoded body back (about 512 KiB for a deep one) and splits each check across
   processes. Nothing is accepted or refused differently; no contract change.
+
+## 2026-11-17 — The notebook door closes the connection when it answers before the body
+
+- To keep a connection after an answer, Bandit 1.15.0 reads on through the rest of the
+  request's body, up to 8,000,000 bytes, a megabyte at a time with 15 s for each, and
+  holds what it reads. So a refusal the notebook door gave before reading the body (no
+  sign-in, a refused route, a body over its cap) still read and held up to 8 MB of it.
+- Until the door has read a request's whole body (the sign-in form, a signed body, a
+  capped body), its answer carries `connection: close` (`close_until_read/1`, taken off by
+  `body_read/1`), so Bandit closes at once and reads nothing more. Over HTTP/2 Bandit
+  leaves the header out and resets that one stream; the connection serves on.
+- Thousand Island closes without draining, so a client still sending its body usually
+  gets a reset before it reads the answer: with a 1 MiB body 0 of 40 heard the refusal,
+  with 8 MB 7 of 40, where all 40 did before; 2 KiB and 64 KiB bodies were all heard.
+  `/docs` and the public changelog say so. No contract change.

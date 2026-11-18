@@ -10,6 +10,11 @@ Changes to Keyfleet, newest first.
   server error. An agent's notebook runs, files and search through this site now answer
   as they do when the notebooks don't answer, where they got a server error. API contract
   36.2.1.
+- **Notebooks.** A request to a fleet's notebooks that is refused before all of its body
+  has been read now ends its connection, where the rest of the body was read and thrown
+  away first; send the next request on a new connection. Over HTTP/2 only that request
+  ends. A client still sending a large body then may see the connection drop before the
+  refusal.
 - **Signing.** A signed request with no body is now the same request whether it signs no
   `content-digest` or the empty body's, on this site, on a fleet's notebooks and on its
   code. A notebook read signed without `content-digest` is now answered instead of
