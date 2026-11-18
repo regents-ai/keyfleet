@@ -195,15 +195,26 @@ defmodule Keyfleet.Seasons.TurnTest do
     assert {seasons(), picks(1), picks(2)} == held
   end
 
-  test "a minute after each boundary every deployed fleet's turn is queued, once" do
+  test "each deployed fleet's turn is queued once while it waits, and again once it gave up" do
     ChainHelpers.deploy!(@fleet)
 
     assert :ok = perform_job(Turns, %{})
     assert :ok = perform_job(Turns, %{})
 
     boundary = DateTime.utc_now() |> Seasons.boundary() |> DateTime.to_iso8601()
-    assert [%Oban.Job{args: args, queue: "seasons"}] = all_enqueued(worker: Turn)
+    assert [%Oban.Job{args: args, queue: "seasons"} = gave_up] = all_enqueued(worker: Turn)
     assert args == %{"fleet_id" => @fleet, "boundary" => boundary}
+
+    # Its last attempt failed: the next tick queues the boundary's turn again.
+    gave_up
+    |> Ecto.Changeset.change(state: "discarded", discarded_at: DateTime.utc_now())
+    |> Repo.update!()
+
+    assert :ok = perform_job(Turns, %{})
+    assert :ok = perform_job(Turns, %{})
+
+    assert [%Oban.Job{args: ^args, id: again}] = all_enqueued(worker: Turn)
+    assert again != gave_up.id
   end
 
   defp turn(boundary),

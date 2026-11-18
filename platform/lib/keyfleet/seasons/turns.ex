@@ -1,9 +1,11 @@
 defmodule Keyfleet.Seasons.Turns do
   @moduledoc """
-  A minute after each season boundary (`config :keyfleet, Oban, cron:`):
-  queues a `Keyfleet.Seasons.Turn` for each deployed fleet at the boundary
-  just passed. A fleet's turn at a boundary is queued once, however many times
-  this runs.
+  Every ten minutes, from a minute past each hour (`config :keyfleet, Oban,
+  cron:`): queues a `Keyfleet.Seasons.Turn` for each deployed fleet at the
+  season boundary last passed. While a fleet's turn at that boundary is waiting
+  or running it is not queued again; once it has finished it is, so a turn that
+  ran out of attempts is tried again within ten minutes, and one that succeeded
+  runs again and changes nothing.
   """
   use Oban.Worker, queue: :default, max_attempts: 1
 

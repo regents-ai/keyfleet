@@ -1,7 +1,7 @@
 defmodule Keyfleet.Seasons.Turn do
   @moduledoc """
   A fleet's turn at a boundary, queued by `Keyfleet.Seasons.Turns` a minute
-  after it. It brings the fleet's seasons up to that boundary, one boundary at
+  after it and every ten minutes until the next. It brings the fleet's seasons up to that boundary, one boundary at
   a time and in order, so a fleet left behind by downtime catches up from
   Coinbase's candle history.
 

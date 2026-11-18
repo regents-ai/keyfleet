@@ -328,7 +328,10 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.Atlas.Fill},
       {"29 * * * *", Keyfleet.Atlas.ReadHubs},
       {"7 * * * *", Keyfleet.Keys.PresenceTimer},
-      {"1 */3 * * *", Keyfleet.Seasons.Turns},
+      # Every ten minutes from a minute past the hour: the first after a
+      # season boundary follows its last closed minute, and a turn that gave
+      # up is queued again (`Keyfleet.Seasons.Turns`).
+      {"1-59/10 * * * *", Keyfleet.Seasons.Turns},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_now"}},
