@@ -104,6 +104,28 @@ test("a page at an address with a name before its host goes live without its lon
   expect(errors).toEqual([])
 })
 
+// Costly failure: a #fragment whose %-escapes spell no text throws as the page
+// looks for what it names, before the page joins, so it never goes live.
+test("a page opened with a #fragment that spells no text goes live, and a link to one breaks nothing", async ({page}) => {
+  const opened = liveConnections(page)
+  const errors = pageErrors(page)
+
+  await page.goto("/syndicate/1/proposals#%E0")
+  await live(page)
+  expect(await page.evaluate(() => window.location.hash)).toBe("#%E0")
+  await page.evaluate(() => {
+    const link = document.createElement("a")
+    link.href = "#%E0"
+    link.textContent = "Nowhere"
+    document.body.append(link)
+  })
+  await page.getByRole("link", {name: "Nowhere"}).click()
+
+  await page.waitForTimeout(settle)
+  expect(opened).toHaveLength(1)
+  expect(errors).toEqual([])
+})
+
 test("a proposal pasted past every field's limit keeps the page live, and the site says what is too long", async ({
   page,
 }) => {

@@ -16,9 +16,21 @@ export function arriveAt(target: HTMLElement) {
   return choice !== undefined
 }
 
+/**
+ * The id a #fragment names, or "" for none. A fragment whose %-escapes spell no
+ * text, such as #%E0, names nothing.
+ */
+function fragmentId(hash: string) {
+  try {
+    return decodeURIComponent(hash.slice(1))
+  } catch {
+    return ""
+  }
+}
+
 /** The element the address's #fragment names, such as the Agents page's pairing box. */
 export const hashTarget = () => {
-  const id = decodeURIComponent(window.location.hash.slice(1))
+  const id = fragmentId(window.location.hash)
   return id ? document.getElementById(id) : null
 }
 
@@ -60,9 +72,8 @@ export function installAccountMenu() {
     link.closest<HTMLElement>("[popover]")?.hidePopover()
     // Assign a Key, under the box once an agent pairs, leads to Your Keys.
     if (link.closest("#shell-pairing")) pairing()?.close()
-    const named = link.hash && link.pathname === window.location.pathname
-      ? document.getElementById(decodeURIComponent(link.hash.slice(1)))
-      : null
+    const id = link.pathname === window.location.pathname ? fragmentId(link.hash) : ""
+    const named = id ? document.getElementById(id) : null
     if (named) arriveAt(named)
   })
 }
