@@ -303,6 +303,8 @@ config :keyfleet, Oban,
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
+  # Each fleet's season turn waits on Coinbase for its prices, so the turns
+  # have their own queue, one fleet at a time (`Keyfleet.Seasons.Turn`).
   queues: [
     default: 5,
     notebook_hubs: 1,
@@ -311,7 +313,8 @@ config :keyfleet, Oban,
     avatars: 2,
     key_art: 1,
     chain: 10,
-    ens: 3
+    ens: 3,
+    seasons: 1
   ],
   cron: [
     crontab: [
@@ -325,6 +328,7 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.Atlas.Fill},
       {"29 * * * *", Keyfleet.Atlas.ReadHubs},
       {"7 * * * *", Keyfleet.Keys.PresenceTimer},
+      {"1 */3 * * *", Keyfleet.Seasons.Turns},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_now"}},
