@@ -44,7 +44,7 @@ Changes to Keyfleet, newest first.
   them (each got 400 before, or 503 for a registration that was neither); allowing or
   ending a connection over 256 bytes or not a form (403 before); the early-access form
   over 4 KB or not a form (422 before); a page's sign-in failure report over 64 bytes or
-  its visit report over 16 KB, or either not JSON (204 before). A profile change from someone
+  its visit report over 22 KB, or either not JSON (204 before). A profile change from someone
   signed out now gets 401 `authentication_required` before its body is read, and a
   signed-in person's broken or oversized change gets `invalid_profile_json` or
   `profile_request_too_large`, where they got `bad_request` or `request_entity_too_large`.

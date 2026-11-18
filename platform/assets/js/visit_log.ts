@@ -14,6 +14,12 @@ const most = 20
 const waiting: VisitLine[] = []
 let timer: number | undefined
 
+// A page is named by the first 1,024 characters of its address, far more than
+// any address the site's own links make, so a post is at most 20 lines of
+// 1,087 bytes, which KeyfleetWeb.Router's visit report limit is set from.
+const longestWhere = 1024
+const page = () => window.location.pathname.slice(0, longestWhere)
+
 /** This visit's id, from the page's `regent-visit` tag, for the page's own tool calls. */
 export function visitId(): string | undefined {
   return document.querySelector<HTMLMetaElement>('meta[name="regent-visit"]')?.content || undefined
@@ -43,9 +49,9 @@ function send(): void {
 
 export function installVisitLog(): void {
   window.addEventListener("error", () =>
-    report({name: "page.error", where: window.location.pathname, outcome: "error"}))
+    report({name: "page.error", where: page(), outcome: "error"}))
   window.addEventListener("unhandledrejection", () =>
-    report({name: "page.error", where: window.location.pathname, outcome: "unhandledrejection"}))
+    report({name: "page.error", where: page(), outcome: "unhandledrejection"}))
   // Any Sign in button, wherever a page draws one (auth_lazy.ts opens the sign-in).
   document.addEventListener("click", event => {
     if (event.target instanceof Element && event.target.closest("[data-account-target='sign-in']"))

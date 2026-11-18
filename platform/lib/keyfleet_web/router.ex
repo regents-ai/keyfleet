@@ -70,12 +70,15 @@ defmodule KeyfleetWeb.Router do
       json_decoder: Jason
   end
 
-  # Up to 20 visit lines, each naming a page by its path (visit_log.ts).
+  # Up to 20 visit lines, each naming a page by its path, at most 1,024
+  # characters of it (visit_log.ts). The longest line is a page error with the
+  # longest outcome, 63 bytes around its path, 1,087 in all; 20 of them with
+  # the commas and the list around them are 21,771.
   pipeline :visit_report do
     plug KeyfleetWeb.Plugs.Parsers,
       parsers: [Plug.Parsers.JSON],
       pass: [],
-      length: 16 * 1024,
+      length: 22 * 1024,
       json_decoder: Jason
   end
 

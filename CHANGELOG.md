@@ -11546,3 +11546,26 @@ a scratch walk that is not kept.
   letters as a browser encodes it, and finds the form's own words (with the 1,024 limit,
   the request is refused before the form sees it). Its helper now sends each form as an
   encoded body, as a browser does, where it handed the fields over already decoded.
+
+## 2026-11-18 — A visit report names a page by at most 1,024 characters, and always fits
+
+- The page's script (assets/js/visit_log.ts) sends up to 20 lines a post, each a page
+  error naming the page by `window.location.pathname`, which had no bound but the web
+  server's 10,000-byte request line, or the live socket's 40,000-byte message for an
+  address a live page moves to. The
+  reviewers' round-six proof 1813: 20 lines fit the 16 KiB limit only while the address
+  was 767 bytes or less, and a longer post was refused whole, every line lost.
+- The script now names the page by the first 1,024 characters of its address, far more
+  than any address the site's own links make. A longer one is still written under its
+  route when the cut falls inside its last part (`/classic/1/keys/` and 5,000 digits:
+  `/classic/1/keys/:token_id`), and otherwise under the route its first 1,024
+  characters name, or `unmatched`.
+  The longest line is a page error with the longest outcome, `unhandledrejection`: 63
+  bytes around its path, 1,087 in all; 20 of them with the 19 commas and the 12 bytes
+  around the list are 21,771, so the route's limit is 22 KiB (22,528).
+- Not done: reading the whole address. That would set the limit near 197 KiB from the
+  request line alone (20 × (63 + 9,985) + 31 = 200,991), more for an address a live
+  page moves to, and anyone with a forms token could have that much JSON decoded.
+- assets/test/visit_log.test.ts raises 25 errors on a page with a 5,006-character
+  address and finds one post of 20 lines, each naming 1,024 characters, within 22 KiB;
+  without the cut it fails. `BodyLimitsTest` takes the new limit.
