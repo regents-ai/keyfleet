@@ -10,7 +10,8 @@ defmodule Keyfleet.Seasons do
   change until its season starts; a change takes the newest place in the
   order picks were locked. Until the season starts a pick is read only by
   its own Key's holder and that Key's agents; from the start every member
-  reads every pick.
+  reads every pick. Once a season is settled it is public record, its picks
+  with it: anyone reads it (`settled_page/2`), its Keys by number.
 
   When a season ends each pick is scored by what its product did over the
   season, and the best one may take the crown: the fleet's holding for the
@@ -28,13 +29,18 @@ defmodule Keyfleet.Seasons do
   """
   use Ash.Domain
 
+  alias Keyfleet.Seasons.Season
+
   @season_hours 3
+  # Settled seasons a page of the public record holds.
+  @page 20
 
   resources do
     resource Keyfleet.Seasons.Season do
       define :list_seasons, action: :in_fleet, args: [:fleet_id]
       define :get_season, action: :numbered, args: [:fleet_id, :number], not_found_error?: false
       define :upcoming_season, action: :upcoming, args: [:fleet_id], not_found_error?: false
+      define :running_season, action: :running, args: [:fleet_id], not_found_error?: false
     end
 
     resource Keyfleet.Seasons.SeasonPick do
@@ -58,4 +64,45 @@ defmodule Keyfleet.Seasons do
   @doc "When a season starting at `starts_at` ends, and the next one starts."
   @spec ends_at(DateTime.t()) :: DateTime.t()
   def ends_at(%DateTime{} = starts_at), do: DateTime.add(starts_at, @season_hours, :hour)
+
+  @doc "How many hours a season lasts."
+  @spec season_hours() :: pos_integer()
+  def season_hours, do: @season_hours
+
+  @doc "Whether `season` still takes picks at `now`: its turn hasn't locked it, and it hasn't started."
+  @spec taking_picks?(Season.t(), DateTime.t()) :: boolean()
+  def taking_picks?(season, now \\ DateTime.utc_now())
+
+  def taking_picks?(%Season{locked_at: nil, starts_at: starts_at}, now),
+    do: DateTime.after?(starts_at, now)
+
+  def taking_picks?(%Season{}, _now), do: false
+
+  @doc """
+  A page of the fleet's settled seasons, newest first, each with its picks in
+  the order they were locked: the newest, or those numbered below `before`.
+  Answers `{seasons, more?}`, `more?` saying older ones follow.
+  """
+  @spec settled_page(String.t(), pos_integer() | nil) :: {[Season.t()], boolean()}
+  def settled_page(fleet_id, before) do
+    Season
+    |> Ash.Query.for_read(:settled, %{fleet_id: fleet_id, before: before})
+    |> Ash.Query.limit(@page + 1)
+    |> Ash.read!()
+    |> Enum.split(@page)
+    |> then(fn {seasons, older} -> {seasons, older != []} end)
+  end
+
+  @doc """
+  The fleet's newest settled season numbered below `before`, with its picks,
+  or nil when none is. Named by the season under way, it is the one settled
+  as that one started, even if a turn has settled that one since.
+  """
+  @spec last_settled(String.t(), pos_integer() | nil) :: Season.t() | nil
+  def last_settled(fleet_id, before) do
+    Season
+    |> Ash.Query.for_read(:settled, %{fleet_id: fleet_id, before: before})
+    |> Ash.Query.limit(1)
+    |> Ash.read_one!()
+  end
 end

@@ -13,6 +13,7 @@ defmodule Keyfleet.Seasons.Changes.Pick do
 
   alias Keyfleet.Polls
   alias Keyfleet.Rooms.Errors.NoKeyToWriteAsError
+  alias Keyfleet.Seasons
   alias Keyfleet.Seasons.CoinList
   alias Keyfleet.Seasons.Errors.PicksClosedError
   alias Keyfleet.Seasons.Errors.ProductIneligibleError
@@ -54,13 +55,11 @@ defmodule Keyfleet.Seasons.Changes.Pick do
     end
   end
 
-  defp taking_picks(%Season{locked_at: nil, starts_at: starts_at} = season) do
-    if DateTime.after?(starts_at, DateTime.utc_now()),
+  defp taking_picks(season) do
+    if Seasons.taking_picks?(season),
       do: :ok,
       else: {:error, PicksClosedError.exception(number: season.number)}
   end
-
-  defp taking_picks(season), do: {:error, PicksClosedError.exception(number: season.number)}
 
   defp picker(actor, fleet_id) do
     case Polls.voter(actor, fleet_id) do

@@ -55,15 +55,24 @@ defmodule Keyfleet.Seasons.CoinList do
     end
   end
 
+  @doc """
+  The products a pick may name now, by the list read last, and when it was
+  read: `{:error, :unavailable}` while there is none, or its last read failed,
+  and every pick is refused as not checked.
+  """
+  @spec listing() :: {:ok, [String.t()], DateTime.t()} | {:error, :unavailable}
+  def listing do
+    case SharedReading.fetch(key()) do
+      {:ok, %{reading: [_ | _] = product_ids, at: at, degraded?: false}} -> {:ok, product_ids, at}
+      _not_read -> {:error, :unavailable}
+    end
+  end
+
   @doc "Whether `product` may be picked, by the list read last."
   @spec check(String.t()) :: :ok | {:error, :ineligible | :unavailable}
   def check(product) do
-    case SharedReading.fetch(key()) do
-      {:ok, %{reading: [_ | _] = product_ids, degraded?: false}} ->
-        if product in product_ids, do: :ok, else: {:error, :ineligible}
-
-      _not_read ->
-        {:error, :unavailable}
+    with {:ok, product_ids, _at} <- listing() do
+      if product in product_ids, do: :ok, else: {:error, :ineligible}
     end
   end
 end

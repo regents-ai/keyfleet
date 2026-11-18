@@ -35,6 +35,10 @@ defmodule Keyfleet.Seasons.Coinbase do
   # today; twenty leave room for it to come 100 products a page up to 2,000.
   @max_pages 20
 
+  @doc "The least a product must have traded over 24 hours, in US dollars, to be picked."
+  @spec volume_floor() :: Decimal.t()
+  def volume_floor, do: @volume_floor
+
   @doc "The ids of every product that may be picked now, `USDC` among them."
   @spec eligible() :: {:ok, [String.t()]} | {:error, term()}
   def eligible do

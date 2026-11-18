@@ -8,7 +8,8 @@ defmodule Keyfleet.Seasons.Season do
   settled at its end, when the holding's close price and its own result over
   the season are set. Only `Keyfleet.Seasons.Turn` writes seasons. A fleet has
   at most one season taking picks and one running at a time, and seasons are
-  never removed. Only the fleet's members read them.
+  never removed. Only the fleet's members read them, but for a settled
+  season: that is public record, read by anyone with its picks (`:settled`).
 
   Opening one, which ends every turn, is announced on `Keyfleet.Seasons.topic/1`
   as "seasons_changed".
@@ -106,12 +107,36 @@ defmodule Keyfleet.Seasons.Season do
       filter expr(fleet_id == ^arg(:fleet_id) and number == ^arg(:number))
     end
 
-    # The season the fleet's members pick for now, until its turn locks it.
+    # The season the fleet's members pick for now, until its turn locks it,
+    # with how many Keys have locked a pick for it, never whose or what.
     read :upcoming do
       argument :fleet_id, :string, allow_nil?: false
       get? true
 
       filter expr(fleet_id == ^arg(:fleet_id) and is_nil(locked_at))
+      prepare build(load: [:keys_locked])
+    end
+
+    # The season under way: locked at its start, not yet settled.
+    read :running do
+      argument :fleet_id, :string, allow_nil?: false
+      get? true
+
+      filter expr(fleet_id == ^arg(:fleet_id) and not is_nil(locked_at) and is_nil(settled_at))
+    end
+
+    # The fleet's settled seasons, newest first, below `before` when it is
+    # given, each with its picks: the fleet's public record.
+    read :settled do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :before, :integer, constraints: [min: 1, max: @bigint]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and not is_nil(settled_at) and
+                 (is_nil(^arg(:before)) or number < ^arg(:before))
+             )
+
+      prepare build(sort: [number: :desc], load: [:settled_picks])
     end
 
     create :open do
@@ -136,9 +161,14 @@ defmodule Keyfleet.Seasons.Season do
       authorize_if always()
     end
 
-    policy action([:in_fleet, :numbered, :upcoming]) do
+    policy action([:in_fleet, :numbered, :upcoming, :running]) do
       authorize_if {Keyfleet.Access.Check, read: :seasons, scope: :fleet_id}
       authorize_if actor_attribute_equals(:role, :system)
+    end
+
+    # Wider than the class: a settled season is public record.
+    policy action(:settled) do
+      authorize_if always()
     end
 
     policy action([:open, :lock, :settle]) do
@@ -186,6 +216,23 @@ defmodule Keyfleet.Seasons.Season do
     end
 
     has_many :picks, Keyfleet.Seasons.SeasonPick
+
+    # A settled season's picks, as its public record holds them, in the order
+    # they were locked.
+    has_many :settled_picks, Keyfleet.Seasons.SeasonPick do
+      public? true
+      read_action :settled
+      sort lock_order: :asc
+    end
+  end
+
+  aggregates do
+    # How many Keys have locked a pick for the season: whoever reads the
+    # season counts them without reading whose or what they are.
+    count :keys_locked, :picks do
+      public? true
+      authorize? false
+    end
   end
 
   identities do

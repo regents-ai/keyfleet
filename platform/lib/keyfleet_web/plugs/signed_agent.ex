@@ -125,6 +125,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @empty_body_paths [@mute_path, @poll_end_path, @copy_restore_path]
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
+  # A fleet's seasons now, a Key's pick for the one taking picks, the settled
+  # ones a page at a time, and the products open to picks in every fleet.
+  @seasons_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons\z"
+  @season_pick_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons/pick\z"
+  @seasons_list_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons/list\z"
+  @season_coins_path ~r"\A/api/v1/agent/seasons/coins\z"
+
   # Direct messages: a Key's conversations and blocks, what it does in one
   # conversation with another Key, and catching up on the agent's Keys.
   @dm_inbox_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms(/blocks)?\z"
@@ -140,8 +147,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @atlas_path ~r"\A/api/v1/agent/fleets/#{@fleet}/atlas/(swarm|things)\z"
   @outside_projects_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(notebooks|code)(/|\z)"
 
-  # The fields each room, sync, proposal read and poll body holds: the ones it
-  # must name, then the ones it may add.
+  # The fields each room, sync, proposal read, poll and season body holds: the
+  # ones it must name, then the ones it may add.
   @body_fields [
     {@message_path, {~w(body operation_id), ~w(reply_to)}},
     {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes mentions max_bytes)}},
@@ -183,7 +190,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@posting_key_path, {~w(token_id), []}},
     {@receipts_path, {~w(idempotency_key), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
-    {@poll_vote_path, {~w(choice), ~w(reason)}}
+    {@poll_vote_path, {~w(choice), ~w(reason)}},
+    {@season_pick_path, {~w(product), ~w(reason)}},
+    {@seasons_list_path, {[], ~w(before)}}
   ]
 
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
@@ -210,7 +219,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @propose_max_body 4_000 * 12 + 8 * 1024
   # A poll holds its question (200 characters), up to 10 choices of 100 and
   # notes of up to 2,000, each character escaped the way a post's can be; it
-  # fits the broker's envelope the same way. A vote's reason is up to 500.
+  # fits the broker's envelope the same way. A vote's reason is up to 500, and
+  # so is a season pick's.
   @poll_start_max_body (200 + 10 * 100 + 2_000) * 12 + 2 * 1024
   @poll_vote_max_body 500 * 12 + 2 * 1024
   # What a proposal's body may name: what every proposal has, then the
@@ -827,6 +837,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @mutes_path,
           @polls_path,
           @poll_path,
+          @seasons_path,
+          @season_coins_path,
           @dm_inbox_path,
           @code_pushes_path,
           @code_commit_path,
@@ -886,7 +898,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @dm_path,
         @code_history_path,
         @code_file_path,
-        @dm_changes_path
+        @dm_changes_path,
+        @season_pick_path,
+        @seasons_list_path
         | @poll_post_paths
       ],
       &Regex.match?(&1, path)
@@ -921,12 +935,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A sync, and catching up on direct messages alone.
   defp catch_up?(path), do: Regex.match?(@sync_path, path) or dm_op(path) == "changes"
 
-  # A message for the site's team, and starting or voting in a poll.
+  # A message for the site's team, starting or voting in a poll, and a
+  # season pick.
   defp form_body_limit(path) do
     cond do
       Regex.match?(@message_path, path) -> @message_max_body
       Regex.match?(@poll_start_path, path) -> @poll_start_max_body
       Regex.match?(@poll_vote_path, path) -> @poll_vote_max_body
+      Regex.match?(@season_pick_path, path) -> @poll_vote_max_body
       true -> nil
     end
   end
@@ -983,6 +999,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@message_path, path) -> check_message_body(params)
       op = atlas_op(path) -> check_fields(Map.fetch!(@atlas_bodies, op), params)
+      op = season_op(path) -> check_season_body(op, params)
       true -> check_op_body(path, params)
     end
   end
@@ -1720,6 +1737,28 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       )
 
   defp check_vote_body(_params), do: :invalid
+
+  defp season_op(path) do
+    cond do
+      Regex.match?(@season_pick_path, path) -> :pick
+      Regex.match?(@seasons_list_path, path) -> :list
+      true -> nil
+    end
+  end
+
+  # A pick names the product, and may say why. A page of settled seasons may
+  # name the season it reads before, as the page before answered it.
+  defp check_season_body(:pick, %{"product" => product} = params) when is_binary(product),
+    do:
+      admit(
+        Enum.all?(Map.keys(params), &(&1 in ~w(product reason))) and
+          is_binary(Map.get(params, "reason", ""))
+      )
+
+  defp check_season_body(:list, params),
+    do: admit(Enum.all?(params, fn {key, value} -> key == "before" and is_binary(value) end))
+
+  defp check_season_body(_op, _params), do: :invalid
 
   defp cursor?(%{"slug" => slug, "after_seq" => after_seq} = room),
     do: map_size(room) == 2 and is_binary(slug) and is_integer(after_seq)

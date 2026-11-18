@@ -24,6 +24,8 @@ defmodule KeyfleetWeb.McpConnectorTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
+  alias Keyfleet.SeasonHelpers
+  alias Keyfleet.Seasons
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -713,6 +715,137 @@ defmodule KeyfleetWeb.McpConnectorTest do
     end
   end
 
+  # A season tool runs its signed request's code: through the connector and
+  # over /mcp signed by the agent it answers what the request answers, and
+  # refuses with its code and words. The agent acts as its person's Key 2;
+  # Key 1's pick for the season taking picks is never shown to it.
+  test "each season tool answers and refuses as its signed request does", c do
+    subject = "did:privy:connector-" <> Ecto.UUID.generate()
+    wallet = new_wallet()
+    Accounts.register_verified!(subject, wallet, [wallet], actor: %Actors.System{})
+    holds!(2, wallet)
+    pair!(subject, c.signer.address)
+    token = connect!(subject, @agent_scopes, c.signer.address)
+    manifest = Map.new(Keyfleet.Capabilities.tools(), &{&1["name"], &1})
+    owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    played!(owner)
+    Seasons.pick!(@fleet, 3, %{product: "SOL-USD", reason: "Not yet seen"}, actor: owner)
+    pick = %{"fleet_id" => @fleet, "product" => "SOL-USD", "reason" => "Mine"}
+
+    for {name, input} <- [
+          {"seasons_pick", pick},
+          {"seasons_pick", %{pick | "product" => "DOGE-USD"}},
+          {"seasons_pick", %{pick | "product" => "sol-usd"}},
+          {"seasons_pick", %{pick | "reason" => "Line one\nline two"}},
+          {"seasons_pick", %{pick | "fleet_id" => "no_such_fleet"}},
+          {"seasons_show", %{"fleet_id" => @fleet}},
+          {"seasons_show", %{"fleet_id" => "no_such_fleet"}},
+          {"seasons_list", %{"fleet_id" => @fleet}},
+          {"seasons_list", %{"fleet_id" => @fleet, "before" => "1"}},
+          {"seasons_list", %{"fleet_id" => @fleet, "before" => "0"}},
+          {"seasons_list", %{"fleet_id" => "no_such_fleet"}},
+          {"seasons_coins", %{}}
+        ],
+        over_mcp <- [result(call(token, name, input, c)), result(signed_call(c, name, input))] do
+      http = http_twin(c, manifest[name], input)
+
+      if http.status in 200..299 do
+        assert %{"isError" => false, "structuredContent" => answer} = over_mcp, name
+        assert answer == http.body, name
+      else
+        assert %{"isError" => true, "content" => [%{"text" => text}]} = over_mcp, name
+        assert Jason.decode!(text)["error"] == http.body["error"], name
+      end
+    end
+
+    now = http_twin(c, manifest["seasons_show"], %{"fleet_id" => @fleet}).body
+    assert %{"key" => 2, "reason" => "Mine"} = now["taking_picks"]["my_pick"]
+    assert now["taking_picks"]["keys_locked"] == 2
+    refute Jason.encode!(now) =~ "Not yet seen"
+
+    # A reason longer than 500 characters is refused at every door, counted
+    # in characters as the signed request counts it, and nothing is written;
+    # 500 emoji are 500 characters.
+    too_long = %{pick | "reason" => String.duplicate("r", 501)}
+
+    assert %{"isError" => true, "content" => [%{"text" => text}]} =
+             result(call(token, "seasons_pick", too_long, c))
+
+    assert %{"code" => "invalid_request", "hint" => "reason is at most 500 characters;" <> _} =
+             Jason.decode!(text)["error"]
+
+    assert http_twin(c, manifest["seasons_pick"], too_long).body["error"]["code"] ==
+             "invalid_pick"
+
+    emoji = %{pick | "reason" => String.duplicate("😀", 500)}
+    assert %{"isError" => false} = result(call(token, "seasons_pick", emoji, c))
+    assert http_twin(c, manifest["seasons_pick"], emoji).status == 200
+
+    # Half an emoji can't be carried as JSON text: the connector refuses the
+    # call and the signed request its body, and the pick stays as it was.
+    half = ~s("reason":"\\ud83d")
+    input = ~s({"fleet_id":"#{@fleet}","product":"SOL-USD",#{half}})
+
+    refused =
+      mcp_text(
+        ~s({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"seasons_pick","arguments":{"input":#{input}}}}),
+        token,
+        c
+      )
+
+    assert refused.status == 400
+    assert error(refused)["code"] == "bad_request"
+
+    path = "/api/v1/agent/fleets/#{@fleet}/seasons/pick"
+    not_json = signed_text(c, "POST", path, ~s({"product":"SOL-USD",#{half}}))
+    assert not_json.status == 422
+    assert not_json.body["error"]["code"] == "invalid_request"
+
+    assert http_twin(c, manifest["seasons_show"], %{"fleet_id" => @fleet}).body["taking_picks"][
+             "my_pick"
+           ]["reason"] == emoji["reason"]
+  end
+
+  # An agent whose person holds no Key of the fleet reads its settled seasons
+  # and the products open to picks, and neither reads the seasons now nor
+  # picks; an app that hasn't paired runs none of the four.
+  test "a season tool refuses a non-member as its signed request does, and an unpaired app",
+       c do
+    {:ok, outsider} = Siwa.LocalSigner.new()
+    subject = account!()
+    pair!(subject, outsider.address)
+    token = connect!(subject, @agent_scopes, outsider.address)
+    played!(%Actors.Human{human_account_id: 1, wallet_addresses: [@owner]})
+    pick = %{"fleet_id" => @fleet, "product" => "SOL-USD"}
+
+    for name <- ["seasons_show", "seasons_pick"] do
+      input = if name == "seasons_pick", do: pick, else: %{"fleet_id" => @fleet}
+
+      assert %{"isError" => true, "content" => [%{"text" => text}]} =
+               result(call(token, name, input, c))
+
+      assert Jason.decode!(text)["error"]["code"] == "season_needs_key", name
+    end
+
+    assert %{"isError" => false, "structuredContent" => %{"seasons" => [%{"number" => 1}]}} =
+             result(call(token, "seasons_list", %{"fleet_id" => @fleet}, c))
+
+    assert %{"isError" => false, "structuredContent" => %{"products" => products}} =
+             result(call(token, "seasons_coins", %{}, c))
+
+    assert Enum.sort(products) == ["SOL-USD", "USDC"]
+
+    unpaired = connect!(account!(), @agent_scopes)
+
+    for {name, input} <- [
+          {"seasons_show", %{"fleet_id" => @fleet}},
+          {"seasons_pick", pick},
+          {"seasons_list", %{"fleet_id" => @fleet}},
+          {"seasons_coins", %{}}
+        ],
+        do: assert(not_paired?(call(unpaired, name, input, c)), name)
+  end
+
   # A picture is larger than a signed request can carry, so it goes in two
   # steps, as the browser tools send it: the start answers an address on this
   # site, and the upload sends the bytes there as base64.
@@ -1007,6 +1140,17 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
   defp person(subject), do: %RegentAgents.Person{privy_user_id: subject}
 
+  # The fleet's seasons played by its turns: season 1 settled with a pick of
+  # `owner`'s Key, season 2 under way and season 3 taking picks.
+  defp played!(owner) do
+    [b0, b1, b2 | _] = SeasonHelpers.boundaries(2)
+    SeasonHelpers.coinbase!(%{"SOL-USD" => [{b1, "100"}, {b2, "97"}]})
+    SeasonHelpers.turn!(@fleet, b0)
+    Seasons.pick!(@fleet, 1, %{product: "SOL-USD", reason: "Fast chain"}, actor: owner)
+    SeasonHelpers.turn!(@fleet, b1)
+    SeasonHelpers.turn!(@fleet, b2)
+  end
+
   defp holds!(token_id, wallet) do
     Keys.record_epoch!(
       %{
@@ -1071,9 +1215,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
   defp key(subject, client), do: RegentMCPAgents.identity_key("keyfleet", subject, client)
   defp identity_wallet(key), do: "0x" <> binary_part(key, 0, 40)
 
-  defp mcp(body, token, c) do
+  defp mcp(body, token, c), do: mcp_text(Jason.encode!(body), token, c)
+
+  defp mcp_text(text, token, c) do
     conn =
-      conn(:post, "/mcp", Jason.encode!(body))
+      conn(:post, "/mcp", text)
       |> Map.put(:remote_ip, c.from)
       |> put_req_header("content-type", "application/json")
       |> put_req_header("accept", "application/json, text/event-stream")
@@ -1119,7 +1265,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
   end
 
   # The same agent's own signed request, through the site served on a port.
-  defp signed(c, method, path, body) do
+  defp signed(c, method, path, body),
+    do: signed_text(c, method, path, body && Jason.encode!(body))
+
+  defp signed_text(c, method, path, text) do
     request =
       SignedAgentHelpers.sign(
         c.signer,
@@ -1127,7 +1276,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
         Siwa.Contract.authority(c.app),
         method,
         path,
-        body && Jason.encode!(body)
+        text
       )
 
     Req.request!(

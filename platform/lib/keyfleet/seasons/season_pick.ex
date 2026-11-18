@@ -8,7 +8,8 @@ defmodule Keyfleet.Seasons.SeasonPick do
   picks were locked (`lock_order`, from a database sequence), and sending the
   same pick again keeps its place. Until the season starts only the Key's
   holder and its agents read the pick; from the start every member of the
-  fleet reads every pick. Picks are never removed.
+  fleet reads every pick, and once the season is settled anyone does, as
+  its public record (`:settled`). Picks are never removed.
 
   At the season's start its turn sets each pick's open price, or why it is
   void; at the end its close price and result over the season, or that it is
@@ -142,6 +143,11 @@ defmodule Keyfleet.Seasons.SeasonPick do
       prepare build(sort: [lock_order: :asc])
     end
 
+    # The picks of settled seasons, the public record's.
+    read :settled do
+      filter expr(not is_nil(season.settled_at))
+    end
+
     update :open do
       accept [:open_price, :void]
     end
@@ -160,6 +166,11 @@ defmodule Keyfleet.Seasons.SeasonPick do
     # by its own Key (`:mine`), and `:in_season` answers only started seasons.
     policy action([:mine, :in_season]) do
       authorize_if {Keyfleet.Access.Check, read: :seasons, scope: :fleet_id}
+    end
+
+    # Wider than the class: a settled season's picks are public record.
+    policy action(:settled) do
+      authorize_if always()
     end
 
     policy action([:read, :open, :close]) do

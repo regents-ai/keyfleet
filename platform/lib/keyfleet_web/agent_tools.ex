@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.AgentTools do
     resource KeyfleetWeb.AgentTools.Rooms
     resource KeyfleetWeb.AgentTools.Dms
     resource KeyfleetWeb.AgentTools.Polls
+    resource KeyfleetWeb.AgentTools.Seasons
     resource KeyfleetWeb.AgentTools.Projects
     resource KeyfleetWeb.AgentTools.Fleets
     resource KeyfleetWeb.AgentTools.Keys
@@ -46,6 +47,7 @@ defmodule KeyfleetWeb.AgentTools do
   @rooms KeyfleetWeb.AgentTools.Rooms
   @dms KeyfleetWeb.AgentTools.Dms
   @polls KeyfleetWeb.AgentTools.Polls
+  @seasons KeyfleetWeb.AgentTools.Seasons
   @projects KeyfleetWeb.AgentTools.Projects
   @fleets KeyfleetWeb.AgentTools.Fleets
   @keys KeyfleetWeb.AgentTools.Keys
@@ -89,6 +91,10 @@ defmodule KeyfleetWeb.AgentTools do
     polls_start: {@polls, :start, "New poll", :once},
     polls_vote: {@polls, :vote, "Vote", :repeatable},
     polls_end: {@polls, :end, "End poll", :once},
+    seasons_show: {@seasons, :show, "Season", :read},
+    seasons_pick: {@seasons, :pick, "Pick", :repeatable},
+    seasons_list: {@seasons, :list, "Seasons", :read},
+    seasons_coins: {@seasons, :coins, "Coins", :read},
     projects_list: {@projects, :list, "Projects", :read},
     projects_start: {@projects, :start, "New project", :once},
     projects_archive: {@projects, :archive, "Archive project", :once},
