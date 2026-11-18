@@ -1728,7 +1728,6 @@ features:
       - platform/test/keyfleet/seasons/turn_test.exs
     gaps:
       - Read against a stand-in for Coinbase; Coinbase's live answers are not read by any test.
-      - No page shows seasons yet.
 
   - id: seasons-agent-tools
     what: >-
@@ -1807,6 +1806,37 @@ features:
     gaps:
       - A failed database read answers a server error, not a 503 with a code, unlike the public proposals.
       - The best pick is chosen by the result as stored, to 28 digits; two results equal that far would be told apart by lock order, where the crown decides them exactly.
+
+  - id: seasons-panel
+    what: >-
+      The fleet's hall has a Season panel. Anyone, signed out too, reads the
+      season under way there: the holding and its open price, the captain
+      Key, the time left counting down in the browser, and the last settled
+      season's result as a signed percentage with whether the crown passed.
+      A person signed in with a Key of the fleet also reads the season under
+      way's picks in lock order, ten at a time with More, and
+      locks or changes the Key's pick for the season taking picks: a product
+      from those open to picks and an optional reason of up to 500
+      characters, through the same rule as seasons_pick, refused in plain
+      words beside the button. The season taking picks shows only how many
+      Keys locked, never whose or what. A turn or a lock reaches open pages
+      without a reload. Keyfleet places no order and holds no money.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/season_panel.ex
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/fleet_now.ex
+      - platform/lib/keyfleet/seasons/season.ex
+      - platform/assets/css/pages/fleet.css
+    entry:
+      - route: GET /:fleet/:number
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/season_panel_test.exs
+    gaps:
+      - No price moves on the panel while a season runs; results appear when it settles.
 
   - id: agent-live-feed
     what: >-

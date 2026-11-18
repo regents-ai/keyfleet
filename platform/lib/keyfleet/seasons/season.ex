@@ -8,9 +8,10 @@ defmodule Keyfleet.Seasons.Season do
   settled at its end, when the holding's close price and its own result over
   the season are set. Only `Keyfleet.Seasons.Turn` writes seasons. A fleet has
   at most one season taking picks and one running at a time, and seasons are
-  never removed. Only the fleet's members read them, but for a settled
-  season: that is public record, read by anyone (`:settled`), its picks a
-  page at a time.
+  never removed. Only the fleet's members read them, but for the season
+  under way, which anyone reads with how many Keys picked for it
+  (`:running`), and a settled season: that is public record, read by anyone
+  (`:settled`), its picks a page at a time.
 
   Opening one, which ends every turn, is announced on `Keyfleet.Seasons.topic/1`
   as "seasons_changed".
@@ -168,13 +169,16 @@ defmodule Keyfleet.Seasons.Season do
       authorize_if always()
     end
 
-    policy action([:in_fleet, :numbered, :upcoming, :running]) do
+    policy action([:in_fleet, :numbered, :upcoming]) do
       authorize_if {Keyfleet.Access.Check, read: :seasons, scope: :fleet_id}
       authorize_if actor_attribute_equals(:role, :system)
     end
 
-    # Wider than the class: a settled season is public record.
-    policy action(:settled) do
+    # Wider than the class: a settled season is public record, and so is the
+    # season under way, whose holding and captain follow from the record of
+    # the one settled as it started. Its picks stay the members'
+    # (`Keyfleet.Seasons.SeasonPick`, `:in_season`).
+    policy action([:running, :settled]) do
       authorize_if always()
     end
 

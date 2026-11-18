@@ -10,9 +10,11 @@ defmodule Keyfleet.Seasons do
   change until its season starts; a change takes the newest place in the
   order picks were locked. Until the season starts a pick is read only by
   its own Key's holder and that Key's agents; from the start every member
-  reads every pick. Once a season is settled it is public record, its picks
-  with it: anyone reads it (`settled_page/2`, `settled_picks_page/4`), its
-  Keys by number. No read answers more than a page, however many Keys pick.
+  reads every pick. Anyone reads the season under way, its holding, captain
+  and prices, but not its picks (`running_season/2`). Once a season is
+  settled it is public record, its picks with it: anyone reads it
+  (`settled_page/2`, `settled_picks_page/4`), its Keys by number. No read
+  answers more than a page, however many Keys pick.
 
   When a season ends each pick is scored by what its product did over the
   season, and the best one may take the crown: the fleet's holding for the

@@ -46,6 +46,7 @@ defmodule KeyfleetWeb.ShellLive do
     Read,
     RoomsLive,
     SearchLive,
+    SeasonPanel,
     SharedFigures,
     TreasuryLive,
     WorkspaceLive,
@@ -67,6 +68,7 @@ defmodule KeyfleetWeb.ShellLive do
   @search_events ~w(search search_more)
   @worldline_events ~w(worldline_older worldline_filter)
   @atlas_events ~w(atlas_older atlas_blocks_fleet atlas_blocks_things)
+  @season_events ~w(season_pick season_lock season_more)
   @sign_in_events ~w(open_notebooks get_code_password)
   @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
@@ -163,7 +165,9 @@ defmodule KeyfleetWeb.ShellLive do
        shared: %{},
        buy_key: nil,
        pass_note: nil,
-       quotes: nil
+       quotes: nil,
+       season: nil,
+       season_topics: []
      )
      |> follow_agents(current_account(socket.assigns.access_context))}
   end
@@ -455,6 +459,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp press(event, params, socket) when event in @atlas_events,
     do: AtlasLive.handle_event(event, params, socket)
 
+  defp press(event, params, socket) when event in @season_events,
+    do: SeasonPanel.handle_event(event, params, socket)
+
   # The Treasury's refresh, once every 30 seconds for each person: by
   # account when signed in, by visit when not.
   defp press("refresh_treasury", _params, socket) do
@@ -584,6 +591,12 @@ defmodule KeyfleetWeb.ShellLive do
        do: PollsLive.handle_info(notice, socket)
 
   defp notice(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
+
+  # A turn of the fleet's seasons, or a pick locked for the one taking picks:
+  # a member's "Season" panel reads what it changed.
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["seasons_changed", "season_changed"],
+       do: {:noreply, SeasonPanel.heard(socket, notice)}
 
   # A mute added or taken away hides or shows that key's posts in the room on
   # show and in the open key's thread.
@@ -878,6 +891,7 @@ defmodule KeyfleetWeb.ShellLive do
           room={@room}
           posts={@streams.posts}
           room_notice={@room_notice}
+          season={@season}
         >
           <WorkspaceLive.board
             :if={@route_spec.route_id == :workspace}
@@ -1058,6 +1072,7 @@ defmodule KeyfleetWeb.ShellLive do
     do:
       socket
       |> SharedFigures.follow(:fleet, [])
+      |> SeasonPanel.leave()
       |> assign(
         fleet: nil,
         fleet_params: nil,

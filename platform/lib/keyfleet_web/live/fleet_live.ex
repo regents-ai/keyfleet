@@ -111,6 +111,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.SearchLive
+  alias KeyfleetWeb.SeasonPanel
   alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
@@ -251,6 +252,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :posts, :any, default: nil, doc: "the open room's posts"
   attr :room_notice, :map, default: nil
+
+  attr :season, :map,
+    default: nil,
+    doc: "the hall's \"Season\" panel, as `KeyfleetWeb.SeasonPanel.show/4` gives it, or nil"
 
   slot :inner_block, doc: "the Treasury, Workspace, search or Worldline page, for those places"
 
@@ -452,6 +457,7 @@ defmodule KeyfleetWeb.FleetLive do
             room={@room}
             posts={@posts}
             room_notice={@room_notice}
+            season={@season}
           />
           <.key_map :if={@view == :map and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@view == :map and not @fleet.deployed?} fleet={@fleet} />
@@ -696,12 +702,14 @@ defmodule KeyfleetWeb.FleetLive do
   attr :room, :any, required: true
   attr :posts, :any, required: true
   attr :room_notice, :map, required: true
+  attr :season, :map, required: true
 
   # The hall: channels down the left, everything happening in the fleet in one
   # feed in the middle, kept current while the page is open, or the room
   # picked on the left in its place, and on the right what is open to a vote,
-  # what the fleet is working on, who is here and, for a signed-in person, what
-  # they have sent their agent to quote. The feed stays on the page, hidden, while a room is
+  # the fleet's season (`KeyfleetWeb.SeasonPanel`), what the fleet is working
+  # on, who is here and, for a signed-in person, what they have sent their
+  # agent to quote. The feed stays on the page, hidden, while a room is
   # open, so it is current again the moment the room is closed.
   defp hall(assigns) do
     ~H"""
@@ -774,6 +782,7 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <aside class="fleet-rail" aria-label="The fleet now">
+        <SeasonPanel.panel :if={@season} season={@season} />
         <.recent_work work={@now.recent_work} fleet_id={@fleet.fleet_id} />
         <CheckIns.who_is_here
           agents={@who}
@@ -1633,6 +1642,7 @@ defmodule KeyfleetWeb.FleetLive do
     |> show_agents()
     |> follow_feed(fleet_id, place, feed, now)
     |> read_quotes(fleet_id, actor)
+    |> SeasonPanel.show(fleet_id, view(place, params), now)
   end
 
   # How far the fleet has sold, and with it, for a hall drawn from the
@@ -1781,6 +1791,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp show_without_keys(socket, fleet, params, place) do
     socket
     |> SharedFigures.follow(:fleet, [])
+    |> SeasonPanel.leave()
     |> assign(
       fleet: fleet,
       fleet_params: params,
@@ -2050,18 +2061,20 @@ defmodule KeyfleetWeb.FleetLive do
   A hall shown to someone who is no longer a member is drawn from the
   fleet's reading from now on, in place of what they read as one; one
   shown to a new member stops hearing the reading, and its next notice
-  reads the feed as theirs. The polls show in the sidebar for a member only.
+  reads the feed as theirs. The polls show in the sidebar for a member only,
+  and the "Season" panel moves to what the new class reads of it.
   """
   def class_changed(
         %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false} = fleet}} = socket,
         fleet_id
       ) do
     %{fleet_place: place, fleet_params: params} = socket.assigns
+    view = view(place, params)
 
     socket =
       socket
       |> assign(:fleet, %{fleet | polls?: ShellLive.may_read?(socket, fleet_id, :polls)})
-      |> follow_shared(fleet_id, view(place, params))
+      |> follow_shared(fleet_id, view)
       |> show_agents()
 
     with true <- from_reading?(socket),
@@ -2069,8 +2082,9 @@ defmodule KeyfleetWeb.FleetLive do
       socket
       |> show_sales(reading)
       |> read_activity(fleet_id, :new, reading)
+      |> SeasonPanel.show(fleet_id, view, reading)
     else
-      _member_or_unread -> socket
+      _member_or_unread -> SeasonPanel.show(socket, fleet_id, view, nil)
     end
   end
 
@@ -2087,6 +2101,7 @@ defmodule KeyfleetWeb.FleetLive do
         |> show_sales(reading)
         |> reread_activity(reading)
         |> reread_waiting_quotes()
+        |> SeasonPanel.show(fleet_id, :hall, reading)
 
       _not_open ->
         socket

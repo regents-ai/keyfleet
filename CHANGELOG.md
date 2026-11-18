@@ -13010,3 +13010,36 @@ step's report).
 - Not covered: the best pick in a list is chosen by the result as stored, to 28 digits,
   where the crown is decided exactly; they could differ only for two results equal to
   28 digits.
+
+## 2026-11-18 — The fleet's hall shows its season and takes a Key's pick
+
+- `KeyfleetWeb.SeasonPanel` draws a Season panel at the top of the hall's rail: Holding
+  (product and open price), Captain, Clock (the house `Countdown` hook counting down to
+  `ends_at` in the browser) and Last (the last settled season's result as a signed
+  percentage, and whether the crown passed). For the fleet's members it adds Pick, a
+  plain product select (USDC first, then the products open to picks in order), an
+  optional reason box under `KeyfleetWeb.BoxLimit` (500 characters, counted as typed)
+  and Lock, and Picks, the season under way's picks in lock order, ten a page from
+  `Seasons.picks_page/5` with More. Lock goes through `Seasons.pick/4` as the person's
+  Key (`Polls.voter`'s choice, as the agent's pick), and each refusal is a few plain
+  words beside the button (season closed, product not open, list not read, reason, no
+  Key). The season taking picks shows only its number, how many Keys locked and the
+  person's own pick; no other Key's pick of it is read for the page.
+- `Keyfleet.Seasons.Season`'s `:running` read is open to anyone, as `:settled` is: its
+  holding and captain follow from the record of the season settled as it started. Its
+  picks stay the members' (`SeasonPick` `:in_season`). The only agent answer that moves:
+  `seasons_picks` for a number not under way, asked by an agent without a Key's
+  standing, answers 404 `season_unknown` where it answered 403 `season_needs_key`.
+- The page hears a turn on `Seasons.topic/1` and a lock on `Seasons.season_topic/1`
+  through the Ash notifications the engine already sends; a lock by another Key rereads
+  only the count. Visitors and people without a Key get the panel's public part from
+  `KeyfleetWeb.FleetNow`, the fleet's one shared reading, which now listens to the
+  seasons topic too. No new timer, job, process or polling.
+- `/docs` (Seasons), `docs/agent-parity.md` (the Page column, and K18: the season under
+  way is public only on the page) and `verification/features.yml` (`seasons-panel`) say
+  the same.
+- Tests: `SeasonPanelTest` locks and changes a pick with every refusal, refuses a pick
+  sent after its season started, shows visitors and people without a Key the season
+  but no form and no pick, proves another Key's pick of the season taking picks is in
+  neither the page nor the page's process, updates open pages on a lock and on a turn,
+  and pages the picks ten at a time.
