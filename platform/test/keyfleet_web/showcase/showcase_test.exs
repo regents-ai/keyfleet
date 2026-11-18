@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.ShowcaseTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
   @endpoint KeyfleetWeb.Endpoint
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.Showcase.{Catalog, LocalOnly, Sample, Utilities}
 
   defp local_conn do
@@ -119,7 +120,7 @@ defmodule KeyfleetWeb.ShowcaseTest do
       |> LazyHTML.attribute("maxlength")
 
     for {typed, note} <- [
-          {binary_part("10000", 0, String.to_integer(box)), "Quantity: at most 3 characters."},
+          {binary_part("10000", 0, String.to_integer(box)), "must be less than or equal to 100"},
           {"0", "must be greater than 0"},
           {"-3", "must be greater than 0"},
           {"1.5", "is invalid"}
@@ -132,6 +133,37 @@ defmodule KeyfleetWeb.ShowcaseTest do
       assert html =~ note
       refute html =~ "Demo record ×"
     end
+  end
+
+  # The action counts a title's letters, an emoji as one; its boxes count an
+  # emoji as two.
+  test "a title of 80 emoji fits the sample's boxes and is taken whole" do
+    {:ok, view, _html} = live(local_conn(), "/showcase")
+    title = String.duplicate("🦊", 80)
+
+    typed = box_keeps(view, "#sample-form [name='sample[title]']", title)
+
+    assert view
+           |> form("#sample-form", sample: %{title: typed, quantity: "2"})
+           |> render_submit() =~ "#{title} × 2"
+
+    view |> element("button[phx-click=edit_step]") |> render_click()
+    typed = box_keeps(view, "#step-form [name='step[title]']", title)
+    view |> form("#step-form", step: %{title: typed}) |> render_submit()
+    refute has_element?(view, "#step-form")
+    assert render(view) =~ title
+  end
+
+  # What the box at `selector` keeps of `value`, as a browser cuts a paste.
+  defp box_keeps(view, selector, value) do
+    [box] =
+      view
+      |> element(selector)
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("maxlength")
+
+    BoxLimit.kept(value, String.to_integer(box) - 2)
   end
 
   test "active component inventory names exported functions and their attributes" do

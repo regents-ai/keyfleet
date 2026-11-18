@@ -1107,6 +1107,60 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
     end
 
+    # The words and a launch's fields are measured as the site keeps them,
+    # trimmed: words of 3,999 letters and the line end a paste brings are 4,001
+    # as typed, which their box takes, and 3,999 kept.
+    test "words and launch fields at the most once trimmed, with a line end or spaces after, are sent",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+      ChainViews.put!(list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000))
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      decision = %{
+        "kind" => "decision",
+        "key" => "7",
+        "text" => String.duplicate("a", 3_999) <> "\r\n"
+      }
+
+      launch = %{
+        "kind" => "launch",
+        "key" => "7",
+        "text" => "Launch the coin",
+        "name" => String.duplicate("n", 64) <> "  ",
+        "symbol" => "FLT",
+        "description" => String.duplicate("d", 512) <> "\n",
+        "website" => "https://example.com",
+        "image" => "https://example.com/coin.png"
+      }
+
+      for form <- [decision, launch] do
+        view |> form("#propose-action-form", form) |> render_change()
+        render_async(view, @async_wait)
+        refute text(view, "#propose-action-line") =~ "too long"
+
+        view
+        |> with_target("#propose-action")
+        |> render_hook("prepare_and_send", %{
+          "form" => form,
+          "step" => "propose",
+          "address" => @holder
+        })
+
+        assert_reply(view, %{send: "propose"})
+      end
+
+      # A letter more is past what the site keeps, and said.
+      view
+      |> form("#propose-action-form", %{decision | "text" => String.duplicate("a", 4_001)})
+      |> render_change()
+
+      render_async(view, @async_wait)
+
+      assert text(view, "#propose-action-line") ==
+               "The proposal is too long: 4000 characters at most."
+    end
+
     # Costly failure: a paste the browser cut at its box is proposed cut, a
     # link that leads elsewhere or words missing their end, and the chain
     # keeps it. A box takes more than the site does, so what it cut is
@@ -1161,7 +1215,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
         assert_push_event(view, "onchain-steps:review", %{
           component_id: "propose-action",
-          review: nil
+          review: %{steps: []}
         })
 
         assert text(view, "#propose-action-line") == note

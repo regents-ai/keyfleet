@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
+  alias KeyfleetWeb.BoxLimit
 
   @fleet "fibonacci_syndicate"
   @list "/syndicate/1/polls"
@@ -108,6 +109,45 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     view |> element(~s(#poll-end[data-confirm-action="End"])) |> render_click()
     assert shows?(fn -> has_element?(view, "#poll-results") end)
     refute has_element?(view, "#poll-end")
+  end
+
+  # A poll's rule counts a choice's letters, an emoji as one; its box counts
+  # an emoji as two. The box holds ten choices of 100 emoji each, and what it
+  # cuts of a longer paste the rule refuses, with its note.
+  test "ten choices of 100 emoji each fit the box and start a poll; what the box cut is refused",
+       %{conn: conn} do
+    {:ok, view, _html} = live(signed_in_as(conn, @starter), @list)
+    choices = for n <- 1..10, do: String.duplicate(<<0x1F600 + n::utf8>>, 100)
+    typed = Enum.join(choices, "\n")
+
+    [box] =
+      view
+      |> element("#polls-start-form textarea[name='poll[choices]']")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("maxlength")
+
+    # What the box keeps of a paste, as a browser cuts it.
+    kept = &BoxLimit.kept(&1, String.to_integer(box) - 2)
+
+    start = fn choices ->
+      view
+      |> form("#polls-start-form",
+        poll: %{question: "Which one next?", choices: choices, notes: "", minutes: "30"}
+      )
+      |> render_submit()
+    end
+
+    # A choice more, of which the box keeps the first letter: eleven choices.
+    assert kept.(typed <> "\nAnother") == typed <> "\nA"
+
+    assert start.(kept.(typed <> "\nAnother")) =~
+             "Give 2 to 10 different choices, each up to 100 characters."
+
+    assert kept.(typed) == typed
+    start.(kept.(typed))
+    refute has_element?(view, "#polls-start-form")
+    assert [%{choices: ^choices}] = Polls.list_polls!(@fleet, actor: human(@starter))
   end
 
   defp start! do

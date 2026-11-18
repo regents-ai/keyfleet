@@ -381,7 +381,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       aria-describedby={field.described_by}
                       phx-mounted={JS.focus()}
                       required
-                      maxlength="80"
+                      maxlength={sample_box("title")}
                     />
                   </P.field>
                   <div class="sc-row">
@@ -713,12 +713,8 @@ defmodule KeyfleetWeb.ShowcaseLive do
     """
   end
 
-  def handle_event("create_sample", %{"sample" => params}, socket) do
-    case sample_too_long(params) do
-      nil -> create_sample(socket, params)
-      words -> {:noreply, assign(socket, errors: [words], form: to_form(params, as: :sample))}
-    end
-  end
+  def handle_event("create_sample", %{"sample" => params}, socket),
+    do: create_sample(socket, params)
 
   def handle_event("create_item", _, socket) do
     params = %{title: "Workshop item #{length(socket.assigns.empty_items) + 1}", quantity: 1}
@@ -815,21 +811,13 @@ defmodule KeyfleetWeb.ShowcaseLive do
     end
   end
 
-  # The longest value each of the sample form's boxes takes, as typed
-  # (`KeyfleetWeb.BoxLimit`): the action's longest title, and 100.
-  defp sample_longest("title"), do: 80
+  # The longest value the sample action takes from each box, in the UTF-16
+  # units a box counts (`KeyfleetWeb.BoxLimit`): a title of 80 letters, each
+  # an emoji of two units, and 100. The action itself refuses more.
+  defp sample_longest("title"), do: 80 * 2
   defp sample_longest("quantity"), do: 3
 
   defp sample_box(name), do: BoxLimit.maxlength(sample_longest(name))
-
-  defp sample_too_long(params) do
-    Enum.find_value([{"title", "Title"}, {"quantity", "Quantity"}], fn {name, label} ->
-      typed = params[name]
-
-      if is_binary(typed) and BoxLimit.too_long?(typed, sample_longest(name)),
-        do: "#{label}: at most #{sample_longest(name)} characters."
-    end)
-  end
 
   defp capability_samples do
     [

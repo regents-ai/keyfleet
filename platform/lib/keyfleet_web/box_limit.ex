@@ -7,11 +7,18 @@ defmodule KeyfleetWeb.BoxLimit do
   paste there without a word, never keeping half a letter, so what it keeps
   of a paste longer than the box may be one unit short of it. A box
   therefore takes two units more than the longest value the site takes from
-  it (`maxlength/1`), room for one more letter of any kind, and the site
-  refuses a value longer than that longest, counted the same way and before
-  anything is trimmed (`too_long?/2`), with a note saying so. Whatever a box
-  cut is longer than that, so it is refused and said, never taken as if it
-  had been typed.
+  it (`maxlength/1`), room for one more letter of any kind.
+
+  Most boxes' values the site refuses when longer than that longest, counted
+  the same way and before anything is trimmed (`too_long?/2`), with a note
+  saying so: whatever such a box cut is longer than that, so it is refused
+  and said, never taken as if it had been typed. Where the rule a value
+  meets counts otherwise once it has trimmed it, in letters or in bytes (a
+  proposal's words and a launch's fields, a poll's choices), the longest is
+  the most that rule takes written in UTF-16 units, so the longest value it
+  takes fits its box, and the rule alone refuses more, with its note. What
+  such a box cut is refused too, unless the cut fell in spaces or blank
+  lines the rule trims away.
 
   `kept/2` is what such a box keeps of a value, for a value the site draws
   into one itself.
