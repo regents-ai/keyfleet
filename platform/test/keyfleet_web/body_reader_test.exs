@@ -7,19 +7,24 @@ defmodule KeyfleetWeb.BodyReaderTest do
 
   alias KeyfleetWeb.SignedAgentHelpers
 
-  # Each address's limit, as its parser gives it to the reader.
+  # Each address's limit: the shared agent address reads through its parser
+  # (`read_body/2`), the connector's address itself (`read_signed/3`).
   @limits %{"/api/agents/v1/pair" => 4096, "/mcp" => 700 * 1024}
 
   setup do
     reader =
       SignedAgentHelpers.serve!(:reader, fn conn, _opts ->
-        options = [length: Map.fetch!(@limits, conn.request_path)]
-        {read, body, conn} = KeyfleetWeb.BodyReader.read_body(conn, options)
+        {read, body, conn} = read(conn, Map.fetch!(@limits, conn.request_path))
         Plug.Conn.send_resp(conn, 200, "#{read} #{byte_size(body)}")
       end)
 
     %{reader: reader}
   end
+
+  defp read(%{request_path: "/mcp"} = conn, limit),
+    do: KeyfleetWeb.BodyReader.read_signed(conn, [], limit)
+
+  defp read(conn, limit), do: KeyfleetWeb.BodyReader.read_body(conn, length: limit)
 
   test "a signed body of exactly its limit is read whole however it arrives, and one byte more is not",
        c do

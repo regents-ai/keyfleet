@@ -1,25 +1,15 @@
 defmodule KeyfleetWeb.BodyReader do
   @moduledoc """
-  The body reader of the two addresses that decode a body an agent may have
-  signed, each up to its parser's `:length`. A shared agent request
-  (`/api/agents/v1`, the router's `:agent_pairing`) is read by the shared SIWA
-  plug's reader, which keeps the exact bytes the agent signed. A signed request
-  to the MCP address (`/mcp`, `KeyfleetWeb.Plugs.McpAgent`) is read the same
-  way, so McpAgent can check the signature against those bytes; an unsigned
-  one is read as any body is.
+  How a body an agent may have signed is read. `read_body/2` is the body
+  reader of the shared agent address (`/api/agents/v1`, the router's
+  `:agent_pairing`): the shared SIWA plug's reader, which keeps the exact bytes
+  the agent signed, up to its parser's `:length`.
 
   `signed?/1` is how every address that takes both signed and unsigned
   requests tells them apart.
   """
 
-  def read_body(%Plug.Conn{path_info: ["api", "agents", "v1" | _rest]} = conn, options),
-    do: read_signed(conn, options, Keyword.fetch!(options, :length))
-
-  def read_body(conn, options) do
-    if signed?(conn),
-      do: read_signed(conn, options, Keyword.fetch!(options, :length)),
-      else: Plug.Conn.read_body(conn, options)
-  end
+  def read_body(conn, options), do: read_signed(conn, options, Keyword.fetch!(options, :length))
 
   @doc """
   Whether `conn` is signed: it carries `x-siwa-signature` or
@@ -32,8 +22,10 @@ defmodule KeyfleetWeb.BodyReader do
   end
 
   @doc """
-  Reads a signed request's body with the shared SIWA reader, which keeps the
-  exact bytes in `conn.assigns.raw_body`: `{:ok, body, conn}` for a body of at
+  Reads a body with the shared SIWA reader, which keeps the exact bytes in
+  `conn.assigns.raw_body`, for a signature to be checked against them or for
+  a call to be decoded only once its caller is known
+  (`KeyfleetWeb.Plugs.McpAgent`): `{:ok, body, conn}` for a body of at
   most `limit` bytes however it arrives, `{:more, partial, conn}` for a longer
   one, or `{:error, reason}`.
 

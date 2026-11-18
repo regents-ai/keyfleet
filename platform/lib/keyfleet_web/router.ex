@@ -395,8 +395,8 @@ defmodule KeyfleetWeb.Router do
   # Claude calls from the same servers. It answers 404 while the connector is
   # off. Nothing is kept between requests. Tool calls carry pairing codes, so
   # nothing is logged. No `:accepts`: McpAgent decodes the JSON once its
-  # address, method, origin and kind pass, and a GET for an event stream must
-  # be answered 405 by McpAgent, not 406 here.
+  # address, method, origin and kind pass and its caller is proved, and a GET
+  # for an event stream must be answered 405 by McpAgent, not 406 here.
   pipeline :mcp do
     plug KeyfleetWeb.Plugs.McpAgent
   end

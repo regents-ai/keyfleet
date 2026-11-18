@@ -402,11 +402,10 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
       unbound = {401, "http_body_binding_invalid"}
 
-      # An empty call is signed in, and the connector answers it as no
-      # JSON-RPC request (-32600).
+      # An empty call is signed in, then refused as no JSON-RPC call.
       assert answers == [
-               {200, -32_600},
-               {200, -32_600},
+               {400, "bad_request"},
+               {400, "bad_request"},
                {401, "http_headers_missing"},
                {200, :tools},
                unbound,
@@ -493,6 +492,54 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     assert List.last(statuses).status == 429
     assert signer_asks() == 120
+  end
+
+  # Costly failure: a caller that hasn't proved who it is has its body
+  # decoded, so a made-up token buys the memory of decoding 700 KiB, once for
+  # each connection it holds open.
+  test "a call's body is decoded only once its caller is proved", c do
+    token = connect!(account!(), @identity_scope)
+    too_long = Jason.encode!(%{"x" => String.duplicate("a", 700 * 1024)})
+    bodies = ["{", "[]", "1", "", too_long]
+    json = [{"content-type", "application/json"}]
+
+    post = fn headers, body ->
+      answer = Req.post!(c.app <> "/mcp", headers: headers, body: body, retry: false)
+      {answer.status, outcome(answer.body)}
+    end
+
+    for headers <- [json, [{"authorization", "Bearer made-up"} | json]], body <- bodies do
+      assert post.(headers, body) == {401, "connection_required"}
+    end
+
+    assert Enum.map(bodies, &post.([{"authorization", "Bearer " <> token} | json], &1)) == [
+             {400, "bad_request"},
+             {400, "batch_not_supported"},
+             {400, "bad_request"},
+             {400, "bad_request"},
+             {413, "request_entity_too_large"}
+           ]
+
+    # A signature covers the bytes read, which are decoded once it verifies;
+    # a body too long to read whole never reaches the sign-in server.
+    signed = fn signed_body ->
+      SignedAgentHelpers.sign(
+        c.signer,
+        c.secret,
+        Siwa.Contract.authority(c.app),
+        "POST",
+        "/mcp",
+        signed_body
+      ).headers
+      |> Map.drop(["cookie", "authorization"])
+      |> Map.to_list()
+    end
+
+    assert post.(signed.(too_long), too_long) == {413, "request_entity_too_large"}
+    refute_received {:broker_payload, _payload}
+    assert post.(signed.("[]"), "{") == {401, "http_signature_invalid"}
+    assert post.(signed.("{"), "{") == {400, "bad_request"}
+    assert post.(signed.("[]"), "[]") == {400, "batch_not_supported"}
   end
 
   describe "a pairing that ends while a tool runs" do

@@ -11339,3 +11339,46 @@ a scratch walk that is not kept.
 - An answer's status and headers reach the reader with the first part of its body, not
   before: the door sends them when the hub's first part arrives, or with the whole answer
   when it has no body. Accepted as it is.
+
+## 2026-11-18 — The connector checks who is calling before it decodes a call
+
+- `/mcp` decoded a call's body, up to 700 KiB, before it looked at the token or the
+  signature (left open by the entry "A body is decoded only where a route reads it"). 100
+  connections each sending a 700 KiB JSON list with a made-up bearer token were each
+  answered 400 `batch_not_supported` from the decoded body, peaked at 1,428 MiB and held
+  1,089 MiB a second later under Bandit's defaults (1,447 and 1 with production's
+  collection after every request).
+- `KeyfleetWeb.Plugs.McpAgent` checks, in order, from the request line and headers alone:
+  the connector is on (404), no query string (400 `unsupported_query`), `POST /mcp` only
+  (405 or 404), no other site's `Origin` (403), one JSON `content-type` (415). Then:
+  - With an `Authorization` header, `RegentOAuth.verify/3` checks the bearer token. Any
+    failure (not a bearer token, made up, expired, revoked, another resource or no identity
+    permission) is 401 `connection_required` with the sign-in challenge, its body unread.
+    A token that verifies spends its account's 120 a minute (429 past it, body unread).
+    Only then is the body read whole, up to 716,800 bytes, by `BodyReader.read_signed/3`
+    (413 `request_entity_too_large` past it, 400 `bad_request` if it can't be read), and
+    decoded: one JSON object goes on, a list is 400 `batch_not_supported`, anything else
+    (malformed, empty, a bare value) 400 `bad_request`. Then the identity's pairing, as
+    before.
+  - Without one, with a SIWA signature header (`BodyReader.signed?/1`), the body is read
+    first, the same way and under the same limit, since the signature covers those bytes
+    (413 or 400 before the sign-in server is asked). `Siwa.AgentAuthPlug` then checks for
+    repeated headers, works out the digest of those bytes and has the sign-in server
+    check the signature, refusing as before (401 with its code, 503
+    `siwa_request_failed`). Only a signature that verified has its body decoded, with the
+    refusals above, and then the agent is admitted by its pairing (403
+    `agent_not_paired`, 503 `pairing_unavailable`), as before.
+  - With neither, 401 `connection_required`, its body unread.
+- After: the same 100 calls are each answered 401 `connection_required`, peak at 96 MiB and
+  hold 102 a second later under Bandit's defaults, which is the unread bodies Bandit reads
+  past to keep each connection open; 35 and 34 with production's setting.
+- The endpoint's per-address allowances are unchanged: a request carrying any bearer
+  token, a made-up one included, still spends the connector's ceiling (6,000 a minute per
+  address) rather than the anonymous 120.
+- Changed answers, in the public changelog: an unproved caller's call is 401 whatever its
+  body; a body that isn't one JSON object (empty, a bare value) is 400 `bad_request` where
+  AshAi answered a JSON-RPC Invalid Request; the 413 and the malformed 400 keep their codes
+  and now come in McpAgent's own shape and words. `BodyReader.read_body/2` now serves only
+  the shared agent address. `McpConnectorTest` sends malformed, batch, bare, empty and
+  over-long bodies through a real port with no token, a made-up one, a real one and a
+  signature; without the change it fails on the first, a made-up token's body answered 400.

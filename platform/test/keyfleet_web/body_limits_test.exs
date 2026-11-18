@@ -46,6 +46,12 @@ defmodule KeyfleetWeb.BodyLimitsTest do
   test "each route that reads a body decodes the one kind it takes, up to its size", c do
     session = forms_session(c.site)
 
+    # The connector's address reads a body only once the request says who
+    # sends it; this one's signature reaches a stand-in sign-in server, which
+    # refuses it.
+    SignedAgentHelpers.start_broker!(self(), :crypto.strong_rand_bytes(32))
+    signed = [{Siwa.Contract.signature_input_header(), "sig1=()"}]
+
     routes = [
       {"/oauth/register", @json, 8192, []},
       {"/oauth/token", @form, 8192, []},
@@ -53,7 +59,7 @@ defmodule KeyfleetWeb.BodyLimitsTest do
       {"/oauth/authorize", @form, 256, []},
       {"/oauth/connections/revoke", @form, 256, []},
       {"/api/agents/v1/pair", @json, 4096, []},
-      {"/mcp", @json, 700 * 1024, []},
+      {"/mcp", @json, 700 * 1024, signed},
       {"/visit-log", @json, 16 * 1024, session},
       {"/auth/privy/failure", @json, 64, session}
     ]

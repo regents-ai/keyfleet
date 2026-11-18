@@ -2,6 +2,19 @@
 
 Changes to Keyfleet, newest first.
 
+## 18 November 2026
+
+- **Claude connector.** A call to `/mcp` now has its body read only once the site knows
+  who sent it. A call with a token this site didn't give, or with neither a token nor an
+  agent's signature, gets 401 `connection_required` whatever its body, where a body over
+  700 KB got 413 and one that wasn't JSON, or was a batch, got 400 first. A connected
+  app's body is read once its token checks out and its account has requests left this
+  minute; an agent's signed call is read, then its signature checked, and only then
+  decoded. A call over 700 KB gets 413 `request_entity_too_large` and a body that isn't
+  one JSON object 400 `bad_request`, in the connector's own answer shape with a sentence
+  saying what to send; an empty body, or JSON that isn't an object, got a JSON-RPC
+  "Invalid Request" error before.
+
 ## 17 November 2026
 
 - **Requests.** The site now reads a request's body only at an address that takes one,

@@ -5,7 +5,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   are never read. While the connector is off (`Keyfleet.OAuth.enabled?/0`) the
   address answers 404.
 
-  In order, before the token is looked at:
+  In order, from the request line and headers alone, with no body read:
 
   - a query string is refused (`unsupported_query`);
   - only `POST /mcp` is served: another method is refused with 405, another
@@ -13,16 +13,32 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   - a page from another site (any `Origin` but this site's own, `null`
     included) is refused (`origin_not_allowed`); a request with no `Origin`, as
     MCP clients send, goes on;
-  - a body that is not JSON is refused (`unsupported_media_type`). Only then
-    is it decoded, up to 700 KiB, and a JSON-RPC batch is refused
-    (`batch_not_supported`).
+  - a body that is not JSON is refused (`unsupported_media_type`).
 
-  Then the request carries a connected app's token (`Authorization: Bearer`),
-  one this site gave for `/mcp` with the identity permission, as `RegentOAuth`
-  checks it, and spends its account's budget: 120 requests a minute, after the
-  endpoint's ceiling for the connector's addresses. Only the token is read
-  before the budget is spent, since the budget is the token's account's, so a
-  request past it never reaches the sign-in server or the pairings.
+  Then who is calling, and only once that is proved is the body decoded:
+
+  - A request with an `Authorization` header is a connected app's. Its token
+    must be one this site gave for `/mcp` with the identity permission, as
+    `RegentOAuth` checks it; any other, a made-up one included, is refused
+    (`connection_required`, below) with its body unread. A token that verifies
+    spends its account's budget: 120 requests a minute, after the endpoint's
+    ceiling for the connector's addresses, and past it is refused with 429,
+    its body unread. Only the token is read before the budget is spent, since
+    the budget is the token's account's, so a request past it never reaches
+    the sign-in server or the pairings. Then its body is read and decoded.
+  - A request without one that carries a SIWA signature
+    (`KeyfleetWeb.BodyReader.signed?/1`) has its body read first, since the
+    signature covers those exact bytes, then its signature checked; only a
+    request whose signature verifies has its body decoded.
+  - A request with neither is refused (`connection_required`) with its body
+    unread.
+
+  A body is read whole, up to 716,800 bytes (700 KiB), and kept as it came
+  (`KeyfleetWeb.BodyReader.read_signed/3`): a longer one is refused with 413
+  (`request_entity_too_large`), and one that can't be read with 400
+  (`bad_request`). Its call must be one JSON object: a JSON-RPC batch is
+  refused (`batch_not_supported`), and anything else, an empty body included,
+  with 400 (`bad_request`).
 
   While the app's own identity is paired with that same account and the
   person allowed Keyfleet's agent permission (`Keyfleet.OAuth.agent_scope/0`),
@@ -49,13 +65,12 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
 
   A request without a token that an agent signed with its own SIWA key, as it
   signs its requests under `/api/v1/agent`, is that agent once its signature
-  verifies and its pairing admits it, exactly as `KeyfleetWeb.Plugs.SignedAgent`
-  admits a signed request: the same refusals, and the same tools the
-  connector's paired agent gets, without the identity tools, which keep a
-  connected app's hosted identity. The signature covers the exact bytes
-  `KeyfleetWeb.BodyReader` kept. Its syncs wait for news under its client
-  address, as its signed syncs do, and its pairing is read again before the
-  answer leaves, as the connector's is.
+  verifies, its call decodes and its pairing admits it, exactly as
+  `KeyfleetWeb.Plugs.SignedAgent` admits a signed request: the same refusals,
+  and the same tools the connector's paired agent gets, without the identity
+  tools, which keep a connected app's hosted identity. Its syncs wait for news
+  under its client address, as its signed syncs do, and its pairing is read
+  again before the answer leaves, as the connector's is.
 
   A request with neither, or with a token this site didn't give, is refused
   (`connection_required`) with words for both callers: an app is asked to
@@ -83,13 +98,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
 
   # The largest call is a picture's upload: 512 KiB as base64, 699,052 bytes,
   # and the rest of the call beside it.
-  @body [
-    body_reader: {KeyfleetWeb.BodyReader, :read_body, []},
-    parsers: [Plug.Parsers.JSON],
-    pass: [],
-    length: 700 * 1024,
-    json_decoder: Jason
-  ]
+  @body_limit 700 * 1024
 
   @impl true
   def init(opts), do: opts
@@ -118,16 +127,9 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
         refuse(conn, "unsupported_media_type")
 
       true ->
-        conn
-        |> KeyfleetWeb.Plugs.Parsers.call(KeyfleetWeb.Plugs.Parsers.init(@body))
-        |> one_call()
+        caller(conn)
     end
   end
-
-  defp one_call(%{body_params: %{"_json" => batch}} = conn) when is_list(batch),
-    do: refuse(conn, "batch_not_supported")
-
-  defp one_call(conn), do: caller(conn)
 
   @doc false
   def account(conn), do: conn.private.mcp_principal.subject
@@ -164,36 +166,81 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
       conn
       |> put_private(:mcp_principal, principal)
       |> RegentAgentAccess.RateLimit.call(budget())
+      |> take_call()
       |> as_connected_app(principal)
     else
       _no_token_of_ours -> connect(conn)
     end
   end
 
-  # The agent the signature names, admitted as a signed request is.
+  # A connected app's call, read and decoded once its token verified and its
+  # account's budget let it in.
+  defp take_call(%{halted: true} = conn), do: conn
+
+  defp take_call(conn) do
+    with {:ok, conn} <- read_call(conn),
+         {:ok, conn} <- decode_call(conn) do
+      conn
+    else
+      {:error, conn, code} -> refuse(conn, code)
+    end
+  end
+
+  # The agent the signature names, admitted as a signed request is, once the
+  # bytes it signed are read.
   defp signed_agent(conn) do
-    Siwa.AgentAuthPlug.call(conn,
-      client: Keyfleet.SiwaBroker,
-      hooks: __MODULE__,
-      audience: "keyfleet"
-    )
+    case read_call(conn) do
+      {:ok, conn} ->
+        Siwa.AgentAuthPlug.call(conn,
+          client: Keyfleet.SiwaBroker,
+          hooks: __MODULE__,
+          audience: "keyfleet"
+        )
+
+      {:error, conn, code} ->
+        refuse(conn, code)
+    end
+  end
+
+  # The body whole, kept as it came, by the reader a signature needs.
+  defp read_call(conn) do
+    case KeyfleetWeb.BodyReader.read_signed(conn, [], @body_limit) do
+      {:ok, _body, conn} -> {:ok, conn}
+      {:more, _partial, conn} -> {:error, conn, "request_entity_too_large"}
+      {:error, _reason} -> {:error, conn, "bad_request"}
+    end
+  end
+
+  defp decode_call(%{assigns: %{raw_body: body}} = conn) do
+    case Jason.decode(body) do
+      {:ok, call} when is_map(call) -> {:ok, %{conn | body_params: call, params: call}}
+      {:ok, batch} when is_list(batch) -> {:error, conn, "batch_not_supported"}
+      _not_one_call -> {:error, conn, "bad_request"}
+    end
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
   def before_verify(_conn, _headers), do: {:ok, nil}
 
+  # The signature verified: the call is decoded, then the agent admitted.
   @impl Siwa.AgentAuthPlug.Hooks
   def accept(conn, data, _context) do
-    with {:ok, %{assigns: %{agent_actor: agent}} = conn} <- SignedAgent.accept_agent(conn, data) do
+    with {:ok, conn} <- decode_call(conn),
+         {:ok, %{assigns: %{agent_actor: agent}} = conn} <- SignedAgent.accept_agent(conn, data) do
       {:ok,
        conn
        |> Ash.PlugHelpers.set_actor(agent)
        |> Ash.PlugHelpers.set_context(%{waiter: ClientAddress.key(conn)})
        |> register_before_send(&recheck(&1, agent))}
+    else
+      {:error, _conn, code} -> {:error, %{refusal: code}}
+      {:error, _metadata} = refused -> refused
     end
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
+  def deny(conn, %{refusal: code}), do: refuse(conn, code)
+
   def deny(conn, metadata) do
     {status, body} = SignedAgent.refusal(conn, metadata)
     conn |> put_status(status) |> Phoenix.Controller.json(body) |> halt()
@@ -323,6 +370,16 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
 
   defp words("batch_not_supported"),
     do: {400, "Send one call a request.", "Send each call in its own request."}
+
+  defp words("request_entity_too_large"),
+    do:
+      {413, "The connector's address takes a call of at most #{@body_limit} bytes.",
+       "Send a shorter call. A picture of up to 512 KB fits in one."}
+
+  defp words("bad_request"),
+    do:
+      {400, "The body isn't one JSON-RPC call.",
+       "Send one JSON-RPC call as a JSON object with Content-Type: application/json."}
 
   defp words("siwa_request_failed"), do: site_words(503, "siwa_request_failed")
   defp words("pairing_unavailable"), do: site_words(503, "pairing_unavailable")
