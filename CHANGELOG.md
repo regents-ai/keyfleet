@@ -11994,3 +11994,11 @@ step's report).
 - `platform/README.md` said the migration step every deploy runs puts four fleets on the site. It
   seeds the catalog's five, the Regents Club, Classic #1, Syndicate #1, Cascade #1 and
   Accelerant #1 (`Keyfleet.Release.seed_catalog!/0`), and now says so.
+
+## 2026-11-18 — Phase 3 and the subscription
+
+- `docs/deployment.md` now says where phase 3 is described, in the order of steps and in step 6,
+  that Syndicate #1, Accelerant #1 and Cascade #1 each have a deck of 1,000 cards and can sell
+  more Keys than that, that the first Key one of them sells past its deck stops the record step
+  for every fleet until the Regents Safe owns the randomness subscription and it lists the
+  collection, and that the phase-3 step does not check the subscription. Nothing else changes.

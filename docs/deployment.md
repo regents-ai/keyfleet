@@ -30,9 +30,11 @@ The release runs in seven steps, in this order:
    into the site. Absent founding slots are retained for later creation.
 6. **Phases.** Phase 1 requires Club and opens only its gifts. Phase 2 requires
    Club and Classic and opens Classic sales. Phase 3 requires all five and
-   opens the other three; phase 4 permits public fleet creation, and the step
-   prepares it only once the Regents Safe owns the randomness subscription and
-   the subscription lists the collection.
+   opens the other three; the first of their Keys sold past its deck stops the
+   record until the Regents Safe owns the randomness subscription and the
+   subscription lists the collection, and the phase-3 step does not check
+   that. Phase 4 permits public fleet creation, and the step prepares it only
+   once both hold.
 7. **Club gifts.** Simulate and sign 25 separate sequential Safe transactions:
    24 batches of 80 and one of 78. Route failed receivers to claims and verify
    every final destination. Do not create the other four fleets at this launch.
@@ -450,7 +452,12 @@ It checks the step against Base's current state as the Safe and writes one file,
 to 3 require only their intended fleets: Club for phase 1, also Classic for
 phase 2, and all five for phase 3. Phase 1 opens only Regents Club gifts.
 Phase 2 opens Classic #1 sales. Phase 3 opens Syndicate #1, Accelerant #1
-and Cascade #1 sales together. Phase 4 lets anyone create a fleet
+and Cascade #1 sales together. Each of the three has a deck of 1,000 cards and
+can sell more Keys than that, and the first Key one of them sells past its deck
+stops the record step for every fleet until the Regents Safe owns the
+randomness subscription and it lists the collection (step 5). The phase-3 step
+does not check the subscription, so make it ready before Key 1,001 of any of
+the three is sold. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase. One such fleet stops the record step for every fleet while
 the Regents Safe does not own the randomness subscription or it does not list
