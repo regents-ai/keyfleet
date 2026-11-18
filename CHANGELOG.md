@@ -13100,3 +13100,18 @@ step's report).
   pass, "what the person's page shows after the agent's refused presses" among them,
   which failed before 860ae3e51; both tests in
   assets/test/adversarial_round11_agent_press.test.ts pass.
+
+## 2026-11-18 — Two proposal tests check the kind of refusal, not only that one came
+
+- Round eleven (a3ae4db06): `ProposalsPageTest` "words and launch fields at their most
+  are sent, and a space or line end more is refused" took any refusal note for its four
+  values a unit past their box's longest, where before round ten it compared the line
+  above the buttons with the too-long sentence; and "a kind's own box filled past its
+  end" did the same. Matching the sentence is not brought back, by the founder's rule
+  that tests do not check wording. Both now check the reply's own facts:
+  `reason: "step_unknown"` and `cause: "values"`, a value the press sent being why
+  (860ae3e51). Each value refused is the same as one the test sends but for one space,
+  line end or letter, which is what tells it is too long.
+- No fact in the reply or on the page names "too long" itself: the reply carries the
+  reason, the cause and the note's words, and an empty proposal or an unreadable Key is
+  `step_unknown` with `cause: "values"` too.

@@ -1103,7 +1103,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         assert_reply(view, %{send: "propose"})
 
         press.(Map.put(form, own_box[kind], past.(own_box[kind], "9")))
-        assert_reply(view, %{note: _refused})
+        assert_reply(view, %{reason: "step_unknown", cause: "values"})
       end
     end
 
@@ -1160,8 +1160,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
             %{launch | "name" => launch["name"] <> " "},
             %{launch | "image" => "  " <> launch["image"]}
           ] do
+        # Refused for a value the press sent, each the same as one sent above
+        # but for a space or a line end. The reply names no field and no
+        # length; that one unit is what tells it is too long.
         press.(form)
-        assert_reply(view, %{note: _refused})
+        assert_reply(view, %{reason: "step_unknown", cause: "values"})
       end
     end
 
