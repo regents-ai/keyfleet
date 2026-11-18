@@ -123,14 +123,18 @@ abstract contract KeyfleetManifest is Script {
 
     /// @notice A collection's randomness subscription, as its coordinator reports it now.
     /// @param collection The collection.
+    /// @param coordinator The coordinator the collection names.
+    /// @param id The subscription's id, as the collection names it.
     /// @param owner Who owns the subscription.
-    /// @param ownerFitsChain Whether that owner is the one this chain asks for: on Base the Regents
-    /// Safe, on any other chain whoever owns it.
+    /// @param requiredOwner The owner this chain asks for: on Base the Regents Safe; on any other
+    /// chain none, given as the zero address.
     /// @param listsCollection Whether the subscription lists the collection as a consumer.
     struct Subscription {
         KeyfleetKeys collection;
+        IVRFCoordinatorV2Plus coordinator;
+        uint256 id;
         address owner;
-        bool ownerFitsChain;
+        address requiredOwner;
         bool listsCollection;
     }
 
@@ -321,11 +325,11 @@ abstract contract KeyfleetManifest is Script {
     /// @dev The collection's randomness subscription, as the collection's coordinator reports it now,
     /// for `requireSubscriptionReady` in `RecordKeyfleets.s.sol`.
     function _subscription(KeyfleetKeys keys) internal view returns (Subscription memory subscription) {
-        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        (subscription.coordinator, subscription.id,) = keys.randomness();
         address[] memory consumers;
-        (,,, subscription.owner, consumers) = coordinator.getSubscription(subscriptionId);
+        (,,, subscription.owner, consumers) = subscription.coordinator.getSubscription(subscription.id);
         subscription.collection = keys;
-        subscription.ownerFitsChain = block.chainid != BASE_CHAIN_ID || subscription.owner == BASE_REGENTS_SAFE;
+        if (block.chainid == BASE_CHAIN_ID) subscription.requiredOwner = BASE_REGENTS_SAFE;
         for (uint256 index = 0; index < consumers.length; ++index) {
             if (consumers[index] == address(keys)) subscription.listsCollection = true;
         }

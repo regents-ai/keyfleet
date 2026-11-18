@@ -12074,3 +12074,13 @@ step's report).
   `Error: Failed to decode return value: 0x…`, the same refusal undecoded, and names the error
   only on its last line, `Error: script failed:` and the error's name. The order it gives puts
   the handover before phase 3. The script is unchanged.
+
+## 2026-11-18 — A phase batch names an owner only where the step checks one
+
+- Off Base the phase-4 batch's description told the signers to read that the Regents Safe owns
+  the randomness subscription, although the step checks the owner only on Base: on any other
+  chain it was prepared, and said so, whoever owned the subscription. The description now says
+  what the step checks on the chain it runs on: on Base, that the Regents Safe owns the
+  subscription and that the subscription lists the collection; on any other chain, only that it
+  lists the collection. Base's own files read as before. The step reads the subscription once,
+  for both its check and the description.

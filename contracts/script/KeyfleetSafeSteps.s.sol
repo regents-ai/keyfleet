@@ -7,7 +7,6 @@ import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
-import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 
@@ -139,8 +138,8 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// founding ones exists: from phase 4 anyone may create one. The call names no phase, so landed
     /// at any time before `opensAt` it opens whichever phase is next. Its description says so, and
     /// names what the signers read on the chain before signing: the phase the collection is in now
-    /// and, for the call to phase 4, that the Regents Safe owns the subscription and the
-    /// subscription lists the collection.
+    /// and, for the call to phase 4, that the subscription lists the collection and, on Base, that
+    /// the Regents Safe owns it.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -151,8 +150,9 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         uint256 next = keys.phase() + 1;
         string memory checks = string.concat("the collection is in phase ", vm.toString(next - 1));
         if (next == keys.FINAL_PHASE()) {
-            requireSubscriptionReady(_subscription(keys));
-            checks = string.concat(checks, _subscriptionChecks(keys, manifest.bindings.safe));
+            Subscription memory subscription = _subscription(keys);
+            requireSubscriptionReady(subscription);
+            checks = string.concat(checks, _subscriptionChecks(subscription));
         }
         calls = new SafeCall[](1);
         calls[0] = SafeCall({
@@ -252,18 +252,25 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         );
     }
 
-    /// @dev What the signers read of the randomness subscription before the call to phase 4: that
-    /// `safe` owns it, by its id and coordinator as the collection names them, and that it lists
-    /// the collection.
-    function _subscriptionChecks(KeyfleetKeys keys, address safe) private view returns (string memory) {
-        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+    /// @dev What the signers read of the randomness subscription before the call to phase 4, by its
+    /// id and coordinator as the collection names them: what `requireSubscriptionReady` checks on
+    /// this chain, that the subscription lists the collection and, on Base, that the Regents Safe
+    /// owns it.
+    function _subscriptionChecks(Subscription memory subscription) private view returns (string memory) {
+        string memory named = string.concat(
+            "randomness subscription ",
+            vm.toString(subscription.id),
+            " on the coordinator ",
+            vm.toString(address(subscription.coordinator))
+        );
+        if (subscription.requiredOwner == address(0)) {
+            return string.concat(", and that ", named, " lists the collection");
+        }
         return string.concat(
             ", that the Regents Safe ",
-            vm.toString(safe),
-            " owns randomness subscription ",
-            vm.toString(subscriptionId),
-            " on the coordinator ",
-            vm.toString(address(coordinator)),
+            vm.toString(subscription.requiredOwner),
+            " owns ",
+            named,
             ", and that the subscription lists the collection"
         );
     }

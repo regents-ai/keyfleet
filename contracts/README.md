@@ -1843,10 +1843,11 @@ latest broadcast there.
   `founding-fleet-5`, `phase-1` to `phase-4`, `club-gifts-1-80` to
   `club-gifts-1921-1998`), for the Safe's signers to load,
   check and sign. A phase file's own description (`meta.description`) says
-  what the signers read on Base before signing, since `advancePhase` names no
-  phase and opens whichever is next: the collection's phase now and, for
-  phase 4, that the Regents Safe owns the subscription and the subscription
-  lists the collection. A rehearsal's files carry the same description.
+  what the signers read on the chain before signing, since `advancePhase` names
+  no phase and opens whichever is next: the collection's phase now and, for
+  phase 4, what the step checks on that chain, that the subscription lists the
+  collection and, on Base only, that the Regents Safe owns it. A rehearsal's
+  files carry the same description.
   Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
   has unlocked. `run` is `runInto("deployments/safe")`; a rehearsal or a test

@@ -207,30 +207,55 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonBytes(file, ".transactions[0].data"), call.data, "The call");
     }
 
-    /// @dev Each phase's batch, as the step writes it, carries its phase's name and its own
-    /// description: the collection and the opening time for every phase, and only for the call to
-    /// phase 4 the subscription the signers read first, by its id, its coordinator and its owner.
+    /// @dev Off Base each phase's batch names no owner of the subscription, since the step checks
+    /// none there, even for the call to phase 4.
     function test_eachPhaseBatchSaysWhatTheSignersReadFirst() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         _found(manifest, deployed);
-        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = collection.randomness();
-        for (uint256 phase = 1; phase <= collection.FINAL_PHASE(); ++phase) {
+        _assertPhaseBatches(manifest, deployed, false);
+    }
+
+    /// @dev On Base the call to phase 4 also names the Regents Safe as the subscription's owner, as
+    /// the step checks there.
+    function test_onBaseEachPhaseBatchAlsoNamesTheSafeAsTheSubscriptionsOwner() public {
+        uint256 subscriptionId = _standInBase();
+        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
+        KeyfleetFactory base = _deployListed(manifest);
+        _found(manifest, base);
+        _assertPhaseBatches(manifest, base, true);
+    }
+
+    /// @dev Moves `factory`'s collection through every phase by the step, checking each batch as the
+    /// step writes it: its phase's name and its own description, which names the collection and the
+    /// opening time for every phase and, only for the call to phase 4, the subscription the signers
+    /// read first, by its id and its coordinator, and the Safe as its owner when `namesOwner`.
+    function _assertPhaseBatches(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, bool namesOwner)
+        private
+    {
+        KeyfleetKeys keys = factory.KEYS();
+        address signers = manifest.bindings.safe;
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        for (uint256 phase = 1; phase <= keys.FINAL_PHASE(); ++phase) {
             uint64 opensAt = uint64(block.timestamp + 1);
-            KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.advancePhaseCalls(manifest, deployed, opensAt);
-            string memory file = safeSteps.safeBatch(safe, calls[0]);
+            KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.advancePhaseCalls(manifest, factory, opensAt);
+            string memory file = safeSteps.safeBatch(signers, calls[0]);
 
             assertEq(vm.parseJsonString(file, ".meta.name"), string.concat("Keyfleet ", calls[0].name), "Name");
             assertEq(calls[0].name, string.concat("phase-", vm.toString(phase)), "Its phase");
             string memory description = vm.parseJsonString(file, ".meta.description");
             assertEq(description, calls[0].description, "The call's own description");
-            assertTrue(_names(description, vm.toString(address(collection))), "The collection");
+            assertTrue(_names(description, vm.toString(address(keys))), "The collection");
             assertTrue(_names(description, vm.toString(uint256(opensAt))), "The opening");
-            bool last = phase == collection.FINAL_PHASE();
-            assertEq(_names(description, vm.toString(subscriptionId)), last, "The subscription, before phase 4");
-            assertEq(_names(description, vm.toString(address(coordinator))), last, "Its coordinator");
-            assertEq(_names(description, vm.toString(manifest.bindings.safe)), last, "Its owner");
+            bool reads = phase == keys.FINAL_PHASE();
+            assertEq(
+                _names(description, string.concat("subscription ", vm.toString(subscriptionId))),
+                reads,
+                "The subscription, before phase 4"
+            );
+            assertEq(_names(description, vm.toString(address(coordinator))), reads, "Its coordinator");
+            assertEq(_names(description, vm.toString(signers)), reads && namesOwner, "Its owner, where checked");
 
-            _make(calls, safe);
+            _make(calls, signers);
             vm.warp(opensAt);
         }
     }

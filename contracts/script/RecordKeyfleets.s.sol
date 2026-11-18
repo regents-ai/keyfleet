@@ -21,7 +21,7 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// the record step for every fleet, so the record step, the trading factory's approval and the step
 /// opening phase 4 all refuse here.
 function requireSubscriptionReady(KeyfleetManifest.Subscription memory subscription) pure {
-    if (!subscription.ownerFitsChain) {
+    if (subscription.requiredOwner != address(0) && subscription.owner != subscription.requiredOwner) {
         revert RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe(subscription.owner);
     }
     if (!subscription.listsCollection) {
