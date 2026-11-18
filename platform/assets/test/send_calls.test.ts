@@ -101,9 +101,17 @@ function memoryStorage() {
   }
 }
 
+// The note the server shows when a press sends nothing, and answers with.
+const note = "The page's note."
+
+// The server: it hears each report, and answers why a press sent nothing with its note.
 function pushes() {
   const pushed: [string, unknown][] = []
-  return {pushed, push: (event: string, payload: unknown) => void pushed.push([event, payload])}
+  const push = async (event: string, payload: unknown) => {
+    pushed.push([event, payload])
+    return event === "step_failed" ? {note} : null
+  }
+  return {pushed, push}
 }
 
 beforeEach(() => {
@@ -259,7 +267,7 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
     replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
     const {pushed, push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
+    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined", note})
     expect(active.sends().map(({method}) => method)).toEqual(["wallet_sendCalls"])
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
@@ -274,7 +282,7 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
     await active.statusReads(1)
     await vi.advanceTimersByTimeAsync(60_000)
 
-    expect(await pressed).toEqual({reason: "send_unconfirmed"})
+    expect(await pressed).toEqual({reason: "send_unconfirmed", note})
     expect(active.sends().map(({method}) => method)).toEqual(["wallet_sendCalls"])
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "send_unconfirmed"}]])
   })
@@ -284,7 +292,7 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
     replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
     const {push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({reason: "send_unconfirmed"})
+    expect(await press(review, "buy", push)).toEqual({reason: "send_unconfirmed", note})
     expect(active.sends().map(({method}) => method)).toEqual(["wallet_sendCalls"])
   })
 

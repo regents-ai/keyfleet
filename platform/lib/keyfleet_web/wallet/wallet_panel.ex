@@ -262,6 +262,8 @@ defmodule KeyfleetWeb.WalletPanel do
 
   def handle_event("step_sent", params, socket), do: {:noreply, OnchainSteps.sent(socket, params)}
 
+  # The note goes on the page and back to the press, so the browser's own
+  # agent hears what the person reads.
   def handle_event("step_failed", params, socket) do
     case Presses.failed(params) do
       {:ok, _step, reason} ->
@@ -275,7 +277,7 @@ defmodule KeyfleetWeb.WalletPanel do
             chain_name(socket)
           )
 
-        {:noreply, assign(socket, press_note: note)}
+        {:reply, %{note: note}, assign(socket, press_note: note)}
 
       :error ->
         {:noreply, socket}

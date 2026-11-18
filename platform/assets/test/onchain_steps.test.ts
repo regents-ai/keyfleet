@@ -71,9 +71,17 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
+// The note the server shows when a press sends nothing, and answers with.
+const note = "The page's note."
+
+// The server: it hears each report, and answers why a press sent nothing with its note.
 function pushes() {
   const pushed: [string, unknown][] = []
-  return {pushed, push: (event: string, payload: unknown) => void pushed.push([event, payload])}
+  const push = async (event: string, payload: unknown) => {
+    pushed.push([event, payload])
+    return event === "step_failed" ? {note} : null
+  }
+  return {pushed, push}
 }
 
 describe("a press sends the server's step through the active wallet", () => {
@@ -109,16 +117,19 @@ describe("a press sends the server's step through the active wallet", () => {
     replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
+    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined", note})
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
 
-  it("sends nothing when no wallet is active", async () => {
+  it("sends nothing when no wallet is active, and answers with the server's note", async () => {
     const {pushed, push} = pushes()
 
-    await press(review, "buy", push)
-
+    expect(await press(review, "buy", push)).toEqual({reason: "wallet_unavailable", note})
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
+  })
+
+  it("answers unheard when the server never heard why nothing was sent", async () => {
+    expect(await press(review, "buy", async () => undefined)).toBe("unheard")
   })
 
   it("sends nothing for a step the server didn't build, or with no steps at all", async () => {

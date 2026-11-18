@@ -793,8 +793,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # Every reason the shared press list (`RegentChain.Presses`) accepts from a
-    # page leaves its own note, and the page goes on.
-    test "every reason a press can report leaves its own note", %{conn: conn} do
+    # page leaves its own note, and the page goes on. The press is answered
+    # with the same note, so the browser's own agent hears what the person reads.
+    test "every reason a press can report leaves its own note, and answers with it",
+         %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       chain!(allowance: 0)
@@ -807,7 +809,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         for reason <-
               ~w(step_unknown wallet_unavailable network_mismatch switch_declined wallet_declined insufficient_funds send_unconfirmed sign_unconfirmed) do
           press_fails!(view, reason)
-          text(view, "#buy-key-order-press-note")
+          note = text(view, "#buy-key-order-press-note")
+          assert_reply(view, %{note: ^note})
+          note
         end
 
       assert length(Enum.uniq(notes)) == 8

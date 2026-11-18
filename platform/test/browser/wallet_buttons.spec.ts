@@ -1,4 +1,5 @@
 import {expect, test, type Locator, type Page} from "@playwright/test"
+import {callTool, installModelContext} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {allowUsdc, landStep, offerRewards, prepareFleet, refuseDraw, sellKey} from "./support/fleet_chain"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
@@ -504,6 +505,23 @@ async function claimedAndDone(page: Page) {
     "Done.",
   )
 }
+
+test("a browser agent's claim from a wallet the account doesn't link sends nothing, and the agent hears the note the person reads", async ({
+  page,
+}) => {
+  await installModelContext(page)
+  const {errors} = await openClaim(page)
+  await useStandInWallet(page, stranger)
+  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeVisible()
+
+  const answer = await callTool(page, "keys_claim", {asset: usdc})
+
+  const note = page.locator("#key-profile-claim-action-press-note")
+  await expect(note).toBeVisible()
+  expect(answer).toMatchObject({ok: false, error: {message: await note.innerText()}})
+  expect(await sentByStandIn(page)).toEqual([])
+  expect(errors).toEqual([])
+})
 
 test("after the page reconnects, a claim whose steps the page already had reaches the wallet and is followed until it lands", async ({
   page,

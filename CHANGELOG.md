@@ -11276,3 +11276,33 @@ suite: 1,569 of 1,570 passed (22 properties), 19 excluded; the one failure is th
 `step_signed` case in its untracked file. The asset budgets pass on a minified build. Browser
 walks: the two kept reconnect walks fail with d193a8183's hooks and pass now, as do the
 review's two; the whole chain project, 141 passed; the device walks, 72 passed.
+
+## 2026-11-17 — Wallet presses after the review's second round
+
+- The browser's own agent hears the note the person reads. A press that sent nothing, or may
+  have sent, answered the agent with `platform/assets/js/page_tools.ts`'s own words, so for
+  a wallet the account doesn't link, or with no wallet open as the server knows it, the
+  agent heard "This can't be sent as it stands" while the person read which wallet to switch
+  to. `KeyfleetWeb.WalletPanel` now answers the `step_failed` report with the note it
+  shows; the press hook waits for that answer and hands the note on, and the page tools
+  keep only a hint for each reason. A report the server never hears answers the agent
+  that the page lost its connection before it could say what the wallet answered. A kept
+  walk in `platform/test/browser/wallet_buttons.spec.ts` claims through the agent's tool
+  from an unlinked wallet and checks the agent hears the page's note (it fails on
+  0f9b3aefd); the fleet page test checks every reason's answer carries its note. The page
+  tools' answers change as they did in af7ce6ad7, without a contract or guide version bump.
+- Words: the public changelog and the `wallet-network-switch` row said that after a
+  reconnect a press reaches the wallet and is followed until it's done, which is not so for
+  a prompt confirmed in the first moments after the page is back, or a press on a panel
+  with a form during the first round trip. They now say the wallet buttons work again
+  without a reload. Those two, a wallet answer that arrives while the page is offline, and
+  a claim confirmed after moving to another Keyfleet page and back go to a follow-up the
+  template leads.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors (585 files)
+and Credo (772 files, no issues) passed. Typecheck passed and vitest 499 passed, leaving out
+the two untracked review files. Wallet step, fleet page, proposals, telemetry and visit log
+tests: 203 passed. Browser walks: `wallet_buttons.spec.ts`, 17 passed. The review's
+round-two walk on the lost line (line 324) still fails on its own check, which asks for the
+line to stay after a reconnect; its log now shows the line hidden once at the rejoin and
+nothing at the next reconnect.

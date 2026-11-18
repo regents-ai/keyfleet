@@ -28,10 +28,15 @@ export type Review = {
   inputs: Record<string, string>
 }
 
-/** What the wallet answered one press: the hash or signature, or why nothing was sent. */
-export type Pressed = {transaction_hash: Hash} | {signature: Hex} | {reason: Failure}
+/**
+ * What the wallet answered one press: the hash or signature, or why nothing was
+ * sent with the note the page shows for it. "unheard" when the server never
+ * heard why, so the page shows no note.
+ */
+export type Pressed = {transaction_hash: Hash} | {signature: Hex} | {reason: Failure; note: string} | "unheard"
 
-type Push = (event: string, payload: unknown) => void
+/** Tells the server; resolves with what it answered, `undefined` when it never heard. */
+type Push = (event: string, payload: unknown) => Promise<unknown>
 
 type OnchainStepsHook = Hook & {
   el: HTMLElement
@@ -60,7 +65,10 @@ const presses = new WeakMap<HTMLElement, number>()
  */
 export const OnchainSteps: Hook = {
   mounted(this: OnchainStepsHook) {
-    const push: Push = (event, payload) => void this.pushEventTo(this.el, event, payload)
+    const push: Push = (event, payload) =>
+      this.pushEventTo(this.el, event, payload).then(([result]) =>
+        result?.status === "fulfilled" ? result.value.reply : undefined,
+      )
 
     // Every hook on the page hears this event; keep only this component's review.
     // No review means none is built yet, or no wallet may send.
@@ -96,8 +104,7 @@ export const OnchainSteps: Hook = {
           heard()
           return await press(reply.review, reply.send, push)
         }
-        push("step_failed", {step: name, reason: "step_unknown"})
-        return {reason: "step_unknown"}
+        return await failed(push, name, "step_unknown")
       } catch {
         return lostPress(this.el, name)
       } finally {
@@ -167,7 +174,8 @@ export const OnchainSteps: Hook = {
  * that acts. With no wallet active, the press sends nothing and the server's
  * note says why. Reports only what the wallet answered, against the review it
  * sent from: the hash or signature, or why nothing was sent, and returns the
- * same answer. The server decides what the hash did.
+ * same answer, with the server's note when nothing was sent. The server decides
+ * what the hash did.
  */
 export async function press(review: Review | undefined, name: string, push: Push): Promise<Pressed> {
   const step = review?.steps.find(candidate => candidate.step === name)
@@ -190,10 +198,15 @@ export async function press(review: Review | undefined, name: string, push: Push
     push("step_sent", {review_id: review.id, step: name, transaction_hash})
     return {transaction_hash}
   } catch (error) {
-    const reason = failure(sending, error)
-    push("step_failed", {step: name, reason})
-    return {reason}
+    return failed(push, name, failure(sending, error))
   }
+}
+
+// Tells the server why a press sent nothing, or may have sent: the server says
+// it in the note beside the buttons, and the answer carries the same note.
+async function failed(push: Push, step: string, reason: Failure): Promise<Pressed> {
+  const told = (await push("step_failed", {step, reason})) as {note: string} | undefined
+  return told ? {reason, note: told.note} : "unheard"
 }
 
 /**

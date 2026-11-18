@@ -74,10 +74,12 @@ Changes to Keyfleet, newest first.
   request, the same press goes on to your wallet. If you turn the switch down, nothing is
   sent and the note says to press again; if your wallet can't switch, the note says to
   switch it in your wallet app.
-- **Wallet buttons after a lost connection.** When a page loses its connection and gets
-  it back, as open pages do while Keyfleet updates, its wallet buttons work straight
-  away, with no reload: a press reaches your wallet and the page follows it until it's
-  done. Your account page knows your wallet again too.
+- **Wallet buttons.** When a page loses its connection and gets it back, as open pages do
+  while Keyfleet updates, its wallet buttons work again without a reload. Your account
+  page knows your wallet again too.
+- **Browser agents.** When your browser's own agent presses a wallet button and nothing is
+  sent, it now hears the same note you see beside the button, such as which of your
+  wallets to switch to.
 
 ## 16 November 2026
 
