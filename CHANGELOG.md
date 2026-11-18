@@ -11969,3 +11969,14 @@ step's report).
   subscription to the Safe, which lists the collection, before stepping to phase 4.
 - `docs/deployment.md` (the order of steps, the record's refusals, step 6, the Base fork rehearsal
   and the Trading Fleets order) and `contracts/README.md` say so.
+
+## 2026-11-18 — The platform guide names the one deployed record
+
+- `platform/README.md` no longer says `/app/bin/seed-deployment` binds one fleet from that fleet's
+  own deployed manifest. It takes the one record for the whole system and every fleet,
+  `contracts/deployments/base.deployed.json`, and in one go binds every fleet in it that is the
+  first of its type, opens their rooms, turns their key sales on and prints each, leaving a fleet
+  the record does not hold yet as it is. It refuses, and changes nothing, a record naming other
+  contracts for a bound fleet or a chain, collection, shard record, USDC, REGENT, staking
+  contract, Autolaunch factory, Regents Club claims contract or trait table that differs from a
+  fleet already bound.

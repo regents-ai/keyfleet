@@ -467,10 +467,15 @@ The migration step every deploy runs (`/app/bin/migrate`) also puts the four
 fleets on the site and opens the rooms of the fleets that are not coming soon,
 without binding any of them to contracts, so key sales stay off; running it
 again changes nothing that is already there. `/app/bin/seed-deployment <file>`
-binds one fleet to its deployed contracts from that fleet's deployed manifest,
-opens its rooms and turns its key sales on, all at once; a coming-soon fleet
-opens with it. It refuses a fleet whose chain, USDC or trait table differs
-from a fleet already recorded.
+takes the one deployed record for the whole system and every fleet,
+`contracts/deployments/base.deployed.json`, and in one go binds every fleet in
+it that is the first of its type to its deployed contracts, opens their rooms,
+turns their key sales on and prints each; a coming-soon fleet opens with them,
+and a fleet the record does not hold yet is left as it is. Seeding the same
+record again changes nothing. It refuses, and changes nothing, a record naming
+other contracts for a bound fleet, or one whose chain, collection, shard
+record, USDC, REGENT, staking contract, Autolaunch factory, Regents Club claims
+contract or trait table differs from a fleet already bound.
 
 Load, deploy-during-load and database-fault runs
 start the release image and a throwaway database on one computer
