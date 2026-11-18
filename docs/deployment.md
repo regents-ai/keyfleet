@@ -594,9 +594,10 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts KEYFLEET_CLUB_TO_CLAIMS=212,977 
 From phase 4 anyone may call `createFleet` on the factory, buying the new
 fleet's key 1 in the same transaction. Such a fleet starts with no card deck, so
 its keys wait for their random numbers. The deck backend sees `FleetCreated`,
-builds the fleet's deck by the same process as the founding fleets, records it
-from the keeper wallet with `setDeck(fleetId, deckHash, deckSize)`, then calls
-`requestReveal(tokenId)` for each key minted while the fleet waited. Keys minted
+builds the fleet's deck by the same process as the founding fleets, and the
+keeper records it with `setDeck(fleetId, deckHash, deckSize)` (on Base, a
+Regents Safe transaction); the backend then calls `requestReveal(tokenId)` for
+each key minted while the fleet waited. Keys minted
 afterwards ask at mint. Rerun the record step to add the new fleet to the
 published record.
 
@@ -682,10 +683,13 @@ phase 3 is opened (step 6), and only after that handover does the trading
 factory's deployment run and do the signers sign its `addFactory` call.
 Neither the steps to phases 3 and 4 nor this script prepares its call before.
 
-Before the trading factory is approved, the Safe also names a separate keeper
-wallet with `setKeeper(<keeper wallet>)` on the collection, and Trading Fleets'
-staking shares are sent by that keeper directly (`sendToStaking()` on each
-fleet's treasury), so that sends do not each need a Safe transaction.
+Only the collection's keeper or the Regents Safe may send what a Trading
+Fleet's treasury owes REGENT revenue staking on to staking, with
+`sendToStaking()` on that treasury. On Base the keeper is the Regents Safe, so
+each Trading Fleet's staking send there is a Safe transaction, and the share
+waits in the fleet's treasury until one is made. For a send made by the Safe,
+the signer who completes the signatures submits the transaction themselves in
+the same step; a fully signed send is never left waiting to be submitted.
 
 ## The trait table
 
@@ -885,11 +889,10 @@ The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, owns the
 randomness subscription and REGENT revenue staking. In the release it adds the
 collection to the subscription, creates the five founding fleets, moves the
 phase when the founder says sales open, and gives the Regents Club keys, each
-only to the holder of its Pass or to the claims contract. Before it approves
-the trading factory, it names a separate keeper wallet (`setKeeper`), and
-Trading Fleets' staking shares are sent by that keeper directly, so that sends
-do not each need a Safe transaction. Later it may replace the keeper or allow
-a newer factory for new fleets; existing fleets never change. It receives the 2.5% resale royalty. It has no vote, claim or price in
+only to the holder of its Pass or to the claims contract. As the keeper, it
+makes each Trading Fleet's staking send, a Safe transaction each (see "Trading
+Fleets"). Later it may replace the keeper or allow a newer factory for new
+fleets; existing fleets never change. It receives the 2.5% resale royalty. It has no vote, claim or price in
 any fleet, cannot mint any other key or move any key, and cannot move a fleet's
 money.
 

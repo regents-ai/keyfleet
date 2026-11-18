@@ -408,7 +408,8 @@ random number only once its fleet has a deck:
   for the waiting keys with `requestReveal(tokenId)`; keys minted afterwards ask
   at mint.
 
-The keeper is a Regents wallet. It is set at deployment and only the Safe may
+The keeper is a Regents wallet; on Base it is the Regents Safe (see the
+[deploy-day checklist](#deploy-day-checklist)). It is set at deployment and only the Safe may
 replace it, with `setKeeper(keeper)` (`ZeroAddress` for zero), which emits
 `KeeperSet(keeper)`. It can record a deck for a fleet with none and ask for a
 key's metadata refresh, and, as the Safe can, send what a Trading Fleet's
@@ -1686,7 +1687,12 @@ Only the keeper or the Regents Safe may send what is owed on to staking, at any
 time, open or closed, with `sendToStaking`: the keeper is the collection's
 `keeper()` at the moment of the call, so a keeper the Safe replaces can no
 longer send, and the Safe is the collection's `SAFE`. Anyone else, the creator
-included, is refused (`OnlyKeeperOrSafe(caller)`). All of `stakingOwed` goes
+included, is refused (`OnlyKeeperOrSafe(caller)`). On Base the keeper is the
+Regents Safe, so each Trading Fleet's staking send there is a Safe transaction,
+and the share waits in the fleet's treasury until one is made. For a send made
+by the Safe, the signer who completes the signatures submits the transaction
+themselves in the same step; a fully signed send is never left waiting to be
+submitted. All of `stakingOwed` goes
 into REGENT revenue staking through `depositUSDC`, tagged
 `keccak256("keyfleet.trading_payback")` with the fleet's manager as the source
 reference, through an exact approval the deposit must use up
@@ -1747,7 +1753,8 @@ Nothing shared calls a Trading Fleet's manager for anything it lacks:
   close the fleet, pay back at will, name a trading wallet or send to one; only
   the daily payback ever runs again, by anyone.
 - Nothing sends staking its 1% by itself: it stays owed in the treasury until
-  the keeper or the Regents Safe calls `sendToStaking`, and while the Regents
+  the keeper or the Regents Safe calls `sendToStaking` (on Base, a Regents Safe
+  transaction, since the keeper there is the Safe), and while the Regents
   Safe has REGENT revenue staking paused that call reverts. Until then, for
   good if neither ever calls it, it is counted out of the fleet's own USDC. The
   keys' paybacks run either way.
@@ -1990,7 +1997,8 @@ Nothing below can be fixed after the fact unless it says so.
 
 1. **Keeper.** Sean selected the Base Regents Safe on 9 October 2026;
    `base.json` now uses the Safe as keeper. It records the deck of every fleet
-   created in phase 4 and asks for card refreshes through Safe transactions.
+   created in phase 4, asks for card refreshes and makes each Trading Fleet's
+   staking send, all through Safe transactions.
    The Safe can replace it later with `setKeeper`.
 2. **Routine public jobs.** Nothing runs by itself. An operator can run a bot
    that presses, as each comes due:

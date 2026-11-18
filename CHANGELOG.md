@@ -12246,3 +12246,21 @@ step's report).
   sends do not each need a Safe transaction. On Base the collection's keeper is today the Regents
   Safe itself.
 - The guide only; no script or contract changed.
+
+## 2026-11-18 — The separate-keeper step is withdrawn; on Base the keeper stays the Regents Safe
+
+- The step the previous entry added is removed from `docs/deployment.md`, in the Trading Fleets
+  section and in "What the Safe does". The record step compares the collection's keeper with the
+  manifest, and `base.json` names the Regents Safe, so with a separate keeper every rerun of the
+  record would refuse (`RecordedMismatch("keeper")`). Whether Base ever has a keeper other than
+  the Safe is the founder's decision; until then every document says the keeper there is the
+  Regents Safe, as chosen on 9 October.
+- The Trading Fleets section, and the README's Paybacks paragraph, now state who sends on Base:
+  each Trading Fleet's staking send there is a Safe transaction, and the share waits in the
+  fleet's treasury until one is made. For a send made by the Safe, the signer who completes the
+  signatures submits the transaction themselves in the same step; a fully signed send is never
+  left waiting to be submitted.
+- The README's keeper paragraph, its Limits bullet on the send and deploy-day item 1 say the
+  same, and the guide's phase-4 deck paragraph says the keeper records a deck (on Base, a Safe
+  transaction) rather than a separate keeper wallet.
+- The guide and README only; no script or contract changed.
