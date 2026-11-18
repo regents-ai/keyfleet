@@ -1,7 +1,7 @@
 import {expect, it} from "vitest"
 
 import {press, type Review} from "../js/hooks/onchain_steps"
-import {replaceActiveEthereumWallet, type SwitchChain} from "../js/wallet_actions/connected_wallet"
+import type {SwitchChain} from "../js/wallet_actions/connected_wallet"
 import {
   failure,
   NothingSent,
@@ -60,17 +60,12 @@ function walletError(code: number, message: string): Error & {code: number} {
   return Object.assign(new Error(message), {code})
 }
 
-// Presses `name` with `wallet` as Privy's active wallet: what the press
-// answered, and what the hook reported.
+// Presses `name` with `wallet` open: what the press answered, and what the
+// hook reported.
 async function pressWith(wallet: ReturnType<typeof walletOn>, name: string) {
   const reports: unknown[] = []
-  replaceActiveEthereumWallet(wallet.selected)
-  try {
-    const pressed = await press(review, name, (event, payload) => reports.push([event, payload]))
-    return {pressed, reports}
-  } finally {
-    replaceActiveEthereumWallet(null)
-  }
+  const pressed = await press(review, name, wallet.selected, (event, payload) => reports.push([event, payload]))
+  return {pressed, reports}
 }
 
 // Invariant: every press reaches the active wallet. The page never compares
@@ -155,7 +150,7 @@ it("sends the server's step as built, from its signer and for its chain", async 
 it("sends nothing with no active wallet", async () => {
   const reports: unknown[] = []
 
-  await expect(press(review, "buy", (event, payload) => reports.push([event, payload])))
+  await expect(press(review, "buy", null, (event, payload) => reports.push([event, payload])))
     .resolves.toEqual({reason: "wallet_unavailable"})
   expect(reports).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
 })
