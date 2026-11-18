@@ -1893,8 +1893,15 @@ latest broadcast there.
   Safe, name, symbol, metadata links or trait table is not the manifest's
   (`CollectionMismatch(field)`); one that collection does not list as a factory
   (`FactoryNotListed(factory, collection)`); and one whose own Safe, REGENT
-  revenue staking or USDC is not the manifest's (`FactoryMismatch(field)`). It
-  then runs the Safe's
+  revenue staking or USDC is not the manifest's (`FactoryMismatch(field)`).
+  Anyone may create a Trading Fleet once the Safe approves the trading factory,
+  and one Trading Fleet stops the record for every fleet while the randomness
+  subscription is not ready for drawn Keys, so it prepares the Safe's call only
+  once the chain shows it is: it refuses, on Base, a subscription anyone but
+  the Regents Safe owns (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then,
+  on every chain, one that does not list the collection
+  (`CollectionNotVrfConsumer(collection)`), and the run stops before anything
+  is sent. It then runs the Safe's
   `KeyfleetKeys.addFactory(tradingFactory)` call from the Safe's address
   against the run's copy of the chain, so a call that would revert stops it
   with the collection's own error, and prints the call, as its target, value
@@ -2212,21 +2219,24 @@ themselves unless `BASE_RPC_URL` is set:
 - `KeyfleetTradingFork.t.sol` runs a Trading Fleet on the live collection as
   deployed, with real USDC and REGENT revenue staking: on the fork only, it acts
   as the Regents Safe to create the founding fleets still missing and step the
-  phases to the last with the release's Safe steps, deploys the trading factory
-  with `DeployTradingFactory` and makes the Safe's call that script prints,
+  phases to the last with the release's Safe steps, has the subscription's
+  owner hand the VRF subscription to the Safe, which lists the collection,
+  deploys the trading factory with `DeployTradingFactory` and makes the Safe's
+  call that script prints,
   then creates a fleet, sells keys, trades out and back, pays back by the
   creator and daily, sends staking its part into real staking, claims, passes
   key 1 (after which nothing goes to trading until its new holder names a
   wallet), closes and pays back everything, and keeps paying back while the
   Safe has staking paused, sending staking its part once it is unpaused.
   It also runs the record over the live system with a Trading Fleet in it,
-  after handing the VRF subscription to the Safe and listing the collection on
-  the fork, as the record requires for any fleet past the founding ones.
+  which the record allows because the subscription was handed over first.
   With `--isolate` its gas lines are the figures in [Trading
   Fleets](#trading-fleets-1). Apart from that, it runs `DeployTradingFactory`'s
   whole `run` on Base as it stands, whatever broadcast log the repository
-  holds: it takes the pinned live factory, deploys the trading factory, and
-  prints the Safe's `addFactory` call for that trading factory on the live
+  holds: with the subscription handed to another account it stops with
+  `VrfSubscriptionNotOwnedByRegentsSafe`, and once the Safe owns it and lists
+  the collection it takes the pinned live factory, deploys the trading factory,
+  and prints the Safe's `addFactory` call for that trading factory on the live
   collection.
 - `KeyfleetReleaseFork.t.sol` checks the first release's pinned factory and
   collection against the live system and that Base's reader gives the pins.

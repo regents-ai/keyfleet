@@ -11886,3 +11886,21 @@ step's report).
   the end of block 52,396,665 and the first of them by the end of block 52,396,666. With the pin
   set one block early or one block late, the test fails.
 - The fork test that checks the pins no longer compares the block with a copy of the number.
+
+## 2026-11-18 — The trading factory's approval waits for the Safe's randomness subscription
+
+- `DeployTradingFactory` no longer prepares the Safe's `addFactory` call for the trading factory
+  while the chain shows the randomness subscription not ready for drawn Keys: on Base while
+  anyone but the Regents Safe owns it (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on
+  every chain while it does not list the collection (`CollectionNotVrfConsumer(collection)`).
+  The run stops before anything is sent. The record step reads the subscription the same way
+  and refuses as before.
+- The reason, now in `docs/deployment.md` and `docs/chain-reader.md`: once the trading factory
+  is approved anyone may create a Trading Fleet, and while the subscription is not ready a
+  single fleet past the founding ones stops the whole record, every founding fleet with it, not
+  only that fleet. The order on Base is the subscription handed to the Safe and the collection
+  listed on it first, the trading factory's approval after.
+- New tests: the call waits for the collection to be listed and, on a stand-in Base, for the
+  Safe to own the subscription; on a fork of Base the run stops while another account owns it.
+  The trading fork tests hand the subscription to the Safe before the approval.
+- Every existing contract still compiles to the same bytes. Nothing was deployed, signed or sent.

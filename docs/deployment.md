@@ -353,9 +353,12 @@ fleets created since: it lists every fleet in the collection's registry.
   or a founding fleet has minted more Keys than its deck holds: a subscription
   that does not list the collection as a consumer (`CollectionNotVrfConsumer`)
   and, on Base, one whose owner is not the Regents Safe
-  (`VrfSubscriptionNotOwnedByRegentsSafe`). So on Base the Safe must own the
-  randomness subscription and list the collection before any such fleet is
-  recorded.
+  (`VrfSubscriptionNotOwnedByRegentsSafe`). This refusal stops the whole
+  record, every founding fleet with it, not only the fleet that needs a draw,
+  and anyone can create such a fleet once a trading factory is approved or
+  phase 4 is open. So on Base the subscription's owner hands it to the Safe and
+  the Safe accepts it and lists the collection first, and only after that does
+  the Safe approve a trading factory or open phase 4.
 
 ### What the record step writes
 
@@ -538,8 +541,14 @@ name, symbol, metadata links or trait table is not the manifest's
 staking or USDC is not the manifest's (`FactoryMismatch(field)`).
 
 The trading factory can register no fleet until the Regents Safe calls
-`addFactory(<trading factory>)` on the collection. The script never makes that
-call on the chain. It runs it once from the Safe's address against its own
+`addFactory(<trading factory>)` on the collection, and from then on anyone may
+create a Trading Fleet through it. The script prepares that call only once the
+chain shows the randomness subscription ready for those fleets: it stops,
+before anything is sent, on Base while anyone but the Regents Safe owns the
+subscription (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every
+chain while the subscription does not list the collection
+(`CollectionNotVrfConsumer(collection)`). The script never makes the call on
+the chain. It runs it once from the Safe's address against its own
 copy of the chain, so a call that would revert stops it with the collection's
 own error, then prints it, as its target (the collection), value (0) and data
 and as a Safe Transaction Builder batch, for the Safe's signers to load, check
@@ -557,9 +566,13 @@ creator could make the Safe pay for as many draws as they like.
 
 Rerun the record step to add a Trading Fleet to the record; its entry is
 described under "What the record step writes". Every Trading Fleet is a fleet
-past the five founding ones, so on Base the record step refuses to record one
-until the Regents Safe owns the randomness subscription and the subscription
-lists the collection.
+past the five founding ones, so while the subscription does not list the
+collection or, on Base, the Regents Safe does not own it, a single Trading
+Fleet stops the record step for every fleet, the founding ones included. The
+order on Base is therefore: the subscription's owner asks to hand it to the
+Safe (step 1), the Safe accepts it and lists the collection (step 3), and only
+then do the signers sign the trading factory's `addFactory` call, which the
+script will not prepare before.
 
 ## The trait table
 

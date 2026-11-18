@@ -23,11 +23,18 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// REGENT revenue staking and USDC.
 ///
 /// The trading factory can register nothing until the Safe calls `KeyfleetKeys.addFactory` with
-/// its address. This script does not make that call: it runs it once from the Safe's address
-/// against this run's copy of the chain, so a call that would revert stops the script with the
-/// collection's own error, then prints it, as the call's target and data and as a Safe Transaction
-/// Builder batch, for the Safe's signers to check and sign. Like the deployment step it writes no
-/// file, since a dry run would write the same file.
+/// its address, and from then on anyone may create a Trading Fleet through it. Every Trading Fleet
+/// is a fleet past the five founding ones, and one such fleet stops the record step for every fleet
+/// while the collection's randomness subscription does not list the collection or, on Base, the
+/// Regents Safe does not own it. So the call is prepared only once the chain shows both: on Base a
+/// subscription another account owns is refused first, then on every chain one that does not list
+/// the collection, and the run stops before anything is sent.
+///
+/// This script does not make that call: it runs it once from the Safe's address against this run's
+/// copy of the chain, so a call that would revert stops the script with the collection's own
+/// error, then prints it, as the call's target and data and as a Safe Transaction Builder batch,
+/// for the Safe's signers to check and sign. Like the deployment step it writes no file of its
+/// own, since a dry run would write the same file; Forge keeps its own logs of each run.
 ///
 /// `deploy` and `addFactoryCall` take values and touch neither the filesystem nor the environment,
 /// so the suite runs them against systems deployed in the test; `run` is the only part that reads a
@@ -43,6 +50,12 @@ contract DeployTradingFactory is KeyfleetManifest {
     error FactoryNotListed(address factory, address collection);
     /// @notice The existing factory's `field` differs from the manifest's.
     error FactoryMismatch(string field);
+    /// @notice On Base, the collection's randomness subscription is owned by someone other than the
+    /// Regents Safe, so the Safe's call is not prepared yet.
+    error VrfSubscriptionNotOwnedByRegentsSafe(address owner);
+    /// @notice The collection's randomness subscription does not list the collection as a consumer,
+    /// so the Safe's call is not prepared yet.
+    error CollectionNotVrfConsumer(address collection);
 
     /// @notice Reads the manifest named by `KEYFLEET_MANIFEST`, takes the existing factory from
     /// `readDeployment`, deploys the trading factory and prints the Safe's call adding it to the
@@ -97,11 +110,19 @@ contract DeployTradingFactory is KeyfleetManifest {
         return new KeyfleetTradingFactory(IKeyfleetFactory(address(factory)));
     }
 
-    /// @notice The Safe's call letting `trading` register fleets in the collection.
+    /// @notice The Safe's call letting `trading` register fleets in the collection, prepared only
+    /// while the collection's randomness subscription lists the collection and, on Base, the
+    /// Regents Safe owns it, as the record step requires once any Trading Fleet exists.
     function addFactoryCall(KeyfleetTradingFactory trading) public view returns (KeyfleetSafeSteps.SafeCall memory) {
+        KeyfleetKeys keys = trading.KEYS();
+        (address owner, bool listsCollection) = _subscription(keys);
+        if (block.chainid == BASE_CHAIN_ID && owner != BASE_REGENTS_SAFE) {
+            revert VrfSubscriptionNotOwnedByRegentsSafe(owner);
+        }
+        if (!listsCollection) revert CollectionNotVrfConsumer(address(keys));
         return KeyfleetSafeSteps.SafeCall({
             name: "add-trading-factory",
-            to: address(trading.KEYS()),
+            to: address(keys),
             data: abi.encodeCall(KeyfleetKeys.addFactory, (address(trading)))
         });
     }

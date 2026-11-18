@@ -153,10 +153,14 @@ minute's wait, not a failure.
    hashes, its profile and requirements and its staking tag; the full list is
    in `docs/deployment.md`. The step, the trading wallet and the close are as
    read at the block the record step ran against. A deck on a Trading Fleet is
-   the keeper's choice, and the default is none. On Base the record step
-   records a Trading Fleet, like any fleet past the five founding ones, only
-   once the Regents Safe owns the randomness subscription and the subscription
-   lists the collection.
+   the keeper's choice, and the default is none. On Base, while the Regents
+   Safe does not own the randomness subscription or the subscription does not
+   list the collection, a single Trading Fleet, like any fleet past the five
+   founding ones, stops the record step for every fleet, so there is no new
+   record to seed. The subscription is therefore handed to the Safe and the
+   collection listed on it first, and the Safe approves the trading factory
+   after; the trading factory's deployment script will not prepare that
+   approval before.
 
    Metadata for a revealed key is drawn from the fleet's trait table, which
    ships with the release: the art agent commits it as

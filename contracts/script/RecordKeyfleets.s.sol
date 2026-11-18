@@ -146,15 +146,11 @@ contract RecordKeyfleets is KeyfleetManifest {
             }
         }
         if (!needed) return;
-        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
-        (,,, address owner, address[] memory consumers) = coordinator.getSubscription(subscriptionId);
+        (address owner, bool listsCollection) = _subscription(keys);
         if (block.chainid == BASE_CHAIN_ID && owner != BASE_REGENTS_SAFE) {
             revert VrfSubscriptionNotOwnedByRegentsSafe(owner);
         }
-        for (uint256 index = 0; index < consumers.length; ++index) {
-            if (consumers[index] == address(keys)) return;
-        }
-        revert CollectionNotVrfConsumer(address(keys));
+        if (!listsCollection) revert CollectionNotVrfConsumer(address(keys));
     }
 
     /// @dev Fleet `fleetId`'s four contracts are where the factory places them, hold code and

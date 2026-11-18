@@ -5,11 +5,13 @@ import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetTradingFactory} from "../src/KeyfleetTradingFactory.sol";
+import {IKeyfleetFactory} from "../src/KeyfleetWiring.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
 import {DeployTradingFactory} from "../script/DeployTradingFactory.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../script/KeyfleetSafeSteps.s.sol";
 import {KeyfleetScriptFixture} from "./helpers/KeyfleetScriptFixture.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev Answers as `real` does, the collection, shard record, USDC and REGENT revenue staking, but
 /// with a Safe of its own.
@@ -104,6 +106,44 @@ contract DeployTradingFactoryTest is KeyfleetScriptFixture {
         (address manager,,) = trading.predict(fleetId);
         assertEq(fleet.manager, manager, "Registered by the trading factory");
         assertEq(uint256(fleet.preset), uint256(KeyfleetPresets.Preset.FleetTechAccelerant), "As an Accelerant");
+    }
+
+    /// @dev Every fleet the trading factory registers is one past the founding ones, which the
+    /// record lists only while the subscription lists the collection, so the Safe's call is refused
+    /// until it does. Off Base its owner may be anyone.
+    function test_theSafesCallWaitsUntilTheSubscriptionListsTheCollection() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        KeyfleetFactory deployed = deployScript.deploy(manifest);
+        KeyfleetTradingFactory trading = script.deploy(manifest, deployed);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployTradingFactory.CollectionNotVrfConsumer.selector, address(deployed.KEYS()))
+        );
+        script.addFactoryCall(trading);
+
+        _listConsumer(manifest, deployed.KEYS());
+        assertEq(script.addFactoryCall(trading).to, address(deployed.KEYS()), "Prepared once it lists it");
+    }
+
+    /// @dev On Base the Safe's call is refused while anyone but the Regents Safe owns the
+    /// subscription, even one that lists the collection, and prepared once the Safe owns it.
+    function test_onBaseTheSafesCallWaitsUntilTheRegentsSafeOwnsTheSubscription() public {
+        uint256 subscriptionId = _standInBase();
+        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
+        KeyfleetFactory deployed = _deployListed(manifest);
+        // A stand-in collection can never be the pinned live one `deploy` requires on Base, so the
+        // trading factory is built on it directly.
+        KeyfleetTradingFactory trading = new KeyfleetTradingFactory(IKeyfleetFactory(address(deployed)));
+        MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR());
+
+        coordinator.openSubscription(subscriptionId, keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployTradingFactory.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper)
+        );
+        script.addFactoryCall(trading);
+
+        coordinator.openSubscription(subscriptionId, script.BASE_REGENTS_SAFE());
+        assertEq(script.addFactoryCall(trading).to, address(deployed.KEYS()), "Prepared once the Safe owns it");
     }
 
     function test_deployRefusesAFactoryWithoutCode() public {

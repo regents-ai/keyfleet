@@ -305,6 +305,17 @@ abstract contract KeyfleetManifest is Script {
         });
     }
 
+    /// @dev Who owns the collection's randomness subscription and whether the subscription lists the
+    /// collection as a consumer, as the collection's coordinator reports them now.
+    function _subscription(KeyfleetKeys keys) internal view returns (address owner, bool listsCollection) {
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        address[] memory consumers;
+        (,,, owner, consumers) = coordinator.getSubscription(subscriptionId);
+        for (uint256 index = 0; index < consumers.length; ++index) {
+            if (consumers[index] == address(keys)) return (owner, true);
+        }
+    }
+
     /// @dev The number of elements of a JSON array.
     function _length(string memory json, string memory array) internal view returns (uint256 length) {
         while (vm.keyExistsJson(json, _element(array, length))) ++length;

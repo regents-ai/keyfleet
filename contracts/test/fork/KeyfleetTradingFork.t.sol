@@ -22,11 +22,39 @@ import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {RecordKeyfleets} from "../../script/RecordKeyfleets.s.sol";
 import {IRegentRevenueStakingViews} from "./KeyfleetBaseFork.t.sol";
 
+/// @dev On a fork of Base only: hands the live collection's randomness subscription to another
+/// account, from whoever owns it at the forked block, as its owner and the new owner would on Base.
+abstract contract LiveSubscriptionFork is Test {
+    KeyfleetKeys internal constant LIVE_COLLECTION = KeyfleetKeys(0xaBC959B463542497639adA57388c65D05AB34A30);
+    address internal constant REGENTS_SAFE = 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e;
+
+    /// @dev The subscription's owner asks to hand it to `to`, and `to` accepts.
+    function _handSubscriptionTo(address to) internal {
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = LIVE_COLLECTION.randomness();
+        (,,, address owner,) = coordinator.getSubscription(subscriptionId);
+        if (owner == to) return;
+        vm.prank(owner);
+        coordinator.requestSubscriptionOwnerTransfer(subscriptionId, to);
+        vm.prank(to);
+        coordinator.acceptSubscriptionOwnerTransfer(subscriptionId);
+    }
+
+    /// @dev The Regents Safe takes the subscription and lists the collection on it, the order the
+    /// trading factory's deployment requires before it prepares the Safe's call.
+    function _subscriptionToTheSafe() internal {
+        _handSubscriptionTo(REGENTS_SAFE);
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = LIVE_COLLECTION.randomness();
+        vm.prank(REGENTS_SAFE);
+        coordinator.addConsumer(subscriptionId, address(LIVE_COLLECTION));
+    }
+}
+
 /// @dev A Trading Fleet on the live Keyfleet collection, on a fork of Base at its latest block: the
 /// real collection and its factory as deployed, real USDC and real REGENT revenue staking. On the
 /// fork only, the Regents Safe's address creates the founding fleets still missing and steps the
-/// phases with the release's own Safe steps; the trading factory is deployed by
-/// `DeployTradingFactory` and the Safe's address makes the call that script prints. Nothing is
+/// phases with the release's own Safe steps, the subscription's owner hands the randomness
+/// subscription to the Safe, which lists the collection, and then the trading factory is deployed
+/// by `DeployTradingFactory` and the Safe's address makes the call that script prints. Nothing is
 /// signed or sent to Base.
 ///
 /// It runs only when `BASE_RPC_URL` is set in the environment and skips itself otherwise; the URL is
@@ -37,7 +65,7 @@ import {IRegentRevenueStakingViews} from "./KeyfleetBaseFork.t.sol";
 /// It logs the gas of a purchase, a creator's payback and a daily payback. Those are whole
 /// transactions, the 21,000 base and the call data included and every account cold, only when Forge
 /// runs each call as a transaction of its own; add `--isolate` for the figures to quote.
-contract KeyfleetTradingForkTest is Test {
+contract KeyfleetTradingForkTest is LiveSubscriptionFork {
     /// @dev The live collection and the factory that deployed it, read from Base on 18 November 2026.
     KeyfleetKeys private constant COLLECTION = KeyfleetKeys(0xaBC959B463542497639adA57388c65D05AB34A30);
     KeyfleetFactory private constant FLEETS = KeyfleetFactory(0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7);
@@ -82,6 +110,7 @@ contract KeyfleetTradingForkTest is Test {
             vm.warp(block.timestamp + 1);
         }
 
+        _subscriptionToTheSafe();
         DeployTradingFactory deployer = new DeployTradingFactory();
         trading = deployer.deploy(manifest, FLEETS);
         _asSafe(deployer.addFactoryCall(trading));
@@ -250,11 +279,10 @@ contract KeyfleetTradingForkTest is Test {
 
     /// @dev The record of the live system lists the Trading Fleet as one beside the live fleets.
     /// A fleet past the founding ones is recorded only while the Regents Safe owns the VRF
-    /// subscription and the collection is on it, so on the fork the subscription's owner hands it to
-    /// the Safe and the Safe lists the collection first.
+    /// subscription and the collection is on it, which `setUp` arranged before the Safe approved the
+    /// trading factory.
     function test_theRecordListsTheTradingFleetBesideTheLiveFleets() public {
         KeyfleetTradingManager fleet = _create();
-        _subscriptionToTheSafe();
         RecordKeyfleets recorder = new RecordKeyfleets();
 
         string memory json = recorder.record(
@@ -277,21 +305,6 @@ contract KeyfleetTradingForkTest is Test {
                 "Founding fleet as before"
             );
         }
-    }
-
-    /// @dev On the fork only: the subscription's owner hands it to the Regents Safe, which accepts
-    /// it and lists the collection.
-    function _subscriptionToTheSafe() private {
-        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = COLLECTION.randomness();
-        (,,, address owner,) = coordinator.getSubscription(subscriptionId);
-        if (owner != SAFE) {
-            vm.prank(owner);
-            coordinator.requestSubscriptionOwnerTransfer(subscriptionId, SAFE);
-            vm.prank(SAFE);
-            coordinator.acceptSubscriptionOwnerTransfer(subscriptionId);
-        }
-        vm.prank(SAFE);
-        coordinator.addConsumer(subscriptionId, address(COLLECTION));
     }
 
     /// @dev While its owner, the Regents Safe, has real staking paused, every payback still pays the
@@ -388,9 +401,10 @@ contract KeyfleetTradingForkTest is Test {
 /// broadcast log the repository holds, every check, the trading factory's deployment and the Safe's
 /// call, which the run then makes from the Safe's address on the fork. Nothing is signed or sent to
 /// Base. It runs only when `BASE_RPC_URL` is set and skips itself otherwise.
-contract DeployTradingFactoryForkTest is Test {
+contract DeployTradingFactoryForkTest is LiveSubscriptionFork {
     KeyfleetKeys private constant COLLECTION = KeyfleetKeys(0xaBC959B463542497639adA57388c65D05AB34A30);
     KeyfleetFactory private constant FLEETS = KeyfleetFactory(0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7);
+    address private constant SOMEONE_ELSE = address(0x50B0);
 
     function setUp() public {
         string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
@@ -401,14 +415,28 @@ contract DeployTradingFactoryForkTest is Test {
         vm.createSelectFork(rpc);
     }
 
-    /// @dev The run finds the live factory without opening a broadcast log, deploys on it, and
-    /// prints the live collection's `addFactory` for the address it deployed, which the Safe's call
-    /// then lists.
+    /// @dev While anyone but the Regents Safe owns the randomness subscription, the whole run stops
+    /// with that owner's address before it prepares the Safe's call.
+    function test_runOnBaseStopsWhileTheSafeDoesNotOwnTheSubscription() public {
+        DeployTradingFactory script = new DeployTradingFactory();
+        _handSubscriptionTo(SOMEONE_ELSE);
+
+        vm.setEnv("KEYFLEET_MANIFEST", "base");
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployTradingFactory.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
+        );
+        script.run();
+    }
+
+    /// @dev Once the Safe owns the subscription and lists the collection, the run finds the live
+    /// factory without opening a broadcast log, deploys on it, and prints the live collection's
+    /// `addFactory` for the address it deployed, which the Safe's call then lists.
     function test_runOnBaseFindsTheLiveFactoryAndPrintsTheSafesCall() public {
         DeployTradingFactory script = new DeployTradingFactory();
         assertEq(script.BASE_KEYFLEET_FACTORY(), address(FLEETS), "the pinned factory");
         assertEq(address(FLEETS.KEYS()), address(COLLECTION), "names the live collection");
         assertEq(vm.computeCreateAddress(address(FLEETS), 1), address(COLLECTION), "which it created first");
+        _subscriptionToTheSafe();
 
         vm.setEnv("KEYFLEET_MANIFEST", "base");
         (KeyfleetTradingFactory trading, KeyfleetSafeSteps.SafeCall memory call) = script.run();
