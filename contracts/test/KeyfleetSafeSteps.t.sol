@@ -192,6 +192,34 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(keys.phase(), keys.FINAL_PHASE(), "Each opened once the Safe owns it");
     }
 
+    /// @dev The call to phase 2 checks nothing of the subscription and names no phase: on Base, with
+    /// another account owning the subscription, a phase-2 file written in phase 1 and landed once
+    /// phase 2 has opened opens phase 3, as its description warns.
+    function test_aPhaseTwoFileLandedOncePhaseTwoHasOpenedOpensPhaseThreeAsItsDescriptionWarns() public {
+        uint256 subscriptionId = _standInBase();
+        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
+        KeyfleetFactory base = _deployListed(manifest);
+        KeyfleetKeys keys = base.KEYS();
+        MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(safeSteps.BASE_VRF_COORDINATOR());
+        coordinator.openSubscription(subscriptionId, keeper);
+        _found(manifest, base);
+        _openPhase(manifest, base);
+
+        KeyfleetSafeSteps.SafeCall[] memory phaseTwo =
+            safeSteps.advancePhaseCalls(manifest, base, uint64(block.timestamp + 1 days));
+        assertTrue(
+            _names(
+                phaseTwo[0].description,
+                " Landed once phase 2 has opened, it opens phase 3, with no check of the randomness subscription. Once phase 2 has opened, throw this file away."
+            ),
+            "Its description warns of it"
+        );
+        _openPhase(manifest, base);
+        _make(phaseTwo, manifest.bindings.safe);
+        assertEq(keys.phase(), 3, "The phase-2 file opened phase 3");
+        assertEq(coordinator.subscriptionOwner(subscriptionId), keeper, "With the subscription not the Safe's");
+    }
+
     /// @dev Both steps check the manifest first.
     function test_stepsRefuseAManifestForAnotherChain() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
@@ -241,9 +269,11 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
 
     /// @dev Moves `factory`'s collection through every phase by the step, checking each batch as the
     /// step writes it: its phase's name and its own description, which names the collection and the
-    /// opening time for every phase and, only for the calls to phases 3 and 4, the subscription the
-    /// signers read first, by its id and its coordinator, and the Safe as its owner when
-    /// `namesOwner`.
+    /// opening time and says to throw the file away once its phase has opened for every phase, warns
+    /// only in the calls to phases 1 and 2 that landed once phase 2 has opened either opens phase 3
+    /// with no check of the subscription, and only for the calls to phases 3 and 4 names the
+    /// subscription the signers read first, by its id and its coordinator, and the Safe as its owner
+    /// when `namesOwner`.
     function _assertPhaseBatches(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, bool namesOwner)
         private
     {
@@ -262,6 +292,17 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             assertTrue(_names(description, vm.toString(address(keys))), "The collection");
             assertTrue(_names(description, vm.toString(uint256(opensAt))), "The opening");
             bool reads = phase >= safeSteps.FIRST_DRAWING_PHASE();
+            assertTrue(
+                _names(
+                    description, string.concat(" Once phase ", vm.toString(phase), " has opened, throw this file away.")
+                ),
+                "Thrown away once its phase has opened"
+            );
+            assertEq(
+                _names(description, "it opens phase 3, with no check of the randomness subscription"),
+                !reads,
+                "The calls to phases 1 and 2 warn of phase 3"
+            );
             assertEq(
                 _names(description, string.concat("subscription ", vm.toString(subscriptionId))),
                 reads,

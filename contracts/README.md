@@ -1859,8 +1859,10 @@ latest broadcast there.
   what the signers read on the chain before signing, since `advancePhase` names
   no phase and opens whichever is next: the collection's phase now and, for
   phases 3 and 4, what the step checks on that chain, that the subscription lists the
-  collection and, on Base only, that the Regents Safe owns it. A rehearsal's
-  files carry the same description.
+  collection and, on Base only, that the Regents Safe owns it. It also says to
+  throw the file away once its phase has opened, and the files to phases 1 and
+  2 that, landed once phase 2 has opened, either opens phase 3 with no check of
+  the subscription. A rehearsal's files carry the same description.
   Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
   has unlocked. `run` is `runInto("deployments/safe")`; a rehearsal or a test

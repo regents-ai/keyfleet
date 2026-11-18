@@ -30,7 +30,9 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 /// phase step is run only when the founder says when sales open. Those three sell past their
 /// decks, and phase 4 lets anyone create a fleet, so the step prepares neither phase until the
 /// randomness subscription is ready for a Key that draws: on Base the Regents Safe owns it, and on
-/// every chain it lists the collection.
+/// every chain it lists the collection. The steps to phases 1 and 2 check nothing of it, yet a file
+/// either writes, landed once phase 2 has opened, opens phase 3: its description says so, and every
+/// phase file's description says to throw it away once its phase has opened.
 ///
 /// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
 /// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key
@@ -142,9 +144,11 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// collection and, on Base, the Regents Safe owns it, as the record step requires once any Key
     /// draws: from phase 3 anyone may buy a founding Key past its deck, and from phase 4 create a
     /// fleet. The call names no phase, so landed at any time before `opensAt` it opens whichever
-    /// phase is next. Its description says so, and names what the signers read on the chain before
-    /// signing: the phase the collection is in now and, for the calls to phases 3 and 4, that the
-    /// subscription lists the collection and, on Base, that the Regents Safe owns it.
+    /// phase is next: the calls to phases 1 and 2, landed once phase 2 has opened, open phase 3
+    /// with no check of the subscription. Its description says so, says to throw the file away once
+    /// its phase has opened, and names what the signers read on the chain before signing: the phase
+    /// the collection is in now and, for the calls to phases 3 and 4, that the subscription lists the
+    /// collection and, on Base, that the Regents Safe owns it.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -154,10 +158,20 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         KeyfleetKeys keys = factory.KEYS();
         uint256 next = keys.phase() + 1;
         string memory checks = string.concat("the collection is in phase ", vm.toString(next - 1));
+        string memory late = string.concat(" Once phase ", vm.toString(next), " has opened, throw this file away.");
         if (next >= FIRST_DRAWING_PHASE) {
             Subscription memory subscription = _subscription(keys);
             requireSubscriptionReady(subscription);
             checks = string.concat(checks, _subscriptionChecks(subscription));
+        } else {
+            late = string.concat(
+                " Landed once phase ",
+                vm.toString(uint256(FIRST_DRAWING_PHASE) - 1),
+                " has opened, it opens phase ",
+                vm.toString(uint256(FIRST_DRAWING_PHASE)),
+                ", with no check of the randomness subscription.",
+                late
+            );
         }
         calls = new SafeCall[](1);
         calls[0] = SafeCall({
@@ -170,6 +184,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
                 ", opening at Unix time ",
                 vm.toString(uint256(opensAt)),
                 ". The call names no phase: landed at any time before then, it opens whichever phase is next.",
+                late,
                 " Sign only after reading on chain ",
                 vm.toString(block.chainid),
                 " that ",

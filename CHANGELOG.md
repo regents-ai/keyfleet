@@ -12198,3 +12198,22 @@ step's report).
   and with exit 0, every suite closed with no summary (exit 101), a whole run stopped by a signal
   afterwards (exit 143), a fork suite left unclosed with the next suite following, a fork setUp
   failing beside a fork suite that passed with a skip, and `--json` output.
+
+## 2026-11-18 — Phase files say that one landed late opens the next phase, and to throw it away
+
+- A phase file's call, `advancePhase(opensAt)`, names no phase, so a file landed after the phase
+  it was written for has opened opens the phase after. The steps to phases 1 and 2 check nothing
+  of the randomness subscription, so a `phase-1` or `phase-2` file landed once phase 2 has opened
+  opens phase 3 with no check of it. This is not reachable on Base today; it would be on a new
+  deployment.
+- The step is unchanged in what it checks and when it refuses; the files say it plainly. Every
+  phase file's description now says `Once phase N has opened, throw this file away.`, and the
+  files to phases 1 and 2 also say `Landed once phase 2 has opened, it opens phase 3, with no
+  check of the randomness subscription.` `docs/deployment.md` says the same in step 6 and in
+  "Before signing a phase file" (a file written for a phase already open must be thrown away,
+  never signed), as do the README's paragraph on phase files and the script's own comments.
+- The Safe-step suite proves it on a stand-in Base whose subscription another account owns: a
+  phase-2 file written in phase 1, landed once phase 2 has opened, opens phase 3, and its
+  description warns of exactly that. The test of every phase file's description also checks the
+  throw-away sentence on every file and the warning only on the files to phases 1 and 2.
+- No contract changed.

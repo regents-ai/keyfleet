@@ -478,7 +478,9 @@ and stop, before anything is written, on Base while anyone but the Regents Safe
 owns the subscription (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on
 every chain while the subscription does not list the collection
 (`CollectionNotVrfConsumer(collection)`). The steps to phases 1 and 2 do not
-check it, since no Key sold before phase 3 draws. There is no step back, and
+check it, since no Key sold before phase 3 draws, yet a file either writes,
+landed once phase 2 has opened, opens phase 3 with no check of the
+subscription (see "Before signing a phase file"). There is no step back, and
 nothing else moves a phase.
 
 Should the subscription stop being ready once phase 3 has opened, the Safe
@@ -497,14 +499,18 @@ handing it on or removing the collection, then from the next Key that draws:
 
 The call in a phase file is `advancePhase(<opening>)`. It names no phase, so
 landed at any time before its opening it moves the collection on from
-whatever phase it is in then: a `base.phase-3.json` that lands after phase 3
-has opened opens phase 4, checked only as the subscription stood when the
-phase-3 file was written. Each file's own description (`meta.description`)
-therefore says what the signers read on Base before signing: the phase the
-collection is in now, and in `base.phase-3.json` and `base.phase-4.json` also
-that the Regents Safe owns the randomness subscription and the subscription
-lists the collection. The description says what the step saw when it wrote
-the file. Read the facts on Base yourselves, not from the file:
+whatever phase it is in then: a `base.phase-2.json` that lands after phase 2
+has opened opens phase 3 with no check of the subscription, since the step to
+phase 2 checks none, and so does a `base.phase-1.json` landed then; a
+`base.phase-3.json` that lands after phase 3 has opened opens phase 4, checked
+only as the subscription stood when the phase-3 file was written. A file
+written for a phase already open must therefore be thrown away, never signed.
+Each file's own description (`meta.description`) says so, and says what the
+signers read on Base before signing: the phase the collection is in now, and
+in `base.phase-3.json` and `base.phase-4.json` also that the Regents Safe owns
+the randomness subscription and the subscription lists the collection. The
+description says what the step saw when it wrote the file. Read the facts on
+Base yourselves, not from the file:
 
 ```sh
 # The phase the collection is in now.
