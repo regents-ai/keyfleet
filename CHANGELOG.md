@@ -11980,3 +11980,11 @@ step's report).
   contracts for a bound fleet or a chain, collection, shard record, USDC, REGENT, staking
   contract, Autolaunch factory, Regents Club claims contract or trait table that differs from a
   fleet already bound.
+
+## 2026-11-18 — The Base fork's reveal proof under the phase-4 step
+
+- The Base fork proof that the real coordinator refuses a request from a collection off the
+  subscription, and takes the retry once the collection is on it, reached phase 4 with its own
+  subscription unlisted, which the phase-4 step now refuses. The Safe now takes the
+  subscription and lists the collection before phase 4, and removes the collection before the
+  drawing key is sold; the Safe adds it again for the retry. The proof is otherwise unchanged.

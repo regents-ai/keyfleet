@@ -257,20 +257,27 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
     }
 
     /// @dev A key that draws, key 2 of a fleet created in phase 4, is sold once the keeper has
-    /// recorded the fleet's deck and before the collection is a consumer. Then the collection is
-    /// added, the request is retried, and answered; key 3 sold by a consumer is accepted straight away.
+    /// recorded the fleet's deck and while the collection is not a consumer: the Safe took the
+    /// subscription and listed the collection before phase 4, as the step requires, and has removed
+    /// it since. Then the Safe adds it again, the request is retried, and answered; key 3 sold by a
+    /// consumer is accepted straight away.
     function test_theRealCoordinatorAcceptsTheRequestAndTheAnswerFits() public {
+        _subscriptionToTheSafe();
         KeyfleetManager drawing = _drawingFleet();
         uint256 fleetId = drawing.FLEET_ID();
+        address safe = script.BASE_REGENTS_SAFE();
+        vm.prank(safe);
+        coordinator.removeConsumer(subscriptionId, address(keys));
         uint256 first = _key(drawing, 2);
         uint256 price = _fund(drawing, BUYER);
         vm.expectEmit(true, false, false, false, address(keys));
         emit KeyfleetKeys.RevealRequestFailed(first);
         vm.prank(BUYER);
         drawing.purchase(BUYER, price, block.timestamp, new bytes32[](0));
-        assertEq(keys.ownerOf(first), BUYER, "a collection not yet on the subscription still sells");
+        assertEq(keys.ownerOf(first), BUYER, "a collection off the subscription still sells");
         assertEq(keys.revealRequestedAt(first), 0, "and its key waits for a request");
 
+        vm.prank(safe);
         coordinator.addConsumer(subscriptionId, address(keys));
         vm.recordLogs();
         vm.cool(address(keys));
