@@ -11877,3 +11877,12 @@ step's report).
 - `foundry.toml` is back to letting scripts and tests only write the record and the batch
   folder, not read them, and lets them read and write `rehearsal/`.
 - Every existing contract still compiles to the same bytes. Nothing was deployed, signed or sent.
+
+## 2026-11-18 — Base's deployment block pin proved from Base
+
+- A new fork test proves the pinned deployment block, 52,396,666, from Base's own state instead
+  of repeating the number: the release's five creations are the addresses one account's nonces
+  50 to 54 create, in the deployment script's order, and that account had sent none of them at
+  the end of block 52,396,665 and the first of them by the end of block 52,396,666. With the pin
+  set one block early or one block late, the test fails.
+- The fork test that checks the pins no longer compares the block with a copy of the number.

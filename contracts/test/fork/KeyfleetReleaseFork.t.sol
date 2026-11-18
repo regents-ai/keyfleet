@@ -8,19 +8,27 @@ import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {RecordKeyfleets} from "../../script/RecordKeyfleets.s.sol";
 
-/// @dev The record's and the Safe steps' whole run on a fork of Base at its latest block, exactly as
-/// it stands: both take Base's first release from `KeyfleetManifest`, whatever broadcast log the
-/// repository holds. Each run writes through `runInto`, the function the real `run` calls with its
-/// own folder, into a folder of this test's own under `rehearsal/`, which git ignores, and the test
-/// removes that folder; no test opens the published record, a Safe batch or a broadcast log, so
-/// each passes whether those are there or not. Nothing is signed or sent to Base. It runs only when
-/// `BASE_RPC_URL` is set and skips itself otherwise.
+/// @dev Base's first release as pinned in `KeyfleetManifest`, its deployment block included, proved
+/// against Base itself, and the record's and the Safe steps' whole run on a fork of Base at its
+/// latest block, exactly as it stands: both take that release from the pins, whatever broadcast
+/// log the repository holds. Each run writes through `runInto`, the function the real `run` calls
+/// with its own folder, into a folder of this test's own under `rehearsal/`, which git ignores, and
+/// the test removes that folder; no test opens the published record, a Safe batch or a broadcast
+/// log, so each passes whether those are there or not. Nothing is signed or sent to Base. It runs
+/// only when `BASE_RPC_URL` is set and skips itself otherwise.
 contract KeyfleetReleaseForkTest is Test {
+    /// @dev The account that sent Base's first release, and the nonce of its first transaction:
+    /// read from Base, and checked below against the addresses those nonces create.
+    address private constant RELEASE_SENDER = 0x9b2C414614aEE294202c1219520955EF3B596031;
+    uint64 private constant RELEASE_FIRST_NONCE = 50;
+
     string private constant RECORD_FOLDER = "rehearsal/release-fork-record";
     string private constant SAFE_FOLDER = "rehearsal/release-fork-safe";
 
+    string private rpc;
+
     function setUp() public {
-        string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
+        rpc = vm.envOr("BASE_RPC_URL", string(""));
         if (bytes(rpc).length == 0) {
             vm.skip(true);
             return;
@@ -42,6 +50,37 @@ contract KeyfleetReleaseForkTest is Test {
         KeyfleetManifest.BroadcastSummary memory deployment = recorder.readDeployment();
         assertEq(address(deployment.factory), address(factory), "Base's factory");
         assertEq(deployment.deploymentBlock, recorder.BASE_DEPLOYMENT_BLOCK(), "Base's first block");
+    }
+
+    /// @dev The pinned deployment block, proved from Base's own state. The release is
+    /// `DeployKeyfleets`' five creations in order, the four deployers the pinned factory names and
+    /// then the factory, and they are the addresses one account's nonces 50 to 54 create. At the end
+    /// of the block before the pin that account had sent none of them and the first, the manager
+    /// deployer, had no code; at the end of the pinned block both had changed. The other four have
+    /// later nonces, so they landed in that block or after it: the pin is the lowest block any of the
+    /// five landed in, which is what the record calls the deployment block. The public endpoint
+    /// refuses log searches, so this reads state at the two edges instead.
+    function test_thePinnedDeploymentBlockIsWhereTheReleaseBegan() public {
+        RecordKeyfleets recorder = new RecordKeyfleets();
+        KeyfleetFactory factory = KeyfleetFactory(recorder.BASE_KEYFLEET_FACTORY());
+        uint256 pin = recorder.BASE_DEPLOYMENT_BLOCK();
+        address[5] memory release = [
+            address(factory.MANAGER_DEPLOYER()),
+            address(factory.VOTES_DEPLOYER()),
+            address(factory.TREASURY_DEPLOYER()),
+            address(factory.REWARDS_DEPLOYER()),
+            address(factory)
+        ];
+        for (uint256 i = 0; i < release.length; ++i) {
+            assertEq(vm.computeCreateAddress(RELEASE_SENDER, RELEASE_FIRST_NONCE + i), release[i], "nonce by nonce");
+        }
+
+        vm.createSelectFork(rpc, pin - 1);
+        assertEq(vm.getNonce(RELEASE_SENDER), RELEASE_FIRST_NONCE, "none of the five sent before the pin");
+        assertEq(release[0].code.length, 0, "no manager deployer before the pin");
+        vm.createSelectFork(rpc, pin);
+        assertGt(vm.getNonce(RELEASE_SENDER), RELEASE_FIRST_NONCE, "the first of the five sent in the pinned block");
+        assertGt(release[0].code.length, 0, "the manager deployer created in it");
     }
 
     /// @dev The record's run writes Base's record with the pinned factory and first block, the

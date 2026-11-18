@@ -2229,8 +2229,15 @@ themselves unless `BASE_RPC_URL` is set:
   prints the Safe's `addFactory` call for that trading factory on the live
   collection.
 - `KeyfleetReleaseFork.t.sol` checks the first release's pinned factory and
-  collection against the live system and that Base's reader gives the pins,
-  then runs the record's and the Safe steps' whole run on Base as it stands:
+  collection against the live system and that Base's reader gives the pins.
+  It proves the pinned deployment block from Base's own state, not from a
+  second copy of the number: the release's five creations, the four deployers
+  the pinned factory names and then the factory, are the addresses one
+  account's nonces 50 to 54 create, and that account had sent none of them at
+  the end of the block before the pin and the first of them by the end of the
+  pinned block, so no other block is the lowest any of them landed in. It reads
+  Base at those two blocks, which Base's public endpoint serves. It then runs
+  the record's and the Safe steps' whole run on Base as it stands:
   the record written has the pinned factory and deployment block and is the
   record `record` gives for them, and the founding-fleets step writes one Safe
   batch per founding fleet still missing, each a call to the pinned factory.
