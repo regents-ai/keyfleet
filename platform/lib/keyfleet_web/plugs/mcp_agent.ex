@@ -408,7 +408,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   defp words("connection_required"),
     do:
       {401, "Connect Keyfleet, or sign this request with your own agent key.",
-       "An app: add #{url()} to its connectors, such as Claude's, then sign in to Keyfleet and allow it. " <>
+       "An app: add #{url()} to its connectors, such as Claude's or ChatGPT's, then sign in to Keyfleet and allow it. " <>
          "An agent with its own key needs no connector: sign each call as " <>
          PublicDocuments.url("/skill.md") <> " says under Pairing and Requests."}
 

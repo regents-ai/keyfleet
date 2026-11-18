@@ -1,7 +1,7 @@
 defmodule Keyfleet.Agents.Connection do
   @moduledoc """
   The one Regents identity an app keeps when a person connects it to their
-  Keyfleet account, such as Claude: the identity tools at `/mcp`. Only that app
+  Keyfleet account, Claude or ChatGPT: the identity tools at `/mcp`. Only that app
   may run them (`Keyfleet.Agents.Connection.Caller`), with the token its
   connection holds, as itself or as its paired identity; `RegentMCPAgents`
   does the work for the account the token names. register_identity prepares
@@ -35,7 +35,7 @@ defmodule Keyfleet.Agents.Connection do
       description "Pairs the connection's identity with the account's own pairing code."
 
       # What `RegentMCPAgents.pair/2` takes, as given: a code and a name of these
-      # lengths, untrimmed, and the one app whose connection Keyfleet serves.
+      # lengths, untrimmed, and one of the apps whose connection Keyfleet serves.
       argument :code, :string,
         allow_nil?: false,
         constraints: [min_length: 1, max_length: 128, trim?: false],
@@ -48,7 +48,7 @@ defmodule Keyfleet.Agents.Connection do
 
       argument :harness, :atom,
         allow_nil?: false,
-        constraints: [one_of: [:claude]],
+        constraints: [one_of: [:claude, :chatgpt]],
         description: "The app you are."
 
       run fn %{arguments: %{code: code, name: name, harness: harness}}, context ->

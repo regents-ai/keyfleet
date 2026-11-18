@@ -19,10 +19,11 @@ defmodule KeyfleetWeb.AgentGuides do
   `/agents`; that page is `/agents/compatibility`. Adding a runtime is adding its file. Nothing here
   reads the database.
 
-  Claude joins only through the Claude connector, so its page, its skill and
-  its place on `/agents` and the sitemap exist only while the
+  Claude and ChatGPT join only through the connector, so their pages, their
+  skills and their places on `/agents` and the sitemap exist only while the
   connector is switched on (`Keyfleet.OAuth.enabled?/0`), read on each call;
-  switched off, `/agents/claude` is not found like any other unknown runtime.
+  switched off, `/agents/claude` and `/agents/chatgpt` are not found like any
+  other unknown runtime.
   """
 
   alias KeyfleetWeb.{AgentCompatibility, PublicDocuments}
@@ -44,8 +45,8 @@ defmodule KeyfleetWeb.AgentGuides do
           end)
           |> Enum.sort_by(fn {_slug, guide} -> guide.name end)
 
-  # The runtimes that join only through the Claude connector.
-  @connector_only ["claude"]
+  # The runtimes that join only through the connector.
+  @connector_only ["chatgpt", "claude"]
 
   # A runtime's new file recompiles this module, as an edited one does.
   def __mix_recompile__?,
