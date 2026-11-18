@@ -264,7 +264,8 @@ defmodule Keyfleet.Notebooks.HubClient do
       Keyword.pop(options, :receive_timeout, Notebooks.config()[:hub_timeout_ms])
 
     {address,
-     Req.request(
+     Notebooks.hub_request(
+       fleet_id,
        [
          method: method,
          base_url: address,

@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks, Projects}
-  alias Keyfleet.Notebooks.Roster
+  alias Keyfleet.Notebooks.{HubClient, MemberRequest, Roster}
   alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers, SignedAgentHelpers}
 
   @endpoint KeyfleetWeb.Endpoint
@@ -1504,6 +1504,125 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, "POST", ^stuck_path, _, _}
   end
 
+  # Costly failure: a request that waits too long for a connection to the hub
+  # is never answered, and holds its connection and its process for good.
+  @tag hub_delay_ms: %{{"GET", "/api/v1/projects/proj-fleet/notebooks/nb-held"} => 7_000}
+  test "a request that waits too long for a hub connection is answered 502 and never reaches the hub",
+       c do
+    cookie = enter!(c.holder)
+    # Let in once, so what follows waits only for the hub.
+    assert get_notebook(@host, "/", cookie).status == 200
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+    held = "/api/v1/projects/proj-fleet/notebooks/nb-held"
+
+    # Every connection to the hub is taken (Finch's pool holds 50).
+    sockets = for _ <- 1..50, do: waiting_get(site, held, cookie)
+    for _ <- 1..50, do: assert_receive({:hub, "GET", ^held, "u_" <> _, _body}, 5_000)
+
+    started = :erlang.monotonic_time(:millisecond)
+    member = Task.async(fn -> MemberRequest.request(@fleet, "u_member", :get, "/api/v1/me") end)
+
+    answer =
+      Req.get!(site <> held,
+        headers: [{"host", @host}, {"cookie", "__Host-kf_notebooks=" <> cookie}],
+        retry: false
+      )
+
+    assert {answer.status, answer.body["error"]["code"]} == {502, "notebooks_unavailable"}
+    assert {:error, _no_connection} = Task.await(member, 7_000)
+    assert :erlang.monotonic_time(:millisecond) - started < 7_000
+    refute_received {:hub, "GET", ^held, _subject, _body}
+    refute_received {:hub, "GET", "/api/v1/me", _subject, _body}
+    Enum.each(sockets, &:gen_tcp.close/1)
+  end
+
+  # Costly failure: someone let in while no connection to the hub comes free
+  # gets a server error instead of being told the notebooks are unavailable.
+  @tag hub_delay_ms: %{{"PUT", "/api/v1/admin/users/u_held/suspension"} => 7_000}
+  test "someone let in while no hub connection comes free is told the notebooks are unavailable",
+       c do
+    cookie = enter!(c.holder)
+    held = for _ <- 1..50, do: Task.async(fn -> HubClient.suspend(@fleet, "u_held") end)
+    suspension = "/api/v1/admin/users/u_held/suspension"
+    for _ <- 1..50, do: assert_receive({:hub, "PUT", ^suspension, _subject, _body}, 5_000)
+
+    refused = get_notebook(@host, "/", cookie)
+    assert json_response(refused, 502)["error"]["code"] == "notebooks_unavailable"
+    refute_received {:hub, "POST", "/api/v1/projects/proj-fleet/members", _subject, _body}
+    Task.await_many(held, 10_000)
+  end
+
+  # Costly failure: an answer streaming back carries the hub's cookies or its
+  # other headers, keeps the hub working for a reader who has gone, or ends as
+  # if it were whole when the hub fails midway.
+  @tag :capture_log
+  test "an answer streams back with only the headers it may keep, stops the hub when its reader goes, and is cut off when the hub fails midway",
+       c do
+    test = self()
+
+    hub =
+      server(fn conn ->
+        case conn.request_path do
+          "/api/v1/projects/proj-fleet/notebooks/nb-streams" -> stream_until_gone(conn, test)
+          "/api/v1/projects/proj-fleet/notebooks/nb-breaks" -> break_midway(conn)
+          _other -> hub_answer(conn, c.holder)
+        end
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => hub})
+    )
+
+    cookie = enter!(c.holder)
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+    headers = [{"host", @host}, {"cookie", "__Host-kf_notebooks=" <> cookie}]
+
+    # The reader takes the first part and hangs up.
+    {:ok, first} =
+      Req.get(site <> "/api/v1/projects/proj-fleet/notebooks/nb-streams",
+        headers: headers,
+        retry: false,
+        into: fn {:data, part}, {request, response} ->
+          {:halt, {request, %{response | body: part}}}
+        end
+      )
+
+    assert {first.status, first.body} == {200, "part"}
+    assert first.headers["content-type"] == ["text/plain; charset=utf-8"]
+    assert {first.headers["set-cookie"], first.headers["x-hub-private"]} == {nil, nil}
+    assert_receive :hub_reader_gone, 5_000
+
+    assert {:error, %Req.TransportError{}} =
+             Req.get(site <> "/api/v1/projects/proj-fleet/notebooks/nb-breaks",
+               headers: headers,
+               retry: false
+             )
+  end
+
+  # Costly failure: a saved page too large to keep is cut off, or handed out
+  # with an address Keyfleet never kept it under.
+  test "a saved page past what Keyfleet keeps streams back whole, with no address", c do
+    cookie = enter!(c.holder)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :saved_page_max_bytes, 8)
+    )
+
+    run_id = "run_" <> String.duplicate("2", 26)
+    run = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000003/jobs/job-1/runs/" <> run_id
+    opened = send_notebook(:get, run <> "/html", cookie, "")
+
+    assert {opened.status, opened.resp_body} == {200, "<p>#{run_id}</p>"}
+    assert get_resp_header(opened, "link") == []
+
+    assert {:ok, []} =
+             Notebooks.newest_run_outputs(@fleet, ["nb-0000000000000003"], actor: %System{})
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do
@@ -1607,6 +1726,20 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       fn {name, value}, conn -> put_req_header(conn, name, value) end
     )
     |> dispatch(@endpoint, request.method, request.path, request.body || "")
+  end
+
+  # A person's GET sent to the site on a socket of its own, left waiting.
+  defp waiting_get(site, path, cookie) do
+    {:ok, socket} =
+      :gen_tcp.connect(~c"127.0.0.1", URI.parse(site).port, [:binary, active: false])
+
+    :ok =
+      :gen_tcp.send(
+        socket,
+        "GET #{path} HTTP/1.1\r\nhost: #{@host}\r\ncookie: __Host-kf_notebooks=#{cookie}\r\n\r\n"
+      )
+
+    socket
   end
 
   # The code a refusal names, or nil for an answer that is not one.
@@ -1720,6 +1853,36 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   defp notebook_answer(conn, _holder, _other), do: json(conn, 200, %{success: true, data: %{}})
+
+  # A part every tenth of a second, with headers the door doesn't keep, until
+  # whoever reads it has gone; then the test hears so.
+  defp stream_until_gone(conn, test) do
+    conn =
+      conn
+      |> put_resp_content_type("text/plain")
+      |> put_resp_header("set-cookie", "hub=1")
+      |> put_resp_header("x-hub-private", "1")
+      |> send_chunked(200)
+
+    Stream.repeatedly(fn -> "part" end)
+    |> Enum.reduce_while(conn, fn part, conn ->
+      Process.sleep(100)
+
+      case chunk(conn, part) do
+        {:ok, conn} ->
+          {:cont, conn}
+
+        {:error, _gone} ->
+          send(test, :hub_reader_gone)
+          {:halt, conn}
+      end
+    end)
+  end
+
+  defp break_midway(conn) do
+    {:ok, _conn} = conn |> send_chunked(200) |> chunk("first")
+    raise "the hub broke midway"
+  end
 
   defp entries("data"), do: [%{path: "/data/theirs.csv", kind: "file"}]
   defp entries("kept"), do: [%{path: "/kept/mine.csv", kind: "file"}]

@@ -11190,3 +11190,21 @@ a scratch walk that is not kept.
 - `contracts/README.md` said Classic #1 was not deployed and that Key sales were off. Classic #1
   is deployed on Base and selling, beside the Regents Club; Syndicate #1, Accelerant #1 and
   Cascade #1 are not deployed, and it is their sales that wait for the founder's word.
+
+## 2026-11-17 — A request waiting for a busy notebook hub is answered
+
+- Finch 0.24.0's HTTP/1 pool raises a plain `RuntimeError` when no connection comes free
+  within `pool_timeout` (5 s), where it returns every other failure. With `into: :self` it
+  raised in the request's own process, so the caller got only an `:EXIT` it traps (every
+  Bandit connection does), and Req 0.7.5's wait for the status has no time limit: the
+  notebook door left such a request unanswered for good. Without `into:` it raised in the
+  caller, so letting someone into the notebooks (`HubClient.add_editor`) answered 500. No
+  Finch or Req release fixes it; Finch issue #405 asks for a named error.
+- `Keyfleet.Notebooks.hub_run/2` and `hub_request/2` send every request to a fleet's hub
+  (the door, `HubClient`, `MemberRequest`) and turn that one error, known by Finch's words,
+  into the request's error, reported as `HubSilentError`. The door passes the hub's answer
+  on through Req's `into:` function in its own process, keeping how far it got with the
+  request, so the wait's end answers 502 `notebooks_unavailable`; a hub that fails after
+  the answer started still drops the connection, a reader who hangs up still stops the
+  hub, and saved pages are still kept whole or streamed past their cap.
+- Contract 36.2.1; `/docs` and the public changelog say the same.

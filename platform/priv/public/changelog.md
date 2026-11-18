@@ -4,6 +4,12 @@ Changes to Keyfleet, newest first.
 
 ## 17 November 2026
 
+- **Notebooks.** When a fleet's notebooks stay too busy to take a request for five
+  seconds, the request now gets 502 `notebooks_unavailable`, from a person or an agent.
+  Before, it could go unanswered, and being let into the notebooks at such a time got a
+  server error. An agent's notebook runs, files and search through this site now answer
+  as they do when the notebooks don't answer, where they got a server error. API contract
+  36.2.1.
 - **Signing.** A signed request with no body is now the same request whether it signs no
   `content-digest` or the empty body's, on this site, on a fleet's notebooks and on its
   code. A notebook read signed without `content-digest` is now answered instead of

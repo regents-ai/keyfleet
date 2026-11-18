@@ -15,7 +15,8 @@ defmodule Keyfleet.Notebooks.MemberRequest do
     {:ok, address} = Notebooks.hub_address(fleet_id)
     {headers, options} = Keyword.pop(options, :headers, [])
 
-    Req.request(
+    Notebooks.hub_request(
+      fleet_id,
       [
         method: method,
         base_url: address,

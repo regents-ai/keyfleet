@@ -93,12 +93,51 @@ defmodule Keyfleet.Notebooks do
   end
 
   @email_domain "identity.keyfleet.invalid"
+  # How Finch begins the error it raises when no connection came free in time.
+  @no_connection "Finch was unable to provide a connection"
 
   @doc "The notebook settings: `config :keyfleet, :notebooks`."
   def config, do: Application.fetch_env!(:keyfleet, :notebooks)
 
   @doc "The private address of the fleet's hub, as `{:ok, url}`, or `:error` when it has none."
   def hub_address(fleet_id), do: Map.fetch(config()[:fleets], fleet_id)
+
+  @doc """
+  Sends `request` to the fleet's hub, as `Req.run/2` does: `{request,
+  response}`, or `{request, exception}` when the hub didn't answer. That
+  includes no connection to the hub coming free within the wait for one,
+  which is also reported (`HubSilentError`).
+  """
+  def hub_run(fleet_id, %Req.Request{} = request) do
+    Req.run(request)
+  rescue
+    # Finch raises that wait's end, where it returns every other failure, as a
+    # plain RuntimeError known only by its words (a named error is Finch issue
+    # #405), and the request can run code of the caller's (`into:`), so only
+    # Finch's words are caught. Match the named error once Finch has one.
+    error in RuntimeError ->
+      if String.starts_with?(error.message, @no_connection) do
+        HubSilentError.report(
+          "No connection to the notebook hub of #{fleet_id} came free in time: " <>
+            error.message
+        )
+
+        {request, error}
+      else
+        reraise error, __STACKTRACE__
+      end
+  end
+
+  @doc """
+  Sends a request to the fleet's hub with Req's `options` (`hub_run/2`),
+  answering as `Req.request/1` does: `{:ok, response}` or `{:error, exception}`.
+  """
+  def hub_request(fleet_id, options) do
+    case hub_run(fleet_id, Req.new(options)) do
+      {_request, %Req.Response{} = response} -> {:ok, response}
+      {_request, exception} -> {:error, exception}
+    end
+  end
 
   @doc "Whether the fleet has a notebook hub."
   def hub?(fleet_id), do: Map.has_key?(config()[:fleets], fleet_id)

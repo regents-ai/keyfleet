@@ -616,21 +616,24 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         with :ok <- unscheduled(conn, body),
              {:ok, {headers, body}, done} <-
                made(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
-          Req.request(
-            method: conn.method,
-            url: address <> target(conn),
-            headers: headers,
-            body: body,
-            into: :self,
-            raw: true,
-            redirect: false,
-            retry: false,
-            # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-            connect_options: [transport_opts: [inet6: true]],
-            receive_timeout: http_timeout(conn)
-          )
-          |> answered(done)
-          |> answer_back(conn, fleet_id, subject)
+          request =
+            Req.new(
+              method: conn.method,
+              url: address <> target(conn),
+              headers: headers,
+              body: body,
+              into: &pass_on(&1, &2, conn, fleet_id, done),
+              raw: true,
+              redirect: false,
+              retry: false,
+              # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+              connect_options: [transport_opts: [inet6: true]],
+              receive_timeout: http_timeout(conn)
+            )
+
+          fleet_id
+          |> Notebooks.hub_run(request)
+          |> answer_back(conn, fleet_id, subject, done)
         else
           {:error, :scheduled} -> Refusal.json(conn, 403, "notebooks_schedules_refused")
           {:error, reason} -> maker_refusal(conn, reason)
@@ -662,25 +665,101 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp label(_conn, _json), do: [{"content-type", "application/json"}]
 
-  # When what the hub made can't keep its maker (`done`), the person is told
-  # to try again instead of the hub's answer.
-  defp answered({:ok, %Req.Response{status: status} = response} = answer, done) do
-    case done.(status) do
+  # The hub's answer is passed on as it arrives, in this process, and how far
+  # it has got is kept with the request (`:notebook_answer`): `nil` before any
+  # of it, then what `begin/4` and each `take/2` made of it.
+  defp pass_on({:data, part}, {request, response}, conn, fleet_id, done) do
+    {next, answer} = take(passed_on(request) || begin(response, conn, fleet_id, done), part)
+    {next, {Req.Request.put_private(request, :notebook_answer, answer), response}}
+  end
+
+  defp passed_on(request), do: Req.Request.get_private(request, :notebook_answer)
+
+  defp answer_back({request, %Req.Response{} = response}, conn, fleet_id, subject, done) do
+    case passed_on(request) || begin(response, conn, fleet_id, done) do
+      {:refused, reason} ->
+        maker_refusal(conn, reason)
+
+      {:reading, conn, address, parts, _size} ->
+        send_kept(conn, fleet_id, subject, address, parts, Notebooks.run_succeeded?(response))
+
+      {_sent_or_streaming, conn} ->
+        conn
+    end
+  end
+
+  # A hub that fails once its answer has started streaming back can't have it
+  # finished, so the connection is dropped (raised) and the answer, cut short,
+  # never looks whole. Before that, nothing has been sent.
+  defp answer_back({request, error}, conn, fleet_id, _subject, _done) do
+    case passed_on(request) do
+      {:streaming, _conn} ->
+        raise error
+
+      _unsent ->
+        HubSilentError.report(
+          "The notebook hub of #{fleet_id} did not answer a request: #{inspect(error)}"
+        )
+
+        Refusal.json(conn, 502, "notebooks_unavailable")
+    end
+  end
+
+  # Where the hub's answer goes once its status and headers are in. When what
+  # the hub made can't keep its maker (`done`), the person is told to try
+  # again instead of the hub's answer.
+  defp begin(response, conn, fleet_id, done) do
+    case done.(response.status) do
       :ok ->
-        answer
+        conn = conn |> answer_headers(response, fleet_id) |> sandbox_saved_page()
+
+        cond do
+          conn.method == "HEAD" or response.status in [204, 304] ->
+            {:sent, send_resp(conn, response.status, "")}
+
+          address = saved_page_address(conn, response) ->
+            {:reading, conn, address, [], 0}
+
+          true ->
+            {:streaming, send_chunked(conn, response.status)}
+        end
 
       {:error, reason} ->
-        Req.cancel_async_response(response)
         {:refused, reason}
     end
   end
 
-  defp answered(answer, _done), do: answer
+  defp answer_headers(conn, response, fleet_id) do
+    for {name, values} <- response.headers,
+        name in @kept_response,
+        value <- values,
+        name != "location" or own_location?(value, fleet_id),
+        reduce: conn do
+      conn -> prepend_resp_headers(conn, [{name, value}])
+    end
+  end
 
-  defp answer_back({:refused, reason}, conn, _fleet_id, _subject), do: maker_refusal(conn, reason)
+  # A saved page is read whole, kept, and only then sent with its address, so
+  # an address is never handed out for a page Keyfleet hasn't kept. A page past
+  # `saved_page_max_bytes` goes on streaming as it came (a saved page is a
+  # 200), with no address. A client that has gone, or a refusal, stops the
+  # hub's answer too.
+  defp take({:refused, _reason} = refused, _part), do: {:halt, refused}
 
-  defp answer_back(answer, conn, fleet_id, subject),
-    do: stream_back(answer, conn, fleet_id, subject)
+  defp take({:reading, conn, address, parts, size}, part) do
+    if size + byte_size(part) <= Notebooks.config()[:saved_page_max_bytes],
+      do: {:cont, {:reading, conn, address, [parts | part], size + byte_size(part)}},
+      else: conn |> send_chunked(200) |> send_part([parts | part])
+  end
+
+  defp take({:streaming, conn}, part), do: send_part(conn, part)
+
+  defp send_part(conn, part) do
+    case chunk(conn, part) do
+      {:ok, conn} -> {:cont, {:streaming, conn}}
+      {:error, _closed} -> {:halt, {:streaming, conn}}
+    end
+  end
 
   defp http_timeout(%{
          method: "POST",
@@ -1034,40 +1113,6 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp body_limit(_conn), do: Notebooks.config()[:max_request_bytes]
 
-  defp stream_back({:error, error}, conn, fleet_id, _subject) do
-    HubSilentError.report(
-      "The notebook hub of #{fleet_id} did not answer a request: #{inspect(error)}"
-    )
-
-    Refusal.json(conn, 502, "notebooks_unavailable")
-  end
-
-  defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id, subject) do
-    conn =
-      for {name, values} <- response.headers,
-          name in @kept_response,
-          value <- values,
-          name != "location" or own_location?(value, fleet_id),
-          reduce: conn do
-        conn -> prepend_resp_headers(conn, [{name, value}])
-      end
-
-    conn = sandbox_saved_page(conn)
-
-    cond do
-      conn.method == "HEAD" or response.status in [204, 304] ->
-        Req.cancel_async_response(response)
-        send_resp(conn, response.status, "")
-
-      address = saved_page_address(conn, response) ->
-        keep_page(response, conn, fleet_id, subject, address)
-
-      true ->
-        conn = send_chunked(conn, response.status)
-        Enum.reduce_while(response.body, conn, &send_part(response, &2, &1))
-    end
-  end
-
   # A hub sends the browser on only within the fleet's notebooks: to a path
   # here, or an address naming this host. Any other location, or one a browser
   # might read another way, is dropped.
@@ -1112,40 +1157,6 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       address
     else
       _ -> nil
-    end
-  end
-
-  # A saved page is read whole, kept, and only then sent with its address, so
-  # an address is never handed out for a page Keyfleet hasn't kept. A page past
-  # `saved_page_max_bytes` goes on streaming as it came, with no address.
-  defp keep_page(response, conn, fleet_id, subject, address) do
-    cap = Notebooks.config()[:saved_page_max_bytes]
-
-    response.body
-    |> Enum.reduce_while({:reading, conn, [], 0}, fn
-      part, {:reading, conn, parts, size} when size + byte_size(part) <= cap ->
-        {:cont, {:reading, conn, [parts | part], size + byte_size(part)}}
-
-      part, {:reading, conn, parts, _size} ->
-        conn = send_chunked(conn, response.status)
-
-        case chunk(conn, [parts | part]) do
-          {:ok, conn} -> {:cont, {:streaming, conn}}
-          {:error, _closed} -> {:halt, {:streaming, conn}}
-        end
-
-      part, {:streaming, conn} ->
-        case send_part(response, conn, part) do
-          {:cont, conn} -> {:cont, {:streaming, conn}}
-          {:halt, conn} -> {:halt, {:streaming, conn}}
-        end
-    end)
-    |> case do
-      {:reading, conn, parts, _size} ->
-        send_kept(conn, fleet_id, subject, address, parts, Notebooks.run_succeeded?(response))
-
-      {:streaming, conn} ->
-        conn
     end
   end
 
@@ -1298,18 +1309,6 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
        do: {:ok, notebook_id, "x-marimohub-version-id"}
 
   defp saved_page_notebook(_path_info), do: :error
-
-  # A client that has gone stops the hub's answer too.
-  defp send_part(response, conn, part) do
-    case chunk(conn, part) do
-      {:ok, conn} ->
-        {:cont, conn}
-
-      {:error, _closed} ->
-        Req.cancel_async_response(response)
-        {:halt, conn}
-    end
-  end
 
   defp websocket?(conn) do
     conn.method == "GET" and
