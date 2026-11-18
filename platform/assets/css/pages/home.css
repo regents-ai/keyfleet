@@ -211,11 +211,32 @@
     .rl-hero .rl-now { animation-delay: 150ms; }
   }
 
-  /* Under the hero, between hairlines: Notebook, Classic #1's newest notebook
-     page made public, in one line after its label. */
+  /* Under the hero, between hairlines: Recent, what Classic #1's Keys made
+     public, and Notebook, its newest notebook page made public, each one
+     line after its label. */
   .rl-recent { display: grid; padding-inline: var(--rg-panel-padding); }
   .rl-recent__part { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: .25rem var(--space-3); padding-block: .75rem; }
+  .rl-recent__part + .rl-recent__part { border-block-start: 1px solid var(--rl-line); }
   .rl-recent__label { color: var(--rl-muted); font-family: var(--font-family-title); font-size: .8125rem; font-weight: 400; letter-spacing: .02em; }
+
+  /* Each thing made public is one line: a diamond, its kind, its title and
+     its Key. Still, the newest three stand side by side, the longest titles
+     cut short first when the line has no room; on a phone they run on
+     across, swiped sideways. The rest, and the second copy, show only while
+     it slides, every title whole. */
+  .rl-ticker { container-type: inline-size; padding-block: .375rem; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .rl-ticker__track, .rl-ticker__list { display: flex; }
+  .rl-ticker__list { gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+  .rl-ticker__list > li { display: flex; flex: none; min-width: 0; max-inline-size: 85cqi; scroll-snap-align: start; }
+  .rl-ticker__list > li:nth-child(n + 4), .rl-ticker__list + .rl-ticker__list { display: none; }
+  .rl-ticker__item { display: flex; align-items: baseline; gap: .5rem; min-width: 0; line-height: 1.5; text-decoration: none; white-space: nowrap; }
+  .rl-ticker__item::before {
+    content: ""; flex: none; align-self: center; inline-size: .375rem; block-size: .375rem; margin-inline: 1px;
+    border: 1px solid var(--rl-muted); transform: rotate(45deg);
+  }
+  .rl-ticker__kind, .rl-ticker__key { flex: none; color: var(--rl-muted); font-size: .8125rem; }
+  .rl-ticker__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .9375rem; }
+  .rl-ticker__item:hover .rl-ticker__title { text-decoration: underline; }
 
   /* Notebook: the project's title, its Key and the page, which opens apart. */
   .rl-notebook { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem var(--space-2); min-width: 0; }
@@ -226,6 +247,29 @@
 
   @media (min-width: 48rem) {
     .rl-recent__part { grid-template-columns: 6rem minmax(0, 1fr); }
+    .rl-ticker__list { inline-size: 100cqi; }
+    .rl-ticker__list > li { flex: 0 1 auto; max-inline-size: none; }
+  }
+
+  /* From four, they slide leftward without stopping, about 40px a second,
+     at an even pace, held twice so the line loops without a jump: a track
+     of two equal copies, each at least the band's width, moved by half its
+     length. Pointing at it pauses it where it is. Keyboard focus in it stops
+     it at its first item, so Tab walks the links in order and the browser
+     brings each into view; it slides again once focus leaves. Less motion:
+     it stays still. */
+  @keyframes rl-ticker { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: no-preference) {
+    .rl-ticker[data-slides] {
+      overflow: hidden; scroll-snap-type: none;
+      mask-image: linear-gradient(to right, transparent, #000 var(--space-4), #000 calc(100% - var(--space-4)), transparent);
+    }
+    .rl-ticker[data-slides] .rl-ticker__track { inline-size: max-content; animation: rl-ticker calc(var(--rl-ticker-items) * 10s) linear infinite; }
+    .rl-ticker[data-slides] .rl-ticker__list { display: flex; flex: none; justify-content: space-around; gap: 0; inline-size: auto; min-inline-size: 100cqi; }
+    .rl-ticker[data-slides] .rl-ticker__list > li { display: flex; flex: none; max-inline-size: none; padding-inline: calc(var(--space-5) / 2); }
+    .rl-ticker[data-slides]:hover .rl-ticker__track { animation-play-state: paused; }
+    .rl-ticker[data-slides]:has(:focus-visible) { mask-image: none; }
+    .rl-ticker[data-slides]:has(:focus-visible) .rl-ticker__track { animation: none; }
   }
 
   /* Overview, under the hero: its section bar, then the value cards

@@ -31,6 +31,8 @@ defmodule Keyfleet.BrowserChain do
 
   import Ecto.Query, only: [from: 2]
 
+  require Ash.Query
+
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
   alias Keyfleet.Actors.System
@@ -50,8 +52,10 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.GoalIdeas
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.Notebooks
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
+  alias Keyfleet.Projects.Publication
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Proposals
   alias Keyfleet.Repo
@@ -507,6 +511,52 @@ defmodule Keyfleet.BrowserChain do
 
   @doc "The address of the workspace item `id`."
   def item_path(fleet_id, id), do: KeyfleetWeb.WorkspacePage.item_path(fleet_id, id)
+
+  @doc """
+  Has Key `key` make a saved notebook page public, in `general` or one of the
+  fleet's two shared projects, taken in turn by Key, and reads the fleet
+  again, as the minute's heal does for its pages. Returns the page's address
+  on the fleet's notebook host.
+  """
+  def publish_page!(fleet_id, key) do
+    projects = [Keyfleet.Projects.general() | Keyfleet.Projects.Project.shared_names(fleet_id)]
+    saved_at = :erlang.unique_integer([:positive, :monotonic])
+    page = Notebooks.result_path("nb-0123456789abcdef", "run_#{saved_at}", saved_at)
+
+    Publication
+    |> Ash.Changeset.for_create(
+      :record,
+      %{
+        fleet_id: fleet_id,
+        project: Enum.at(projects, rem(key, length(projects))),
+        key: key,
+        author_wallet: @agent.wallet_address,
+        kind: :page,
+        page: page
+      },
+      actor: @system
+    )
+    |> Ash.create!()
+
+    FleetNow.read(fleet_id)
+    Notebooks.url(fleet_id, page)
+  end
+
+  @doc "Takes back everything made public in the fleet, and reads it again."
+  def take_back_public!(fleet_id) do
+    Publication
+    |> Ash.Query.for_read(:read, %{}, actor: @system)
+    |> Ash.Query.filter(fleet_id == ^fleet_id)
+    |> Ash.bulk_destroy!(:remove, %{},
+      actor: @system,
+      strategy: [:stream],
+      allow_stream_with: :full_read,
+      return_errors?: true
+    )
+
+    FleetNow.read(fleet_id)
+    :ok
+  end
 
   @doc """
   Gives the fleet's workspace a small tree of work, opening its log first

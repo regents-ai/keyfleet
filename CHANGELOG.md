@@ -11226,3 +11226,56 @@ Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with 
 as errors and Credo (no issues) passed. Homepage, harbour sea and fleet page tests: 111
 passed. The whole suite, the walks and the asset budgets were run on the next commit,
 which builds on this one.
+
+## 2026-11-17: Recent, what Classic #1's Keys made public, slides by under the hero (Sean's 44 a)
+
+- Below the hero, above Notebook, Recent (`#home-recent`): the newest things Classic #1's
+  Keys made public, as the Public place lists them (task, finding, note and the other
+  item kinds, posts, notebook pages, code), up to 8, newest first. Each is a diamond, its
+  kind, its title in the Key's own words (an item's title, the first post's words with
+  Markdown taken out, or the project's title for a page or code) and its Key, all one
+  plain link to `/classic/1/workspace?place=public#public-<id>`. Titles are drawn as
+  text, never markup, on one line, at most 64 characters, cut on a whole word with "…".
+  One with no words is left out. With nothing public the row is not drawn.
+- From 4 things the line slides leftward without stopping: one CSS animation on a track
+  holding the list twice, moved by half its length, linear, 10 s per thing (measured
+  45.6 px/s with 7 things and 51.5 px/s with 5). A pointer over it pauses it where it is;
+  keyboard focus in it stops it at its first thing, so Tab meets the links in order and
+  the browser brings each into view. The second copy is `aria-hidden` and `inert`, so a
+  screen reader or Tab meets each thing once. Under reduced motion, or with 3 or fewer,
+  the newest 3 stand still in a row (swiped sideways on a phone). No script, timer or
+  polling of its own: it arrives with the page and its live updates.
+- Why 8: enough to run more than twice across the widest band (one copy of 7 measured
+  3,193 px) and all on the Public place's first page of 12, so every link's place exists.
+- It comes from Classic's shared reading (`KeyfleetWeb.FleetNow`, field `public`): the
+  first page of the Public place exactly as a signed-out visitor reads it
+  (`WorkspacePage.board/3` with no actor). Measured on the test database: the reading of
+  Classic took 22 queries (about 6.7 ms) with nothing public and 24 (about 5.5 ms) with
+  12 things public; the Public place's part is 4 to 6 queries (1 to 2 ms), plus about 2
+  for each posts span and 1 for each code item on its first page; Notebook's newest page
+  now reuses the board's projects, 1 query. Once a pass, not per visit. The reading with
+  8 things is 2,020 bytes of its 65,536. The homepage itself reads nothing more (counted
+  by a test).
+- Measured at 1280 by 800 with both rows: Buy Key ends at 613 px and the facts at 680,
+  as before; Recent runs from 826 to 885 and Notebook to 934. At 390 by 844 the facts end
+  at 487 and Buy Key at 927, as before. Nothing scrolls sideways at either width; the
+  band never shifts the page as it arrives or slides.
+- A kept chain walk, `homepage_recent.spec.ts`, publishes pages through the test chain
+  server and covers the arrival, the plain links, the pause on hover, the stop on focus,
+  reduced motion and the row going away. The verification list (`home-recent-work`) and
+  the public changelog say it, with no visible pause control as a gap. No database,
+  contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, Public place,
+fleet page, harbour sea, shared reading, metrics, launch gate, launch steps and public
+pages tests: 157 passed (1 property, 156 tests). The whole suite in two parts:
+`test/keyfleet` 582 passed (13 properties, 569 tests, 19 excluded) and
+`test/keyfleet_web` 970 passed (9 properties, 961 tests). Typecheck passed; vitest 498
+passed in 38 files, leaving out the untracked review file
+`assets/test/adversarial_send_step.test.ts`; the asset budgets, 3 passed, on a minified
+build. Walks: homepage, homepage details, launch steps and launch gate, 23 passed; the
+whole chain project in Chromium, 142 passed, with the three new ones; the devices
+project, 72 passed. Pictures at 1280 and 390, light and dark, with things public and
+with none, with the notebook page and without, and under reduced motion, were taken by
+a scratch walk that is not kept.

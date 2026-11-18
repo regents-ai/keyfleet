@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, Repo, Rooms, SharedReading}
   alias Keyfleet.Projects.Publication
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.FleetNow
@@ -34,9 +34,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   price and the goal it is working on, which links its workspace
   # - under the hero, the four steps in order, Explore, Key, Agent and Work,
   #   each a title with one line
-  # - below the hero, Notebook: the newest notebook page made public, by its
-  #   project's title and its Key, opening the page. With none it is not
-  #   drawn, and it costs the page no read
+  # - below the hero, Recent: what Classic's Keys made public, newest first,
+  #   each its kind, its title as plain text cut to 64 characters and its
+  #   Key, a plain link to its place in the Public place; from four they
+  #   slide, held twice, the copy hidden and skipped by Tab; and Notebook: the
+  #   newest notebook page made public, opening the page. With nothing made
+  #   public neither is drawn, and neither costs the page a read
   # - launch-gate: internal links stay on the fleets' maps, workspaces,
   #   proposals and treasuries, the account and pairing pages, the public
   #   documents, or anchors that exist
@@ -330,7 +333,70 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert attribute(html, "#home-steps a", "href") == []
   end
 
-  test "Notebook: the newest notebook page made public, by its project's title and its Key, opening the page",
+  test "Recent: what Classic's Keys made public, newest first, as plain text, each opening its place in the Public place",
+       %{conn: conn} do
+    task_item =
+      Workspace.create(@classic, "task", %{"title" => "Fix <b>the</b> price reader"}, by: 5)
+
+    long = String.duplicate("Keys bought early are held longer ", 3)
+    finding_item = Workspace.create(@classic, "finding", %{"title" => long}, by: 6)
+    archived = Workspace.create(@classic, "note", %{"title" => "Withdrawn"}, by: 6)
+    Workspace.archive(@classic, archived)
+
+    task = make_public!(%{key: 5, kind: :item, item: task_item})
+    finding = make_public!(%{key: 6, kind: :item, item: finding_item})
+    make_public!(%{key: 6, kind: :item, item: archived})
+    span = post!(8, "**Read** the [sales](https://example.com) from the chain")
+    posts = make_public!(Map.merge(%{key: 8, kind: :posts, room: "general"}, span))
+    page = make_public!(%{project: "understanding", key: 7, kind: :page, page: page_path(1)})
+    made = [page, posts, finding, task]
+    read_fleets()
+    {:ok, view, html} = live(conn, "/")
+
+    assert attribute(html, "main section[id]", "id") ==
+             ["home-hero", "home-recent", "home-notebook", "home-overview"]
+
+    shown =
+      html
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("#home-recent-list > li > a")
+      |> Enum.map(fn link ->
+        Enum.map(
+          ~w(kind title key),
+          &(link |> LazyHTML.query(".rl-ticker__#{&1}") |> LazyHTML.text())
+        )
+      end)
+
+    clipped = "Keys bought early are held longer Keys bought early are held…"
+
+    assert shown == [
+             ["Notebook page", "Keyfleet Classic #1 Collaborative Understanding", "Key 7"],
+             ["Posts", "Read the sales from the chain", "Key 8"],
+             ["Finding", clipped, "Key 6"],
+             ["Task", "Fix <b>the</b> price reader", "Key 5"]
+           ]
+
+    assert String.length(clipped) <= 64
+    assert html =~ "Fix &lt;b&gt;the&lt;/b&gt; price reader"
+
+    assert attribute(html, "#home-recent-list a", "href") ==
+             Enum.map(made, &"/classic/1/workspace?place=public#public-#{&1.id}")
+
+    refute has_element?(view, "#home-recent a[data-phx-link]")
+
+    # Four or more slide, held twice; the copy is hidden from screen readers
+    # and skipped by Tab, and holds no ids.
+    assert attribute(html, "#home-recent-band", "data-slides") == [""]
+    copy = "#home-recent-band ul[aria-hidden=\"true\"][inert]"
+    assert length(attribute(html, "#{copy} > li > a", "href")) == 4
+    assert attribute(html, "#{copy} [id]", "id") == []
+
+    # Each link lands on its own place in the Public place, as anyone reads it.
+    {:ok, public, _html} = live(build_conn(), "/classic/1/workspace?place=public")
+    for publication <- made, do: assert(has_element?(public, "#public-#{publication.id}"))
+  end
+
+  test "Notebook: the newest notebook page made public, by its project's title and its Key, opening the page; fewer than four stand still",
        %{conn: conn} do
     make_public!(%{key: 3, kind: :page, page: page_path(1)})
     make_public!(%{project: "understanding", key: 7, kind: :page, page: page_path(2)})
@@ -349,21 +415,19 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert attribute(html, "a#home-notebook-open", "target") == ["_blank"]
     assert attribute(html, "a#home-notebook-open", "rel") == ["noopener noreferrer"]
 
-    assert attribute(html, "main section[id]", "id") == [
-             "home-hero",
-             "home-notebook",
-             "home-overview"
-           ]
+    assert attribute(html, "#home-recent-list > li", "id") |> length() == 2
+    assert attribute(html, "#home-recent-band", "data-slides") == []
+    assert attribute(html, "#home-recent-band ul", "id") == ["home-recent-list"]
   end
 
-  test "with no notebook page made public there is no Notebook, and no row for it",
+  test "with nothing made public there is neither Recent nor Notebook, and no row for them",
        %{conn: conn} do
     {:ok, _view, html} = live(conn, "/")
     assert attribute(html, "main section[id]", "id") == ["home-hero", "home-overview"]
     assert attribute(html, "main .rl-recent", "class") == []
   end
 
-  test "a notebook page made public costs the homepage no read of its own", %{conn: conn} do
+  test "what Classic's Keys made public costs the homepage no read of its own", %{conn: conn} do
     get(conn, "/")
     {before, _conn} = Keyfleet.QueryHelpers.queries_during(fn -> get(build_conn(), "/") end)
 
@@ -371,7 +435,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     read_fleets()
 
     {count, served} = Keyfleet.QueryHelpers.queries_during(fn -> get(build_conn(), "/") end)
-    assert html_response(served, 200) =~ ~s(id="home-notebook")
+    assert html_response(served, 200) =~ ~s(id="home-recent")
     assert count == before
   end
 
@@ -479,6 +543,38 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   defp page_path(n),
     do: Keyfleet.Notebooks.result_path("nb-0123456789abcdef", "run_#{n}", 1_790_000_000_000 + n)
+
+  # A post `@owner` wrote as Key `key` in Classic's general room, kept as the
+  # room's store keeps one; answers its place in the room as one post's span.
+  defp post!(key, body) do
+    Rooms.bootstrap_rooms!([@classic])
+    room = Rooms.get_room!(@classic, "general", authorize?: false)
+    seq = Rooms.Sequence.next!(room.id)
+
+    Repo.insert_all(
+      "messages",
+      [
+        %{
+          id: Ecto.UUID.dump!(Ash.UUID.generate()),
+          seq: seq,
+          fleet_id: @classic,
+          room_id: Ecto.UUID.dump!(room.id),
+          kind: "post",
+          in_key_thread: false,
+          author_kind: "human",
+          author_wallet: @owner,
+          as_key: key,
+          body: body,
+          body_digest: Base.encode16(:crypto.hash(:sha256, body), case: :lower),
+          idempotency_key: Ash.UUID.generate(),
+          inserted_at: NaiveDateTime.utc_now()
+        }
+      ],
+      prefix: "keyfleet_app"
+    )
+
+    %{from_seq: seq, to_seq: seq}
+  end
 
   # A fleet the site has never read, as just after it starts, then read once.
   defp first_read(fleet_id) do
