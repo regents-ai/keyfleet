@@ -219,19 +219,19 @@ defmodule KeyfleetWeb.WalletPanel do
   def handle_event("prepare_and_send", %{"form" => form, "step" => step} = params, socket)
       when is_map(form) and is_binary(step) do
     socket = socket |> take_inputs(form) |> take_active(params) |> sync_now()
+    review = socket.assigns.review
 
-    case {socket.assigns.review, blocked(socket.assigns, step)} do
-      {%{} = review, nil} ->
-        {:reply, %{review: review, send: step}, socket}
-
-      # Refused: nothing reaches the wallet. The note beside the buttons is
-      # written here, from the wallet the press named, and the reply carries
-      # that same note, so the browser's own agent hears what the person reads.
-      # The page reports nothing more for this press.
-      _none_or_blocked ->
-        note = failure_note(socket, "step_unknown")
-        KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
-        {:reply, %{note: note}, assign(socket, press_note: note)}
+    if review && Review.find(review, step) && blocked(socket.assigns, step) == nil do
+      {:reply, %{review: review, send: step}, socket}
+    else
+      # Refused, and nothing reaches the wallet: the steps have none of this
+      # name, as when the form can't be built from, or it is certain to fail.
+      # The note beside the buttons is written here and the reply carries that
+      # same note, so the browser's own agent hears what the person reads. The
+      # page reports nothing more for this press.
+      note = refusal_note(socket)
+      KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
+      {:reply, %{note: note}, assign(socket, press_note: note)}
     end
   end
 
@@ -560,6 +560,19 @@ defmodule KeyfleetWeb.WalletPanel do
   defp failure_note(socket, reason),
     do:
       OnchainSteps.failure_note(reason, linked(socket), socket.assigns.active, chain_name(socket))
+
+  # Why a press is refused: what is wrong with the form, or else the note
+  # from the wallet the press named.
+  defp refusal_note(socket),
+    do: form_problem(socket.assigns) || failure_note(socket, "step_unknown")
+
+  # What is wrong with the form, in the words of the line above the buttons,
+  # which names the field and what it takes; nil when the line says nothing
+  # is (a sold-out fleet says so beside its Buy button instead).
+  defp form_problem(%{built: %{problem: problem}} = assigns) when problem not in [nil, :unread],
+    do: line(assigns)
+
+  defp form_problem(_assigns), do: nil
 
   defp chain_name(%{assigns: %{fleet: %{chain_id: chain_id}}}) do
     case WalletSteps.chain(chain_id) do

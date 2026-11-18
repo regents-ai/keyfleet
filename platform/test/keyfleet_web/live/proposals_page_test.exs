@@ -1168,6 +1168,40 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
     end
 
+    # The browser's own agent presses through the page's tool and hears only
+    # the reply, so a press the form can't be built from is answered with the
+    # line the person reads above the buttons, naming the field and what it
+    # takes, and nothing is handed to the wallet.
+    test "a press the form can't be built from is answered with the line above the buttons",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+
+      ChainViews.put!(
+        list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000),
+        balances: %{@treasury => 10 ** 18}
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      for form <- [
+            %{"kind" => "rate", "key" => "7", "text" => "Raise the slice", "rate" => "5"},
+            %{"kind" => "decision", "key" => "7", "text" => String.duplicate("a", 4_001)}
+          ] do
+        view
+        |> with_target("#propose-action")
+        |> render_hook("prepare_and_send", %{
+          "form" => form,
+          "step" => "propose",
+          "address" => @holder
+        })
+
+        assert_reply(view, %{note: note})
+        assert note == text(view, "#propose-action-line")
+        assert text(view, "#propose-action-press-note") == note
+      end
+    end
+
     # Costly failure: the site's largest form, typed to its fields' limits, is
     # more than a live page's socket reads, so the page closes, loses what was
     # typed and joins again, as it does for an agent's press of the same form.
