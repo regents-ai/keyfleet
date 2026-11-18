@@ -1,10 +1,15 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
-  The homepage: the headline, one line under it, "Watch" (Classic #1's own
+  The homepage: the headline, one line under it, "Explore" (Classic #1's own
   page, open to anyone) and Classic #1 as it is now: its Keys sold, the agents
   here, the price of the next Key and the goal it is working on. Beside it the
   Key on offer's card art over "Buy Key", which opens the "Buy Key" window, as
-  the header's "Buy Key" does; then Overview, the row of six value cards
+  the header's "Buy Key" does. Under both, the four steps a person takes:
+  Explore, Key, Agent and Work. Under the hero, Recent: the newest things
+  Classic #1's Keys made public, sliding by in one line, each opening its
+  place in the fleet's Public place; and Notebook: the newest notebook page a
+  Key made public, which opens for anyone. Either is left out while there is
+  nothing to show. Then Overview, the row of six value cards
   (`KeyfleetWeb.Components.ValueCards`), one for each part of a fleet, each
   opening a page anyone can read; then the footer.
 
@@ -50,6 +55,18 @@ defmodule KeyfleetWeb.HomeLive do
   @classic_join "Any personal agent can join with a Key, its digital pass. With a Key, your " <>
                   "agent joins the Chat, the Workspace and Treasury Proposals."
   @split "90% to Keyfleet Treasury | 10% to $REGENT stakers"
+
+  # The steps a person takes, in order, each with what they do there.
+  @steps [
+    {"Explore", "See a fleet at work without a wallet."},
+    {"Key", "Buy a Key, your agent’s pass."},
+    {"Agent", "Pair your agent with a code."},
+    {"Work", "Your agent joins tasks as your Key."}
+  ]
+
+  # How many things made public it takes to slide: three or fewer stand still,
+  # since a copy of so few would show the same one twice across a wide screen.
+  @slides_from 4
 
   @doc """
   The homepage for agents, in Markdown: the block every agent entry opens with
@@ -170,22 +187,25 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   # Classic as the homepage shows it: its name and sale (`BuyKey.sale/2`),
-  # from a reading of the open fleet the goal it is working on, and the agents
-  # here, nil until they are counted.
+  # from a reading of the open fleet the goal it is working on, what its Keys
+  # made public and its newest notebook page made public, and the agents here,
+  # nil until they are counted.
   defp fleet(fleet_id) do
     found = FleetNow.fetch(fleet_id)
 
     fleet_id
     |> BuyKey.sale(found)
+    |> Map.merge(work(found))
     |> Map.merge(%{
       name: Fleets.name(fleet_id),
-      goal: goal(found),
       here: here(SharedFigures.reading(Here.fleet_key(fleet_id)))
     })
   end
 
-  defp goal({%{coming_soon?: false} = reading, _degraded?}), do: reading.goal
-  defp goal(_not_open), do: nil
+  defp work({%{coming_soon?: false} = reading, _degraded?}),
+    do: Map.take(reading, [:goal, :public, :page])
+
+  defp work(_not_open), do: %{goal: nil, public: [], page: nil}
 
   defp here(%{here: here}), do: here
   defp here(nil), do: nil
@@ -260,6 +280,9 @@ defmodule KeyfleetWeb.HomeLive do
         <Regent.Structure.row rail={false}>
           <.hero classic={@classic} />
         </Regent.Structure.row>
+        <Regent.Structure.row :if={@classic.public != [] or @classic.page} rail={false}>
+          <.recent public={@classic.public} page={@classic.page} />
+        </Regent.Structure.row>
         <Regent.Structure.row rail={false}>
           <section id="home-overview" class="rl-overview" aria-labelledby="home-overview-title">
             <Regent.Structure.section_bar>
@@ -281,9 +304,9 @@ defmodule KeyfleetWeb.HomeLive do
   attr :classic, :map, required: true
 
   # The headline, with its last words in the accent colour, what a fleet gives
-  # an agent and "Watch", a fleet at work, which needs no wallet. Then Classic
+  # an agent and "Explore", a fleet at work, which needs no wallet. Then Classic
   # #1 as it is now, each figure under its own name: Keys sold and agents here
-  # are never added together.
+  # are never added together. Under it and the Key on offer, the steps.
   defp hero(assigns) do
     assigns = assign(assigns, BuyKey.offer(assigns.classic))
 
@@ -298,12 +321,12 @@ defmodule KeyfleetWeb.HomeLive do
 
         <div class="rl-hero__ways">
           <.link
-            id="home-watch"
+            id="home-explore"
             href={Fleets.path(@classic.id)}
             data-step="watch"
             class="rg-button rg-button--primary"
           >
-            <span class="rg-button__label">Watch</span>
+            <span class="rg-button__label">Explore</span>
           </.link>
         </div>
 
@@ -339,11 +362,112 @@ defmodule KeyfleetWeb.HomeLive do
       </div>
 
       <.buy_key classic={@classic} />
+
+      <ol id="home-steps" class="rl-steps" aria-label="Steps">
+        <li :for={{title, line} <- steps()}>
+          <p class="rl-steps__title">{title}</p>
+          <p class="rl-steps__line">{line}</p>
+        </li>
+      </ol>
     </section>
     """
   end
 
   defp lead, do: @lead
+
+  defp steps, do: @steps
+
+  attr :public, :list, required: true
+  attr :page, :map, required: true
+
+  # Recent: the newest things made public, each by its kind, its title and its
+  # Key, opening its place in the fleet's Public place. From @slides_from on
+  # they slide by in one line, held twice so the line loops without a jump;
+  # the second copy is hidden from screen readers and skipped by Tab. Beside
+  # the label, Pause stops the line where it is and becomes Play, until pressed
+  # again: LiveView's own toggle of `data-paused` on the section, which keeps
+  # through the page's updates and is forgotten with the page. Fewer, or with
+  # less motion, the newest few stand still and there is no Pause. Notebook:
+  # the newest notebook page made public, by its project's title and its Key.
+  defp recent(assigns) do
+    assigns = assign(assigns, :slides?, length(assigns.public) >= @slides_from)
+
+    ~H"""
+    <div class="rl-recent">
+      <section
+        :if={@public != []}
+        id="home-recent"
+        class="rl-recent__part"
+        aria-labelledby="home-recent-title"
+      >
+        <div class="rl-recent__head">
+          <h2 id="home-recent-title" class="rl-recent__label">Recent</h2>
+          <button
+            :if={@slides?}
+            id="home-recent-pause"
+            type="button"
+            class="rl-recent__toggle"
+            phx-click={JS.toggle_attribute({"data-paused", ""}, to: "#home-recent")}
+          >
+            <span class="rl-recent__pause">Pause</span><span class="rl-recent__play">Play</span>
+          </button>
+        </div>
+        <div
+          id="home-recent-band"
+          class="rl-ticker"
+          data-slides={@slides?}
+          style={"--rl-ticker-items: #{length(@public)}"}
+        >
+          <div class="rl-ticker__track">
+            <ul id="home-recent-list" class="rl-ticker__list">
+              <li :for={item <- @public} id={"home-recent-#{item.id}"}>
+                <.public_item item={item} />
+              </li>
+            </ul>
+            <ul :if={@slides?} class="rl-ticker__list" aria-hidden="true" inert>
+              <li :for={item <- @public}><.public_item item={item} /></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section
+        :if={@page}
+        id="home-notebook"
+        class="rl-recent__part"
+        aria-labelledby="home-notebook-title"
+      >
+        <h2 id="home-notebook-title" class="rl-recent__label">Notebook</h2>
+        <p class="rl-notebook">
+          <span id="home-notebook-name" class="rl-notebook__name">{@page.title}</span>
+          <span class="rl-notebook__key">{@page.key}</span>
+          <a
+            id="home-notebook-open"
+            class="rl-notebook__open"
+            href={@page.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-describedby="home-notebook-name"
+          >
+            Open
+          </a>
+        </p>
+      </section>
+    </div>
+    """
+  end
+
+  attr :item, :map, required: true
+
+  defp public_item(assigns) do
+    ~H"""
+    <a class="rl-ticker__item" href={@item.link}>
+      <span class="rl-ticker__kind">{@item.kind}</span>
+      <span class="rl-ticker__title">{@item.title}</span>
+      <span class="rl-ticker__key">{@item.key}</span>
+    </a>
+    """
+  end
 
   attr :sales, :map, required: true
   attr :failed, :boolean, required: true

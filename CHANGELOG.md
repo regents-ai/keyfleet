@@ -11178,6 +11178,108 @@ a scratch walk that is not kept.
   Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
 - The command line section of the public documents says which Python it runs on (3.12 to 3.14).
 
+## 2026-11-17: the homepage's Watch is Explore, with the four steps under the hero (Sean's 34)
+
+- The hero's link to Classic #1 says "Explore" (`#home-explore`). Its press is still
+  counted as step `watch` (`data-step`, `/steps` and `keyfleet_launch_steps_total`), so
+  the totals carry on; only the words around it say Explore. The privacy policy names the
+  Explore button (effective November 17, still version 1.3).
+- Under the hero, after the Key on offer, an ordered list of four steps (`#home-steps`):
+  Explore, Key, Agent and Work, each a one-word title with one line. It holds no links and
+  no motion. At 1280 wide it runs across both columns under the facts and the card; on a
+  phone it is two by two after "Sales open soon", so the first screen is as it was.
+- Measured on the test page at 1280 by 800, light and dark: Buy Key ends at 613 px, the
+  facts at 680, the steps run from 704 to 777. A goal of two lines (the live goal is about
+  105 letters) puts the steps' foot at 853, past the screen's foot; Buy Key and the facts
+  do not move. At 390 by 844 the facts end at 487 and Buy Key at 927, as before; the steps
+  run from 1004 to 1202. Nothing scrolls sideways.
+- The verification list (`home-ways-in`, `launch-step-counters`) says the same, with the
+  phone and two-line goal placement as a gap. The public changelog says Watch is now
+  Explore. No database, contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, metrics, launch
+steps, public pages and launch gate tests: 58 passed. Typecheck passed; vitest 498 passed,
+leaving out the untracked review file `assets/test/adversarial_send_step.test.ts`; the
+asset budgets pass on a minified build. Walks: homepage, homepage details and launch
+steps, 20 passed. The whole suite and the chain and phone walks are run once, with the
+next homepage change on this branch.
+
+## 2026-11-17: the homepage shows Classic #1's newest notebook page made public (Sean's 44 a)
+
+- Below the hero, in a row of its own, Notebook (`#home-notebook`): the newest notebook
+  page a Key made public in Classic #1, by its project's title (one line, at most 64
+  characters, cut on a whole word) and its Key, with "Open the page", a plain link that
+  opens the page on Classic's notebook host in a new tab; anyone can open it, signed out.
+  While there is none (the live site today) the row is not drawn: no empty slot, no words.
+- It comes from Classic's shared reading (`KeyfleetWeb.FleetNow`, field `page`): the
+  fleet's project titles (`Project :titles`) and the newest page from
+  `Publication :in_fleet` with no actor, both actions anyone may read, so 2 more queries
+  a pass (a notice, at most once a second, or the minute's heal), not per visit. Making a
+  page public sends no notice, so it shows within the minute. A page in a deleted project
+  is passed over. The homepage itself reads nothing more: a test counts its queries with
+  and without pages made public.
+- The verification list has a `home-recent-work` row and `home-ways-in` names Notebook;
+  the public changelog says it. No database, contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
+as errors and Credo (no issues) passed. Homepage, harbour sea and fleet page tests: 111
+passed. The whole suite, the walks and the asset budgets were run on the next commit,
+which builds on this one.
+
+## 2026-11-17: Recent, what Classic #1's Keys made public, slides by under the hero (Sean's 44 a)
+
+- Below the hero, above Notebook, Recent (`#home-recent`): the newest things Classic #1's
+  Keys made public, as the Public place lists them (task, finding, note and the other
+  item kinds, posts, notebook pages, code), up to 8, newest first. Each is a diamond, its
+  kind, its title in the Key's own words (an item's title, the first post's words with
+  Markdown taken out, or the project's title for a page or code) and its Key, all one
+  plain link to `/classic/1/workspace?place=public#public-<id>`. Titles are drawn as
+  text, never markup, on one line, at most 64 characters, cut on a whole word with "…".
+  One with no words is left out. With nothing public the row is not drawn.
+- From 4 things the line slides leftward without stopping: one CSS animation on a track
+  holding the list twice, moved by half its length, linear, 10 s per thing (measured
+  45.6 px/s with 7 things and 51.5 px/s with 5). A pointer over it pauses it where it is;
+  keyboard focus in it stops it at its first thing, so Tab meets the links in order and
+  the browser brings each into view. The second copy is `aria-hidden` and `inert`, so a
+  screen reader or Tab meets each thing once. Under reduced motion, or with 3 or fewer,
+  the newest 3 stand still in a row (swiped sideways on a phone). No script, timer or
+  polling of its own: it arrives with the page and its live updates.
+- Why 8: enough to run more than twice across the widest band (one copy of 7 measured
+  3,193 px) and all on the Public place's first page of 12, so every link's place exists.
+- It comes from Classic's shared reading (`KeyfleetWeb.FleetNow`, field `public`): the
+  first page of the Public place exactly as a signed-out visitor reads it
+  (`WorkspacePage.board/3` with no actor). Measured on the test database: the reading of
+  Classic took 22 queries (about 6.7 ms) with nothing public and 24 (about 5.5 ms) with
+  12 things public; the Public place's part is 4 to 6 queries (1 to 2 ms), plus about 2
+  for each posts span and 1 for each code item on its first page; Notebook's newest page
+  now reuses the board's projects, 1 query. Once a pass, not per visit. The reading with
+  8 things is 2,020 bytes of its 65,536. The homepage itself reads nothing more (counted
+  by a test).
+- Measured at 1280 by 800 with both rows: Buy Key ends at 613 px and the facts at 680,
+  as before; Recent runs from 826 to 885 and Notebook to 934. At 390 by 844 the facts end
+  at 487 and Buy Key at 927, as before. Nothing scrolls sideways at either width; the
+  band never shifts the page as it arrives or slides.
+- A kept chain walk, `homepage_recent.spec.ts`, publishes pages through the test chain
+  server and covers the arrival, the plain links, the pause on hover, the stop on focus,
+  reduced motion and the row going away. The verification list (`home-recent-work`) and
+  the public changelog say it, with no visible pause control as a gap. No database,
+  contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, Public place,
+fleet page, harbour sea, shared reading, metrics, launch gate, launch steps and public
+pages tests: 157 passed (1 property, 156 tests). The whole suite in two parts:
+`test/keyfleet` 582 passed (13 properties, 569 tests, 19 excluded) and
+`test/keyfleet_web` 970 passed (9 properties, 961 tests). Typecheck passed; vitest 498
+passed in 38 files, leaving out the untracked review file
+`assets/test/adversarial_send_step.test.ts`; the asset budgets, 3 passed, on a minified
+build. Walks: homepage, homepage details, launch steps and launch gate, 23 passed; the
+whole chain project in Chromium, 142 passed, with the three new ones; the devices
+project, 72 passed. Pictures at 1280 and 390, light and dark, with things public and
+with none, with the notebook page and without, and under reduced motion, were taken by
+a scratch walk that is not kept.
+
 ## 2026-11-17 — The install line and checker pin name regents-cli 1.10.32
 
 - `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
@@ -11191,7 +11293,79 @@ a scratch walk that is not kept.
   is deployed on Base and selling, beside the Regents Club; Syndicate #1, Accelerant #1 and
   Cascade #1 are not deployed, and it is their sales that wait for the founder's word.
 
-## 2026-11-17 — Every wallet press reaches the wallet, and asks to switch to Base first
+## 2026-11-17: Notebook's link says Open; the privacy policy keeps its November 11 date
+
+- The Notebook row under the homepage's hero links its page with "Open" (was "Open the
+  page"), since a label is one or two words. Its ↗ and its description, the project's
+  title (`aria-describedby`), stay, so a screen reader still hears which page it opens.
+  Tests and walks find it by its id, so none changed.
+- `platform/priv/public/privacy.md` is effective November 11, 2026 again, still version
+  1.3. Renaming the homepage's button from Watch to Explore, in the entry for Sean's 34
+  above, is not a change of policy, and no test or written rule in the repository moves
+  the date with an edit.
+
+Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
+as errors and Credo (no issues) passed; homepage tests, 20 passed. The walks were run
+with the next commit, which builds on this one.
+
+## 2026-11-17: Recent has Pause, and keyboard focus shows each link whole (the chief's 1 a)
+
+- Beside the Recent label, while the line slides, a button (`#home-recent-pause`):
+  "Pause" stops the line where it is and becomes "Play"; Play lets it go on. It stays
+  stopped until pressed again, through the page's live updates, and is forgotten when
+  the page closes. Pressing it runs LiveView's own `JS.toggle_attribute` of `data-paused`
+  on the section, with no script of the page's own. A checkbox would have needed no
+  script, but its name would have stayed "Pause" while it showed "Play", or a checked
+  "Play" would have read as playing. Like every button on the page, it answers once the
+  page has connected, a moment after it first draws.
+- It is absent with 3 or fewer things, when the line stands still, and hidden under
+  reduced motion. It is one muted word in a hairline box, 51 by 24 px, 44 px tall on a
+  touch screen, with the site's own focus ring, and Tab meets it before the first thing.
+  The label column is 7rem wide on wide screens (was 6rem), so Recent and Pause fit side
+  by side; Notebook's row keeps lining up with it. Hover still pauses the line; keyboard
+  focus still stops it.
+- Keyboard focus: the sliding line scrolls only while a link in it has keyboard focus,
+  and then that link is the line's one snap position, so the line rests with it at its
+  start, and while focused a link is no wider than the line (a longer title ends in
+  "…"). Each of five links was measured wholly in view at 1280, and at 390, where before
+  the long ones sat partly past the edge. When focus leaves, the line cannot scroll, so
+  it slides again from its start; before, it could come back offset by the last scroll.
+- Measured at 1280 by 800 with Pause: Buy Key, the figures and the steps (704 to 777 px)
+  do not move; Recent's line runs from 838 to 873 and Notebook to 934. At 390 by 844,
+  Pause sits beside the label and Recent's row is 24 px taller on touch. Nothing scrolls
+  sideways at either width. The Recent walk presses Pause and Play (the line holds one
+  place over two reads, then moves), finds Pause before the first thing by Tab, and
+  finds no Pause with two things or with less motion. The verification list
+  (`home-recent-work`, whose gaps no longer name a missing pause or a half-shown link)
+  and the public changelog say it.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, Public place,
+fleet page, harbour sea, shared reading, metrics, launch gate, launch steps and public
+pages tests: 159 passed (1 property, 158 tests). Typecheck passed; vitest 498 passed in
+38 files, leaving out the untracked review file
+`assets/test/adversarial_send_step.test.ts`; the asset budgets, 3 passed, on a minified
+build. Walks: homepage, homepage details, launch steps and launch gate, 23 passed; the
+chain project's Recent and value card walks in Chromium, 9 passed; the devices project,
+72 passed. Pictures of Pause and Play at 1280 and 390, light and dark, on touch, and
+with keyboard focus, were taken by a scratch walk that is not kept.
+
+## 2026-11-17: the Public place's notebook page link says Open (the chief's 1 a)
+
+- In a fleet's Public place, a notebook page made public is linked with "Open" (was
+  "Open the page"), since a label is one or two words. Its description is the line above
+  it, which says it is a notebook page and, when every project is listed, which project
+  (`aria-describedby` to `public-<id>-kind`), so a screen reader still hears what it
+  opens. The homepage's Notebook row already reads the same way.
+- The homepage test that opens the Public place now finds the page's link described by
+  that line, naming its project, and the Recent walk, landing there, finds the link named
+  Open with that line as its description.
+
+Check (partition `_kf_s3`, PORT unset for ExUnit): format, compile with warnings as
+errors and Credo (no issues) passed. Homepage, workspace and public workspace tests, 109
+passed. The chain project's Recent walk in Chromium, 3 passed.
+
+## 2026-11-17 — Wallet presses: no account check, and a wallet off Base is asked to switch first
 
 The template's 8011292d ("Wallet presses: no account check, a prompt to switch network"),
 ported for Sean's wallet ruling. Its 8f28f899 (Privy's own wallet switching through the

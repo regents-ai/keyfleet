@@ -1,7 +1,8 @@
 // The steps a visitor takes into Keyfleet, each sent to this site once as it
 // happens and counted there with nothing saved (KeyfleetWeb.LaunchSteps): the
-// homepage opened, and its "Watch" pressed. A report names only the step: no
-// person, address, wallet or Key.
+// homepage opened, and its "Explore" pressed (step `watch`, the name its
+// counts are kept under). A report names only the step: no person, address,
+// wallet or Key.
 
 type Report = {step: "home" | "watch"}
 

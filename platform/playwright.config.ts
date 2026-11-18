@@ -41,6 +41,7 @@ export default defineConfig({
     "fleet_prompts.spec.ts",
     "fleet_search.spec.ts",
     "homepage_cards.spec.ts",
+    "homepage_recent.spec.ts",
     "tree_canvas.spec.ts",
     "atlas.spec.ts",
     "worldline.spec.ts",

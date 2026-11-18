@@ -117,6 +117,15 @@ export const reworkItem = (fleet: string, key: number, id: string, title: string
 /** A workspace item's address. */
 export const itemPath = (fleet: string, id: string) => call("item_path", [fleet, id])
 
+/**
+ * Has Key `key` make a saved notebook page public in the fleet, and reads the
+ * fleet again. Returns the page's address on the fleet's notebook host.
+ */
+export const publishPage = (fleet: string, key: number) => call("publish_page!", [fleet, key])
+
+/** Takes back everything made public in the fleet, and reads it again. */
+export const takeBackPublic = (fleet: string) => void call("take_back_public!", [fleet])
+
 /** Records that a Key's holder sent the fleet's code a change ending at `head`. */
 export const pushCode = (fleet: string, key: number, wallet: string, head: string) =>
   void call("push!", [fleet, key, wallet, head])

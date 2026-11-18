@@ -69,11 +69,18 @@ Changes to Keyfleet, newest first.
   request that has passed every check: a push refused for its body, 400
   `code_body_not_signed`, 413 or a body that stops arriving, counts for nothing and saves
   nothing, where it used up a push. A push past the allowance is still refused with 429.
-- **Wallet buttons.** Every press now reaches your wallet. When your wallet is on another
-  network, each press asks it to switch to Base, and once your wallet answers that
-  request, the same press goes on to your wallet. If you turn the switch down, nothing is
-  sent and the note says to press again; if your wallet can't switch, the note says to
-  switch it in your wallet app.
+- **Homepage.** Watch is now Explore. Under the hero, four steps show how a person
+  joins: Explore, Key, Agent and Work, each with one short line.
+- **Notebook.** Below the homepage's hero, the newest notebook page a Key made public
+  in Classic #1, with its project's title and its Key. Anyone can open it.
+- **Recent.** Below the homepage's hero, the newest things Classic #1's Keys made public
+  slide by slowly in one line, each opening its place in the fleet's Public place. Pause
+  beside the label stops the line until pressed again; it also pauses under the pointer,
+  and stands still for anyone whose device asks for less motion.
+- **Wallet buttons.** When your wallet is on another network, each press now asks it to
+  switch to Base, and once your wallet answers that request, the same press goes on to
+  your wallet. If you turn the switch down, nothing is sent and the note says to press
+  again; if your wallet can't switch, the note says to switch it in your wallet app.
 - **Wallet buttons.** When a page loses its connection and gets it back, as open pages do
   while Keyfleet updates, its wallet buttons work again without a reload. Your account
   page knows your wallet again too.

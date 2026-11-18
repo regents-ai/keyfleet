@@ -1086,11 +1086,14 @@ features:
   - id: home-ways-in
     what: >-
       The homepage opens on one screen: "A persistent team for your AI agent",
-      one line on what that means, "Watch", which opens Classic #1 with no
+      one line on what that means, "Explore", which opens Classic #1 with no
       wallet needed, and Classic #1's facts: Keys sold and agents here as
       separate numbers, the next Key's price and the goal it is working on.
       Beside them the next Key's card over "Buy Key", with the Key's number and
-      price under it. Then Overview (home-value-cards), then the footer.
+      price under it. Under both, four steps, Explore, Key, Agent and Work,
+      each with one line on what a person does there. Then Recent and
+      Notebook while there is something to show (home-recent-work), Overview
+      (home-value-cards) and the footer.
     who: person
     level: ordinary
     paths:
@@ -1106,6 +1109,44 @@ features:
       - platform/test/browser/homepage.spec.ts
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
+      - The steps come after Buy Key on a phone, below its first screen; at 1280 by 800 a goal of two lines leaves them at the screen's foot.
+
+  - id: home-recent-work
+    what: >-
+      Below the homepage's hero, Recent: the newest things Classic #1's Keys
+      made public, up to eight, each its kind, its title in the Key's own
+      words, cut to 64 characters and drawn as plain text, and its Key, each a
+      plain link to its place in the fleet's Public place. From four they
+      slide leftward in one line without stopping, about 40px a second, held
+      twice so the line loops without a jump: a pointer over it pauses it;
+      Pause beside the label stops it where it is, becoming Play, until
+      pressed again; keyboard focus in it stops it and brings each link
+      wholly to the line's start, a long one cut to the line's width while
+      focused; and a screen reader or Tab meets each thing once, Pause first.
+      With less motion, or fewer than four, the newest three stand still and
+      there is no Pause. Under it, Notebook: the newest notebook page a Key
+      made public, by its project's title and its Key, with Open, which opens
+      the page for anyone. Either is absent while there is nothing to show,
+      and neither moves Buy Key, the figures or the steps. Both come from
+      Classic's shared reading, so a visit reads nothing more; something made
+      public shows within the minute.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/fleet_now.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/assets/css/pages/home.css
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/browser/homepage_recent.spec.ts
+    gaps:
+      - Pause answers once the page has connected, a moment after it first draws; it is forgotten when the page closes.
+      - Checked in headless Chromium at 390 and 1280; WebKit and real phones are not run on the Mac.
+      - Nothing is public in Classic #1 on the live site yet, so neither shows there until a Key makes something public.
 
   - id: home-value-cards
     what: >-
@@ -1320,10 +1361,11 @@ features:
   - id: launch-step-counters
     what: >-
       The site counts, in running totals only, how many visits open the
-      homepage and press its "Watch". The browser reports each step once as
-      it happens; a reconnect is not a new visit and a browser a program drives
-      reports nothing. A report names only the step, never a person, address,
-      wallet or Key, and the totals are read in Fly's metrics dashboard.
+      homepage and press its "Explore" (kept as `watch`). The browser reports
+      each step once as it happens; a reconnect is not a new visit and a
+      browser a program drives reports nothing. A report names only the step,
+      never a person, address, wallet or Key, and the totals are read in Fly's
+      metrics dashboard.
     who: person
     level: ordinary
     paths:
@@ -1923,9 +1965,9 @@ features:
       wallet moves at once through the provider the page holds. Once the
       wallet answers the switch request, the same press sends or signs: the
       page reads neither the network nor the wallet's account again to refuse
-      it, and the step carries Base's chain id. Every press reaches Privy's active wallet with
-      the step as built, and every press off Base asks again; nothing is
-      remembered or held back. Privy connects every wallet on Base and offers
+      it, and the step carries Base's chain id. A press the server has built
+      steps for reaches Privy's active wallet with the step as built, and every
+      press off Base asks again; nothing is remembered or held back. Privy connects every wallet on Base and offers
       no other network. A declined switch sends nothing and leaves "Press
       again to switch your wallet to Base. Nothing was sent." Any other failed
       switch sends nothing and leaves "Your wallet couldn't switch to Base.
