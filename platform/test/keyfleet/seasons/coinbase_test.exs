@@ -60,8 +60,14 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
         {minutes_before(7), "2002"}
       ],
       "QUIET-USD" => [{minutes_before(16), "1.5"}],
-      "BUSY-USD" => [{minutes_before(15), "0.00000123"}]
+      "BUSY-USD" => [{minutes_before(15), "0.00000123"}],
+      "ZERO-USD" => [{minutes_before(2), "5"}, {minutes_before(1), "0.000"}],
+      "BELOW-USD" => [{minutes_before(1), "-1"}]
     })
+
+    # The newest close is the price, and one of 0 or below is none.
+    assert Coinbase.price("ZERO-USD", @boundary) == {:ok, nil}
+    assert Coinbase.price("BELOW-USD", @boundary) == {:ok, nil}
 
     assert Coinbase.price("SOL-USD", @boundary) == {:ok, Decimal.new("73.160")}
     assert Coinbase.price("ETH-USD", @boundary) == {:ok, Decimal.new("2002")}

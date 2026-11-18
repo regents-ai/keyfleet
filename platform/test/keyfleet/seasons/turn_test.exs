@@ -167,6 +167,23 @@ defmodule Keyfleet.Seasons.TurnTest do
     assert locked == Enum.sort(locked, DateTime)
   end
 
+  test "a close of 0 is no price, so the pick is void and the turn goes on",
+       %{boundaries: [b0, b1, b2 | _]} do
+    stub([CoinbaseStub.product("SOL-USD")], %{
+      "SOL-USD" => [{before(b1, 1), "100"}, {before(b2, 1), "0"}]
+    })
+
+    assert :ok = turn(b0)
+    pick!(1, "a", "SOL-USD")
+    assert :ok = turn(b1)
+    assert :ok = turn(b2)
+
+    assert [%{void: :no_close_price, close_price: nil, result: nil}] = picks(1)
+
+    assert [%{settled_at: %DateTime{}}, %{holding: "USDC", captain_key: nil}, %{number: 3}] =
+             seasons()
+  end
+
   test "when Coinbase can't be read, the turn fails and settles nothing", %{
     boundaries: [b0, b1, b2 | _]
   } do

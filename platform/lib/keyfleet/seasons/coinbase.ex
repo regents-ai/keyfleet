@@ -13,7 +13,8 @@ defmodule Keyfleet.Seasons.Coinbase do
   A product's price at boundary T is the close of the one-minute candle that
   started at T - 60 s (`GET /market/products/{product_id}/candles`), or, when
   that minute had no trade, the newest one-minute close of the 15 minutes
-  before T. With none it has no price. `USDC`'s price is 1. Prices are the
+  before T. With none it has no price, and a close of 0 or below is no price
+  either. `USDC`'s price is 1. Prices are the
   decimals Coinbase sent.
 
   A product Coinbase no longer knows has no price. Any other answer but a
@@ -133,8 +134,16 @@ defmodule Keyfleet.Seasons.Coinbase do
     |> Enum.filter(fn {start, _close} -> start in minutes end)
     |> Enum.max_by(fn {start, _close} -> start end, fn -> nil end)
     |> case do
-      {_start, close} -> Decimal.new(close)
+      {_start, close} -> above_zero(close)
       nil -> nil
+    end
+  end
+
+  # A close of 0 or below, or one that is not a number, is no price.
+  defp above_zero(close) do
+    case Decimal.parse(close) do
+      {%Decimal{sign: 1, coef: coef} = price, ""} when is_integer(coef) and coef > 0 -> price
+      _not_a_price -> nil
     end
   end
 
