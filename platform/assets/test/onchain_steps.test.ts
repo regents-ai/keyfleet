@@ -1,6 +1,9 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 
+vi.mock("../js/visit_log", () => ({report: vi.fn()}))
+
 import {asksServer, OnchainSteps, press, type Review} from "../js/hooks/onchain_steps"
+import {report} from "../js/visit_log"
 import {
   forgetWalletDisconnected,
   replaceActiveEthereumWallet,
@@ -70,6 +73,7 @@ beforeEach(() => {
   vi.stubGlobal("window", {localStorage: memoryStorage(), dispatchEvent: () => true})
   forgetWalletDisconnected()
   replaceActiveEthereumWallet(null)
+  vi.mocked(report).mockClear()
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -171,6 +175,17 @@ describe("a press asks the server for its review when the page's won't do", () =
   })
 })
 
+// A server answer that never came back: the page lost its connection.
+const unreached = Symbol("unreached")
+
+function answered(answer: unknown) {
+  return [
+    answer === unreached
+      ? {status: "rejected", reason: new Error("The page lost its connection")}
+      : {status: "fulfilled", value: {reply: answer}},
+  ]
+}
+
 // The hook on a group with no form fields, with the server answering an ask for
 // steps with `reply`.
 function group(reply: (payload: {address?: string}) => unknown) {
@@ -178,6 +193,7 @@ function group(reply: (payload: {address?: string}) => unknown) {
   const handlers: Record<string, (payload: unknown) => void> = {}
   let clicked: ((event: unknown) => void) | undefined
   const button = {dataset: {onchainStep: "buy"} as Record<string, string>, closest: () => button}
+  const lostLine = {hidden: true}
   const el = {
     id: "buy-key-order",
     addEventListener: (_type: string, listener: (event: unknown) => void) => {
@@ -187,7 +203,7 @@ function group(reply: (payload: {address?: string}) => unknown) {
     contains: () => true,
     hasAttribute: () => false,
     querySelectorAll: () => [],
-    querySelector: () => null,
+    querySelector: (selector: string) => (selector === "[data-onchain-lost]" ? lostLine : null),
   }
   const hook = {
     el,
@@ -196,14 +212,14 @@ function group(reply: (payload: {address?: string}) => unknown) {
     },
     pushEventTo: async (_target: unknown, event: string, payload: unknown) => {
       pushed.push([event, payload])
-      const answer = event === "prepare_and_send" ? reply(payload as {address?: string}) : {}
-      return [{status: "fulfilled", value: {reply: answer}}]
+      return answered(event === "prepare_and_send" ? reply(payload as {address?: string}) : {})
     },
   }
   OnchainSteps.mounted!.call(hook)
 
   return {
     pushed,
+    lostLine,
     held: (steps: Review) => handlers["onchain-steps:review"]({component_id: el.id, review: steps}),
     rejoined: () => OnchainSteps.reconnected!.call(hook),
     press: () => clicked!({target: button}),
@@ -293,6 +309,7 @@ function proposalGroup(reply: () => unknown, held = true) {
   vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
   const button = {dataset: {onchainStep: "propose"}, disabled: held}
   const fields = Object.entries(theirs).map(([name, value]) => ({dataset: {onchainInput: name}, value}))
+  const lostLine = {hidden: true}
   const el = {
     id: "propose-action",
     dataset: {webmcpTool: "proposals_create"},
@@ -300,7 +317,7 @@ function proposalGroup(reply: () => unknown, held = true) {
     removeEventListener: () => undefined,
     hasAttribute: () => false,
     querySelectorAll: (selector: string) => (selector.startsWith("button") ? [button] : fields),
-    querySelector: () => null,
+    querySelector: (selector: string) => (selector === "[data-onchain-lost]" ? lostLine : null),
   }
   const hook = {
     el,
@@ -309,7 +326,7 @@ function proposalGroup(reply: () => unknown, held = true) {
     },
     pushEventTo: async (_target: unknown, event: string, payload: unknown) => {
       pushed.push([event, payload])
-      return [{status: "fulfilled", value: {reply: event === "prepare_for_agent" ? reply() : {}}}]
+      return answered(event === "prepare_for_agent" ? reply() : {})
     },
   }
   OnchainSteps.mounted!.call(hook)
@@ -317,6 +334,7 @@ function proposalGroup(reply: () => unknown, held = true) {
 
   return {
     pushed,
+    lostLine,
     // What the press told the server, leaving out the wallet the page reports on its own.
     told: () => pushed.filter(([event]) => event !== "onchain_active_wallet"),
     held: (steps: Review) => handlers["onchain-steps:review"]({component_id: el.id, review: steps}),
@@ -418,6 +436,56 @@ describe("a browser agent's press is judged on its own values", () => {
 
     expect(answer).toMatchObject({ok: false, error: {code: "wallet_declined"}})
     expect(page.told().at(-1)).toEqual(["step_failed", {step: "propose", reason: "wallet_declined", agent: true}])
+  })
+
+  // Costly failure: the person pressed nothing, yet reads that the page lost
+  // its connection and is asked to press again.
+  it("answers that the page lost its connection, shows the person nothing, and reports the press as the agent's", async () => {
+    replaceActiveEthereumWallet(wallet().selected)
+    const page = proposalGroup(() => unreached)
+
+    const answer = await page.call({kind: "decision", key: "7", text: "The agent's words"})
+
+    expect(answer).toMatchObject({ok: false, error: {code: "connection_lost"}})
+    expect(page.lostLine.hidden).toBe(true)
+    expect(report).toHaveBeenCalledWith({name: "press.unsent", where: "propose", outcome: "lost", agent: true})
+  })
+
+  // Costly failure: the line the person's own lost press showed goes away
+  // before they have pressed again.
+  it("leaves the lost line the person's own press showed", async () => {
+    replaceActiveEthereumWallet(wallet().selected)
+    const page = proposalGroup(() => ({reason: "blocked", cause: "values", note: "Not your Key"}))
+    page.lostLine.hidden = false
+
+    await page.call({kind: "decision", key: "9", text: "The agent's words"})
+
+    expect(page.lostLine.hidden).toBe(false)
+  })
+})
+
+// Invariant: the lost line speaks for the person's own presses: their press
+// the page could not get to the server shows it, and their next press hides it.
+describe("the person's press and the lost line", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", Object.assign(new EventTarget(), {localStorage: memoryStorage()}))
+    vi.stubGlobal("document", {})
+  })
+
+  it("shows it when the press can't reach the server, and hides it at their next press", async () => {
+    const active = wallet()
+    replaceActiveEthereumWallet(active.selected)
+    let reached = false
+    const page = group(() => (reached ? {review, send: "buy"} : unreached))
+
+    page.press()
+    await vi.waitFor(() => expect(page.lostLine.hidden).toBe(false))
+    expect(report).toHaveBeenCalledWith({name: "press.unsent", where: "buy", outcome: "lost"})
+
+    reached = true
+    page.press()
+    expect(page.lostLine.hidden).toBe(true)
+    await vi.waitFor(() => expect(active.sent).toHaveLength(1))
   })
 })
 

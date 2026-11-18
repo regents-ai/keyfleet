@@ -94,7 +94,8 @@ export const OnchainSteps: Hook = {
     // group names (page_tools.ts), with its values over the form's, and the
     // server judges those values. All its press tells the server is marked as
     // the agent's, and the agent hears every answer in its own: the person's
-    // form and the note above their buttons stay as they are.
+    // form, the note above their buttons and the line saying the page lost its
+    // connection stay as they are.
     const pressWith = async (button: HTMLElement, form: Record<string, string>, ask: Ask): Promise<Pressed | "lost"> => {
       const name = button.dataset.onchainStep!
       const agent = ask === "prepare_for_agent"
@@ -102,7 +103,8 @@ export const OnchainSteps: Hook = {
       const release = mark(button)
       const asks = (button as HTMLButtonElement).disabled === true || asksServer(this.review, name, form)
       const wallet = activeEthereumWallet()
-      lost(this.el, false)
+      // The lost line speaks for the person's own presses alone.
+      if (!agent) lost(this.el, false)
       // The server hears the press, and the form it was made from, just before
       // the wallet does and once its steps are built from that form: a
       // proposal's words are saved then. The press never waits on this. With
@@ -121,7 +123,7 @@ export const OnchainSteps: Hook = {
         // before the server has heard which wallet is open. The steps that come
         // back go to that same wallet.
         const [result] = await this.pushEventTo(this.el, ask, {form, step: name, address: wallet.address})
-        if (result?.status !== "fulfilled") return lostPress(this.el, name)
+        if (result?.status !== "fulfilled") return lostPress(this.el, name, agent)
         const reply = result.value.reply as {review: Review; send: string} | Refused
         // Refused: the reply says why. For the person's press the server has
         // already written the same note above the buttons; the agent hears it
@@ -132,7 +134,7 @@ export const OnchainSteps: Hook = {
         if (!agent) heard()
         return await press(reply.review, reply.send, wallet, tell)
       } catch {
-        return lostPress(this.el, name)
+        return lostPress(this.el, name, agent)
       } finally {
         release()
         // The press may have spent funds or changed what the wallet allows.
@@ -269,19 +271,20 @@ function sameInputs(review: Record<string, string>, form: Record<string, string>
   return [...names].every(name => review[name] === form[name])
 }
 
-// The component's `data-onchain-lost` line, shown when a press could not reach
-// the server. The next render from the server hides it again.
+// The component's `data-onchain-lost` line, shown when the person's own press
+// could not reach the server, and hidden by their next press. The next render
+// from the server hides it again.
 function lost(root: HTMLElement, shown: boolean): void {
   const line = root.querySelector<HTMLElement>("[data-onchain-lost]")
   if (line) line.hidden = !shown
 }
 
-// A press that could not reach the server: the page says so, and so does the answer.
-// The server never heard the press, so it cannot say why; the page does, and
-// reports it.
-function lostPress(root: HTMLElement, step: string): "lost" {
-  lost(root, true)
-  report({name: "press.unsent", where: step, outcome: "lost"})
+// A press that could not reach the server: the answer says so, and for the
+// person's own press so does the page. The server never heard the press, so it
+// cannot say why; the page reports it, the agent's marked as the agent's.
+function lostPress(root: HTMLElement, step: string, agent: boolean): "lost" {
+  if (!agent) lost(root, true)
+  report({name: "press.unsent", where: step, outcome: "lost", ...(agent ? {agent: true as const} : {})})
   return "lost"
 }
 

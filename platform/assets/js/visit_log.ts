@@ -7,7 +7,7 @@
 export type VisitLine =
   | {name: "page.error"; where: string; outcome: "error" | "unhandledrejection"}
   | {name: "tool.unsent"; where: string; outcome: "unreachable" | "outcome_unknown"}
-  | {name: "press.unsent"; where: string; outcome: "lost"}
+  | {name: "press.unsent"; where: string; outcome: "lost"; agent?: true}
   | {name: "step"; where: "sign_in_opened"}
 
 const most = 20
