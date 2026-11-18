@@ -11399,3 +11399,53 @@ a scratch walk that is not kept.
   the address, the port and the setting; development's is its address, its port and the
   setting; the browser test server's https listener keeps its certificate and has the
   setting, with no plain listener. Loading the test settings as Mix does gives the same.
+
+## 2026-11-18 — A body nothing read is thrown away in small pieces before the answer
+
+- To keep a connection open, Bandit reads what is left of a request's body once the
+  answer is sent, in one piece of up to 8,000,000 bytes (`Bandit.HTTP1.Socket`'s
+  `ensure_completed/1`), held until the last byte arrives. In the reviewers' round-six
+  proofs 211 and 241, 100 anonymous connections each sending 7.5 MB to `/` peaked at 451
+  to 583 MiB here, and with each last byte held back 718 MiB stayed held for as long as
+  the senders liked; `/mcp`, the notebook door to someone signed out and a picture upload
+  with an unknown ticket did the same. The site takes 3,000 connections on a 4 GB
+  machine.
+- `KeyfleetWeb.Plugs.UnreadBody`, first in the endpoint below the LiveView socket,
+  registers the callback that runs last before any answer is sent. If any body is left,
+  it reads it in 64 KiB pieces and throws each away, up to 8,000,000 bytes and for at most
+  10 seconds in all, then marks the answer `connection: close`. A body a route read whole,
+  or none, leaves the connection open as before. 10 seconds lets a caller sending at
+  0.8 MB a second or faster finish an 8 MB body and hear its answer cleanly, and bounds how
+  long one sender can keep a connection's process reading for nothing; Bandit's own read
+  waits 15 seconds per read with no total.
+- The connection closes even when the read reached the end, not only past a bound: Plug
+  sends the answer with Bandit's state from before the callback ran
+  (`Plug.Conn.send_resp/1`, `send_chunked/2` and `send_file/5` likewise), so Bandit would
+  still count the body as unread and take the next request's bytes for its rest. Closing
+  on every answer without reading first was tried for the door (1be991676, reverted in
+  491e17db3): callers with bodies of 1 MiB or more never heard the refusal. Reading first
+  is what lets them hear it.
+- After: proofs 211 and 241 pass, peaking at 9 to 36 MiB with every request answered, and
+  3 MiB held at 3 and 8 seconds. A refused 7.5 MB write (a picture upload with an unknown
+  ticket, 401; the door to someone signed out, 404; `/`, 404) is heard 0 to 35 ms after
+  its first byte is sent on the same machine, with `connection: close`, and the
+  connection then closes in order.
+- Checked through a real port: an answer sent whole, as a file, in parts, a redirect, the
+  error page after the router's not-found and after `NoTrailingSlash`'s above it (the
+  callback is there in both), HEAD and GET with a body, a chunked body with no length, and
+  `Expect: 100-continue` (the callback asks for the body, then answers and closes). Left
+  alone: a 101 upgrade (Bandit then reads the body as websocket frames and closes on the
+  first unmasked one), and HTTP/2, where 10 connections of 100 streams each sending 7.5 MB
+  to `/` got about 3.3 MB per connection through flow control, all answered 404, 19 MiB
+  peak; Fly's proxy speaks HTTP/1.1 to the machine.
+- Not covered: the error page after a plug above the router raises anything but a
+  not-found, such as `Plug.Static` refusing a path with `..` or a NUL (GET or HEAD only).
+  Phoenix renders it from the request as it entered the endpoint, without the callback,
+  and Bandit closes without reading: nothing is held, and a caller still sending a large
+  body may not hear the 400 (one of two 7.5 MB tries did not, in one run). As before.
+- The public changelog's 17 November line "A body sent to any other address is never
+  read" now says never decoded, and contract 36.3.1 says a 413 or 415 body was not
+  decoded, where it said not read. `UnreadBodyTest` sends each kind of answer above a
+  1 MiB body it does not read, a chunked body, a refused 7.5 MB body, a body a route reads
+  (the connection stays open for a second request) and a sender that stops short (heard
+  within 9 to 12 seconds); without the plug, four of its six fail.

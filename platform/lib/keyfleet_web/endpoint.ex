@@ -25,6 +25,10 @@ defmodule KeyfleetWeb.Endpoint do
     ],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 
+  # First, so that every answer below it, the gateways' included, reads what
+  # is left of a body nothing read in small pieces before it is sent.
+  plug KeyfleetWeb.Plugs.UnreadBody
+
   # Every answer names its request, the notebook and code hosts' too, so an
   # agent can cite the one it means.
   plug Plug.RequestId

@@ -4,6 +4,14 @@ Changes to Keyfleet, newest first.
 
 ## 18 November 2026
 
+- **Requests.** A body no address reads, or the rest of one an address refused, is now
+  read in small pieces and thrown away before the answer is sent, up to 8 MB and for at
+  most ten seconds, and the answer then closes the connection. A caller that sends its
+  whole body hears its answer as before; one that stops sending hears it after ten
+  seconds. Before, what was left was read after the answer in one piece of up to 8 MB
+  and held until its last byte came. A body an address reads whole leaves the connection
+  open, as before. API contract 36.3.1 says a body refused with 413 or 415 was not
+  decoded, where it said not read.
 - **Claude connector.** A call to `/mcp` now has its body read only once the site knows
   who sent it. A call with a token this site didn't give, or with neither a token nor an
   agent's signature, gets 401 `connection_required` whatever its body, where a body over
@@ -19,7 +27,7 @@ Changes to Keyfleet, newest first.
 
 - **Requests.** The site now reads a request's body only at an address that takes one,
   as the one kind that address takes and up to the size it takes. A body sent to any
-  other address is never read: it gets that address's own answer, such as 404 for an
+  other address is never decoded: it gets that address's own answer, such as 404 for an
   address with nothing at it, where a body that wasn't valid JSON or a form got 400 and
   one over 1 MB got 413. Where a body is taken, a larger one now gets 413
   `request_entity_too_large` and another kind 415 `unsupported_media_type`: a pairing at

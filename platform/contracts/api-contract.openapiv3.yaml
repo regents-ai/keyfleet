@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 36.3.0
+  version: 36.3.1
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -5013,9 +5013,9 @@ components:
     CsrfForbidden:
       description: CSRF token was absent or invalid
     BodyTooLarge:
-      description: request_entity_too_large, the body is larger than this address takes; it was not read
+      description: request_entity_too_large, the body is larger than this address takes; it was not decoded
     BodyKindRefused:
-      description: unsupported_media_type, the body is not the one kind this address takes; it was not read
+      description: unsupported_media_type, the body is not the one kind this address takes; it was not decoded
     Profile:
       description: The verified account's profile
       content:
