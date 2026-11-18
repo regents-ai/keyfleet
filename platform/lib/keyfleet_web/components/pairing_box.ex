@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.PairingBox do
   Pairing an agent (`RegentAgents`), in the pairing window every Pair New Agent
   opens and on the pairing link's page, in the shared pairing box
   (`Regent.Account.pairing`): a dropdown of the ten agents in
-  `RegentAgents.Harness.featured/0`, and Claude while its connector is on
+  `RegentAgents.Harness.featured/0`, and ChatGPT and Claude while the connector is on
   (`RegentAgents.Harness.hosted/0`, read at runtime), then the message to paste with
   its code in a short box with icons to copy it and make a new code. Each agent keeps its own code until it expires, so choosing another
   agent and coming back shows the same message. Once the agent uses the code, the
@@ -101,7 +101,7 @@ defmodule KeyfleetWeb.PairingBox do
   def choices,
     do: for(harness <- offered(), do: %{value: to_string(harness), label: label(harness)})
 
-  # The ten featured agents, then Claude while its connector is on.
+  # The ten featured agents, then ChatGPT and Claude while the connector is on.
   defp offered, do: Harness.featured() ++ Harness.hosted()
 
   defp label(:other), do: "Any agent"
@@ -221,8 +221,8 @@ defmodule KeyfleetWeb.PairingBox do
 
   # A link to a workspace item or a project's page names the work, so the
   # agent's first read once paired is that work itself, as its page shows it
-  # to a person, rather than the whole fleet. Claude, through its connector,
-  # reads it with the connector's tool of the same name.
+  # to a person, rather than the whole fleet. ChatGPT and Claude, through the
+  # connector, read it with the connector's tool of the same name.
   defp first_read(nil, _hosted?), do: nil
 
   defp first_read(start, hosted?) do
@@ -322,6 +322,12 @@ defmodule KeyfleetWeb.PairingBox do
   defp setup(:claude),
     do: """
     If the Keyfleet connector isn't in your tools yet, ask me to add it in Claude's settings under Connectors, with the address #{KeyfleetWeb.Endpoint.url()}/mcp.
+    After pairing, call check_in each time you start on Keyfleet.\
+    """
+
+  defp setup(:chatgpt),
+    do: """
+    If Keyfleet isn't in your tools yet, ask me to add it in ChatGPT as a custom MCP server, with the address #{KeyfleetWeb.Endpoint.url()}/mcp.
     After pairing, call check_in each time you start on Keyfleet.\
     """
 

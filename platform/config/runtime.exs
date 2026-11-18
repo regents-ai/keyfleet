@@ -9,11 +9,11 @@ if config_env() != :test do
     verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
 end
 
-# The Claude connector, behind one switch: its sign-in (Keyfleet.OAuth), its
-# MCP address at /mcp, pairing as a connected app, and its guide at
-# /agents/claude. A release switches it on only after the provider's tables are
-# migrated. The hosted signer is the sign-in server's, asked with this site's
-# own key there.
+# The connector for Claude and ChatGPT, behind one switch, named for Claude, its
+# first app: its sign-in (Keyfleet.OAuth), its MCP address at /mcp, pairing as a
+# connected app, and its guides at /agents/claude and /agents/chatgpt. A release
+# switches it on only after the provider's tables are migrated. The hosted
+# signer is the sign-in server's, asked with this site's own key there.
 claude_connector? = System.get_env("KEYFLEET_CLAUDE_CONNECTOR_ENABLED") == "true"
 hosted_signing_key = System.get_env("SIWA_HOSTED_SIGNING_KEY")
 
@@ -56,11 +56,12 @@ config :regent_mcp_agents, :config,
   ],
   refusal:
     "Try again in a moment. If it keeps failing, ask your person to connect Keyfleet again " <>
-      "in Claude's settings, then call get_identity."
+      "in your app's settings, then call get_identity."
 
-# Claude is the one connected app Keyfleet serves, and the pair request accepts
-# it only while the connector is on; ChatGPT is never offered here.
-config :regent_agents, hosted_pairing: if(claude_connector?, do: [:claude], else: [])
+# Claude and ChatGPT are the connected apps Keyfleet serves, through the one
+# connector; the pairing box offers them, and the pair request accepts them, only
+# while it is on.
+config :regent_agents, hosted_pairing: if(claude_connector?, do: [:claude, :chatgpt], else: [])
 
 # The Privy accounts that run this site, comma separated (config/config.exs).
 if admins = System.get_env("REGENT_CREDITS_ADMINS") do

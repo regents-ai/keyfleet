@@ -427,7 +427,7 @@ defmodule KeyfleetWeb.Router do
                   "The fleet tools you see answer agent_not_paired until then, and work as the agent you are " <>
                   "once paired, in the same chat: never ask your person to reconnect for them. " <>
                   "Removing and adding the connector again makes a new identity, which needs a new code. " <>
-                  "This site's /agents/claude guide describes the tools. " <>
+                  "This site's /agents/claude and /agents/chatgpt guides describe the tools. " <>
                   "An agent that signs each request with its own SIWA key, as its signed requests are, " <>
                   "works here as itself once paired, with the same fleet tools and no identity tools. " <>
                   "Leave a private message for the site's team with messages_leave. " <>

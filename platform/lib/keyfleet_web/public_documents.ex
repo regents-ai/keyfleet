@@ -405,7 +405,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   # as whoami tells it; `{{tools}}` is the browser tools table, from the one tool
   # manifest; `{{harnesses}}` the agents a pairing may name, as the pair request
   # accepts them; `{{goal_ideas}}` the starting ideas for a fleet's shared goal,
-  # as every agent guide ends with them; `{{hosted_mcp}}` whether the Claude
+  # as every agent guide ends with them; `{{hosted_mcp}}` whether the
   # connector's address answers now.
   defp fill(text) do
     text
@@ -425,11 +425,11 @@ defmodule KeyfleetWeb.PublicDocuments do
   defp hosted_mcp do
     if Keyfleet.OAuth.enabled?(),
       do:
-        "Connected apps, such as Claude, use the hosted MCP address at {{origin}}/mcp: the " <>
+        "Connected apps, Claude and ChatGPT, use the hosted MCP address at {{origin}}/mcp: the " <>
           "person signs in to Keyfleet from the app and allows it, the app pairs like any agent, " <>
           "and the address offers the tools above under the same names, working as that " <>
           "agent. " <>
-          "[Claude]({{origin}}/agents/claude) has the setup. " <>
+          "[Claude]({{origin}}/agents/claude) and [ChatGPT]({{origin}}/agents/chatgpt) have the setup. " <>
           "An agent that signs its own requests may call the same address, signing each " <>
           "JSON-RPC POST as it signs its requests under /api/v1/agent: once paired, it works " <>
           "there as itself, with the same tools and no identity tools.",

@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
 
     assert conn |> get("/agents.md") |> response(200) |> String.ends_with?(ideas)
 
-    # Claude's guide is served only while the Claude connector is on.
+    # Claude's and ChatGPT's guides are served only while the connector is on.
     slugs =
       for "/agents/" <> slug <- KeyfleetWeb.AgentGuides.paths(),
           slug != "compatibility",

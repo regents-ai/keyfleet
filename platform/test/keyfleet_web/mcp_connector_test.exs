@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.McpConnectorTest do
-  # The Claude connector's address, /mcp, through this site's own endpoint,
-  # router, sign-in, pairings and tools, with the connector switched on:
+  # The connector's address, /mcp, for Claude and ChatGPT, through this site's
+  # own endpoint, router, sign-in, pairings and tools, with the connector on:
   # - what a token is listed follows its permissions alone, the same before and
   #   after its identity pairs; who a request runs as follows its identity's
   #   pairing too: the fleet tools run only for the agent paired with that same
@@ -36,6 +36,19 @@ defmodule KeyfleetWeb.McpConnectorTest do
   @identity_scope "regent.identity.manage"
   @agent_scopes "regent.identity.manage keyfleet.agent"
   @wallets __MODULE__.HostedWallets
+
+  # The apps a person connects, as each registers itself.
+  @claude %{
+    "client_name" => "Claude",
+    "redirect_uris" => ["https://claude.ai/api/mcp/auth_callback"]
+  }
+  @chatgpt %{
+    "client_name" => "ChatGPT",
+    "redirect_uris" => [
+      "https://chatgpt.com/connector/oauth/keyfleet-callback",
+      "https://chatgpt.com/connector_platform_oauth_redirect"
+    ]
+  }
 
   setup do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
@@ -857,6 +870,41 @@ defmodule KeyfleetWeb.McpConnectorTest do
         do: assert(not_paired?(call(unpaired, name, input, c)), name)
   end
 
+  # ChatGPT connects as Claude does: it registers with its own callbacks, keeps
+  # its identity, pairs it as `chatgpt` through the tool with its person's code,
+  # and in the same chat locks a season pick as its person's Key.
+  test "ChatGPT registers, pairs as chatgpt and picks as its person's Key", c do
+    subject = "did:privy:connector-" <> Ecto.UUID.generate()
+    wallet = new_wallet()
+    Accounts.register_verified!(subject, wallet, [wallet], actor: %Actors.System{})
+    holds!(2, wallet)
+    token = connect_app!(subject, @agent_scopes, nil, @chatgpt).access
+    hosted_signer!(c)
+
+    assert %{"isError" => false} = result(call(token, "register_identity", %{}, c))
+    assert not_paired?(call(token, "seasons_show", %{"fleet_id" => @fleet}, c))
+
+    %{code: code} = RegentAgents.issue_pairing_code!(actor: person(subject))
+    pairing = %{"code" => code, "name" => "ChatGPT", "harness" => "chatgpt"}
+
+    assert %{"isError" => false, "structuredContent" => %{"paired" => true}} =
+             result(call(token, "pair_identity", pairing, c))
+
+    signer = c.signer.address
+
+    assert [%{name: "ChatGPT", harness: :chatgpt, wallet: ^signer}] =
+             RegentAgents.list_my_agents!(actor: person(subject))
+
+    played!(%Actors.Human{human_account_id: 1, wallet_addresses: [@owner]})
+    pick = %{"fleet_id" => @fleet, "product" => "SOL-USD", "reason" => "Mine"}
+    assert %{"isError" => false} = result(call(token, "seasons_pick", pick, c))
+
+    assert %{"isError" => false, "structuredContent" => now} =
+             result(call(token, "seasons_show", %{"fleet_id" => @fleet}, c))
+
+    assert %{"key" => 2, "reason" => "Mine"} = now["taking_picks"]["my_pick"]
+  end
+
   # A picture is larger than a signed request can carry, so it goes in two
   # steps, as the browser tools send it: the start answers an address on this
   # site, and the upload sends the bytes there as base64.
@@ -1096,7 +1144,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
       )
     )
 
-    put_env(:regent_agents, :hosted_pairing, [:claude])
+    put_env(:regent_agents, :hosted_pairing, [:claude, :chatgpt])
     put_env(:regent_mcp_agents, :req_options, plug: {Req.Test, RegentMCPAgents.HostedSigner})
     keep_env(:regent_oauth, :site)
     keep_env(:boruta, Boruta.Oauth)
@@ -1178,18 +1226,53 @@ defmodule KeyfleetWeb.McpConnectorTest do
     )
   end
 
+  # The hosted signer and the sign-in server as they answer an identity that
+  # pairs through the tool: the signer keeps the local signer's wallet and signs
+  # each request with it, and the sign-in server checks what it signed.
+  defp hosted_signer!(c) do
+    Req.Test.stub(RegentAgents.Broker, fn conn ->
+      {:ok, raw, conn} = read_body(conn)
+      {status, body} = SignedAgentHelpers.verdict(Jason.decode!(raw), c.secret)
+      conn |> put_status(status) |> Req.Test.json(body)
+    end)
+
+    Req.Test.stub(RegentMCPAgents.HostedSigner, fn conn ->
+      {:ok, body, conn} = read_body(conn)
+
+      case Jason.decode!(body) do
+        %{"operation" => "register"} ->
+          Req.Test.json(conn, %{"address" => c.signer.address})
+
+        %{"operation" => "sign", "request" => %{"method" => method, "path" => path} = request} ->
+          signed =
+            SignedAgentHelpers.sign(
+              c.signer,
+              c.secret,
+              request["authority"],
+              method,
+              path,
+              request["body"]
+            )
+
+          Req.Test.json(conn, %{
+            "method" => method,
+            "path" => path,
+            "body" => request["body"],
+            "headers" => Map.drop(signed.headers, ["cookie", "authorization"])
+          })
+      end
+    end)
+  end
+
   # An app connected by `subject`, as consent leaves it: its access token.
   # Given a wallet, the app's hosted identity keeps it.
   defp connect!(subject, scope, wallet \\ nil),
     do: connect_app!(subject, scope, wallet).access
 
   # The same app as its client id and the access and refresh tokens it holds.
-  defp connect_app!(subject, scope, wallet) do
+  defp connect_app!(subject, scope, wallet, app \\ @claude) do
     register =
-      conn(:post, "/oauth/register", %{
-        "client_name" => "Claude",
-        "redirect_uris" => ["https://claude.ai/api/mcp/auth_callback"]
-      })
+      conn(:post, "/oauth/register", app)
       |> put_req_header("accept", "application/json")
       |> @endpoint.call([])
 
