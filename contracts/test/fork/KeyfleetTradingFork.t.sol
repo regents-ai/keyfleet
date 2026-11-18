@@ -103,8 +103,8 @@ contract KeyfleetTradingForkTest is Test {
     }
 
     /// @dev A Trading Fleet's whole life on real USDC and real staking: creation, sales, a trade
-    /// out and back with a profit, a creator's payback and a daily payback into real staking, a
-    /// claim, the authority passing with Key 1, the close, and paying back everything.
+    /// out and back with a profit, a creator's payback and a daily payback, their 1% sent on to real
+    /// staking, a claim, the authority passing with Key 1, the close, and paying back everything.
     function test_aTradingFleetOnTheLiveCollection() public {
         KeyfleetTradingManager fleet = _create();
         uint256 fleetId = fleet.FLEET_ID();
@@ -117,9 +117,10 @@ contract KeyfleetTradingForkTest is Test {
         _sell(fleet);
         _tradeOutAndBack(fleet.TREASURY());
         vm.warp(block.timestamp + 2 days);
-        uint256 owed = _creatorsPayback(fleet);
-        owed += _dailyPayback(fleet);
-        _claim(fleet, owed);
+        (uint256 owed, uint256 forStaking) = _creatorsPayback(fleet);
+        (uint256 dailyOwed, uint256 dailyForStaking) = _dailyPayback(fleet);
+        _sendToStaking(fleet, forStaking + dailyForStaking);
+        _claim(fleet, owed + dailyOwed);
         _passKeyOne(fleet);
         _closeAndPayBackAll(fleet);
     }
@@ -147,35 +148,51 @@ contract KeyfleetTradingForkTest is Test {
         usdc.transfer(address(treasury), raised + 40e6);
     }
 
-    /// @dev The creator pays back 50 USDC into real staking and the ledger; returns each Key's part.
-    function _creatorsPayback(KeyfleetTradingManager fleet) private returns (uint256 perKey) {
+    /// @dev The creator pays back 50 USDC: each Key's part to the ledger, the 1% set aside for
+    /// staking. Returns each Key's part and the 1%.
+    function _creatorsPayback(KeyfleetTradingManager fleet) private returns (uint256 perKey, uint256 forStaking) {
         KeyfleetTradingTreasury treasury = fleet.TREASURY();
         uint256 receivedBefore = staking.totalUsdcReceived();
         uint256 amount = 50e6;
-        uint256 staked = Math.mulDiv(amount, 100, 10_000, Math.Rounding.Ceil);
-        perKey = (amount - staked) / 4;
-        vm.recordLogs();
+        forStaking = Math.mulDiv(amount, 100, 10_000, Math.Rounding.Ceil);
+        perKey = (amount - forStaking) / 4;
         vm.prank(CREATOR);
         treasury.payback(amount);
         _logGas("payback by the creator, the fleet's first, four Keys");
-        assertEq(staking.totalUsdcReceived() - receivedBefore, staked, "1% counted as revenue by staking");
-        _assertDeposit(treasury, fleet, staked);
-        assertEq(usdc.allowance(address(treasury), STAKING), 0, "no approval left");
+        assertEq(staking.totalUsdcReceived(), receivedBefore, "staking is not called");
+        assertEq(treasury.stakingOwed(), forStaking, "the 1% set aside");
         assertEq(fleet.REWARDS().accrued(BASE_USDC, _key(fleet, 3)), perKey, "each Key its share");
     }
 
-    /// @dev Alice runs the daily payback; returns each Key's part.
-    function _dailyPayback(KeyfleetTradingManager fleet) private returns (uint256 perKey) {
+    /// @dev Alice runs the daily payback on the fleet's own USDC. Returns each Key's part and the 1%.
+    function _dailyPayback(KeyfleetTradingManager fleet) private returns (uint256 perKey, uint256 forStaking) {
         KeyfleetTradingTreasury treasury = fleet.TREASURY();
-        uint256 receivedBefore = staking.totalUsdcReceived();
-        uint256 daily = usdc.balanceOf(address(treasury)) * treasury.DAILY_PAYBACK_BPS() / 10_000;
-        uint256 staked = Math.mulDiv(daily, 100, 10_000, Math.Rounding.Ceil);
-        perKey = (daily - staked) / 4;
+        uint256 daily = treasury.available() * treasury.DAILY_PAYBACK_BPS() / 10_000;
+        uint256 owedBefore = treasury.stakingOwed();
+        forStaking = Math.mulDiv(daily, 100, 10_000, Math.Rounding.Ceil);
+        perKey = (daily - forStaking) / 4;
         vm.prank(ALICE);
         treasury.runDailyPayback();
         _logGas("runDailyPayback, a later payback, four Keys");
-        assertEq(staking.totalUsdcReceived() - receivedBefore, staked, "the daily 1% too");
+        assertEq(treasury.stakingOwed(), owedBefore + forStaking, "the daily 1% set aside too");
+    }
+
+    /// @dev Bob, who holds no Key 1, sends what both paybacks owe into real staking, which counts it
+    /// as revenue from this fleet's manager under the trading payback tag.
+    function _sendToStaking(KeyfleetTradingManager fleet, uint256 owed) private {
+        KeyfleetTradingTreasury treasury = fleet.TREASURY();
+        uint256 receivedBefore = staking.totalUsdcReceived();
+        uint256 balanceBefore = usdc.balanceOf(address(treasury));
+        assertEq(treasury.stakingOwed(), owed);
+        vm.recordLogs();
+        vm.prank(BOB);
+        treasury.sendToStaking();
+        _logGas("sendToStaking, two paybacks' 1%");
+        assertEq(staking.totalUsdcReceived() - receivedBefore, owed, "1% counted as revenue by staking");
+        _assertDeposit(treasury, fleet, owed);
         assertEq(usdc.allowance(address(treasury), STAKING), 0, "no approval left");
+        assertEq(usdc.balanceOf(address(treasury)), balanceBefore - owed);
+        assertEq(treasury.stakingOwed(), 0);
     }
 
     /// @dev Alice claims both paybacks for Key 2 in real USDC.
@@ -191,7 +208,8 @@ contract KeyfleetTradingForkTest is Test {
         assertEq(usdc.balanceOf(ALICE) - aliceBefore, owed, "both paybacks claimed");
     }
 
-    /// @dev Key 1 passes to Bob, and the fleet's authority with it.
+    /// @dev Key 1 passes to Bob, and the fleet's authority with it, but not the creator's trading
+    /// wallet: Bob sends nothing until he names his own.
     function _passKeyOne(KeyfleetTradingManager fleet) private {
         uint256 first = _key(fleet, 1);
         vm.prank(CREATOR);
@@ -201,9 +219,13 @@ contract KeyfleetTradingForkTest is Test {
         vm.prank(CREATOR);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTradingTreasury.OnlyCreator.selector, CREATOR));
         treasury.sendToTrading(1);
+        assertEq(treasury.tradingWallet(), address(0), "the creator's desk is not Bob's");
+        vm.prank(BOB);
+        vm.expectRevert(KeyfleetTradingTreasury.NoTradingWallet.selector);
+        treasury.sendToTrading(1);
     }
 
-    /// @dev Bob closes; sales end; anyone pays back everything.
+    /// @dev Bob closes; sales end; anyone pays back everything and sends its 1% to staking.
     function _closeAndPayBackAll(KeyfleetTradingManager fleet) private {
         KeyfleetTradingTreasury treasury = fleet.TREASURY();
         vm.prank(BOB);
@@ -215,6 +237,7 @@ contract KeyfleetTradingForkTest is Test {
         vm.expectRevert(KeyfleetTradingManager.SalesEnded.selector);
         fleet.purchase(ALICE, type(uint256).max, block.timestamp, new bytes32[](0));
         treasury.paybackAll();
+        treasury.sendToStaking();
         assertLt(usdc.balanceOf(address(treasury)), 4, "less than a unit per Key stays");
         KeyfleetRewards rewards = fleet.REWARDS();
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(BASE_USDC), "the ledger holds what it owes");
@@ -271,27 +294,37 @@ contract KeyfleetTradingForkTest is Test {
         coordinator.addConsumer(subscriptionId, address(COLLECTION));
     }
 
-    /// @dev While its owner, the Regents Safe, has staking paused, every payback reverts and nothing
-    /// moves; once unpaused it goes through.
-    function test_aPausedStakingHoldsEveryPayback() public {
+    /// @dev While its owner, the Regents Safe, has real staking paused, every payback still pays the
+    /// Keys, the close and paying back everything included; only the send to staking waits, and
+    /// goes through once staking is unpaused.
+    function test_paybacksRunWhileRealStakingIsPaused() public {
         KeyfleetTradingManager fleet = _create();
         KeyfleetTradingTreasury treasury = fleet.TREASURY();
+        KeyfleetRewards rewards = fleet.REWARDS();
         vm.warp(block.timestamp + 2 days);
         assertEq(staking.owner(), SAFE, "the Regents Safe owns staking");
+        uint256 receivedBefore = staking.totalUsdcReceived();
 
         vm.prank(SAFE);
         staking.setPaused(true);
-        vm.prank(CREATOR);
-        vm.expectRevert();
+        vm.startPrank(CREATOR);
         treasury.payback(10e6);
-        vm.expectRevert();
+        treasury.close();
+        vm.stopPrank();
         treasury.runDailyPayback();
-        assertEq(usdc.balanceOf(address(treasury)), 25e6, "nothing moved");
+        treasury.paybackAll();
+        uint256 owed = treasury.stakingOwed();
+        assertEq(rewards.accrued(BASE_USDC, _key(fleet, 1)), usdc.balanceOf(address(rewards)), "the Keys were paid");
+        assertEq(treasury.available(), 0, "all of the fleet's own paid out");
+        vm.expectRevert();
+        treasury.sendToStaking();
+        assertEq(treasury.stakingOwed(), owed, "still owed while staking is paused");
 
         vm.prank(SAFE);
         staking.setPaused(false);
-        vm.prank(CREATOR);
-        treasury.payback(10e6);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived() - receivedBefore, owed, "staking got all it was owed");
+        assertEq(usdc.balanceOf(address(treasury)), 0);
     }
 
     function _create() private returns (KeyfleetTradingManager fleet) {

@@ -36,6 +36,13 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// registered as `FleetTechAccelerant` and takes that type's next number; the collection's
 /// `FleetRegistered` event names this factory, which is how a Trading Fleet is told apart. The
 /// factory holds no money and has no upgrade path and no pause.
+///
+/// A Trading Fleet is registered without a deck, and the default is that it never gets one. The
+/// collection lets its keeper record a deck for any fleet, and nothing here can refuse it. A deck
+/// is the keeper's choice, and a costly one: from then on every Key minted asks VRF for a draw that
+/// the Safe's subscription pays for, and anyone may ask one for each Key minted before. A creator
+/// can mint Keys at no cost, buying each and sending its price straight back out to their own
+/// trading wallet, so with a deck they can make the Safe pay for as many draws as they like.
 contract KeyfleetTradingFactory is IKeyfleetTradingFactory, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
@@ -68,7 +75,7 @@ contract KeyfleetTradingFactory is IKeyfleetTradingFactory, ReentrancyGuardTrans
     KeyfleetShards public immutable SHARDS;
     /// @notice The USDC every Key is paid in.
     IERC20 public immutable USDC;
-    /// @notice REGENT revenue staking, which receives 1% of every payback.
+    /// @notice REGENT revenue staking, which is owed 1% of every payback.
     IRegentRevenueStaking public immutable REGENT_STAKING;
     /// @notice Deploys each Trading Fleet's manager.
     KeyfleetDeployer public immutable MANAGER_DEPLOYER;
@@ -157,9 +164,9 @@ contract KeyfleetTradingFactory is IKeyfleetTradingFactory, ReentrancyGuardTrans
     /// @notice Creates a Trading Fleet on the caller's terms and sells its Key 1 to the caller at the
     /// first price, once the collection's last phase has opened.
     /// @dev The creator must have approved this factory for the first price, which goes straight to
-    /// the new treasury. The fleet is registered without a deck; the keeper records it later, and
-    /// Key 1 waits for its draw until then. Locked, so the creator's `onERC721Received` cannot create
-    /// another fleet from inside this one.
+    /// the new treasury. The fleet is registered without a deck and keeps none unless the keeper
+    /// records one. Locked, so the creator's `onERC721Received` cannot create another fleet from
+    /// inside this one.
     function create(TradingTerms calldata terms) external nonReentrant returns (uint256 fleetId, uint256 tokenId) {
         uint8 phase = KEYS.phase();
         if (phase != KEYS.FINAL_PHASE() || block.timestamp < KEYS.phaseOpensAt()) revert CreationClosed(phase);

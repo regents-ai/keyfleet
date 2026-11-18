@@ -20,7 +20,8 @@ import {KeyfleetWiring} from "./KeyfleetWiring.sol";
 /// tells it about every move of one of them.
 ///
 /// The creator is whoever holds the fleet's Key 1 at the moment of each call, read from the
-/// collection, never stored: when Key 1 changes hands, the fleet's authority goes with it. Only the
+/// collection, never stored: when Key 1 changes hands, the fleet's authority goes with it, so Key 1
+/// must never be lent or held by a contract that lets another account act as its holder. Only the
 /// creator may change the price, the step and the profile. The step is in hundredths of a percent,
 /// from 0 to 100%. Keys sell in order, each for the price at that moment, all of which goes to the
 /// fleet's treasury in the purchase: nothing is taken and nothing is converted. After every sale the

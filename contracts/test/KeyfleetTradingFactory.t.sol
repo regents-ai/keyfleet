@@ -6,11 +6,12 @@ import {KeyfleetDeployer} from "../src/KeyfleetDeployers.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTradingFactory} from "../src/KeyfleetTradingFactory.sol";
 import {KeyfleetTradingManager} from "../src/KeyfleetTradingManager.sol";
 import {KeyfleetTradingTreasury} from "../src/KeyfleetTradingTreasury.sol";
 import {TradingWiring} from "../src/KeyfleetTradingWiring.sol";
-import {FleetWiring, IKeyfleetFactory} from "../src/KeyfleetWiring.sol";
+import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "../src/KeyfleetWiring.sol";
 import {KeyfleetTradingFixture} from "./helpers/KeyfleetTradingFixture.sol";
 import {MockToken} from "./mocks/MockToken.sol";
 
@@ -35,6 +36,33 @@ contract ReenteringTradingCreator {
     function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
         if (_reenter) _factory.create(_terms);
         return this.onERC721Received.selector;
+    }
+}
+
+/// @dev A deployer of anyone's that names the real trading factory as its own, as the real
+/// deployers do, and builds a fleet's contracts directly.
+contract SpoofTradingDeployer {
+    address private immutable _factory;
+
+    constructor(address factory) {
+        _factory = factory;
+    }
+
+    // forge-lint: disable-next-line(mixed-case-function)
+    function FACTORY() external view returns (address) {
+        return _factory;
+    }
+
+    function deployManager() external returns (address) {
+        return address(new KeyfleetTradingManager());
+    }
+
+    function deployTreasury() external returns (address) {
+        return address(new KeyfleetTradingTreasury());
+    }
+
+    function deployRewards() external returns (address) {
+        return address(new KeyfleetRewards());
     }
 }
 
@@ -283,11 +311,29 @@ contract KeyfleetTradingFactoryTest is KeyfleetTradingFixture {
         assertEq(usdc.balanceOf(address(reenterer)), FIRST_PRICE);
     }
 
+    /// @dev Outside a creation the factory holds no wiring, so each of a fleet's three contracts
+    /// refuses to be built, whether by the factory's own deployer at the next fleet's address or by
+    /// a deployer of anyone's that names the real factory.
     function test_managerTreasuryAndLedgerCannotBeDeployedOutsideACreation() public {
-        vm.expectRevert();
-        new KeyfleetTradingManager();
-        vm.expectRevert();
-        new KeyfleetTradingTreasury();
+        uint256 next = keys.nextFleetId(trading.PRESET());
+        (address manager, address treasury_, address rewards_) = trading.predict(next);
+        KeyfleetDeployer[3] memory deployers =
+            [trading.MANAGER_DEPLOYER(), trading.TREASURY_DEPLOYER(), trading.REWARDS_DEPLOYER()];
+        address[3] memory predicted = [manager, treasury_, rewards_];
+        for (uint256 i = 0; i < 3; ++i) {
+            vm.prank(address(trading));
+            vm.expectRevert(abi.encodeWithSelector(KeyfleetWiring.NotWired.selector, predicted[i]));
+            deployers[i].deploy(next);
+        }
+
+        SpoofTradingDeployer spoof = new SpoofTradingDeployer(address(trading));
+        address at = vm.computeCreateAddress(address(spoof), vm.getNonce(address(spoof)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetWiring.NotWired.selector, at));
+        spoof.deployManager();
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetWiring.NotWired.selector, at));
+        spoof.deployTreasury();
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetWiring.NotWired.selector, at));
+        spoof.deployRewards();
     }
 
     function testFuzz_createAcceptsEveryTermInRange(uint256 firstPrice, uint256 stepBps, uint256 dailyBps, uint256 cap)

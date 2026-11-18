@@ -30,6 +30,17 @@ contract ReenteringBuyer {
     }
 }
 
+/// @dev Answers every call, `balanceOf` included, with 31 bytes of 0xff: one byte short of a whole
+/// word.
+contract ShortAnswerToken {
+    fallback() external {
+        assembly ("memory-safe") {
+            mstore(0, not(0))
+            return(0, 31)
+        }
+    }
+}
+
 contract KeyfleetTradingManagerTest is KeyfleetTradingFixture {
     address internal stranger = makeAddr("stranger");
 
@@ -182,6 +193,25 @@ contract KeyfleetTradingManagerTest is KeyfleetTradingFixture {
         assertTrue(fleet.meetsRequirements(stranger, new bytes32[](0)));
         assertFalse(fleet.meetsRequirements(buyer, new bytes32[](0)));
         _tbuy(stranger);
+    }
+
+    /// @dev An NFT or token requirement whose `balanceOf` answers with less than a whole word is
+    /// not met, however large the bytes it does answer.
+    function test_aRequirementAnsweringTooLittleDataIsNotMet() public {
+        address short = address(new ShortAnswerToken());
+        KeyfleetTradingFactory.TradingTerms memory terms = _tradingTerms(FIRST_PRICE, STEP_BPS, DAILY_BPS, 0);
+        terms.requirements.nft = short;
+        _createTrading(terms);
+        assertFalse(fleet.meetsRequirements(stranger, new bytes32[](0)));
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetTradingManager.RequirementNotMet.selector, stranger));
+        fleet.purchase(stranger, type(uint256).max, block.timestamp, new bytes32[](0));
+
+        terms = _tradingTerms(FIRST_PRICE, STEP_BPS, DAILY_BPS, 0);
+        terms.requirements.token = short;
+        terms.requirements.tokenMin = 1;
+        _createTrading(terms);
+        assertFalse(fleet.meetsRequirements(stranger, new bytes32[](0)));
     }
 
     function test_requirementsAreSetOnceAndKept() public {
@@ -350,21 +380,44 @@ contract KeyfleetTradingManagerTest is KeyfleetTradingFixture {
         assertEq(fleet.matureKeys(), 3);
     }
 
-    function testFuzz_matureKeysMatchesEveryKeysMintTime(uint8 count, uint32 gap, uint32 later) public {
+    /// @dev Keys bought with a gap of their own before each, a quarter of them in the same second as
+    /// the one before: at a random later time and at each Key's own edge, the second before and the
+    /// second it counts, the search agrees with a plain count over the mint times this test saw.
+    function testFuzz_matureKeysMatchesEveryKeysMintTime(uint8 count, uint256 seed, uint32 later) public {
         count = uint8(bound(count, 1, 40));
-        for (uint256 i = 0; i < count; ++i) {
-            vm.warp(block.timestamp + bound(gap, 0, 1 days));
+        uint256[] memory mintedAt = new uint256[](uint256(count) + 2);
+        mintedAt[1] = block.timestamp;
+        for (uint256 n = 2; n <= uint256(count) + 1; ++n) {
+            uint256 r = uint256(keccak256(abi.encode(seed, n)));
+            vm.warp(block.timestamp + (r % 4 == 0 ? 0 : (r >> 8) % 3 days));
             _tbuy(stranger);
+            mintedAt[n] = block.timestamp;
         }
-        vm.warp(block.timestamp + bound(later, 0, 3 days));
-        uint256 expected;
-        for (uint256 n = 1; n <= fleet.totalMinted(); ++n) {
-            if (keys.mintedAt(_tkey(n)) + 2 days <= block.timestamp) expected = n;
+        uint256 end = block.timestamp + bound(later, 0, 3 days);
+        vm.warp(end);
+        assertEq(fleet.matureKeys(), _plainCount(mintedAt));
+        for (uint256 n = 1; n < mintedAt.length; ++n) {
+            for (uint256 d = 0; d < 2; ++d) {
+                vm.warp(mintedAt[n] + 2 days - 1 + d);
+                assertEq(fleet.matureKeys(), _plainCount(mintedAt));
+            }
         }
-        assertEq(fleet.matureKeys(), expected);
     }
 
     // --- price ------------------------------------------------------------------------
+
+    /// @dev The step's rise is rounded down: 33.33% of 1,000,003 units is 333,300.9999, so the next
+    /// price is 1,333,303, on paper and after a real sale.
+    function test_theStepRoundsDown() public {
+        assertEq(fleet.raised(1_000_003, 3_333), 1_333_303);
+        assertEq(fleet.raised(1_000_001, 1), 1_000_101);
+        vm.startPrank(creator);
+        fleet.setPrice(1_000_003);
+        fleet.setStep(3_333);
+        vm.stopPrank();
+        _tbuy(stranger);
+        assertEq(fleet.price(), 1_333_303);
+    }
 
     function test_priceStopsAtTheCeiling() public view {
         assertEq(fleet.raised(MAX_PRICE, 10_000), MAX_PRICE);
@@ -409,6 +462,13 @@ contract KeyfleetTradingManagerTest is KeyfleetTradingFixture {
             _tbuy(stranger);
             assertEq(usdc.balanceOf(address(treasury)), before + price);
             assertEq(fleet.price(), fleet.raised(price, fleet.stepBps()));
+        }
+    }
+
+    /// @dev The Keys counting now by a plain count: the last whose mint was two days ago or more.
+    function _plainCount(uint256[] memory mintedAt) private view returns (uint256 counting) {
+        for (uint256 n = 1; n < mintedAt.length; ++n) {
+            if (mintedAt[n] + 2 days <= block.timestamp) counting = n;
         }
     }
 

@@ -15,8 +15,10 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// @dev One transaction from one account: the trading factory, whose constructor reads the
 /// collection, the shard record, USDC and REGENT revenue staking from the existing factory and
 /// deploys its own three deployers. The existing factory is the one the deployment step's latest
-/// broadcast on this chain created, and it must be the manifest's: the manifest's Safe, REGENT
-/// revenue staking and USDC.
+/// broadcast on this chain created, and nothing is deployed until it is proven to be the live one:
+/// its collection is the live collection (on Base, the address pinned here; on every chain, the
+/// manifest's Safe, name, symbol, metadata links and trait table), that collection lists it as a
+/// factory, and it has the manifest's Safe, REGENT revenue staking and USDC.
 ///
 /// The trading factory can register nothing until the Safe calls `KeyfleetKeys.addFactory` with
 /// its address. This script does not make that call: it runs it once from the Safe's address
@@ -29,8 +31,18 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// so the suite runs them against systems deployed in the test; `run` is the only part that reads a
 /// file or an environment variable.
 contract DeployTradingFactory is KeyfleetManifest {
+    /// @notice The live Keyfleet collection on Base, deployed by the release and read from Base on
+    /// 18 November 2026.
+    address public constant BASE_KEYFLEET_COLLECTION = 0xaBC959B463542497639adA57388c65D05AB34A30;
+
     /// @notice The existing factory has no code on this chain.
     error FactoryMissing(address factory);
+    /// @notice On Base, the existing factory's collection is not the live one.
+    error CollectionNotPinned(address collection);
+    /// @notice The existing factory's collection's `field` differs from the manifest's.
+    error CollectionMismatch(string field);
+    /// @notice The collection does not list the existing factory as one of its factories.
+    error FactoryNotListed(address factory, address collection);
     /// @notice The existing factory's `field` differs from the manifest's.
     error FactoryMismatch(string field);
 
@@ -60,12 +72,24 @@ contract DeployTradingFactory is KeyfleetManifest {
         console2.log(new KeyfleetSafeSteps().safeBatch(manifest.bindings.safe, call));
     }
 
-    /// @notice Deploys the trading factory on `factory`, once `factory` is checked against the
-    /// manifest.
+    /// @notice Deploys the trading factory on `factory`, once `factory` is proven to be the live
+    /// collection's and checked against the manifest.
     /// @dev Reads no file and no environment variable, so this is the function the suite runs.
     function deploy(Manifest memory manifest, KeyfleetFactory factory) public returns (KeyfleetTradingFactory) {
         _requireManifestFitsChain(manifest);
         if (address(factory).code.length == 0) revert FactoryMissing(address(factory));
+        KeyfleetKeys keys = factory.KEYS();
+        if (block.chainid == BASE_CHAIN_ID && address(keys) != BASE_KEYFLEET_COLLECTION) {
+            revert CollectionNotPinned(address(keys));
+        }
+        KeyfleetKeys.Collection memory collection = manifest.bindings.collection;
+        _collection(keys.SAFE() == manifest.bindings.safe, "safe");
+        _collection(_equal(keys.name(), collection.name), "name");
+        _collection(_equal(keys.symbol(), collection.symbol), "symbol");
+        _collection(_equal(keys.baseTokenURI(), collection.baseTokenURI), "baseTokenURI");
+        _collection(_equal(keys.contractURI(), collection.contractURI), "contractURI");
+        _collection(keys.TRAIT_TABLE_HASH() == manifest.bindings.traitTableHash, "traitTableHash");
+        if (!keys.isFactory(address(factory))) revert FactoryNotListed(address(factory), address(keys));
         _match(factory.SAFE() == manifest.bindings.safe, "safe");
         _match(factory.REGENT_STAKING() == manifest.bindings.staking, "regentStaking");
         _match(address(factory.USDC()) == manifest.bindings.route.usdc, "route.usdc");
@@ -79,6 +103,10 @@ contract DeployTradingFactory is KeyfleetManifest {
             to: address(trading.KEYS()),
             data: abi.encodeCall(KeyfleetKeys.addFactory, (address(trading)))
         });
+    }
+
+    function _collection(bool matches, string memory field) private pure {
+        if (!matches) revert CollectionMismatch(field);
     }
 
     function _match(bool matches, string memory field) private pure {

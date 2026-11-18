@@ -11761,3 +11761,44 @@ step's report).
 - The contract size table in `contracts/README.md` now matches the build; the rows for the
   existing factory and the key collection were out of date. Every existing contract still
   compiles to the same bytes.
+
+## 2026-11-18 — Trading Fleets: fixes from the hostile review
+
+- Paybacks no longer wait on REGENT revenue staking. A payback now only sets staking's 1%
+  (rounded up) aside in the treasury, counted as `stakingOwed`; no creator send and no payback
+  can spend it or count it as the fleet's money, and the treasury always holds at least that
+  much. Anyone may send what is owed on to staking with the new `sendToStaking`, with the same
+  tag and source, an exact approval and no allowance left after. The Keys' 99% is paid on every
+  payback while staking is paused, refuses or misbehaves; staking's part waits until it takes
+  it. Nothing sends it on by itself.
+- Each holder of Key 1 names their own trading wallet. Once Key 1 changes hands nothing can be
+  sent to trading until the new holder names a wallet themselves. A holder who gets Key 1 back
+  finds their own earlier wallet still named.
+- `script/DeployTradingFactory.s.sol` now proves, before deploying, that the factory is the
+  live collection's: on Base its collection must be the live one at
+  `0xaBC959B463542497639adA57388c65D05AB34A30`; on every chain the collection's Safe, name,
+  symbol, links and trait table must be the manifest's and the collection must list the
+  factory. Each refusal has its own named error. A dry run against Base, with nothing sent,
+  passes every check for the live factory.
+- Written down, no code changed for them: a deck on a Trading Fleet is the keeper's choice, each
+  Key then costs the Regents Safe a draw and the creator can mint Keys at no cost, so the default
+  is no deck (the trading contracts cannot refuse a deck without changing the collection); the
+  daily payback is a share of what is in the treasury at the run and a creator can make it pay
+  almost nothing; whoever holds Key 1 for one call can empty the treasury, so it must never be
+  lent; a lost Key 1 leaves only the daily payback; after the close less than one unit per Key
+  stays for good; the 1% is at most one unit over each time.
+- Tests: the invariant suite now keeps its own model (each Key's mint time, holder and
+  earnings, each holder's credit, every USDC flow), checks every Key and holder against it,
+  runs over a staking stand-in that pauses, misbehaves or calls back in, and buys up to 200
+  Keys; eight deliberate faults put into the contracts were each caught. New tests for a
+  requirement token that answers too little data, the price step rounding down, the lock on
+  paying everything back, deployers called outside a creation, and Key mint times that each
+  differ. The gas test runs in every suite run.
+- Gas, each whole transaction, before and after. Over stand-ins at 1, 100 and 10,000 Keys: the
+  creator's payback 368,053 / 330,893 / 378,553 → 258,911 / 292,951 / 340,611; the daily
+  payback 177,746 / 211,786 / 259,446 → 122,669 / 156,709 / 204,369; the new `sendToStaking`
+  169,040 / 97,840 / 97,840. On a fork of Base: the creator's payback 354,027 → 273,143, the
+  daily payback 205,330 → 136,901, `sendToStaking` 147,282.
+- Unchanged, waiting on the founder: how a payback is split between early and late Keys.
+- Every existing contract still compiles to the same bytes (31 compared). Nothing was deployed,
+  signed or sent.

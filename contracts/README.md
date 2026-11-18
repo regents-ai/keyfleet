@@ -29,7 +29,7 @@ creator trades from and pays back from, and the same `KeyfleetRewards` ledger
 | `KeyfleetTradingFactory` | one | Nothing of value; creates Trading Fleets in the same collection |
 | three trading deployers | one each | Nothing; each holds one Trading Fleet contract's creation code (the third is another `KeyfleetRewardsDeployer`) |
 | `KeyfleetTradingManager` | one per Trading Fleet | The price of the next key, the step, the key cap, keys minted, name, description, image link, joining requirements |
-| `KeyfleetTradingTreasury` | one per Trading Fleet | The fleet's USDC, the trading wallet, the daily payback rate, its last run, when the fleet closed |
+| `KeyfleetTradingTreasury` | one per Trading Fleet | The fleet's USDC, what of it is owed to REGENT revenue staking, the trading wallet each holder of key 1 named, the daily payback rate, its last run, when the fleet closed |
 
 `KeyfleetPresets` is a pure library holding every price, supply and
 purchase-split rule, with Classic's price table in the generated
@@ -604,11 +604,11 @@ per contract. Measured with `forge build --sizes`:
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
-| `KeyfleetTradingFactory` | 4,993 | 35,038 |
+| `KeyfleetTradingFactory` | 4,993 | 35,147 |
 | `KeyfleetTradingManager` | 8,530 | 9,981 |
 | `KeyfleetTradingManagerDeployer` | 10,471 | 10,602 |
-| `KeyfleetTradingTreasury` | 5,737 | 6,886 |
-| `KeyfleetTradingTreasuryDeployer` | 7,376 | 7,507 |
+| `KeyfleetTradingTreasury` | 5,860 | 6,995 |
+| `KeyfleetTradingTreasuryDeployer` | 7,485 | 7,616 |
 | `KeyfleetTreasury` | 11,951 | 14,050 |
 | `KeyfleetTreasuryDeployer` | 14,540 | 14,671 |
 | `KeyfleetVotes` | 19,574 | 21,188 |
@@ -1598,8 +1598,20 @@ contract checks its own terms as it is deployed: the manager the price
 (`ProfileInvalid`) and requirements (`RequirementsInvalid`), the treasury the
 daily payback (`DailyPaybackInvalid`). Any failure undoes the whole creation.
 `create` is locked, so key 1's `onERC721Received` cannot create another fleet
-from inside it. Key 1 waits for its draw until the keeper records a deck, as on
-every fleet created in phase 4.
+from inside it.
+
+A Trading Fleet is registered without a deck, and the default is that it never
+gets one. The collection lets its keeper record a deck for any fleet
+(`setDeck`), and nothing in the trading contracts can refuse it: `setDeck` tells
+no fleet's manager, so the most a manager could do is stop selling once it saw a
+deck, which would end its sales for good and still leave anyone free to ask a
+draw for every key minted before. A deck on a Trading Fleet is therefore the
+keeper's choice alone. With one, every key minted from then on asks the
+collection's randomness for a draw, paid by the Regents Safe's subscription, and
+anyone may ask one for each key minted before. The fleet's creator can mint keys
+at no cost, since a purchase pays the treasury and the creator can send that
+straight back out to their own trading wallet and buy again, so with a deck the
+creator could make the Safe pay for as many draws as they like.
 
 The collection has five fixed fleet types and no Trading type, so every Trading
 Fleet is registered as `FleetTechAccelerant` and takes the next Accelerant
@@ -1635,36 +1647,57 @@ keys 1 to that number, by a binary search over the collection's mint times.
 
 ### Paybacks
 
-`KeyfleetTradingTreasury` holds USDC only and takes no ETH. Only the creator may
-name the trading wallet (`setTradingWallet`, `TradingWalletNamed`), send any
-amount of the USDC held to it while the fleet is open (`sendToTrading`,
-`SentToTrading(wallet, amount)`; `NoTradingWallet`, `FleetClosed`,
-`AboveBalance`), start a payback of any amount (`payback`) and close the fleet,
-once (`close`, `Closed`). USDC comes back by a plain transfer to the treasury
-from anyone; no function is needed. Nothing else moves USDC out of the
-treasury.
+`KeyfleetTradingTreasury` holds USDC only and takes no ETH. Its USDC is of two
+kinds: `stakingOwed`, the part of past paybacks owed to REGENT revenue staking,
+and the rest, the fleet's own (`available()`). Only the fleet's own may be sent
+to trading or paid back; nothing the creator does, and no payback, can spend
+what is owed to staking or count it as the fleet's, so the treasury always holds
+at least `stakingOwed`.
 
-Every payback runs one routine. 1% of its amount, rounded up, goes into REGENT
-revenue staking through `depositUSDC`, tagged `keccak256("keyfleet.trading_payback")`
-with the fleet's manager as the source reference, through an exact approval the
-deposit uses up (`StakingDepositFailed` if staking takes anything else or leaves
-an approval). The rest is shared equally among the keys that count: the same
-whole amount per key goes to the ledger and is added with `fundSplit`, while
-`splitInProgress()` is true for that call only. What does not divide evenly
-stays in the treasury. With no key that counts (`NoKeysCount`), or too little
-for one unit per key (`PaybackTooSmall`), the payback reverts and nothing moves.
-`PaidBack(by, kind, amount, staked, perKey, keys)` says who started it and
-whether it was the creator's, the daily one or one after the close.
+Only the creator may name a trading wallet (`setTradingWallet`,
+`TradingWalletNamed(holder, wallet)`), send any amount of the fleet's own USDC
+to it while the fleet is open (`sendToTrading`, `SentToTrading(wallet, amount)`;
+`NoTradingWallet`, `FleetClosed`, `AboveAvailable(amount, available)`), start a
+payback of any amount of it (`payback`) and close the fleet, once (`close`,
+`Closed`). Each holder of key 1 names their own wallet (`tradingWalletOf(holder)`;
+`tradingWallet()` reads the current holder's): a wallet one holder named is never
+used for another, so once key 1 changes hands nothing can be sent to trading
+until its new holder names a wallet themselves. A holder who gets key 1 back
+finds their own earlier wallet still named. USDC comes back by a plain transfer
+to the treasury from anyone; no function is needed. Nothing else moves USDC out
+of the treasury but a payback and the send to staking.
+
+Every payback runs one routine. 1% of its amount, rounded up (so at most one
+unit over 1% each time), is set aside for REGENT revenue staking: it is added to
+`stakingOwed` and stays in the treasury. The rest is shared equally among the
+keys that count: the same whole amount per key goes to the ledger and is added
+with `fundSplit`, while `splitInProgress()` is true for that call only. What does
+not divide evenly stays in the treasury as the fleet's own. With no key that
+counts (`NoKeysCount`), or too little for one unit per key (`PaybackTooSmall`),
+the payback reverts and nothing moves. `PaidBack(by, kind, amount, forStaking,
+perKey, keys)` says who started it and whether it was the creator's, the daily
+one or one after the close. No payback calls staking, so nothing staking does
+can hold one back: the keys' 99% is paid whatever staking does.
+
+Anyone may send what is owed on to staking at any time, open or closed, with
+`sendToStaking`: all of `stakingOwed` goes into REGENT revenue staking through
+`depositUSDC`, tagged `keccak256("keyfleet.trading_payback")` with the fleet's
+manager as the source reference, through an exact approval the deposit must use
+up (`StakingDepositFailed` if staking takes anything else, reports anything else
+or leaves an approval), and `SentToStaking(by, amount)` is emitted. It is locked
+with every function that moves USDC, so staking cannot call back into a payback
+or a send while the owed USDC is still in the treasury. While staking refuses,
+it reverts and the amount stays owed; nothing sends it on by itself.
 
 Anyone may run the guaranteed daily payback, `runDailyPayback`: the fleet's
-daily rate times the USDC held at that moment, rounded down, once a day has
-passed since its last run, or since key 1's mint before its first run
-(`DailyNotDue(dueAt)`; `nextDailyAt()` reads it), the same rule as every fleet's
-daily split. A day nobody runs it is not made up, and a run that reverts uses up
-nothing.
+daily rate times the fleet's own USDC in the treasury at the moment it runs,
+rounded down, once a day has passed since its last run, or since key 1's mint
+before its first run (`DailyNotDue(dueAt)`; `nextDailyAt()` reads it), the same
+rule as every fleet's daily split. A day nobody runs it is not made up, and a
+run that reverts uses up nothing.
 
 Once the fleet is closed, no key is sold and nothing goes to the trading wallet
-again, and anyone may pay back everything the treasury holds with `paybackAll`,
+again, and anyone may pay back all of the fleet's own USDC with `paybackAll`,
 again and again as USDC comes back. The creator's payback and the daily one keep
 working too. From the close on, every payback waits until every minted key
 counts (`KeysMaturing(counting, minted)`), at most two days after the last sale,
@@ -1691,23 +1724,35 @@ Nothing shared calls a Trading Fleet's manager for anything it lacks:
 
 ### Limits
 
-- While the Regents Safe has REGENT revenue staking paused, every payback
-  reverts, the daily one included, and the creator still controls the money.
-- The daily payback is a share of what the treasury holds at the run. The
-  creator may send everything to the trading wallet first, and then the day's
-  payback is a share of nothing.
-- If key 1 goes to an address that can never act, no one can ever close the
-  fleet, name or change the trading wallet, or send to it; anyone may still run
-  the daily payback.
+- The daily payback is the fleet's daily rate of the fleet's own USDC in the
+  treasury when it runs, once a day at most; a missed day is not made up. It is
+  a share of what is there, not of what the fleet has made. A creator who keeps
+  the money out in trading, or sends it out before the run and back after it,
+  makes the daily payback pay almost nothing.
+- Whoever holds key 1 for the length of one call can empty the treasury of the
+  fleet's own USDC: they may name themselves the trading wallet and send it
+  everything in that call. Key 1 must never be lent, or held by a contract that
+  would let another account act as its holder, even for one call.
+- If key 1 is lost, sent to an address that can never act, no one can ever
+  close the fleet, pay back at will, name a trading wallet or send to one; only
+  the daily payback ever runs again, by anyone.
+- Nothing sends staking its 1% by itself: it stays owed in the treasury until
+  someone calls `sendToStaking`, and while the Regents Safe has REGENT revenue
+  staking paused that call reverts. The keys' paybacks run either way.
+- After the close, `paybackAll` cannot give every key one more whole unit of
+  what is left, so less than one unit per key stays in the treasury for good,
+  besides what is owed to staking until it is sent.
+- Staking's 1% is rounded up, so each payback sets aside at most one unit more
+  than 1% of its amount.
 - Any token but USDC sent to the treasury, and USDC sent straight to the ledger,
   stays where it is for good.
-- The deployed record lists a Trading Fleet's step, trading wallet and close as
-  they stand at the block it reads; the creator may change the first two at any
-  time, and the record is not rewritten when they do.
+- The deployed record lists a Trading Fleet's step, the trading wallet key 1's
+  current holder named and the close as they stand at the block it reads; the
+  creator may change the first two at any time, and the record is not rewritten
+  when they do. It does not list what the treasury owes staking.
 - Trading Fleets take fleet numbers and Accelerant numbers from the same counts
-  as every fleet. Once the keeper records a deck for one, each of its keys draws
-  through the collection's randomness subscription, which the Regents Safe pays
-  for, as for every fleet created in phase 4.
+  as every fleet. A deck on one is the keeper's choice, and the default is none
+  (see [Creation](#creation)).
 
 ## Deployment scripts
 
@@ -1806,7 +1851,8 @@ without six decimals, a zero keeper and a zero trait table hash.
   registered it under (always 2 or more, since Accelerant #1 is founding fleet
   3); `tradingFactory` and `tradingFactoryCodeHash`; `firstPrice`, `stepBps`,
   `dailyPaybackBps`, `keyCap` (zero for none), `closedAt` (zero while open) and
-  `tradingWallet` (zero until named); `deckHash` and `deckSize` (zero until the
+  `tradingWallet` (the one key 1's current holder named; zero until they name
+  one); `deckHash` and `deckSize` (zero until the
   keeper records a deck); `manager`, `treasury` and `rewards`, each with its
   `…CodeHash`; `name`, `description`, `imageLink`; `requirements`
   (`merkleRoot`, `nft`, `token`, `tokenMin`); and `stakingSourceTag`, the tag
@@ -1818,9 +1864,16 @@ without six decimals, a zero keeper and a zero trait table hash.
   live system and writes nothing. It sends one transaction from one account,
   about 7.4 million gas; the trading factory's constructor deploys its three
   deployers. It finds the existing factory in the deployment step's latest
-  broadcast on the chain and refuses one with no code (`FactoryMissing`) or
-  whose Safe, REGENT revenue staking or USDC is not the manifest's
-  (`FactoryMismatch(field)`). It then runs the Safe's
+  broadcast on the chain and, before deploying anything, proves it is the
+  factory of the live collection: it refuses one with no code
+  (`FactoryMissing`); on Base, one whose collection is not the live one at
+  `0xaBC959B463542497639adA57388c65D05AB34A30`, pinned in the script
+  (`CollectionNotPinned(collection)`); on every chain, one whose collection's
+  Safe, name, symbol, metadata links or trait table is not the manifest's
+  (`CollectionMismatch(field)`); one that collection does not list as a factory
+  (`FactoryNotListed(factory, collection)`); and one whose own Safe, REGENT
+  revenue staking or USDC is not the manifest's (`FactoryMismatch(field)`). It
+  then runs the Safe's
   `KeyfleetKeys.addFactory(tradingFactory)` call from the Safe's address
   against the run's copy of the chain, so a call that would revert stops it
   with the collection's own error, and prints the call, as its target, value
@@ -2026,16 +2079,18 @@ fleets of 1, 100 and 10,000 keys, all counting:
 
 | Call | 1 key | 100 keys | 10,000 keys |
 | --- | --- | --- | --- |
-| `create`, with key 1 | 5,359,239 | 5,342,163 | 5,342,163 |
-| `purchase`, the next key | 199,452 | 182,352 | 182,352 |
-| `payback` by the creator, the fleet's first | 368,053 | 330,893 | 378,553 |
-| `runDailyPayback`, a later payback | 177,746 | 211,786 | 259,446 |
+| `create`, with key 1 | 5,383,919 | 5,366,843 | 5,366,843 |
+| `purchase`, the next key | 199,491 | 182,391 | 182,391 |
+| `payback` by the creator, the fleet's first | 258,911 | 292,951 | 340,611 |
+| `runDailyPayback`, a later payback | 122,669 | 156,709 | 204,369 |
+| `sendToStaking`, both paybacks' 1% | 169,040 | 97,840 | 97,840 |
 
 Only `matureKeys`, a binary search over mint times read twice a payback, grows
 with the number of keys; the suite checks that 10,000 keys cost less than
 100,000 gas more than one. The 1-key fleet is the suite's first, so its
-creation, purchase and payback also make the stand-in staking's and USDC's
-first writes.
+creation, purchase and first send to staking also make the stand-in staking's
+and USDC's first writes. A payback no longer calls staking; one
+`sendToStaking` carries the 1% of any number of paybacks.
 
 On a fork of Base at its latest block (`test/fork/KeyfleetTradingFork.t.sol`,
 run with `--isolate`), with real USDC and REGENT revenue staking, on a fleet of
@@ -2043,14 +2098,15 @@ four keys:
 
 | Call | Gas |
 | --- | --- |
-| `create`, with key 1 | 5,321,482 |
-| `purchase`, key 3 | 208,087 |
-| `payback` by the creator, the fleet's first | 354,027 |
-| `runDailyPayback`, a later payback | 205,330 |
+| `create`, with key 1 | 5,346,162 |
+| `purchase`, key 3 | 208,126 |
+| `payback` by the creator, the fleet's first | 273,143 |
+| `runDailyPayback`, a later payback | 136,901 |
+| `sendToStaking`, both paybacks' 1% | 147,282 |
 
 Deploying the trading factory itself is one transaction of about 7.4 million
 gas: `forge script script/DeployTradingFactory.s.sol` on a fork of Base,
-without `--broadcast`, sets its gas limit at 9,640,913, Forge's estimate with
+without `--broadcast`, sets its gas limit at 9,672,434, Forge's estimate with
 its usual 30% margin.
 
 ## Checks
@@ -2078,7 +2134,22 @@ the Regents Club's gifts, and the phases), the money of the founding Cascade and
 money and authority. The presence suite runs
 256 runs, and the fleet, electorate and segregation suites 256 runs × depth 100.
 The Trading Fleet suite runs 32 runs × depth 100 every day and 256 runs × depth
-100 under the `deep` profile.
+100 under the `deep` profile. It keeps a model of its own and never asks the
+contracts what they should have done: each key's mint time and holder, a plain
+count of the keys that count, the 1% as the amount plus 99 over 100, every USDC
+flow in and out of the treasury, what is owed to staking, what each key has
+earned since it last moved or was claimed and what each holder was credited. It
+checks every key and every holder against that model, and runs over a REGENT
+staking stand-in that takes, pauses, takes too little, reports too much, takes
+nothing, or calls back into every treasury function that moves USDC, and that
+may itself hold key 1. Its fleet has a cap of 200 keys and buys up to 20 at a
+time; a run reaches the cap only sometimes, as each check walks every key after
+every call. Fleets of thousands of keys are left to the gas test, at 10,000
+keys, and to the manager's maturity fuzz.
+
+`test/KeyfleetTradingGas.t.sol` runs in every suite run, as each call's own gas;
+its whole-transaction figures come only with `--isolate` (see [Trading
+Fleets](#trading-fleets-1)).
 The two collection suites run short every day, 24 runs × depth 80 and
 24 runs × depth 40; the `deep` profile runs them at 256 runs × depth 100:
 
@@ -2123,8 +2194,10 @@ themselves unless `BASE_RPC_URL` is set:
   phases to the last with the release's Safe steps, deploys the trading factory
   with `DeployTradingFactory` and makes the Safe's call that script prints,
   then creates a fleet, sells keys, trades out and back, pays back by the
-  creator and daily into real staking, claims, passes key 1, closes and pays
-  back everything, and holds every payback while the Safe has staking paused.
+  creator and daily, sends staking its part into real staking, claims, passes
+  key 1 (after which nothing goes to trading until its new holder names a
+  wallet), closes and pays back everything, and keeps paying back while the
+  Safe has staking paused, sending staking its part once it is unpaused.
   It also runs the record over the live system with a Trading Fleet in it,
   after handing the VRF subscription to the Safe and listing the collection on
   the fork, as the record requires for any fleet past the founding ones.

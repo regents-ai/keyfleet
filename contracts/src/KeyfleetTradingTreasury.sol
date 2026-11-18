@@ -18,25 +18,41 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// fleet's manager and ledger. Every purchase pays its whole price here. It holds USDC only: it takes
 /// no ETH, and any other token sent here stays here for ever, as nothing can move it.
 ///
-/// The creator, whoever holds the fleet's Key 1 at the moment of the call, alone may name the trading
-/// wallet, send any amount of the USDC here to it, start a payback of any amount of it, and close
-/// the fleet. USDC comes back by a plain transfer to this address from anyone; no function is
-/// needed. Nothing else moves USDC out of here except a payback.
+/// The creator, whoever holds the fleet's Key 1 at the moment of the call, alone may name a trading
+/// wallet, send any amount of the fleet's own USDC to it, start a payback of any amount of it, and
+/// close the fleet. Each holder of Key 1 names their own wallet: a wallet named by an earlier holder
+/// is never used for a later one, so once Key 1 changes hands nothing goes to trading until its new
+/// holder names one. USDC comes back by a plain transfer to this address from anyone; no function is
+/// needed. Nothing else moves USDC out of here except a payback and the send to staking.
 ///
-/// Every payback runs one routine. 1% of its amount, rounded up, is deposited into REGENT revenue
-/// staking through `depositUSDC`, with an exact approval that the deposit uses up. The rest is
-/// shared equally among the Keys that count: the same whole amount per Key, sent to the fleet's
-/// ledger and added there with `fundSplit`, while `splitInProgress` is true for the length of that
-/// call only. What does not divide evenly stays here. With no Key that counts, or too little to give
-/// each one a whole unit, the payback reverts and nothing moves.
+/// Whoever holds Key 1 for the length of one call holds all of this: they may name themselves the
+/// trading wallet and send it everything in that call. Key 1 must never be lent, or held by a
+/// contract that would let another account act as its holder, even for one call. If Key 1 is lost,
+/// sent where nobody can use it, nobody can close the fleet or pay back at will, and only the daily
+/// payback ever runs again.
+///
+/// The fleet's own USDC is everything here less `stakingOwed`, the part of past paybacks owed to
+/// REGENT revenue staking (`available`). Every payback runs one routine. 1% of its amount, rounded up
+/// (so at most one unit over 1% each time), is set aside for staking: it is added to `stakingOwed`
+/// and stays here, where no creator send and no payback can spend or count it. The rest is shared
+/// equally among the Keys that count: the same whole amount per Key, sent to the fleet's ledger and
+/// added there with `fundSplit`, while `splitInProgress` is true for the length of that call only.
+/// What does not divide evenly stays here as the fleet's own. With no Key that counts, or too little
+/// to give each one a whole unit, the payback reverts and nothing moves. No payback calls staking,
+/// so nothing staking does can hold a payback back. Anyone may send what is owed on to staking at any
+/// time with `sendToStaking`; while staking refuses, it stays owed here.
 ///
 /// Anyone may run the guaranteed daily payback, `DAILY_PAYBACK_BPS` hundredths of a percent of the
-/// USDC here at that moment, once a day has passed since the last run, or since Key 1's mint before
-/// any run; a day nobody runs it is not made up, and a run that reverts uses up nothing. Once the
-/// creator closes the fleet, no Key is sold and nothing goes to the trading wallet again, and anyone
-/// may pay back everything here, again and again as USDC comes back. From the close on, every
-/// payback waits until every minted Key counts, so a Key bought just before the close shares in it.
-/// There is no administrator, no upgrade path and no pause.
+/// fleet's own USDC here at the moment it runs, once a day has passed since the last run, or since
+/// Key 1's mint before any run. A day nobody runs it is not made up, and a run that reverts uses up
+/// nothing. It pays a share of what is here, not of what the fleet has made: a creator who keeps the
+/// money out in trading, or sends it out and back around the run, makes it pay almost nothing.
+///
+/// Once the creator closes the fleet, no Key is sold and nothing goes to trading again, and anyone may
+/// pay back everything here, again and again as USDC comes back. From the close on, every payback
+/// waits until every minted Key counts, so a Key bought just before the close shares in it. What
+/// cannot give every Key one more whole unit stays here for good: less than one unit per Key, plus
+/// staking's rounding. There is no administrator, no upgrade path and no pause.
 contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using TransientSlot for *;
@@ -50,8 +66,8 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
 
     /// @notice Hundredths of a percent in a whole.
     uint256 public constant BPS = 10_000;
-    /// @notice The part of every payback deposited into REGENT revenue staking, in hundredths of a
-    /// percent: 1%, rounded up.
+    /// @notice The part of every payback owed to REGENT revenue staking, in hundredths of a percent:
+    /// 1%, rounded up.
     uint256 public constant STAKING_BPS = 100;
     /// @notice How long after the last run anyone may run the daily payback again.
     uint256 public constant DAILY_INTERVAL = 1 days;
@@ -79,12 +95,15 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
     /// from 10 to 200. It never changes.
     uint256 public immutable DAILY_PAYBACK_BPS;
 
-    /// @notice Where the creator sends USDC to trade; zero until the creator names one.
-    address public tradingWallet;
+    /// @notice USDC here owed to REGENT revenue staking: the staking part of every payback so far,
+    /// less what `sendToStaking` has sent. It is never the fleet's to send or pay back.
+    uint256 public stakingOwed;
     /// @notice When the daily payback last ran; zero before its first run.
     uint64 public lastDailyAt;
     /// @notice When the creator closed the fleet; zero while it is open.
     uint64 public closedAt;
+    /// @notice The trading wallet each holder of Key 1 named while holding it; zero for none.
+    mapping(address holder => address wallet) public tradingWalletOf;
 
     /// @notice Only the holder of the fleet's Key 1 may do this.
     error OnlyCreator(address caller);
@@ -94,14 +113,15 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
     error ZeroAddress();
     /// @notice A zero amount.
     error ZeroAmount();
-    /// @notice No trading wallet has been named.
+    /// @notice Key 1's current holder has named no trading wallet.
     error NoTradingWallet();
     /// @notice The fleet is closed.
     error FleetClosed();
     /// @notice The fleet is not closed.
     error FleetOpen();
-    /// @notice The amount is more than the treasury holds.
-    error AboveBalance(uint256 amount, uint256 balance);
+    /// @notice The amount is more than the fleet's own USDC here, which leaves out what is owed to
+    /// staking.
+    error AboveAvailable(uint256 amount, uint256 available);
     /// @notice The daily payback is not due: a day has not passed since the last run or Key 1's mint.
     error DailyNotDue(uint256 dueAt);
     /// @notice No Key counts yet.
@@ -113,16 +133,19 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
     /// @notice Staking did not take exactly the amount approved for it.
     error StakingDepositFailed(uint256 amount, uint256 received);
 
-    /// @notice The creator named the trading wallet.
-    event TradingWalletNamed(address indexed wallet);
+    /// @notice `holder`, holding Key 1, named `wallet` their trading wallet.
+    event TradingWalletNamed(address indexed holder, address indexed wallet);
     /// @notice The creator sent `amount` USDC to the trading wallet `wallet`.
     event SentToTrading(address indexed wallet, uint256 amount);
-    /// @notice A payback ran: `staked` went to REGENT revenue staking and `perKey` to each of the
-    /// `keys` Keys that count; the rest of `amount` stays here.
+    /// @notice A payback ran: `forStaking` was set aside for REGENT revenue staking and `perKey` went
+    /// to each of the `keys` Keys that count; the rest of `amount` stays here as the fleet's own.
     /// @param by Who started it.
     event PaidBack(
-        address indexed by, Payback indexed kind, uint256 amount, uint256 staked, uint256 perKey, uint256 keys
+        address indexed by, Payback indexed kind, uint256 amount, uint256 forStaking, uint256 perKey, uint256 keys
     );
+    /// @notice `amount`, everything owed to REGENT revenue staking, was deposited there.
+    /// @param by Who sent it.
+    event SentToStaking(address indexed by, uint256 amount);
     /// @notice The creator closed the fleet.
     event Closed(address indexed by);
 
@@ -164,32 +187,44 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
         return Math.max(lastDailyAt, firstMintAt) + DAILY_INTERVAL;
     }
 
-    // --- the creator -----------------------------------------------------
-
-    /// @notice Names the wallet the creator trades from. Only the creator.
-    function setTradingWallet(address wallet) external onlyCreator {
-        if (wallet == address(0)) revert ZeroAddress();
-        tradingWallet = wallet;
-        emit TradingWalletNamed(wallet);
+    /// @notice The fleet's own USDC here: everything held less what is owed to staking. Only this
+    /// may be sent to trading or paid back.
+    function available() public view returns (uint256) {
+        return USDC.balanceOf(address(this)) - stakingOwed;
     }
 
-    /// @notice Sends `amount` of the USDC here to the trading wallet. Only the creator, only while
-    /// the fleet is open and a trading wallet is named.
+    /// @notice The trading wallet Key 1's current holder named; zero until they name one.
+    function tradingWallet() external view returns (address) {
+        return tradingWalletOf[MANAGER.creator()];
+    }
+
+    // --- the creator -----------------------------------------------------
+
+    /// @notice Names the wallet the creator trades from, as theirs only: it is used while they hold
+    /// Key 1 and never for a later holder. Only the creator.
+    function setTradingWallet(address wallet) external onlyCreator {
+        if (wallet == address(0)) revert ZeroAddress();
+        tradingWalletOf[msg.sender] = wallet;
+        emit TradingWalletNamed(msg.sender, wallet);
+    }
+
+    /// @notice Sends `amount` of the fleet's own USDC to the trading wallet the creator named. Only
+    /// the creator, only while the fleet is open and once they have named a wallet.
     function sendToTrading(uint256 amount) external nonReentrant onlyCreator {
         if (closedAt != 0) revert FleetClosed();
-        address wallet = tradingWallet;
+        address wallet = tradingWalletOf[msg.sender];
         if (wallet == address(0)) revert NoTradingWallet();
         if (amount == 0) revert ZeroAmount();
-        uint256 balance = USDC.balanceOf(address(this));
-        if (amount > balance) revert AboveBalance(amount, balance);
+        uint256 own = available();
+        if (amount > own) revert AboveAvailable(amount, own);
         emit SentToTrading(wallet, amount);
         USDC.safeTransfer(wallet, amount);
     }
 
-    /// @notice Pays back `amount` of the USDC here: 1% to REGENT revenue staking and the rest
-    /// shared equally among the Keys that count. Only the creator.
+    /// @notice Pays back `amount` of the fleet's own USDC: 1% set aside for REGENT revenue staking
+    /// and the rest shared equally among the Keys that count. Only the creator.
     function payback(uint256 amount) external nonReentrant onlyCreator {
-        _payback(amount, Payback.Creator);
+        _payback(amount, available(), Payback.Creator);
     }
 
     /// @notice Closes the fleet, once: no Key is sold and nothing goes to the trading wallet again.
@@ -203,44 +238,57 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
     // --- anyone ----------------------------------------------------------
 
     /// @notice Runs the guaranteed daily payback: `DAILY_PAYBACK_BPS` hundredths of a percent of the
-    /// USDC here now, rounded down. Anyone may run it once it is due.
+    /// fleet's own USDC here now, rounded down. Anyone may run it once it is due.
     function runDailyPayback() external nonReentrant {
         uint256 dueAt = nextDailyAt();
         if (dueAt == 0 || block.timestamp < dueAt) revert DailyNotDue(dueAt);
         lastDailyAt = uint64(block.timestamp);
-        _payback(Math.mulDiv(USDC.balanceOf(address(this)), DAILY_PAYBACK_BPS, BPS), Payback.Daily);
+        uint256 own = available();
+        _payback(Math.mulDiv(own, DAILY_PAYBACK_BPS, BPS), own, Payback.Daily);
     }
 
-    /// @notice Pays back everything here. Anyone may, once the fleet is closed.
+    /// @notice Pays back all of the fleet's own USDC here. Anyone may, once the fleet is closed.
     function paybackAll() external nonReentrant {
         if (closedAt == 0) revert FleetOpen();
-        _payback(USDC.balanceOf(address(this)), Payback.Closed);
+        uint256 own = available();
+        _payback(own, own, Payback.Closed);
+    }
+
+    /// @notice Deposits everything owed to REGENT revenue staking there, through `depositUSDC` with
+    /// `STAKING_SOURCE_TAG` and the manager's address as source reference, and an exact approval
+    /// that the deposit must use up. Anyone may, at any time, open or closed. While staking refuses,
+    /// this reverts and the amount stays owed.
+    function sendToStaking() external nonReentrant {
+        uint256 owed = stakingOwed;
+        if (owed == 0) revert ZeroAmount();
+        stakingOwed = 0;
+        emit SentToStaking(msg.sender, owed);
+        USDC.forceApprove(address(REGENT_STAKING), owed);
+        uint256 received =
+            REGENT_STAKING.depositUSDC(owed, STAKING_SOURCE_TAG, bytes32(uint256(uint160(address(MANAGER)))));
+        if (received != owed || USDC.allowance(address(this), address(REGENT_STAKING)) != 0) {
+            revert StakingDepositFailed(owed, received);
+        }
     }
 
     // --- internals -------------------------------------------------------
 
-    /// @dev The one payback routine. Every check comes first; then the staking part is deposited,
-    /// the Keys' part sent to the ledger, and the ledger funded with the flag up for that call only.
-    function _payback(uint256 amount, Payback kind) private {
-        uint256 balance = USDC.balanceOf(address(this));
-        if (amount > balance) revert AboveBalance(amount, balance);
+    /// @dev The one payback routine, for `amount` of `own`, the fleet's own USDC. Every check comes
+    /// first; then the staking part is set aside, the Keys' part sent to the ledger, and the ledger
+    /// funded with the flag up for that call only.
+    function _payback(uint256 amount, uint256 own, Payback kind) private {
+        if (amount > own) revert AboveAvailable(amount, own);
         uint256 keys = MANAGER.matureKeys();
         if (keys == 0) revert NoKeysCount();
         if (closedAt != 0) {
             uint256 minted = MANAGER.totalMinted();
             if (keys != minted) revert KeysMaturing(keys, minted);
         }
-        uint256 staked = Math.mulDiv(amount, STAKING_BPS, BPS, Math.Rounding.Ceil);
-        uint256 perKey = (amount - staked) / keys;
+        uint256 forStaking = Math.mulDiv(amount, STAKING_BPS, BPS, Math.Rounding.Ceil);
+        uint256 perKey = (amount - forStaking) / keys;
         if (perKey == 0) revert PaybackTooSmall(amount, keys);
-        emit PaidBack(msg.sender, kind, amount, staked, perKey, keys);
-
-        USDC.forceApprove(address(REGENT_STAKING), staked);
-        uint256 received =
-            REGENT_STAKING.depositUSDC(staked, STAKING_SOURCE_TAG, bytes32(uint256(uint160(address(MANAGER)))));
-        if (received != staked || USDC.allowance(address(this), address(REGENT_STAKING)) != 0) {
-            revert StakingDepositFailed(staked, received);
-        }
+        stakingOwed += forStaking;
+        emit PaidBack(msg.sender, kind, amount, forStaking, perKey, keys);
 
         USDC.safeTransfer(address(REWARDS), perKey * keys);
         TransientSlot.BooleanSlot flag = SPLIT_IN_PROGRESS.asBoolean();

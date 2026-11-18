@@ -21,10 +21,12 @@ contract BulkBuyer {
     }
 }
 
-/// @dev The gas of a Trading Fleet's purchase, creator's payback and daily payback with 1, 100 and
-/// 10,000 Keys, on the stand-in system. Each figure is the whole transaction's gas, the 21,000 base
-/// and the calldata included, so it runs only when Forge runs each call as a transaction of its own
-/// (`--isolate`), and skips itself otherwise:
+/// @dev The gas of a Trading Fleet's creation, purchase, creator's payback, daily payback and send
+/// to staking with 1, 100 and 10,000 Keys, on the stand-in system, and the check that a payback's
+/// cost barely grows with the number of Keys. It runs in every suite run. There each figure is the
+/// call's own gas; the whole transaction's, the 21,000 base and the calldata included and every
+/// account cold, comes only when Forge runs each call as a transaction of its own, which is how
+/// the figures to quote are made:
 ///
 ///     forge test --match-contract KeyfleetTradingGasTest --isolate -vv
 ///
@@ -39,11 +41,6 @@ contract KeyfleetTradingGasTest is KeyfleetTradingFixture {
     }
 
     function test_gasAtOneHundredAndTenThousandKeys() public {
-        usdc.approve(address(this), 0);
-        if (vm.lastCallGas().gasTotalUsed < 21_000) {
-            vm.skip(true);
-            return;
-        }
         BulkBuyer bulk = new BulkBuyer();
         uint256[3] memory sizes = [uint256(1), 100, 10_000];
         uint256[3] memory paybackGas;
@@ -85,6 +82,10 @@ contract KeyfleetTradingGasTest is KeyfleetTradingFixture {
             dailyGas[s] = vm.lastCallGas().gasTotalUsed;
             _log("runDailyPayback, a later payback", size, dailyGas[s]);
             assertEq(fleet.matureKeys(), size);
+
+            treasury.sendToStaking();
+            _log("sendToStaking, two paybacks' 1%", size, vm.lastCallGas().gasTotalUsed);
+            assertEq(treasury.stakingOwed(), 0);
         }
         // Cost grows only with the binary search over mint times, read twice a payback.
         assertLt(paybackGas[2], paybackGas[0] + 100_000);
