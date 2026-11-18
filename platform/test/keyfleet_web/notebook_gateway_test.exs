@@ -5,13 +5,14 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   use ExUnit.Case, async: false
   use Oban.Testing, repo: Keyfleet.Repo
 
+  import Ecto.Query, only: [from: 2]
   import Phoenix.ConnTest
   import Plug.Conn
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks, Projects}
-  alias Keyfleet.Notebooks.{HubClient, MemberRequest, Roster}
+  alias Keyfleet.Notebooks.{HubClient, HubSilentError, MemberRequest, Roster}
   alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers, SignedAgentHelpers}
 
   @endpoint KeyfleetWeb.Endpoint
@@ -1567,10 +1568,17 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       )
 
     assert {answer.status, answer.body["error"]["code"]} == {502, "notebooks_unavailable"}
-    assert {:error, _no_connection} = Task.await(member, 7_000)
+    assert {:error, %HubSilentError{}} = Task.await(member, 7_000)
     assert :erlang.monotonic_time(:millisecond) - started < 7_000
     refute_received {:hub, "GET", ^held, _subject, _body}
     refute_received {:hub, "GET", "/api/v1/me", _subject, _body}
+
+    # Each request's wait reported once: the door's and the agent's.
+    assert [
+             "No connection to the notebook hub of #{@fleet} came free in time" <> _,
+             "No connection to the notebook hub of #{@fleet} came free in time" <> _
+           ] = hub_reports()
+
     Enum.each(sockets, &:gen_tcp.close/1)
   end
 
@@ -1587,6 +1595,10 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refused = get_notebook(@host, "/", cookie)
     assert json_response(refused, 502)["error"]["code"] == "notebooks_unavailable"
     refute_received {:hub, "POST", "/api/v1/projects/proj-fleet/members", _subject, _body}
+
+    assert ["No connection to the notebook hub of #{@fleet} came free in time" <> _] =
+             hub_reports()
+
     Task.await_many(held, 10_000)
   end
 
@@ -1939,6 +1951,18 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       Notebooks.newest_run_outputs(@fleet, ["nb-0000000000000003"], actor: %System{})
 
     kept.failure
+  end
+
+  # Every report of a silent hub saved with the site's errors, one message each.
+  # Saved errors are ErrorTracker's own tables, which no Ash resource reads.
+  defp hub_reports do
+    Keyfleet.Repo.all(
+      from(occurrence in ErrorTracker.Occurrence,
+        join: error in assoc(occurrence, :error),
+        where: error.kind == ^to_string(HubSilentError),
+        select: occurrence.reason
+      )
+    )
   end
 
   defp server(answer) do

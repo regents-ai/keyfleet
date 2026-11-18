@@ -701,6 +701,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
+  # No connection to the hub came free: nothing was sent, and the wait's end is
+  # reported already (`Notebooks.hub_run/2`).
+  defp answer_back({_request, %HubSilentError{}}, conn, _fleet_id, _subject, _done),
+    do: Refusal.json(conn, 502, "notebooks_unavailable")
+
   # A hub that fails once its answer has started streaming back can't have it
   # finished, so the connection is dropped (raised) and the answer, cut short,
   # never looks whole. Before that, nothing has been sent.

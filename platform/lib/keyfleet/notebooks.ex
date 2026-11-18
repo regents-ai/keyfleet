@@ -104,9 +104,10 @@ defmodule Keyfleet.Notebooks do
 
   @doc """
   Sends `request` to the fleet's hub, as `Req.run/2` does: `{request,
-  response}`, or `{request, exception}` when the hub didn't answer. That
-  includes no connection to the hub coming free within the wait for one,
-  which is also reported (`HubSilentError`).
+  response}`, or `{request, exception}` when the hub didn't answer. No
+  connection to the hub coming free within the wait for one is reported here,
+  once for every caller, and is the request's `HubSilentError`, which a
+  caller that reports the hub's failures leaves as reported.
   """
   def hub_run(fleet_id, %Req.Request{} = request) do
     Req.run(request)
@@ -117,12 +118,13 @@ defmodule Keyfleet.Notebooks do
     # Finch's words are caught. Match the named error once Finch has one.
     error in RuntimeError ->
       if String.starts_with?(error.message, @no_connection) do
-        HubSilentError.report(
-          "No connection to the notebook hub of #{fleet_id} came free in time: " <>
-            error.message
-        )
+        silent =
+          HubSilentError.report(
+            "No connection to the notebook hub of #{fleet_id} came free in time: " <>
+              error.message
+          )
 
-        {request, error}
+        {request, silent}
       else
         reraise error, __STACKTRACE__
       end
@@ -400,6 +402,9 @@ defmodule Keyfleet.Notebooks do
       {:spaces, {:error, _error}} ->
         {:error, :unavailable}
 
+      {:hub, {:error, {:hub, _address, %HubSilentError{}}}} ->
+        {:error, :unavailable}
+
       {:hub, {:error, reason}} ->
         HubSilentError.report(
           "The notebook hub of #{fleet_id} did not make a holder an editor: #{inspect(reason)}"
@@ -456,6 +461,9 @@ defmodule Keyfleet.Notebooks do
          Enum.any?(sessions, &(&1["notebook_id"] == notebook_id))}
     else
       {:spaces, {:error, _error}} ->
+        {:error, :unavailable}
+
+      {:hub, {:error, {:hub, _address, %HubSilentError{}}}} ->
         {:error, :unavailable}
 
       {:hub, {:error, reason}} ->

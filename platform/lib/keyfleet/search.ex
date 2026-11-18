@@ -262,6 +262,9 @@ defmodule Keyfleet.Search do
       {:ok, %Req.Response{status: status}} when status in [403, 404] ->
         []
 
+      {:error, %HubSilentError{}} ->
+        []
+
       unanswered ->
         HubSilentError.report(
           "The notebook hub of #{fleet_id} did not list #{space}'s notebooks for a search: " <>

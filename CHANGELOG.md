@@ -11228,3 +11228,14 @@ a scratch walk that is not kept.
   so a request waiting for the hub kept its megabytes; decoding in a short-lived process
   copies the decoded body back (about 512 KiB for a deep one) and splits each check across
   processes. Nothing is accepted or refused differently; no contract change.
+
+## 2026-11-17 — A busy notebook hub's wait is reported once for each request
+
+- The end of a wait for a hub connection was saved with the site's errors twice when the
+  caller also reported the hub's failures: the notebook door, letting a holder in, listing
+  open sessions and a search's notebook listing. It is now saved once, by
+  `Keyfleet.Notebooks.hub_run/2`, the one place every request to a hub passes, and so
+  the only one that sees it for agents' notebook runs and files and for background jobs.
+  `hub_run/2` hands it back as the request's `HubSilentError`, which the four callers
+  leave as reported. The door's wait test counts two saved reports for the door's request
+  and an agent's (three before), and letting someone in counts one (two before).
