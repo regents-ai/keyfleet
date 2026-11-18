@@ -1966,7 +1966,7 @@ features:
       wallet answers the switch request, the same press sends or signs: the
       page reads neither the network nor the wallet's account again to refuse
       it, and the step carries Base's chain id. A press the server has built
-      steps for reaches Privy's active wallet with the step as built, and every
+      steps for reaches the wallet open when it was pressed, with the step as built, and every
       press off Base asks again; nothing is remembered or held back. Privy connects every wallet on Base and offers
       no other network. A declined switch sends nothing and leaves "Press
       again to switch your wallet to Base. Nothing was sent." Any other failed
@@ -2032,6 +2032,14 @@ features:
       - Two presses that fail close together leave one note beside the buttons, the later one's.
       - Signed out, a browser agent's press leaves "Sign in to send this. Nothing was sent." beside the button, while the agent hears that the wallet app has no wallet open.
       - The browser agent hears "Sent" for any hash the wallet returns, before the server checks it. A hash the page then marks as not this page's step, such as one from held steps sent by a wallet that ignores the steps' sender, is still "Sent" to the agent.
+      - A press made just before the person lets the wallet go still reaches that wallet when its steps arrive. If the wallet then refuses, the page and the browser agent both say the wallet may have sent it, though nothing was sent.
+      - A press from steps the page already holds, made as another wallet opens, goes through the new wallet with the old wallet's address as sender. A wallet that refuses that is reported to the person and the agent as "may have sent", though nothing was sent.
+      - A person's own press that the server refuses, followed at once by a wallet switch, leaves no note beside the buttons. Nothing was sent and the button still works.
+      - The visit log records a press the server refused to build steps for as "ok", with no line for the refusal. The failure count is right.
+      - A wallet app that never answers holds the press, and a browser agent's call, open without end. A second press still reaches the wallet.
+      - The lost-connection line disappears at the page's next redraw.
+      - A claim made, then the page left and come back to, is not followed on the page.
+      - The wallet panel handles no report of a signature step. No Keyfleet page builds one today.
       - The walks press from another network with a stand-in wallet whose switch stands in for Privy's; a real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release.
       - The anvil lab's network, which Privy does not list, reaches Privy with the site's own name and node (a unit test checks this); the lab needs a real Privy sign-in, so it is not walked end to end, and it has not been tried by hand since this change.
       - WebKit is not run on the Mac.

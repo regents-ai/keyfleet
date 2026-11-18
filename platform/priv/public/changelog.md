@@ -6,9 +6,10 @@ Changes to Keyfleet, newest first.
 
 - **Wallet buttons.** A press now goes to the wallet that was open when you pressed it,
   even if you open another one before your wallet asks you to approve.
-- **Browser agents.** When your browser's own agent presses a wallet button and nothing
-  can be sent, the note beside the button now always says what the agent hears. If you
-  switch wallets at that moment, the note may clear, but it never says something else.
+- **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
+  can't send that press, for example because a wallet your account doesn't link is open,
+  the agent hears the note that appears beside the button. If you switch wallets at that
+  moment, the note may clear, but it never says something else.
 
 ## 17 November 2026
 
@@ -93,7 +94,8 @@ Changes to Keyfleet, newest first.
   its wallet buttons work again without a reload, and your account page knows your wallet
   again too. A button pressed while the page is getting its connection back, after you
   changed the form beside it, now reaches your wallet; before, that press sent nothing.
-  The Buy Key window still closes then; open it again to buy.
+  The Buy Key window still closes then, and a press made in it at that moment may not
+  reach your wallet; open it again to buy.
 - **Browser agents.** When your browser's own agent presses a wallet button while a wallet
   your account doesn't link is open, nothing is sent, and the agent now hears the same
   note you see beside the button, naming which of your wallets to switch to.

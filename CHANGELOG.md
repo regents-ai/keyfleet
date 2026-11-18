@@ -11677,8 +11677,9 @@ fails, as above.
 - Tests (ebaf892d1): the hook's ask test now has a server that builds steps only for the
   wallet the ask names, so it fails for the reason it names; the test that passed without
   the form it described is gone, as the shard walks cover that case. The agent's refusal
-  test in `platform/assets/test/page_tools.test.ts` no longer asserts a reason the code
-  never gives.
+  test in `platform/assets/test/page_tools.test.ts` no longer covers the words for a press
+  whose steps came back without the step. The code can still give that reason
+  (`press/4` in `platform/assets/js/hooks/onchain_steps.ts`); its words are untested.
 - Gaps (b40a9e55d): `verification/features.yml` lists the agent's open wallet gaps: an
   asked press that never answers once the page moves away, a dropped connection during the
   ask that makes the agent wait about 30 seconds, offline words the person never sees, two
@@ -11699,3 +11700,16 @@ wallet passed, both pass. Round two's walks pass 10 of 18: FINDING 2, 3, 4, 5, 6
 13 stay open as before, and BEFORE b fails because the ask now names the wallet (fixed on
 17 November). Round one's server file passes 6 of 7; the missing `step_signed` handler in
 `KeyfleetWeb.WalletPanel` is unchanged, as recorded earlier.
+
+Round five of the review (158802d85..a7697cd63) found nothing of medium severity or above
+and no code changed after it. Round four's two-notes finding is closed in every order
+tried, a refused press is counted once, and a press asked from the server goes to the
+wallet open at the press. What it found is written down, not fixed: the public 18 November
+line no longer says the note "always" says what the agent hears, and the 17 November line
+says a press in the Buy Key window as the page reconnects may not reach the wallet;
+`verification/features.yml` says a press reaches the wallet open when it was pressed, and
+lists eight more gaps (a press just before the wallet is let go, held steps pressed as
+another wallet opens, no note after a person's refused press and a quick switch, the visit
+log's "ok" for a refused press, a wallet app that never answers, the lost line gone at the
+next redraw, a claim not followed across a move away and back, no handler for a signature
+step's report).
