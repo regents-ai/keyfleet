@@ -586,14 +586,14 @@ defmodule KeyfleetWeb.WalletPanel do
   # Why `step` is not handed over from `pressed`, the panel as the press was
   # built, as the reply to the press, or nil when it is: its `reason`, its
   # `note` in the person's words, and its `cause`, "values" when a value the
-  # steps were built from is why, so the press with another one may go
-  # through, or "state" when the chain's or the page's own state alone is, so
-  # the same press goes through once that changes. No wallet here may send
-  # it: what is wrong with the form, or else the note for the wallet the
-  # press named. The chain's state makes it certain to fail: the words beside
-  # its button. The steps have none of that name, as when the form can't be
-  # built from: what is wrong with the form, or else that it can't be sent
-  # as it stands.
+  # press sent is why, a field the steps were built from or the choice
+  # pressed, so the press with another one may go through, or "state" when
+  # the chain's or the page's own state alone is, so the same press goes
+  # through once that changes. No wallet here may send it: what is wrong with
+  # the form, or else the note for the wallet the press named. The chain's
+  # state makes it certain to fail: the words beside its button. The steps
+  # have none of that name, as when the form can't be built from: what is
+  # wrong with the form, or else that it can't be sent as it stands.
   defp refusal(socket, pressed, step) do
     reason = blocked(pressed, step)
 
@@ -632,8 +632,13 @@ defmodule KeyfleetWeb.WalletPanel do
 
   # A step the chain's state holds back for a value typed is held back for
   # that value: the Key or Keys named, the wallet or the amount, when the
-  # steps were built from that field. Any other reason is the chain's state
-  # alone, such as a sale not open yet or a Key too new to propose with.
+  # steps were built from that field. A Yes or Abstain while the proposal
+  # takes only No is held back for the choice pressed, since No is taken.
+  # Any other reason is the chain's state alone, such as a sale not open yet,
+  # a Key too new to propose with, or a Buy REGENT that no amount from 1 USDC
+  # up gets through.
+  defp held_cause(_pressed, :only_no), do: "values"
+
   defp held_cause(pressed, reason) do
     read = read(pressed.flow, pressed.inputs)
     if Enum.any?(typed_for(reason), &Map.has_key?(read, &1)), do: "values", else: "state"
@@ -658,6 +663,7 @@ defmodule KeyfleetWeb.WalletPanel do
   defp typed_for(:not_your_key), do: ["key", "keys"]
   defp typed_for(:own_wallet), do: ["wallet"]
   defp typed_for(reason) when reason in [:above_outstanding, :not_enough], do: ["amount"]
+  defp typed_for({:too_big, nil}), do: []
   defp typed_for({:too_big, _largest}), do: ["amount"]
   defp typed_for(_reason), do: []
 

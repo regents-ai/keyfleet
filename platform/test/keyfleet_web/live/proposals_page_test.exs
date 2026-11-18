@@ -1890,6 +1890,42 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, ~s(#{amount}[value=""]))
     end
 
+    # The buyer has a piece open and turns down every whole USDC from 1 up to
+    # the amount typed: no amount goes through now, so the agent's press is
+    # held back for the network's state, not for the amount it sent.
+    test "the agent's Buy REGENT that no amount gets through is held back for the state",
+         %{conn: conn} do
+      buyer = "0x" <> String.duplicate("b0", 20)
+      usdc = 1_000_000
+
+      ChainViews.put!(
+        list_views() ++
+          [
+            {@fleet_contract, "pendingConversion()", [], {"uint256", [5 * usdc]}},
+            {@fleet_contract, "REGENT_BUYER()", [], {"address", [buyer]}},
+            {buyer, "queueLength()", [], {"uint256", [1]}},
+            {buyer, "nextPieceAt()", [], {"uint64", [0]}},
+            {buyer, "convert(uint256)", [usdc], :revert},
+            {buyer, "convert(uint256)", [3 * usdc], :revert}
+          ]
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
+      active!(view, "#proposals-convert", @holder)
+
+      for amount <- ["1", "3"] do
+        view
+        |> with_target("#proposals-convert")
+        |> render_hook("prepare_for_agent", %{
+          "form" => %{"amount" => amount},
+          "step" => "convert",
+          "address" => @holder
+        })
+
+        assert_reply(view, %{reason: "blocked", cause: "state"})
+      end
+    end
+
     # Signed out, the split preview and presence are read from the chain as
     # for a member and shown without their buttons. The Treasury tab shows a
     # visitor its figures only: sending the staking share and turning USDC
@@ -2063,6 +2099,36 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       })
 
       assert_reply(view, %{reason: "blocked", cause: "state"})
+    end
+
+    # A proposal waiting its day takes only No: the choice the agent's press
+    # sent is why its Yes or Abstain is held back, and its No goes through.
+    test "while a proposal takes only No, the agent's other choices are held back for the choice",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [1], @holder)
+      ProposalHelpers.proposal!(@fleet, 2)
+      ChainViews.put!(on_chain(2, :waiting) ++ owners([{1, @holder}]))
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), "#{@list}/2")
+      active!(view, "#proposal-vote-action", @holder)
+
+      vote = fn choice ->
+        view
+        |> with_target("#proposal-vote-action")
+        |> render_hook("prepare_for_agent", %{
+          "form" => %{},
+          "step" => choice,
+          "address" => @holder
+        })
+      end
+
+      for choice <- ["yes", "abstain"] do
+        vote.(choice)
+        assert_reply(view, %{reason: "blocked", cause: "values"})
+      end
+
+      vote.("no")
+      assert_reply(view, %{send: "no"})
     end
 
     # A ballot the contract turns down says why it may have been, and the
