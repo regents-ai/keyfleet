@@ -3,7 +3,7 @@ defmodule Keyfleet.Seasons.Coinbase do
   Coinbase's public market data, read with no account, key or secret: which
   products a season's picks may name, and a product's price at a boundary.
 
-  A product may be picked when Coinbase's list of products
+  A product may be picked when Coinbase's list of spot products
   (`GET /market/products`) shows it as spot, quoted in US dollars and open for
   trading (not disabled, trading not disabled, not view-only, not cancel-only,
   not limit-only, not in auction mode), with at least 1,000,000 US dollars
@@ -33,7 +33,8 @@ defmodule Keyfleet.Seasons.Coinbase do
   @doc "The ids of every product that may be picked now, `USDC` among them."
   @spec eligible() :: {:ok, [String.t()]} | {:error, term()}
   def eligible do
-    with {:ok, products} <- products([]), do: {:ok, [@usdc | eligible_ids(products)]}
+    with {:ok, products} <- products(product_type: "SPOT"),
+         do: {:ok, [@usdc | eligible_ids(products)]}
   end
 
   @doc "Which of `product_ids` may be picked now."

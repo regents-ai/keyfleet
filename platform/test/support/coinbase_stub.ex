@@ -88,10 +88,15 @@ defmodule Keyfleet.CoinbaseStub do
     })
   end
 
-  # The whole list on one page, or, asked for some ids, those of them it knows.
+  # The whole list of spot products on one page, or, asked for some ids, those
+  # of them it knows.
   defp listed(conn, products) do
-    case for {"product_ids", id} <- URI.query_decoder(conn.query_string), do: id do
+    query = conn.query_string |> URI.query_decoder() |> Enum.to_list()
+
+    case for {"product_ids", id} <- query, do: id do
       [] ->
+        {"product_type", "SPOT"} = List.keyfind(query, "product_type", 0)
+
         Req.Test.json(conn, %{
           "products" => products,
           "num_products" => length(products),

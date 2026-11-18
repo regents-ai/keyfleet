@@ -5,10 +5,10 @@ defmodule Keyfleet.Seasons.CoinList do
   One runs on each machine that serves pages.
 
   This is a reread on notice, one of the two shapes the `elixir-stack` skill
-  lets keep a shared reading: each minute `Keyfleet.SharedReading.Heal` asks
-  for the list to be read again, so Coinbase is asked at most once a minute
-  on each machine, however many picks arrive. It holds nothing, and it never
-  writes the database.
+  lets keep a shared reading: every ten minutes `Keyfleet.SharedReading.Heal`
+  asks for the list to be read again, so Coinbase is asked at most once in ten
+  minutes on each machine, however many picks arrive. It holds nothing, and it
+  never writes the database.
 
   The first read follows its start, so the site's start never waits on
   Coinbase. Until it has a reading, or while its last read failed, a pick is

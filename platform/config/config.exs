@@ -338,7 +338,7 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "project_cards"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}}
+      {"*/10 * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}}
     ]
   ],
   pruner: [max_age: {7, :days}],
