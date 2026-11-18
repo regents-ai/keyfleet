@@ -853,7 +853,7 @@ defmodule KeyfleetWeb.PollsLive do
       when is_map(params) do
     if choices_too_long?(params) do
       too_long =
-        {"The choices are too long: #{@longest_choices} characters at most.",
+        {"The choices are too long: #{Rules.grouped(@longest_choices)} characters at most.",
          [validation: :length, kind: :max, count: @longest_choices]}
 
       {:noreply, assign(socket, poll_form: form(params, choices: too_long), polls_notice: nil)}

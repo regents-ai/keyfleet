@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
   alias Keyfleet.Actors.Human
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Rules
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
@@ -203,7 +204,7 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
 
     assert too_long != "" and broken != ""
     assert too_long != broken
-    assert too_long =~ Integer.to_string(longest)
+    assert too_long =~ Rules.grouped(longest)
     assert Polls.list_polls!(@fleet, actor: human(@starter)) == []
   end
 
