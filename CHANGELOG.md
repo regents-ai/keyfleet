@@ -12108,3 +12108,21 @@ step's report).
   collection's listing are required before phase 3, no longer that randomness setup may be
   deferred. The suites that step to phase 3 hand the subscription over first; the step's own
   tests prove that phases 1 and 2 open whoever owns it, and that phases 3 and 4 each wait for it.
+
+## 2026-11-18 — The contract check's closing lines come from what Forge ran
+
+- The entry "The contract check says what it did not run" above says the closing lines say
+  whether the Base fork proofs ran and name the path the gate leaves out. They read the
+  environment and the arguments, not the run: with `BASE_RPC_URL` set they said
+  `Base fork proofs: run against BASE_RPC_URL.` for a run whose own filters left every Base fork
+  suite out, a `--match-path` to one unit file, `--nmp` or `--no-match-path=…`; they named a
+  path left out only for the two-word `--no-match-path` form; and with `--color always` the list
+  of skipped suites came out empty, since Forge's colour codes hid the lines it looked for.
+- `contracts/script/run_tests.sh` now reads only what Forge printed, with the colour codes taken
+  out, and reads neither the arguments nor the environment. It ends with the suites under
+  `test/fork` that ran with no test skipped (`Base fork proofs: ran, with no test skipped, in`
+  and the suites), or `Base fork proofs: NOT RUN. This result does not include them.` when none
+  did, whatever the reason: no endpoint, a filter, a skip, a failed `setUp` or a run that stopped
+  first; then every suite in which a test skipped itself. It no longer names the path the gate
+  leaves out, the audit's fork proofs, which the Makefile names. It still keeps Forge's own
+  output and exit status, never fails for want of an endpoint, and prints no endpoint.

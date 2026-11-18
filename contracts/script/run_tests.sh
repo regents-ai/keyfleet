@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Runs `forge test` with the arguments given and exits with its status, then ends by saying what
-# the result does not include: whether the Base fork proofs ran, every suite in which a test
-# skipped itself, and every path the arguments leave out. The suites under test/fork skip
-# themselves without BASE_RPC_URL, and the Base gas suite also without --isolate, so a pass is
-# never read as including them. It never fails for want of an endpoint, and never prints one.
+# Runs `forge test` with the arguments given and exits with its status, then ends by saying, from
+# what Forge printed alone, which Base fork suites (those under test/fork) ran with no test
+# skipped, every suite in which a test skipped itself, and "Base fork proofs: NOT RUN" when no Base
+# fork suite ran that way, whatever the reason: no BASE_RPC_URL, a filter that left them out, a
+# skip, a failed setUp or a run that stopped first. A pass is therefore never read as including
+# them. It reads neither the arguments nor the environment, never fails for want of an endpoint,
+# and prints no endpoint.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,27 +14,30 @@ trap 'rm -f "$log"' EXIT
 forge test "$@" 2>&1 | tee "$log"
 status=${PIPESTATUS[0]}
 
-skipped=$(awk '/^Ran [0-9]+ tests? for /{ suite = $NF } /^\[SKIP/{ print suite }' "$log" | sort -u)
-left_out=()
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--no-match-path" ] && [ "$#" -gt 1 ]; then
-    left_out+=("$2")
-    shift
-  fi
-  shift
-done
+# Forge's lines with their colour codes taken out. Each result line belongs to the suite named by
+# the "Ran N tests for <path>:<contract>" line above it, until that suite's "Suite result" line. A
+# suite whose setUp failed ran none of its tests.
+suites=$(sed $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$log" | awk '
+  /^Ran [0-9]+ tests? for / { suite = $NF; next }
+  /^Suite result:/ { suite = ""; next }
+  suite != "" && (/^\[PASS/ || (/^\[FAIL/ && !/\] setUp\(\) /)) { tested[suite] = 1 }
+  suite != "" && /^\[SKIP/ { skipped[suite] = 1 }
+  END {
+    for (suite in tested) if (suite ~ /^test\/fork\// && !(suite in skipped)) print "ran " suite
+    for (suite in skipped) print "skipped " suite
+  }' | sort)
+ran=$(sed -n 's/^ran /  /p' <<< "$suites")
+skipped=$(sed -n 's/^skipped /  /p' <<< "$suites")
 
 echo
-if [ -n "${BASE_RPC_URL:-}" ]; then
-  echo "Base fork proofs: run against BASE_RPC_URL."
+if [ -n "$ran" ]; then
+  echo "Base fork proofs: ran, with no test skipped, in"
+  echo "$ran"
 else
-  echo "Base fork proofs: NOT RUN, BASE_RPC_URL is not set. This result does not include them."
+  echo "Base fork proofs: NOT RUN. This result does not include them."
 fi
 if [ -n "$skipped" ]; then
   echo "Skipped, so not in this result:"
-  echo "$skipped" | sed 's/^/  /'
+  echo "$skipped"
 fi
-for path in "${left_out[@]+"${left_out[@]}"}"; do
-  echo "Left out of this run: $path"
-done
 exit "$status"

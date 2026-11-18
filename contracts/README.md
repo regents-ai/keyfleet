@@ -2169,11 +2169,15 @@ its usual 30% margin.
 Run `make check-contracts` from the repository root. It runs, in `contracts/`,
 `forge fmt --check`, `forge build`, `script/check_bytecode.sh` and last
 `forge test` (all but the audit's fork proofs) through `script/run_tests.sh`,
-which ends the output by saying whether the Base fork proofs ran, naming every
-suite that skipped itself and the path left out. Without `BASE_RPC_URL` the
-suites in `test/fork/` skip themselves and the gate still passes, so read those
-closing lines before taking a pass to include them; the Base gas suite also
-skips there, since it needs `--isolate`.
+which keeps Forge's output and exit status and ends by saying, from what Forge
+printed alone, which suites in `test/fork/` ran with no test skipped, every
+suite in which a test skipped itself, and `Base fork proofs: NOT RUN` when no
+suite in `test/fork/` ran that way. Without `BASE_RPC_URL` the suites in
+`test/fork/` skip themselves and the gate still passes, so read those closing
+lines before taking a pass to include them; the Base gas suite also skips
+there, since it needs `--isolate`. Other arguments, such as a `--match-path`
+to one file, reach `forge test` as given, and the closing lines say what that
+run left out.
 
 The suites in `test/`, all against local stand-ins, cover the presets, the
 collection (registry, phases, sales, decks, the keeper, metadata and royalty),
