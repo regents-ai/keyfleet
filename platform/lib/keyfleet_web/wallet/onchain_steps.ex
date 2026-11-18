@@ -157,6 +157,9 @@ defmodule KeyfleetWeb.OnchainSteps do
   def failure_note("send_unconfirmed", _linked, _active, _chain_name),
     do: "Your wallet may have sent this. Check your wallet activity."
 
+  def failure_note("sign_unconfirmed", _linked, _active, _chain_name),
+    do: "Your wallet may have signed this. Check your wallet before pressing again."
+
   @doc """
   The note beside the buttons while the wallet app has open a wallet the
   signed-in account does not link, naming both and asking the person to switch.

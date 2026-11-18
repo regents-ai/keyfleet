@@ -11245,3 +11245,10 @@ launch, 22 passed; the whole chain project, 139 passed; the device walks, 72 pas
   `reconnected`. Two kept walks in `platform/test/browser/wallet_buttons.spec.ts` drop and
   restore the socket, then claim: one with the steps the page had, one that asks the server
   for its steps. Both fail on d193a8183 and are followed to "Done." now.
+- The shared press list (`RegentChain.Presses`) accepts `sign_unconfirmed`, which had no note
+  here, so a hand-made report of it stopped its sender's page process. It now has the
+  template's note, "Your wallet may have signed this. Check your wallet before pressing
+  again.", so every reason the shared list accepts has one; a fleet page test reports each
+  and checks each leaves its own note. Keyfleet builds no signature steps; a hand-made
+  `step_signed` report still has no handler in `KeyfleetWeb.WalletPanel` and stops only its
+  sender's page, as the chief ruled.

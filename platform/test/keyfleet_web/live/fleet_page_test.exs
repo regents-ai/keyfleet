@@ -792,6 +792,27 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert Enum.all?(notes, &(&1 =~ "Base" and String.ends_with?(&1, "Nothing was sent.")))
     end
 
+    # Every reason the shared press list (`RegentChain.Presses`) accepts from a
+    # page leaves its own note, and the page goes on.
+    test "every reason a press can report leaves its own note", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+      active!(view, @owner)
+
+      notes =
+        for reason <-
+              ~w(step_unknown wallet_unavailable network_mismatch switch_declined wallet_declined insufficient_funds send_unconfirmed sign_unconfirmed) do
+          press_fails!(view, reason)
+          text(view, "#buy-key-order-press-note")
+        end
+
+      assert length(Enum.uniq(notes)) == 8
+    end
+
     # Costly failure: with no wallet of the account open, or another wallet
     # open, Buy says the account's wallet can't pay the network fee, though
     # the press is never sent from it.
