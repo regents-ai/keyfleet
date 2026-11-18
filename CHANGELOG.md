@@ -11677,3 +11677,13 @@ a scratch walk that is not kept.
 - Left as it is: platform/fly.toml keeps one site machine "until cross-instance long-poll
   resumption is fixed". It does not say whether that was this long-poll or the agents'
   waiting syncs, and it is the deploy's setting.
+
+## 2026-11-18 — The contract is 36.3.0 for every change since 36.2.0
+
+- The entries above took the contract from 36.2.0, the live one, to 36.2.1, 36.3.0 and
+  36.3.1, none of them released. Nothing in the repository asks for a new number per
+  change (`Keyfleet.Capabilities` reads the number; no test or script compares one), so
+  both copies now say 36.3.0, one minor step for the 413 and 415 answers the sign-in
+  failure report and the pairing gained, with their JSON.
+- The public changelog names the contract once, at 36.3.0, in its 17 November "Requests"
+  entry; its mentions of 36.2.1 and 36.3.1 are gone.

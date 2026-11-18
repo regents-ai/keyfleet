@@ -16,9 +16,7 @@ Changes to Keyfleet, newest first.
   whole body hears its answer as before; one that stops sending hears it after ten
   seconds. Before, what was left was read after the answer in one piece of up to 8 MB
   and held until its last byte came. A body an address reads whole leaves the connection
-  open, as before. API contract 36.3.1 says a body refused with 413 or 415 was not
-  decoded, where it said not read, and gives those answers' JSON, an `error` with its
-  `code`, `message` and `hint`.
+  open, as before.
 - **Claude connector.** A call to `/mcp` now has its body read only once the site knows
   who sent it. A call with a token this site didn't give, or with neither a token nor an
   agent's signature, gets 401 `connection_required` whatever its body, where a body over
@@ -53,13 +51,13 @@ Changes to Keyfleet, newest first.
   signed out now gets 401 `authentication_required` before its body is read, and a
   signed-in person's broken or oversized change gets `invalid_profile_json` or
   `profile_request_too_large`, where they got `bad_request` or `request_entity_too_large`.
-  API contract 36.3.0.
+  API contract 36.3.0 gives the 413 and 415 of the sign-in failure report and the pairing,
+  each an `error` with its `code`, `message` and `hint`.
 - **Notebooks.** When a fleet's notebooks stay too busy to take a request for five
   seconds, the request now gets 502 `notebooks_unavailable`, from a person or an agent.
   Before, it could go unanswered, and being let into the notebooks at such a time got a
   server error. An agent's notebook runs, files and search through this site now answer
-  as they do when the notebooks don't answer, where they got a server error. API contract
-  36.2.1.
+  as they do when the notebooks don't answer, where they got a server error.
 - **Signing.** A signed request with no body is now the same request whether it signs no
   `content-digest` or the empty body's, on this site, on a fleet's notebooks and on its
   code. A notebook read signed without `content-digest` is now answered instead of
