@@ -226,15 +226,13 @@ const csrfStateIsCurrent = () => openRotations === 0 && !unreadRenewal
 // is named here.
 export type PinnedSocket = {connect: () => void; transportConnect: () => void}
 
-// `Socket.transportConnect` is the single place phoenix 1.8.9 builds a
-// transport. `connect` reaches it for the page's first attempt, every reconnect
-// and the pageshow and visibility recoveries; `connectWithFallback` reaches it
-// again from both its long-poll timer and its transport-error path, which call
-// it directly rather than through `connect`. Refusing it there is what makes
-// the barrier real rather than an ordering an independent reconnect never waits
-// for. An open socket never reaches it, so a mounted same-account socket
-// survives the rotation. A renewal whose own adoption failed left this tab
-// closed, and the refusal here is the connection opportunity that reads the
+// `Socket.transportConnect` is the single place the pinned phoenix client
+// builds a transport. `connect` reaches it for the page's first attempt, every
+// reconnect and the pageshow and visibility recoveries. Refusing it there is
+// what makes the barrier real rather than an ordering an independent reconnect
+// never waits for. An open socket never reaches it, so a mounted same-account
+// socket survives the rotation. A renewal whose own adoption failed left this
+// tab closed, and the refusal here is the connection opportunity that reads the
 // state the cookie now carries.
 export function holdSocketDuringCookieRotation(
   socket: PinnedSocket,
@@ -256,8 +254,7 @@ export function holdSocketDuringCookieRotation(
   }
 }
 
-// One read, shared by every attempt overlapping it, including the long poll the
-// pinned `connectWithFallback` swaps in behind the websocket.
+// One read, shared by every attempt overlapping it.
 function adoptUnreadRenewal(fetcher: typeof fetch): Promise<void> {
   if (adoptingRenewal) return adoptingRenewal
 

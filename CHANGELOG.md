@@ -11474,12 +11474,11 @@ a scratch walk that is not kept.
   with the test's own 20 MB of messages in the same machine. Through a real port, a
   40,001-byte frame is closed with 1009, a 40,000-byte one is read, two parts of 30,000
   are closed with 1009, and a 36,340-byte message is answered.
+- Long-poll is off ("A live page connects by websocket only", below). Phoenix's long-poll
+  read each message with Plug's default of 8 MB and has no setting to lower it, and proof
+  303's long-poll half peaked at 1,988 MiB here; it now peaks at 5 MiB, each message
+  answered 404 and thrown away in small pieces.
 - Not covered:
-  - Long-poll. Phoenix's long-poll reads each message with Plug's default of 8 MB and
-    has no setting to lower it, and the page's script falls back to it when the
-    websocket has not connected within 2.5 seconds (`longPollFallbackMs`,
-    assets/js/app.ts), so it stays on: proof 303's long-poll half peaks at 1,988 MiB
-    here, as before.
   - A deep message inside the bound still costs: decoding 39,980 bytes of nesting grows
     the process by 1.5 MiB, and its crash adds the rest. 20 at once peaked at 28 MiB,
     100 at once at 360 MiB.
@@ -11640,3 +11639,41 @@ a scratch walk that is not kept.
   must be the whole body's. The consent forms and the early-access form now go with a
   session and its forms token: before, each was counted taken on a 403 for the token
   missing, and sent that way now the test fails (`:not_decoded`).
+
+## 2026-11-18 — A live page connects by websocket only
+
+- The `/live` socket also answered Phoenix's long-poll at `/live/longpoll`, before any
+  plug of the endpoint and from anyone, and a page's script moved to it when its websocket
+  had not opened and answered a ping within 2.5 seconds (`longPollFallbackMs`). The
+  long-poll reads each message whole with Plug's default of 8 MB, and Phoenix has no
+  setting to lower it: in the reviewers' round-six proof 303, 20 anonymous 1 MB messages
+  nested deep peaked at 1,988 MiB, on a site machine of 4 GB.
+- `socket "/live"` now has `longpoll: false` (`KeyfleetWeb.Endpoint`), and
+  assets/js/app.ts no longer passes `longPollFallbackMs`. ash-template, which Keyfleet
+  follows on the live socket, has neither.
+- `/live/longpoll` is now an address with nothing at it. GET and POST get the site's HTML
+  not-found page, 404, whatever they send; while the site is closed, GET is sent to
+  `/early` with 302 and POST gets 503 with one line of Markdown, as at any other address.
+  Before, a GET got 200 with a new session's token in JSON, and a POST 200 once its
+  message was read and decoded. A body sent there is now thrown away in pieces of 64 KiB
+  (`KeyfleetWeb.Plugs.UnreadBody`), and the connection closes.
+- For people: a browser on a network that lets no websocket through no longer gets live
+  pages; it keeps trying the websocket, as after any drop. A tab already on long-poll when
+  this is released stays without live updates until it is reloaded; it was there because
+  its websocket had failed.
+- After: proof 303's long-poll half peaks at 5 MiB, each of the 20 POSTs answered 404
+  with no token to be had; its websocket half at 47 MiB. `UnreadBodyTest` sends a 1 MiB
+  body to `/live/longpoll` with GET and with POST: each gets 404 and the connection
+  closes, which the plug does only for a body nothing had read. With long-poll back on,
+  both get 200 and the connection stays open.
+- Removed with it: the long-poll in the comments of assets/js/auth_lazy.ts and
+  `KeyfleetWeb.Plugs.UnreadBody`; the two vitest cases that ran phoenix's own client with
+  the fallback (`PINNED_LONG_POLL_FALLBACK_OBEYS_THE_BARRIER`); and in the load kit
+  (platform/load) the `lv_longpoll_fallback` rate and the heartbeat a page sent the moment
+  its socket opened, which stood for the fallback's ping: its first heartbeat now goes 30
+  seconds after, as phoenix sends it. "Shares one read between the websocket and the long
+  poll behind it" is now "shares one read between overlapping attempts", two connects at
+  once. The content security policy had no entry for it, and no browser walk waited on it.
+- Left as it is: platform/fly.toml keeps one site machine "until cross-instance long-poll
+  resumption is fixed". It does not say whether that was this long-poll or the agents'
+  waiting syncs, and it is the deploy's setting.

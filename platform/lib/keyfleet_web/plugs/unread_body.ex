@@ -40,8 +40,8 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
       reading anything more, so nothing is held, and a caller still sending a
       large body may not hear the error page.
 
-  The LiveView socket's addresses are answered before any plug of the
-  endpoint (`socket "/live"`), and its long-poll reads its own body.
+  The LiveView socket's address is answered before any plug of the endpoint
+  (`socket "/live"`), and upgraded to a websocket.
   """
 
   @behaviour Plug

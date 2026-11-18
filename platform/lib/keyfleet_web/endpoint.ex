@@ -26,14 +26,16 @@ defmodule KeyfleetWeb.Endpoint do
   # fullsweep_after: 0 has each page's connection give back what it used to send
   # the page: 1.67 MB down to 0.09 MB a page where it was measured
   # (ash-frontend, references/public-figures.md). A frame larger than a live
-  # page's largest message closes the connection before it is read.
+  # page's largest message closes the connection before it is read. There is
+  # no long-poll: it reads each message whole, up to 8 MB, with no setting to
+  # lower it.
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [
       connect_info: [:peer_data, :uri, session: @session_options],
       fullsweep_after: 0,
       max_frame_size: @live_message_bytes
     ],
-    longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
+    longpoll: false
 
   # First, so that every answer below it, the gateways' included, reads what
   # is left of a body nothing read in small pieces before it is sent.

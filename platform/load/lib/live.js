@@ -38,7 +38,6 @@ const m = {
   redirects: new Counter("lv_redirects"),
   heartbeatRtt: new Trend("lv_heartbeat_rtt", true),
   heartbeatTimeouts: new Counter("lv_heartbeat_timeouts"),
-  longPollFallback: new Rate("lv_longpoll_fallback"),
   socketDrops: new Counter("lv_socket_drops"),
   stormDrops: new Counter("lv_storm_drops"),
   rejoins: new Counter("lv_rejoins"),
@@ -50,7 +49,6 @@ const m = {
 // The client's own timings (phoenix socket.js and LiveView's constants.ts).
 const HEARTBEAT_MS = 30000
 const PUSH_TIMEOUT_MS = 10000
-const LONGPOLL_FALLBACK_MS = 2500 // app.ts sets longPollFallbackMs: 2500
 const MAX_RELOADS = 10
 const reconnectAfter = (tries) => [10, 50, 100, 150, 200, 250, 500, 1000, 2000][tries - 1] || 5000
 const rejoinAfter = (tries) => [1000, 2000, 5000][tries - 1] || 10000
@@ -140,7 +138,6 @@ class LivePage {
     this.ref = 0
     this.ws = null
     this.opened = false
-    this.everOpened = false
     this.ready = false
     this.leaving = false
     this.leaveWhenBack = false
@@ -192,19 +189,11 @@ class LivePage {
     this.ws = ws
     this.opened = false
 
-    // The browser gives the socket 2.5 s to open and answer a ping, then
-    // falls back to long polling for the rest of the visit. That fallback is
-    // counted here; this visitor stays on the socket either way.
-    const first = !this.everOpened
-    if (first) this.timer("fallback", LONGPOLL_FALLBACK_MS, () => this.judgeFallback(true))
-
     ws.onopen = () => {
       if (ws !== this.ws) return
       this.opened = true
-      this.everOpened = true
       this.reconnectTries = 0
       m.wsConnecting.add(Date.now() - began, this.tags())
-      this.sendHeartbeat(first)
       this.views.forEach((view) => this.join(view))
       this.heartbeat = setInterval(() => this.beat(), HEARTBEAT_MS)
     }
@@ -222,23 +211,16 @@ class LivePage {
     if (this.ws && this.opened) this.ws.send(JSON.stringify(message))
   }
 
-  judgeFallback(fellBack) {
-    if (this.fallbackJudged) return
-    this.fallbackJudged = true
-    this.cancel("fallback")
-    m.longPollFallback.add(fellBack, this.tags())
-  }
-
-  sendHeartbeat(probe) {
+  sendHeartbeat() {
     const ref = this.nextRef()
-    this.pendingHeartbeat = { ref, sent: Date.now(), probe }
+    this.pendingHeartbeat = { ref, sent: Date.now() }
     this.send([null, ref, "phoenix", "heartbeat", {}])
   }
 
   // A heartbeat still unanswered when the next is due means the connection is
   // dead to the client, which closes it and reconnects.
   beat() {
-    if (!this.pendingHeartbeat) return this.sendHeartbeat(false)
+    if (!this.pendingHeartbeat) return this.sendHeartbeat()
     m.heartbeatTimeouts.add(1, this.tags())
     this.abandon({ code: "heartbeat_timeout" })
   }
@@ -293,7 +275,6 @@ class LivePage {
       if (event === "phx_reply" && this.pendingHeartbeat && ref === this.pendingHeartbeat.ref) {
         const rtt = Date.now() - this.pendingHeartbeat.sent
         m.heartbeatRtt.add(rtt, this.tags())
-        if (this.pendingHeartbeat.probe) this.judgeFallback(rtt > LONGPOLL_FALLBACK_MS)
         this.pendingHeartbeat = null
       }
       return

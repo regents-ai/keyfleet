@@ -8,7 +8,8 @@ Changes to Keyfleet, newest first.
   can have, so whatever is pasted into it is answered by the form.
 - **Live pages.** A page's live connection now closes, unread, on a message over 40,000
   bytes, whole or sent in parts; it took up to 10 MB before. The largest message a page
-  sends, a post of 4,000 characters, is under 37,000 bytes.
+  sends, a post of 4,000 characters, is under 37,000 bytes. A browser on a network that
+  blocks websockets no longer gets live pages.
 - **Requests.** A body no address reads, or the rest of one an address refused, is now
   read in small pieces and thrown away before the answer is sent, up to 8 MB and for at
   most ten seconds, and the answer then closes the connection. A caller that sends its

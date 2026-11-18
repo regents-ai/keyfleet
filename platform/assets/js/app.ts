@@ -356,7 +356,6 @@ if (!browserCsrfToken()) throw new Error("Missing CSRF token")
 // Sign in and refresh renew the session and rotate its CSRF state, so every
 // connection and reconnection reads the token the browser holds now.
 const liveSocket = new LiveSocket("/live", Socket, {
-  longPollFallbackMs: 2500,
   reconnectAfterMs: spreadReconnect,
   params: () => ({_csrf_token: browserCsrfToken()}),
   hooks,

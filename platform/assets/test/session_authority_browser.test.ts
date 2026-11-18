@@ -1,7 +1,4 @@
 import {afterEach, describe, expect, it, vi} from "vitest"
-import {resolve} from "node:path"
-import {fileURLToPath, pathToFileURL} from "node:url"
-import {env} from "node:process"
 
 import {
   SessionLifecycleError,
@@ -16,7 +13,6 @@ import {
   holdSocketDuringCookieRotation,
   installCrossTabCsrf,
   recoverOnce,
-  type PinnedSocket,
 } from "../js/auth_lazy"
 import {createLocalSession} from "../js/privy_bridge"
 
@@ -370,112 +366,6 @@ describe("COOKIE_TO_CSRF_HAS_A_REAL_LIVESOCKET_BARRIER", () => {
   })
 })
 
-// The pinned phoenix 1.8.9 client itself, loaded from `deps` exactly as the
-// asset build resolves it. Its `connect` arms `connectWithFallback`, whose
-// long-poll timer and transport-error path each replace the transport and call
-// `transportConnect` directly, never returning through `connect`.
-const {Socket: PinnedPhoenixSocket} = (await import(
-  pathToFileURL(resolve(env.MIX_DEPS_PATH ?? fileURLToPath(new URL("../../deps", import.meta.url)),
-    "phoenix/priv/static/phoenix.mjs")).href
-)) as {
-  Socket: new (
-    endPoint: string,
-    options: Record<string, unknown>,
-  ) => PinnedSocket & {conn: {onerror: (reason: unknown) => void; pollEndpoint?: string} | null}
-}
-
-// Records every transport the socket builds, so an establishment refused inside
-// the interval is the absence of a constructed transport rather than a claim
-// about one.
-function pinnedPhoenixSocketBuilding(built: string[]) {
-  vi.stubGlobal("location", {protocol: "https:", host: "socket.test"})
-
-  return new PinnedPhoenixSocket("/live", {
-    transport: class {
-      binaryType = ""
-      timeout = 0
-      onopen: () => void = () => {}
-      onerror: (reason: unknown) => void = () => {}
-      onmessage: (event: unknown) => void = () => {}
-      onclose: (event: unknown) => void = () => {}
-
-      constructor(url: string) {
-        built.push(url)
-      }
-
-      close() {}
-    },
-    // The exact options app.ts gives LiveSocket.
-    longPollFallbackMs: 2500,
-    params: () => ({_csrf_token: browserCsrfToken()}),
-  })
-}
-
-const longPollEndpoint = (token: string) =>
-  `https://socket.test/live/longpoll?_csrf_token=${token}&vsn=2.0.0`
-
-describe("PINNED_LONG_POLL_FALLBACK_OBEYS_THE_BARRIER", () => {
-  afterEach(() => vi.useRealTimers())
-
-  it("builds no transport when the fallback timer fires inside the interval", async () => {
-    vi.useFakeTimers()
-    pageWithCsrfMeta("page-token")
-    const built: string[] = []
-    const socket = pinnedPhoenixSocketBuilding(built)
-    holdSocketDuringCookieRotation(socket)
-    // The page's opening attempt, whose websocket handshake is still pending
-    // when the rotation begins. It armed the fallback timer, which owes nothing
-    // to `connect` when it expires.
-    socket.connect()
-
-    expect(built).toEqual(["wss://socket.test/live/websocket?_csrf_token=page-token&vsn=2.0.0"])
-
-    const tokens = ["before-post", "after-renewal"]
-    const insideInterval: {built: number; connected: boolean}[] = []
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input === "/auth/csrf") return csrfResponse(tokens.shift() ?? "exhausted")
-      vi.advanceTimersByTime(2500)
-      insideInterval.push({built: built.length, connected: Boolean(socket.conn)})
-      return signedInResponse("true")
-    }) as unknown as typeof fetch
-
-    await createLocalSession(verifiedPair, fetcher)
-
-    expect(insideInterval).toEqual([{built: 1, connected: false}])
-    // The fallback had already swapped the transport before it was refused, so
-    // the single attempt admitted after adoption is the long poll, carrying the
-    // token this tab has just read.
-    expect(socket.conn?.pollEndpoint).toBe(longPollEndpoint("after-renewal"))
-  })
-
-  it("builds no transport when the fallback error path fires inside the interval", async () => {
-    vi.useFakeTimers()
-    pageWithCsrfMeta("page-token")
-    const built: string[] = []
-    const socket = pinnedPhoenixSocketBuilding(built)
-    holdSocketDuringCookieRotation(socket)
-    socket.connect()
-
-    expect(built).toEqual(["wss://socket.test/live/websocket?_csrf_token=page-token&vsn=2.0.0"])
-
-    const tokens = ["before-post", "after-renewal"]
-    const insideInterval: {built: number; connected: boolean}[] = []
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      if (input === "/auth/csrf") return csrfResponse(tokens.shift() ?? "exhausted")
-      // The primary transport fails as the renewed cookie lands: the fallback
-      // takes its error path rather than its timer.
-      socket.conn?.onerror("primary refused")
-      insideInterval.push({built: built.length, connected: Boolean(socket.conn)})
-      return signedInResponse("true")
-    }) as unknown as typeof fetch
-
-    await createLocalSession(verifiedPair, fetcher)
-
-    expect(insideInterval).toEqual([{built: 1, connected: false}])
-    expect(socket.conn?.pollEndpoint).toBe(longPollEndpoint("after-renewal"))
-  })
-})
-
 // The exact state a renewal leaves behind when its own adoption fails: the
 // cookie in this browser is the renewed one and this tab has never read the
 // CSRF state that cookie carries.
@@ -491,7 +381,7 @@ async function withUnreadRenewal(): Promise<void> {
 }
 
 describe("A_LATER_CONNECT_READS_WHAT_A_FAILED_ADOPTION_NEVER_DID", () => {
-  it("shares one read between the websocket and the long poll behind it", async () => {
+  it("shares one read between overlapping attempts", async () => {
     pageWithCsrfMeta("stale-token")
     const socket = pinnedSocket()
     let reads = 0
@@ -504,11 +394,10 @@ describe("A_LATER_CONNECT_READS_WHAT_A_FAILED_ADOPTION_NEVER_DID", () => {
     holdSocketDuringCookieRotation(socket, fetcher)
     await withUnreadRenewal()
 
-    // The pinned fallback replaces the transport and reaches `transportConnect`
-    // directly, so the second attempt of the same opportunity never returns
-    // through `connect`.
+    // A reconnect and a pageshow recovery, the second before the first's read
+    // has answered.
     socket.connect()
-    socket.transportConnect()
+    socket.connect()
     await until(() => reads === 1)
     await settle()
 

@@ -60,6 +60,25 @@ defmodule KeyfleetWeb.Plugs.UnreadBodyTest do
            ]
   end
 
+  # Costly failure: LiveView's long-poll answers again, and reads each message
+  # whole, up to 8 MB, and decodes it: twenty anonymous messages of 1 MB, nested
+  # deep, held 1,988 MiB at once.
+  test "LiveView's long-poll address has nothing at it, so a body sent there is read the same way",
+       c do
+    body = :binary.copy("l", @mib)
+
+    answers =
+      for method <- ["GET", "POST"] do
+        socket = connect!(c.port)
+        path = "/live/longpoll?vsn=2.0.0"
+        :ok = :gen_tcp.send(socket, [head(method, path, "localhost", length: @mib), body])
+        answer = answer!(socket, method)
+        {method, answer.status, answer.headers["connection"], ends(socket)}
+      end
+
+    assert answers == [{"GET", 404, "close", :closed}, {"POST", 404, "close", :closed}]
+  end
+
   test "a body sent in chunks with no length is read the same way", c do
     socket = connect!(c.port)
     piece = :binary.copy("c", 300 * 1024)

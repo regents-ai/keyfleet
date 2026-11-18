@@ -132,9 +132,7 @@ When the site misbehaves it does what a browser would: a join refused as
 stale reloads the page; a crashed view rejoins after 1, 2, 5 and then 10
 seconds; a dropped connection reconnects after 10 ms, 50 ms and so on to 5
 seconds; a heartbeat unanswered for 30 seconds closes the socket and
-reconnects. A socket not open and answering within 2.5 seconds is counted as
-a page that would move to long polling (`app.ts`), though the script keeps to
-the socket.
+reconnects.
 
 ## Scenarios
 
