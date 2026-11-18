@@ -22,7 +22,8 @@ The release runs in seven steps, in this order:
    from that wallet. It creates no fleet.
 3. **Randomness setup, deferred.** Consumer setup, funding and Safe ownership
    can wait while every minted Key is within its fixed founding deck. Complete
-   setup before any Key needs a random draw, and before phase 4.
+   setup before phase 3 opens: from then any buyer can buy a Key past its
+   deck, which needs a random draw.
 4. **Club fleet.** In phase 0, `founding-fleets` prepares only Club fleet 5.
    After Club testing, the same step in phase 1 prepares Classic fleet 1.
    In phase 2 it prepares missing Syndicate, Accelerant and Cascade fleets.
@@ -30,11 +31,12 @@ The release runs in seven steps, in this order:
    into the site. Absent founding slots are retained for later creation.
 6. **Phases.** Phase 1 requires Club and opens only its gifts. Phase 2 requires
    Club and Classic and opens Classic sales. Phase 3 requires all five and
-   opens the other three; the first of their Keys sold past its deck stops the
-   record until the Regents Safe owns the randomness subscription and the
-   subscription lists the collection, and the phase-3 step does not check
-   that. Phase 4 permits public fleet creation, and the step prepares it only
-   once both hold.
+   opens the other three, and from then any buyer's purchase of a Key past
+   its deck stops the record until the Regents Safe owns the randomness
+   subscription and the subscription lists the collection, which the step to
+   phase 4 requires in any case. The phase-3 step does not check that, so the
+   Safe takes the subscription and lists the collection before phase 3 is
+   opened. Phase 4 permits public fleet creation.
 7. **Club gifts.** Simulate and sign 25 separate sequential Safe transactions:
    24 batches of 80 and one of 78. Route failed receivers to claims and verify
    every final destination. Do not create the other four fleets at this launch.
@@ -157,8 +159,8 @@ Sean supplied subscription
 `58953026474889286452657611148401201221788353993662160123850640810329610213433`,
 now written as a decimal string in `base.json`. A read-only Base check confirmed
 it exists and belongs to his wallet. Sean will add the consumer and transfer
-ownership later, before the first Key beyond its founding deck or any public
-fleet Key. The Safe must accept that transfer. Recording checks ownership and
+ownership later, before phase 3 opens, since from then any buyer can buy a Key
+beyond its founding deck. The Safe must accept that transfer. Recording checks ownership and
 consumer setup once a recorded Key needs randomness. Its native ETH balance must be
 funded before randomness requests begin. Club cards use the fixed founding deck
 and make no VRF request, but the shared system's deployment still requires a
@@ -177,7 +179,8 @@ pays for every fleet's randomness requests in ETH. Setup order:
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
    `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-   Complete setup before the first random draw; recording drawn Keys requires it. The `keeper` is
+   Complete setup before phase 3 opens, from which any buyer can make the first
+   random draw; recording drawn Keys requires it. The `keeper` is
    already set to the Regents Safe.
 
 ### Keeping the subscription funded
@@ -358,13 +361,14 @@ fleets created since: it lists every fleet in the collection's registry.
   that does not list the collection as a consumer (`CollectionNotVrfConsumer`)
   and, on Base, one whose owner is not the Regents Safe
   (`VrfSubscriptionNotOwnedByRegentsSafe`). This refusal stops the whole
-  record, every founding fleet with it, not only the fleet that needs a draw,
-  and from phase 4, the collection's last, anyone can create such a fleet,
-  through the factory or through a trading factory the Safe has approved. So on
-  Base the subscription's owner hands it to the Safe and the Safe accepts it
-  and lists the collection first, and only after that does the Safe open phase
-  4 or approve a trading factory. The phase step and the trading factory's
-  script refuse, with these two errors, to prepare either call before.
+  record, every founding fleet with it, not only the fleet that needs a draw.
+  From phase 3 any buyer can buy a founding Key past its deck, and from phase
+  4, the collection's last, anyone can create such a fleet, through the
+  factory or through a trading factory the Safe has approved. So on Base the
+  subscription's owner hands it to the Safe and the Safe accepts it and lists
+  the collection first, before the Safe opens phase 3. The phase-4 step and the
+  trading factory's script refuse, with these two errors, to prepare their
+  calls before; the phase-3 step does not check.
 
 ### What the record step writes
 
@@ -453,11 +457,24 @@ to 3 require only their intended fleets: Club for phase 1, also Classic for
 phase 2, and all five for phase 3. Phase 1 opens only Regents Club gifts.
 Phase 2 opens Classic #1 sales. Phase 3 opens Syndicate #1, Accelerant #1
 and Cascade #1 sales together. Each of the three has a deck of 1,000 cards and
-can sell more Keys than that, and the first Key one of them sells past its deck
-stops the record step for every fleet until the Regents Safe owns the
-randomness subscription and it lists the collection (step 5). The phase-3 step
-does not check the subscription, so make it ready before Key 1,001 of any of
-the three is sold. Phase 4 lets anyone create a fleet
+can sell more Keys than that, and when its Key 1,001 is sold is a buyer's
+choice, not the Safe's: Syndicate #1's first 1,001 Keys cost about 59,255 USDC
+in ordinary purchases. From that purchase until the Regents Safe owns the
+randomness subscription and the subscription lists the collection:
+
+- the record step refuses every fleet (step 5), so the published record and
+  the site stay as last recorded, with the five founding fleets recorded once
+  they exist in phase 2, and no later record can be made;
+- while the subscription does not list the collection, that Key's request for
+  its card is refused, and the Key waits until anyone asks again with
+  `requestReveal(tokenId)` once it does;
+- sales go on, and every Key within its deck is dealt its card by number as
+  before;
+- the step to phase 4 refuses, as it does in any case until both hold.
+
+The phase-3 step does not check the subscription. The order is therefore: the
+subscription's owner hands it to the Safe, the Safe accepts it and lists the
+collection (steps 1 and 3), and only then do the signers open phase 3. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase. One such fleet stops the record step for every fleet while
 the Regents Safe does not own the randomness subscription or it does not list

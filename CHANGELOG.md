@@ -12019,3 +12019,21 @@ step's report).
   `claim` by 59,766, `sendProtocolShare` by 35,743, the drawing purchase by 31,810, `castBallot`
   by 27,783, `propose` by 15,204, the Regents Club batch by 8,800, each plain purchase by 7,707
   and `transferFrom` by 4,866; the others moved by 352 gas or less, and `present` did not move.
+
+## 2026-11-18 — The subscription before phase 3
+
+- The entry "The phase-4 step waits for the Safe's randomness subscription" above says phases 1
+  to 3 create no fleet past the founding ones, "so no other step needs the check". That is not
+  true of the record step. Phase 3 lets anyone buy a founding Key past its deck, and from that
+  purchase the record step refuses every fleet, as the step to phase 4 does in any case, until
+  the Regents Safe owns the randomness subscription and the subscription lists the collection.
+  The phase-3 step still does not check the subscription.
+- `docs/deployment.md` no longer tells the operator to make the subscription ready before
+  Key 1,001 is sold, since a buyer, not the operator, chooses that moment: Syndicate #1's first
+  1,001 Keys cost about 59,255 USDC in ordinary purchases. It now says, in the order of steps,
+  steps 1 and 6 and the record's refusals, what such a purchase stops and what it leaves alone.
+  The published record and the site stay as last recorded, with the five founding fleets
+  recorded in phase 2, but no later record can be made. While the subscription does not list
+  the collection, that Key waits for its card. Sales go on, and Keys within their decks are dealt
+  as before. The order it recommends is the subscription handed to the Safe and the collection
+  listed before phase 3 is opened.
