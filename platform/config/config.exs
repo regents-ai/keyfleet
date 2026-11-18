@@ -418,6 +418,11 @@ config :keyfleet, :session_options,
 config :keyfleet, KeyfleetWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
+  # A connection kept open cleans up after every request it answers, not
+  # every fifth, so no large body or decoding stays held while it idles. Each
+  # environment's listener adds its address and port (config/dev.exs,
+  # config/runtime.exs), and the browser test server takes these for its own.
+  http: [http_1_options: [gc_every_n_keepalive_requests: 1]],
   render_errors: [
     formats: [
       html: KeyfleetWeb.ErrorHTML,

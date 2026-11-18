@@ -48,13 +48,17 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc """
-  Serves the site on a free local port with the web server settings it runs
-  with (`config/runtime.exs`), and returns its address and its server.
+  Serves the site on a free local port with the web server settings every
+  listener of the site runs with (`config/config.exs`), and returns its
+  address and its server.
   """
   def serve_site!(id) do
     {server, port} =
-      listen!(id, KeyfleetWeb.Endpoint, {127, 0, 0, 1},
-        http_1_options: [gc_every_n_keepalive_requests: 1]
+      listen!(
+        id,
+        KeyfleetWeb.Endpoint,
+        {127, 0, 0, 1},
+        Application.fetch_env!(:keyfleet, KeyfleetWeb.Endpoint)[:http]
       )
 
     %{url: "http://127.0.0.1:#{port}", server: server}

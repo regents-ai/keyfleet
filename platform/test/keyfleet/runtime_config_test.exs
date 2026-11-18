@@ -1,6 +1,7 @@
 defmodule Keyfleet.RuntimeConfigTest do
   use ExUnit.Case, async: false
 
+  @build_config Path.expand("../../config/config.exs", __DIR__)
   @runtime_config Path.expand("../../config/runtime.exs", __DIR__)
   @fly_production_config Path.expand("../../fly.toml", __DIR__)
   @fly_staging_config Path.expand("../../fly.staging.toml", __DIR__)
@@ -39,7 +40,8 @@ defmodule Keyfleet.RuntimeConfigTest do
       "DNS_CLUSTER_QUERY",
       "KEYFLEET_PRESENCE_TIMER_KEY",
       "SOURCE_COMMIT",
-      "FLY_IMAGE_REF"
+      "FLY_IMAGE_REF",
+      "KEYFLEET_BROWSER_TEST"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -137,6 +139,33 @@ defmodule Keyfleet.RuntimeConfigTest do
     assert endpoint[:url][:scheme] == "https"
     assert endpoint[:http][:port] == 4000
     assert endpoint[:http][:ip] == {0, 0, 0, 0, 0, 0, 0, 0}
+  end
+
+  # Costly failure: a listener runs on the web server's defaults, so a
+  # connection kept open holds a large body until Bandit's fifth request.
+  test "each of the site's listeners runs with the web server settings in config.exs" do
+    put_production_role()
+    put_pooled_url()
+    System.put_env("PHX_HOST", "shadow.example.test")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
+    shared = [gc_every_n_keepalive_requests: 1]
+
+    # As a release boots: what the build baked in, with runtime.exs merged over it.
+    production = Config.Reader.merge(build_config(:prod), read_runtime_config(:prod))
+
+    assert production |> get_in([:keyfleet, KeyfleetWeb.Endpoint, :http]) |> Enum.sort() ==
+             [http_1_options: shared, ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4000]
+
+    assert build_config(:dev) |> get_in([:keyfleet, KeyfleetWeb.Endpoint, :http]) |> Enum.sort() ==
+             [http_1_options: shared, ip: {127, 0, 0, 1}, port: 4000]
+
+    System.put_env("KEYFLEET_BROWSER_TEST", "1")
+    browser = Config.Reader.merge(build_config(:test), read_runtime_config(:test))
+    endpoint = get_in(browser, [:keyfleet, KeyfleetWeb.Endpoint])
+
+    assert endpoint[:http] == false
+    assert endpoint[:https][:http_1_options] == shared
+    assert endpoint[:https][:certfile] =~ "localhost.pem"
   end
 
   test "PKG-RUNTIME the graph machine boots as the graph machine" do
@@ -380,6 +409,10 @@ defmodule Keyfleet.RuntimeConfigTest do
     read_runtime_config(:dev)
     |> get_in([:keyfleet, key])
   end
+
+  # The settings a build bakes in: config.exs with the environment's own file.
+  defp build_config(environment),
+    do: Config.Reader.read!(@build_config, env: environment, target: :host)
 
   defp read_runtime_config(environment) do
     @runtime_config

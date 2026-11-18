@@ -647,7 +647,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # this process some megabytes for a deeply nested 64 KiB one. It would hold
   # them while it waits for the hub, so they are given back as soon as the
   # checks are done, whatever they found. Only a decoded body leaves anything to
-  # give back; the web server cleans up after every answer (`config/runtime.exs`).
+  # give back; the web server cleans up after every answer (`config/config.exs`).
   defp checked(conn, fleet_id, subject, {_headers, body} = request) do
     checked = with :ok <- unscheduled(conn, body), do: made(conn, fleet_id, subject, request)
     if decodes?(conn), do: :erlang.garbage_collect()

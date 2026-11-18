@@ -11382,3 +11382,20 @@ a scratch walk that is not kept.
   the shared agent address. `McpConnectorTest` sends malformed, batch, bare, empty and
   over-long bodies through a real port with no token, a made-up one, a real one and a
   signature; without the change it fails on the first, a made-up token's body answered 400.
+
+## 2026-11-18 — One place for the web server's clean-up setting
+
+- Bandit's `gc_every_n_keepalive_requests: 1` was set for production alone, in
+  `config/runtime.exs`; `SignedAgentHelpers.serve_site!/1` repeated it, and the development
+  and browser test servers ran on Bandit's default (every fifth request). It is now in the
+  endpoint's shared settings in `config/config.exs`, under `http:`, and each environment's
+  listener adds its own address and port: production's in `config/runtime.exs`,
+  development's in `config/dev.exs`. The browser test server answers over https alone, so
+  its block in `config/runtime.exs` turns the plain listener off and gives its https
+  listener the same settings; without that it would also have opened a plain one on
+  port 4000. `serve_site!/1` reads them from the endpoint's settings.
+- `RuntimeConfigTest` reads each merged setting rather than assuming it: production's as
+  a release boots (the build's settings with `config/runtime.exs` merged over them) is
+  the address, the port and the setting; development's is its address, its port and the
+  setting; the browser test server's https listener keeps its certificate and has the
+  setting, with no plain listener. Loading the test settings as Mix does gives the same.

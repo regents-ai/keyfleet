@@ -89,6 +89,12 @@ if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
   # one too long. It keeps the test setting's ten connections, twice the site's.
   config :keyfleet, Keyfleet.Repo, pool: DBConnection.ConnectionPool
 
+  # It answers over https alone (config/test.exs), with the web server
+  # settings every listener of the site runs with (config/config.exs).
+  config :keyfleet, KeyfleetWeb.Endpoint,
+    http: false,
+    https: Application.fetch_env!(:keyfleet, KeyfleetWeb.Endpoint)[:http]
+
   # The browser test server (playwright.config.ts) writes its lines in
   # production's shape to a file, which test/browser/visits.spec.ts reads to
   # replay a visit.
@@ -273,12 +279,9 @@ if config_env() == :prod do
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,
       url: [host: host, port: 443, scheme: "https"],
-      # A connection kept open cleans up after every request it answers, not
-      # every fifth, so no large body or decoding stays held while it idles.
       http: [
         ip: {0, 0, 0, 0, 0, 0, 0, 0},
-        port: String.to_integer(System.get_env("PORT", "4000")),
-        http_1_options: [gc_every_n_keepalive_requests: 1]
+        port: String.to_integer(System.get_env("PORT", "4000"))
       ],
       secret_key_base: secret_key_base
 
