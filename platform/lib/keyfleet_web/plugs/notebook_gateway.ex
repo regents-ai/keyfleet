@@ -1183,7 +1183,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # The page is a notebook's own saved page, sent as members wrote it on purpose:
-  # `stream_back/4` has already put it in a sandbox of its own (`sandbox_saved_page/1`).
+  # `begin/4` has already put it in a sandbox of its own (`sandbox_saved_page/1`).
   # sobelow_skip ["XSS.SendResp"]
   defp send_kept(conn, fleet_id, subject, {notebook_id, source_id, saved_at}, parts, succeeded) do
     page = IO.iodata_to_binary(parts)

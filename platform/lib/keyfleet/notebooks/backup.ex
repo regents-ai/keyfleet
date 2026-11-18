@@ -7,7 +7,7 @@ defmodule Keyfleet.Notebooks.Backup do
   Beside the code it keeps who could edit the notebook when it was copied:
   its creator in the hub (`author`), the Key whose scratchpad it was (`key`)
   and whether it was unlocked. Any of them brings the copy back as a new
-  notebook of their own in the same project (`Keyfleet.Notebooks.restore/4`),
+  notebook of their own in the same project (`Keyfleet.Notebooks.restore/5`),
   whether or not the notebook is still there. A project deleted takes its
   copies with it (`Keyfleet.Projects.Changes.Forget`).
   """

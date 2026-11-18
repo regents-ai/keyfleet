@@ -11306,3 +11306,19 @@ a scratch walk that is not kept.
   signed-out change is refused before its body is read.
 - Still open: a connector call is decoded before its token or signature is checked, so
   100 calls of 700 KiB lists with a made-up bearer token peak at 951 MiB (924 before).
+
+## 2026-11-17 — A background job's wait for a busy hub is saved once
+
+- A job that found no hub connection free was saved twice on every attempt that failed:
+  the wait, by `Keyfleet.Notebooks.hub_run/2`, and again as the job's failure
+  (`Oban.PerformError`, whose reason holds the same `HubSilentError`). The roster job
+  fails at once; a job that waits while the hub is away (`HubClient.wait_while_away/2`)
+  snoozes six times, each wait still saved, then fails the same way.
+- `Keyfleet.ErrorIgnorer` now leaves out a job failure whose reason holds a
+  `HubSilentError`. The wait is still saved where it happened, with the job's worker, id
+  and attempt; a job's other failures, and any crash, are saved as before. The new door
+  test holds every hub connection, runs the roster job and finds the wait alone saved
+  for it (the wait and the job's failure before).
+- Notes that named functions since renamed now name the current ones:
+  `NotebookGateway.begin/4`, `SessionAuthority.signed_in/2`, `Code.record_pushes/4`,
+  `Notebooks.restore/5`.

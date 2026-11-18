@@ -13,7 +13,7 @@ defmodule KeyfleetWeb.AgentTools.Notebooks.Answer do
   project the address names; lock or unlock a notebook it made (`:lock`),
   and list and bring back the project's daily copies of its notebooks
   (`:copies`, `:restore`; `Keyfleet.Notebooks.lock/6`, `copies/4`,
-  `restore/4`). Each answer is `{status, body, retry_after}`; `params` is the
+  `restore/5`). Each answer is `{status, body, retry_after}`; `params` is the
   signed request's JSON, its body with the names in its address.
 
   The agent is let in exactly as on the fleet's notebook host

@@ -107,7 +107,8 @@ defmodule Keyfleet.Notebooks do
   response}`, or `{request, exception}` when the hub didn't answer. No
   connection to the hub coming free within the wait for one is reported here,
   once for every caller, and is the request's `HubSilentError`, which a
-  caller that reports the hub's failures leaves as reported.
+  caller that reports the hub's failures leaves as reported, and a job that
+  fails with it is not saved again (`Keyfleet.ErrorIgnorer`).
   """
   def hub_run(fleet_id, %Req.Request{} = request) do
     Req.run(request)

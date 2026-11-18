@@ -231,7 +231,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   @doc """
   The id of the sign-in `lineage` carries while it is current for `account_id`,
   or `nil`. Another address this site serves (a fleet's notebooks) keeps the id,
-  never the lineage, and asks `signed_in_account/2` with it.
+  never the lineage, and asks `signed_in/2` with it.
   """
   @spec current_id(String.t(), integer()) :: String.t() | nil
   def current_id(lineage, account_id) do

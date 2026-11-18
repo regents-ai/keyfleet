@@ -1622,6 +1622,32 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     Task.await_many(held, 10_000)
   end
 
+  # Costly failure: a job's wait for a hub connection is saved twice, where it
+  # happens and again as the job's failure, or the job gives up on the fleet.
+  @tag hub_delay_ms: %{{"PUT", "/api/v1/admin/users/u_held/suspension"} => 7_000}
+  test "a job that waits too long for a hub connection is reported once and runs again" do
+    held = for _ <- 1..50, do: Task.async(fn -> HubClient.suspend(@fleet, "u_held") end)
+    suspension = "/api/v1/admin/users/u_held/suspension"
+    for _ <- 1..50, do: assert_receive({:hub, "PUT", ^suspension, _subject, _body}, 5_000)
+
+    assert {:error, {:hub, _address, %HubSilentError{}}} =
+             perform_job(Roster, %{fleet_id: @fleet})
+
+    assert ["No connection to the notebook hub of #{@fleet} came free in time" <> _] =
+             hub_reports()
+
+    # Everything saved while the job ran: the wait, and not the job's failure.
+    assert Keyfleet.Repo.all(
+             from(occurrence in ErrorTracker.Occurrence,
+               join: error in assoc(occurrence, :error),
+               where: occurrence.context["job.worker"] == ^inspect(Roster),
+               select: error.kind
+             )
+           ) == [to_string(HubSilentError)]
+
+    Task.await_many(held, 10_000)
+  end
+
   # Costly failure: an answer streaming back carries the hub's cookies or its
   # other headers, keeps the hub working for a reader who has gone, or ends as
   # if it were whole when the hub fails midway.
