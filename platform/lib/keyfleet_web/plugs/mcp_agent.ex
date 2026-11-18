@@ -163,8 +163,22 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
     end
   end
 
+  @doc """
+  The token of the request's one `Authorization` header when its scheme is
+  Bearer, its name in any case (RFC 9110 §11.1), or `nil`.
+  """
+  def bearer(conn) do
+    with [credentials] <- get_req_header(conn, "authorization"),
+         [scheme, token] <- String.split(credentials, " ", parts: 2),
+         "bearer" <- String.downcase(scheme, :ascii) do
+      token
+    else
+      _no_bearer -> nil
+    end
+  end
+
   defp connected_app(conn) do
-    with ["Bearer " <> bearer] <- get_req_header(conn, "authorization"),
+    with bearer when is_binary(bearer) <- bearer(conn),
          {:ok, principal} <-
            RegentOAuth.verify(bearer, RegentOAuth.resource(), RegentMCPAgents.identity_scope()) do
       conn

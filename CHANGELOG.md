@@ -11569,3 +11569,17 @@ a scratch walk that is not kept.
 - assets/test/visit_log.test.ts raises 25 errors on a page with a 5,006-character
   address and finds one post of 20 lines, each naming 1,024 characters, within 22 KiB;
   without the cut it fails. `BodyLimitsTest` takes the new limit.
+
+## 2026-11-18 — The connector reads a token's scheme in any case
+
+- `/mcp` took a token only after `Bearer ` exactly (`KeyfleetWeb.Plugs.McpAgent`), and the
+  endpoint chose the connector's per-address ceiling the same way; HTTP's scheme names
+  are case-insensitive (RFC 9110 §11.1). A `bearer` token was asked to connect, and
+  spent the budget of callers without one.
+- `McpAgent.bearer/1` reads the one `Authorization` header's scheme in any case and
+  answers its token, and both the plug and the endpoint's budget use it.
+- `McpConnectorTest` lists the tools with `bearer`, `BEARER` and `bEaReR`, each spending
+  the connector's ceiling; with the old match it is refused.
+- Left as before: more than one space after the scheme. RFC 6750 allows it
+  (`"Bearer" 1*SP b64token`); the token is then read with the extra spaces in front, and
+  refused.

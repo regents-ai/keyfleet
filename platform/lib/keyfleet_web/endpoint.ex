@@ -155,9 +155,9 @@ defmodule KeyfleetWeb.Endpoint do
   # account is known, so it spends the /api budget, as does an agent's own
   # signed request there, as its signed requests under /api do.
   defp limit_rate(%Plug.Conn{path_info: ["mcp" | _]} = conn, _opts) do
-    case Plug.Conn.get_req_header(conn, "authorization") do
-      ["Bearer " <> _token] -> RegentAgentAccess.RateLimit.call(conn, connector_rate_limit())
-      _no_token -> RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+    case KeyfleetWeb.Plugs.McpAgent.bearer(conn) do
+      nil -> RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+      _token -> RegentAgentAccess.RateLimit.call(conn, connector_rate_limit())
     end
   end
 

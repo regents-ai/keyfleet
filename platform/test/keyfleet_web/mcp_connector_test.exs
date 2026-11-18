@@ -177,6 +177,30 @@ defmodule KeyfleetWeb.McpConnectorTest do
                Enum.sort(RegentMCPAgents.Tools.names() ++ fleet_tools())
     end
 
+    # Costly failure: an app that names the scheme in another case, which HTTP
+    # allows (RFC 9110 §11.1), is asked to connect as if it sent no token, and
+    # spends the budget of callers without one.
+    test "the token's scheme is read in any case", c do
+      token = connect!(account!(), @identity_scope)
+
+      for scheme <- ["bearer", "BEARER", "bEaReR"] do
+        answer =
+          conn(:post, "/mcp", Jason.encode!(rpc("tools/list")))
+          |> Map.put(:remote_ip, c.from)
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("authorization", scheme <> " " <> token)
+          |> @endpoint.call([])
+
+        assert %{"result" => %{"tools" => tools}} = json(answer), scheme
+
+        assert Enum.sort(Enum.map(tools, & &1["name"])) ==
+                 Enum.sort(RegentMCPAgents.Tools.names())
+
+        assert [policies] = get_resp_header(answer, "ratelimit-policy")
+        assert policies =~ ~s("connector"), scheme
+      end
+    end
+
     # Both callers meet the same refusal: an app that hasn't connected, and an
     # agent that sent its call without its signature. Its hint sends the agent
     # to the served guide, which says how to sign.

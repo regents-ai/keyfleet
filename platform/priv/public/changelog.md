@@ -26,7 +26,8 @@ Changes to Keyfleet, newest first.
   decoded. A call over 742 KB gets 413 `request_entity_too_large` and a body that isn't
   one JSON object 400 `bad_request`, in the connector's own answer shape with a sentence
   saying what to send; an empty body, or JSON that isn't an object, got a JSON-RPC
-  "Invalid Request" error before.
+  "Invalid Request" error before. A token's scheme is now read in any case, `bearer` as
+  `Bearer`, as HTTP allows; any other case was asked to connect.
 
 ## 17 November 2026
 
