@@ -640,25 +640,53 @@ Autolaunch against Base's own contracts. The contracts README lists them.
 
 ```sh
 anvil --fork-url "$BASE_RPC_URL"
+export RPC_URL=http://127.0.0.1:8545
 ```
 
-This keeps Base's chain id, 8453, so the Base manifest deploys there exactly as
-it would on Base. Every step after the deployment then takes the first
-release's factory from the pins in `contracts/script/KeyfleetManifest.sol`, as
-it does on Base, not the system the rehearsal deployed: the Safe steps write
-their files, instead of sending, for the first release's factory as forked, and
-the record step reads that system. Create and fund a subscription on the fork
-from an anvil account and write its id and a keeper into the manifest for the
-rehearsal only; the record step then refuses the manifest, since its keeper and
-subscription are not the first release's (`RecordedMismatch(field)`). The later
-steps on a system of the rehearsal's own run on chain 31337, below. A fork rehearsal writes
-`broadcast/DeployKeyfleets.s.sol/8453/`, `deployments/safe/base.*.json` and,
-if it gets that far, `deployments/base.deployed.json`. Delete all three, and put
-the manifest's keeper and subscription back, before the real deployment, so
-nobody mistakes the rehearsal for the release. Git keeps those paths on purpose:
-the Base broadcast log, the Safe's batch files and `base.deployed.json` are the
-evidence of the real deployment and are committed with it, while everything a
-chain-31337 rehearsal writes is ignored.
+This keeps Base's chain id, 8453, so every step runs there as it does on Base,
+and the first release is already on the fork, live: there is nothing to deploy.
+Every step after the deployment takes that release from the pins in
+`contracts/script/KeyfleetManifest.sol`, so a plain `run` of the Safe steps or
+the record step would write at the real paths, `deployments/safe/base.<name>.json`
+and `deployments/base.deployed.json`, with the real files' names and, from the
+same state, the same content, and nobody could tell it from the release's. On
+this fork, run them through `runInto` instead, with a folder under
+`contracts/rehearsal/`, of which git keeps nothing:
+
+```sh
+KEYFLEET_MANIFEST=base KEYFLEET_STEP=founding-fleets \
+  forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps \
+  --sig "runInto(string)" rehearsal/safe --rpc-url "$RPC_URL"
+
+KEYFLEET_MANIFEST=base \
+  forge script script/RecordKeyfleets.s.sol:RecordKeyfleets \
+  --sig "runInto(string)" rehearsal --rpc-url "$RPC_URL"
+```
+
+The Safe steps create the folder they are given; the record step writes
+`base.deployed.json` into a folder that exists, as `rehearsal/` always does. To
+see what the next step prepares, make a batch's call on the fork from the
+Safe's address, impersonated as below. The trading factory's deployment stops
+on the fork, as on Base, until the Safe owns the subscription and lists the
+collection: impersonate the subscription's owner to call
+`requestSubscriptionOwnerTransfer(<subscription id>, <Safe>)` on the
+coordinator, then the Safe to call `acceptSubscriptionOwnerTransfer(<subscription id>)`
+and `addConsumer(<subscription id>, <collection>)`. Never pass `--broadcast` on
+this fork: Forge would then write `broadcast/<script>/8453/run-latest.json`,
+the real deployment's log. Without it, the deployment and the trading factory's
+deployment are simulated and leave only Forge's own logs under
+`broadcast/<script>/8453/dry-run/` and `cache/`, which git ignores. Rehearse
+whatever sends on chain 31337, below. The fork suites write only under
+`contracts/rehearsal/` too, and remove what they write.
+
+Keep everything at the real paths: `broadcast/<script>/8453/` outside
+`dry-run/`, `deployments/safe/base.*.json` and `deployments/base.deployed.json`
+are the evidence of the real deployment and steps, committed with them, and a
+rehearsal run as above never writes there. A file git shows there as new or
+changed that no real step wrote is a rehearsal's mistake: put back what git
+holds and delete the rest. Delete what a rehearsal leaves in
+`contracts/rehearsal/`, all but its `.gitignore`, and the `dry-run/` folders;
+git keeps none of it, nor anything a chain-31337 rehearsal writes.
 
 **A fork on chain 31337, for the anvil manifest.**
 

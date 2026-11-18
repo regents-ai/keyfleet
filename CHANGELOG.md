@@ -11923,3 +11923,15 @@ step's report).
   `DeployTradingFactory`'s own notes now say so, and the order on Base is the subscription
   handed to the Safe and the collection listed on it before the Safe opens phase 4 or approves a
   trading factory. The phase step does not check the subscription; the guide says the signers do.
+
+## 2026-11-18 — The plain Base fork rehearsal brought up to the live release
+
+- `docs/deployment.md`'s plain Base fork rehearsal no longer deploys a system or tells the
+  operator to delete the Base broadcast log, the Safe's batch files and the record before the
+  real deployment, which would delete the release's evidence once committed. The release is
+  live, so the fork already holds it; the Safe steps and the record step run there through
+  `runInto` into `contracts/rehearsal/`, with the commands, since a plain `run` would write files
+  with the real ones' names and content at the real paths. The trading factory's deployment is
+  shown waiting for the subscription, `--broadcast` is ruled out on that fork, and the guide says
+  which files to keep (everything at the real paths) and which to delete (`contracts/rehearsal/`
+  and the `dry-run/` logs). The commands were run on a local fork of Base.
