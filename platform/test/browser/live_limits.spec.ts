@@ -80,6 +80,30 @@ test("a page at a path that starts // goes live without its long #fragment, and 
   expect(errors).toEqual([])
 })
 
+// Costly failure: an address with a name and password before the host hides
+// them from the page's own reading of it, so writing that reading back names
+// another address, the browser refuses it, and the page never goes live.
+test("a page at an address with a name before its host goes live without its long #fragment, keeping its path and query", async ({
+  page,
+  baseURL,
+}) => {
+  const opened = liveConnections(page)
+  const errors = pageErrors(page)
+  const {protocol, host} = new URL(baseURL!)
+
+  await page.goto(`${protocol}//someone:secret@${host}/syndicate/1/proposals?from=a#${"a".repeat(300)}`)
+  await live(page)
+  expect(await page.evaluate(() => [window.location.pathname, window.location.search, window.location.hash])).toEqual([
+    "/syndicate/1/proposals",
+    "?from=a",
+    "",
+  ])
+
+  await page.waitForTimeout(settle)
+  expect(opened).toHaveLength(1)
+  expect(errors).toEqual([])
+})
+
 test("a proposal pasted past every field's limit keeps the page live, and the site says what is too long", async ({
   page,
 }) => {
