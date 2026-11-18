@@ -180,6 +180,8 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
         address wallet = tradingWallet;
         if (wallet == address(0)) revert NoTradingWallet();
         if (amount == 0) revert ZeroAmount();
+        uint256 balance = USDC.balanceOf(address(this));
+        if (amount > balance) revert AboveBalance(amount, balance);
         emit SentToTrading(wallet, amount);
         USDC.safeTransfer(wallet, amount);
     }
