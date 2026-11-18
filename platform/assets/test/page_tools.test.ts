@@ -36,8 +36,10 @@ it("offers Claim for all your Keys once for every fleet's group, and presses the
 })
 
 // Costly failure: the agent's words go over the page's live socket whatever
-// their length, and a message larger than the socket reads closes it.
-it("refuses a proposal longer than the page's own field takes, and presses one that fits", async () => {
+// their length, and are drawn back into the page's boxes: longer than a box
+// takes, the person's next keystroke is more than the socket reads, and the
+// page closes it.
+it("refuses a proposal longer than the page's own field takes, as the field counts it, and presses one that fits", async () => {
   const offered: ModelContextTool[] = []
   vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
   const {offerPageTool} = await import("../js/page_tools")
@@ -48,11 +50,15 @@ it("refuses a proposal longer than the page's own field takes, and presses one t
   const leaving = offerPageTool(root as unknown as HTMLElement, press)!
   const proposal = (text: string) => offered[0].execute({kind: "decision", key: "7", text}, {})
 
-  expect(await proposal("提".repeat(4001))).toMatchObject({ok: false, error: {code: "invalid_input"}})
+  // A box counts an emoji as two.
+  for (const text of ["提".repeat(4001), "😀".repeat(2001), "😀".repeat(4000)]) {
+    expect(await proposal(text)).toMatchObject({ok: false, error: {code: "invalid_input"}})
+  }
   expect(press).not.toHaveBeenCalled()
 
-  expect(await proposal("😀".repeat(4000))).toMatchObject({ok: true, transaction_hash: hash})
-  expect(press).toHaveBeenCalledWith(button, {kind: "decision", key: "7", text: "😀".repeat(4000)})
+  const fits = "😀".repeat(2000)
+  expect(await proposal(fits)).toMatchObject({ok: true, transaction_hash: hash})
+  expect(press).toHaveBeenCalledWith(button, {kind: "decision", key: "7", text: fits})
   leaving.abort()
 })
 

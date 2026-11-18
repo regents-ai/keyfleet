@@ -7527,7 +7527,7 @@
     {
       "name": "proposals_create",
       "title": "Propose",
-      "description": "Fill the proposal form with these fields and press Propose: opens a vote of every Key on what it does. Fields left out keep what the form shows.",
+      "description": "Fill the proposal form with these fields and press Propose: opens a vote of every Key on what it does. Fields left out keep what the form shows. This tool counts a field's length as the page's box does, an emoji as two; the site counts the words and a launch's fields in bytes, an emoji as four, and answers which is too long.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -7550,7 +7550,7 @@
           "text": {
             "type": "string",
             "maxLength": 4000,
-            "description": "The proposal's words, up to 4,000 bytes. They are kept on Keyfleet; the chain holds their fingerprint."
+            "description": "The proposal's words: at most 4,000 characters here, and 4,000 bytes once trimmed on the site. They are kept on Keyfleet; the chain holds their fingerprint."
           },
           "asset": {
             "type": "string",

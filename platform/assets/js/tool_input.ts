@@ -29,8 +29,10 @@ export function inputProblem(input: unknown, schema: Schema): string | null {
     const {enum: choices, maxLength} = schema.properties[key]
     if (typeof value !== "string") return `${key} must be a string.`
     if (choices && !choices.includes(value)) return `${key} must be one of ${choices.join(", ")}.`
-    // Counted in characters, as a schema counts them.
-    if (maxLength !== undefined && [...value].length > maxLength) return `${key} takes at most ${maxLength} characters.`
+    // Counted as the page's box counts it, in UTF-16 units: an emoji is two.
+    if (maxLength !== undefined && value.length > maxLength) {
+      return `${key} takes at most ${maxLength} characters, an emoji counting as two.`
+    }
   }
   return null
 }
