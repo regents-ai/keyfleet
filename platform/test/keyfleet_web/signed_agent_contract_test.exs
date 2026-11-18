@@ -77,6 +77,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @seasons "/api/v1/agent/fleets/{fleet_id}/seasons"
   @season_pick "/api/v1/agent/fleets/{fleet_id}/seasons/pick"
   @seasons_list "/api/v1/agent/fleets/{fleet_id}/seasons/list"
+  @season_picks "/api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks"
   @season_coins "/api/v1/agent/seasons/coins"
   @dm_inbox "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms"
   @dm_blocks "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks"
@@ -97,7 +98,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     "project" => "general",
     "poll_id" => "00000000-0000-4000-8000-000000000000",
     "advance_id" => "7",
-    "notebook_id" => "nb-0123456789abcdef"
+    "notebook_id" => "nb-0123456789abcdef",
+    "number" => "1"
   }
   @poll_question %{
     "question" => "Which door next?",
@@ -327,6 +329,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"GET", @seasons, [], nil},
     {"POST", @season_pick, [], %{"product" => "SOL-USD", "reason" => "r"}},
     {"POST", @seasons_list, [], %{"before" => "5"}},
+    {"POST", @season_picks, [], %{"after" => "5"}},
     {"POST", @notebook_create, [],
      %{
        "title" => "Log",
@@ -377,6 +380,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@poll_vote, Keyfleet.Polls.Vote, :cast},
              {@season_pick, KeyfleetWeb.AgentTools.Seasons, :pick},
              {@seasons_list, KeyfleetWeb.AgentTools.Seasons, :list},
+             {@season_picks, KeyfleetWeb.AgentTools.Seasons, :picks},
              {@dm <> "read", Keyfleet.Dms.Message, :in_conversation},
              {@project_start, Keyfleet.Projects.Project, :start},
              {@project_archive, Keyfleet.Projects.Project, :archive},
@@ -878,6 +882,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("ownership_refreshing")
 
     assert answer(c, c.signer, "POST", @season_pick, @address, %{"product" => "SOL-USD"}, 503).body ==
+             refused("ownership_refreshing")
+
+    running = Map.put(@address, "number", "2")
+
+    assert answer(c, c.signer, "POST", @season_picks, running, %{}, 503).body ==
              refused("ownership_refreshing")
 
     # Every route: unsigned, too large, signed with a body that fits none of
@@ -1892,8 +1901,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert %{"season" => 3, "key" => 2, "product" => "SOL-USD", "reason" => "Fast chain"} = mine
     assert answer(c, c.signer, "POST", @season_pick, @address, pick, 200).body["pick"] == mine
 
-    # Key 6 reads the season under way with every pick, and of the one taking
-    # picks only that one Key has locked, never whose or what.
+    # Key 6 reads the season under way with its first page of picks, and of
+    # the one taking picks only that one Key has locked, never whose or what.
     now = answer(c, second, "GET", @seasons, @address, nil, 200).body
 
     assert %{
@@ -1901,6 +1910,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              "holding" => "SOL-USD",
              "captain_key" => 2,
              "holding_open_price" => "103",
+             "pick_count" => 1,
              "picks" => [
                %{
                  "key" => 6,
@@ -1909,7 +1919,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
                  "open_price" => "103",
                  "void" => nil
                }
-             ]
+             ],
+             "next_after" => nil
            } = now["running"]
 
     assert %{"number" => 3, "my_pick" => nil, "keys_locked" => 1} = now["taking_picks"]
@@ -1965,21 +1976,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     assert Enum.sort(products) == ["ETH-USD", "SOL-USD", "USDC"]
 
-    # The settled seasons are the fleet's record, read by any paired agent.
+    # The settled seasons are the fleet's record, read by any paired agent:
+    # each with how many Keys picked and the best pick, its picks on their own.
     assert %{
              "seasons" => [
                %{
                  "number" => 1,
                  "holding_close_price" => "1",
-                 "picks" => [
-                   %{
-                     "key" => 2,
-                     "reason" => "Fast chain",
-                     "close_price" => "103",
-                     "result" => "0.03"
-                   },
-                   %{"key" => 6, "reason" => nil, "close_price" => "1990", "result" => "-0.005"}
-                 ]
+                 "pick_count" => 2,
+                 "best_pick" => %{"key" => 2, "product" => "SOL-USD", "result" => "0.03"}
                }
              ],
              "next_before" => nil,
@@ -1993,6 +1998,47 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     for before <- ["0", "01", "x", "9223372036854775808"] do
       assert answer(c, c.signer, "POST", @seasons_list, @address, %{"before" => before}, 400).body ==
                refused("invalid_season_cursor")
+    end
+
+    assert %{
+             "season" => 1,
+             "picks" => [
+               %{
+                 "key" => 2,
+                 "reason" => "Fast chain",
+                 "close_price" => "103",
+                 "result" => "0.03"
+               },
+               %{"key" => 6, "reason" => nil, "close_price" => "1990", "result" => "-0.005"}
+             ],
+             "next_after" => nil,
+             "has_more" => false
+           } = answer(c, stranger, "POST", @season_picks, @address, %{}, 200).body
+
+    for place <- ["0", "01", "x", "9223372036854775808"] do
+      assert answer(c, c.signer, "POST", @season_picks, @address, %{"after" => place}, 400).body ==
+               refused("invalid_season_cursor")
+    end
+
+    # The season under way's picks are its members' alone, with no result
+    # yet; a season taking picks, or none, has none to read here.
+    running = Map.put(@address, "number", "2")
+
+    assert %{
+             "season" => 2,
+             "picks" => [
+               %{"key" => 6, "reason" => "Following", "close_price" => nil, "result" => nil}
+             ]
+           } = answer(c, c.signer, "POST", @season_picks, running, %{}, 200).body
+
+    assert answer(c, stranger, "POST", @season_picks, running, %{}, 403).body ==
+             refused("season_needs_key")
+
+    for number <- ["3", "99"] do
+      at = Map.put(@address, "number", number)
+
+      assert answer(c, c.signer, "POST", @season_picks, at, %{}, 404).body ==
+               refused("season_unknown")
     end
   end
 
@@ -2139,6 +2185,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"GET", @seasons},
       {"POST", @season_pick},
       {"POST", @seasons_list},
+      {"POST", @season_picks},
       {"GET", @season_coins},
       {"GET", @dm_inbox},
       {"GET", @dm_blocks},

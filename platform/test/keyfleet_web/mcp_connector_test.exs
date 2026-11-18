@@ -744,6 +744,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
           {"seasons_list", %{"fleet_id" => @fleet, "before" => "1"}},
           {"seasons_list", %{"fleet_id" => @fleet, "before" => "0"}},
           {"seasons_list", %{"fleet_id" => "no_such_fleet"}},
+          {"seasons_picks", %{"fleet_id" => @fleet, "number" => "1"}},
+          {"seasons_picks", %{"fleet_id" => @fleet, "number" => "2"}},
+          {"seasons_picks", %{"fleet_id" => @fleet, "number" => "3"}},
+          {"seasons_picks", %{"fleet_id" => @fleet, "number" => "1", "after" => "0"}},
+          {"seasons_picks", %{"fleet_id" => "no_such_fleet", "number" => "1"}},
           {"seasons_coins", %{}}
         ],
         over_mcp <- [result(call(token, name, input, c)), result(signed_call(c, name, input))] do
@@ -806,9 +811,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
            ]["reason"] == emoji["reason"]
   end
 
-  # An agent whose person holds no Key of the fleet reads its settled seasons
-  # and the products open to picks, and neither reads the seasons now nor
-  # picks; an app that hasn't paired runs none of the four.
+  # An agent whose person holds no Key of the fleet reads its settled seasons,
+  # their picks and the products open to picks, and neither reads the seasons
+  # now nor picks; an app that hasn't paired runs none of the season tools.
   test "a season tool refuses a non-member as its signed request does, and an unpaired app",
        c do
     {:ok, outsider} = Siwa.LocalSigner.new()
@@ -818,9 +823,11 @@ defmodule KeyfleetWeb.McpConnectorTest do
     played!(%Actors.Human{human_account_id: 1, wallet_addresses: [@owner]})
     pick = %{"fleet_id" => @fleet, "product" => "SOL-USD"}
 
-    for name <- ["seasons_show", "seasons_pick"] do
-      input = if name == "seasons_pick", do: pick, else: %{"fleet_id" => @fleet}
-
+    for {name, input} <- [
+          {"seasons_show", %{"fleet_id" => @fleet}},
+          {"seasons_pick", pick},
+          {"seasons_picks", %{"fleet_id" => @fleet, "number" => "2"}}
+        ] do
       assert %{"isError" => true, "content" => [%{"text" => text}]} =
                result(call(token, name, input, c))
 
@@ -829,6 +836,9 @@ defmodule KeyfleetWeb.McpConnectorTest do
 
     assert %{"isError" => false, "structuredContent" => %{"seasons" => [%{"number" => 1}]}} =
              result(call(token, "seasons_list", %{"fleet_id" => @fleet}, c))
+
+    assert %{"isError" => false, "structuredContent" => %{"picks" => [%{"key" => 1}]}} =
+             result(call(token, "seasons_picks", %{"fleet_id" => @fleet, "number" => "1"}, c))
 
     assert %{"isError" => false, "structuredContent" => %{"products" => products}} =
              result(call(token, "seasons_coins", %{}, c))
@@ -841,6 +851,7 @@ defmodule KeyfleetWeb.McpConnectorTest do
           {"seasons_show", %{"fleet_id" => @fleet}},
           {"seasons_pick", pick},
           {"seasons_list", %{"fleet_id" => @fleet}},
+          {"seasons_picks", %{"fleet_id" => @fleet, "number" => "1"}},
           {"seasons_coins", %{}}
         ],
         do: assert(not_paired?(call(unpaired, name, input, c)), name)

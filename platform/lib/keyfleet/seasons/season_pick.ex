@@ -130,14 +130,32 @@ defmodule Keyfleet.Seasons.SeasonPick do
       prepare Keyfleet.Seasons.Preparations.OwnPick
     end
 
-    # Every pick of a season that has started, in the order they were locked.
+    # The picks of a season that has started, in the order they were locked,
+    # after the one locked at `after` when it is given.
     read :in_season do
       argument :fleet_id, :string, allow_nil?: false
       argument :number, :integer, allow_nil?: false
+      argument :after, :integer, constraints: [min: 1, max: @bigint]
 
       filter expr(
                season.fleet_id == ^arg(:fleet_id) and season.number == ^arg(:number) and
-                 not is_nil(season.locked_at)
+                 not is_nil(season.locked_at) and
+                 (is_nil(^arg(:after)) or lock_order > ^arg(:after))
+             )
+
+      prepare build(sort: [lock_order: :asc])
+    end
+
+    # The same of a settled season, for anyone: the public record's.
+    read :in_settled_season do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :number, :integer, allow_nil?: false
+      argument :after, :integer, constraints: [min: 1, max: @bigint]
+
+      filter expr(
+               season.fleet_id == ^arg(:fleet_id) and season.number == ^arg(:number) and
+                 not is_nil(season.settled_at) and
+                 (is_nil(^arg(:after)) or lock_order > ^arg(:after))
              )
 
       prepare build(sort: [lock_order: :asc])
@@ -169,7 +187,7 @@ defmodule Keyfleet.Seasons.SeasonPick do
     end
 
     # Wider than the class: a settled season's picks are public record.
-    policy action(:settled) do
+    policy action([:settled, :in_settled_season]) do
       authorize_if always()
     end
 

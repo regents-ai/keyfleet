@@ -11,7 +11,8 @@ defmodule Keyfleet.Seasons do
   order picks were locked. Until the season starts a pick is read only by
   its own Key's holder and that Key's agents; from the start every member
   reads every pick. Once a season is settled it is public record, its picks
-  with it: anyone reads it (`settled_page/2`), its Keys by number.
+  with it: anyone reads it (`settled_page/2`, `settled_picks_page/4`), its
+  Keys by number. No read answers more than a page, however many Keys pick.
 
   When a season ends each pick is scored by what its product did over the
   season, and the best one may take the crown: the fleet's holding for the
@@ -29,7 +30,7 @@ defmodule Keyfleet.Seasons do
   """
   use Ash.Domain
 
-  alias Keyfleet.Seasons.Season
+  alias Keyfleet.Seasons.{Season, SeasonPick}
 
   @season_hours 3
   # Settled seasons a page of the public record holds.
@@ -46,7 +47,6 @@ defmodule Keyfleet.Seasons do
     resource Keyfleet.Seasons.SeasonPick do
       define :pick, action: :pick, args: [:fleet_id, :number]
       define :my_pick, action: :mine, args: [:fleet_id, :number], not_found_error?: false
-      define :season_picks, action: :in_season, args: [:fleet_id, :number]
     end
   end
 
@@ -79,9 +79,9 @@ defmodule Keyfleet.Seasons do
   def taking_picks?(%Season{}, _now), do: false
 
   @doc """
-  A page of the fleet's settled seasons, newest first, each with its picks in
-  the order they were locked: the newest, or those numbered below `before`.
-  Answers `{seasons, more?}`, `more?` saying older ones follow.
+  A page of the fleet's settled seasons, newest first, each with how many
+  Keys picked and its best pick: the newest, or those numbered below
+  `before`. Answers `{seasons, more?}`, `more?` saying older ones follow.
   """
   @spec settled_page(String.t(), pos_integer() | nil) :: {[Season.t()], boolean()}
   def settled_page(fleet_id, before) do
@@ -89,14 +89,14 @@ defmodule Keyfleet.Seasons do
     |> Ash.Query.for_read(:settled, %{fleet_id: fleet_id, before: before})
     |> Ash.Query.limit(@page + 1)
     |> Ash.read!()
-    |> Enum.split(@page)
-    |> then(fn {seasons, older} -> {seasons, older != []} end)
+    |> split(@page)
   end
 
   @doc """
-  The fleet's newest settled season numbered below `before`, with its picks,
-  or nil when none is. Named by the season under way, it is the one settled
-  as that one started, even if a turn has settled that one since.
+  The fleet's newest settled season numbered below `before`, with how many
+  Keys picked and its best pick, or nil when none is. Named by the season
+  under way, it is the one settled as that one started, even if a turn has
+  settled that one since.
   """
   @spec last_settled(String.t(), pos_integer() | nil) :: Season.t() | nil
   def last_settled(fleet_id, before) do
@@ -104,5 +104,58 @@ defmodule Keyfleet.Seasons do
     |> Ash.Query.for_read(:settled, %{fleet_id: fleet_id, before: before})
     |> Ash.Query.limit(1)
     |> Ash.read_one!()
+  end
+
+  @doc "The fleet's settled season numbered `number`, for anyone, or nil when it has none."
+  @spec settled_season(String.t(), pos_integer()) :: Season.t() | nil
+  def settled_season(fleet_id, number) do
+    Season
+    |> Ash.Query.for_read(:settled, %{fleet_id: fleet_id, number: number})
+    |> Ash.read_one!()
+  end
+
+  @doc """
+  Up to `size` picks of the fleet's season numbered `number` once it has
+  started, in the order they were locked, after the one locked at `place`
+  when it is given, as `actor` in `opts` may read them: a member reads the
+  season under way's (`:in_season`). Answers `{:ok, {picks, more?}}`, or the
+  read's error; `next_after/1` names the page after it.
+  """
+  @spec picks_page(String.t(), pos_integer(), pos_integer() | nil, pos_integer(), keyword()) ::
+          {:ok, {[SeasonPick.t()], boolean()}} | {:error, term()}
+  def picks_page(fleet_id, number, place, size, opts) do
+    SeasonPick
+    |> Ash.Query.for_read(
+      :in_season,
+      %{fleet_id: fleet_id, number: number, after: place},
+      Keyword.take(opts, [:actor])
+    )
+    |> Ash.Query.limit(size + 1)
+    |> Ash.read(opts)
+    |> case do
+      {:ok, picks} -> {:ok, split(picks, size)}
+      {:error, _error} = error -> error
+    end
+  end
+
+  @doc "The same of a settled season, for anyone: its public record's (`:in_settled_season`)."
+  @spec settled_picks_page(String.t(), pos_integer(), pos_integer() | nil, pos_integer()) ::
+          {[SeasonPick.t()], boolean()}
+  def settled_picks_page(fleet_id, number, place, size) do
+    SeasonPick
+    |> Ash.Query.for_read(:in_settled_season, %{fleet_id: fleet_id, number: number, after: place})
+    |> Ash.Query.limit(size + 1)
+    |> Ash.read!()
+    |> split(size)
+  end
+
+  @doc "The `after` that reads the picks following `picks`, or nil when none follow."
+  @spec next_after({[SeasonPick.t()], boolean()}) :: pos_integer() | nil
+  def next_after({picks, true}), do: List.last(picks).lock_order
+  def next_after({_picks, false}), do: nil
+
+  defp split(records, size) do
+    {page, rest} = Enum.split(records, size)
+    {page, rest != []}
   end
 end

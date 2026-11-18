@@ -94,6 +94,7 @@ defmodule KeyfleetWeb.AgentTools do
     seasons_show: {@seasons, :show, "Season", :read},
     seasons_pick: {@seasons, :pick, "Pick", :repeatable},
     seasons_list: {@seasons, :list, "Seasons", :read},
+    seasons_picks: {@seasons, :picks, "Season picks", :read},
     seasons_coins: {@seasons, :coins, "Coins", :read},
     projects_list: {@projects, :list, "Projects", :read},
     projects_start: {@projects, :start, "New project", :once},

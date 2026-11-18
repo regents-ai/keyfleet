@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
 
   @fleet "fibonacci_syndicate"
   @path "/api/v1/fleets/{fleet_id}/seasons"
+  @season "/api/v1/fleets/{fleet_id}/seasons/{number}"
   @first "0x" <> String.duplicate("a", 40)
   @second "0x" <> String.duplicate("b", 40)
 
@@ -58,7 +59,7 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
            } = body
 
     assert Map.keys(season) ==
-             ~w(captain_key ends_at holding holding_close_price holding_open_price holding_result number picks starts_at)
+             ~w(best_pick captain_key ends_at holding holding_close_price holding_open_price holding_result number pick_count starts_at)
 
     assert %{
              "number" => 1,
@@ -66,13 +67,32 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
              "captain_key" => nil,
              "holding_open_price" => "1",
              "holding_close_price" => "1",
-             "holding_result" => "0"
+             "holding_result" => "0",
+             "pick_count" => 2,
+             "best_pick" => %{"key" => 1, "product" => "SOL-USD", "result" => "0.03"}
            } = season
 
     assert DateTime.compare(at(season["starts_at"]), b1) == :eq
     assert DateTime.compare(at(season["ends_at"]), b2) == :eq
 
-    assert season["picks"] == [
+    # Its picks are read on their own; the season under way and the one
+    # taking picks have none to read here.
+    picks = get(conn, "/api/v1/fleets/#{@fleet}/seasons/1")
+    picks_body = json_response(picks, 200)
+
+    assert get_resp_header(picks, "cache-control") == ["no-store"]
+    assert ContractSchema.response_errors(picks_body, "GET", @season, 200) == []
+
+    assert %{"fleet_id" => @fleet, "season" => 1, "next_after" => nil, "has_more" => false} =
+             picks_body
+
+    for number <- [2, 3] do
+      unread = conn |> get("/api/v1/fleets/#{@fleet}/seasons/#{number}") |> json_response(404)
+      assert unread == refused("season_unknown")
+      assert ContractSchema.response_errors(unread, "GET", @season, 404) == []
+    end
+
+    assert picks_body["picks"] == [
              %{
                "key" => 1,
                "product" => "SOL-USD",
@@ -93,10 +113,43 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
              }
            ]
 
-    text = response.resp_body
-    refute text =~ "Under way"
-    refute text =~ "Not yet seen"
-    refute text =~ ~r/0x[0-9a-f]{40}/i
+    for text <- [response.resp_body, picks.resp_body] do
+      refute text =~ "Under way"
+      refute text =~ "Not yet seen"
+      refute text =~ ~r/0x[0-9a-f]{40}/i
+    end
+  end
+
+  # A season with more picks than a page holds: the first hundred in lock
+  # order, then the rest by the cursor the page gave; the record counts them
+  # all and names the best.
+  test "a settled season's picks page in lock order by the cursor each page gives",
+       %{conn: conn} do
+    [b0, b1, b2 | _] = SeasonHelpers.boundaries(2)
+    SeasonHelpers.coinbase!(%{"SOL-USD" => [{b1, "100"}, {b2, "103"}]})
+    SeasonHelpers.turn!(@fleet, b0)
+
+    for token_id <- 1..101 do
+      wallet = wallet(token_id)
+      if token_id > 2, do: holds!(token_id, wallet)
+      Seasons.pick!(@fleet, 1, %{product: "SOL-USD"}, actor: human(token_id, wallet))
+    end
+
+    SeasonHelpers.turn!(@fleet, b1)
+    SeasonHelpers.turn!(@fleet, b2)
+
+    first = conn |> get("/api/v1/fleets/#{@fleet}/seasons/1") |> json_response(200)
+    assert ContractSchema.response_errors(first, "GET", @season, 200) == []
+    assert Enum.map(first["picks"], & &1["key"]) == Enum.to_list(1..100)
+    assert %{"next_after" => place, "has_more" => true} = first
+
+    rest = conn |> get("/api/v1/fleets/#{@fleet}/seasons/1?after=#{place}") |> json_response(200)
+    assert ContractSchema.response_errors(rest, "GET", @season, 200) == []
+    assert Enum.map(rest["picks"], & &1["key"]) == [101]
+    assert %{"next_after" => nil, "has_more" => false} = rest
+
+    assert %{"seasons" => [%{"pick_count" => 101, "best_pick" => %{"key" => 1}}]} =
+             conn |> get("/api/v1/fleets/#{@fleet}/seasons") |> json_response(200)
   end
 
   # Twenty-one seasons settled by turns that caught up at once: the newest
@@ -136,10 +189,39 @@ defmodule KeyfleetWeb.PublicSeasonsTest do
     body = conn |> get("/api/v1/fleets/no_such_fleet/seasons") |> json_response(404)
     assert body == refused("fleet_unknown")
     assert ContractSchema.response_errors(body, "GET", @path, 404) == []
+
+    # One season's picks: the cursor is after alone, and a number that names
+    # no season names none.
+    SeasonHelpers.coinbase!(%{"SOL-USD" => []})
+    [b0, b1, b2 | _] = SeasonHelpers.boundaries(2)
+    Enum.each([b0, b1, b2], &SeasonHelpers.turn!(@fleet, &1))
+
+    for query <-
+          ["after=0", "after=01", "after=x", "after=9223372036854775808"] ++
+            ["before=2", "after=2&before=1"] do
+      body = conn |> get("/api/v1/fleets/#{@fleet}/seasons/1?#{query}") |> json_response(400)
+      assert body == refused("invalid_season_cursor"), query
+      assert ContractSchema.response_errors(body, "GET", @season, 400) == []
+    end
+
+    for number <- ["0", "01", "x", "99", "9223372036854775808"] do
+      body = conn |> get("/api/v1/fleets/#{@fleet}/seasons/#{number}") |> json_response(404)
+      assert body == refused("season_unknown"), number
+      assert ContractSchema.response_errors(body, "GET", @season, 404) == []
+    end
+
+    body = conn |> get("/api/v1/fleets/no_such_fleet/seasons/1") |> json_response(404)
+    assert body == refused("fleet_unknown")
+    assert ContractSchema.response_errors(body, "GET", @season, 404) == []
   end
 
-  defp human(@first), do: %Actors.Human{human_account_id: 1, wallet_addresses: [@first]}
-  defp human(@second), do: %Actors.Human{human_account_id: 2, wallet_addresses: [@second]}
+  defp human(@first), do: human(1, @first)
+  defp human(@second), do: human(2, @second)
+  defp human(id, wallet), do: %Actors.Human{human_account_id: id, wallet_addresses: [wallet]}
+
+  defp wallet(1), do: @first
+  defp wallet(2), do: @second
+  defp wallet(token_id), do: "0x" <> String.pad_leading(Integer.to_string(token_id), 40, "0")
 
   defp at(text) do
     {:ok, at, 0} = DateTime.from_iso8601(text)

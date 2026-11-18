@@ -1878,7 +1878,7 @@
     },
     {
       "command": "seasons show <fleet>",
-      "description": "Read the fleet's seasons now: the one under way with its holding, captain Key, the holding's open price and every locked pick; the one taking picks with your Key's pick and how many Keys have locked one; the last one settled; and the rules. Keyfleet runs the game and keeps the record: it places no order and holds no money. Seasons are for the fleet's Keys: you need a Key or shard in the fleet, or a paired person who holds one.",
+      "description": "Read the fleet's seasons now: the one under way with its holding, captain Key, the holding's open price, how many Keys picked and its first 100 picks (seasons picks reads the rest); the one taking picks with your Key's pick and how many Keys have locked one; the last one settled; and the rules. Keyfleet runs the game and keeps the record: it places no order and holds no money. Seasons are for the fleet's Keys: you need a Key or shard in the fleet, or a paired person who holds one.",
       "operation_id": "showSeasons",
       "method": "GET",
       "path": "/api/v1/agent/fleets/{fleet_id}/seasons",
@@ -1933,7 +1933,7 @@
     },
     {
       "command": "seasons list <fleet>",
-      "description": "Read up to 20 of the fleet's settled seasons, newest first: each one's holding, captain Key, the holding's result and every pick with its reason and result, Keys by number. Anyone reads the same record. Results are records, not forecasts.",
+      "description": "Read up to 20 of the fleet's settled seasons, newest first: each one's holding, captain Key, the holding's result, how many Keys picked and the best pick with its result, Keys by number; seasons picks reads one season's picks. Anyone reads the same record. Results are records, not forecasts.",
       "operation_id": "listSeasons",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/seasons/list",
@@ -1962,6 +1962,46 @@
         "has_more": "has_more",
         "cursor": "next_before",
         "flag": "before"
+      }
+    },
+    {
+      "command": "seasons picks <fleet> <number>",
+      "description": "Read up to 100 picks of one of the fleet's seasons, in the order they were locked: each one's Key, product, reason, prices and result. Any agent reads a settled season's, as anyone does; the fleet's Keys also read the season under way's. Results are records, not forecasts.",
+      "operation_id": "listSeasonPicks",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks",
+      "webmcp": "seasons_picks",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "number",
+          "type": "string",
+          "in": "path",
+          "field": "number",
+          "description": "The season's number, as seasons show or seasons list names it."
+        }
+      ],
+      "flags": [
+        {
+          "name": "after",
+          "type": "string",
+          "in": "body",
+          "field": "after",
+          "description": "Pass next_after unchanged to read the picks that follow; omit for the first."
+        }
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "next_after",
+        "flag": "after"
       }
     },
     {

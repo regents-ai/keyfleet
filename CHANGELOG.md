@@ -12977,3 +12977,36 @@ step's report).
   - Each page of the public record carries every pick of its seasons, and a database
     failure there answers a server error, not a 503.
   - Not yet run by a real agent.
+
+## 2026-11-18 — No season answer grows with the number of Keys
+
+- A hard cutover of the unreleased 36.4.0 season shapes, one shape each:
+  - A settled season in `seasons_list` and the public record carries its holding,
+    captain, prices, result, `pick_count` and `best_pick` (`{key, product, result}` or
+    null), no longer its picks. The best pick is a `has_one` read ordered by the stored
+    result and lock order.
+  - `seasons_show`'s `running` carries `pick_count`, its first 100 picks in lock order
+    and `next_after`.
+  - One season's picks are read on their own, 100 a page in lock order, continued by
+    `next_after` (the last pick's place in the lock order, as text): anyone at
+    `GET /api/v1/fleets/:fleet_id/seasons/:number` (`showPublicSeason`), settled seasons
+    only, a season under way or taking picks answering 404 `season_unknown`; a paired
+    agent with the new fifth tool `seasons_picks`,
+    `POST /api/v1/agent/fleets/:fleet_id/seasons/:number/picks` (`listSeasonPicks`),
+    which also reads the season under way for the fleet's members (403
+    `season_needs_key` otherwise, 503 `ownership_refreshing` while Keys are read again).
+    A fifth tool rather than a `season` argument on `seasons_list`, so no tool answers
+    two shapes.
+  - New refusal `season_unknown`; `invalid_season_cursor` now names both cursors.
+- The contract, the public OpenAPI file (still 16.1.0), the tool manifest, the command
+  list (`seasons picks <fleet> <number>`), `/docs`, `skill/decide.md`, `agents.md`,
+  `agents/claude.md`, `llms.md`, `docs/agent-parity.md`, `docs/agent-feature-map.md` and
+  `verification/features.yml` say the same.
+- Tests: `SignedAgentContractTest` drives every documented answer of the new route;
+  `McpConnectorTest` runs `seasons_picks` through the connector and signed `/mcp`
+  against its signed request; `PublicSeasonsTest` reads a season's picks signed out,
+  pages 101 picks by the cursor, and refuses a season not settled, a bad number and a
+  bad cursor; `SeasonsTest` pages the picks of the season under way.
+- Not covered: the best pick in a list is chosen by the result as stored, to 28 digits,
+  where the crown is decided exactly; they could differ only for two results equal to
+  28 digits.

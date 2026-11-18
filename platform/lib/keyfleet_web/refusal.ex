@@ -396,8 +396,11 @@ defmodule KeyfleetWeb.Refusal do
       {"This doesn't fit a pick.",
        "/docs#seasons gives the rules for a pick's product and reason. Correct it, then send the request again."},
     "invalid_season_cursor" =>
-      {"This isn't a season number to read before.",
-       "Send before as the next_before of the page you read, or leave it out for the newest seasons."},
+      {"This isn't a place in the fleet's seasons to read from.",
+       "Send before as the next_before, or after as the next_after, of the page you read, unchanged, or leave it out for the first page."},
+    "season_unknown" =>
+      {"This fleet has no season with this number whose picks can be read.",
+       "Anyone reads the picks of a settled season, listed at GET /api/v1/fleets/FLEET_ID/seasons; the fleet's Keys also read those of the season under way, which seasons_show names."},
 
     # Direct messages between Keys.
     "not_your_key" =>

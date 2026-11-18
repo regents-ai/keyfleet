@@ -9,7 +9,8 @@ defmodule Keyfleet.Seasons.Season do
   the season are set. Only `Keyfleet.Seasons.Turn` writes seasons. A fleet has
   at most one season taking picks and one running at a time, and seasons are
   never removed. Only the fleet's members read them, but for a settled
-  season: that is public record, read by anyone with its picks (`:settled`).
+  season: that is public record, read by anyone (`:settled`), its picks a
+  page at a time.
 
   Opening one, which ends every turn, is announced on `Keyfleet.Seasons.topic/1`
   as "seasons_changed".
@@ -117,26 +118,32 @@ defmodule Keyfleet.Seasons.Season do
       prepare build(load: [:keys_locked])
     end
 
-    # The season under way: locked at its start, not yet settled.
+    # The season under way: locked at its start, not yet settled, with how
+    # many Keys picked for it.
     read :running do
       argument :fleet_id, :string, allow_nil?: false
       get? true
 
       filter expr(fleet_id == ^arg(:fleet_id) and not is_nil(locked_at) and is_nil(settled_at))
+      prepare build(load: [:keys_locked])
     end
 
     # The fleet's settled seasons, newest first, below `before` when it is
-    # given, each with its picks: the fleet's public record.
+    # given, or the one numbered `number`, each with how many Keys picked and
+    # its best pick: the fleet's public record. A season's picks are read a
+    # page at a time (`Keyfleet.Seasons.SeasonPick`, `:in_settled_season`).
     read :settled do
       argument :fleet_id, :string, allow_nil?: false
       argument :before, :integer, constraints: [min: 1, max: @bigint]
+      argument :number, :integer, constraints: [min: 1, max: @bigint]
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and not is_nil(settled_at) and
-                 (is_nil(^arg(:before)) or number < ^arg(:before))
+                 (is_nil(^arg(:before)) or number < ^arg(:before)) and
+                 (is_nil(^arg(:number)) or number == ^arg(:number))
              )
 
-      prepare build(sort: [number: :desc], load: [:settled_picks])
+      prepare build(sort: [number: :desc], load: [:keys_locked, :best_pick])
     end
 
     create :open do
@@ -217,12 +224,17 @@ defmodule Keyfleet.Seasons.Season do
 
     has_many :picks, Keyfleet.Seasons.SeasonPick
 
-    # A settled season's picks, as its public record holds them, in the order
-    # they were locked.
-    has_many :settled_picks, Keyfleet.Seasons.SeasonPick do
+    # A settled season's best pick, as its public record shows it: the
+    # highest result, and of equal results the one locked first. It orders
+    # picks by the result kept, to 28 digits, as `Keyfleet.Seasons.Rules.best/1`,
+    # which decides the crown exactly, orders any two whose results still
+    # differ when kept so.
+    has_one :best_pick, Keyfleet.Seasons.SeasonPick do
       public? true
+      from_many? true
       read_action :settled
-      sort lock_order: :asc
+      filter expr(not is_nil(result))
+      sort result: :desc, lock_order: :asc
     end
   end
 

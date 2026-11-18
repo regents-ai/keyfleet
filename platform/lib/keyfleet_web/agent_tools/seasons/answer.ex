@@ -3,12 +3,14 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
   What a fleet's seasons (`Keyfleet.Seasons`) answer an agent, the same over
   its signed requests (`KeyfleetWeb.AgentSeasonController`) and as the Claude
   connector's tools (`KeyfleetWeb.AgentTools.Seasons`): the seasons now,
-  locking or changing the agent's Key's pick, the settled seasons and the
-  products open to picks. The settled seasons are the fleet's public record,
-  answered alike to anyone, at the public address too
+  locking or changing the agent's Key's pick, the settled seasons, one
+  season's picks a page at a time, and the products open to picks. The
+  settled seasons and their picks are the fleet's public record, answered
+  alike to anyone, at the public addresses too
   (`KeyfleetWeb.PublicSeasonsController`). Each answer is
   `{status, body, nil}`; `params` is the request's JSON, its body or query
-  with the names in its address (`fleet_id`).
+  with the names in its address (`fleet_id`, and `number` at the public
+  address of one season).
 
   Only an agent that is one of the fleet's members reads its seasons now and
   picks (`Keyfleet.Access`, `:seasons`); any other is answered
@@ -24,6 +26,10 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
   alias Keyfleet.Seasons.Errors
   alias Keyfleet.Seasons.Season
   alias KeyfleetWeb.{Refusal, SeasonJSON}
+
+  # Picks a page holds, of the season under way in `show` and of any season
+  # read on its own.
+  @picks 100
 
   # A deployed fleet's turn opens its first season within ten minutes
   # (`Keyfleet.Seasons.Turns`).
@@ -45,6 +51,28 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
       else: refusal(404, "fleet_unknown")
   end
 
+  # A settled season's picks, at the public address; the query is `after`
+  # alone or nothing.
+  def answer(:season, %{"fleet_id" => fleet_id} = params, _actor, _waiter) do
+    with :ok <- known(fleet_id, Fleets.open_fleet_ids()),
+         {:ok, number, place} <- picks_query(params) do
+      if Seasons.settled_season(fleet_id, number),
+        do: settled_picks(fleet_id, number, place),
+        else: refusal(404, "season_unknown")
+    end
+  end
+
+  # A season's picks for an agent: a settled one's for any, the one under
+  # way's for a member.
+  def answer(:picks, %{"fleet_id" => fleet_id} = params, actor, _waiter) do
+    with :ok <- known(fleet_id, Fleets.catalog_ids()),
+         {:ok, number, place} <- picks_query(params) do
+      if Seasons.settled_season(fleet_id, number),
+        do: settled_picks(fleet_id, number, place),
+        else: running_picks(fleet_id, number, place, actor)
+    end
+  end
+
   def answer(op, %{"fleet_id" => fleet_id} = params, actor, _waiter) do
     cond do
       fleet_id not in Fleets.catalog_ids() -> refusal(404, "fleet_unknown")
@@ -53,9 +81,10 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
     end
   end
 
-  # A member reads the season under way with every pick, the one taking
-  # picks with its own Key's pick alone, and the one settled as the one under
-  # way started: a turn settling that one meanwhile changes neither.
+  # A member reads the season under way with its first page of picks, the
+  # one taking picks with its own Key's pick alone, and the one settled as
+  # the one under way started: a turn settling that one meanwhile changes
+  # neither.
   defp run(:show, %{"fleet_id" => fleet_id}, actor) do
     with {:ok, running} <- Seasons.running_season(fleet_id, actor: actor, authorize_with: :error),
          {:ok, upcoming} <-
@@ -88,7 +117,7 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
   end
 
   defp record(fleet_id, query) do
-    case cursor(query) do
+    case cursor(query, "before") do
       {:ok, before} ->
         {seasons, more?} = Seasons.settled_page(fleet_id, before)
         {200, SeasonJSON.record(fleet_id, seasons, more?), nil}
@@ -98,10 +127,51 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
     end
   end
 
-  defp picks(nil, _actor), do: {:ok, []}
+  defp settled_picks(fleet_id, number, place) do
+    page = Seasons.settled_picks_page(fleet_id, number, place, @picks)
+    {200, SeasonJSON.picks(fleet_id, number, page), nil}
+  end
+
+  # Who holds which Key decides whether the season under way is read, so it
+  # isn't read from ownership that isn't fresh.
+  defp running_picks(fleet_id, number, place, actor) do
+    if Keyfleet.Chain.fresh?(fleet_id) do
+      with {:ok, %Season{number: ^number}} <-
+             Seasons.running_season(fleet_id, actor: actor, authorize_with: :error),
+           {:ok, page} <-
+             Seasons.picks_page(fleet_id, number, place, @picks,
+               actor: actor,
+               authorize_with: :error
+             ) do
+        {200, SeasonJSON.picks(fleet_id, number, page), nil}
+      else
+        {:ok, _not_under_way} -> refusal(404, "season_unknown")
+        {:error, error} -> refuse(error)
+      end
+    else
+      refusal(503, "ownership_refreshing")
+    end
+  end
+
+  defp known(fleet_id, fleet_ids),
+    do: if(fleet_id in fleet_ids, do: :ok, else: refusal(404, "fleet_unknown"))
+
+  # The season's `number`, from the address, names no season unless it is
+  # one; `after` is the page's cursor, alone or not given.
+  defp picks_query(params) do
+    query = Map.drop(params, ["fleet_id", "number"])
+
+    case {number(params["number"]), cursor(query, "after")} do
+      {nil, _cursor} -> refusal(404, "season_unknown")
+      {_number, :error} -> refusal(400, "invalid_season_cursor")
+      {{:ok, number}, {:ok, place}} -> {:ok, number, place}
+    end
+  end
+
+  defp picks(nil, _actor), do: {:ok, {[], false}}
 
   defp picks(%Season{fleet_id: fleet_id, number: number}, actor),
-    do: Seasons.season_picks(fleet_id, number, actor: actor, authorize_with: :error)
+    do: Seasons.picks_page(fleet_id, number, nil, @picks, actor: actor, authorize_with: :error)
 
   defp mine(nil, _actor), do: {:ok, nil}
 
@@ -135,16 +205,25 @@ defmodule KeyfleetWeb.AgentTools.Seasons.Answer do
       "it then. Pick again for it."
   end
 
-  defp cursor(query) when map_size(query) == 0, do: {:ok, nil}
+  defp cursor(query, _name) when map_size(query) == 0, do: {:ok, nil}
 
-  defp cursor(%{"before" => value} = query) when map_size(query) == 1 and is_binary(value) do
-    if Regex.match?(~r/\A[1-9][0-9]{0,18}\z/, value) and
-         String.to_integer(value) <= 9_223_372_036_854_775_807,
-       do: {:ok, String.to_integer(value)},
-       else: :error
+  defp cursor(query, name) when map_size(query) == 1 do
+    case number(query[name]) do
+      {:ok, value} -> {:ok, value}
+      nil -> :error
+    end
   end
 
-  defp cursor(_query), do: :error
+  defp cursor(_query, _name), do: :error
+
+  # A positive decimal at most the largest bigint, written without leading zeros.
+  defp number(value) when is_binary(value) do
+    if Regex.match?(~r/\A[1-9][0-9]{0,18}\z/, value) and
+         String.to_integer(value) <= 9_223_372_036_854_775_807,
+       do: {:ok, String.to_integer(value)}
+  end
+
+  defp number(_value), do: nil
 
   defp refusal(status, code), do: {status, Refusal.body(code), nil}
   defp refusal(status, code, hint), do: {status, Refusal.body(code, hint), nil}

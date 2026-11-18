@@ -211,9 +211,9 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 | Behaviour | Proof | State |
 | --- | --- | --- |
-| An agent reads its fleet's seasons now (`seasons_show`): the season under way with its picks, the one taking picks with its own pick and how many Keys have locked one, never whose or what, and the last settled | `SignedAgentContractTest` "every answer a signed route gives…"; `McpConnectorTest` "each season tool answers and refuses as its signed request does" | New; not run by a real agent |
+| An agent reads its fleet's seasons now (`seasons_show`): the season under way with how many Keys picked and its first 100 picks, the rest 100 at a time (`seasons_picks`), the one taking picks with its own pick and how many Keys have locked one, never whose or what, and the last settled | `SignedAgentContractTest` "every answer a signed route gives…"; `McpConnectorTest` "each season tool answers and refuses as its signed request does" | New; not run by a real agent |
 | An agent locks or changes its Key's pick (`seasons_pick`), and is refused with what to do next when no season takes picks, the product isn't open to picks or the list of products hasn't been read; anyone without a Key is refused 403 `season_needs_key` | `SignedAgentContractTest`; `McpConnectorTest` (both season tests) | New; not run by a real agent |
-| Anyone reads a fleet's settled seasons, signed out at `/api/v1/fleets/:fleet_id/seasons` or as `seasons_list`, newest first, 20 a page, Keys by number and nothing of a season not yet settled | `PublicSeasonsTest` (3 tests); `SignedAgentContractTest`; `McpConnectorTest` | New |
+| Anyone reads a fleet's settled seasons, signed out at `/api/v1/fleets/:fleet_id/seasons` or as `seasons_list`, newest first, 20 a page, each with how many Keys picked and the best pick; and one settled season's picks at `/api/v1/fleets/:fleet_id/seasons/:number` or as `seasons_picks`, 100 a page in lock order; Keys by number and nothing of a season not yet settled | `PublicSeasonsTest`; `SignedAgentContractTest`; `McpConnectorTest` | New |
 
 ## Messages for the team
 

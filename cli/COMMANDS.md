@@ -1824,8 +1824,10 @@ records, not forecasts. Refusals the season commands that name a fleet share:
 - **Inputs:** `<fleet>`. It sends no body.
 - **Answer:** `{"fleet_id", "running", "taking_picks", "last_settled", "rules"}`.
   `running` is the season under way, `{"number", "starts_at", "ends_at", "holding",
-  "captain_key", "holding_open_price", "picks"}`, each pick `{"key", "product", "reason",
-  "open_price", "void"}` in the order they were locked. `taking_picks` is the season
+  "captain_key", "holding_open_price", "pick_count", "picks", "next_after"}`: how many
+  Keys picked, and the first 100 picks, each `{"key", "product", "reason", "open_price",
+  "void"}` in the order they were locked; `seasons picks` with `next_after` reads the
+  rest. `taking_picks` is the season
   taking picks, `{"number", "starts_at", "my_pick", "keys_locked"}`: the agent's own
   Key's pick or `null`, and how many Keys have locked one, never whose or what.
   `last_settled` is `{"number", "holding", "holding_result", "best_pick",
@@ -1839,9 +1841,9 @@ records, not forecasts. Refusals the season commands that name a fleet share:
 Server:
 
 ```text
-Seasons.running_season, upcoming_season, season_picks and my_pick(fleet) as the agent
-answer the season under way with every pick, the one taking picks with the agent's
-Key's pick alone, and the one settled as the one under way started
+Seasons.running_season, upcoming_season, picks_page and my_pick(fleet) as the agent
+answer the season under way with its first 100 picks, the one taking picks with the
+agent's Key's pick alone, and the one settled as the one under way started
 ```
 
 - **Server needs:** the `seasons` and `season_picks` tables; the keys, shards and
@@ -1895,9 +1897,10 @@ answer the pick; 200 when it was already held, else 201; broadcast season_change
 - **Inputs:** `<fleet>`; optionally `--before`, the `next_before` of the page read last.
 - **Answer:** `{"fleet_id", "seasons", "next_before", "has_more"}`: up to 20 seasons,
   newest first, each `{"number", "starts_at", "ends_at", "holding", "captain_key",
-  "holding_open_price", "holding_close_price", "holding_result", "picks"}`, each pick
-  `{"key", "product", "reason", "open_price", "close_price", "result", "void"}` in the
-  order they were locked. Keys are named by number.
+  "holding_open_price", "holding_close_price", "holding_result", "pick_count",
+  "best_pick"}`: how many Keys picked, and the pick with the highest result, the first
+  locked of equal ones, `{"key", "product", "result"}`, or `null` when none scored. Keys
+  are named by number; `seasons picks` reads a season's picks.
 - **Refusals:** 400 `invalid_season_cursor` (`before` isn't a season number); and those
   every signed command shares.
 
@@ -1905,10 +1908,43 @@ Server:
 
 ```text
 Seasons.settled_page(fleet, before) for anyone
-answer up to 20 settled seasons below before, newest first, with their picks
+answer up to 20 settled seasons below before, newest first, each with its pick count and best pick
 ```
 
 - **Server needs:** the `seasons` and `season_picks` tables.
+- **History:** 2026-11-18 added.
+
+## regents keyfleet seasons picks <fleet> <number>
+
+- **Purpose:** reads one season's picks, a page at a time.
+- **Access:** any paired agent for a settled season, which anyone also reads, signed in
+  or not, at `GET /api/v1/fleets/{fleet_id}/seasons/{number}`; a paired agent that takes
+  part as one of the fleet's Keys for the season under way.
+- **Changes:** nothing (read).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks` →
+  `listSeasonPicks`
+- **Inputs:** `<fleet>` and `<number>`, the season's number; optionally `--after`, the
+  `next_after` of the page read last.
+- **Answer:** `{"fleet_id", "season", "picks", "next_after", "has_more"}`: up to 100
+  picks in the order they were locked, each `{"key", "product", "reason", "open_price",
+  "close_price", "result", "void"}`; the season under way's have no close price or result
+  yet. Keys are named by number. A season taking picks is never read here.
+- **Refusals:** 400 `invalid_season_cursor` (`after` isn't a place in the picks); 403
+  `season_needs_key` (the season is under way and the agent holds no Key here, no shard
+  of one, and isn't paired with a person who holds one); 404 `season_unknown` (the fleet
+  has no settled season and no season under way with this number); 503
+  `ownership_refreshing`; and those every signed command shares.
+
+Server:
+
+```text
+Seasons.settled_picks_page(fleet, number, after) for anyone, or
+Seasons.picks_page(fleet, number, after) as the agent for the season under way
+answer up to 100 picks locked after after, in the order they were locked
+```
+
+- **Server needs:** the `seasons` and `season_picks` tables; the keys, shards and
+  pairings as recorded.
 - **History:** 2026-11-18 added.
 
 ## regents keyfleet seasons coins

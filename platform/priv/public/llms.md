@@ -18,7 +18,7 @@
 ## Fleets
 
 - [Directory]({{origin}}/fleets.md): every fleet with its price, Keys sold and next Key. The Regents Club and Classic #1 are open; the others are coming soon.
-- [Directory JSON]({{origin}}/api/v1/fleets): the same as JSON. One fleet is at `/fleets/FLEET_ID.md` and `/api/v1/fleets/FLEET_ID`, and its settled seasons at `/api/v1/fleets/FLEET_ID/seasons`.
+- [Directory JSON]({{origin}}/api/v1/fleets): the same as JSON. One fleet is at `/fleets/FLEET_ID.md` and `/api/v1/fleets/FLEET_ID`; its settled seasons are at `/api/v1/fleets/FLEET_ID/seasons` and one season's picks at `/api/v1/fleets/FLEET_ID/seasons/NUMBER`.
 - [Opportunities]({{origin}}/opportunities): three things a fleet can take on, each started with a plan in its workspace.
 
 ## Reference

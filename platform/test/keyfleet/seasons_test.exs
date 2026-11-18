@@ -92,12 +92,19 @@ defmodule Keyfleet.SeasonsTest do
     assert id == from_agent.id
     assert %{id: ^id} = Seasons.my_pick!(@fleet, 1, actor: agent)
     assert %{token_id: 2} = Seasons.my_pick!(@fleet, 1, actor: human("b"))
-    assert [] = Seasons.season_picks!(@fleet, 1, actor: human("b"))
+    assert {:ok, {[], false}} = Seasons.picks_page(@fleet, 1, nil, 100, actor: human("b"))
 
     lock!(season)
 
-    assert [%{token_id: 1, reason: "My person's Key"}, %{token_id: 2}] =
-             Seasons.season_picks!(@fleet, 1, actor: human("b"))
+    assert {:ok, {[%{token_id: 1, reason: "My person's Key"} = first, %{token_id: 2}], false}} =
+             Seasons.picks_page(@fleet, 1, nil, 100, actor: human("b"))
+
+    # A page holds no more than it is asked for, and the next reads on after it.
+    assert {:ok, {[^first], true} = page} =
+             Seasons.picks_page(@fleet, 1, nil, 1, actor: human("b"))
+
+    assert {:ok, {[%{token_id: 2}], false}} =
+             Seasons.picks_page(@fleet, 1, Seasons.next_after(page), 1, actor: human("b"))
 
     assert %{number: 1, holding: "USDC"} = Seasons.get_season!(@fleet, 1, actor: human("b"))
   end
@@ -116,7 +123,7 @@ defmodule Keyfleet.SeasonsTest do
                Seasons.my_pick(@fleet, 1, actor: outsider, authorize_with: :error)
 
       assert {:error, %Ash.Error.Forbidden{}} =
-               Seasons.season_picks(@fleet, 1, actor: outsider, authorize_with: :error)
+               Seasons.picks_page(@fleet, 1, nil, 100, actor: outsider, authorize_with: :error)
 
       assert {:error, %Ash.Error.Forbidden{}} =
                Seasons.pick(@fleet, 1, %{product: "SOL-USD"}, actor: outsider)

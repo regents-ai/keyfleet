@@ -1733,15 +1733,18 @@ features:
   - id: seasons-agent-tools
     what: >-
       A member agent reads its fleet's seasons now (seasons_show): the season
-      under way with its holding, captain, the holding's open price and every
-      pick in lock order; the season taking picks with its own Key's pick and
+      under way with its holding, captain, the holding's open price, how many
+      Keys picked and its first 100 picks in lock order, the rest read 100 at
+      a time (seasons_picks); the season taking picks with its own Key's pick and
       how many Keys have locked, never whose or what; the last settled
       season with the best pick and whether the crown changed; and the rules.
       It locks or changes its Key's pick (seasons_pick), refused with a hint
       that says what to do when the season is closed, the product is not
       open to picks or the product list hasn't been read. Any paired agent
-      reads the settled seasons (seasons_list) and the products open to picks
-      (seasons_coins). A non-member is refused season_needs_key, an unpaired
+      reads the settled seasons (seasons_list), a settled season's picks
+      (seasons_picks) and the products open to picks (seasons_coins). No
+      answer grows with the number of Keys. A non-member is refused
+      season_needs_key, an unpaired
       agent agent_not_paired, alike over signed HTTP, at /mcp and through the
       Claude connector.
     who: agent
@@ -1765,6 +1768,7 @@ features:
       - route: GET /api/v1/agent/fleets/{fleet_id}/seasons
       - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/pick
       - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/list
+      - route: POST /api/v1/agent/fleets/{fleet_id}/seasons/{number}/picks
       - route: GET /api/v1/agent/seasons/coins
       - route: POST /mcp
     proofs:
@@ -1780,7 +1784,10 @@ features:
       Anyone, signed out, reads a fleet's settled seasons at
       GET /api/v1/fleets/{fleet_id}/seasons, twenty a page, newest first,
       continued with next_before: each season's holding, captain, the
-      holding's prices and result, and every pick with its reason, prices
+      holding's prices and result, how many Keys picked and the best pick;
+      and one settled season's picks at
+      GET /api/v1/fleets/{fleet_id}/seasons/{number}, a hundred a page in
+      lock order, continued with next_after, each with its reason, prices
       and result, Keys by number. Nothing of a season still running or
       taking picks, no wallet and no agent or person is in it.
     who: person
@@ -1794,11 +1801,12 @@ features:
       - platform/priv/public/docs.md
     entry:
       - route: GET /api/v1/fleets/{fleet_id}/seasons
+      - route: GET /api/v1/fleets/{fleet_id}/seasons/{number}
     proofs:
       - platform/test/keyfleet_web/controllers/public_seasons_test.exs
     gaps:
       - A failed database read answers a server error, not a 503 with a code, unlike the public proposals.
-      - Each season in a page carries every pick it had, so a page of a large fleet's seasons is long.
+      - The best pick is chosen by the result as stored, to 28 digits; two results equal that far would be told apart by lock order, where the crown decides them exactly.
 
   - id: agent-live-feed
     what: >-

@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.AgentSeasonController do
   def show(conn, params), do: reply(conn, :show, params)
   def pick(conn, params), do: reply(conn, :pick, params)
   def list(conn, params), do: reply(conn, :list, params)
+  def picks(conn, params), do: reply(conn, :picks, params)
   def coins(conn, params), do: reply(conn, :coins, params)
 
   defp reply(conn, op, params),

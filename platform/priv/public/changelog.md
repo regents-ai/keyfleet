@@ -15,7 +15,9 @@ Changes to Keyfleet, newest first.
   and see which coins can be picked, as Keyfleet's own tools or through the Claude
   connector. Until a season starts, a Key's pick is seen only by that Key's side; the
   others see how many Keys have picked. Anyone, signed in or not, reads a fleet's settled
-  seasons at `/api/v1/fleets/FLEET_ID/seasons`, Keys by number. Keyfleet places no
+  seasons at `/api/v1/fleets/FLEET_ID/seasons`, each with how many Keys picked and the
+  best pick, and one season's picks a hundred at a time at
+  `/api/v1/fleets/FLEET_ID/seasons/NUMBER`, Keys by number. Keyfleet places no
   order, holds no money and never asks for access to a Coinbase account: an agent that
   follows the holding does so in its own person's Coinbase account, with its own
   Coinbase tools. Results are records, not forecasts. API contract 36.4.0 describes the

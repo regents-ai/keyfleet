@@ -126,10 +126,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
   # A fleet's seasons now, a Key's pick for the one taking picks, the settled
-  # ones a page at a time, and the products open to picks in every fleet.
+  # ones a page at a time, one season's picks a page at a time, and the
+  # products open to picks in every fleet.
   @seasons_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons\z"
   @season_pick_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons/pick\z"
   @seasons_list_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons/list\z"
+  @season_picks_path ~r"\A/api/v1/agent/fleets/#{@fleet}/seasons/[1-9][0-9]{0,18}/picks\z"
   @season_coins_path ~r"\A/api/v1/agent/seasons/coins\z"
 
   # Direct messages: a Key's conversations and blocks, what it does in one
@@ -192,7 +194,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}},
     {@season_pick_path, {~w(product), ~w(reason)}},
-    {@seasons_list_path, {[], ~w(before)}}
+    {@seasons_list_path, {[], ~w(before)}},
+    {@season_picks_path, {[], ~w(after)}}
   ]
 
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
@@ -900,7 +903,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @code_file_path,
         @dm_changes_path,
         @season_pick_path,
-        @seasons_list_path
+        @seasons_list_path,
+        @season_picks_path
         | @poll_post_paths
       ],
       &Regex.match?(&1, path)
@@ -1742,12 +1746,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@season_pick_path, path) -> :pick
       Regex.match?(@seasons_list_path, path) -> :list
+      Regex.match?(@season_picks_path, path) -> :picks
       true -> nil
     end
   end
 
   # A pick names the product, and may say why. A page of settled seasons may
-  # name the season it reads before, as the page before answered it.
+  # name the season it reads before, and a page of one season's picks the
+  # pick it reads after, as the page before answered it.
   defp check_season_body(:pick, %{"product" => product} = params) when is_binary(product),
     do:
       admit(
@@ -1757,6 +1763,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_season_body(:list, params),
     do: admit(Enum.all?(params, fn {key, value} -> key == "before" and is_binary(value) end))
+
+  defp check_season_body(:picks, params),
+    do: admit(Enum.all?(params, fn {key, value} -> key == "after" and is_binary(value) end))
 
   defp check_season_body(_op, _params), do: :invalid
 

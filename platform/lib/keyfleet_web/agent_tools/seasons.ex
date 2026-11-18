@@ -2,7 +2,8 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
   @moduledoc """
   A fleet's seasons as an agent reads and takes part in them: the seasons now
   (`show`), locking or changing its Key's pick (`pick`), the settled seasons
-  (`list`) and the products open to picks (`coins`). Each takes what its
+  (`list`), one season's picks (`picks`) and the products open to picks
+  (`coins`). Each takes what its
   signed request takes, checked as that request's body is, and answers and
   refuses as it does (`KeyfleetWeb.AgentTools.Run`,
   `KeyfleetWeb.AgentTools.Seasons.Answer`). Only an agent runs them, never a
@@ -16,6 +17,7 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
   alias KeyfleetWeb.AgentTools.Run
 
   @fleet [max_length: 63, trim?: false]
+  @number [max_length: 19, trim?: false]
 
   actions do
     action :show, :map do
@@ -35,8 +37,16 @@ defmodule KeyfleetWeb.AgentTools.Seasons do
     action :list, :map do
       description "Up to 20 of a fleet's settled seasons, newest first, before a number."
       argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
-      argument :before, :string, constraints: [max_length: 19, trim?: false]
+      argument :before, :string, constraints: @number
       run {Run, tool: "seasons_list"}
+    end
+
+    action :picks, :map do
+      description "Up to 100 picks of one season of a fleet, in the order they were locked, after a place."
+      argument :fleet_id, :string, allow_nil?: false, constraints: @fleet
+      argument :number, :string, allow_nil?: false, constraints: @number
+      argument :after, :string, constraints: @number
+      run {Run, tool: "seasons_picks"}
     end
 
     action :coins, :map do
