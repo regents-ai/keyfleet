@@ -12210,3 +12210,146 @@ step's report).
   failure report and the pairing gained, with their JSON.
 - The public changelog names the contract once, at 36.3.0, in its 17 November "Requests"
   entry; its mentions of 36.2.1 and 36.3.1 are gone.
+
+## 2026-11-18 — A live page's largest message, worked out again: 52,000 bytes
+
+- "A live page's socket takes no message larger than a page sends" (above) set 40,000
+  bytes as the largest message a live page sends, rounded up. It was not. In the
+  reviewers' round-seven proofs 250 and 283: a page's first message carries its whole
+  address, the part after `#` included (`url` is `window.location.href`,
+  phoenix_live_view's view.ts), so a page opened from a link with a 40,000-character `#`
+  part sent a 41,051-byte join, was closed with 1009 and never went live, on every retry;
+  and the proposal form had no `maxlength` on its text or description, so 4,450 letters of
+  three bytes made a change of 40,546 bytes, which closed the connection instead of
+  showing the form's note. That entry's proposal estimate (5,104 bytes × 3, "about
+  15,500") counted bytes; the form encoding writes each three-byte letter, one character
+  in the browser's count, as nine.
+- The `/live` socket's frame and its messages in parts are now at most 52,000 bytes
+  (`max_fragmented_message_size`, config/config.exs, which `KeyfleetWeb.Endpoint` reads
+  for `max_frame_size`), which leaves 1,685 bytes, frame header counted, above the largest
+  message measured, for what the measure leaves out (below). Measured, the largest
+  messages a page sends:
+  - the first message of a page reached by one of the site's links from a page opened at
+    the longest address the site takes: 50,307 bytes. That carries the link as long as an
+    address the site takes (`redirect`), the first address (`_live_referer`) and the first
+    page's token, which holds its address and the schedule cookie;
+  - the first message of a page opened at the longest address the site takes: 40,276.
+    Bandit reads a request line of 10,000 bytes with its line end; its query was of
+    backslashes, which a browser keeps as they are and JSON writes as two each; with the
+    browser's longest schedule cookie, 4,096 bytes, and a `#` part of 256;
+  - the proposal form's change with every field at its `maxlength` in letters of three
+    bytes, each field also named `_unused_`: 49,540. Its presses (`step_pressed`,
+    `prepare_and_send`), with every field, the page's and an agent's, at its limit in
+    characters JSON writes as six (`\u0001`): 33,585 and 33,644.
+- Every text field on every live page now has a `maxlength`, so a browser cannot send a
+  form larger than that. The proposal's text and launch fields take as many characters as
+  the server takes bytes (`VoteSteps.field_bytes/0`), so text in letters of more than one
+  byte that the browser takes still gets the server's own "too long" note: text 4,000,
+  name 64, symbol 16, description 512, website 256, image 256. The rest: a Key 20, a
+  share, rate, recipient and each amount 100; on a Key's page the wallet 100, the days 10
+  and the Keys 1,000, as the signed API takes them (`SignedAgent`'s `typed?/2`); the
+  workspace's post range 20 each and page address 512; a poll's choices 1,100; the
+  showcase's title 80 and quantity 3; the Regents Club pass 20; the Worldline filter 100.
+  The fields already limited are as they were. The workspace's post range, the showcase's
+  quantity and the Club pass were `type="number"`, which takes no `maxlength` and sends
+  digits of any length; they are now text with `inputmode="numeric"`, without the arrows
+  or the browser's own minimum and maximum (the server checks them as before).
+- A page's tools for the browser's own agent fill the form from what the agent sent and
+  push it over the socket (assets/js/hooks/onchain_steps.ts). `proposals_create` and
+  `treasury_buy_regent` now give each string field a `maxLength` in
+  priv/tool_manifest.json, the page's own field's, and assets/js/tool_input.ts refuses a
+  string longer than its schema's `maxLength`, counted in characters as JSON Schema counts
+  them, with `invalid_input` and nothing sent. The public reads the browser offers go
+  through the same check: `proposals_list`'s `before` and `workspace_pulse`'s `after`, 19.
+- The `#` part, which no server limit bounds: assets/js/app.ts takes a `#` part of over
+  256 characters off the address (`history.replaceState`) before the page's LiveSocket is
+  made, which reads the address once. Chosen as the smallest honest way: the server cannot
+  bound what a browser puts in the join, a limit raised for any `#` part is no limit, and
+  this site's `#` parts name an element of the page (`hashTarget` in
+  assets/js/account_menu.ts, the `#public-<id>` links), all far shorter. A page opened at
+  a longer one goes live at its top.
+- `KeyfleetWeb.LiveMessageLimitTest`, through a real port with the frames a browser sends:
+  the first page's message is answered `ok`, the next page's is not closed, both fit; a
+  message of the limit, frame header counted, is answered and one byte more is closed with
+  1009. With the limit at 10,000,000 the last fails; at 40,000 the first fails.
+  `KeyfleetWeb.Live.ProposalsPageTest`'s "the proposal form at every field's limit fits a
+  live page's socket" reads the form as rendered and the tool from the manifest; at 40,000
+  it fails, and it fails for a text field without `maxlength` or a tool field without
+  `maxLength`. The browser walk test/browser/live_limits.spec.ts (Chromium, the chain
+  config): a page opened with a `#` part of 60,000 characters goes live without it, with
+  one live connection over two seconds, and keeps a short one; with app.ts's rule taken
+  out it never goes live. A proposal pasted 1,000 letters past each field's limit: the
+  browser keeps each at its limit, the "too long" note shows, and the page keeps its one
+  live connection. assets/test/page_tools.test.ts: an agent's proposal of 4,001 characters
+  is refused and none pressed; one of 4,000 emoji is pressed.
+- After: round-seven proof 250 passes, as a 41,051-byte join is now inside the limit; a
+  `#` part long enough to go past it is dropped in the browser. Proof 283 still fails, on
+  its own `byte_size(change) < 37_000` with 4,450 letters sent by hand, which a browser no
+  longer sends: the field stops at 4,000, 36,496 bytes.
+- Corrected: the entry named above's sizing, and "A visit report names a page by at most
+  1,024 characters" (above), whose "the live socket's 40,000-byte message" is now 52,000.
+  The public changelog's 18 November "Live pages" entry no longer says a page's largest
+  message is a post under 37,000 bytes.
+- Not covered:
+  - The "too long" note reads "N characters at most" for a limit counted in bytes
+    (`WalletWords`): 4,000 letters of three bytes are 12,000 bytes, so it says too long
+    for fewer than 4,000 characters. Unchanged.
+  - The wallet panel's `verified_connections` push carries what the sign-in provider
+    reports and has no bound in code; it is not typed and was not measured.
+  - A flash on a live navigation (`flash`, a signed token of the site's own words) is not
+    in the measure.
+  - A `#` part is dropped only as a page is opened; a link of the site's own with a long
+    one would keep it on a live move, and no link of the site's has one.
+  - Found, not changed: a `#` part with a broken `%` sequence, such as `/#%E0`, makes
+    `hashTarget` throw (`decodeURIComponent`), in the shell's mounted hook in
+    assets/js/app.ts. It was so before.
+
+## 2026-11-18 — A body nothing reads waits ten seconds at most, and no caller is told to send it
+
+- Round-seven proof 61: a chunked body dripped a byte every two seconds held its answer
+  back 30,016 ms, and one with a length 10,055. Bandit's `read_timeout` bounds each read
+  of a chunked body's size line, data and line end afresh, so no read option bounds the
+  whole. Tried first, as asked: a small `length` with the 64 KiB `read_length`, which
+  returns once it has any bytes. It still waited for each chunk afresh (a drip held 30
+  seconds, a size line sent a byte at a time 36), and `length: 1` read an 8 MB chunked
+  body a byte a call, 7.0 MB by ten seconds.
+- `KeyfleetWeb.Plugs.UnreadBody` now reads a body sent with its length in 64 KiB pieces,
+  each read waiting until 10 seconds after reading began and then taking only what has
+  arrived, and a chunked body with `read_timeout: 0` only, as far as it has arrived; both
+  up to 8,000,000 bytes. No timer or helper process. Proof 61 now: chunked 4 ms, with a
+  length 10,050.
+- Changed for callers: a caller still sending a chunked body nothing reads when the answer
+  is ready may find the connection reset before it reads the answer. One that sent it all
+  hears its answer as before (`UnreadBodyTest`'s 900 KiB chunked case).
+- Proof 176: a caller that sent `Expect: 100-continue` to an address that reads no body
+  was told `100 Continue` and sent its body, at four addresses, because the plug's read
+  asked for it. The plug now leaves alone a request still waiting to be told
+  (`%Bandit.Adapter{expect_continue: true}`), and Bandit answers it and closes without
+  asking (`maybe_close_for_unhonored_expect/3`, RFC 9110 §10.1.1), at `/`, `/healthz` and
+  `/mcp`'s callers that proved nothing among them: answered 0 to 3 ms after asking, none
+  sent a byte of its body. This corrects "A body nothing read is thrown away in small
+  pieces before the answer" (above), which said the callback asks for the body, then
+  answers and closes, and that the rest was read "for at most 10 seconds in all", which
+  held only for a body sent with its length.
+- Proof 97, accepted as separate work: a connection waiting for the rest of a body sent
+  with its length keeps what its answer's own work left until the read ends, up to ten
+  seconds; for the docs page 8,170 KiB each, 818 MiB for 100 such connections. A chunked
+  body now holds nothing. `UnreadBody`'s moduledoc says so.
+- Known limit, proof 203: a request sent on the same connection right behind a body the
+  site throws away is never answered, since the connection closes after the first answer;
+  before, Bandit read the body after the answer and answered the next request too. Send
+  each request after the answer to the one before it, or on its own connection.
+- Proof 116 passes: 300 requests for the docs page each with a body it never finishes peak
+  at 2,420 MiB, against 2,224 without a body.
+- `UnreadBodyTest`, through a real port, gains four cases, each failing only under its own
+  undoing: a caller asking first is answered within a second and never asked for its body
+  (fails with the plug reading it); a chunked body still arriving does not hold the answer
+  (fails waiting for it); twenty connections holding back their last byte of 7.5 MB grow
+  the machine under 60 MiB, 18 to 20 here (155 MiB with an 8 MB piece); and of a 40 MiB
+  body fewer than 40 MiB can be sent (all 40 with the bound at 800 MB).
+- The reviewers' earlier proof files fail the same cases with the plug as it was before
+  this entry and with it: door load 6 of 10, signed edges 5 of 14, signed round four 3 of
+  14, empty body 2 of 16, signed round two 1 of 8. Round six fails only its lowercase
+  bearer case, as expected. Round three's cost ratio failed once (2.2 times the memory,
+  against its 2) and passed run again; it compares two copies of the door's reading inside
+  the test, not the site.

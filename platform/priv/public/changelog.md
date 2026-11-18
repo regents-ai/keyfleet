@@ -6,17 +6,31 @@ Changes to Keyfleet, newest first.
 
 - **Early access.** The email field takes at most 254 characters, the most an address
   can have, so whatever is pasted into it is answered by the form.
-- **Live pages.** A page's live connection now closes, unread, on a message over 40,000
-  bytes, whole or sent in parts; it took up to 10 MB before. The largest message a page
-  sends, a post of 4,000 characters, is under 37,000 bytes. A browser on a network that
-  blocks websockets no longer gets live pages.
+- **Live pages.** A page's live connection now closes, unread, on a message over 52,000
+  bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message
+  a page sends, rounded up: the first message of a page reached by a link from one opened
+  at the longest address the site takes, 50,307 bytes, and the proposal form with every
+  box full, 49,540. Every text box now stops at its own length, so text pasted past it is
+  cut there, and the page still says when what is left is too long. A page opened at an
+  address whose part after `#` is over 256 characters drops that part, and goes live. The
+  boxes for a Key's number, a post's number, a pass and a quantity now take digits as
+  text, with the number keyboard on phones, and no longer have arrows. A browser on a
+  network that blocks websockets no longer gets live pages.
 - **Requests.** A body no address reads, or the rest of one an address refused, is now
-  read in small pieces and thrown away before the answer is sent, up to 8 MB and for at
-  most ten seconds, and the answer then closes the connection. A caller that sends its
-  whole body hears its answer as before; one that stops sending hears it after ten
-  seconds. Before, what was left was read after the answer in one piece of up to 8 MB
-  and held until its last byte came. A body an address reads whole leaves the connection
-  open, as before.
+  read in small pieces and thrown away before the answer is sent, up to 8 MB, and the
+  answer then closes the connection. A body sent with its length is waited for until ten
+  seconds after the site starts reading it, so a caller that stops sending one hears its
+  answer then. A body sent in chunks is read only as far as it has arrived and is never
+  waited for, so a caller still sending one may find the connection closed before it
+  reads the answer. A caller whose whole body has arrived hears its answer as before. A
+  caller that asks before sending its body (`Expect: 100-continue`) is answered at once,
+  never asked for the body, and its connection closes, at every address that reads none.
+  Before, what was left was read after the answer in one piece of up to 8 MB and held
+  until its last byte came. A body an address reads whole leaves the connection open, as
+  before.
+- **Known limit.** A request sent on the same connection right behind a body the site
+  throws away is never answered: the connection closes after the first answer. Send each
+  request only after the answer to the one before it, or on a connection of its own.
 - **Claude connector.** A call to `/mcp` now has its body read only once the site knows
   who sent it. A call with a token this site didn't give, or with neither a token nor an
   agent's signature, gets 401 `connection_required` whatever its body, where a body over
@@ -33,7 +47,11 @@ Changes to Keyfleet, newest first.
 - **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
   can't send that press, for example because a wallet your account doesn't link is open,
   the agent hears the note that appears beside the button. If you switch wallets at that
-  moment, the note may clear, but it never says something else.
+  moment, the note may clear, but it never says something else. A proposal or an amount
+  the agent sends that is longer than the page's own box takes is refused, naming the
+  field and its most characters, and nothing is sent. The public reads offered to it
+  refuse a field longer than their description allows in the same way, before asking the
+  site.
 
 ## 17 November 2026
 
