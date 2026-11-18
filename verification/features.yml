@@ -1921,9 +1921,9 @@ features:
       network, and their wallet asks to switch to Base through Privy's own
       switch, which also adds Base to a wallet app that lacks it; Privy's own
       wallet moves at once through the provider the page holds. Once the
-      switch is done, the same press sends or signs: the page reads neither
-      the network nor the wallet's account again to refuse it, and the step
-      carries Base's chain id. Every press reaches Privy's active wallet with
+      wallet answers the switch request, the same press sends or signs: the
+      page reads neither the network nor the wallet's account again to refuse
+      it, and the step carries Base's chain id. Every press reaches Privy's active wallet with
       the step as built, and every press off Base asks again; nothing is
       remembered or held back. Privy connects every wallet on Base and offers
       no other network. A declined switch sends nothing and leaves "Press

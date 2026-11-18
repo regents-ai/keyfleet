@@ -61,16 +61,16 @@ const failures: Record<Failure, {message: string; hint: string}> = {
     hint: "Check the details on the page, then call again.",
   },
   wallet_unavailable: {
-    message: "No wallet on the signed-in account is open, so nothing was sent.",
-    hint: "Sign in, open a wallet on your account in the wallet app, then call again.",
+    message: "The wallet app has no wallet open, or didn't answer, so nothing was sent.",
+    hint: "Check the wallet app is unlocked and open on a wallet of the signed-in account, then call again.",
   },
   switch_declined: {
-    message: "The wallet declined the switch to the page's network. Nothing was sent.",
-    hint: "Ask the person signed in before calling again.",
+    message: "The wallet didn't switch to the page's network, so nothing was sent.",
+    hint: "Calling again asks the wallet to switch again; ask the person signed in first.",
   },
   network_mismatch: {
-    message: "The wallet isn't on the page's network. Nothing was sent.",
-    hint: "Change the wallet's network to the one the page names in the wallet app, then call again.",
+    message: "The wallet couldn't switch to the page's network, so nothing was sent.",
+    hint: "Switch the wallet to the page's network in the wallet app, then call again.",
   },
   wallet_declined: {
     message: "The wallet declined this. Nothing was sent.",

@@ -11252,3 +11252,24 @@ launch, 22 passed; the whole chain project, 139 passed; the device walks, 72 pas
   and checks each leaves its own note. Keyfleet builds no signature steps; a hand-made
   `step_signed` report still has no handler in `KeyfleetWeb.WalletPanel` and stops only its
   sender's page, as the chief ruled.
+- Leftovers and words: the stand-in wallet in `platform/assets/test/send_step.test.ts` no
+  longer answers an account read nothing asks for. In `platform/assets/js/page_tools.ts` the
+  browser agent hears what the person reads: a wallet app with no wallet open or that didn't
+  answer, a switch the wallet didn't make (calling again asks again), and a switch it
+  couldn't make (switch it in the wallet app). The public changelog and the
+  `wallet-network-switch` row say the press goes on once the wallet answers the switch
+  request, not once it has switched. The page tools' words change as they did in af7ce6ad7,
+  without a contract or guide version bump.
+- Not built, as the chief ruled: a wallet that refuses a request outright (a chain id not its
+  network, or a sender it doesn't hold) still reads "may have sent" until the shared list and
+  the template add `wallet_refused`; the review's A2 and F1 fail until then, and A1 and A3 stay
+  as the owner's ruling leaves them.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors (585 files),
+Credo (772 files, no issues) and xref (within the 138 compile-connected limit) passed.
+Typecheck passed leaving out the two untracked review files; vitest 497 passed, leaving them
+out. Wallet step, fleet page, proposals, telemetry and visit log tests: 203 passed. The whole
+suite: 1,569 of 1,570 passed (22 properties), 19 excluded; the one failure is the review's own
+`step_signed` case in its untracked file. The asset budgets pass on a minified build. Browser
+walks: the two kept reconnect walks fail with d193a8183's hooks and pass now, as do the
+review's two; the whole chain project, 141 passed; the device walks, 72 passed.

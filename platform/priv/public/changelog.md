@@ -70,10 +70,10 @@ Changes to Keyfleet, newest first.
   `code_body_not_signed`, 413 or a body that stops arriving, counts for nothing and saves
   nothing, where it used up a push. A push past the allowance is still refused with 429.
 - **Wallet buttons.** Every press now reaches your wallet. When your wallet is on another
-  network, each press asks it to switch to Base, and once it has switched, the same
-  press goes on to your wallet. If you turn the switch down, nothing is sent and the
-  note says to press again; if your wallet can't switch, the note says to switch it in
-  your wallet app.
+  network, each press asks it to switch to Base, and once your wallet answers that
+  request, the same press goes on to your wallet. If you turn the switch down, nothing is
+  sent and the note says to press again; if your wallet can't switch, the note says to
+  switch it in your wallet app.
 - **Wallet buttons after a lost connection.** When a page loses its connection and gets
   it back, as open pages do while Keyfleet updates, its wallet buttons work straight
   away, with no reload: a press reaches your wallet and the page follows it until it's

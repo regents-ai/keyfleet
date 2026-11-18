@@ -29,7 +29,6 @@ function walletOn(account: string, {on = base, switching = (wanted: number) => w
   const provider = {
     request: async ({method, params}: {method: string; params?: unknown[]}) => {
       if (method === "eth_chainId") return `0x${current.toString(16)}`
-      if (method === "eth_accounts") return [account]
       if (method === "eth_sendTransaction") {
         sent.push(params?.[0])
         return hash
