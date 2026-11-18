@@ -111,6 +111,20 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert emails() == []
   end
 
+  # Costly failure: a person who pastes too much into the field gets a bare
+  # error page in place of the form's own words.
+  test "the most the field takes, in letters the form encodes longest, is answered by the form" do
+    page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
+    assert page |> LazyHTML.query("#early-email") |> LazyHTML.attribute("maxlength") == ["254"]
+
+    # Three bytes each, nine characters each once the form encodes them.
+    longest = String.duplicate("€", 254)
+    page = %{"email" => longest} |> sign_up() |> html_response(422) |> LazyHTML.from_document()
+
+    assert text(page, "#early-email-errors") == @unreadable
+    assert emails() == []
+  end
+
   test "a filled-in trap field gets the same answer and keeps nothing" do
     conn = sign_up(%{"email" => "bot@example.com", "website" => "https://spam.example"})
 
@@ -156,7 +170,8 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     page
     |> recycle()
     |> put_req_header("fly-client-ip", client)
-    |> post("/early", Map.put(params, "_csrf_token", token))
+    |> put_req_header("content-type", "application/x-www-form-urlencoded")
+    |> post("/early", URI.encode_query(Map.put(params, "_csrf_token", token)))
   end
 
   defp followed(conn) do

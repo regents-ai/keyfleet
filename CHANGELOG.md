@@ -11521,3 +11521,28 @@ a scratch walk that is not kept.
 - The connector test's picture tools now also set the largest picture sent that way,
   which the 700 KiB limit refused with 413. The public changelog's 17 and 18 November
   lines say 742 KB, where they said 700 KB; neither has been released.
+
+## 2026-11-18 — The sign-in failure report refuses in JSON, and the early-access form takes any paste
+
+- The reviewers' round-six proofs 1813 and 1876: a sign-in failure report refused with 413
+  or 415 got the site's HTML error page, where the contract names
+  `request_entity_too_large` and `unsupported_media_type` (its route runs the browser
+  pipeline, which chose HTML); and the early-access form, limited to 1,024 bytes, gave a
+  person who pasted 1,000 letters (a 1,098-byte body) a bare 413 page, where the form had
+  answered with its own words. Its email field had no length limit, so no body limit
+  covered every paste.
+- The `:sign_in_failure` pipeline puts the JSON format before its parser, so its 413 and
+  415 answer `{"error": {"code": ...}}` with those codes; a refused forms token is
+  checked before it and answers as before.
+- The email field now takes 254 characters (`maxlength`), the address's own limit, and
+  the form's body limit is 4,096: the forms token, 56 characters; 254 letters of three
+  bytes, each nine characters once the form encodes them, 2,286; the empty trap field
+  and the names: 2,370. Only a body no person's browser sends gets the bare 413.
+- The consent forms' 256 bytes hold: a person types nothing into them, and the largest,
+  allowing a connection (forms token, 43-character key, `decision=allow`), is 140 bytes;
+  ending one is 115.
+- `BodyLimitsTest` checks both refusals name their codes in JSON (with the HTML page, it
+  fails), and `EarlyControllerTest` sends the field's longest content in three-byte
+  letters as a browser encodes it, and finds the form's own words (with the 1,024 limit,
+  the request is refused before the form sees it). Its helper now sends each form as an
+  encoded body, as a browser does, where it handed the fields over already decoded.

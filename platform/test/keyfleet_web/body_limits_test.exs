@@ -71,7 +71,27 @@ defmodule KeyfleetWeb.BodyLimitsTest do
     # The early-access form is served only while the site is closed.
     Application.put_env(:keyfleet, :app_surfaces, false)
     on_exit(fn -> Application.put_env(:keyfleet, :app_surfaces, true) end)
-    assert answers(c.site, "/early", @form, 1024, []) == {"/early", :taken, 413, 415}
+    assert answers(c.site, "/early", @form, 4096, []) == {"/early", :taken, 413, 415}
+  end
+
+  # Costly failure: the page's sign-in failure report is refused with the
+  # site's HTML error page, where its contract names a code in JSON.
+  test "a sign-in failure report refused for its size or kind names the contract's code", c do
+    session = forms_session(c.site)
+
+    over =
+      post!(c.site, "/auth/privy/failure", [{"content-type", @json} | session], body(@json, 65))
+
+    other =
+      post!(
+        c.site,
+        "/auth/privy/failure",
+        [{"content-type", @form} | session],
+        "reason=flow_closed"
+      )
+
+    assert {413, %{"error" => %{"code" => "request_entity_too_large"}}} = {over.status, over.body}
+    assert {415, %{"error" => %{"code" => "unsupported_media_type"}}} = {other.status, other.body}
   end
 
   # A body of exactly `limit` bytes of the route's kind, one byte more, and

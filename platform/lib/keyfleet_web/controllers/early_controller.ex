@@ -138,6 +138,7 @@ defmodule KeyfleetWeb.EarlyHTML do
                 id={field.id}
                 type="email"
                 name="email"
+                maxlength="254"
                 value={@email}
                 autocomplete="email"
                 inputmode="email"

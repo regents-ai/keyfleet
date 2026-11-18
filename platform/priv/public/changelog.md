@@ -4,6 +4,8 @@ Changes to Keyfleet, newest first.
 
 ## 18 November 2026
 
+- **Early access.** The email field takes at most 254 characters, the most an address
+  can have, so whatever is pasted into it is answered by the form.
 - **Live pages.** A page's live connection now closes, unread, on a message over 40,000
   bytes, whole or sent in parts; it took up to 10 MB before. The largest message a page
   sends, a post of 4,000 characters, is under 37,000 bytes.
@@ -41,7 +43,7 @@ Changes to Keyfleet, newest first.
   revocation at `/oauth/token` or `/oauth/revoke` over 8 KB or not a form, as OAuth sends
   them (each got 400 before, or 503 for a registration that was neither); allowing or
   ending a connection over 256 bytes or not a form (403 before); the early-access form
-  over 1 KB or not a form (422 before); a page's sign-in failure report over 64 bytes or
+  over 4 KB or not a form (422 before); a page's sign-in failure report over 64 bytes or
   its visit report over 16 KB, or either not JSON (204 before). A profile change from someone
   signed out now gets 401 `authentication_required` before its body is read, and a
   signed-in person's broken or oversized change gets `invalid_profile_json` or

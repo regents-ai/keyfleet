@@ -30,10 +30,12 @@ defmodule KeyfleetWeb.Router do
   # is refused with 415, a larger one with 413. A route without one, and an
   # address with no route, never has its body decoded.
 
-  # The early-access form: its forms token, an email address of up to 254
-  # bytes, each up to three once encoded, and the empty trap field.
+  # The early-access form: its forms token, 56 characters, the email field,
+  # which takes 254 characters (`maxlength`), each a letter of up to three
+  # bytes that the form encodes as nine, 2,286, the empty trap field and the
+  # names, 2,370 in all: whatever a person pastes is answered by the form.
   pipeline :early_form do
-    plug KeyfleetWeb.Plugs.Parsers, parsers: [Plug.Parsers.URLENCODED], pass: [], length: 1024
+    plug KeyfleetWeb.Plugs.Parsers, parsers: [Plug.Parsers.URLENCODED], pass: [], length: 4096
   end
 
   # Allowing or cancelling a connection, and ending one: a forms token and a
@@ -77,8 +79,11 @@ defmodule KeyfleetWeb.Router do
       json_decoder: Jason
   end
 
-  # One sign-in failure's name, such as {"reason":"session_exchange"}.
+  # One sign-in failure's name, such as {"reason":"session_exchange"}. A body
+  # it refuses is answered in JSON, with the code the contract names.
   pipeline :sign_in_failure do
+    plug :put_format, "json"
+
     plug KeyfleetWeb.Plugs.Parsers,
       parsers: [Plug.Parsers.JSON],
       pass: [],
