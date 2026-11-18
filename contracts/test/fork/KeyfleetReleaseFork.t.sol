@@ -136,33 +136,40 @@ contract KeyfleetReleaseForkTest is LiveSubscriptionFork {
         assertEq(steps.foundingFleetCalls(manifest, factory).length, 0, "the run made every call on the fork");
     }
 
-    /// @dev The release's steps on the fork up to phase 3, from the Safe's address. Then, with the
-    /// randomness subscription handed to another account, the step to phase 4 stops with that
+    /// @dev The release's steps on the fork, from the Safe's address, up to phase 2 and every
+    /// founding fleet created, whoever owns the randomness subscription. Then, for phase 3 and again
+    /// for phase 4, with the subscription handed to another account, the step stops with that
     /// account's address; once the Regents Safe holds the subscription and lists the collection, the
-    /// step's call opens phase 4.
-    function test_thePhaseFourStepOnBaseWaitsForTheSafesSubscription() public {
+    /// step's call opens the phase.
+    function test_theDrawingPhaseStepsOnBaseWaitForTheSafesSubscription() public {
         KeyfleetSafeSteps steps = new KeyfleetSafeSteps();
         KeyfleetManifest.Manifest memory manifest = steps.readManifest("base");
         KeyfleetFactory factory = KeyfleetFactory(steps.BASE_KEYFLEET_FACTORY());
         KeyfleetKeys collection = factory.KEYS();
-        while (collection.phase() + 1 < collection.FINAL_PHASE()) {
+        _handSubscriptionTo(SOMEONE_ELSE);
+        while (collection.phase() + 1 < steps.FIRST_DRAWING_PHASE()) {
             _asSafe(steps.foundingFleetCalls(manifest, factory));
             _asSafe(steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1)));
             vm.warp(block.timestamp + 1);
         }
+        _asSafe(steps.foundingFleetCalls(manifest, factory));
 
-        _handSubscriptionTo(SOMEONE_ELSE);
-        vm.expectRevert(
-            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
-        );
-        steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1));
-
-        _subscriptionToTheSafe();
-        KeyfleetSafeSteps.SafeCall[] memory calls =
+        while (collection.phase() < collection.FINAL_PHASE()) {
+            uint256 next = collection.phase() + 1;
+            _handSubscriptionTo(SOMEONE_ELSE);
+            vm.expectRevert(
+                abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
+            );
             steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1));
-        assertEq(calls[0].name, "phase-4");
-        _asSafe(calls);
-        assertEq(collection.phase(), collection.FINAL_PHASE(), "phase 4 opened");
+
+            _subscriptionToTheSafe();
+            KeyfleetSafeSteps.SafeCall[] memory calls =
+                steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1));
+            assertEq(calls[0].name, string.concat("phase-", vm.toString(next)));
+            _asSafe(calls);
+            assertEq(collection.phase(), next, "opened once the Safe holds it");
+            vm.warp(block.timestamp + 1);
+        }
     }
 
     function _asSafe(KeyfleetSafeSteps.SafeCall[] memory calls) private {

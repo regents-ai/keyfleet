@@ -100,7 +100,7 @@ abstract contract KeyfleetForkFixture is Test {
     }
 
     /// @dev Hands the test's subscription to the Regents Safe, which lists the collection on it: the
-    /// step opening phase 4 is prepared on Base only then.
+    /// steps opening phases 3 and 4 are prepared on Base only then.
     function _subscriptionToTheSafe() internal {
         address safe = script.BASE_REGENTS_SAFE();
         coordinator.requestSubscriptionOwnerTransfer(subscriptionId, safe);
@@ -258,7 +258,7 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
 
     /// @dev A key that draws, key 2 of a fleet created in phase 4, is sold once the keeper has
     /// recorded the fleet's deck and while the collection is not a consumer: the Safe took the
-    /// subscription and listed the collection before phase 4, as the step requires, and has removed
+    /// subscription and listed the collection before phase 3, as the step requires, and has removed
     /// it since. Then the Safe adds it again, the request is retried, and answered; key 3 sold by a
     /// consumer is accepted straight away.
     function test_theRealCoordinatorAcceptsTheRequestAndTheAnswerFits() public {

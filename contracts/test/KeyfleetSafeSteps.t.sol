@@ -136,46 +136,60 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         this.make(calls, keeper);
     }
 
-    /// @dev From phase 4 anyone may create a fleet past the founding ones, which the record lists only
-    /// while the subscription lists the collection, so the step to phase 4 is refused until it does;
-    /// the phases before it are not. Off Base its owner may be anyone.
-    function test_thePhaseFourStepWaitsUntilTheSubscriptionListsTheCollection() public {
+    /// @dev From phase 3 anyone may buy a founding Key past its deck, and from phase 4 create a
+    /// fleet, so a Key may draw, and the record then lists the system only while the subscription
+    /// lists the collection: the steps to phases 3 and 4 are each refused until it does, and the
+    /// phases before them are not. Off Base its owner may be anyone.
+    function test_theDrawingPhaseStepsWaitUntilTheSubscriptionListsTheCollection() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetFactory unlisted = deployScript.deploy(manifest);
         KeyfleetKeys keys = unlisted.KEYS();
+        MockVRFCoordinatorV2Plus coordinator =
+            MockVRFCoordinatorV2Plus(address(manifest.bindings.randomness.coordinator));
+        uint256 subscriptionId = manifest.bindings.randomness.subscriptionId;
         _found(manifest, unlisted);
-        while (keys.phase() + 1 < keys.FINAL_PHASE()) {
+        while (keys.phase() + 1 < safeSteps.FIRST_DRAWING_PHASE()) {
             _openPhase(manifest, unlisted);
         }
 
-        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.CollectionNotVrfConsumer.selector, address(keys)));
-        safeSteps.advancePhaseCalls(manifest, unlisted, uint64(block.timestamp + 1));
+        while (keys.phase() < keys.FINAL_PHASE()) {
+            vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.CollectionNotVrfConsumer.selector, address(keys)));
+            safeSteps.advancePhaseCalls(manifest, unlisted, uint64(block.timestamp + 1));
 
-        _listConsumer(manifest, keys);
-        _openPhase(manifest, unlisted);
-        assertEq(keys.phase(), keys.FINAL_PHASE(), "Opened once it lists it");
+            _listConsumer(manifest, keys);
+            _openPhase(manifest, unlisted);
+            vm.prank(coordinator.subscriptionOwner(subscriptionId));
+            coordinator.removeConsumer(subscriptionId, address(keys));
+        }
+        assertEq(keys.phase(), keys.FINAL_PHASE(), "Each opened once it lists it");
     }
 
-    /// @dev On Base the step to phase 4 is refused while anyone but the Regents Safe owns the
-    /// subscription, even one that lists the collection, and prepared once the Safe owns it.
-    function test_onBaseThePhaseFourStepWaitsUntilTheRegentsSafeOwnsTheSubscription() public {
+    /// @dev On Base the steps to phases 3 and 4 are each refused while anyone but the Regents Safe
+    /// owns the subscription, even one that lists the collection, and prepared once the Safe owns
+    /// it; the phases before them open whoever owns it.
+    function test_onBaseTheDrawingPhaseStepsWaitUntilTheRegentsSafeOwnsTheSubscription() public {
         uint256 subscriptionId = _standInBase();
         KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
         KeyfleetFactory base = _deployListed(manifest);
         KeyfleetKeys keys = base.KEYS();
+        MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(safeSteps.BASE_VRF_COORDINATOR());
         _found(manifest, base);
-        while (keys.phase() + 1 < keys.FINAL_PHASE()) {
+        coordinator.openSubscription(subscriptionId, keeper);
+        while (keys.phase() + 1 < safeSteps.FIRST_DRAWING_PHASE()) {
             _openPhase(manifest, base);
         }
-        MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(safeSteps.BASE_VRF_COORDINATOR());
 
-        coordinator.openSubscription(subscriptionId, keeper);
-        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper));
-        safeSteps.advancePhaseCalls(manifest, base, uint64(block.timestamp + 1));
+        while (keys.phase() < keys.FINAL_PHASE()) {
+            coordinator.openSubscription(subscriptionId, keeper);
+            vm.expectRevert(
+                abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper)
+            );
+            safeSteps.advancePhaseCalls(manifest, base, uint64(block.timestamp + 1));
 
-        coordinator.openSubscription(subscriptionId, safeSteps.BASE_REGENTS_SAFE());
-        _openPhase(manifest, base);
-        assertEq(keys.phase(), keys.FINAL_PHASE(), "Opened once the Safe owns it");
+            coordinator.openSubscription(subscriptionId, safeSteps.BASE_REGENTS_SAFE());
+            _openPhase(manifest, base);
+        }
+        assertEq(keys.phase(), keys.FINAL_PHASE(), "Each opened once the Safe owns it");
     }
 
     /// @dev Both steps check the manifest first.
@@ -208,15 +222,15 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     }
 
     /// @dev Off Base each phase's batch names no owner of the subscription, since the step checks
-    /// none there, even for the call to phase 4.
+    /// none there, even for the calls to phases 3 and 4.
     function test_eachPhaseBatchSaysWhatTheSignersReadFirst() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         _found(manifest, deployed);
         _assertPhaseBatches(manifest, deployed, false);
     }
 
-    /// @dev On Base the call to phase 4 also names the Regents Safe as the subscription's owner, as
-    /// the step checks there.
+    /// @dev On Base the calls to phases 3 and 4 also name the Regents Safe as the subscription's
+    /// owner, as the step checks there.
     function test_onBaseEachPhaseBatchAlsoNamesTheSafeAsTheSubscriptionsOwner() public {
         uint256 subscriptionId = _standInBase();
         KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
@@ -227,8 +241,9 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
 
     /// @dev Moves `factory`'s collection through every phase by the step, checking each batch as the
     /// step writes it: its phase's name and its own description, which names the collection and the
-    /// opening time for every phase and, only for the call to phase 4, the subscription the signers
-    /// read first, by its id and its coordinator, and the Safe as its owner when `namesOwner`.
+    /// opening time for every phase and, only for the calls to phases 3 and 4, the subscription the
+    /// signers read first, by its id and its coordinator, and the Safe as its owner when
+    /// `namesOwner`.
     function _assertPhaseBatches(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, bool namesOwner)
         private
     {
@@ -246,11 +261,11 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             assertEq(description, calls[0].description, "The call's own description");
             assertTrue(_names(description, vm.toString(address(keys))), "The collection");
             assertTrue(_names(description, vm.toString(uint256(opensAt))), "The opening");
-            bool reads = phase == keys.FINAL_PHASE();
+            bool reads = phase >= safeSteps.FIRST_DRAWING_PHASE();
             assertEq(
                 _names(description, string.concat("subscription ", vm.toString(subscriptionId))),
                 reads,
-                "The subscription, before phase 4"
+                "The subscription, before phases 3 and 4"
             );
             assertEq(_names(description, vm.toString(address(coordinator))), reads, "Its coordinator");
             assertEq(_names(description, vm.toString(signers)), reads && namesOwner, "Its owner, where checked");

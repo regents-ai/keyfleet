@@ -18,7 +18,8 @@ import {KeyfleetSystem} from "./KeyfleetSystem.sol";
 /// `deploy` takes a `Manifest` value and touches neither the filesystem nor the environment, so
 /// the suite runs the real deployment against local stand-ins; `run` is the only part that reads a
 /// file or an environment variable. The script moves no token and does not touch the VRF
-/// subscription: consumer setup and Safe ownership may follow later while only fixed decks are used.
+/// subscription: the Safe takes the subscription over and lists the collection afterwards, before
+/// phase 3, whose step refuses until both are done.
 contract DeployKeyfleets is KeyfleetManifest {
     /// @notice Reads the manifest named by `KEYFLEET_MANIFEST` and deploys the system.
     /// @dev There is no default manifest, because a default would pick a chain for the operator.

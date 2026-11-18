@@ -176,7 +176,7 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
     }
 
     /// @dev Invariant: the record lists keys only while the subscription pays for their reveals. The
-    /// step to phase 4 waits for the subscription to list the collection, and its owner can remove
+    /// steps to phases 3 and 4 wait for the subscription to list the collection, and its owner can remove
     /// the collection afterwards: with a fleet that draws, the record then refuses it.
     function test_recordRefusesACollectionTheSubscriptionNoLongerLists() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();

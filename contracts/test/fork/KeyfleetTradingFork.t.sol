@@ -39,8 +39,9 @@ abstract contract LiveSubscriptionFork is Test {
         coordinator.acceptSubscriptionOwnerTransfer(subscriptionId);
     }
 
-    /// @dev The Regents Safe takes the subscription and lists the collection on it, which the phase-4
-    /// step and the trading factory's approval both require before they prepare the Safe's call.
+    /// @dev The Regents Safe takes the subscription and lists the collection on it, which the steps to
+    /// phases 3 and 4 and the trading factory's approval all require before they prepare the Safe's
+    /// call.
     function _subscriptionToTheSafe() internal {
         _handSubscriptionTo(REGENTS_SAFE);
         (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = LIVE_COLLECTION.randomness();
@@ -99,7 +100,7 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         staking = IRegentRevenueStakingViews(STAKING);
         fleetsBefore = COLLECTION.fleetCount();
 
-        // The subscription goes to the Safe first, as the phase-4 step requires, then the release's
+        // The subscription goes to the Safe first, as the phase-3 step requires, then the release's
         // Safe steps, from the Safe's address on the fork: the founding fleets each phase needs, then
         // the next phase, until the last is open.
         _subscriptionToTheSafe();

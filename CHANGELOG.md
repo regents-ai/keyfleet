@@ -12084,3 +12084,27 @@ step's report).
   subscription and that the subscription lists the collection; on any other chain, only that it
   lists the collection. Base's own files read as before. The step reads the subscription once,
   for both its check and the description.
+
+## 2026-11-18 — The phase-3 step waits for the subscription
+
+- This replaces the order "The subscription before phase 3" above only recommended. The guide
+  put the handover before phase 3, but the phase-3 step prepared its batch whoever owned the
+  randomness subscription and whether or not it listed the collection, and its description asked
+  the signers to read only the phase. From phase 3 anyone may buy a founding Key past its deck,
+  which draws, and from that purchase the record step refuses every fleet until the Regents Safe
+  owns the subscription and the subscription lists the collection; such a Key also needs the
+  collection listed to be revealed at all.
+- The Safe step now refuses to prepare the move to phase 3, as it does the move to phase 4, by
+  the one shared rule the record step and the trading factory's approval use, with the same two
+  errors: on Base while anyone but the Regents Safe owns the subscription
+  (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the subscription
+  does not list the collection (`CollectionNotVrfConsumer(collection)`). The steps to phases 1
+  and 2 still check nothing of it, since no Key sold before phase 3 draws. The phase-3 batch's
+  description now names the subscription, its coordinator and, on Base, the Regents Safe as its
+  owner, as the phase-4 batch's does, and the guide's reads before signing a phase file cover
+  phase 3 too.
+- `docs/deployment.md`, in the order of steps, step 1, step 3, step 6, the record's refusals,
+  "Rehearsing" and "Trading Fleets", and `contracts/README.md` now say that the handover and the
+  collection's listing are required before phase 3, no longer that randomness setup may be
+  deferred. The suites that step to phase 3 hand the subscription over first; the step's own
+  tests prove that phases 1 and 2 open whoever owns it, and that phases 3 and 4 each wait for it.

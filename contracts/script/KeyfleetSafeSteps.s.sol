@@ -27,9 +27,10 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 /// Moving to phase 1 opens only the Regents Club's gifts once its own fleet exists.
 /// Phase 2 opens Classic #1's sales, and phase 3 opens Syndicate, Accelerant and Cascade, at the second
 /// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
-/// phase step is run only when the founder says when sales open. Phase 4 lets anyone create a
-/// fleet, so the step does not prepare it until the randomness subscription is ready for one: on
-/// Base the Regents Safe owns it, and on every chain it lists the collection.
+/// phase step is run only when the founder says when sales open. Those three sell past their
+/// decks, and phase 4 lets anyone create a fleet, so the step prepares neither phase until the
+/// randomness subscription is ready for a Key that draws: on Base the Regents Safe owns it, and on
+/// every chain it lists the collection.
 ///
 /// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
 /// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key
@@ -53,6 +54,10 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
 
     /// @notice Regents Club keys given in one Safe call: about 13.2 million gas on Base.
     uint256 public constant CLUB_GIFT_BATCH = 80;
+    /// @notice The first phase in which a Key can draw: phase 3 opens Syndicate, Accelerant and
+    /// Cascade, which sell past their decks, and phase 4 lets anyone create a fleet. The steps to it
+    /// and to every phase after it wait for the randomness subscription.
+    uint8 public constant FIRST_DRAWING_PHASE = 3;
 
     /// @notice The step named by `KEYFLEET_STEP` is not `founding-fleets`, `advance-phase` or
     /// `club-gifts`.
@@ -133,13 +138,13 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     }
 
     /// @notice The Safe's call moving the collection to its next phase, which opens at `opensAt`.
-    /// The call to phase 4 is prepared only while the randomness subscription lists the collection
-    /// and, on Base, the Regents Safe owns it, as the record step requires once any fleet past the
-    /// founding ones exists: from phase 4 anyone may create one. The call names no phase, so landed
-    /// at any time before `opensAt` it opens whichever phase is next. Its description says so, and
-    /// names what the signers read on the chain before signing: the phase the collection is in now
-    /// and, for the call to phase 4, that the subscription lists the collection and, on Base, that
-    /// the Regents Safe owns it.
+    /// The calls to phases 3 and 4 are prepared only while the randomness subscription lists the
+    /// collection and, on Base, the Regents Safe owns it, as the record step requires once any Key
+    /// draws: from phase 3 anyone may buy a founding Key past its deck, and from phase 4 create a
+    /// fleet. The call names no phase, so landed at any time before `opensAt` it opens whichever
+    /// phase is next. Its description says so, and names what the signers read on the chain before
+    /// signing: the phase the collection is in now and, for the calls to phases 3 and 4, that the
+    /// subscription lists the collection and, on Base, that the Regents Safe owns it.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -149,7 +154,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         KeyfleetKeys keys = factory.KEYS();
         uint256 next = keys.phase() + 1;
         string memory checks = string.concat("the collection is in phase ", vm.toString(next - 1));
-        if (next == keys.FINAL_PHASE()) {
+        if (next >= FIRST_DRAWING_PHASE) {
             Subscription memory subscription = _subscription(keys);
             requireSubscriptionReady(subscription);
             checks = string.concat(checks, _subscriptionChecks(subscription));
@@ -252,10 +257,10 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         );
     }
 
-    /// @dev What the signers read of the randomness subscription before the call to phase 4, by its
-    /// id and coordinator as the collection names them: what `requireSubscriptionReady` checks on
-    /// this chain, that the subscription lists the collection and, on Base, that the Regents Safe
-    /// owns it.
+    /// @dev What the signers read of the randomness subscription before the calls to phases 3 and
+    /// 4, by its id and coordinator as the collection names them: what `requireSubscriptionReady`
+    /// checks on this chain, that the subscription lists the collection and, on Base, that the
+    /// Regents Safe owns it.
     function _subscriptionChecks(Subscription memory subscription) private view returns (string memory) {
         string memory named = string.concat(
             "randomness subscription ",

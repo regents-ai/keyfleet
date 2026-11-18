@@ -18,8 +18,8 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// @notice Refuses, with the record step's own errors, while a collection's randomness subscription
 /// is not ready for Keys that draw: on Base, while another account than the Regents Safe owns it,
 /// and on every chain, while it does not list the collection. Until it is, one Key that draws stops
-/// the record step for every fleet, so the record step, the trading factory's approval and the step
-/// opening phase 4 all refuse here.
+/// the record step for every fleet, so the record step, the trading factory's approval and the steps
+/// opening phases 3 and 4 all refuse here.
 function requireSubscriptionReady(KeyfleetManifest.Subscription memory subscription) pure {
     if (subscription.requiredOwner != address(0) && subscription.owner != subscription.requiredOwner) {
         revert RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe(subscription.owner);
@@ -62,10 +62,10 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// @notice A fleet's `part` is missing, misplaced or bound to something else.
     error FleetNotBound(uint256 fleetId, string part);
     /// @notice The VRF subscription does not list the collection as a consumer yet. The trading
-    /// factory's approval and the step opening phase 4 refuse with it too.
+    /// factory's approval and the steps opening phases 3 and 4 refuse with it too.
     error CollectionNotVrfConsumer(address collection);
     /// @notice On Base, the VRF subscription is owned by someone other than the Regents Safe. The
-    /// trading factory's approval and the step opening phase 4 refuse with it too.
+    /// trading factory's approval and the steps opening phases 3 and 4 refuse with it too.
     error VrfSubscriptionNotOwnedByRegentsSafe(address owner);
 
     /// @notice Reads the manifest named by `KEYFLEET_MANIFEST` and what the deployment step

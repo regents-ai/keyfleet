@@ -497,11 +497,12 @@ The site draws traits with this rule in `platform/lib/keyfleet/traits.ex`, and
 The table's file format is in [../docs/deployment.md](../docs/deployment.md).
 
 The operator writes a known VRF subscription id into the manifest before deployment.
-Funding, consumer setup and Safe ownership may be deferred while all minted Keys
-are dealt from their fixed founding decks. Complete them before minting a Key
-past its founding deck or any public fleet's Key; recording drawn Keys requires
-consumer setup and Safe ownership. A key minted before
-that has its request refused and can ask again once the collection is added.
+Consumer setup and Safe ownership follow the deployment and are required before
+phase 3, the first phase in which a Key can be minted past its founding deck:
+the Safe's steps to phases 3 and 4 refuse until the Regents Safe owns the
+subscription and the subscription lists the collection, and recording drawn
+Keys requires both. Fund it before then too. A key minted while the collection
+is not listed has its request refused and can ask again once it is added.
 The deploy-day checklist is under Deployment scripts.
 The three Chainlink files the collection uses are copied unchanged into
 `src/vendor/chainlink`, with their source, commit and checksums in the README
@@ -1827,10 +1828,11 @@ latest broadcast there.
   does not answer the NFT receiver check with exactly its selector, when the
   Pass has no holder, or when `KEYFLEET_CLUB_TO_CLAIMS`, a comma-separated list
   of key numbers, names the key); any other
-  step reverts with `UnknownStep`. Phase 4 lets anyone create a fleet, and one
-  fleet that draws stops the record for every fleet while the randomness
-  subscription is not ready, so `advance-phase` prepares phase 4 only once the
-  chain shows it is, with the record step's own errors otherwise: on Base, a
+  step reverts with `UnknownStep`. Phase 3 lets anyone buy a founding Key past
+  its deck and phase 4 create a fleet, and one Key that draws stops the record
+  for every fleet while the randomness subscription is not ready, so
+  `advance-phase` prepares phases 3 and 4 (`FIRST_DRAWING_PHASE` on) only once
+  the chain shows it is, with the record step's own errors otherwise: on Base, a
   subscription anyone but the Regents Safe owns
   (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then, on every chain, one
   that does not list the collection (`CollectionNotVrfConsumer(collection)`).
@@ -1845,7 +1847,7 @@ latest broadcast there.
   check and sign. A phase file's own description (`meta.description`) says
   what the signers read on the chain before signing, since `advancePhase` names
   no phase and opens whichever is next: the collection's phase now and, for
-  phase 4, what the step checks on that chain, that the subscription lists the
+  phases 3 and 4, what the step checks on that chain, that the subscription lists the
   collection and, on Base only, that the Regents Safe owns it. A rehearsal's
   files carry the same description.
   Nothing is signed or sent from it on Base. On a local anvil
@@ -1994,8 +1996,8 @@ Nothing below can be fixed after the fact unless it says so.
    the manifest and that it already serves the right file. It is fixed at
    deployment and nothing can change it.
 5. **VRF subscription id.** Sean's subscription id is set in `vrf.subscriptionId`.
-   Before the first Key that needs randomness, fund it with 0.5 ETH, add the
-   collection as consumer and transfer ownership to the Regents Safe. The
+   Before phase 3, from which a Key can need randomness, fund it with 0.5 ETH,
+   add the collection as consumer and transfer ownership to the Regents Safe. The
    placeholder `"0"` is refused. The balance is checked by hand: top it up
    back to 0.5 ETH when it is below 0.3 ETH, and never leave it below
    0.25 ETH. One answer can cost up to about 0.001 ETH at the
@@ -2004,9 +2006,10 @@ Nothing below can be fixed after the fact unless it says so.
    [../docs/deployment.md](../docs/deployment.md)). The Safe can move the
    collection to another subscription or gas lane later with `setRandomness`,
    and to another coordinator once no key waits for its answer.
-6. **Add the collection as a VRF consumer.** This may wait during fixed-deck
-   minting. Before drawn Keys, add the collection and transfer ownership to the
-   Safe; recording such Keys requires both. A key minted before that has its draw refused and asks again later.
+6. **Add the collection as a VRF consumer.** Required before phase 3, with the
+   Safe's ownership: the steps to phases 3 and 4 refuse until both hold, and
+   recording drawn Keys requires both. A key minted while the collection is not
+   listed has its draw refused and asks again later.
 7. **REGENT staking is unpaused.** The 10% protocol share goes to REGENT revenue
    staking only while staking accepts deposits. While the Safe has it paused,
    every fleet's share waits in its manager, still owed, and sales go on.
@@ -2280,11 +2283,12 @@ themselves unless `BASE_RPC_URL` is set:
   the record written has the pinned factory and deployment block and is the
   record `record` gives for them, and the founding-fleets step writes one Safe
   batch per founding fleet still missing, each a call to the pinned factory.
-  Last, it steps the live collection to phase 3 from the Safe's address with
-  the Safe steps: with the subscription handed to another account the step to
-  phase 4 stops with `VrfSubscriptionNotOwnedByRegentsSafe` naming that
-  account, and once the Safe owns it and lists the collection the step's call
-  opens phase 4.
+  Last, it steps the live collection to phase 2 and creates every founding
+  fleet from the Safe's address with the Safe steps, whoever owns the
+  subscription; then for phase 3 and again for phase 4, with the subscription
+  handed to another account the step stops with
+  `VrfSubscriptionNotOwnedByRegentsSafe` naming that account, and once the Safe
+  owns it and lists the collection the step's call opens the phase.
   Each run goes through `runInto`, the function `run` calls with the real
   folder, into a folder of the test's own under `rehearsal/`, which git
   ignores, and the test removes that folder. No test opens
