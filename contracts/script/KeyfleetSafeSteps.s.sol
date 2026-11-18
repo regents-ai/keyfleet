@@ -14,7 +14,7 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 /// @notice The Regents Safe's steps after the system is deployed: creating the five founding
 /// fleets, moving the collection to its next phase, and giving the Regents Club keys.
 /// @dev Each step is one call from the Safe, and each founding fleet is its own transaction, since
-/// one creation uses about 10.4 million gas. Before anything leaves this script, every call is run
+/// one creation uses about 11.9 million gas. Before anything leaves this script, every call is run
 /// from the Safe's address against the chain's current state, in order, so a call that would revert
 /// stops the step with the collection's or factory's own error.
 ///

@@ -312,7 +312,7 @@ its own Safe Transaction Builder file:
 
 The Safe's signers load each file in the Safe's Transaction Builder, check it
 and sign it. Initially only `base.founding-fleet-5.json` is prepared. Classic's
-file follows in phase 1; the other three follow in phase 2. Each creation uses about 11.8
+file follows in phase 1; the other three follow in phase 2. Each creation uses about 11.9
 million gas, so each is its own transaction. Run the step again after some have
 landed and it writes files only for the fleets still missing. Each founding
 fleet is created with its deck and no joining requirements, and its sales stay
