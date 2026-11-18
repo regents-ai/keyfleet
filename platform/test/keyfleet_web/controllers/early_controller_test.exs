@@ -35,7 +35,10 @@ defmodule KeyfleetWeb.EarlyControllerTest do
              "Keyfleet opens soon. Leave your email and we'll tell you when it does."
 
     assert text(page, "label[for=early-email]") == "Email"
-    assert page |> LazyHTML.query("input#early-email") |> LazyHTML.attribute("type") == ["email"]
+
+    assert page |> LazyHTML.query("input#early-email") |> LazyHTML.attribute("inputmode") ==
+             ["email"]
+
     assert text(page, "button[type=submit]") == "Tell me when it opens"
 
     assert page |> LazyHTML.query("footer a") |> LazyHTML.attribute("href") ==

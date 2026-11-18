@@ -147,14 +147,18 @@ defmodule KeyfleetWeb.EarlyHTML do
               errors={List.wrap(@error)}
               class="early__field"
             >
+              <%!-- A text box with the email keyboard: an email box sends its
+                   value without the spaces before it, which its limit counted,
+                   so the site would never see what the box cut. --%>
               <input
                 id={field.id}
-                type="email"
+                type="text"
                 name="email"
                 maxlength={@email_box}
                 value={@email}
                 autocomplete="email"
                 inputmode="email"
+                autocapitalize="none"
                 spellcheck="false"
                 aria-describedby={field.described_by != "" && field.described_by}
                 aria-invalid={field.aria_invalid}
