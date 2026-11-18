@@ -4,6 +4,7 @@ import {activeEthereumWallet} from "../wallet_actions/connected_wallet"
 type ReferenceHook = Hook & {
   el: HTMLElement
   pushEvent(event: string, payload: unknown): void
+  publish?: () => void
   cleanup?: () => void
 }
 
@@ -15,6 +16,7 @@ export const PrivyShowcase: Hook = {
     const publish = () => this.pushEvent("privy_wallet_changed", {
       address: activeEthereumWallet()?.address ?? null,
     })
+    this.publish = publish
     window.addEventListener("ash:wallet-state", publish)
     publish()
     if (this.el.dataset.privyEnabled === "true") {
@@ -23,5 +25,7 @@ export const PrivyShowcase: Hook = {
     }
     this.cleanup = () => window.removeEventListener("ash:wallet-state", publish)
   },
+  // The page that rejoins starts with no wallet on the server; tell it again.
+  reconnected(this: ReferenceHook) { this.publish?.() },
   destroyed(this: ReferenceHook) { this.cleanup?.() },
 }

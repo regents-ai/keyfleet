@@ -70,6 +70,25 @@ async function shownDone(approve: Locator) {
   }).toBe(true)
 }
 
+// Drops the page's connection and lets it join again, as every open page does
+// at a release. The page then talks to a fresh server, which starts with no
+// wallet and no steps. LiveView puts its connected class back only once the
+// page has joined again, so the class is taken off first and waited for.
+async function reconnect(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>(resolve => {
+        const socket = (window as unknown as {liveSocket: {disconnect(done: () => void): void; connect(): void}}).liveSocket
+        socket.disconnect(() => {
+          document.querySelector("[data-phx-main]")!.classList.remove("phx-connected")
+          socket.connect()
+          resolve()
+        })
+      }),
+  )
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+}
+
 test.beforeAll(() => {
   prepareFleet(fleet)
 })
@@ -456,6 +475,66 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
   await expect(page.locator(`#key-profile-claim-action-sent li:has(#key-profile-claim-action-sent-${claimed.hash})`)).toContainText(
     "Done.",
   )
+  expect(errors).toEqual([])
+})
+
+// A Key's page with its income to claim, signed in, the stand-in wallet active.
+// Returns the Claim button and the page's uncaught errors.
+async function openClaim(page: Page) {
+  const key = sellKey(fleet, me)
+  offerRewards(fleet, key, 2_500_000)
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(`/classic/1?key=${key}`)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  await useStandInWallet(page, me)
+  const claim = page.locator(`#key-profile-claim-${usdc}`)
+  await expect(claim).toHaveText("Claim 2.5 USDC")
+  return {claim, errors}
+}
+
+// The claim reached the wallet once, and the server follows it until it lands.
+async function claimedAndDone(page: Page) {
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [claimed] = await sentByStandIn(page)
+  expect(claimed.transaction.to.toLowerCase()).toBe(rewardsContract)
+  landStep(claimed.hash, claimed.transaction, true)
+  await expect(page.locator(`#key-profile-claim-action-sent li:has(#key-profile-claim-action-sent-${claimed.hash})`)).toContainText(
+    "Done.",
+  )
+}
+
+test("after the page reconnects, a claim whose steps the page already had reaches the wallet and is followed until it lands", async ({
+  page,
+}) => {
+  const {claim, errors} = await openClaim(page)
+
+  await reconnect(page)
+  await claim.click()
+
+  await claimedAndDone(page)
+  expect(errors).toEqual([])
+})
+
+test("after the page reconnects, a claim that asks the server for its steps reaches the wallet and is followed until it lands", async ({
+  page,
+}) => {
+  const {claim, errors} = await openClaim(page)
+
+  await reconnect(page)
+  // A field the steps weren't built from, as when the person has changed a
+  // form (the propose and shard forms): the press asks the server for steps
+  // built from the form on screen.
+  await page.locator("#key-profile-claim-action").evaluate(root => {
+    const field = document.createElement("input")
+    field.type = "hidden"
+    field.dataset.onchainInput = "changed"
+    root.append(field)
+  })
+  await claim.click()
+
+  await claimedAndDone(page)
   expect(errors).toEqual([])
 })
 
