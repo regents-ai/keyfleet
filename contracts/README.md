@@ -1863,8 +1863,11 @@ without six decimals, a zero keeper and a zero trait table hash.
 - `script/DeployTradingFactory.s.sol` deploys `KeyfleetTradingFactory` on the
   live system and writes nothing. It sends one transaction from one account,
   about 7.4 million gas; the trading factory's constructor deploys its three
-  deployers. It finds the existing factory in the deployment step's latest
-  broadcast on the chain and, before deploying anything, proves it is the
+  deployers. On Base the existing factory is the live one at
+  `0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7`, pinned in the script beside the
+  live collection, so a run on Base needs no file but the manifest; on any
+  other chain it is the one the deployment step's latest broadcast on that
+  chain created. Before deploying anything it proves that factory is the
   factory of the live collection: it refuses one with no code
   (`FactoryMissing`); on Base, one whose collection is not the live one at
   `0xaBC959B463542497639adA57388c65D05AB34A30`, pinned in the script
@@ -2202,7 +2205,10 @@ themselves unless `BASE_RPC_URL` is set:
   after handing the VRF subscription to the Safe and listing the collection on
   the fork, as the record requires for any fleet past the founding ones.
   With `--isolate` its gas lines are the figures in [Trading
-  Fleets](#trading-fleets-1).
+  Fleets](#trading-fleets-1). Apart from that, it runs `DeployTradingFactory`'s
+  whole `run` on Base as it stands, with no broadcast record: it finds the
+  pinned live factory, deploys the trading factory, and prints the Safe's
+  `addFactory` call for that trading factory on the live collection.
 
 Run them one suite at a time, as a public endpoint may refuse a burst of
 requests.

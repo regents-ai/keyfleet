@@ -382,3 +382,43 @@ contract KeyfleetTradingForkTest is Test {
         return a > b ? a : b;
     }
 }
+
+/// @dev `DeployTradingFactory.run`, the whole path an honest run takes, on a fork of Base at its
+/// latest block exactly as it stands: the live factory taken from the script itself with no
+/// broadcast record, every check, the trading factory's deployment and the Safe's call, which the
+/// run then makes from the Safe's address on the fork. Nothing is signed or sent to Base. It runs
+/// only when `BASE_RPC_URL` is set and skips itself otherwise.
+contract DeployTradingFactoryForkTest is Test {
+    KeyfleetKeys private constant COLLECTION = KeyfleetKeys(0xaBC959B463542497639adA57388c65D05AB34A30);
+    KeyfleetFactory private constant FLEETS = KeyfleetFactory(0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7);
+
+    function setUp() public {
+        string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
+        if (bytes(rpc).length == 0) {
+            vm.skip(true);
+            return;
+        }
+        vm.createSelectFork(rpc);
+    }
+
+    /// @dev The run finds the live factory with no broadcast record of the release in the
+    /// repository, deploys on it, and prints the live collection's `addFactory` for the address it
+    /// deployed, which the Safe's call then lists.
+    function test_runOnBaseFindsTheLiveFactoryAndPrintsTheSafesCall() public {
+        DeployTradingFactory script = new DeployTradingFactory();
+        assertEq(script.BASE_KEYFLEET_FACTORY(), address(FLEETS), "the pinned factory");
+        assertEq(address(FLEETS.KEYS()), address(COLLECTION), "names the live collection");
+        assertEq(vm.computeCreateAddress(address(FLEETS), 1), address(COLLECTION), "which it created first");
+        assertFalse(vm.exists("broadcast/DeployKeyfleets.s.sol/8453/run-latest.json"), "no release broadcast");
+
+        vm.setEnv("KEYFLEET_MANIFEST", "base");
+        (KeyfleetTradingFactory trading, KeyfleetSafeSteps.SafeCall memory call) = script.run();
+
+        assertGt(address(trading).code.length, 0, "deployed");
+        assertEq(address(trading.KEYS()), address(COLLECTION), "on the live collection");
+        assertEq(call.name, "add-trading-factory");
+        assertEq(call.to, address(COLLECTION), "the Safe calls the live collection");
+        assertEq(call.data, abi.encodeCall(KeyfleetKeys.addFactory, (address(trading))), "addFactory(trading)");
+        assertTrue(COLLECTION.isFactory(address(trading)), "listed once the Safe calls");
+    }
+}

@@ -11802,3 +11802,24 @@ step's report).
 - Unchanged, waiting on the founder: how a payback is split between early and late Keys.
 - Every existing contract still compiles to the same bytes (31 compared). Nothing was deployed,
   signed or sent.
+
+## 2026-11-18 — Trading Fleets: the trading factory's deployment runs on Base from the repository
+
+- `script/DeployTradingFactory.s.sol` no longer needs the first release's broadcast file on Base,
+  which no copy of the repository holds. On Base it takes the live Keyfleet factory at
+  `0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7`, now pinned in the script beside the live
+  collection; on any other chain it still takes the factory from that chain's own deployment
+  broadcast. Every check before deploying is unchanged, so on Base the pinned factory must still
+  hold code, name the pinned collection, be listed by it, and match the manifest.
+- The pinned address was checked on Base through its public endpoint only: it holds code, it names
+  the live collection, the collection lists it as a factory, the collection is at the address of
+  the factory's first creation, its Safe, REGENT revenue staking and USDC are the manifest's, and
+  the managers of fleets 1 and 5 name it as their factory.
+- A new fork test runs the script's whole run on Base as it stands, with no broadcast file: it
+  deploys the trading factory and prints the Safe's `addFactory` call for it on the live
+  collection. A dry run of the script against Base, with no broadcast file and nothing sent, does
+  the same, with the gas limit unchanged at 9,672,434.
+- Unchanged: `script/RecordKeyfleets.s.sol` and the Safe steps' own run still read the first
+  release's broadcast file, since the record also takes the release's first block from it.
+- Every existing contract still compiles to the same bytes (31 compared). Nothing was deployed,
+  signed or sent.
