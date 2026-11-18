@@ -399,6 +399,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
     # Each link lands on its own place in the Public place, as anyone reads it.
     {:ok, public, _html} = live(build_conn(), "/classic/1/workspace?place=public")
     for publication <- made, do: assert(has_element?(public, "#public-#{publication.id}"))
+
+    # There the page's Open is described by the line naming it and its project.
+    kind = "public-#{page.id}-kind"
+    assert has_element?(public, ~s(#public-#{page.id}-page[aria-describedby="#{kind}"]))
+    assert has_element?(public, "##{kind}", "Collaborative Understanding")
   end
 
   test "Notebook: the newest notebook page made public, by its project's title and its Key, opening the page; fewer than four stand still, with no Pause",

@@ -151,14 +151,20 @@ test("Recent and Notebook arrive under the hero, slide from four things, pause a
   expect(await sideways(page)).toBe(0)
   await page.setViewportSize({width: 1280, height: 800})
 
-  // A thing opens its place in the Public place.
+  // A thing opens its place in the Public place, where the page's Open is
+  // described by the line naming it and its project.
   await page.locator("#home-recent-band").hover()
   await expect.poll(() => motion(page)).toEqual(["paused"])
   const first = page.locator("#home-recent-list a").first()
   const href = await first.getAttribute("href")
   await first.click()
   await expect(page).toHaveURL(href!)
-  await expect(page.locator(`#${href!.split("#")[1]}`)).toBeVisible()
+  const record = page.locator(`#${href!.split("#")[1]}`)
+  await expect(record).toBeVisible()
+  const open = record.locator(`#${href!.split("#")[1]}-page`)
+  const kind = (await record.locator(".workspace-kicker").textContent())!.replace(/\s+/g, " ").trim()
+  await expect(open).toHaveAccessibleName("Open")
+  await expect(open).toHaveAccessibleDescription(kind, {ignoreCase: true})
 })
 
 test("with less motion Recent stands still, the newest three in one line, with no Pause, at 1280 and 390", async ({page}) => {

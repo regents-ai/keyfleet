@@ -11343,3 +11343,18 @@ build. Walks: homepage, homepage details, launch steps and launch gate, 23 passe
 chain project's Recent and value card walks in Chromium, 9 passed; the devices project,
 72 passed. Pictures of Pause and Play at 1280 and 390, light and dark, on touch, and
 with keyboard focus, were taken by a scratch walk that is not kept.
+
+## 2026-11-17: the Public place's notebook page link says Open (the chief's 1 a)
+
+- In a fleet's Public place, a notebook page made public is linked with "Open" (was
+  "Open the page"), since a label is one or two words. Its description is the line above
+  it, which says it is a notebook page and, when every project is listed, which project
+  (`aria-describedby` to `public-<id>-kind`), so a screen reader still hears what it
+  opens. The homepage's Notebook row already reads the same way.
+- The homepage test that opens the Public place now finds the page's link described by
+  that line, naming its project, and the Recent walk, landing there, finds the link named
+  Open with that line as its description.
+
+Check (partition `_kf_s3`, PORT unset for ExUnit): format, compile with warnings as
+errors and Credo (no issues) passed. Homepage, workspace and public workspace tests, 109
+passed. The chain project's Recent walk in Chromium, 3 passed.
