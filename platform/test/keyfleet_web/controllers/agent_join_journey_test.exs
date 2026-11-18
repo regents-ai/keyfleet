@@ -395,6 +395,41 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     end
   end
 
+  # Costly failure: decoding a deeply nested body takes its request megabytes,
+  # which a connection kept open goes on holding.
+  test "a deeply nested body leaves its request holding little once judged", c do
+    path = "/api/v1/agent/fleets/fibonacci_syndicate/sync"
+    depth = div(64 * 1024 - 12, 2)
+    deep = ~s({"name":) <> :binary.copy("[", depth) <> :binary.copy("]", depth) <> "}"
+
+    # Many at once, each in a process of its own as each connection has: one
+    # request alone may happen to clean up after itself.
+    held =
+      for _ <- 1..50 do
+        request =
+          SignedAgentHelpers.sign(c.signer, c.secret, "www.example.com", "POST", path, deep)
+
+        Task.async(fn ->
+          conn =
+            request.headers
+            |> Enum.reduce(
+              %{Plug.Test.conn("POST", path, deep) | remote_ip: {198, 51, 100, 152}},
+              fn {name, value}, conn -> put_req_header(conn, name, value) end
+            )
+            |> KeyfleetWeb.Endpoint.call([])
+
+          {conn.status, Process.info(self(), :memory)}
+        end)
+      end
+      |> Task.await_many()
+
+    assert for(
+             {status, {:memory, bytes}} <- held,
+             status != 422 or bytes > 256 * 1024,
+             do: {status, bytes}
+           ) == []
+  end
+
   # Costly failure: a body other than the one a signature declares is acted
   # on, or a read signed with no content-digest, or the empty body's, is refused.
   test "a request carries the body its content-digest declares, none declaring the empty body",

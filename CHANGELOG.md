@@ -11208,3 +11208,22 @@ a scratch walk that is not kept.
   the answer started still drops the connection, a reader who hangs up still stops the
   hub, and saved pages are still kept whole or streamed past their cap.
 - Contract 36.2.1; `/docs` and the public changelog say the same.
+
+## 2026-11-17 — A deeply nested body no longer leaves its request holding megabytes
+
+- Deciding whether a notebook request may go on can mean decoding its JSON body
+  (`NotebookGateway.decoded/1` and its walks for a field named twice), and `SignedAgent`
+  decodes every signed body sent to the agent API. For a deeply nested 64 KiB body that
+  grows the request's process by 2 to 4 MiB, which it kept while it waited for the hub
+  (up to 180 s) and, on a connection kept open, until Bandit next collected (every fifth
+  request): 1,150 such jobs within one person's allowance peaked at 4,030 MiB.
+- The door now collects once its checks are done, whatever they found, before it waits
+  for the hub (`checked/4`), and `SignedAgent.take_body/1` once it has decoded. With the
+  reviewers' round-four proofs, 1,150 deep jobs at once peak at 496 MiB (4,030 before),
+  235 on closing connections (1,261), 1,150 files at 542 (638), and 150 deep jobs waiting
+  on a slow hub hold 128 MiB (542). A request holds about 41 KiB once answered (3,475 at
+  the door and 2,476 on the agent API before). The collection costs about 8 µs a request.
+- Bandit's option to collect after every request collects only once the answer is sent,
+  so a request waiting for the hub kept its megabytes; decoding in a short-lived process
+  copies the decoded body back (about 512 KiB for a deep one) and splits each check across
+  processes. Nothing is accepted or refused differently; no contract change.

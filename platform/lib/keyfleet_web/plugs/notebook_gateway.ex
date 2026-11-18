@@ -613,32 +613,45 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 413, "request_too_large")
 
       true ->
-        with :ok <- unscheduled(conn, body),
-             {:ok, {headers, body}, done} <-
-               made(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
-          request =
-            Req.new(
-              method: conn.method,
-              url: address <> target(conn),
-              headers: headers,
-              body: body,
-              into: &pass_on(&1, &2, conn, fleet_id, done),
-              raw: true,
-              redirect: false,
-              retry: false,
-              # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-              connect_options: [transport_opts: [inet6: true]],
-              receive_timeout: http_timeout(conn)
-            )
+        case checked(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
+          {:ok, {headers, body}, done} ->
+            request =
+              Req.new(
+                method: conn.method,
+                url: address <> target(conn),
+                headers: headers,
+                body: body,
+                into: &pass_on(&1, &2, conn, fleet_id, done),
+                raw: true,
+                redirect: false,
+                retry: false,
+                # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+                connect_options: [transport_opts: [inet6: true]],
+                receive_timeout: http_timeout(conn)
+              )
 
-          fleet_id
-          |> Notebooks.hub_run(request)
-          |> answer_back(conn, fleet_id, subject, done)
-        else
-          {:error, :scheduled} -> Refusal.json(conn, 403, "notebooks_schedules_refused")
-          {:error, reason} -> maker_refusal(conn, reason)
+            fleet_id
+            |> Notebooks.hub_run(request)
+            |> answer_back(conn, fleet_id, subject, done)
+
+          {:error, :scheduled} ->
+            Refusal.json(conn, 403, "notebooks_schedules_refused")
+
+          {:error, reason} ->
+            maker_refusal(conn, reason)
         end
     end
+  end
+
+  # Deciding who may send a body can mean decoding it (`decoded/1`), which takes
+  # this process some megabytes for a deeply nested 64 KiB one. It would hold
+  # them while it waits for the hub, and on a connection kept open until that
+  # connection next cleans up, so they are given back as soon as the checks are
+  # done, whatever they found.
+  defp checked(conn, fleet_id, subject, {_headers, body} = request) do
+    checked = with :ok <- unscheduled(conn, body), do: made(conn, fleet_id, subject, request)
+    :erlang.garbage_collect()
+    checked
   end
 
   # The hub reads a body by its label, and this door reads an agent's body, and

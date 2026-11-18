@@ -1219,6 +1219,44 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_received {:hub, "PUT", ^files, "u_" <> _, ^file}
   end
 
+  # Costly failure: decoding a deeply nested body takes its request megabytes,
+  # which a connection kept open goes on holding: gigabytes for one person's
+  # minute of such requests.
+  test "a deeply nested body leaves its request holding little once answered, from a person or an agent",
+       c do
+    cookie = enter!(c.holder)
+    jobs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000002/jobs"
+    depth = div(64 * 1024 - 30, 2)
+    nested = fn inside -> :binary.copy("[", depth) <> inside <> :binary.copy("]", depth) end
+    deep = ~s({"name":#{nested.("")}})
+    # Refused only once the door has read down to its last object.
+    twice = ~s({"name":#{nested.(~s({"a":1,"a":2}))}})
+
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    signed = SignedAgentHelpers.sign(signer, secret, @host, "POST", jobs, deep)
+
+    # Each request in a process of its own, as each connection has.
+    held =
+      for send <- [
+            fn -> send_notebook(:post, jobs, cookie, deep) end,
+            fn -> send_notebook(:post, jobs, cookie, twice) end,
+            fn -> send_signed(signed, {198, 51, 100, 142}) end
+          ] do
+        Task.await(Task.async(fn -> {send.().status, Process.info(self(), :memory)} end))
+      end
+
+    assert [{201, _}, {400, _}, {201, _}] = held
+    assert for({_status, {:memory, bytes}} <- held, bytes > 256 * 1024, do: bytes) == []
+  end
+
   # Costly failure: a session start whose replacement isn't text crashes the
   # door, from a person or an agent, where it should be refused.
   test "a session start whose mode or replacement isn't text, or whose text can't be read, is refused and never reaches the hub, from a person or an agent",
