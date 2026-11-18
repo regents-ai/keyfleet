@@ -11613,3 +11613,30 @@ a scratch walk that is not kept.
   arrives. Main does the same (the reviewers' round-six proof 418; the client libraries
   are the same versions in `mix.lock`). A hub that follows HTTP never sends it. Accepted
   as it is.
+
+## 2026-11-18 — Three body tests fail for the reason they name
+
+- `KeyfleetWeb.Plugs.ParsersTest` keeps the one case that turns on
+  `KeyfleetWeb.Plugs.Parsers` rendering a refusal for the request as it stands: a query
+  string that isn't UTF-8 at an `/api` address, asking for HTML, gets a JSON 400; without
+  that, the HTML page. Gone: a malformed body to an agent's pairing (the router already
+  renders for the request its pipelines left, so JSON either way), a malformed consent
+  form and the home page's query string (HTML either way).
+- `KeyfleetWeb.Plugs.Parsers.LastRead` makes no difference here: with each refusal
+  reported for the request as parsing began, a malformed body and one over its limit, on a
+  closed or a kept-open connection, are answered 400 and 413 as with it. Nothing tests it
+  now, and it may no longer be needed; left as it is.
+- Contract 36.3.1's `BodyTooLarge` and `BodyKindRefused` gave their codes in words alone,
+  so `ApiContractTest`, which compares the contract with a copy of it, was all that checked
+  them. They now give the JSON the site sends, `{"error": {"code", "message", "hint"}}`
+  with the code fixed (`BodyTooLargeError`, `BodyKindRefusedError`), and `BodyLimitsTest`
+  checks the 413 and 415 of both addresses that document them, a sign-in failure report
+  and an agent's pairing, with `Keyfleet.ContractSchema`. Without the sign-in failure's
+  JSON format it fails (`$: is not of type "object"`).
+- `BodyLimitsTest` counted a body of exactly the limit as taken when it got any answer but
+  413 or 415. It now follows each request out of its route (`[:phoenix, :router_dispatch,
+  :stop]`) and takes only that body's one field arriving whole; at `/mcp`, which decodes a
+  call only once the sign-in server checks its signature, the digest that server was sent
+  must be the whole body's. The consent forms and the early-access form now go with a
+  session and its forms token: before, each was counted taken on a 403 for the token
+  missing, and sent that way now the test fails (`:not_decoded`).

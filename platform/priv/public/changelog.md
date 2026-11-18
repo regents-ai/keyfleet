@@ -16,7 +16,8 @@ Changes to Keyfleet, newest first.
   seconds. Before, what was left was read after the answer in one piece of up to 8 MB
   and held until its last byte came. A body an address reads whole leaves the connection
   open, as before. API contract 36.3.1 says a body refused with 413 or 415 was not
-  decoded, where it said not read.
+  decoded, where it said not read, and gives those answers' JSON, an `error` with its
+  `code`, `message` and `hint`.
 - **Claude connector.** A call to `/mcp` now has its body read only once the site knows
   who sent it. A call with a token this site didn't give, or with neither a token nor an
   agent's signature, gets 401 `connection_required` whatever its body, where a body over
