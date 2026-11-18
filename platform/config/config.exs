@@ -115,6 +115,12 @@ config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
 # good (`Keyfleet.Lighthouse`). Production sets its `api_key`.
 config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage", req_options: []
 
+# Coinbase's public market data, read with no account or key, for the seasons'
+# picks and prices (`Keyfleet.Seasons.Coinbase`).
+config :keyfleet, Keyfleet.Seasons.Coinbase,
+  url: "https://api.coinbase.com/api/v3/brokerage",
+  req_options: []
+
 # Ash 3.33 requires an explicit string length unit. Codepoints match how
 # PostgreSQL counts `length()`, so `max_length` bounds stored size; graphemes
 # (`:mixed`) do not, because one grapheme can carry unbounded combining marks
@@ -326,7 +332,8 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "share_card"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "project_cards"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "points_board"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "season_coins"}}
     ]
   ],
   pruner: [max_age: {7, :days}],

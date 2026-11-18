@@ -55,6 +55,11 @@ config :keyfleet, Keyfleet.Keys.KeyArt,
   url: "https://key-art.test",
   req_options: [plug: {Req.Test, Keyfleet.Keys.KeyArt}]
 
+# Coinbase is answered by `Req.Test`.
+config :keyfleet, Keyfleet.Seasons.Coinbase,
+  url: "https://coinbase.test",
+  req_options: [plug: {Req.Test, Keyfleet.Seasons.Coinbase}]
+
 # Lighthouse is answered by `Req.Test`.
 config :keyfleet, Keyfleet.Lighthouse,
   api_key: "test-lighthouse-key",
