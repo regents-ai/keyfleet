@@ -83,8 +83,9 @@ contract KeyfleetTradingGasTest is KeyfleetTradingFixture {
             _log("runDailyPayback, a later payback", size, dailyGas[s]);
             assertEq(fleet.matureKeys(), size);
 
+            vm.prank(keeper);
             treasury.sendToStaking();
-            _log("sendToStaking, two paybacks' 1%", size, vm.lastCallGas().gasTotalUsed);
+            _log("sendToStaking by the keeper, two paybacks' 1%", size, vm.lastCallGas().gasTotalUsed);
             assertEq(treasury.stakingOwed(), 0);
         }
         // Cost grows only with the binary search over mint times, read twice a payback.

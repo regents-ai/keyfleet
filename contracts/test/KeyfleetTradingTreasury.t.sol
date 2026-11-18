@@ -155,6 +155,7 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         assertEq(usdc.balanceOf(address(treasury)), owed);
         assertEq(treasury.available(), 0);
 
+        vm.prank(keeper);
         treasury.sendToStaking();
         assertEq(staking.totalUsdcReceived(), owed);
         assertEq(usdc.balanceOf(address(treasury)), 0);
@@ -181,9 +182,10 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
 
     // --- the payback routine ----------------------------------------------------------
 
-    /// @dev A payback sends the Keys their 99% at once and only sets staking's 1% aside; anyone then
-    /// sends what is owed to staking, with the tag, the manager as reference and no approval left.
-    function test_paybackSetsOnePercentAsideAndAnyoneSendsItToStaking() public {
+    /// @dev A payback sends the Keys their 99% at once and only sets staking's 1% aside; the keeper
+    /// then sends what is owed to staking, with the tag, the manager as reference and no approval
+    /// left.
+    function test_paybackSetsOnePercentAsideAndTheKeeperSendsItToStaking() public {
         _tbuyMany(2);
         _tcount();
         _return(1_000e6);
@@ -213,8 +215,8 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         }
 
         vm.expectEmit(address(treasury));
-        emit KeyfleetTradingTreasury.SentToStaking(stranger, forStaking);
-        vm.prank(stranger);
+        emit KeyfleetTradingTreasury.SentToStaking(keeper, forStaking);
+        vm.prank(keeper);
         treasury.sendToStaking();
         assertEq(staking.totalUsdcReceived(), forStaking);
         assertEq(staking.lastSourceTag(), keccak256("keyfleet.trading_payback"));
@@ -240,9 +242,11 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         uint256 owed = 2 + Math.ceilDiv(daily, 100) + Math.ceilDiv(own, 100);
         assertEq(treasury.stakingOwed(), owed);
 
+        vm.prank(keeper);
         treasury.sendToStaking();
         assertEq(staking.totalUsdcReceived(), owed);
         assertEq(treasury.stakingOwed(), 0);
+        vm.prank(keeper);
         vm.expectRevert(KeyfleetTradingTreasury.ZeroAmount.selector);
         treasury.sendToStaking();
     }
@@ -305,10 +309,12 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         assertEq(rewards.accrued(address(usdc), _tkey(1)), usdc.balanceOf(address(rewards)), "the Keys were paid");
         assertEq(treasury.available(), 0, "everything of the fleet's own paid out");
 
+        vm.prank(keeper);
         vm.expectRevert("PAUSED");
         treasury.sendToStaking();
         assertEq(treasury.stakingOwed(), owed, "still owed");
         staking.setPaused(false);
+        vm.prank(keeper);
         treasury.sendToStaking();
         assertEq(staking.totalUsdcReceived(), owed);
         assertEq(usdc.balanceOf(address(treasury)), 0);
@@ -324,9 +330,11 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         assertEq(owed, 5e4);
 
         staking.setShort(1, 0);
+        vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTradingTreasury.StakingDepositFailed.selector, owed, owed));
         treasury.sendToStaking();
         staking.setShort(0, 1);
+        vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetTradingTreasury.StakingDepositFailed.selector, owed, owed - 1));
         treasury.sendToStaking();
         assertEq(treasury.stakingOwed(), owed);
@@ -357,6 +365,7 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         uint256 balance = usdc.balanceOf(address(treasury));
         uint256 accrued = rewards.accrued(address(usdc), _tkey(1));
 
+        vm.prank(keeper);
         treasury.sendToStaking();
 
         for (uint256 i = 0; i < 5; ++i) {
@@ -547,6 +556,7 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         vm.prank(stranger);
         treasury.paybackAll();
         assertLt(treasury.available(), 3);
+        vm.prank(safe);
         treasury.sendToStaking();
         assertLt(usdc.balanceOf(address(treasury)), 3, "less than a unit per Key stays for good");
     }
@@ -561,5 +571,114 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         treasury.payback(1e6);
         vm.stopPrank();
         assertEq(fleet.totalMinted(), 1);
+    }
+
+    // --- the send to staking -----------------------------------------------------------------
+
+    function test_theKeeperSendsWhatIsOwedToStaking() public {
+        uint256 owed = _oweStaking();
+        vm.expectEmit(address(treasury));
+        emit KeyfleetTradingTreasury.SentToStaking(keeper, owed);
+        vm.prank(keeper);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived(), owed);
+        assertEq(treasury.stakingOwed(), 0);
+    }
+
+    function test_theRegentsSafeSendsWhatIsOwedToStaking() public {
+        uint256 owed = _oweStaking();
+        vm.expectEmit(address(treasury));
+        emit KeyfleetTradingTreasury.SentToStaking(safe, owed);
+        vm.prank(safe);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived(), owed);
+        assertEq(treasury.stakingOwed(), 0);
+    }
+
+    function test_theCreatorMayNotSendToStaking() public {
+        _oweStaking();
+        _assertSendToStakingRefused(creator);
+    }
+
+    function test_aStrangerMayNotSendToStaking() public {
+        _oweStaking();
+        _assertSendToStakingRefused(stranger);
+    }
+
+    function test_aKeyHolderMayNotSendToStaking() public {
+        address holder = makeAddr("key holder");
+        _tbuy(holder);
+        _oweStaking();
+        _assertSendToStakingRefused(holder);
+    }
+
+    function testFuzz_onlyTheKeeperOrTheRegentsSafeSendsToStaking(address caller) public {
+        assumeNotForgeAddress(caller);
+        vm.assume(caller != keeper && caller != safe);
+        _oweStaking();
+        _assertSendToStakingRefused(caller);
+    }
+
+    /// @dev Once the Safe names a new keeper, the old one is refused and the new one sends.
+    function test_aNewKeeperSendsAndTheOldOneIsRefused() public {
+        uint256 owed = _oweStaking();
+        address newKeeper = makeAddr("new keeper");
+        vm.prank(safe);
+        keys.setKeeper(newKeeper);
+        _assertSendToStakingRefused(keeper);
+
+        vm.prank(newKeeper);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived(), owed);
+        assertEq(treasury.stakingOwed(), 0);
+    }
+
+    /// @dev With the fleet closed and Key 1 sent where nobody can use it, what every payback owes
+    /// staking still goes there.
+    function test_theSendWorksAfterTheCloseWithKeyOneUnusable() public {
+        _oweStaking();
+        vm.startPrank(creator);
+        treasury.close();
+        keys.transferFrom(creator, address(0xdead), _tkey(1));
+        vm.stopPrank();
+        treasury.paybackAll();
+        uint256 owed = treasury.stakingOwed();
+
+        vm.prank(keeper);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived(), owed);
+        assertEq(treasury.stakingOwed(), 0);
+        assertEq(treasury.available(), usdc.balanceOf(address(treasury)));
+    }
+
+    /// @dev The creator pays back 100 USDC once every Key counts, so staking is owed 1 USDC.
+    function _oweStaking() private returns (uint256 owed) {
+        _tcount();
+        _return(990e6);
+        vm.prank(creator);
+        treasury.payback(100e6);
+        owed = treasury.stakingOwed();
+        assertEq(owed, 1e6);
+    }
+
+    /// @dev `caller`'s send to staking is refused, naming them, and leaves what is owed, the
+    /// approval and every balance as they were.
+    function _assertSendToStakingRefused(address caller) private {
+        uint256 owed = treasury.stakingOwed();
+        uint256 held = usdc.balanceOf(address(treasury));
+        uint256 stakingHeld = usdc.balanceOf(address(staking));
+        uint256 callerHeld = usdc.balanceOf(caller);
+        uint256 received = staking.totalUsdcReceived();
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetTradingTreasury.OnlyKeeperOrSafe.selector, caller));
+        treasury.sendToStaking();
+
+        assertEq(treasury.stakingOwed(), owed, "still owed");
+        assertEq(usdc.allowance(address(treasury), address(staking)), 0, "no approval");
+        assertEq(usdc.balanceOf(address(treasury)), held, "the treasury's balance");
+        assertEq(usdc.balanceOf(address(staking)), stakingHeld, "staking's balance");
+        assertEq(usdc.balanceOf(caller), callerHeld, "the caller's balance");
+        assertEq(staking.totalUsdcReceived(), received, "nothing deposited");
     }
 }

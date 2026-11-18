@@ -208,17 +208,26 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         assertEq(treasury.stakingOwed(), owedBefore + forStaking, "the daily 1% set aside too");
     }
 
-    /// @dev Bob, who holds no Key 1, sends what both paybacks owe into real staking, which counts it
-    /// as revenue from this fleet's manager under the trading payback tag.
+    /// @dev The creator and Bob, who holds Keys, are refused; the live collection's keeper sends what
+    /// both paybacks owe into real staking, which counts it as revenue from this fleet's manager
+    /// under the trading payback tag.
     function _sendToStaking(KeyfleetTradingManager fleet, uint256 owed) private {
         KeyfleetTradingTreasury treasury = fleet.TREASURY();
         uint256 receivedBefore = staking.totalUsdcReceived();
         uint256 balanceBefore = usdc.balanceOf(address(treasury));
         assertEq(treasury.stakingOwed(), owed);
+        address[2] memory refused = [CREATOR, BOB];
+        for (uint256 i = 0; i < refused.length; ++i) {
+            vm.prank(refused[i]);
+            vm.expectRevert(abi.encodeWithSelector(KeyfleetTradingTreasury.OnlyKeeperOrSafe.selector, refused[i]));
+            treasury.sendToStaking();
+        }
+        assertEq(treasury.stakingOwed(), owed, "a refused send leaves it owed");
+        address keeper = COLLECTION.keeper();
         vm.recordLogs();
-        vm.prank(BOB);
+        vm.prank(keeper);
         treasury.sendToStaking();
-        _logGas("sendToStaking, two paybacks' 1%");
+        _logGas("sendToStaking by the keeper, two paybacks' 1%");
         assertEq(staking.totalUsdcReceived() - receivedBefore, owed, "1% counted as revenue by staking");
         _assertDeposit(treasury, fleet, owed);
         assertEq(usdc.allowance(address(treasury), STAKING), 0, "no approval left");
@@ -256,7 +265,8 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         treasury.sendToTrading(1);
     }
 
-    /// @dev Bob closes; sales end; anyone pays back everything and sends its 1% to staking.
+    /// @dev Bob closes; sales end; anyone pays back everything, and the Regents Safe sends its 1% to
+    /// staking.
     function _closeAndPayBackAll(KeyfleetTradingManager fleet) private {
         KeyfleetTradingTreasury treasury = fleet.TREASURY();
         vm.prank(BOB);
@@ -268,7 +278,9 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         vm.expectRevert(KeyfleetTradingManager.SalesEnded.selector);
         fleet.purchase(ALICE, type(uint256).max, block.timestamp, new bytes32[](0));
         treasury.paybackAll();
+        vm.prank(SAFE);
         treasury.sendToStaking();
+        assertEq(treasury.stakingOwed(), 0);
         assertLt(usdc.balanceOf(address(treasury)), 4, "less than a unit per Key stays");
         KeyfleetRewards rewards = fleet.REWARDS();
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(BASE_USDC), "the ledger holds what it owes");
@@ -331,12 +343,15 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         uint256 owed = treasury.stakingOwed();
         assertEq(rewards.accrued(BASE_USDC, _key(fleet, 1)), usdc.balanceOf(address(rewards)), "the Keys were paid");
         assertEq(treasury.available(), 0, "all of the fleet's own paid out");
+        address keeper = COLLECTION.keeper();
+        vm.prank(keeper);
         vm.expectRevert();
         treasury.sendToStaking();
         assertEq(treasury.stakingOwed(), owed, "still owed while staking is paused");
 
         vm.prank(SAFE);
         staking.setPaused(false);
+        vm.prank(keeper);
         treasury.sendToStaking();
         assertEq(staking.totalUsdcReceived() - receivedBefore, owed, "staking got all it was owed");
         assertEq(usdc.balanceOf(address(treasury)), 0);

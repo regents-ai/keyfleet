@@ -12126,3 +12126,40 @@ step's report).
   first; then every suite in which a test skipped itself. It no longer names the path the gate
   leaves out, the audit's fork proofs, which the Makefile names. It still keeps Forge's own
   output and exit status, never fails for want of an endpoint, and prints no endpoint.
+
+## 2026-11-18 — Only the keeper or the Regents Safe sends a Trading Fleet's staking share
+
+- `KeyfleetTradingTreasury.sendToStaking()` was open to anyone. Only the keeper or the Regents
+  Safe may now send what is owed on to staking: the collection's `keeper()` as it stands at the
+  moment of the call, read through the fleet's manager, so a keeper the Safe replaces can no
+  longer send, or the collection's `SAFE`. Every other caller, the fleet's creator included, is
+  refused with the new `OnlyKeeperOrSafe(caller)`, and a refused call changes nothing. The send
+  is otherwise as before: the same checks in the same order, the same `SentToStaking(by, amount)`,
+  the same lock and the same exact approval. No payback, daily run or close depends on the keeper
+  or the Safe, and a payback still only sets the 1% aside. The treasury has no new storage and
+  no new constructor argument. Nothing is deployed.
+- If neither the keeper nor the Safe ever sends it, what is owed stays in the treasury for good,
+  counted out of the fleet's own USDC. `contracts/README.md` says so where the send is described
+  and among the limits, and names the send among the keeper's powers; `docs/deployment.md` names
+  it in the manifest's `keeper` field.
+- The treasury suite proves that the keeper and the Safe send; that the creator, a stranger, a
+  Key holder and any fuzzed caller are refused, leaving what is owed, the approval and every
+  balance as they were; that once the Safe names a new keeper the old one is refused and the new
+  one sends; and that the send works after the close with Key 1 sent where nobody can use it. The
+  invariant suite's handler tries the send from the keeper, the keeper before it, the Safe, Key
+  1's holder, other Key holders and actors holding none, while the Safe names another keeper
+  between calls, and checks that only the keeper and the Safe get through and that a refused
+  send leaves what is owed as it was. The gas suite and the Base fork suite send as the keeper;
+  the fork suite also checks on the live collection that the creator and a Key holder are refused.
+- The figures that move, measured again on 18 November 2026 with `--isolate`: over stand-ins,
+  `create` 5,383,919 / 5,366,843 / 5,366,843 → 5,467,582 / 5,450,506 / 5,450,506 and
+  `sendToStaking` 169,040 / 97,840 / 97,840 → 177,701 / 106,501 / 106,501 at 1, 100 and 10,000
+  keys; on the Base fork, `create` 5,346,162 → 5,429,825 and `sendToStaking` 147,282 → 155,943.
+  The treasury's runtime code is 6,276 bytes (from 5,860), its deployer's 7,908 (from 7,485), and
+  the trading factory's deployment code 35,570 (from 35,147). Deploying the trading factory is
+  now about 7.5 million gas, Forge's estimate 9,790,950 (from 9,672,434), measured on a local fork
+  of Base on which the Safe owns the randomness subscription, since the deployment script refuses
+  on Base until it does.
+- Only the trading treasury's code changed, and with it the code that carries it: the trading
+  treasury's deployer and the trading factory. Every other contract compiled from
+  `contracts/src`, the 31 already deployed among them, compiles to the same bytes.

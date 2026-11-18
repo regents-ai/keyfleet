@@ -100,7 +100,7 @@ falls back on one nobody chose.
 | --- | --- |
 | `chainId` | The only chain this manifest may be deployed to or recorded on. |
 | `safe` | The Regents Safe: the only account that may move the phase, create the founding fleets, replace the keeper or allow another factory, and the receiver of the 2.5% resale royalty. On Base it must be `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. |
-| `keeper` | The Regents wallet that records an open fleet's card deck once and may ask for a key's metadata refresh. It must not be zero. |
+| `keeper` | The Regents wallet that records an open fleet's card deck once and may ask for a key's metadata refresh. With the Regents Safe, it is the only account that may send what a Trading Fleet's treasury owes REGENT revenue staking on to staking. It must not be zero. |
 | `regentStaking` | Where each fleet's treasury deposits the 10% protocol share. On Base it must be REGENT revenue staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`. |
 | `autolaunchFactory` | The Autolaunch factory a fleet launches its own token through. On Base it must be Autolaunch Revstake v2's factory, `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E`. |
 | `regentsClubPass` | The Regents Club Pass collection: the holder of Pass N receives Regents Club key N. On Base it must be `0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487`, Passes 1 to 1,998. |
@@ -607,7 +607,7 @@ KEYFLEET_MANIFEST=base \
   --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
 ```
 
-It is one transaction from one account, about 7.4 million gas: the trading
+It is one transaction from one account, about 7.5 million gas: the trading
 factory, whose constructor reads the collection, the shard record, USDC and
 REGENT revenue staking from the existing factory and deploys its own three
 deployers. It takes the existing factory as the steps above do, on Base from

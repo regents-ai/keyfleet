@@ -76,8 +76,9 @@ contract HostileStaking {
 /// a hostile REGENT staking would: purchases one or many at a time, Key transfers (Key 1's among
 /// them, to staking too, which moves the fleet's authority), price and step changes, naming
 /// wallets, sending to trading, USDC coming back with a profit or a loss, paybacks of every kind,
-/// staking that pauses, misbehaves or calls back in, sending what is owed to staking, the close,
-/// claims, attempts on the factory-only and collection-only functions, and time passing.
+/// staking that pauses, misbehaves or calls back in, the Safe naming another keeper, sending what is
+/// owed to staking from every kind of caller, the close, claims, attempts on the factory-only and
+/// collection-only functions, and time passing.
 ///
 /// It keeps its own model of the fleet, never asking the contracts what they should have done:
 /// each Key's mint time and holder, each holder's named wallet, the USDC that flowed in and out, what
@@ -97,9 +98,12 @@ contract TradingHandler is Test {
     KeyfleetRewards internal immutable _rewards;
     uint256 internal immutable _cap;
     uint256 internal immutable _dailyBps;
+    address internal immutable _safe;
 
     address[ACTORS] internal _actors;
     address[2] internal _wallets;
+    /// @dev The collection's first keeper and the one the Safe may name instead.
+    address[2] internal _keepers;
 
     // --- the model -------------------------------------------------------------------
 
@@ -115,6 +119,8 @@ contract TradingHandler is Test {
     /// @dev The price and step the fleet should be at.
     uint256 internal _price;
     uint256 internal _step;
+    /// @dev The collection's keeper as the Safe last named it.
+    address internal _keeper;
 
     /// @dev USDC into the treasury: every sale's price, and everything sent back to it.
     uint256 public salesIn;
@@ -157,8 +163,11 @@ contract TradingHandler is Test {
         _rewards = fleet.REWARDS();
         _cap = cap;
         _dailyBps = _treasury.DAILY_PAYBACK_BPS();
+        _safe = _keys.SAFE();
         _actors = actors;
         _wallets = [makeAddr("wallet a"), makeAddr("wallet b")];
+        _keeper = _keys.keeper();
+        _keepers = [_keeper, makeAddr("next keeper")];
         minted = 1;
         _mintedAt[1] = block.timestamp;
         holderOf[1] = creator;
@@ -361,28 +370,6 @@ contract TradingHandler is Test {
         _staking.setMode(modeSeed % 6);
     }
 
-    /// @dev Anyone sends what is owed to staking, which goes through only when something is owed
-    /// and staking takes it honestly.
-    function sendToStaking(uint256 callerSeed) external {
-        address caller = _actor(callerSeed);
-        uint256 owed = owedToStaking;
-        uint256 mode = _staking.mode();
-        bool ok = owed != 0 && (mode == 0 || mode == 1);
-        uint256 receivedBefore = _staking.received();
-        vm.prank(caller);
-        try _treasury.sendToStaking() {
-            if (!ok) _breach("a send to staking that should have been refused went through");
-            if (_staking.received() != receivedBefore + owed) _breach("staking got other than what was owed");
-            sentToStaking += owed;
-            owedToStaking = 0;
-        } catch {
-            if (ok) _breach("a send to staking that should have gone through was refused");
-        }
-        if (_staking.reentered() != 0) _breach("staking called back into the treasury and got through");
-        if (_usdc.allowance(address(_treasury), address(_staking)) != 0) _breach("an approval to staking was left");
-        _checkBooks();
-    }
-
     /// @dev An actor claims for every Key they hold, and their own credit.
     function claim(uint256 actorSeed) external {
         address claimer = _actor(actorSeed);
@@ -412,6 +399,44 @@ contract TradingHandler is Test {
         } catch {
             if (owed != 0) _breach("a claim with something owed was refused");
         }
+    }
+
+    // --- the keeper or the Regents Safe ---------------------------------------------
+
+    /// @dev The Safe names one of the two keepers, the one already named included.
+    function renameKeeper(uint256 keeperSeed) external {
+        address next = _keepers[keeperSeed % 2];
+        vm.prank(_safe);
+        _keys.setKeeper(next);
+        _keeper = next;
+    }
+
+    /// @dev The keeper, the keeper before it, the Regents Safe, Key 1's holder, other Key holders and
+    /// actors holding none send what is owed to staking. It goes through only from the keeper or the
+    /// Safe, when something is owed and staking takes it honestly; a refused send leaves what is
+    /// owed as it was.
+    function sendToStaking(uint256 callerSeed) external {
+        address caller = _stakingCaller(callerSeed);
+        uint256 owed = owedToStaking;
+        uint256 mode = _staking.mode();
+        bool allowed = caller == _keeper || caller == _safe;
+        bool ok = allowed && owed != 0 && (mode == 0 || mode == 1);
+        uint256 receivedBefore = _staking.received();
+        vm.prank(caller);
+        try _treasury.sendToStaking() {
+            if (!allowed) _breach("someone other than the keeper or the Regents Safe sent to staking");
+            if (!ok) _breach("a send to staking that should have been refused went through");
+            if (_staking.received() != receivedBefore + owed) _breach("staking got other than what was owed");
+            sentToStaking += owed;
+            owedToStaking = 0;
+        } catch {
+            if (ok) _breach("a send to staking that should have gone through was refused");
+            if (_treasury.stakingOwed() != owed) _breach("a refused send to staking changed what is owed");
+            if (_staking.received() != receivedBefore) _breach("a refused send to staking deposited");
+        }
+        if (_staking.reentered() != 0) _breach("staking called back into the treasury and got through");
+        if (_usdc.allowance(address(_treasury), address(_staking)) != 0) _breach("an approval to staking was left");
+        _checkBooks();
     }
 
     // --- the trading wallets and outsiders --------------------------------------------
@@ -571,6 +596,15 @@ contract TradingHandler is Test {
         return other == creatorNow ? _actor(seed / outOf + 1) : other;
     }
 
+    /// @dev Either keeper a quarter of the time, the Regents Safe a quarter, otherwise an actor:
+    /// Key 1's holder, another Key holder or one holding none. The seed is hashed first.
+    function _stakingCaller(uint256 seed) internal view returns (address) {
+        seed = uint256(keccak256(abi.encode(seed)));
+        if (seed % 4 == 0) return _keepers[(seed / 4) % 2];
+        if (seed % 4 == 1) return _safe;
+        return _actor(seed / 4);
+    }
+
     function _balance() internal view returns (uint256) {
         return _usdc.balanceOf(address(_treasury));
     }
@@ -622,7 +656,7 @@ contract KeyfleetTradingInvariantTest is KeyfleetTradingFixture {
             handler.buy(i, i);
         }
 
-        bytes4[] memory selectors = new bytes4[](24);
+        bytes4[] memory selectors = new bytes4[](25);
         selectors[0] = TradingHandler.buy.selector;
         selectors[1] = TradingHandler.buyMany.selector;
         selectors[2] = TradingHandler.transfer.selector;
@@ -647,6 +681,7 @@ contract KeyfleetTradingInvariantTest is KeyfleetTradingFixture {
         selectors[21] = TradingHandler.wait.selector;
         selectors[22] = TradingHandler.wait.selector;
         selectors[23] = TradingHandler.buy.selector;
+        selectors[24] = TradingHandler.renameKeeper.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }

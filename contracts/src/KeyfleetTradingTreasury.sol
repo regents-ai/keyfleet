@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {TransientSlot} from "@openzeppelin/contracts/utils/TransientSlot.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {KeyfleetKeys} from "./KeyfleetKeys.sol";
 import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 import {KeyfleetTradingManager} from "./KeyfleetTradingManager.sol";
 import {IKeyfleetTradingFactory, KeyfleetTradingWiring, TradingWiring} from "./KeyfleetTradingWiring.sol";
@@ -39,8 +40,9 @@ import {IRegentRevenueStaking} from "./interfaces/IRegentRevenueStaking.sol";
 /// added there with `fundSplit`, while `splitInProgress` is true for the length of that call only.
 /// What does not divide evenly stays here as the fleet's own. With no Key that counts, or too little
 /// to give each one a whole unit, the payback reverts and nothing moves. No payback calls staking,
-/// so nothing staking does can hold a payback back. Anyone may send what is owed on to staking at any
-/// time with `sendToStaking`; while staking refuses, it stays owed here.
+/// so nothing staking does can hold a payback back. Only the collection's keeper, as it stands at
+/// the call, or the Regents Safe may send what is owed on to staking, at any time, with
+/// `sendToStaking`; until one of them does, and while staking refuses, it stays owed here.
 ///
 /// Anyone may run the guaranteed daily payback, `DAILY_PAYBACK_BPS` hundredths of a percent of the
 /// fleet's own USDC here at the moment it runs, once a day has passed since the last run, or since
@@ -107,6 +109,8 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
 
     /// @notice Only the holder of the fleet's Key 1 may do this.
     error OnlyCreator(address caller);
+    /// @notice Only the collection's keeper or the Regents Safe may do this.
+    error OnlyKeeperOrSafe(address caller);
     /// @notice A daily payback outside `MIN_DAILY_PAYBACK_BPS` to `MAX_DAILY_PAYBACK_BPS`.
     error DailyPaybackInvalid(uint256 dailyPaybackBps);
     /// @notice A zero address.
@@ -168,6 +172,13 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
 
     modifier onlyCreator() {
         if (msg.sender != MANAGER.creator()) revert OnlyCreator(msg.sender);
+        _;
+    }
+
+    /// @dev The keeper is whoever the collection names at the call.
+    modifier onlyKeeperOrSafe() {
+        KeyfleetKeys keys = MANAGER.KEYS();
+        if (msg.sender != keys.keeper() && msg.sender != keys.SAFE()) revert OnlyKeeperOrSafe(msg.sender);
         _;
     }
 
@@ -254,11 +265,14 @@ contract KeyfleetTradingTreasury is ReentrancyGuardTransient {
         _payback(own, own, Payback.Closed);
     }
 
+    // --- the keeper or the Regents Safe ----------------------------------
+
     /// @notice Deposits everything owed to REGENT revenue staking there, through `depositUSDC` with
     /// `STAKING_SOURCE_TAG` and the manager's address as source reference, and an exact approval
-    /// that the deposit must use up. Anyone may, at any time, open or closed. While staking refuses,
-    /// this reverts and the amount stays owed.
-    function sendToStaking() external nonReentrant {
+    /// that the deposit must use up. Only the collection's keeper, as it stands at the call, or the
+    /// Regents Safe, at any time, open or closed. While staking refuses, this reverts and the amount
+    /// stays owed.
+    function sendToStaking() external nonReentrant onlyKeeperOrSafe {
         uint256 owed = stakingOwed;
         if (owed == 0) revert ZeroAmount();
         stakingOwed = 0;
