@@ -769,6 +769,32 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to 0xaaaa..aaaa. Nothing was sent."
     end
 
+    # A press the server won't prepare, with another wallet open or none as the
+    # server knows it, is answered with the note its report then leaves, so the
+    # browser's own agent hears what the person reads.
+    test "a press refused its steps is answered with the note its report leaves",
+         %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+      panel = with_target(view, "#buy-key-order")
+
+      notes =
+        for wallet <- [@stranger, nil] do
+          active!(view, wallet)
+          render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "buy"})
+          assert_reply(view, %{note: note})
+          render_hook(panel, "step_failed", %{"step" => "buy", "reason" => "step_unknown"})
+          assert text(view, "#buy-key-order-press-note") == note
+          note
+        end
+
+      assert length(Enum.uniq(notes)) == 2
+    end
+
     # A press whose wallet stays on another network sends nothing, and the
     # note tells a switch the person declined apart from one that failed.
     test "a declined or failed network switch leaves a note that nothing was sent",
@@ -793,10 +819,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # Every reason the shared press list (`RegentChain.Presses`) accepts from a
-    # page leaves its own note, and the page goes on. The press is answered
-    # with the same note, so the browser's own agent hears what the person reads.
-    test "every reason a press can report leaves its own note, and answers with it",
-         %{conn: conn} do
+    # page leaves its own note, and the page goes on.
+    test "every reason a press can report leaves its own note", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       chain!(allowance: 0)
@@ -809,9 +833,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         for reason <-
               ~w(step_unknown wallet_unavailable network_mismatch switch_declined wallet_declined insufficient_funds send_unconfirmed sign_unconfirmed) do
           press_fails!(view, reason)
-          note = text(view, "#buy-key-order-press-note")
-          assert_reply(view, %{note: ^note})
-          note
+          text(view, "#buy-key-order-press-note")
         end
 
       assert length(Enum.uniq(notes)) == 8

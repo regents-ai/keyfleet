@@ -219,8 +219,14 @@ defmodule KeyfleetWeb.WalletPanel do
     socket = socket |> take_inputs(form) |> sync_now()
 
     case {socket.assigns.review, blocked(socket.assigns, step)} do
-      {%{} = review, nil} -> {:reply, %{review: review, send: step}, socket}
-      _none_or_blocked -> {:reply, %{}, socket}
+      {%{} = review, nil} ->
+        {:reply, %{review: review, send: step}, socket}
+
+      # Refused: the press reports `step_unknown`, and this reply carries the
+      # note that report leaves, so the browser's own agent hears what the
+      # person reads without waiting for anything more.
+      _none_or_blocked ->
+        {:reply, %{note: failure_note(socket, "step_unknown")}, socket}
     end
   end
 
@@ -262,22 +268,11 @@ defmodule KeyfleetWeb.WalletPanel do
 
   def handle_event("step_sent", params, socket), do: {:noreply, OnchainSteps.sent(socket, params)}
 
-  # The note goes on the page and back to the press, so the browser's own
-  # agent hears what the person reads.
   def handle_event("step_failed", params, socket) do
     case Presses.failed(params) do
       {:ok, _step, reason} ->
         KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, reason)
-
-        note =
-          OnchainSteps.failure_note(
-            reason,
-            linked(socket),
-            socket.assigns.active,
-            chain_name(socket)
-          )
-
-        {:reply, %{note: note}, assign(socket, press_note: note)}
+        {:noreply, assign(socket, press_note: failure_note(socket, reason))}
 
       :error ->
         {:noreply, socket}
@@ -488,6 +483,10 @@ defmodule KeyfleetWeb.WalletPanel do
 
   defp linked(%{assigns: %{actor: %{wallet_addresses: wallets}}}), do: wallets
   defp linked(_socket), do: nil
+
+  defp failure_note(socket, reason),
+    do:
+      OnchainSteps.failure_note(reason, linked(socket), socket.assigns.active, chain_name(socket))
 
   defp chain_name(%{assigns: %{fleet: %{chain_id: chain_id}}}) do
     case WalletSteps.chain(chain_id) do

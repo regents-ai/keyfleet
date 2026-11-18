@@ -552,10 +552,10 @@ test("a browser agent's claim that the wallet may have sent while the page is of
   const answer = await callTool(page, "keys_claim", {asset: usdc})
 
   // The wallet was asked and failed mid-send, and the page could not tell the
-  // server: the agent hears that the page lost its connection, never that
-  // nothing was sent, and the page doesn't say so either.
+  // server: the agent hears at once that the wallet may have sent it, never
+  // that nothing was sent, and the page doesn't say so either.
   expect(await page.evaluate(() => window.standInWallet!.asked)).toBe(1)
-  expect(answer).toMatchObject({ok: false, error: {code: "connection_lost"}})
+  expect(answer).toMatchObject({ok: false, error: {code: "send_unconfirmed"}})
   expect(answer.error!.message).not.toMatch(/nothing was sent/i)
   await expect(page.locator("#key-profile-claim-action [data-onchain-lost]")).toBeHidden()
   expect(errors).toEqual([])

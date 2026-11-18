@@ -53,25 +53,13 @@ function walletError(code: number, message: string): Error & {code: number} {
   return Object.assign(new Error(message), {code})
 }
 
-// The note the server shows when a press sends nothing, and answers with.
-const note = "The page's note."
-
-// The server: it keeps each report in `reports`, and answers why a press sent
-// nothing with its note.
-function server(reports: unknown[]) {
-  return async (event: string, payload: unknown) => {
-    reports.push([event, payload])
-    return event === "step_failed" ? {note} : null
-  }
-}
-
 // Presses `name` with `wallet` as Privy's active wallet: what the press
 // answered, and what the hook reported.
 async function pressWith(wallet: ReturnType<typeof walletOn>, name: string) {
   const reports: unknown[] = []
   replaceActiveEthereumWallet(wallet.selected)
   try {
-    const pressed = await press(review, name, server(reports))
+    const pressed = await press(review, name, (event, payload) => reports.push([event, payload]))
     return {pressed, reports}
   } finally {
     replaceActiveEthereumWallet(null)
@@ -86,9 +74,8 @@ it("sends and signs through the active wallet when it answers for another accoun
     const wallet = walletOn("0x2222222222222222222222222222222222222222")
     const {pressed, reports} = await pressWith(wallet, name)
 
-    const answered = name === "buy" ? {transaction_hash: hash} : {signature: signed}
-    expect(pressed).toEqual(answered)
-    expect(reports).toEqual([[name === "buy" ? "step_sent" : "step_signed", {review_id: review.id, step: name, ...answered}]])
+    expect(pressed).toEqual(name === "buy" ? {transaction_hash: hash} : {signature: signed})
+    expect(reports).toEqual([[name === "buy" ? "step_sent" : "step_signed", {review_id: review.id, step: name, ...pressed}]])
     expect(wallet.sent).toHaveLength(1)
   }
 })
@@ -134,7 +121,7 @@ it("sends nothing when the switch is declined or fails, and the next press asks 
       const wallet = walletOn(signer, {on: 1, switching: wanted => (refuses ? refusal : wanted)})
 
       const first = await pressWith(wallet, name)
-      expect(first.pressed).toEqual({reason, note})
+      expect(first.pressed).toEqual({reason})
       expect(first.reports).toEqual([["step_failed", {step: name, reason}]])
       expect(wallet.sent).toEqual([])
 
@@ -161,6 +148,7 @@ it("sends the server's step as built, from its signer and for its chain", async 
 it("sends nothing with no active wallet", async () => {
   const reports: unknown[] = []
 
-  await expect(press(review, "buy", server(reports))).resolves.toEqual({reason: "wallet_unavailable", note})
+  await expect(press(review, "buy", (event, payload) => reports.push([event, payload])))
+    .resolves.toEqual({reason: "wallet_unavailable"})
   expect(reports).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
 })

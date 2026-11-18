@@ -55,16 +55,39 @@ type Group = {root: HTMLElement; pressButton: PressButton}
 type Offered = {groups: Group[]; registration: AbortController}
 const offered = new Map<string, Offered>()
 
-// A press that sent nothing, or may have sent, answers with the note the page
-// shows the person beside the buttons, and this hint for the agent.
-const hints: Record<Failure, string> = {
-  step_unknown: "Ask the person to do what the message says, then call again.",
-  wallet_unavailable: "Ask the person to do what the message says, then call again.",
-  switch_declined: "Calling again asks the wallet to switch again; ask the person signed in first.",
-  network_mismatch: "Switch the wallet to the page's network in the wallet app, then call again.",
-  wallet_declined: "Ask the person signed in before calling again.",
-  insufficient_funds: "Add funds for the network fee to the wallet, then call again.",
-  send_unconfirmed: "Check the wallet's activity before calling again.",
+// What the agent hears when a press sent nothing, or may have sent: what the
+// note the page shows the person says, in words for the agent. A press answers
+// at once and never waits for that note. A press the server refused to prepare
+// carries the server's note, and the agent hears that instead (onchain_steps.ts).
+const failures: Record<Failure, {message: string; hint: string}> = {
+  step_unknown: {
+    message: "This can't be sent as it stands. Nothing was sent.",
+    hint: "Check the details on the page, then call again.",
+  },
+  wallet_unavailable: {
+    message: "The wallet app has no wallet open, or didn't answer, so nothing was sent.",
+    hint: "Check the wallet app is unlocked and open on a wallet of the signed-in account, then call again.",
+  },
+  switch_declined: {
+    message: "The wallet didn't switch to the page's network, so nothing was sent.",
+    hint: "Calling again asks the wallet to switch again; ask the person signed in first.",
+  },
+  network_mismatch: {
+    message: "The wallet couldn't switch to the page's network, so nothing was sent.",
+    hint: "Switch the wallet to the page's network in the wallet app, then call again.",
+  },
+  wallet_declined: {
+    message: "The wallet declined this. Nothing was sent.",
+    hint: "Ask the person signed in before calling again.",
+  },
+  insufficient_funds: {
+    message: "The wallet can't pay the network fee. Nothing was sent.",
+    hint: "Add funds for the network fee to the wallet, then call again.",
+  },
+  send_unconfirmed: {
+    message: "The wallet may have sent this.",
+    hint: "Check the wallet's activity before calling again.",
+  },
 }
 
 // JSON imports widen every literal, so the manifest is read as the shape it is written in.
@@ -82,18 +105,13 @@ function answer(pressed: Pressed | "lost") {
       "Call again once the page is back.",
     )
   }
-  if (pressed === "unheard") {
-    return refusal(
-      "connection_lost",
-      "This page lost its connection before it could say what the wallet answered.",
-      "Check the wallet's activity, then call again once the page is back.",
-    )
-  }
   if ("transaction_hash" in pressed) {
     return {ok: true, transaction_hash: pressed.transaction_hash, note: "Sent from the wallet. The page shows when it lands."}
   }
   if ("signature" in pressed) return {ok: true, signature: pressed.signature}
-  return refusal(pressed.reason, pressed.note, hints[pressed.reason])
+  if ("note" in pressed) return refusal(pressed.reason, pressed.note, failures[pressed.reason].hint)
+  const {message, hint} = failures[pressed.reason]
+  return refusal(pressed.reason, message, hint)
 }
 
 // Addresses in a step's name may be written in either case.
