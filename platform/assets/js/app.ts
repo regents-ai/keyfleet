@@ -358,9 +358,13 @@ if (!browserCsrfToken()) throw new Error("Missing CSRF token")
 // site's fragments name an element of the page and are short, so a longer one
 // is taken off the address before the page joins, and a page opened from any
 // link goes live (config/config.exs counts this many in a page's largest message).
+// The page's own whole address is written back with only the fragment gone,
+// so a path that starts // is still read as this site's.
 const longestFragment = 256
-if (window.location.hash.length > longestFragment) {
-  history.replaceState(history.state, "", window.location.pathname + window.location.search)
+if (window.location.hash.slice(1).length > longestFragment) {
+  const address = new URL(window.location.href)
+  address.hash = ""
+  history.replaceState(history.state, "", address)
 }
 
 // Sign in and refresh renew the session and rotate its CSRF state, so every

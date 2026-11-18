@@ -54,6 +54,32 @@ test("a page opened with a #fragment longer than a live message goes live withou
   expect(errors).toEqual([])
 })
 
+// Costly failure: the page can't take its long fragment off an address whose
+// path starts //, which the browser would read as another site's, so it
+// never goes live.
+test("a page at a path that starts // goes live without its long #fragment, and a page keeps one of 256 characters", async ({
+  page,
+  baseURL,
+}) => {
+  const opened = liveConnections(page)
+  const errors = pageErrors(page)
+
+  for (const [address, fragment] of [
+    [`//syndicate/1/proposals#${"a".repeat(300)}`, ""],
+    [`/syndicate/1/proposals#${"a".repeat(256)}`, `#${"a".repeat(256)}`],
+  ]) {
+    const path = address.split("#")[0]
+    await page.goto("about:blank")
+    await page.goto(`${baseURL}${address}`)
+    await live(page)
+    expect(await page.evaluate(() => [window.location.pathname, window.location.hash])).toEqual([path, fragment])
+  }
+
+  await page.waitForTimeout(settle)
+  expect(opened).toHaveLength(2)
+  expect(errors).toEqual([])
+})
+
 test("a proposal pasted past every field's limit keeps the page live, and the site says what is too long", async ({
   page,
 }) => {

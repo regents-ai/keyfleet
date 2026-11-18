@@ -38,7 +38,7 @@ defmodule KeyfleetWeb.LiveMessageLimitTest do
     assert {414, _} = status(c.port, target <> "\\")
 
     page = page!(c.port, target, schedule: @cookie - byte_size("keyfleet_schedule="))
-    href = c.origin <> target <> "#" <> String.duplicate("\\", @fragment - 1)
+    href = c.origin <> target <> "#" <> String.duplicate("\\", @fragment)
     opened = join_message(page, "1", %{"url" => href}, %{})
 
     # Following one of the site's links from it, as long as an address the
