@@ -4,14 +4,23 @@
 # passing and none skipped, which failed, every suite in which a test skipped itself, and "Base
 # fork proofs: NOT RUN" when no Base fork suite ran, whatever the reason: no BASE_RPC_URL, a filter
 # that left them out or a skip. A suite counts only once its own "Suite result" line closes its
-# block. A run Forge did not finish, stopped by a signal or cut off before its closing summary,
-# says so and nothing else, and never exits 0. A pass is therefore never read as including them.
-# It reads neither the arguments nor the environment, never fails for want of an endpoint, and
-# prints no endpoint.
+# block, and each is listed once: a suite that failed in any block is listed as failed only, and
+# one that skipped in any block is not listed as ran. A run Forge did not finish, stopped by a
+# signal or cut off before its closing summary (the "Ran N test suites" line, or with `--summary`
+# the table headed "| Test Suite"), says so and nothing else, and never exits 0. A pass is
+# therefore never read as including them. It reads neither the arguments nor the environment and
+# never fails for want of an endpoint; its own closing lines name no endpoint, though Forge's
+# output, passed through above them, can, inside an endpoint's error message.
 #
-# Known limit: the closing lines are read from Forge's printed text, so a test in this repository
-# that prints text shaped like Forge's results could forge them; and with `--json` or `--junit` the
-# lines say NOT RUN and list nothing skipped.
+# Known limits:
+# - The closing lines are read from Forge's printed text, so text shaped like Forge's results can
+#   forge them or hide them, whether a test in this repository prints it or it comes from an
+#   endpoint's error message, which Forge prints as it is within a failing test's reason.
+# - Some flags leave nothing to read. With `--json` or `--junit` Forge prints no suite lines,
+#   with `-q` it prints nothing, and with `--list` it runs no test, so the lines say NOT RUN and
+#   list nothing skipped, whatever ran.
+# - A stop aimed at the whole run, such as Ctrl-C, stops this script with Forge, so no closing
+#   line is printed at all.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,23 +31,31 @@ status=${PIPESTATUS[0]}
 
 # Forge's lines with their colour codes taken out. Each result line belongs to the suite named by
 # the "Ran N tests for <path>:<contract>" line above it, and the suite counts only when its own
-# "Suite result" line follows. A new suite, the closing "Ran N test suites" summary or the end of
-# the output arriving first means the output was cut off.
+# "Suite result" line follows. A new suite, the closing summary (the "Ran N test suites" line, or
+# the "| Test Suite" header of `--summary`'s table) or the end of the output arriving first means
+# the output was cut off.
 suites=$(sed $'s/\x1b\\[[0-9;]*[A-Za-z]//g' "$log" | awk '
   /^Ran [0-9]+ tests? for / { if (suite != "") cut = 1; suite = $NF; seen = 1; passed = failed = skipped = 0; next }
-  /^Ran [0-9]+ test suites? in / { if (suite != "") cut = 1; suite = ""; summary = 1; next }
+  /^Ran [0-9]+ test suites? in / || /^\| Test Suite +\| Passed +\| Failed +\| Skipped +\|/ {
+    if (suite != "") cut = 1; suite = ""; summary = 1; next
+  }
   /^Suite result:/ {
-    if (suite != "" && skipped) print "skipped " suite
+    if (suite != "" && skipped) skip[suite] = 1
     if (suite ~ /^test\/fork\//) {
-      if (failed) print "failed " suite
-      else if (passed && !skipped) print "ran " suite
+      if (failed) fail[suite] = 1
+      else if (passed && !skipped) pass[suite] = 1
     }
     suite = ""; next
   }
   suite != "" && /^\[PASS/ { passed = 1 }
   suite != "" && /^\[FAIL/ { failed = 1 }
   suite != "" && /^\[SKIP/ { skipped = 1 }
-  END { if (suite != "" || cut || (seen && !summary)) print "unfinished" }' | sort)
+  END {
+    for (s in skip) print "skipped " s
+    for (s in fail) print "failed " s
+    for (s in pass) if (!(s in fail) && !(s in skip)) print "ran " s
+    if (suite != "" || cut || (seen && !summary)) print "unfinished"
+  }' | sort)
 ran=$(sed -n 's/^ran /  /p' <<< "$suites")
 failed=$(sed -n 's/^failed /  /p' <<< "$suites")
 skipped=$(sed -n 's/^skipped /  /p' <<< "$suites")

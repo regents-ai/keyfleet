@@ -2219,17 +2219,28 @@ printed alone, which suites in `test/fork/` ran with every test passing and
 none skipped, which failed (`Base fork proofs: FAILED in`), every suite in
 which a test skipped itself, and `Base fork proofs: NOT RUN` when no suite in
 `test/fork/` ran. A suite counts only once its own `Suite result` line closes
-its block. A run Forge did not finish, stopped by a signal or cut off before
-its closing summary, says `Forge did not finish this run` and nothing else,
-and never passes. Without `BASE_RPC_URL` the suites in
+its block, and each suite is listed once: one that failed in any block only as
+failed, and one that skipped in any block never as ran. A run Forge did not
+finish, stopped by a signal or cut off before its closing summary (the `Ran N
+test suites` line, or with `--summary` the table headed `| Test Suite`), says
+`Forge did not finish this run` and nothing else, and never passes. Without
+`BASE_RPC_URL` the suites in
 `test/fork/` skip themselves and the gate still passes, so read those closing
 lines before taking a pass to include them; the Base gas suite also skips
 there, since it needs `--isolate`. Other arguments, such as a `--match-path`
 to one file, reach `forge test` as given, and the closing lines say what that
-run left out. A known limit: the closing lines are read from Forge's printed
-text, so a test in this repository that prints text shaped like Forge's
-results could forge them; and with `--json` or `--junit` the lines say NOT RUN
-and list nothing skipped.
+run left out. The closing lines name no endpoint; Forge's output above them
+can, inside an endpoint's error message. Known limits:
+
+- The closing lines are read from Forge's printed text, so text shaped like
+  Forge's results can forge them or hide them, whether a test in this
+  repository prints it or it comes from an endpoint's error message, which
+  Forge prints as it is within a failing test's reason.
+- Some flags leave nothing to read. With `--json` or `--junit` Forge prints no
+  suite lines, with `-q` it prints nothing, and with `--list` it runs no test,
+  so the lines say NOT RUN and list nothing skipped, whatever ran.
+- A stop aimed at the whole run, such as Ctrl-C, stops the script with Forge,
+  so no closing line is printed at all.
 
 The suites in `test/`, all against local stand-ins, cover the presets, the
 collection (registry, phases, sales, decks, the keeper, metadata and royalty),

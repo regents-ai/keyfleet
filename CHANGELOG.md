@@ -12298,3 +12298,24 @@ step's report).
   description; a second phase-2 file landed before phase 2 opens opens phase 3 as it warns. The
   record suite and the release fork suite found fleets 2 to 4 once the Safe holds the
   subscription. No contract changed.
+
+## 2026-11-18 — The test runner reads a `--summary` run as finished and lists each suite once
+
+- `contracts/script/run_tests.sh` took a finished run under `--summary`, `--summary --detailed`
+  or `--summary --md` for one Forge did not finish, and exited 1 after a passing run, since Forge
+  then prints its table in place of the "Ran N test suites" line. The table's "| Test Suite"
+  header now closes the run as that line does, so a passing run exits 0 and its closing lines
+  read as in a plain run; a run cut before the table still says it did not finish.
+- Each suite is now listed once. A suite Forge printed in more than one block is listed as failed
+  only if it failed in any of them, and never as ran if it skipped in any.
+- The script's header and the README's "Checks" paragraph now state its limits in full: text
+  shaped like Forge's results can forge or hide the closing lines, whether a test prints it or it
+  comes from an endpoint's error message, which Forge prints within a failing test's reason;
+  with `--json` or `--junit` Forge prints no suite lines, with `-q` nothing, and with `--list`
+  it runs no test, so the lines say NOT RUN and list nothing skipped; a stop aimed at the whole
+  run, such as Ctrl-C, prints no closing line; and the closing lines name no endpoint, though
+  Forge's output above them can, inside an endpoint's error message.
+- Checked against a stand-in `forge` replaying saved gate logs with and without an endpoint, as
+  plain runs and under each summary flag, cut, with a suite printed twice, and against real Forge
+  output for a fork suite failing at a refused local endpoint, plain and under `--summary`,
+  `-q`, `--json` and `--junit`. No contract changed.
