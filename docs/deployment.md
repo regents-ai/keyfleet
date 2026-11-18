@@ -248,8 +248,12 @@ and verify afterwards if there is none to hand.
 
 A simulation leaves Forge's own log under
 `broadcast/DeployKeyfleets.s.sol/8453/dry-run/`, which git ignores. A broadcast
-writes `broadcast/DeployKeyfleets.s.sol/8453/run-latest.json`, which the Safe
-steps and the record step read to find the factory.
+writes `broadcast/DeployKeyfleets.s.sol/8453/run-latest.json`. The steps after
+this one do not read it on Base: the Safe steps, the record step and the
+trading factory's deployment take the first release's factory, and the record
+step its deployment block, from the pins in
+`contracts/script/KeyfleetManifest.sol`. On any other chain they read that
+chain's own broadcast record to find them.
 
 No private key goes in a file, an environment variable or a command line. No
 script reads one: they read the manifest and the chain, and signing is entirely
@@ -322,9 +326,10 @@ fleets created since: it lists every fleet in the collection's registry.
 
 ### What the record step refuses
 
-- A broadcast with a transaction that has no receipt (`BroadcastIncomplete`) or
-  a receipt that did not succeed (`BroadcastReceiptFailed`), or one that created
-  no factory (`FactoryNotInBroadcast`).
+- Off Base, a broadcast with a transaction that has no receipt
+  (`BroadcastIncomplete`) or a receipt that did not succeed
+  (`BroadcastReceiptFailed`), or one that created no factory
+  (`FactoryNotInBroadcast`).
 - A factory with no code on the chain it is run against (`FactoryMissing`).
 - The same chain, pin, gas lane and subscription refusals as the deployment
   step.
@@ -338,10 +343,19 @@ fleets created since: it lists every fleet in the collection's registry.
   code or do not point at each other, the collection and the fleet, or a
   founding fleet of another type or deck than the manifest's
   (`FleetNotBound(fleetId, part)`).
-- A collection with drawn Keys that the subscription does not list as a consumer
-  (`CollectionNotVrfConsumer`).
-- On Base, when a recorded fleet needs random draws, a subscription whose
-  owner is not the Regents Safe (`VrfSubscriptionNotOwnedByRegentsSafe`).
+- A Trading Fleet whose manager names a trading factory that the collection
+  does not list or that does not read this system's collection, shard record,
+  USDC and REGENT revenue staking (`FleetNotBound(fleetId, "tradingFactory")`), or
+  whose manager, treasury and ledger are not where that trading factory places
+  them, hold no code or do not point at each other (`FleetNotBound` with
+  `"manager"`, `"preset"`, `"treasury"` or `"rewards"`).
+- Once any fleet past the five founding ones exists, Trading Fleets included,
+  or a founding fleet has minted more Keys than its deck holds: a subscription
+  that does not list the collection as a consumer (`CollectionNotVrfConsumer`)
+  and, on Base, one whose owner is not the Regents Safe
+  (`VrfSubscriptionNotOwnedByRegentsSafe`). So on Base the Safe must own the
+  randomness subscription and list the collection before any such fleet is
+  recorded.
 
 ### What the record step writes
 
@@ -353,7 +367,8 @@ contract's runtime code hash is recorded so anyone can check later that the
 deployed code is the code those constants came from. It carries:
 
 - `chainId` and `deploymentBlock`, the lowest block the deployment's
-  transactions landed in, so a reader starting there misses nothing;
+  transactions landed in, so a reader starting there misses nothing (on Base,
+  the first release's, pinned in `contracts/script/KeyfleetManifest.sol`);
 - `factory`: its address and code hash and its four deployers with theirs;
 - `collection`: address, code hash, name, symbol, metadata base, collection
   metadata address, the Safe, the keeper and the royalty in basis points;
@@ -376,15 +391,35 @@ deployed code is the code those constants came from. It carries:
   open fleet), its manager, votes, treasury and rewards addresses each with its
   code hash, its name, description and image link, its joining requirements,
   the tag its protocol share deposits carry, and the assets its daily split
-  shares;
+  shares; a Trading Fleet's entry has its own fields, below;
 - `disclosures`: public-read chat, no refunds, service rewards to keys only,
   what the 10% fee and the 2.5% royalty are, that the treasury's part is turned
   into REGENT afterwards, a little at a time, at the market price with no
   minimum, and what the Regents Safe can and
   cannot do.
 
+A Trading Fleet's entry under `fleets`, keyed by fleet number like every other,
+has 24 fields: `type` `"trading"`; `collectionType` `"accelerant"` and
+`typeNumber`, the type and number the collection registered it under (always 2
+or more); `tradingFactory` and `tradingFactoryCodeHash`; `firstPrice`,
+`stepBps`, `dailyPaybackBps`, `keyCap` (zero for none), `closedAt` (zero while
+open) and `tradingWallet` (the one Key 1's current holder named, zero until
+they name one); `deckHash` and `deckSize` (zero until the keeper records a
+deck); `manager`, `treasury` and `rewards`, each with its code hash; `name`,
+`description` and `imageLink`; `requirements` (`merkleRoot`, `nft`, `token`,
+`tokenMin`); and `stakingSourceTag`, the tag its paybacks' staking deposits
+carry. It has no `startPrice`, `accelerantStepPercent`, `votes`,
+`protocolShareTag` or `splitAssets`. The step, the trading wallet and the close
+are as read at the block the record step runs against: the creator may change
+the step, each new holder of Key 1 names their own wallet, and a close sets
+`closedAt`, so a later run may record other values. Every other fleet's entry
+is as listed above.
+
 There is no configuration screen anywhere in the product, so this file is where
-those values are published, and it is what the site is seeded from.
+those values are published, and it is what the site is seeded from. The site's
+seeding today binds only the first fleet of each of the five fleet types
+(`typeNumber` 1), so it leaves a Trading Fleet's entry out and reads nothing
+from its contracts.
 
 ## Step 6: phases
 
@@ -471,6 +506,61 @@ from the keeper wallet with `setDeck(fleetId, deckHash, deckSize)`, then calls
 afterwards ask at mint. Rerun the record step to add the new fleet to the
 published record.
 
+## Trading Fleets
+
+Trading Fleets come from their own factory, `KeyfleetTradingFactory`, which
+works on the existing system. `contracts/script/DeployTradingFactory.s.sol`
+deploys it, run from `contracts/` like step 2:
+
+```sh
+# Simulated. Sends nothing and writes no file.
+KEYFLEET_MANIFEST=base \
+  forge script script/DeployTradingFactory.s.sol:DeployTradingFactory \
+  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address>
+
+# Deployed: one transaction, the trading factory.
+KEYFLEET_MANIFEST=base \
+  forge script script/DeployTradingFactory.s.sol:DeployTradingFactory \
+  --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address> --broadcast --verify
+```
+
+It is one transaction from one account, about 7.4 million gas: the trading
+factory, whose constructor reads the collection, the shard record, USDC and
+REGENT revenue staking from the existing factory and deploys its own three
+deployers. It takes the existing factory as the steps above do, on Base from
+the pins in `contracts/script/KeyfleetManifest.sol`. Before deploying anything
+it proves that factory is the collection's and the manifest's, and refuses one
+with no code (`FactoryMissing`); on Base, one whose collection is not the
+pinned one (`CollectionNotPinned(collection)`); one whose collection's Safe,
+name, symbol, metadata links or trait table is not the manifest's
+(`CollectionMismatch(field)`); one the collection does not list as a factory
+(`FactoryNotListed(factory, collection)`); and one whose Safe, REGENT revenue
+staking or USDC is not the manifest's (`FactoryMismatch(field)`).
+
+The trading factory can register no fleet until the Regents Safe calls
+`addFactory(<trading factory>)` on the collection. The script never makes that
+call on the chain. It runs it once from the Safe's address against its own
+copy of the chain, so a call that would revert stops it with the collection's
+own error, then prints it, as its target (the collection), value (0) and data
+and as a Safe Transaction Builder batch, for the Safe's signers to load, check
+and sign. It writes no file. The trading factory address it prints is the one
+its simulation gives for the deploying account; before signing, the signers
+check it against the contract address in the deployment transaction's receipt,
+and sign only a call naming that address.
+
+Once the collection lists it, anyone may create a Trading Fleet through it
+from the collection's last phase. A Trading Fleet is registered with no deck,
+and the default is that it never gets one: a deck on one is the keeper's choice
+alone. With a deck, every Key minted from then on asks for a draw paid by the
+Regents Safe's subscription, and the creator can mint Keys at no cost, so the
+creator could make the Safe pay for as many draws as they like.
+
+Rerun the record step to add a Trading Fleet to the record; its entry is
+described under "What the record step writes". Every Trading Fleet is a fleet
+past the five founding ones, so on Base the record step refuses to record one
+until the Regents Safe owns the randomness subscription and the subscription
+lists the collection.
+
 ## The trait table
 
 `traitTableHash` is `keccak256` of the trait table file itself, byte for byte.
@@ -534,11 +624,15 @@ anvil --fork-url "$BASE_RPC_URL"
 ```
 
 This keeps Base's chain id, 8453, so the Base manifest deploys there exactly as
-it would on Base, and the Safe steps write their files instead of sending.
-Create and fund a subscription on the fork from an anvil account and write its
-id and a keeper into the manifest for the rehearsal only; the record step will
-then refuse it because the Regents Safe does not own the subscription, which is
-the Base rule working. A fork rehearsal writes
+it would on Base. Every step after the deployment then takes the first
+release's factory from the pins in `contracts/script/KeyfleetManifest.sol`, as
+it does on Base, not the system the rehearsal deployed: the Safe steps write
+their files, instead of sending, for the first release's factory as forked, and
+the record step reads that system. Create and fund a subscription on the fork
+from an anvil account and write its id and a keeper into the manifest for the
+rehearsal only; the record step then refuses the manifest, since its keeper and
+subscription are not the first release's (`RecordedMismatch(field)`). The later
+steps on a system of the rehearsal's own run on chain 31337, below. A fork rehearsal writes
 `broadcast/DeployKeyfleets.s.sol/8453/`, `deployments/safe/base.*.json` and,
 if it gets that far, `deployments/base.deployed.json`. Delete all three, and put
 the manifest's keeper and subscription back, before the real deployment, so

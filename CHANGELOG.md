@@ -11848,3 +11848,18 @@ step's report).
   `deployments/safe`.
 - Every existing contract still compiles to the same bytes (31 compared). Nothing was deployed,
   signed or sent.
+
+## 2026-11-18 — Deployment guides brought up to Trading Fleets and Base's pinned release
+
+- `docs/deployment.md`: on Base the steps after the deployment take the first release's factory
+  and deployment block from `contracts/script/KeyfleetManifest.sol`, and other chains read
+  their own broadcast record; a plain Base fork rehearsal's later steps therefore work on the
+  first release as forked. New section on deploying the trading factory: what it deploys, what
+  it refuses, that it prints the Safe's `addFactory` call and never makes it, and that the
+  printed address is checked against the receipt before signing. The record step's refusals and
+  output now cover Trading Fleets: the trading entry's fields, its step, trading wallet and close
+  as read at the record's block, that the site's seeding leaves it out, that a deck on one is
+  the keeper's choice with none by default, and that on Base the Safe must own the randomness
+  subscription and list the collection before any fleet past the founding ones is recorded.
+- `docs/chain-reader.md`: seeding leaves a Trading Fleet's entry out, with the same facts in
+  short.

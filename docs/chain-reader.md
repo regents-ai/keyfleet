@@ -144,6 +144,20 @@ minute's wait, not a failure.
    fleet is refused and changes nothing. In development the same step is
    `mix keyfleet.seed_deployment ../contracts/deployments/<name>.<fleet>.deployed.json`.
 
+   A Trading Fleet's entry in the record (`"type": "trading"`) is left out:
+   seeding binds only the first fleet of each of the five fleet types
+   (`typeNumber` 1), and a Trading Fleet is always numbered 2 or more, so the
+   app neither binds a Trading Fleet nor reads its contracts. The entry holds
+   its trading factory, first price, step, daily payback, key cap, close and
+   trading wallet, its deck, its manager, treasury and ledger with their code
+   hashes, its profile and requirements and its staking tag; the full list is
+   in `docs/deployment.md`. The step, the trading wallet and the close are as
+   read at the block the record step ran against. A deck on a Trading Fleet is
+   the keeper's choice, and the default is none. On Base the record step
+   records a Trading Fleet, like any fleet past the five founding ones, only
+   once the Regents Safe owns the randomness subscription and the subscription
+   lists the collection.
+
    Metadata for a revealed key is drawn from the fleet's trait table, which
    ships with the release: the art agent commits it as
    `platform/priv/trait_tables/<traitTableHash>.json`, named by the manifest's
