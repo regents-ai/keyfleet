@@ -11279,3 +11279,10 @@ whole chain project in Chromium, 142 passed, with the three new ones; the device
 project, 72 passed. Pictures at 1280 and 390, light and dark, with things public and
 with none, with the notebook page and without, and under reduced motion, were taken by
 a scratch walk that is not kept.
+
+## 2026-11-17 — The install line and checker pin name regents-cli 1.10.32
+
+- `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
+  `platform/priv/tool_manifest.json` name regents-cli 1.10.32 (tag commit `a972d344`), the
+  newest release, published while the release before it was being checked. Its tag commit
+  was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
