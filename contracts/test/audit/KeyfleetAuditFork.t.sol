@@ -72,6 +72,7 @@ contract KeyfleetAuditForkTest is KeyfleetForkFixture {
         assertTrue(_setUpFork(FORK_BLOCK), "forked");
         assertEq(block.number, FORK_BLOCK, "pinned block");
         _found(5);
+        _subscriptionToTheSafe();
         while (keys.phase() < keys.FINAL_PHASE()) {
             _advancePhase();
         }

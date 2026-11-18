@@ -11947,3 +11947,25 @@ step's report).
   `cache/`, which git ignores.
 - `contracts/.gitignore` now ignores the empty `*.recovery.lock` Forge leaves beside every
   broadcast log, so only the log itself is committed.
+
+## 2026-11-18 — The phase-4 step waits for the Safe's randomness subscription
+
+- The Safe's `advance-phase` step no longer prepares phase 4, from which anyone may create a
+  fleet, while the randomness subscription is not ready for Keys that draw. On Base it refuses
+  while anyone but the Regents Safe owns the subscription
+  (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the subscription does
+  not list the collection (`CollectionNotVrfConsumer(collection)`), before anything is written or
+  sent. This corrects the entry "Phase 4 named beside the trading factory's approval" above, which
+  says the phase step does not check the subscription and the signers do.
+- The record step, the trading factory's approval and the phase-4 step apply one rule,
+  `requireSubscriptionReady` in `contracts/script/RecordKeyfleets.s.sol`, over one reader of the
+  subscription, and all three refuse with the record step's own two errors; the trading factory's
+  script no longer declares its own copies of them. Phases 1 to 3 and a factory's approval create
+  no fleet past the founding ones, since the collection registers one only once phase 4 has
+  opened, so no other step needs the check.
+- The record's refusal of a collection the subscription does not list is now tested with the
+  subscription's owner removing the collection after phase 4 opened, and the stand-in coordinator
+  can remove a consumer, as the real one can. The Base gas and audit fork suites hand their own
+  subscription to the Safe, which lists the collection, before stepping to phase 4.
+- `docs/deployment.md` (the order of steps, the record's refusals, step 6, the Base fork rehearsal
+  and the Trading Fleets order) and `contracts/README.md` say so.

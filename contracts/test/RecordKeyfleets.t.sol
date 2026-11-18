@@ -175,11 +175,18 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonUint(json, ".fleets.6.requirements.tokenMin"), 5e18, "Requirement amount");
     }
 
-    /// @dev Invariant: the record lists keys only once the subscription pays for their reveals.
-    function test_recordRefusesACollectionTheSubscriptionDoesNotListYet() public {
+    /// @dev Invariant: the record lists keys only while the subscription pays for their reveals. The
+    /// step to phase 4 waits for the subscription to list the collection, and its owner can remove
+    /// the collection afterwards: with a fleet that draws, the record then refuses it.
+    function test_recordRefusesACollectionTheSubscriptionNoLongerLists() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        KeyfleetFactory deployed = deployScript.deploy(manifest);
+        KeyfleetFactory deployed = _deployListed(manifest);
         _drawnFleet(manifest, deployed);
+        MockVRFCoordinatorV2Plus coordinator =
+            MockVRFCoordinatorV2Plus(address(manifest.bindings.randomness.coordinator));
+        uint256 subscriptionId = manifest.bindings.randomness.subscriptionId;
+        vm.prank(coordinator.subscriptionOwner(subscriptionId));
+        coordinator.removeConsumer(subscriptionId, address(deployed.KEYS()));
         vm.expectRevert(
             abi.encodeWithSelector(RecordKeyfleets.CollectionNotVrfConsumer.selector, address(deployed.KEYS()))
         );

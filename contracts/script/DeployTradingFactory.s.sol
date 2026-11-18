@@ -9,6 +9,7 @@ import {KeyfleetTradingFactory} from "../src/KeyfleetTradingFactory.sol";
 import {IKeyfleetFactory} from "../src/KeyfleetWiring.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
+import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 
 /// @notice Deploys the Trading Fleet factory on a Keyfleet system that is already live, and prints
 /// the Regents Safe's call that lets it register fleets.
@@ -28,7 +29,8 @@ import {KeyfleetSafeSteps} from "./KeyfleetSafeSteps.s.sol";
 /// the record step for every fleet while the collection's randomness subscription does not list the
 /// collection or, on Base, the Regents Safe does not own it. So the call is prepared only once the
 /// chain shows both: on Base a subscription another account owns is refused first, then on every
-/// chain one that does not list the collection, and the run stops before anything is sent.
+/// chain one that does not list the collection, each with the record step's own error, and the run
+/// stops before anything is sent.
 ///
 /// This script does not make that call: it runs it once from the Safe's address against this run's
 /// copy of the chain, so a call that would revert stops the script with the collection's own
@@ -50,12 +52,6 @@ contract DeployTradingFactory is KeyfleetManifest {
     error FactoryNotListed(address factory, address collection);
     /// @notice The existing factory's `field` differs from the manifest's.
     error FactoryMismatch(string field);
-    /// @notice On Base, the collection's randomness subscription is owned by someone other than the
-    /// Regents Safe, so the Safe's call is not prepared yet.
-    error VrfSubscriptionNotOwnedByRegentsSafe(address owner);
-    /// @notice The collection's randomness subscription does not list the collection as a consumer,
-    /// so the Safe's call is not prepared yet.
-    error CollectionNotVrfConsumer(address collection);
 
     /// @notice Reads the manifest named by `KEYFLEET_MANIFEST`, takes the existing factory from
     /// `readDeployment`, deploys the trading factory and prints the Safe's call adding it to the
@@ -115,11 +111,7 @@ contract DeployTradingFactory is KeyfleetManifest {
     /// Regents Safe owns it, as the record step requires once any Trading Fleet exists.
     function addFactoryCall(KeyfleetTradingFactory trading) public view returns (KeyfleetSafeSteps.SafeCall memory) {
         KeyfleetKeys keys = trading.KEYS();
-        (address owner, bool listsCollection) = _subscription(keys);
-        if (block.chainid == BASE_CHAIN_ID && owner != BASE_REGENTS_SAFE) {
-            revert VrfSubscriptionNotOwnedByRegentsSafe(owner);
-        }
-        if (!listsCollection) revert CollectionNotVrfConsumer(address(keys));
+        requireSubscriptionReady(_subscription(keys));
         return KeyfleetSafeSteps.SafeCall({
             name: "add-trading-factory",
             to: address(keys),

@@ -1827,7 +1827,14 @@ latest broadcast there.
   does not answer the NFT receiver check with exactly its selector, when the
   Pass has no holder, or when `KEYFLEET_CLUB_TO_CLAIMS`, a comma-separated list
   of key numbers, names the key); any other
-  step reverts with `UnknownStep`. It takes the factory from `readDeployment`:
+  step reverts with `UnknownStep`. Phase 4 lets anyone create a fleet, and one
+  fleet that draws stops the record for every fleet while the randomness
+  subscription is not ready, so `advance-phase` prepares phase 4 only once the
+  chain shows it is, with the record step's own errors otherwise: on Base, a
+  subscription anyone but the Regents Safe owns
+  (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then, on every chain, one
+  that does not list the collection (`CollectionNotVrfConsumer(collection)`).
+  It takes the factory from `readDeployment`:
   on Base the first release's pinned factory, elsewhere the deployment step's
   latest broadcast on the chain. On Base it runs every call from the Safe's address
   against the chain's current state, stopping at the first call that would
@@ -1909,7 +1916,8 @@ latest broadcast there.
   in the collection's last phase, and one Trading Fleet stops the record for
   every fleet while the randomness subscription is not ready for drawn Keys,
   so it prepares the Safe's call only once the chain shows it is: it refuses,
-  on Base, a subscription anyone but the Regents Safe owns
+  with the record step's own errors and by the same rule as the step to phase
+  4, on Base a subscription anyone but the Regents Safe owns
   (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then, on every chain, one
   that does not list the collection (`CollectionNotVrfConsumer(collection)`),
   and the run stops before anything is sent. It then runs the Safe's
@@ -2228,10 +2236,10 @@ themselves unless `BASE_RPC_URL` is set:
 - `KeyfleetBaseGas.t.sol` gives the figures in [On a fork of Base](#on-a-fork-of-base)
   and runs only with `--isolate`.
 - `KeyfleetTradingFork.t.sol` runs a Trading Fleet on the live collection as
-  deployed, with real USDC and REGENT revenue staking: on the fork only, it acts
-  as the Regents Safe to create the founding fleets still missing and step the
-  phases to the last with the release's Safe steps, has the subscription's
-  owner hand the VRF subscription to the Safe, which lists the collection,
+  deployed, with real USDC and REGENT revenue staking: on the fork only, it has
+  the subscription's owner hand the VRF subscription to the Safe, which lists
+  the collection, acts as the Regents Safe to create the founding fleets still
+  missing and step the phases to the last with the release's Safe steps,
   deploys the trading factory with `DeployTradingFactory` and makes the Safe's
   call that script prints,
   then creates a fleet, sells keys, trades out and back, pays back by the
@@ -2262,6 +2270,11 @@ themselves unless `BASE_RPC_URL` is set:
   the record written has the pinned factory and deployment block and is the
   record `record` gives for them, and the founding-fleets step writes one Safe
   batch per founding fleet still missing, each a call to the pinned factory.
+  Last, it steps the live collection to phase 3 from the Safe's address with
+  the Safe steps: with the subscription handed to another account the step to
+  phase 4 stops with `VrfSubscriptionNotOwnedByRegentsSafe` naming that
+  account, and once the Safe owns it and lists the collection the step's call
+  opens phase 4.
   Each run goes through `runInto`, the function `run` calls with the real
   folder, into a folder of the test's own under `rehearsal/`, which git
   ignores, and the test removes that folder. No test opens

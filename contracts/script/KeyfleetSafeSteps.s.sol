@@ -8,6 +8,7 @@ import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
+import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 
 /// @notice The Regents Safe's steps after the system is deployed: creating the five founding
 /// fleets, moving the collection to its next phase, and giving the Regents Club keys.
@@ -24,7 +25,9 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// Moving to phase 1 opens only the Regents Club's gifts once its own fleet exists.
 /// Phase 2 opens Classic #1's sales, and phase 3 opens Syndicate, Accelerant and Cascade, at the second
 /// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
-/// phase step is run only when the founder says when sales open.
+/// phase step is run only when the founder says when sales open. Phase 4 lets anyone create a
+/// fleet, so the step does not prepare it until the randomness subscription is ready for one: on
+/// Base the Regents Safe owns it, and on every chain it lists the collection.
 ///
 /// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
 /// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key
@@ -124,6 +127,9 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     }
 
     /// @notice The Safe's call moving the collection to its next phase, which opens at `opensAt`.
+    /// The call to phase 4 is prepared only while the randomness subscription lists the collection
+    /// and, on Base, the Regents Safe owns it, as the record step requires once any fleet past the
+    /// founding ones exists: from phase 4 anyone may create one.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -131,6 +137,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     {
         _requireManifestFitsChain(manifest);
         KeyfleetKeys keys = factory.KEYS();
+        if (keys.phase() + 1 == keys.FINAL_PHASE()) requireSubscriptionReady(_subscription(keys));
         calls = new SafeCall[](1);
         calls[0] = SafeCall({
             name: string.concat("phase-", vm.toString(keys.phase() + 1)),

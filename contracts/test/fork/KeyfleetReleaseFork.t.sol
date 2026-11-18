@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Test} from "forge-std/Test.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {RecordKeyfleets} from "../../script/RecordKeyfleets.s.sol";
+import {LiveSubscriptionFork} from "./KeyfleetTradingFork.t.sol";
 
 /// @dev Base's first release as pinned in `KeyfleetManifest`, its deployment block included, proved
 /// against Base itself, and the record's and the Safe steps' whole run on a fork of Base at its
@@ -16,11 +17,12 @@ import {RecordKeyfleets} from "../../script/RecordKeyfleets.s.sol";
 /// the test removes that folder; no test opens the published record, a Safe batch or a broadcast
 /// log, so each passes whether those are there or not. Nothing is signed or sent to Base. It runs
 /// only when `BASE_RPC_URL` is set and skips itself otherwise.
-contract KeyfleetReleaseForkTest is Test {
+contract KeyfleetReleaseForkTest is LiveSubscriptionFork {
     /// @dev The account that sent Base's first release, and the nonce of its first transaction:
     /// read from Base, and checked below against the addresses those nonces create.
     address private constant RELEASE_SENDER = 0x9b2C414614aEE294202c1219520955EF3B596031;
     uint64 private constant RELEASE_FIRST_NONCE = 50;
+    address private constant SOMEONE_ELSE = address(0x50B0);
 
     string private constant RECORD_FOLDER = "rehearsal/release-fork-record";
     string private constant SAFE_FOLDER = "rehearsal/release-fork-safe";
@@ -132,5 +134,41 @@ contract KeyfleetReleaseForkTest is Test {
             assertEq(vm.parseJsonBytes(written[i], ".transactions[0].data"), calls[i].data);
         }
         assertEq(steps.foundingFleetCalls(manifest, factory).length, 0, "the run made every call on the fork");
+    }
+
+    /// @dev The release's steps on the fork up to phase 3, from the Safe's address. Then, with the
+    /// randomness subscription handed to another account, the step to phase 4 stops with that
+    /// account's address; once the Regents Safe holds the subscription and lists the collection, the
+    /// step's call opens phase 4.
+    function test_thePhaseFourStepOnBaseWaitsForTheSafesSubscription() public {
+        KeyfleetSafeSteps steps = new KeyfleetSafeSteps();
+        KeyfleetManifest.Manifest memory manifest = steps.readManifest("base");
+        KeyfleetFactory factory = KeyfleetFactory(steps.BASE_KEYFLEET_FACTORY());
+        KeyfleetKeys collection = factory.KEYS();
+        while (collection.phase() + 1 < collection.FINAL_PHASE()) {
+            _asSafe(steps.foundingFleetCalls(manifest, factory));
+            _asSafe(steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1)));
+            vm.warp(block.timestamp + 1);
+        }
+
+        _handSubscriptionTo(SOMEONE_ELSE);
+        vm.expectRevert(
+            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
+        );
+        steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1));
+
+        _subscriptionToTheSafe();
+        KeyfleetSafeSteps.SafeCall[] memory calls =
+            steps.advancePhaseCalls(manifest, factory, uint64(block.timestamp + 1));
+        assertEq(calls[0].name, "phase-4");
+        _asSafe(calls);
+        assertEq(collection.phase(), collection.FINAL_PHASE(), "phase 4 opened");
+    }
+
+    function _asSafe(KeyfleetSafeSteps.SafeCall[] memory calls) private {
+        for (uint256 i = 0; i < calls.length; ++i) {
+            vm.prank(REGENTS_SAFE);
+            Address.functionCall(calls[i].to, calls[i].data);
+        }
     }
 }

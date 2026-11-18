@@ -110,6 +110,22 @@ contract MockVRFCoordinatorV2Plus {
         _consumers[subId].push(consumer);
     }
 
+    function removeConsumer(uint256 subId, address consumer) external {
+        address owner = subscriptionOwner[subId];
+        if (owner == address(0)) revert InvalidSubscription();
+        if (msg.sender != owner) revert MustBeSubOwner(owner);
+        if (!consumerConfig[consumer][subId].active) revert InvalidConsumer(subId, consumer);
+        consumerConfig[consumer][subId].active = false;
+        address[] storage consumers = _consumers[subId];
+        for (uint256 index = 0; index < consumers.length; ++index) {
+            if (consumers[index] == consumer) {
+                consumers[index] = consumers[consumers.length - 1];
+                consumers.pop();
+                return;
+            }
+        }
+    }
+
     function getSubscription(uint256 subId)
         external
         view

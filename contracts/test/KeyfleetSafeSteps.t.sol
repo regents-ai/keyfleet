@@ -7,9 +7,11 @@ import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../script/KeyfleetSafeSteps.s.sol";
+import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
 import {KeyfleetScriptFixture} from "./helpers/KeyfleetScriptFixture.sol";
 import {MockClubPass} from "./mocks/MockClubPass.sol";
 import {MockContractWallet} from "./mocks/MockContractWallet.sol";
+import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev A contract that cannot take an NFT sent with a safe transfer.
 contract NoReceiver {}
@@ -131,6 +133,48 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OnlySafe.selector, keeper));
         this.make(calls, keeper);
+    }
+
+    /// @dev From phase 4 anyone may create a fleet past the founding ones, which the record lists only
+    /// while the subscription lists the collection, so the step to phase 4 is refused until it does;
+    /// the phases before it are not. Off Base its owner may be anyone.
+    function test_thePhaseFourStepWaitsUntilTheSubscriptionListsTheCollection() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        KeyfleetFactory unlisted = deployScript.deploy(manifest);
+        KeyfleetKeys keys = unlisted.KEYS();
+        _found(manifest, unlisted);
+        while (keys.phase() + 1 < keys.FINAL_PHASE()) {
+            _openPhase(manifest, unlisted);
+        }
+
+        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.CollectionNotVrfConsumer.selector, address(keys)));
+        safeSteps.advancePhaseCalls(manifest, unlisted, uint64(block.timestamp + 1));
+
+        _listConsumer(manifest, keys);
+        _openPhase(manifest, unlisted);
+        assertEq(keys.phase(), keys.FINAL_PHASE(), "Opened once it lists it");
+    }
+
+    /// @dev On Base the step to phase 4 is refused while anyone but the Regents Safe owns the
+    /// subscription, even one that lists the collection, and prepared once the Safe owns it.
+    function test_onBaseThePhaseFourStepWaitsUntilTheRegentsSafeOwnsTheSubscription() public {
+        uint256 subscriptionId = _standInBase();
+        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
+        KeyfleetFactory base = _deployListed(manifest);
+        KeyfleetKeys keys = base.KEYS();
+        _found(manifest, base);
+        while (keys.phase() + 1 < keys.FINAL_PHASE()) {
+            _openPhase(manifest, base);
+        }
+        MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(safeSteps.BASE_VRF_COORDINATOR());
+
+        coordinator.openSubscription(subscriptionId, keeper);
+        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper));
+        safeSteps.advancePhaseCalls(manifest, base, uint64(block.timestamp + 1));
+
+        coordinator.openSubscription(subscriptionId, safeSteps.BASE_REGENTS_SAFE());
+        _openPhase(manifest, base);
+        assertEq(keys.phase(), keys.FINAL_PHASE(), "Opened once the Safe owns it");
     }
 
     /// @dev Both steps check the manifest first.

@@ -15,6 +15,20 @@ import {V4PoolKey} from "../src/interfaces/IUniswapV4PoolManager.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
+/// @notice Refuses, with the record step's own errors, while a collection's randomness subscription
+/// is not ready for Keys that draw: on Base, while another account than the Regents Safe owns it,
+/// and on every chain, while it does not list the collection. Until it is, one Key that draws stops
+/// the record step for every fleet, so the record step, the trading factory's approval and the step
+/// opening phase 4 all refuse here.
+function requireSubscriptionReady(KeyfleetManifest.Subscription memory subscription) pure {
+    if (!subscription.ownerFitsChain) {
+        revert RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe(subscription.owner);
+    }
+    if (!subscription.listsCollection) {
+        revert RecordKeyfleets.CollectionNotVrfConsumer(address(subscription.collection));
+    }
+}
+
 /// @notice The last step: reads the system and every fleet back from the chain, checks them
 /// against the input manifest, and writes the published deployment record.
 /// @dev Nothing here is taken on trust from the other steps. What the deployment step established
@@ -47,9 +61,11 @@ contract RecordKeyfleets is KeyfleetManifest {
     error RecordedMismatch(string field);
     /// @notice A fleet's `part` is missing, misplaced or bound to something else.
     error FleetNotBound(uint256 fleetId, string part);
-    /// @notice The VRF subscription does not list the collection as a consumer yet.
+    /// @notice The VRF subscription does not list the collection as a consumer yet. The trading
+    /// factory's approval and the step opening phase 4 refuse with it too.
     error CollectionNotVrfConsumer(address collection);
-    /// @notice On Base, the VRF subscription is owned by someone other than the Regents Safe.
+    /// @notice On Base, the VRF subscription is owned by someone other than the Regents Safe. The
+    /// trading factory's approval and the step opening phase 4 refuse with it too.
     error VrfSubscriptionNotOwnedByRegentsSafe(address owner);
 
     /// @notice Reads the manifest named by `KEYFLEET_MANIFEST` and what the deployment step
@@ -145,12 +161,7 @@ contract RecordKeyfleets is KeyfleetManifest {
                 break;
             }
         }
-        if (!needed) return;
-        (address owner, bool listsCollection) = _subscription(keys);
-        if (block.chainid == BASE_CHAIN_ID && owner != BASE_REGENTS_SAFE) {
-            revert VrfSubscriptionNotOwnedByRegentsSafe(owner);
-        }
-        if (!listsCollection) revert CollectionNotVrfConsumer(address(keys));
+        if (needed) requireSubscriptionReady(_subscription(keys));
     }
 
     /// @dev Fleet `fleetId`'s four contracts are where the factory places them, hold code and

@@ -22,7 +22,7 @@ The release runs in seven steps, in this order:
    from that wallet. It creates no fleet.
 3. **Randomness setup, deferred.** Consumer setup, funding and Safe ownership
    can wait while every minted Key is within its fixed founding deck. Complete
-   setup before any Key needs a random draw.
+   setup before any Key needs a random draw, and before phase 4.
 4. **Club fleet.** In phase 0, `founding-fleets` prepares only Club fleet 5.
    After Club testing, the same step in phase 1 prepares Classic fleet 1.
    In phase 2 it prepares missing Syndicate, Accelerant and Cascade fleets.
@@ -30,7 +30,9 @@ The release runs in seven steps, in this order:
    into the site. Absent founding slots are retained for later creation.
 6. **Phases.** Phase 1 requires Club and opens only its gifts. Phase 2 requires
    Club and Classic and opens Classic sales. Phase 3 requires all five and
-   opens the other three; phase 4 permits public fleet creation.
+   opens the other three; phase 4 permits public fleet creation, and the step
+   prepares it only once the Regents Safe owns the randomness subscription and
+   the subscription lists the collection.
 7. **Club gifts.** Simulate and sign 25 separate sequential Safe transactions:
    24 batches of 80 and one of 78. Route failed receivers to claims and verify
    every final destination. Do not create the other four fleets at this launch.
@@ -359,7 +361,8 @@ fleets created since: it lists every fleet in the collection's registry.
   through the factory or through a trading factory the Safe has approved. So on
   Base the subscription's owner hands it to the Safe and the Safe accepts it
   and lists the collection first, and only after that does the Safe open phase
-  4 or approve a trading factory.
+  4 or approve a trading factory. The phase step and the trading factory's
+  script refuse, with these two errors, to prepare either call before.
 
 ### What the record step writes
 
@@ -451,8 +454,12 @@ and Cascade #1 sales together. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase. One such fleet stops the record step for every fleet while
 the Regents Safe does not own the randomness subscription or it does not list
-the collection (step 5), so the signers sign phase 4 only once both hold; this
-step does not check them.
+the collection (step 5), so the step prepares phase 4 only once the chain shows
+both: it stops, before anything is written, on Base while anyone but the
+Regents Safe owns the subscription
+(`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the
+subscription does not list the collection
+(`CollectionNotVrfConsumer(collection)`).
 
 ## Step 7: Regents Club gifts
 
@@ -585,8 +592,7 @@ Fleet stops the record step for every fleet, the founding ones included. The
 order on Base is therefore: the subscription's owner asks to hand it to the
 Safe (step 1), the Safe accepts it and lists the collection (step 3), and only
 then do the signers open phase 4 and sign the trading factory's `addFactory`
-call, which the script will not prepare before. The phase step does not check
-the subscription; the signers do.
+call. Neither the phase step nor the script prepares its call before.
 
 ## The trait table
 
@@ -674,9 +680,9 @@ KEYFLEET_MANIFEST=base \
 The Safe steps create the folder they are given; the record step writes
 `base.deployed.json` into a folder that exists, as `rehearsal/` always does. To
 see what the next step prepares, make a batch's call on the fork from the
-Safe's address, impersonated as below. The trading factory's deployment stops
-on the fork, as on Base, until the Safe owns the subscription and lists the
-collection: impersonate the subscription's owner to call
+Safe's address, impersonated as below. The step to phase 4 and the trading
+factory's deployment stop on the fork, as on Base, until the Safe owns the
+subscription and lists the collection: impersonate the subscription's owner to call
 `requestSubscriptionOwnerTransfer(<subscription id>, <Safe>)` on the
 coordinator, then the Safe to call `acceptSubscriptionOwnerTransfer(<subscription id>)`
 and `addConsumer(<subscription id>, <collection>)`. Never pass `--broadcast` on

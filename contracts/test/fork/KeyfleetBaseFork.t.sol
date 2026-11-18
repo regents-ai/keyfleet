@@ -99,6 +99,17 @@ abstract contract KeyfleetForkFixture is Test {
         }
     }
 
+    /// @dev Hands the test's subscription to the Regents Safe, which lists the collection on it: the
+    /// step opening phase 4 is prepared on Base only then.
+    function _subscriptionToTheSafe() internal {
+        address safe = script.BASE_REGENTS_SAFE();
+        coordinator.requestSubscriptionOwnerTransfer(subscriptionId, safe);
+        vm.startPrank(safe);
+        coordinator.acceptSubscriptionOwnerTransfer(subscriptionId);
+        coordinator.addConsumer(subscriptionId, address(keys));
+        vm.stopPrank();
+    }
+
     /// @dev Makes the Safe step's call moving the collection to its next phase, opening a second
     /// from now, from the Safe, and waits for that second.
     function _advancePhase() internal {

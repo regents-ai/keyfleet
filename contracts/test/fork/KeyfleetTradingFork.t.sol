@@ -39,8 +39,8 @@ abstract contract LiveSubscriptionFork is Test {
         coordinator.acceptSubscriptionOwnerTransfer(subscriptionId);
     }
 
-    /// @dev The Regents Safe takes the subscription and lists the collection on it, the order the
-    /// trading factory's deployment requires before it prepares the Safe's call.
+    /// @dev The Regents Safe takes the subscription and lists the collection on it, which the phase-4
+    /// step and the trading factory's approval both require before they prepare the Safe's call.
     function _subscriptionToTheSafe() internal {
         _handSubscriptionTo(REGENTS_SAFE);
         (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = LIVE_COLLECTION.randomness();
@@ -51,10 +51,10 @@ abstract contract LiveSubscriptionFork is Test {
 
 /// @dev A Trading Fleet on the live Keyfleet collection, on a fork of Base at its latest block: the
 /// real collection and its factory as deployed, real USDC and real REGENT revenue staking. On the
-/// fork only, the Regents Safe's address creates the founding fleets still missing and steps the
-/// phases with the release's own Safe steps, the subscription's owner hands the randomness
-/// subscription to the Safe, which lists the collection, and then the trading factory is deployed
-/// by `DeployTradingFactory` and the Safe's address makes the call that script prints. Nothing is
+/// fork only, the subscription's owner hands the randomness subscription to the Safe, which lists
+/// the collection, the Regents Safe's address creates the founding fleets still missing and steps
+/// the phases with the release's own Safe steps, and then the trading factory is deployed by
+/// `DeployTradingFactory` and the Safe's address makes the call that script prints. Nothing is
 /// signed or sent to Base.
 ///
 /// It runs only when `BASE_RPC_URL` is set in the environment and skips itself otherwise; the URL is
@@ -99,8 +99,10 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
         staking = IRegentRevenueStakingViews(STAKING);
         fleetsBefore = COLLECTION.fleetCount();
 
-        // The release's Safe steps, from the Safe's address on the fork: the founding fleets each
-        // phase needs, then the next phase, until the last is open.
+        // The subscription goes to the Safe first, as the phase-4 step requires, then the release's
+        // Safe steps, from the Safe's address on the fork: the founding fleets each phase needs, then
+        // the next phase, until the last is open.
+        _subscriptionToTheSafe();
         while (COLLECTION.phase() < COLLECTION.FINAL_PHASE()) {
             KeyfleetSafeSteps.SafeCall[] memory founding = steps.foundingFleetCalls(manifest, FLEETS);
             for (uint256 i = 0; i < founding.length; ++i) {
@@ -110,7 +112,6 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
             vm.warp(block.timestamp + 1);
         }
 
-        _subscriptionToTheSafe();
         DeployTradingFactory deployer = new DeployTradingFactory();
         trading = deployer.deploy(manifest, FLEETS);
         _asSafe(deployer.addFactoryCall(trading));
@@ -279,8 +280,8 @@ contract KeyfleetTradingForkTest is LiveSubscriptionFork {
 
     /// @dev The record of the live system lists the Trading Fleet as one beside the live fleets.
     /// A fleet past the founding ones is recorded only while the Regents Safe owns the VRF
-    /// subscription and the collection is on it, which `setUp` arranged before the Safe approved the
-    /// trading factory.
+    /// subscription and the collection is on it, which `setUp` arranged before the Safe opened phase
+    /// 4.
     function test_theRecordListsTheTradingFleetBesideTheLiveFleets() public {
         KeyfleetTradingManager fleet = _create();
         RecordKeyfleets recorder = new RecordKeyfleets();
@@ -423,7 +424,7 @@ contract DeployTradingFactoryForkTest is LiveSubscriptionFork {
 
         vm.setEnv("KEYFLEET_MANIFEST", "base");
         vm.expectRevert(
-            abi.encodeWithSelector(DeployTradingFactory.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
+            abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, SOMEONE_ELSE)
         );
         script.run();
     }

@@ -10,6 +10,7 @@ import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol
 import {DeployTradingFactory} from "../script/DeployTradingFactory.s.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../script/KeyfleetSafeSteps.s.sol";
+import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
 import {KeyfleetScriptFixture} from "./helpers/KeyfleetScriptFixture.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
@@ -117,7 +118,7 @@ contract DeployTradingFactoryTest is KeyfleetScriptFixture {
         KeyfleetTradingFactory trading = script.deploy(manifest, deployed);
 
         vm.expectRevert(
-            abi.encodeWithSelector(DeployTradingFactory.CollectionNotVrfConsumer.selector, address(deployed.KEYS()))
+            abi.encodeWithSelector(RecordKeyfleets.CollectionNotVrfConsumer.selector, address(deployed.KEYS()))
         );
         script.addFactoryCall(trading);
 
@@ -137,9 +138,7 @@ contract DeployTradingFactoryTest is KeyfleetScriptFixture {
         MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(script.BASE_VRF_COORDINATOR());
 
         coordinator.openSubscription(subscriptionId, keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(DeployTradingFactory.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper)
-        );
+        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper));
         script.addFactoryCall(trading);
 
         coordinator.openSubscription(subscriptionId, script.BASE_REGENTS_SAFE());

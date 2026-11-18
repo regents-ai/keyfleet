@@ -32,7 +32,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
 
     function setUp() public {
         if (!_setUpFork(0)) return;
-        coordinator.addConsumer(subscriptionId, address(keys));
+        _subscriptionToTheSafe();
     }
 
     function test_gasOfEverydayCallsOnBase() public {
