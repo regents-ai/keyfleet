@@ -31,7 +31,9 @@ defmodule Keyfleet.Notebooks.HubClient do
   (502, 503 or 504), the job is snoozed for #{@away_wait} seconds, which
   uses no attempt and saves no error, up to #{@away_waits} times
   (`meta["snoozed"]`), so a hub restarting for a deploy goes unremarked.
-  After that, and for anything else, the job ends with `result` as it is:
+  One wait is saved all the same, where it happened: the site's own
+  connections to the hub all busy (`Keyfleet.Notebooks.hub_run/2`), which
+  is the site's fault rather than the hub's absence. After that, and for anything else, the job ends with `result` as it is:
   a hub that answered with a refusal fails the attempt at once, and is
   saved with the site's errors like any failed job.
   """
