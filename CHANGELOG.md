@@ -11221,9 +11221,11 @@ a scratch walk that is not kept.
   for the hub (`checked/4`), and `SignedAgent.take_body/1` once it has decoded. With the
   reviewers' round-four proofs, 1,150 deep jobs at once peak at 496 MiB (4,030 before),
   235 each on a connection of its own to a hub taking 100 ms (1,261), 1,150 files at 542
-  (638), and 150 deep jobs waiting on a slow hub hold 128 MiB (542). A request holds about
-  41 KiB once answered (3,475 at the door and 2,476 on the agent API before). The
-  collection costs about 8 µs a request.
+  (638), and 150 deep jobs waiting on a slow hub hold 128 MiB (542). Once answered, a job
+  at the door holds about 33 KiB (3,475 before) and a body the agent API refuses under
+  256 KiB (2,476 before); the connection also keeps the 64 KiB body until Bandit next
+  collects, and a deep body the agent API took still held 2,053 KiB, until the entry
+  below. The collection costs about 8 µs a request.
 - Bandit's option to collect after every request collects only once the answer is sent,
   so a request waiting for the hub kept its megabytes; decoding in a short-lived process
   copies the decoded body back (about 512 KiB for a deep one) and splits each check across
