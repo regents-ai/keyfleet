@@ -7,10 +7,11 @@ import {atRest} from "./support/first_visit"
 // and Notebook: the newest notebook page made public. Both arrive with the
 // fleet's reading while the page is open, and neither moves Buy Key or the
 // figures. From four things, Recent slides leftward: a pointer over it pauses
-// it, keyboard focus in it stops it at its first link, and Tab meets each
-// thing once. With less motion it stands still. Nothing scrolls the page
-// sideways. This runs with the chain to deploy Classic, whose pages are then
-// open, and takes back what it made public.
+// it, Pause beside its label stops it until pressed again, keyboard focus in
+// it stops it and brings each link wholly into view, and Tab meets each thing
+// once. With less motion it stands still, with no Pause. Nothing scrolls the
+// page sideways. This runs with the chain to deploy Classic, whose pages are
+// then open, and takes back what it made public.
 const classic = "fleet_tech_classic"
 const place = /^\/classic\/1\/workspace\?place=public#public-[0-9a-f-]{36}$/
 
@@ -40,6 +41,10 @@ const sideways = (page: Page) =>
 const motion = (page: Page) =>
   page.locator("#home-recent-band .rl-ticker__track").evaluate(track => track.getAnimations().map(animation => animation.playState))
 
+// Where the line stands now.
+const position = (page: Page) =>
+  page.locator("#home-recent-band .rl-ticker__track").evaluate(track => getComputedStyle(track).transform)
+
 test("Recent and Notebook arrive under the hero, slide from four things, pause and stop for a person", async ({page}) => {
   await page.setViewportSize({width: 1280, height: 800})
   await openHome(page)
@@ -47,13 +52,16 @@ test("Recent and Notebook arrive under the hero, slide from four things, pause a
   await atRest(page)
   const buy = await box(page, "#home-buy-key")
   const facts = await box(page, "#home-classic-facts")
+  const steps = await box(page, "#home-steps")
 
-  // Two pages made public: both stand still, and the newest is Notebook's.
+  // Two pages made public: both stand still, with no Pause, and the newest is
+  // Notebook's.
   publishPage(classic, 3)
   const newest = publishPage(classic, 4)
   await expect(page.locator("#home-recent-list > li")).toHaveCount(2)
   await expect(page.locator("#home-recent-band")).not.toHaveAttribute("data-slides")
   await expect(page.locator("#home-recent-band .rl-ticker__list")).toHaveCount(1)
+  await expect(page.locator("#home-recent-pause")).toHaveCount(0)
   expect(await motion(page)).toEqual([])
   await expect(page.locator("#home-notebook-open")).toHaveAttribute("href", newest)
   await expect(page.locator("#home-notebook")).toContainText("Key 4")
@@ -74,9 +82,11 @@ test("Recent and Notebook arrive under the hero, slide from four things, pause a
     expect(await link.getAttribute("data-phx-link")).toBeNull()
   }
 
-  // Buy Key and the figures stay where they were, on the first screen.
+  // Buy Key, the figures and the steps stay where they were, Buy Key and the
+  // figures on the first screen.
   expect(await box(page, "#home-buy-key")).toEqual(buy)
   expect(await box(page, "#home-classic-facts")).toEqual(facts)
+  expect(await box(page, "#home-steps")).toEqual(steps)
   expect(buy.bottom).toBeLessThanOrEqual(800)
   expect(facts.bottom).toBeLessThanOrEqual(800)
   expect(await sideways(page)).toBe(0)
@@ -87,23 +97,54 @@ test("Recent and Notebook arrive under the hero, slide from four things, pause a
   await page.mouse.move(0, 0)
   await expect.poll(() => motion(page)).toEqual(["running"])
 
-  // Keyboard focus stops it at its first link; Tab reaches each thing once,
-  // in view, then Notebook's link, never the copy.
+  // Pause stops it where it is, and it stays stopped, Pause now Play; Play,
+  // from the keyboard, lets it go on.
+  const pause = page.locator("#home-recent-pause")
+  await expect(pause).toHaveAccessibleName("Pause")
+  const target = await pause.boundingBox()
+  expect(target!.width).toBeGreaterThanOrEqual(24)
+  expect(target!.height).toBeGreaterThanOrEqual(24)
+  await pause.click()
+  await page.mouse.move(0, 0)
+  await expect(pause).toHaveAccessibleName("Play")
+  await expect(pause.locator("span:visible")).toHaveText("Play")
+  await expect.poll(() => motion(page)).toEqual(["paused"])
+  const stopped = await position(page)
+  await page.waitForTimeout(400)
+  expect(await position(page)).toBe(stopped)
+  await pause.focus()
+  await page.keyboard.press("Space")
+  await expect(pause).toHaveAccessibleName("Pause")
+  await expect.poll(() => motion(page)).toEqual(["running"])
+  await expect.poll(() => position(page)).not.toBe(stopped)
+  expect(await box(page, "#home-steps")).toEqual(steps)
+
+  // Tab meets Pause before the first thing. Keyboard focus stops the line;
+  // Tab reaches each thing once, wholly in view, then Notebook's link, never
+  // the copy, and the line slides again from its start.
   await page.locator("#home-buy-key").focus()
+  await page.keyboard.press("Tab")
+  await expect(pause).toBeFocused()
   for (const [index, link] of (await page.locator("#home-recent-list a").all()).entries()) {
     await page.keyboard.press("Tab")
     await expect(link, `thing ${index + 1} has focus`).toBeFocused()
     expect(await motion(page)).toEqual([])
-    const shown = await link.evaluate(element => {
-      const view = element.closest(".rl-ticker")!.getBoundingClientRect()
-      const {left, right} = element.getBoundingClientRect()
-      return Math.min(right, view.right) - Math.max(left, view.left)
-    })
-    expect(shown, `thing ${index + 1} is in view`).toBeGreaterThan(32)
+    await expect
+      .poll(
+        () =>
+          link.evaluate(element => {
+            const view = element.closest(".rl-ticker")!.getBoundingClientRect()
+            const {left, right} = element.getBoundingClientRect()
+            return left >= view.left - 0.5 && right <= view.right + 0.5
+          }),
+        {message: `thing ${index + 1} is wholly in view`},
+      )
+      .toBe(true)
   }
   await page.keyboard.press("Tab")
   await expect(page.locator("#home-notebook-open")).toBeFocused()
   await expect.poll(() => motion(page)).toEqual(["running"])
+  expect(await page.locator("#home-recent-band").evaluate(band => band.scrollLeft)).toBe(0)
 
   // On a phone nothing scrolls sideways either.
   await page.setViewportSize({width: 390, height: 844})
@@ -120,7 +161,7 @@ test("Recent and Notebook arrive under the hero, slide from four things, pause a
   await expect(page.locator(`#${href!.split("#")[1]}`)).toBeVisible()
 })
 
-test("with less motion Recent stands still, the newest three in one line, at 1280 and 390", async ({page}) => {
+test("with less motion Recent stands still, the newest three in one line, with no Pause, at 1280 and 390", async ({page}) => {
   await page.emulateMedia({reducedMotion: "reduce"})
 
   for (const size of [{width: 1280, height: 800}, {width: 390, height: 844}]) {
@@ -130,6 +171,7 @@ test("with less motion Recent stands still, the newest three in one line, at 128
     expect(await motion(page)).toEqual([])
     await expect(page.locator("#home-recent-list > li:visible")).toHaveCount(3)
     await expect(page.locator("#home-recent-band .rl-ticker__list + .rl-ticker__list")).toBeHidden()
+    await expect(page.locator("#home-recent-pause")).toBeHidden()
     const transform = await page.locator("#home-recent-band .rl-ticker__track").evaluate(track => getComputedStyle(track).transform)
     expect(transform).toBe("none")
     expect(await sideways(page)).toBe(0)

@@ -11301,3 +11301,45 @@ a scratch walk that is not kept.
 Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
 as errors and Credo (no issues) passed; homepage tests, 20 passed. The walks were run
 with the next commit, which builds on this one.
+
+## 2026-11-17: Recent has Pause, and keyboard focus shows each link whole (the chief's 1 a)
+
+- Beside the Recent label, while the line slides, a button (`#home-recent-pause`):
+  "Pause" stops the line where it is and becomes "Play"; Play lets it go on. It stays
+  stopped until pressed again, through the page's live updates, and is forgotten when
+  the page closes. Pressing it runs LiveView's own `JS.toggle_attribute` of `data-paused`
+  on the section, with no script of the page's own. A checkbox would have needed no
+  script, but its name would have stayed "Pause" while it showed "Play", or a checked
+  "Play" would have read as playing. Like every button on the page, it answers once the
+  page has connected, a moment after it first draws.
+- It is absent with 3 or fewer things, when the line stands still, and hidden under
+  reduced motion. It is one muted word in a hairline box, 51 by 24 px, 44 px tall on a
+  touch screen, with the site's own focus ring, and Tab meets it before the first thing.
+  The label column is 7rem wide on wide screens (was 6rem), so Recent and Pause fit side
+  by side; Notebook's row keeps lining up with it. Hover still pauses the line; keyboard
+  focus still stops it.
+- Keyboard focus: the sliding line scrolls only while a link in it has keyboard focus,
+  and then that link is the line's one snap position, so the line rests with it at its
+  start, and while focused a link is no wider than the line (a longer title ends in
+  "…"). Each of five links was measured wholly in view at 1280, and at 390, where before
+  the long ones sat partly past the edge. When focus leaves, the line cannot scroll, so
+  it slides again from its start; before, it could come back offset by the last scroll.
+- Measured at 1280 by 800 with Pause: Buy Key, the figures and the steps (704 to 777 px)
+  do not move; Recent's line runs from 838 to 873 and Notebook to 934. At 390 by 844,
+  Pause sits beside the label and Recent's row is 24 px taller on touch. Nothing scrolls
+  sideways at either width. The Recent walk presses Pause and Play (the line holds one
+  place over two reads, then moves), finds Pause before the first thing by Tab, and
+  finds no Pause with two things or with less motion. The verification list
+  (`home-recent-work`, whose gaps no longer name a missing pause or a half-shown link)
+  and the public changelog say it.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, Public place,
+fleet page, harbour sea, shared reading, metrics, launch gate, launch steps and public
+pages tests: 159 passed (1 property, 158 tests). Typecheck passed; vitest 498 passed in
+38 files, leaving out the untracked review file
+`assets/test/adversarial_send_step.test.ts`; the asset budgets, 3 passed, on a minified
+build. Walks: homepage, homepage details, launch steps and launch gate, 23 passed; the
+chain project's Recent and value card walks in Chromium, 9 passed; the devices project,
+72 passed. Pictures of Pause and Play at 1280 and 390, light and dark, on touch, and
+with keyboard focus, were taken by a scratch walk that is not kept.

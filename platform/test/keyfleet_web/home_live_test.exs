@@ -37,9 +37,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - below the hero, Recent: what Classic's Keys made public, newest first,
   #   each its kind, its title as plain text cut to 64 characters and its
   #   Key, a plain link to its place in the Public place; from four they
-  #   slide, held twice, the copy hidden and skipped by Tab; and Notebook: the
-  #   newest notebook page made public, opening the page. With nothing made
-  #   public neither is drawn, and neither costs the page a read
+  #   slide, held twice, the copy hidden and skipped by Tab, with Pause
+  #   before the line; and Notebook: the newest notebook page made public,
+  #   opening the page. With nothing made public neither is drawn, and
+  #   neither costs the page a read
   # - launch-gate: internal links stay on the fleets' maps, workspaces,
   #   proposals and treasuries, the account and pairing pages, the public
   #   documents, or anchors that exist
@@ -391,12 +392,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert length(attribute(html, "#{copy} > li > a", "href")) == 4
     assert attribute(html, "#{copy} [id]", "id") == []
 
+    # Pause, a button beside the label, before the line.
+    assert has_element?(view, "#home-recent .rl-recent__head > #home-recent-pause[type=button]")
+    assert has_element?(view, "#home-recent .rl-recent__head + #home-recent-band")
+
     # Each link lands on its own place in the Public place, as anyone reads it.
     {:ok, public, _html} = live(build_conn(), "/classic/1/workspace?place=public")
     for publication <- made, do: assert(has_element?(public, "#public-#{publication.id}"))
   end
 
-  test "Notebook: the newest notebook page made public, by its project's title and its Key, opening the page; fewer than four stand still",
+  test "Notebook: the newest notebook page made public, by its project's title and its Key, opening the page; fewer than four stand still, with no Pause",
        %{conn: conn} do
     make_public!(%{key: 3, kind: :page, page: page_path(1)})
     make_public!(%{project: "understanding", key: 7, kind: :page, page: page_path(2)})
@@ -418,6 +423,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert attribute(html, "#home-recent-list > li", "id") |> length() == 2
     assert attribute(html, "#home-recent-band", "data-slides") == []
     assert attribute(html, "#home-recent-band ul", "id") == ["home-recent-list"]
+    refute has_element?(view, "#home-recent-pause")
   end
 
   test "with nothing made public there is neither Recent nor Notebook, and no row for them",

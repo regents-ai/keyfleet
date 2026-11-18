@@ -30,9 +30,9 @@ Changes to Keyfleet, newest first.
 - **Notebook.** Below the homepage's hero, the newest notebook page a Key made public
   in Classic #1, with its project's title and its Key. Anyone can open it.
 - **Recent.** Below the homepage's hero, the newest things Classic #1's Keys made public
-  slide by slowly in one line, each opening its place in the fleet's Public place. The
-  line pauses under the pointer, and stands still for anyone whose device asks for less
-  motion.
+  slide by slowly in one line, each opening its place in the fleet's Public place. Pause
+  beside the label stops the line until pressed again; it also pauses under the pointer,
+  and stands still for anyone whose device asks for less motion.
 
 ## 16 November 2026
 

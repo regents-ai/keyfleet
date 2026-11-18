@@ -383,9 +383,12 @@ defmodule KeyfleetWeb.HomeLive do
   # Recent: the newest things made public, each by its kind, its title and its
   # Key, opening its place in the fleet's Public place. From @slides_from on
   # they slide by in one line, held twice so the line loops without a jump;
-  # the second copy is hidden from screen readers and skipped by Tab. Fewer,
-  # or with less motion, the newest few stand still. Notebook: the newest
-  # notebook page made public, by its project's title and its Key.
+  # the second copy is hidden from screen readers and skipped by Tab. Beside
+  # the label, Pause stops the line where it is and becomes Play, until pressed
+  # again: LiveView's own toggle of `data-paused` on the section, which keeps
+  # through the page's updates and is forgotten with the page. Fewer, or with
+  # less motion, the newest few stand still and there is no Pause. Notebook:
+  # the newest notebook page made public, by its project's title and its Key.
   defp recent(assigns) do
     assigns = assign(assigns, :slides?, length(assigns.public) >= @slides_from)
 
@@ -397,7 +400,18 @@ defmodule KeyfleetWeb.HomeLive do
         class="rl-recent__part"
         aria-labelledby="home-recent-title"
       >
-        <h2 id="home-recent-title" class="rl-recent__label">Recent</h2>
+        <div class="rl-recent__head">
+          <h2 id="home-recent-title" class="rl-recent__label">Recent</h2>
+          <button
+            :if={@slides?}
+            id="home-recent-pause"
+            type="button"
+            class="rl-recent__toggle"
+            phx-click={JS.toggle_attribute({"data-paused", ""}, to: "#home-recent")}
+          >
+            <span class="rl-recent__pause">Pause</span><span class="rl-recent__play">Play</span>
+          </button>
+        </div>
         <div
           id="home-recent-band"
           class="rl-ticker"
