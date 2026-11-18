@@ -12174,3 +12174,27 @@ step's report).
   staking, before the close and after it.
 - A changed rule that let anyone send once the fleet is closed passed the whole treasury suite
   before; this test fails on it. Only tests changed.
+
+## 2026-11-18 — The test gate's closing lines count a suite only once it closes, and say when it failed
+
+- `contracts/script/run_tests.sh` counts a suite only once its own `Suite result` line closes
+  its block. A suite in `test/fork/` with every test passing and none skipped is listed under
+  `Base fork proofs: ran, every test passing and none skipped, in`; one with a failing test, a
+  failed setUp included, under `Base fork proofs: FAILED in`; `Base fork proofs: NOT RUN` is said
+  when neither list has a suite. Every suite in which a test skipped itself is still listed under
+  `Skipped, so not in this result:`.
+- A run Forge did not finish, stopped by a signal or with its output cut off before its closing
+  summary (a suite's block left open, or no `Ran N test suites` line after the suites), prints
+  only `Forge did not finish this run (it exited N), so this result says nothing about the Base
+  fork proofs or what skipped.` and never exits 0. Before, a fork suite cut off after its first
+  result line, in a run that exited 130, was listed as ran.
+- A known limit, said once in the script's header and in the "Checks" paragraph of
+  `contracts/README.md`: the closing lines are read from Forge's printed text, so a test in this
+  repository that prints text shaped like Forge's results could forge them; and with `--json` or
+  `--junit` the lines say NOT RUN and list nothing skipped. The `Makefile` comment above
+  `check-contracts` names the failed list too.
+- Checked against saved Forge output, whole and cut, through a stand-in `forge`: a whole run with
+  public Base, one without an endpoint, a cut after a fork suite's first result line with exit 130
+  and with exit 0, every suite closed with no summary (exit 101), a whole run stopped by a signal
+  afterwards (exit 143), a fork suite left unclosed with the next suite following, a fork setUp
+  failing beside a fork suite that passed with a skip, and `--json` output.

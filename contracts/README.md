@@ -2182,14 +2182,21 @@ Run `make check-contracts` from the repository root. It runs, in `contracts/`,
 `forge fmt --check`, `forge build`, `script/check_bytecode.sh` and last
 `forge test` (all but the audit's fork proofs) through `script/run_tests.sh`,
 which keeps Forge's output and exit status and ends by saying, from what Forge
-printed alone, which suites in `test/fork/` ran with no test skipped, every
-suite in which a test skipped itself, and `Base fork proofs: NOT RUN` when no
-suite in `test/fork/` ran that way. Without `BASE_RPC_URL` the suites in
+printed alone, which suites in `test/fork/` ran with every test passing and
+none skipped, which failed (`Base fork proofs: FAILED in`), every suite in
+which a test skipped itself, and `Base fork proofs: NOT RUN` when no suite in
+`test/fork/` ran. A suite counts only once its own `Suite result` line closes
+its block. A run Forge did not finish, stopped by a signal or cut off before
+its closing summary, says `Forge did not finish this run` and nothing else,
+and never passes. Without `BASE_RPC_URL` the suites in
 `test/fork/` skip themselves and the gate still passes, so read those closing
 lines before taking a pass to include them; the Base gas suite also skips
 there, since it needs `--isolate`. Other arguments, such as a `--match-path`
 to one file, reach `forge test` as given, and the closing lines say what that
-run left out.
+run left out. A known limit: the closing lines are read from Forge's printed
+text, so a test in this repository that prints text shaped like Forge's
+results could forge them; and with `--json` or `--junit` the lines say NOT RUN
+and list nothing skipped.
 
 The suites in `test/`, all against local stand-ins, cover the presets, the
 collection (registry, phases, sales, decks, the keeper, metadata and royalty),
