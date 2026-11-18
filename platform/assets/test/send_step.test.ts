@@ -2,7 +2,14 @@ import {expect, it} from "vitest"
 
 import {press, type Review} from "../js/hooks/onchain_steps"
 import {replaceActiveEthereumWallet, type SwitchChain} from "../js/wallet_actions/connected_wallet"
-import {sendStep, signStep, type SignatureStep, type TransactionStep} from "../js/wallet_actions/send_step"
+import {
+  failure,
+  NothingSent,
+  sendStep,
+  signStep,
+  type SignatureStep,
+  type TransactionStep,
+} from "../js/wallet_actions/send_step"
 
 const base = 8453
 const chain = {chain_id: base}
@@ -151,4 +158,44 @@ it("sends nothing with no active wallet", async () => {
   await expect(press(review, "buy", (event, payload) => reports.push([event, payload])))
     .resolves.toEqual({reason: "wallet_unavailable"})
   expect(reports).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
+})
+
+// Invariant: a press that ends with no answer is named for what the wallet may
+// have done. Before the wallet was asked, nothing was sent; after, an unexplained
+// end may have sent the transaction or, for a signature step, made the signature,
+// and the two are never confused, since the page tells the person which to check.
+it("names an unexplained end by the kind of step the wallet was asked for", () => {
+  const dropped = new Error("the wallet stopped answering")
+
+  expect(failure(true, dropped, false)).toBe("send_unconfirmed")
+  expect(failure(true, dropped, true)).toBe("sign_unconfirmed")
+  for (const kind of [false, true]) {
+    expect(failure(true, {code: 4001}, kind)).toBe("wallet_declined")
+    expect(failure(true, walletError(-32000, "insufficient funds for gas * price + value"), kind)).toBe("insufficient_funds")
+    expect(failure(false, dropped, kind)).toBe("wallet_unavailable")
+    expect(failure(false, new NothingSent("network_mismatch"), kind)).toBe("network_mismatch")
+    expect(failure(false, new NothingSent("switch_declined"), kind)).toBe("switch_declined")
+  }
+})
+
+// The same through a press: a wallet that stops answering a send or a
+// signature it was asked for is reported as one that may have sent or signed it.
+it("reports a send or signature the wallet may have made by which it was", async () => {
+  const cases = [
+    ["buy", "eth_sendTransaction", "send_unconfirmed"],
+    ["sign", "eth_signTypedData_v4", "sign_unconfirmed"],
+  ] as const
+
+  for (const [name, method, reason] of cases) {
+    const wallet = walletOn(signer)
+    const request = wallet.selected.provider.request
+    wallet.selected.provider.request = async (args: {method: string; params?: unknown[]}) => {
+      if (args.method === method) throw new Error("the wallet stopped answering")
+      return request(args)
+    }
+
+    const {pressed, reports} = await pressWith(wallet, name)
+    expect(pressed).toEqual({reason})
+    expect(reports).toEqual([["step_failed", {step: name, reason}]])
+  }
 })

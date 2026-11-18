@@ -23,7 +23,12 @@ export class NothingSent extends Error {
   }
 }
 
-export type Failure = NothingSent["reason"] | "wallet_declined" | "insufficient_funds" | "send_unconfirmed"
+export type Failure =
+  | NothingSent["reason"]
+  | "wallet_declined"
+  | "insufficient_funds"
+  | "send_unconfirmed"
+  | "sign_unconfirmed"
 
 /**
  * Sends one transaction through `wallet`, from the signer the server built the
@@ -219,12 +224,17 @@ export async function signStep(
   return signature as Hex
 }
 
-/** Why a press ended without a hash. After `sending`, the wallet may have sent it. */
-export function failure(sending: boolean, error: unknown): Failure {
+/**
+ * Why a press ended without a hash or signature. After `sending`, the wallet may
+ * have sent the transaction, or made the signature when the step was one
+ * (`signature`), unless its error says it declined.
+ */
+export function failure(sending: boolean, error: unknown, signature: boolean): Failure {
   if (!sending) return error instanceof NothingSent ? error.reason : "wallet_unavailable"
   if (hasCode(error, 4001)) return "wallet_declined"
   // No EIP-1193 code names this; wallets and nodes all say it in these words.
-  return hasMessage(error, /insufficient funds/i) ? "insufficient_funds" : "send_unconfirmed"
+  if (hasMessage(error, /insufficient funds/i)) return "insufficient_funds"
+  return signature ? "sign_unconfirmed" : "send_unconfirmed"
 }
 
 // A wallet on another chain is asked to switch to the step's on every press,

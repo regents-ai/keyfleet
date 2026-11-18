@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.Telemetry do
 
   # The reasons the wallet hook reports (`Failure` in send_step.ts). Only these
   # are counted, so a label never holds whatever a browser chose to send.
-  @wallet_failures ~w(step_unknown wallet_unavailable switch_declined network_mismatch wallet_declined insufficient_funds send_unconfirmed)
+  @wallet_failures ~w(step_unknown wallet_unavailable switch_declined network_mismatch wallet_declined insufficient_funds send_unconfirmed sign_unconfirmed)
 
   @reporter :keyfleet_prometheus
 

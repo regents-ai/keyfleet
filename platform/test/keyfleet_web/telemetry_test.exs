@@ -21,4 +21,19 @@ defmodule KeyfleetWeb.TelemetryTest do
 
     assert scrape =~ ~r/^keyfleet_repo_query_microseconds_count [1-9]/m
   end
+
+  # The wallet hook reports a signature the wallet may have made apart from a
+  # send that may have gone, and each is counted under its own reason.
+  test "a press the wallet may have sent or signed is counted by which" do
+    for reason <- ~w(send_unconfirmed sign_unconfirmed) do
+      KeyfleetWeb.Telemetry.wallet_failed(:telemetry_test, reason)
+    end
+
+    scrape = KeyfleetWeb.Telemetry.scrape()
+
+    for reason <- ~w(send_unconfirmed sign_unconfirmed) do
+      assert scrape =~
+               ~r/^health_wallet_send_failures_total\{flow="telemetry_test",reason="#{reason}"\} [1-9]/m
+    end
+  end
 end

@@ -200,7 +200,7 @@ export async function press(review: Review | undefined, name: string, push: Push
     push("step_sent", {review_id: review.id, step: name, transaction_hash})
     return {transaction_hash}
   } catch (error) {
-    const reason = failure(sending, error)
+    const reason = failure(sending, error, step?.kind === "signature")
     push("step_failed", {step: name, reason})
     return {reason}
   }

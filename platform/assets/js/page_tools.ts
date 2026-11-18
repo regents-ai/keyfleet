@@ -88,6 +88,10 @@ const failures: Record<Failure, {message: string; hint: string}> = {
     message: "The wallet may have sent this.",
     hint: "Check the wallet's activity before calling again.",
   },
+  sign_unconfirmed: {
+    message: "The wallet may have signed this.",
+    hint: "Check the wallet before calling again.",
+  },
 }
 
 // JSON imports widen every literal, so the manifest is read as the shape it is written in.
