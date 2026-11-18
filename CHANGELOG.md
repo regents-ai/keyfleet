@@ -11490,3 +11490,18 @@ a scratch walk that is not kept.
     (a proposal's text, a poll's choices, the Keys list on a Key's page) has the
     connection closed and reconnected instead of seeing the field's own message, and the
     page sends the form again when it reconnects.
+
+## 2026-11-18 — Only a job failure that is a hub wait alone is left unsaved
+
+- `Keyfleet.ErrorIgnorer` left out any job failure whose printed reason held
+  `%Keyfleet.Notebooks.HubSilentError{` anywhere (7ffad39ca). In the reviewers' round-six
+  proof 490, a job whose failure quoted that name in a member's title, and one that
+  returned a hub wait beside a real fault, were saved nowhere.
+- It now leaves out only a failure whose whole printed reason is the hub client's answer
+  for a wait, `<worker> failed with {:error, {:hub, "<address>", %Keyfleet.Notebooks.HubSilentError{message: "..."}}}`,
+  matched from start to end. Anything else, including a wait printed some other way, is
+  saved.
+- `Keyfleet.ErrorIgnorerTest` runs three stand-in jobs (a wait alone, a failure quoting
+  the name, a wait beside a fault) and finds the last two saved and the first not; with
+  the old rule it finds none saved. Proof 490 passes, and the Roster job's wait is still
+  saved once, where it happened.

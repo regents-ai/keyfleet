@@ -5,15 +5,23 @@ defmodule Keyfleet.ErrorIgnorer do
   would let anyone fill the table. Server faults, exits and throws are all kept.
 
   Also leaves out a job that failed for want of a connection to a notebook
-  hub: that wait is saved where it happened (`Keyfleet.Notebooks.hub_run/2`),
-  with the job and its attempt, so the job's failure would save it twice.
+  hub and nothing else: that wait is saved where it happened
+  (`Keyfleet.Notebooks.hub_run/2`), with the job and its attempt, so the job's
+  failure would save it twice. Only a failure whose whole printed reason is
+  the hub client's answer for a wait, `{:error, {:hub, address, wait}}`, is
+  left out; one that merely quotes the wait's name, or carries a wait beside
+  anything else, is saved.
   """
 
   @behaviour ErrorTracker.Ignorer
 
+  # Oban.PerformError's message, "<worker> failed with <inspected reason>", for
+  # `Keyfleet.Notebooks.HubClient`'s answer when no hub connection came free.
+  @hub_wait ~r/\A\S+ failed with \{:error, \{:hub, "(?:[^"\\]|\\.)*", %Keyfleet\.Notebooks\.HubSilentError\{message: "(?:[^"\\]|\\.)*"\}\}\}\z/
+
   @impl ErrorTracker.Ignorer
   def ignore?(%ErrorTracker.Error{kind: "Elixir.Oban.PerformError", reason: reason}, _context),
-    do: String.contains?(reason, "%" <> inspect(Keyfleet.Notebooks.HubSilentError) <> "{")
+    do: Regex.match?(@hub_wait, reason)
 
   def ignore?(%ErrorTracker.Error{kind: "Elixir." <> _module = kind}, _context),
     do: kind |> String.to_existing_atom() |> visitors?()
