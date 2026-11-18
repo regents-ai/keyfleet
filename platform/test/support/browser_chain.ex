@@ -25,8 +25,10 @@ defmodule Keyfleet.BrowserChain do
   allowed a fleet the USDC `allow!/2` names, and none until then. A step a
   page's wallet sent is on the chain once `land!/3` puts it on the server's
   `Keyfleet.TestChainNode`. On the vote contract every key has been able to
-  take part since 1970, none is present, and every proposal is open; the
-  site's record has a key marked present once `present!/2` logs it.
+  take part since 1970, none is present, so no lapsed presence waits to be
+  cleared, the treasury opened seven days after the Keys went on sale,
+  and every proposal is open; the site's record has a key marked present once
+  `present!/2` logs it.
   """
 
   import Ecto.Query, only: [from: 2]
@@ -88,6 +90,8 @@ defmodule Keyfleet.BrowserChain do
   @present_from Call.selector("presentFrom(uint256)")
   @matures_at Call.selector("maturesAt(uint256)")
   @status Call.selector("status(uint256)")
+  @treasury_opens_at Call.selector("treasuryOpensAt()")
+  @sweep_expired Call.selector("sweepExpired(uint256)")
   @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
   @shard_ended Event.topic0("ShardEnded(uint256,address,address)")
   @present Event.topic0("Present(uint256,uint64,uint64,uint64)")
@@ -226,6 +230,13 @@ defmodule Keyfleet.BrowserChain do
   defp answer(_votes, @present_from <> _token_id, _block_hash), do: {:ok, <<0::256>>}
   defp answer(_votes, @matures_at <> _token_id, _block_hash), do: {:ok, <<1::256>>}
   defp answer(_votes, @status <> _proposal, _block_hash), do: {:ok, <<0::256>>}
+
+  # The vote contract's treasury opens seven days after its Keys went on sale,
+  # in the first second of 1970.
+  defp answer(_votes, @treasury_opens_at, _block_hash), do: {:ok, <<1 + 7 * 86_400::256>>}
+
+  # With no key present, a clear moves nothing and leaves nothing due.
+  defp answer(_votes, @sweep_expired <> _limit, _block_hash), do: {:ok, <<0::256, 0::256>>}
 
   defp answer(_fleet, @reveal_seed <> _token_id, _block_hash), do: {:ok, <<0::256>>}
   defp answer(_keys, @reveal_expired <> _token_id, _block_hash), do: {:ok, <<0::256>>}

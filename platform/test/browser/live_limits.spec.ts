@@ -1,13 +1,23 @@
-import {expect, test, type Page} from "@playwright/test"
+import {expect, test, type Locator, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {prepareFleet} from "./support/fleet_chain"
+import {prepareFleet, sellKey} from "./support/fleet_chain"
+import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 
 // A page goes live whatever address it is opened at, and a form typed or
 // pasted past its fields' limits keeps its live connection: the browser keeps
-// each field to its limit, and the site's own note says what is too long. A
-// message larger than the connection reads closes it, and the page opens
-// another, so each walk counts the page's live connections.
+// each field to its limit, and the site's own note says what is too long, for
+// the kind of proposal chosen alone. A message larger than the connection
+// reads closes it, and the page opens another, so each walk counts the page's
+// live connections.
 const fleet = "fibonacci_syndicate"
+// The wallet the "valid" account links (test/support/test_privy_verifier.ex).
+const me = "0x1111111111111111111111111111111111111111"
+const votesContract = `0x${"e1".repeat(20)}`
+// propose(uint256,bytes32,(address,uint256,bytes)[]), for Key `key` of the
+// Syndicate, fleet 2, named by its id across every fleet.
+const proposeFor = (key: number) => `0x4d51a20c${(BigInt(20_000_000_000) + BigInt(key)).toString(16).padStart(64, "0")}`
+// The Builder Code every step's data ends with (RegentChain.BuilderCode).
+const builderCode = "62635f7530393336306a6f0b0080218021802180218021802180218021"
 // A connection closed for its size is open again within a second
 // (LiveView's reconnectAfterMs), so two seconds with none new is none.
 const settle = 2_000
@@ -169,5 +179,78 @@ test("a proposal pasted past every field's limit keeps the page live, and the si
   await live(page)
   await expect(line).toContainText("too long")
   expect(opened).toHaveLength(1)
+  expect(errors).toEqual([])
+})
+
+// Costly failure: a field a box cut, still in that box once the kind is changed
+// to a decision, holds the decision back, and no wallet is asked. A rate is
+// held to the page's own count, and a launch's image link to the launch's.
+test("a rate and a launch's image link too long, left in their hidden boxes, never hold back a decision; the launch is refused", async ({
+  page,
+}) => {
+  const errors = pageErrors(page)
+  const key = sellKey(fleet, me)
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto("/syndicate/1/proposals")
+  await live(page)
+  await useStandInWallet(page, me)
+
+  const form = page.locator("#propose-action-form")
+  const line = page.locator("#propose-action-line")
+  const pressNote = page.locator("#propose-action-press-note")
+  const press = page.locator('#propose-action [data-onchain-step="propose"]')
+  const rate = form.locator('[name="rate"]')
+  const image = form.locator('[name="image"]')
+  const tooLong = "The image link is too long: 256 characters at most."
+  // Each box keeps two characters more than the site takes.
+  const link = `https://example.com/${"coin/".repeat(60)}coin.png`
+  const kept = link.slice(0, 258)
+  // Pasted as a person pastes, once the page has opened the box for the kind chosen.
+  const paste = async (box: Locator, text: string) => {
+    await expect(box.locator("xpath=ancestor-or-self::*[@inert]")).toHaveCount(0)
+    await box.focus()
+    await expect(box).toBeFocused()
+    await page.keyboard.insertText(text)
+  }
+
+  await form.locator('[name="key"]').fill(String(key))
+  await form.locator('[name="kind"]').selectOption("rate")
+  await paste(rate, "1".repeat(200))
+  await expect(rate).toHaveJSProperty("value", "1".repeat(102))
+  await expect(line).toHaveText("The rate is too long: 100 characters at most.")
+
+  await form.locator('[name="kind"]').selectOption("launch")
+  for (const [name, value] of [
+    ["text", "Launch the fleet's coin"],
+    ["name", "Fleet Coin"],
+    ["symbol", "FLT"],
+    ["description", "The fleet's own token"],
+    ["website", "https://example.com"],
+  ]) {
+    await form.locator(`[name="${name}"]`).fill(value)
+  }
+  await paste(image, link)
+  await expect(image).toHaveJSProperty("value", kept)
+  await expect(line).toHaveText(tooLong)
+
+  // The control: the launch, which carries the image link, is refused and
+  // asks no wallet.
+  await press.click()
+  await expect(pressNote).toHaveText(tooLong)
+  expect(await sentByStandIn(page)).toEqual([])
+
+  await form.locator('[name="kind"]').selectOption("decision")
+  await form.locator('[name="text"]').fill("Fund the docs for a month.")
+  for (const box of [rate, image]) await expect(box.locator("xpath=ancestor-or-self::*[@inert]")).toHaveCount(1)
+  await expect(rate).toHaveJSProperty("value", "1".repeat(102))
+  await expect(image).toHaveJSProperty("value", kept)
+  await expect(line).toContainText("A decision; nothing moves.")
+
+  await press.click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [{transaction}] = await sentByStandIn(page)
+  expect(transaction.to.toLowerCase()).toBe(votesContract)
+  expect(transaction.data.startsWith(proposeFor(key))).toBe(true)
+  expect(transaction.data.endsWith(builderCode)).toBe(true)
   expect(errors).toEqual([])
 })

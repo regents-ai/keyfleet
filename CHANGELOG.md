@@ -12644,3 +12644,36 @@ step's report).
   - The poll form's largest message, a start with every box full of three-byte letters,
     is worked out at about 38,000 bytes (4,211 units at nine characters each), under
     52,000; it was not measured.
+
+## 2026-11-18 — The browser walk's chain answers a proposal's reads, and a decision is proposed through to the wallet
+
+- test/support/browser_chain.ex answered neither `treasuryOpensAt()` nor
+  `sweepExpired(uint256)` on the vote contract, so every proposal built on the browser
+  walk's chain read as "Can’t reach the network right now" and no wallet was asked
+  (round nine's proof R9 Q6 and its own control). It now answers both as the vote
+  contract would for the chain it stands in for: the treasury opens at the Keys' sale
+  opening (the first second of 1970, as `salesOpenAt` answers) plus the contract's
+  seven days, and, with no key present, a clear moves nothing and leaves nothing due.
+  Nothing in lib/ changed.
+- test/browser/live_limits.spec.ts "a rate and a launch's image link too long, left in
+  their hidden boxes, never hold back a decision; the launch is refused": a rate pasted
+  past its 100 and an image link past its 256 are each refused while their kind is
+  chosen; the launch's press asks no wallet and says why (the control); then, as a
+  decision with both boxes hidden, the press reaches the wallet with a proposal for that
+  Key to the vote contract. With the hidden-kind fix (1ad085669) undone it fails where
+  the launch's line names the rate. The image link does not guard the fix on its own:
+  since b779e5884 a launch's fields are counted by the steps, and a decision's steps
+  never read them, so the rate, which the page counts itself, is the box that does.
+- Round nine's browser proof R9 Q6 passes: the decision with the cut image link left in
+  its hidden box asks the wallet once, and so does its control.
+- The round-nine entry's "Not covered" item "No browser walk presses Propose through to
+  the wallet" is fixed by this.
+- The "call put_chain/2 before reading the chain" error the homepage tests log predates
+  this branch: test/keyfleet_web/home_live_test.exs logs it three times on origin/main
+  (2bc4e59e1) as on this branch, all 20 tests passing on both. It comes from the three
+  tests that open the Buy Key window once Classic is on sale (lines 150, 181 and 194):
+  the window's Buy panel, for a visitor, reads its figures in a task of its own
+  (`KeyfleetWeb.WalletPanel.build/2`, `Keyfleet.WalletSteps.KeySteps.buy/1`,
+  `Keyfleet.WalletSteps.Reads.at_head/0`), and those tests give the test chain
+  (test/support/chain_stub_client.ex) no chain to read, so the task raises. The tests
+  assert only the window. Left as it was.
