@@ -1802,7 +1802,13 @@ deployment block, from `readDeployment`: on Base these pins, so a step on Base
 needs no file but the manifest; on any other chain, the deployment step's
 latest broadcast there.
 
-- `script/DeployKeyfleets.s.sol` deploys the system and writes nothing. It sends
+- `script/DeployKeyfleets.s.sol` deploys the system and writes no file of its
+  own. A simulation leaves Forge's log under
+  `broadcast/DeployKeyfleets.s.sol/<chain>/dry-run/` and `cache/`, both
+  ignored by git; the deployment leaves
+  `broadcast/DeployKeyfleets.s.sol/<chain>/run-latest.json`, which git keeps
+  on every chain but the local 31337 and the later steps read on every chain
+  but Base. It sends
   five transactions from one account through `script/KeyfleetSystem.sol`: the
   four deployers, each told the factory's address before it exists (the
   account's fifth contract address from now), then the factory, whose
@@ -1880,7 +1886,12 @@ latest broadcast there.
   other fleet's entry, and every other part of the record, is written exactly
   as before Trading Fleets existed.
 - `script/DeployTradingFactory.s.sol` deploys `KeyfleetTradingFactory` on the
-  live system and writes nothing. It sends one transaction from one account,
+  live system and writes no file of its own. A simulation leaves Forge's log
+  under `broadcast/DeployTradingFactory.s.sol/<chain>/dry-run/` and `cache/`,
+  both ignored by git; the deployment leaves
+  `broadcast/DeployTradingFactory.s.sol/8453/run-latest.json` and a dated copy,
+  which git keeps as the evidence the Safe's signers check the trading
+  factory's address against. It sends one transaction from one account,
   about 7.4 million gas; the trading factory's constructor deploys its three
   deployers. It takes the existing factory from `readDeployment`: on Base the
   first release's, pinned in `script/KeyfleetManifest.sol`, so a run on Base

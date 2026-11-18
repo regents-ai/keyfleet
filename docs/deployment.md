@@ -520,7 +520,7 @@ works on the existing system. `contracts/script/DeployTradingFactory.s.sol`
 deploys it, run from `contracts/` like step 2:
 
 ```sh
-# Simulated. Sends nothing and writes no file.
+# Simulated. Sends nothing; leaves only Forge's own log, which git ignores.
 KEYFLEET_MANIFEST=base \
   forge script script/DeployTradingFactory.s.sol:DeployTradingFactory \
   --rpc-url "$BASE_RPC_URL" --ledger --sender <deployer address>
@@ -547,20 +547,28 @@ staking or USDC is not the manifest's (`FactoryMismatch(field)`).
 The trading factory can register no fleet until the Regents Safe calls
 `addFactory(<trading factory>)` on the collection, and from then on, in the
 collection's last phase, anyone may create a Trading Fleet through it. The
-script prepares that call only once the
-chain shows the randomness subscription ready for those fleets: it stops,
-before anything is sent, on Base while anyone but the Regents Safe owns the
-subscription (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every
-chain while the subscription does not list the collection
+script prepares that call only once the chain shows the randomness
+subscription ready for those fleets: it stops, before anything is sent, on
+Base while anyone but the Regents Safe owns the subscription
+(`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), and on every chain while the
+subscription does not list the collection
 (`CollectionNotVrfConsumer(collection)`). The script never makes the call on
-the chain. It runs it once from the Safe's address against its own
-copy of the chain, so a call that would revert stops it with the collection's
+the chain. It runs it once from the Safe's address against its own copy of the
+chain, so a call that would revert stops it with the collection's
 own error, then prints it, as its target (the collection), value (0) and data
 and as a Safe Transaction Builder batch, for the Safe's signers to load, check
-and sign. It writes no file. The trading factory address it prints is the one
-its simulation gives for the deploying account; before signing, the signers
-check it against the contract address in the deployment transaction's receipt,
-and sign only a call naming that address.
+and sign.
+
+The script writes no file of its own; Forge keeps its own log of each run. A
+simulation leaves `broadcast/DeployTradingFactory.s.sol/8453/dry-run/` and the
+same under `cache/`, which git ignores. The deployment leaves
+`broadcast/DeployTradingFactory.s.sol/8453/run-latest.json` and a dated copy
+beside it, which git keeps and which are committed with the deployment as its
+evidence, and their counterparts under `cache/`, which git ignores. The trading
+factory address the script prints is the one its simulation gives for the
+deploying account; before signing, the signers check it against the contract
+address in the deployment transaction's receipt, which that log holds, and sign
+only a call naming that address.
 
 Once the collection lists it, anyone may create a Trading Fleet through it
 from the collection's last phase. A Trading Fleet is registered with no deck,

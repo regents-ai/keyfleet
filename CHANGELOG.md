@@ -11935,3 +11935,15 @@ step's report).
   shown waiting for the subscription, `--broadcast` is ruled out on that fork, and the guide says
   which files to keep (everything at the real paths) and which to delete (`contracts/rehearsal/`
   and the `dry-run/` logs). The commands were run on a local fork of Base.
+
+## 2026-11-18 — What the deployment runs leave
+
+- `docs/deployment.md` and `contracts/README.md` no longer say the trading factory's
+  deployment, or the system's, writes no file. Neither script writes a file of its own; Forge
+  keeps a log of each run. A simulation leaves `broadcast/<script>/<chain>/dry-run/` and the same
+  under `cache/`, which git ignores. The deployment leaves `broadcast/<script>/8453/run-latest.json`
+  and a dated copy, which git keeps as the deployment's evidence and which holds the receipt the
+  Safe's signers check the trading factory's address against, and their counterparts under
+  `cache/`, which git ignores.
+- `contracts/.gitignore` now ignores the empty `*.recovery.lock` Forge leaves beside every
+  broadcast log, so only the log itself is committed.

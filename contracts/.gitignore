@@ -3,6 +3,8 @@ local-only-*
 out/
 cache/
 broadcast/**/dry-run/
+# The empty lock Forge leaves beside every broadcast log; no evidence.
+broadcast/**/*.recovery.lock
 # Lab rehearsals on chain 31337. Base broadcasts, base.deployed.json and the Safe's
 # batch files in deployments/safe are deployment evidence.
 /broadcast/*/31337/
