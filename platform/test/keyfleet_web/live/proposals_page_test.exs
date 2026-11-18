@@ -1024,6 +1024,89 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert text(view, "#propose-action-line") == "From 0.1% to 2%."
     end
 
+    # Costly failure: a valid proposal never reaches the wallet because a box
+    # of another kind, out of sight, still holds a link pasted past its end.
+    # The other kinds' fields are filled past their boxes, as a script or an
+    # agent can, and their choices with none the form offers; only the chosen
+    # kind's own fields are read.
+    test "a field of a kind not chosen never holds a press of the chosen kind back",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+
+      ChainViews.put!(
+        list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000),
+        balances: %{@treasury => 10 ** 18}
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      past = fn name, letter -> String.duplicate(letter, box(view, name)) end
+      launch_fields = ~w(name symbol description website image)
+
+      # Each kind's own fields, as typed to be sent, and as left in the form
+      # unseen while another kind is chosen.
+      kinds = %{
+        "decision" => {%{}, %{}},
+        "pay" =>
+          {%{"asset" => @usdc, "share" => "12.5", "recipient" => ProposalHelpers.wallet("b")},
+           %{
+             "asset" => @eth <> "1",
+             "share" => past.("share", "9"),
+             "recipient" => past.("recipient", "b")
+           }},
+        "rate" => {%{"rate" => "0.75"}, %{"rate" => past.("rate", "9")}},
+        "edits" =>
+          {%{"target" => "12", "restricted" => "true"},
+           %{"target" => past.("target", "9"), "restricted" => "maybe"}},
+        "launch" =>
+          {%{
+             "name" => "Fleet Coin",
+             "symbol" => "FLT",
+             "description" => "The fleet's own token",
+             "website" => "https://example.com",
+             "image" => "https://example.com/coin.png"
+           }, Map.new(launch_fields, &{&1, past.(&1, "a")})}
+      }
+
+      # Each kind's first box of its own, filled past its end, which is read.
+      own_box = %{
+        "decision" => "text",
+        "pay" => "share",
+        "rate" => "rate",
+        "edits" => "target",
+        "launch" => "image"
+      }
+
+      press = fn form ->
+        view
+        |> with_target("#propose-action")
+        |> render_hook("prepare_and_send", %{
+          "form" => form,
+          "step" => "propose",
+          "address" => @holder
+        })
+      end
+
+      for {kind, {own, _unseen}} <- kinds do
+        unseen =
+          for {other, {_own, unseen}} <- kinds, other != kind, reduce: %{} do
+            acc -> Map.merge(acc, unseen)
+          end
+
+        form =
+          %{"kind" => kind, "key" => "7", "text" => "Hire a designer"}
+          |> Map.merge(unseen)
+          |> Map.merge(own)
+
+        press.(form)
+        assert_reply(view, %{send: "propose"})
+
+        press.(Map.put(form, own_box[kind], past.(own_box[kind], "9")))
+        assert_reply(view, %{note: _refused})
+      end
+    end
+
     # Costly failure: a paste the browser cut at its box is proposed cut, a
     # link that leads elsewhere or words missing their end, and the chain
     # keeps it. A box takes more than the site does, so what it cut is
@@ -1961,6 +2044,18 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   defp open(conn, path) do
     Enum.each(Fleets.catalog_ids(), &FleetProposals.read/1)
     live(conn, path)
+  end
+
+  # The browser limit of the proposal form's box `name`.
+  defp box(view, name) do
+    [most] =
+      view
+      |> element(~s(#propose-action-form [name="#{name}"]))
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("maxlength")
+
+    String.to_integer(most)
   end
 
   # What a form field sends at its widest, given the letter typed: a field

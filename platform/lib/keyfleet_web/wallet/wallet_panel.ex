@@ -360,8 +360,8 @@ defmodule KeyfleetWeb.WalletPanel do
   # in UTF-16 units, by its field's name: a proposal's text fields as
   # `Keyfleet.WalletSteps.VoteSteps` keeps them; an amount, a wallet, days
   # and a Keys list as the signed API takes them; and room for any Key's
-  # number and any share, rate or address written out. Each is held to it
-  # before anything is built from the form, wherever the group shows it.
+  # number and any share, rate or address written out. Each field the steps
+  # are built from is held to it before they are built (`read/1`).
   defp longest do
     [key: 20, target: 20] ++
       VoteSteps.field_bytes() ++
@@ -391,6 +391,15 @@ defmodule KeyfleetWeb.WalletPanel do
         do: {:too_long, name, units}
     end)
   end
+
+  # The fields the steps are built from: a proposal's own kind's
+  # (`VoteSteps.fields/1`), so a field of a kind not chosen, which stays in the
+  # form unseen, never holds a press back; and the whole form of any other
+  # group, whose every field is read.
+  defp read(%{flow: :propose, params: %{inputs: inputs}}),
+    do: Map.take(inputs, VoteSteps.fields(inputs["kind"]))
+
+  defp read(%{params: %{inputs: inputs}}), do: inputs
 
   # The steps follow the wallet that may send them and the form. The figures
   # are built for that wallet, or for the account's own while another is
@@ -493,10 +502,10 @@ defmodule KeyfleetWeb.WalletPanel do
     }
   end
 
-  # A box holding more than the site takes from it is refused, and said,
-  # before any step is built from the form.
+  # A box the steps are built from holding more than the site takes from it
+  # is refused, and said, before any step is built from the form.
   defp build_steps!(request) do
-    case too_long(request.params.inputs) do
+    case too_long(read(request)) do
       nil ->
         WalletSteps.build_steps!(
           request.fleet_id,

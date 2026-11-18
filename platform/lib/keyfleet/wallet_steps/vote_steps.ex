@@ -39,8 +39,25 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   # in one press of the step that clears them first.
   @sweep_limit 256
 
+  # The form fields each kind of proposal is built from, beside its kind, Key
+  # and words.
+  @kind_fields %{
+    "decision" => [],
+    "pay" => ["asset", "share", "recipient"],
+    "rate" => ["rate"],
+    "edits" => ["target", "restricted"],
+    "launch" => for({name, _bytes} <- @launch_fields, do: "#{name}")
+  }
+
   @doc "The most bytes each of a proposal's text fields takes, by its name in the form."
   def field_bytes, do: [text: @text_bytes] ++ @launch_fields
+
+  @doc """
+  The form fields a proposal of `kind` is built from: its kind, its Key, its
+  words and its kind's own. Nothing else in the form is read for it, so a
+  field of another kind never holds it back.
+  """
+  def fields(kind), do: ["kind", "key", "text" | Map.get(@kind_fields, kind, [])]
 
   @doc false
   def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
@@ -141,9 +158,11 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   # certain to fail. So is one made while more lapsed presences wait than the
   # contract clears inside a proposal: the steps then start with clearing
   # them, which anyone may do. `governs?` says whether the signer may vote the
-  # Key at all, whatever else blocks the step.
+  # Key at all, whatever else blocks the step. Only the kind's own fields are
+  # read (`fields/1`).
   def steps(:propose, %{fleet: fleet, signer: signer, inputs: inputs}) do
     kind = Build.field(inputs, "kind")
+    inputs = Map.take(inputs, fields(kind))
 
     with {:ok, key} <- Build.typed(inputs, "key", &Typed.key/1, %{kind: kind}),
          figures = %{kind: kind, key: key},
