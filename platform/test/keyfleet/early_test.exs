@@ -82,6 +82,18 @@ defmodule Keyfleet.EarlyTest do
     assert length(list()) == length(typed)
   end
 
+  # A host typed on a Japanese or Chinese keyboard may hold these dots, and is
+  # kept with the plain one; before the @ they are not an address.
+  test "the host's three other dots are taken after the @ only" do
+    for cp <- [0x3002, 0xFF0E, 0xFF61] do
+      before = "ada" <> <<cp::utf8>> <> "lovelace@example.com"
+      assert {:error, %Ash.Error.Invalid{}} = Early.sign_up(before), inspect(before)
+      assert {:ok, _signup} = Early.sign_up("ada@mail" <> <<cp::utf8>> <> "example.com")
+    end
+
+    assert [%Signup{email: "ada@mail.example.com"}] = list()
+  end
+
   test "an address of exactly 254 bytes fits" do
     address = String.duplicate("a", 242) <> "@example.com"
     assert byte_size(address) == 254

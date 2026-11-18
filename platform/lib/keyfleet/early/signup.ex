@@ -28,17 +28,18 @@ defmodule Keyfleet.Early.Signup do
       # Only what an address may hold, once trimmed: letters, combining marks
       # and decimal digits in any script; the punctuation the mail standard
       # takes unquoted before the @ (RFC 5322's atext), the dot and the @; the
-      # three other dots a host may be typed with (`StoredEmail`); and the
-      # nine characters the host standard takes beyond letters, marks and
-      # digits (RFC 5892's exceptions and contextual rules: the middle dot of
-      # Catalan's l·l, the Greek lower numeral sign, the Hebrew geresh and
+      # three other dots a host may be typed with (`StoredEmail`), after the
+      # last @ only, as the lookahead says: none of them with an @ after it;
+      # and the nine characters the host standard takes beyond letters, marks
+      # and digits (RFC 5892's exceptions and contextual rules: the middle dot
+      # of Catalan's l·l, the Greek lower numeral sign, the Hebrew geresh and
       # gershayim, the katakana middle dot, the Tibetan tsheg, two Arabic
       # signs and the ideographic zero). Nothing default-ignorable, which
       # takes out the Hangul fillers and the variation selectors, letters and
       # marks though they are.
       validate match(
                  :email,
-                 ~r/\A(?:(?!\p{DI})[\p{L}\p{M}\p{Nd}!#$%&'*+\-\/=?^_`{|}~.@\x{3002}\x{FF0E}\x{FF61}\x{B7}\x{375}\x{5F3}\x{5F4}\x{30FB}\x{F0B}\x{6FD}\x{6FE}\x{3007}])+\z/u
+                 ~r/\A(?!.*[\x{3002}\x{FF0E}\x{FF61}].*@)(?:(?!\p{DI})[\p{L}\p{M}\p{Nd}!#$%&'*+\-\/=?^_`{|}~.@\x{3002}\x{FF0E}\x{FF61}\x{B7}\x{375}\x{5F3}\x{5F4}\x{30FB}\x{F0B}\x{6FD}\x{6FE}\x{3007}])+\z/u
                )
 
       change Keyfleet.Early.Signup.StoredEmail
