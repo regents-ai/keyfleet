@@ -463,7 +463,7 @@ machine's code does not have answers "try again" and writes nothing
 The image can only be built from that context folder, so a plain `fly deploy`
 from `platform/` cannot work.
 
-The migration step every deploy runs (`/app/bin/migrate`) also puts the four
+The migration step every deploy runs (`/app/bin/migrate`) also puts the five
 fleets on the site and opens the rooms of the fleets that are not coming soon,
 without binding any of them to contracts, so key sales stay off; running it
 again changes nothing that is already there. `/app/bin/seed-deployment <file>`

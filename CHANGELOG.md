@@ -11988,3 +11988,9 @@ step's report).
   subscription unlisted, which the phase-4 step now refuses. The Safe now takes the
   subscription and lists the collection before phase 4, and removes the collection before the
   drawing key is sold; the Safe adds it again for the retry. The proof is otherwise unchanged.
+
+## 2026-11-18 — The platform guide counts five fleets
+
+- `platform/README.md` said the migration step every deploy runs puts four fleets on the site. It
+  seeds the catalog's five, the Regents Club, Classic #1, Syndicate #1, Cascade #1 and
+  Accelerant #1 (`Keyfleet.Release.seed_catalog!/0`), and now says so.
