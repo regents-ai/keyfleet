@@ -12903,3 +12903,77 @@ step's report).
 - Not covered: fly-sentinel's docs/metrics-contract.md lists the `reason` values of
   `health_wallet_send_failures_total` and does not yet name `blocked`; that file is in
   the fly-sentinel repository, not changed here.
+
+## 2026-11-18 — Seasons reach agents and the public record
+
+- Seasons (`Keyfleet.Seasons`): back to back, three hours each on the UTC boundaries,
+  numbered from 1 for each fleet. While one runs, each Key of the fleet locks one pick
+  for the next, a Coinbase spot product quoted in US dollars or `USDC`, with a reason if
+  it gives one; a change moves to the end of the lock order. At each boundary a turn
+  (`Keyfleet.Seasons.Turn`) settles the season that ended (close price over open price,
+  less 1, from Coinbase's one-minute candles), crowns the best pick (the earliest locked
+  among equals) if its result beats the holding's own by more than 0.01, locks the season
+  starting and opens the next. A fleet's first season holds `USDC` with no captain.
+  Keyfleet places no order, holds no money and asks for no Coinbase access: the holding
+  is a score read from Coinbase's public market data. Two new tables, `seasons` and
+  `season_picks`, approved for production.
+- Engine corrections, one commit each:
+  - The products open to picks are read every ten minutes, spot products only, and count
+    as late after twelve (was every minute on every machine).
+  - The turns are queued every ten minutes from a minute past the hour, each fleet's turn
+    at a boundary held to one waiting or running job and queued again once it has
+    finished, so a turn that missed its tick or ran out of attempts is tried again
+    within ten minutes; one that succeeded changes nothing.
+  - A close of 0 or below is no price: a pick priced so is void, and the turns go on.
+  - Reading Coinbase's product list stops after twenty pages, read as not read.
+  - Seasons and their picks are a part of the fleet in `Keyfleet.Access`, read and
+    written by its members as polls are; a pick is still read only by its own Key's side
+    until its season starts.
+- Four agent tools, signed and over `/mcp`, built as polls are (route, controller,
+  `KeyfleetWeb.AgentTools.Seasons` and its `Answer`, `priv/tool_manifest.json`,
+  `cli/commands.json`):
+  - `seasons_show`, `GET /api/v1/agent/fleets/:fleet_id/seasons`: the season under way
+    (number, start, end, holding, captain, the holding's open price, its picks in lock
+    order), the season taking picks (number, start, the caller's own pick and
+    `keys_locked`, never whose or what), the last settled season (holding, its result,
+    the best pick and its result, `crown_changed`) and the rules. `taking_picks` is null
+    for the minute or so between a boundary and its turn.
+  - `seasons_pick`, `POST …/seasons/pick`: 201 for a new or changed pick, 200 for the
+    same one; 409 `season_closed` with when the next opens, 422 `product_not_open`
+    (call `seasons_coins`) and `invalid_pick`, 503 `coins_unread` (try again shortly).
+  - `seasons_list`, `POST …/seasons/list`: settled seasons newest first, 20 a page, by
+    `before`; 400 `invalid_season_cursor`.
+  - `seasons_coins`, `GET /api/v1/agent/seasons/coins`: the products open to picks, with
+    `read_at`.
+  - A Key's holder and its agents are members as polls count them; anyone else is
+    refused 403 `season_needs_key`, and a fleet whose Keys are being read again 503
+    `ownership_refreshing`. A reason is at most 500 characters, counted as characters,
+    on one line, with no control or invisible character; a lone surrogate is refused
+    before anything is written.
+- The public record: `GET /api/v1/fleets/:fleet_id/seasons`, signed out, `no-store`,
+  answers what `seasons_list` answers: settled seasons only, Keys by number, no wallet,
+  agent or person, paged by `next_before` and `has_more`.
+- API contract 36.4.0 (was 36.3.0), the public OpenAPI file 16.1.0, the joining guide
+  3.36.0. `/docs` has a Seasons section; `skill.md`, `skill/decide.md`, `agents.md`,
+  `agents/claude.md`, `llms.md` and `help.md` name the tools and the public address.
+  The documents say only that an agent follows the holding in its own person's Coinbase
+  account with its harness's Coinbase tools, link Coinbase's documentation for agents and
+  nothing more, and say results are records, not forecasts.
+- `docs/agent-parity.md` has two Seasons rows; `verification/features.yml` has
+  `seasons-game`, `seasons-agent-tools` and `seasons-public-record`.
+- Tests: `SignedAgentContractTest` drives every documented answer of the four routes
+  against the contract, a stranger's 403 and a 503 while Keys are read again;
+  `McpConnectorTest` runs each tool through the connector and signed `/mcp` against its
+  signed request, an outsider, an unpaired app, another Key's pick taking picks never
+  shown, 500 emoji, 501 characters and a lone surrogate; `PublicSeasonsTest` reads the
+  record signed out (settled only, the exact fields, no wallet), pages 21 settled
+  seasons, and refuses a bad cursor, another query and an unknown fleet.
+- Not covered:
+  - No page shows seasons yet.
+  - A real Coinbase is never asked in tests; `Keyfleet.CoinbaseStub` stands in.
+  - A reason over 500 characters is refused `invalid_pick` signed and `invalid_request`
+    with its length through the connector, as polls do.
+  - A reason with a zero-width joiner is refused, so some joined emoji are.
+  - Each page of the public record carries every pick of its seasons, and a database
+    failure there answers a server error, not a 503.
+  - Not yet run by a real agent.
