@@ -13,9 +13,9 @@ Changes to Keyfleet, newest first.
   languages write inside a domain name, such as the middle dot of Catalan's l·l, and the
   dot, the @ and the punctuation email allows, such as + or '. Anything else, such as a
   character that shows as nothing or a space of any kind inside the address, is refused
-  as not an address. An address whose part after the @ isn't an ordinary domain name
-  can't join: one with an underscore or an emoji in it, or an IP address in brackets. It
-  still brings up the email keyboard on phones.
+  as not an address. An address with an underscore or an emoji after the @, or an IP
+  address in brackets there, can't join. It still brings up the email keyboard on
+  phones.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000
   bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message
   a page sends, rounded up: the first message of a page reached by a link from one opened
@@ -77,7 +77,7 @@ Changes to Keyfleet, newest first.
 - **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
   can't send that press, for example because a wallet your account doesn't link is open,
   the agent hears why, in the page's own words for it. Whatever comes of the agent's
-  press, your side of the page stays as it was: the note above your buttons, your form
+  press, your side of the page stays as it was: the note below your buttons, your form
   and what you typed. What the agent sends is judged on its own, with anything it leaves
   out taken from your form: a proposal it makes with its own Key reaches your wallet even
   while your form names a Key you can't propose with. When the network makes the agent's

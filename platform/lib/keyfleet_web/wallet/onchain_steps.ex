@@ -77,7 +77,7 @@ defmodule KeyfleetWeb.OnchainSteps do
 
   @doc """
   The wallet sent a step; it is read from now on against the review it was
-  sent from, whoever pressed. The person's own send lets go of the note above
+  sent from, whoever pressed. The person's own send lets go of the note below
   the buttons, which spoke of an earlier press; the browser agent's, marked
   `"agent" => true`, leaves it.
   """

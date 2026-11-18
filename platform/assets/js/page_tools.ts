@@ -58,9 +58,11 @@ const offered = new Map<string, Offered>()
 
 // What the agent hears when a press sent nothing, or may have sent: what the
 // note the page shows the person for such a press says, in words for the
-// agent. A press answers at once and never waits for the server. A press the
-// server refused to prepare carries the server's note, and the agent hears that
-// instead (onchain_steps.ts), with the hint for its cause (`refusedHint`).
+// agent. A press sent from the steps the page holds goes to the wallet without
+// waiting for the server; one that asks the server for its steps waits for that
+// reply first. A press the server refused to prepare carries the server's note,
+// and the agent hears that instead (onchain_steps.ts), with the hint for its
+// cause (`refusedHint`).
 const failures: Record<Failure, {message: string; hint: string}> = {
   step_unknown: {
     message: "This can't be sent as it stands. Nothing was sent.",
@@ -96,10 +98,12 @@ const failures: Record<Failure, {message: string; hint: string}> = {
   },
 }
 
-// A refused press's hint, by what the server says is why. A value the call
-// used, its own or the form's where it sent none: another value may go through
-// now. The chain's state alone: the same call goes through once that changes.
-// Anything else on the page, such as the wallet open there.
+// A refused press's hint, by what the server says is why (its `cause`). A value
+// the call sent, or the form's where it sent none, such as an amount, a Key or
+// a vote's choice: the call with another may go through. A step the chain's
+// state alone holds back: the same call may go through once that changes.
+// Anything else, such as a wallet open there that the account doesn't link:
+// the details on the page.
 function refusedHint({reason, cause}: Refused): string {
   if (cause === "values") return "Nothing was sent: a value this call used is why, as the message says. Change it in the call, then call again."
   if (reason === "blocked") return "Nothing was sent: the chain's state makes this call certain to fail now. Call again once that changes."

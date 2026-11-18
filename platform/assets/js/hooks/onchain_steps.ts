@@ -94,7 +94,7 @@ export const OnchainSteps: Hook = {
     // group names (page_tools.ts), with its values over the form's, and the
     // server judges those values. All its press tells the server is marked as
     // the agent's, and the agent hears every answer in its own: the person's
-    // form, the note above their buttons and the line saying the page lost its
+    // form, the note below their buttons and the line saying the page lost its
     // connection stay as they are.
     const pressWith = async (button: HTMLElement, form: Record<string, string>, ask: Ask): Promise<Pressed | "lost"> => {
       const name = button.dataset.onchainStep!
@@ -126,7 +126,7 @@ export const OnchainSteps: Hook = {
         if (result?.status !== "fulfilled") return lostPress(this.el, name, agent)
         const reply = result.value.reply as {review: Review; send: string} | Refused
         // Refused: the reply says why. For the person's press the server has
-        // already written the same note above the buttons; the agent hears it
+        // already written the same note below the buttons; the agent hears it
         // alone.
         if ("note" in reply) return reply
         // The agent's steps were built from the agent's values alone, and the

@@ -1508,13 +1508,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       refute has_element?(view, "#propose-button[disabled]")
     end
 
-    # Costly failure: the note above the person's buttons speaks for the
+    # Costly failure: the note below the person's buttons speaks for the
     # agent's press, and stays until the wallet answers the person's next
     # one. Whatever the agent's press comes to, refused for its Key or a
     # field too long, turned down in the wallet or sent, the person's note,
     # form and button stay as their own press left them; what the wallet
     # answered the agent is still counted.
-    test "an agent's press leaves the note above the person's buttons, whatever it comes to",
+    test "an agent's press leaves the note below the person's buttons, whatever it comes to",
          %{conn: conn} do
       ProposalHelpers.keys_sold!(@fleet, [7], @holder)
       ProposalHelpers.keys_sold!(@fleet, [8], @other)

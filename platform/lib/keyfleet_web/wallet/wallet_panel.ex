@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.WalletPanel do
   so what the person typed, and the steps and figures shown, stay as they
   are. What its press tells the panel is marked as the agent's, and every
   answer, a refusal, a wallet that sends nothing or a step sent, reaches the
-  agent alone: the note above the person's buttons and their form stay as
+  agent alone: the note below the person's buttons and their form stay as
   they are.
 
   The page renders it with `live_component`, giving:
@@ -242,7 +242,7 @@ defmodule KeyfleetWeb.WalletPanel do
   # page judges its own, while the form and the steps the page shows stay as
   # they are. What is sent from them is followed as any other press, and a
   # proposal's words are saved as its steps are handed over. A refusal is
-  # counted and goes only in the reply: the note above the buttons speaks for
+  # counted and goes only in the reply: the note below the buttons speaks for
   # the person's own presses.
   def handle_event("prepare_for_agent", %{"form" => form, "step" => step} = params, socket)
       when is_map(form) and is_binary(step) do
@@ -289,7 +289,7 @@ defmodule KeyfleetWeb.WalletPanel do
   def handle_event("step_sent", params, socket), do: {:noreply, OnchainSteps.sent(socket, params)}
 
   # The wallet sent nothing, or may have: counted, and for the person's own
-  # press the note above the buttons says why. The agent hears it in its
+  # press the note below the buttons says why. The agent hears it in its
   # own answer.
   def handle_event("step_failed", params, socket) do
     case Presses.failed(params) do
@@ -667,7 +667,7 @@ defmodule KeyfleetWeb.WalletPanel do
   defp typed_for({:too_big, _largest}), do: ["amount"]
   defp typed_for(_reason), do: []
 
-  # The note for the person's own press, written above the buttons; the
+  # The note for the person's own press, written below the buttons; the
   # agent hears what the wallet answered its press in its own answer.
   defp noted(socket, %{"agent" => true}, _reason), do: socket
 

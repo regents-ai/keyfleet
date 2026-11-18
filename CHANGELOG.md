@@ -13142,3 +13142,49 @@ step's report).
     match the form's uses the steps the page holds, and clears the form's amount once
     the wallet has it, as the person's press does": since 860ae3e51 it uses those steps
     and leaves the form's amount as it is.
+
+## 2026-11-18 — The press note's place, the agent's saved words and the part after the @, said as the code has them
+
+- Round twelve (d01bd443c) found sentences the code does not bear out. Each is made true;
+  nothing the site does changed.
+- The press note, the note a person's own refused or unsent press writes
+  (`#{id}-press-note` in `WalletPanel`'s template), is drawn below the buttons, as it has
+  been since b88512c3c first drew it; above the buttons are the page's own notes for the
+  panel, the panel's line, the wallet it sends from and a wallet mismatch. "Above the
+  buttons" for the press
+  note now reads "below" in `WalletPanel`'s moduledoc and its comments on
+  `prepare_for_agent`, `step_failed` and `noted/3`, `OnchainSteps.sent/2`'s doc, the two
+  comments in assets/js/hooks/onchain_steps.ts, and `ProposalsPageTest`'s "an agent's
+  press leaves the note below the person's buttons, whatever it comes to" (renamed) and
+  its comment. Where these entries say "the line above the buttons" for what is wrong
+  with the form, that line is above them, and stays as written.
+- assets/js/page_tools.ts: the comment on what the agent hears said a press "never
+  waits for the server"; a press sent from the steps the page holds goes to the wallet
+  without waiting for it, and one that asks the server for its steps waits for that
+  reply first. The comment on the refusal hint now says what the code does: a value the
+  call sent, or the form's where it sent none, such as an amount, a Key or a vote's
+  choice, gets the hint to change the call; a step the chain's state alone holds back,
+  the hint to call again once that changes; anything else, the details on the page.
+- The public changelog's 18 November entry, edited in place: "Browser agents" says the
+  note below your buttons; "Early access" says only what is refused after the @, an
+  underscore or an emoji, or an IP address in brackets, since a bare IP address such as
+  name@192.0.2.1 joins. Its "your side of the page stays as it was" and "told to change
+  what it sent when that is why" were read again against the code with this round's
+  changes to the agent's press and to the refusal's cause, and hold.
+- Corrected, in the entries above:
+  - "An agent's press leaves the person's side of the page alone", its account of
+    860ae3e51: "The panel saves no words, clears no Buy REGENT amount, and writes or
+    lets go of no note for it": the panel clears no Buy REGENT amount and writes or lets
+    go of no note for the agent's press, but it does save the agent's proposal words, its
+    own, as the steps built for its press are handed over, or as it sends from the steps
+    the page already holds, its words then being the form's.
+  - Every place these entries put the press note above the buttons means below: the
+    round-ten entry ("Every limited box counted as typed ..."), on R10 Q5 twice and on
+    ff6838ac9 ("the note above the buttons shows them"); and "An agent's press leaves
+    the person's side of the page alone", on R11 Q3, on 860ae3e51, on the test now
+    renamed, on ff6838ac9 and on R10 Q5.
+  - "An early-access address holds only what an address may hold": the public
+    changelog's "an address whose part after the @ isn't an ordinary domain name (an
+    underscore or an emoji in it, or an IP address in brackets) can't join" was not true
+    of a bare IP address, which joins; the public changelog now names only what is
+    refused.
