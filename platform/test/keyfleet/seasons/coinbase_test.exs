@@ -51,6 +51,24 @@ defmodule Keyfleet.Seasons.CoinbaseTest do
     assert Coinbase.eligible_among(["USDC"]) == {:ok, MapSet.new(["USDC"])}
   end
 
+  test "a list on many pages is read to its end, and one past twenty pages is not read" do
+    CoinbaseStub.pages([
+      [CoinbaseStub.product("SOL-USD")],
+      [CoinbaseStub.product("BTC-USD")],
+      [CoinbaseStub.product("ETH-USD", %{"view_only" => true})]
+    ])
+
+    assert Coinbase.eligible() == {:ok, ["USDC", "SOL-USD", "BTC-USD"]}
+
+    twenty = for n <- 1..20, do: [CoinbaseStub.product("C#{n}-USD")]
+    CoinbaseStub.pages(twenty)
+    assert {:ok, ["USDC" | listed]} = Coinbase.eligible()
+    assert length(listed) == 20
+
+    CoinbaseStub.pages(twenty ++ [[CoinbaseStub.product("C21-USD")]])
+    assert Coinbase.eligible() == {:error, :too_many_pages}
+  end
+
   test "a price is the close of the minute before the boundary, or the newest of the 15 minutes before it" do
     CoinbaseStub.stub([], %{
       "SOL-USD" => [{minutes_before(1), "73.160"}, {minutes_before(2), "73.2"}, {@boundary, "80"}],

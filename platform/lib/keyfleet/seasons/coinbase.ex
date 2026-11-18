@@ -8,7 +8,7 @@ defmodule Keyfleet.Seasons.Coinbase do
   trading (not disabled, trading not disabled, not view-only, not cancel-only,
   not limit-only, not in auction mode), with at least 1,000,000 US dollars
   traded over the last 24 hours (`approximate_quote_24h_volume`). `USDC`
-  always may.
+  always may. A list that goes on past twenty pages is not read.
 
   A product's price at boundary T is the close of the one-minute candle that
   started at T - 60 s (`GET /market/products/{product_id}/candles`), or, when
@@ -30,6 +30,10 @@ defmodule Keyfleet.Seasons.Coinbase do
 
   # Every spot product quoted in US dollars is named this way on Coinbase.
   @usd_product ~r/\A[A-Z0-9]+-USD\z/
+
+  # The most pages of the list one read follows. The list comes on one page
+  # today; twenty leave room for it to come 100 products a page up to 2,000.
+  @max_pages 20
 
   @doc "The ids of every product that may be picked now, `USDC` among them."
   @spec eligible() :: {:ok, [String.t()]} | {:error, term()}
@@ -107,11 +111,15 @@ defmodule Keyfleet.Seasons.Coinbase do
   defp listed([]), do: {:ok, []}
   defp listed(product_ids), do: products(Enum.map(product_ids, &{:product_ids, &1}))
 
-  # Every page of the list, following its cursor.
-  defp products(params) do
+  # Every page of the list, following its cursor, up to `@max_pages`.
+  defp products(params), do: products(params, @max_pages)
+
+  defp products(_params, 0 = _pages_left), do: {:error, :too_many_pages}
+
+  defp products(params, pages_left) do
     case get("/market/products", params: params) do
       {:ok, %Req.Response{status: 200, body: %{"products" => products} = body}} ->
-        next_page(products, body["pagination"], params)
+        next_page(products, body["pagination"], params, pages_left - 1)
 
       {:ok, %Req.Response{status: status}} ->
         {:error, {:coinbase, status}}
@@ -121,12 +129,12 @@ defmodule Keyfleet.Seasons.Coinbase do
     end
   end
 
-  defp next_page(products, %{"has_next" => true, "next_cursor" => cursor}, params) do
-    with {:ok, rest} <- products(Keyword.put(params, :cursor, cursor)),
+  defp next_page(products, %{"has_next" => true, "next_cursor" => cursor}, params, pages_left) do
+    with {:ok, rest} <- products(Keyword.put(params, :cursor, cursor), pages_left),
          do: {:ok, products ++ rest}
   end
 
-  defp next_page(products, _last_page, _params), do: {:ok, products}
+  defp next_page(products, _last_page, _params, _pages_left), do: {:ok, products}
 
   defp newest_close(candles, minutes) do
     candles

@@ -74,6 +74,34 @@ defmodule Keyfleet.CoinbaseStub do
     end)
   end
 
+  @doc """
+  Answers the list of spot products in `pages`, one list of products for each
+  page, every page but the last naming the next by its cursor.
+  """
+  def pages(pages) do
+    Req.Test.stub(Coinbase, fn conn ->
+      query = conn.query_string |> URI.query_decoder() |> Map.new()
+      "SPOT" = query["product_type"]
+
+      page =
+        query |> Map.get("cursor", Base.encode64("0")) |> Base.decode64!() |> String.to_integer()
+
+      products = Enum.at(pages, page)
+      has_next = page < length(pages) - 1
+
+      Req.Test.json(conn, %{
+        "products" => products,
+        "num_products" => length(products),
+        "pagination" => %{
+          "prev_cursor" => "",
+          "next_cursor" => if(has_next, do: Base.encode64(Integer.to_string(page + 1)), else: ""),
+          "has_next" => has_next,
+          "has_prev" => page > 0
+        }
+      })
+    end)
+  end
+
   @doc "Coinbase answering every request 503."
   def down, do: Req.Test.stub(Coinbase, &unavailable/1)
 
