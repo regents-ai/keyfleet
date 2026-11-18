@@ -47,6 +47,7 @@ export default defineConfig({
     "worldline.spec.ts",
     "fleet_tour.spec.ts",
     "kept_page.spec.ts",
+    "live_limits.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

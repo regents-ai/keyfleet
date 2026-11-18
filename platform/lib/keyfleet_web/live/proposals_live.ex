@@ -655,6 +655,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               name="key"
               label="Key"
               inputmode="numeric"
+              maxlength={20}
               value={panel.inputs["key"]}
             />
             <.text_area
@@ -662,6 +663,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               name="text"
               label="Proposal"
               rows="4"
+              maxlength={bytes(:text)}
               value={panel.inputs["text"]}
             />
 
@@ -681,6 +683,7 @@ defmodule KeyfleetWeb.ProposalsLive do
                   name="share"
                   label="Share of the treasury’s balance, %"
                   inputmode="decimal"
+                  maxlength={100}
                   value={panel.inputs["share"]}
                 >
                   0.0001 to 99
@@ -689,6 +692,7 @@ defmodule KeyfleetWeb.ProposalsLive do
                   id="propose-recipient"
                   name="recipient"
                   label="To wallet"
+                  maxlength={100}
                   value={panel.inputs["recipient"]}
                 />
               </div>
@@ -699,6 +703,7 @@ defmodule KeyfleetWeb.ProposalsLive do
                   name="rate"
                   label="Daily Treasury Slice to Keys, %"
                   inputmode="decimal"
+                  maxlength={100}
                   value={panel.inputs["rate"]}
                 >
                   0.1 to 2
@@ -711,6 +716,7 @@ defmodule KeyfleetWeb.ProposalsLive do
                   name="target"
                   label="Key"
                   inputmode="numeric"
+                  maxlength={20}
                   value={panel.inputs["target"]}
                 />
                 <.select_field
@@ -723,11 +729,18 @@ defmodule KeyfleetWeb.ProposalsLive do
               </div>
 
               <div class="proposals-form" inert={panel.inputs["kind"] != "launch"}>
-                <.text_field id="propose-name" name="name" label="Name" value={panel.inputs["name"]} />
+                <.text_field
+                  id="propose-name"
+                  name="name"
+                  label="Name"
+                  maxlength={bytes(:name)}
+                  value={panel.inputs["name"]}
+                />
                 <.text_field
                   id="propose-symbol"
                   name="symbol"
                   label="Symbol"
+                  maxlength={bytes(:symbol)}
                   value={panel.inputs["symbol"]}
                 />
                 <.text_area
@@ -735,18 +748,21 @@ defmodule KeyfleetWeb.ProposalsLive do
                   name="description"
                   label="Description"
                   rows="3"
+                  maxlength={bytes(:description)}
                   value={panel.inputs["description"]}
                 />
                 <.text_field
                   id="propose-website"
                   name="website"
                   label="Website"
+                  maxlength={bytes(:website)}
                   value={panel.inputs["website"]}
                 />
                 <.text_field
                   id="propose-image"
                   name="image"
                   label="Image link"
+                  maxlength={bytes(:image)}
                   value={panel.inputs["image"]}
                 />
               </div>
@@ -885,6 +901,7 @@ defmodule KeyfleetWeb.ProposalsLive do
                 name="amount"
                 label="Return"
                 inputmode="decimal"
+                maxlength={100}
                 value={panel.inputs["amount"]}
               />
             </:fields>
@@ -967,6 +984,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             name="amount"
             label="USDC to convert"
             inputmode="decimal"
+            maxlength={100}
             value={panel.inputs["amount"]}
           />
         </:fields>
@@ -1257,11 +1275,16 @@ defmodule KeyfleetWeb.ProposalsLive do
   # The fleet the wallet buttons act on, and the network they send on.
   defp fleet(page), do: %{fleet_id: page.fleet_id, chain_id: page.chain_id}
 
+  # A text field takes as many characters as the server takes bytes, so text
+  # in any letters up to the browser's limit gets the server's own note.
+  defp bytes(name), do: Keyword.fetch!(Keyfleet.WalletSteps.VoteSteps.field_bytes(), name)
+
   attr :id, :string, required: true
   attr :name, :string, required: true
   attr :label, :string, required: true
   attr :value, :string, required: true
   attr :inputmode, :string, default: nil
+  attr :maxlength, :integer, required: true
   slot :inner_block
 
   # A field the wallet buttons' steps are built from.
@@ -1273,6 +1296,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         name={@name}
         value={@value}
         inputmode={@inputmode}
+        maxlength={@maxlength}
         autocomplete="off"
         aria-describedby={field.described_by}
         data-onchain-input={@name}
@@ -1287,6 +1311,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :label, :string, required: true
   attr :value, :string, required: true
   attr :rows, :string, required: true
+  attr :maxlength, :integer, required: true
 
   defp text_area(assigns) do
     ~H"""
@@ -1295,6 +1320,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id={field.id}
         name={@name}
         rows={@rows}
+        maxlength={@maxlength}
         aria-describedby={field.described_by}
         data-onchain-input={@name}
       >{@value}</textarea>

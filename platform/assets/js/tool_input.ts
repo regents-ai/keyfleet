@@ -5,7 +5,7 @@
 
 export type Schema = {
   type: "object"
-  properties: Record<string, {type: "string"; description: string; enum?: string[]}>
+  properties: Record<string, {type: "string"; description: string; enum?: string[]; maxLength?: number}>
   required: string[]
   additionalProperties: false
 }
@@ -26,9 +26,11 @@ export function inputProblem(input: unknown, schema: Schema): string | null {
   if (missing) return `${missing} is required.`
 
   for (const [key, value] of Object.entries(input)) {
-    const {enum: choices} = schema.properties[key]
+    const {enum: choices, maxLength} = schema.properties[key]
     if (typeof value !== "string") return `${key} must be a string.`
     if (choices && !choices.includes(value)) return `${key} must be one of ${choices.join(", ")}.`
+    // Counted in characters, as a schema counts them.
+    if (maxLength !== undefined && [...value].length > maxLength) return `${key} takes at most ${maxLength} characters.`
   }
   return null
 }

@@ -238,6 +238,7 @@ defmodule KeyfleetWeb.KeysLive do
                     id="key-shard-wallet"
                     name="wallet"
                     label="Agent’s wallet"
+                    maxlength={100}
                     value={panel.inputs["wallet"]}
                   />
                   <.field
@@ -245,6 +246,7 @@ defmodule KeyfleetWeb.KeysLive do
                     name="days"
                     label="Days"
                     inputmode="numeric"
+                    maxlength={10}
                     value={panel.inputs["days"]}
                   />
                 </div>
@@ -288,6 +290,7 @@ defmodule KeyfleetWeb.KeysLive do
                   id="key-agent-voting-keys"
                   name="keys"
                   label="Keys"
+                  maxlength={1000}
                   value={panel.inputs["keys"]}
                 />
               </div>
@@ -322,6 +325,7 @@ defmodule KeyfleetWeb.KeysLive do
   attr :label, :string, required: true
   attr :value, :string, required: true
   attr :inputmode, :string, default: nil
+  attr :maxlength, :integer, required: true
 
   # A field the wallet buttons' steps are built from.
   defp field(assigns) do
@@ -332,6 +336,7 @@ defmodule KeyfleetWeb.KeysLive do
         name={@name}
         value={@value}
         inputmode={@inputmode}
+        maxlength={@maxlength}
         autocomplete="off"
         aria-describedby={field.described_by}
         data-onchain-input={@name}

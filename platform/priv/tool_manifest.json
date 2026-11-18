@@ -7544,26 +7544,32 @@
           },
           "key": {
             "type": "string",
+            "maxLength": 20,
             "description": "The number of the Key it is made with: one the wallet holds, or holds a shard of while the Key's agent voting is on."
           },
           "text": {
             "type": "string",
+            "maxLength": 4000,
             "description": "The proposal's words, up to 4,000 bytes. They are kept on Keyfleet; the chain holds their fingerprint."
           },
           "asset": {
             "type": "string",
+            "maxLength": 100,
             "description": "pay: the address of the asset paid, one the page offers."
           },
           "recipient": {
             "type": "string",
+            "maxLength": 100,
             "description": "pay: the address paid."
           },
           "rate": {
             "type": "string",
+            "maxLength": 100,
             "description": "rate: the Daily Treasury Slice to Keys in percent, 0.1 to 2."
           },
           "target": {
             "type": "string",
+            "maxLength": 20,
             "description": "edits: the number of the Key whose edits change."
           },
           "restricted": {
@@ -7576,26 +7582,32 @@
           },
           "name": {
             "type": "string",
+            "maxLength": 64,
             "description": "launch: the token's name."
           },
           "symbol": {
             "type": "string",
+            "maxLength": 16,
             "description": "launch: the token's symbol."
           },
           "description": {
             "type": "string",
+            "maxLength": 512,
             "description": "launch: the token's description."
           },
           "website": {
             "type": "string",
+            "maxLength": 256,
             "description": "launch: the token's website."
           },
           "image": {
             "type": "string",
+            "maxLength": 256,
             "description": "launch: the token's image address."
           },
           "share": {
             "type": "string",
+            "maxLength": 100,
             "description": "pay: percentage of the treasury balance, 0.0001 to 99. Voting lasts 24 hours."
           }
         },
@@ -7843,6 +7855,7 @@
         "properties": {
           "amount": {
             "type": "string",
+            "maxLength": 100,
             "description": "USDC to turn, as a decimal string such as \"250\" or \"12.5\". At most 250 is turned a press whatever is typed, so \"250\" is the usual choice. Leave it out to press with the amount the page shows."
           }
         },

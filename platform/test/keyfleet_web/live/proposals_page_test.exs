@@ -45,6 +45,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   @proposal_types "bytes32,bytes32,bytes32,uint64,uint48,uint64,uint64,uint64," <>
                     "uint32,uint32,uint32,uint32,uint32,bool,bool"
   @statuses [:open, :waiting, :approved, :rejected, :cancelled, :executed, :execution_expired]
+  @live_message_bytes Application.compile_env!(:keyfleet, [
+                        KeyfleetWeb.Endpoint,
+                        :http,
+                        :websocket_options,
+                        :max_fragmented_message_size
+                      ])
+  # A browser's frame header for a message of 126 to 65,535 bytes, which the
+  # socket counts with the message.
+  @frame_header 8
 
   setup do
     Fleets.bootstrap_catalog!()
@@ -1015,6 +1024,64 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert text(view, "#propose-action-line") == "From 0.1% to 2%."
     end
 
+    # Costly failure: the site's largest form, typed to its fields' limits, is
+    # more than a live page's socket reads, so the page closes, loses what was
+    # typed and joins again, as it does for an agent's press of the same form.
+    # Each field is filled in the characters that cost the most: letters of
+    # three bytes in the form's change, which writes each as %XX%XX%XX, and
+    # characters JSON writes as \u00XX in a press, which sends the page's
+    # fields with the agent's over them (assets/js/hooks/onchain_steps.ts).
+    test "the proposal form at every field's limit fits a live page's socket", %{conn: conn} do
+      ChainViews.put!(list_views())
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      render_async(view, @async_wait)
+
+      form = view |> element("#propose-action-form") |> render() |> LazyHTML.from_fragment()
+
+      fields =
+        for field <- LazyHTML.query(form, "input[name], textarea[name], select[name]") do
+          [name] = LazyHTML.attribute(field, "name")
+          {name, widest(field)}
+        end
+
+      change =
+        fields
+        |> Enum.flat_map(fn {name, value} -> [{"_unused_" <> name, ""}, {name, value.("提")}] end)
+        |> URI.encode_query(:www_form)
+
+      %{"input_schema" => %{"properties" => tool}} =
+        Enum.find(Keyfleet.Capabilities.tools(), &(&1["name"] == "proposals_create"))
+
+      pressed =
+        Map.merge(
+          Map.new(fields, fn {name, value} -> {name, value.(<<1>>)} end),
+          Map.new(tool, fn {name, field} -> {name, widest_input(field, <<1>>)} end),
+          fn _name, page, agent -> Enum.max_by([page, agent], &byte_size(Jason.encode!(&1))) end
+        )
+
+      messages = [
+        event(view, %{
+          "type" => "form",
+          "event" => "change",
+          "value" => change,
+          "meta" => %{"_target" => "description"},
+          "uploads" => %{}
+        }),
+        event(view, %{
+          "type" => "hook",
+          "event" => "step_pressed",
+          "value" => %{"step" => "propose", "form" => pressed}
+        }),
+        event(view, %{
+          "type" => "hook",
+          "event" => "prepare_and_send",
+          "value" => %{"step" => "propose", "form" => pressed, "address" => @holder}
+        })
+      ]
+
+      assert Enum.all?(messages, &(byte_size(&1) + @frame_header <= @live_message_bytes))
+    end
+
     # The words are saved as the press starts, before the wallet answers, and
     # shown only with a proposal whose fingerprint on the chain is theirs.
     test "a proposal's words are saved at the press and shown with the proposal they match",
@@ -1833,6 +1900,40 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   defp open(conn, path) do
     Enum.each(Fleets.catalog_ids(), &FleetProposals.read/1)
     live(conn, path)
+  end
+
+  # What a form field sends at its widest, given the letter typed: a field
+  # typed into its browser limit of that letter, a chosen one its longest choice.
+  defp widest(field) do
+    case {LazyHTML.tag(field), LazyHTML.attribute(field, "type")} do
+      {["select"], _no_type} ->
+        values = field |> LazyHTML.query("option") |> LazyHTML.attribute("value")
+        choice = Enum.max_by(values, &byte_size/1)
+        fn _letter -> choice end
+
+      {["input"], [kind]} when kind in ~w(hidden checkbox radio) ->
+        [value] = LazyHTML.attribute(field, "value")
+        fn _letter -> value end
+
+      _typed ->
+        [most] = LazyHTML.attribute(field, "maxlength")
+        fn letter -> String.duplicate(letter, String.to_integer(most)) end
+    end
+  end
+
+  # What an agent's call sends for a field of the page's tool at its widest.
+  defp widest_input(%{"enum" => choices}, _letter), do: Enum.max_by(choices, &byte_size/1)
+  defp widest_input(%{"maxLength" => most}, letter), do: String.duplicate(letter, most)
+
+  # A message a page sends its live view, numbered as a page open for days numbers it.
+  defp event(view, payload) do
+    Jason.encode!([
+      "999999",
+      "999999",
+      "lv:" <> view.id,
+      "event",
+      Map.put(payload, "cid", 999_999)
+    ])
   end
 
   # Polls every tenth of a second, `tries` times.

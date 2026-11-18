@@ -149,7 +149,7 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("PHX_HOST", "shadow.example.test")
     System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
     shared = [gc_every_n_keepalive_requests: 1]
-    websocket = [max_fragmented_message_size: 40_000]
+    websocket = [max_fragmented_message_size: 52_000]
 
     # As a release boots: what the build baked in, with runtime.exs merged over it.
     production = Config.Reader.merge(build_config(:prod), read_runtime_config(:prod))

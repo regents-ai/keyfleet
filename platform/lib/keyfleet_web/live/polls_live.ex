@@ -132,6 +132,7 @@ defmodule KeyfleetWeb.PollsLive do
               id={field.id}
               name={@form[:choices].name}
               rows="4"
+              maxlength="1100"
               required
               aria-invalid={field.aria_invalid}
               aria-describedby={field.described_by != "" && field.described_by}

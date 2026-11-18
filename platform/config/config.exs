@@ -423,17 +423,22 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   # environment's listener adds its address and port (config/dev.exs,
   # config/runtime.exs), and the browser test server takes these for its own.
   #
-  # A websocket message is at most 40,000 bytes, whole or sent in parts, so a
+  # A websocket message is at most 52,000 bytes, whole or sent in parts, so a
   # live page's socket never decodes more (`KeyfleetWeb.Endpoint` bounds a
   # frame by the same number; a notebook's socket keeps Bandit's own,
-  # `KeyfleetWeb.Plugs.NotebookGateway`). The largest message a live page
-  # sends is a post of 4,000 characters, each field's most (rooms, direct
-  # messages and a Key's wall), in letters of three bytes, which the
-  # browser's form encoding writes as nine characters each: 36,000, with the
-  # field's name and the message around it under 200 more.
+  # `KeyfleetWeb.Plugs.NotebookGateway`). It is the largest message a live
+  # page sends, rounded up. The largest two: the first message of a page
+  # reached by a link from one opened at the longest address the site takes,
+  # which carries both addresses and the first page's token (50,307 bytes),
+  # and the proposal form typed to every field's limit in letters of three
+  # bytes, which a form's change writes as nine characters each (49,540).
+  # Every text field has a browser limit (`maxlength`), a page's tools take
+  # no more (`priv/tool_manifest.json`), and a page drops a #fragment of over
+  # 256 characters before it joins (`assets/js/app.ts`).
+  # KeyfleetWeb.LiveMessageLimitTest and the proposals page's test measure them.
   http: [
     http_1_options: [gc_every_n_keepalive_requests: 1],
-    websocket_options: [max_fragmented_message_size: 40_000]
+    websocket_options: [max_fragmented_message_size: 52_000]
   ],
   render_errors: [
     formats: [

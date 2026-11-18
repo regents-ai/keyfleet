@@ -28,6 +28,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   @choices [{"yes", 1}, {"no", 2}, {"abstain", 3}]
   @execute "execute(uint256,(address,uint256,bytes)[])"
   @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
+  # A proposal's most bytes, as `Keyfleet.Proposals.Words` keeps them.
+  @text_bytes 4_000
   # Each launch field's most bytes, as Autolaunch v2's factory takes them.
   @launch_fields [name: 64, symbol: 16, description: 512, website: 256, image: 256]
   # The kinds of proposal whose calls move money, which the vote contract
@@ -36,6 +38,9 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   # How many lapsed presences the vote contract clears inside a proposal, and
   # in one press of the step that clears them first.
   @sweep_limit 256
+
+  @doc "The most bytes each of a proposal's text fields takes, by its name in the form."
+  def field_bytes, do: [text: @text_bytes] ++ @launch_fields
 
   @doc false
   def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
@@ -142,7 +147,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
     with {:ok, key} <- Build.typed(inputs, "key", &Typed.key/1, %{kind: kind}),
          figures = %{kind: kind, key: key},
-         {:ok, text} <- Build.typed(inputs, "text", &Typed.text(&1, :text, 4_000), figures),
+         {:ok, text} <- Build.typed(inputs, "text", &Typed.text(&1, :text, @text_bytes), figures),
          {:ok, reads} <- reads(figures),
          {:ok, action, details} <- action(kind, fleet, inputs, reads, text, figures),
          {:ok, %{^key => {_holder, governs?}}} <- acting(reads, fleet, signer, key, figures),

@@ -353,6 +353,16 @@ const hooks = {
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
 
+// A page's first message to the server carries its whole address, which the
+// server bounds all but the #fragment of: that is the browser's own. This
+// site's fragments name an element of the page and are short, so a longer one
+// is taken off the address before the page joins, and a page opened from any
+// link goes live (config/config.exs counts this many in a page's largest message).
+const longestFragment = 256
+if (window.location.hash.length > longestFragment) {
+  history.replaceState(history.state, "", window.location.pathname + window.location.search)
+}
+
 // Sign in and refresh renew the session and rotate its CSRF state, so every
 // connection and reconnection reads the token the browser holds now.
 const liveSocket = new LiveSocket("/live", Socket, {

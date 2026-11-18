@@ -548,6 +548,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       <input
                         id={field.id}
                         name="sample[title]"
+                        maxlength="80"
                         value={@form[:title].value}
                         aria-invalid={field.aria_invalid}
                         aria-describedby={field.described_by}
@@ -556,7 +557,8 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       <input
                         id={field.id}
                         name="sample[quantity]"
-                        type="number"
+                        inputmode="numeric"
+                        maxlength="3"
                         value={@form[:quantity].value}
                       />
                     </P.field><P.button type="submit">Run create action</P.button>

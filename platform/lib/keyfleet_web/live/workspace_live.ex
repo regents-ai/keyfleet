@@ -2595,10 +2595,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </select>
         </label>
         <label>
-          First post <input name="from" type="number" min="1" step="1" required />
+          First post <input name="from" inputmode="numeric" maxlength="20" required />
         </label>
         <label>
-          Last post <input name="to" type="number" min="1" step="1" required />
+          Last post <input name="to" inputmode="numeric" maxlength="20" required />
         </label>
         <p class="workspace-detail">
           Only the posts {ActivityLines.key_name(@board.you.key, nil)} wrote in that range show. The room itself stays with its members.
@@ -2611,7 +2611,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <Regent.Primitives.disclosure id="public-page" summary="Public page">
       <form id="public-page-form" class="workspace-project-form" phx-submit="publish_page">
         <label>
-          Page address <input name="page" type="url" required />
+          Page address <input name="page" type="url" maxlength="512" required />
         </label>
         <p class="workspace-detail">
           Paste the address of a saved page you made. Anyone with the link can then open it, signed in or not; the notebook itself stays with members.

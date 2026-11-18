@@ -583,10 +583,8 @@ defmodule KeyfleetWeb.FleetLive do
         <input
           id="fleet-entry-pass-number"
           name="pass"
-          type="number"
           inputmode="numeric"
-          min="1"
-          max={@fleet.progress && @fleet.progress.max_supply}
+          maxlength="20"
           required
         />
         <Regent.Primitives.button type="submit" variant="secondary">Open its Key</Regent.Primitives.button>

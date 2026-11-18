@@ -372,6 +372,7 @@ defmodule KeyfleetWeb.WorldlineLive do
               id={field.id}
               name="by"
               type="search"
+              maxlength="100"
               value={@worldline.typed}
               placeholder="Key 19 or 0x…"
               autocomplete="off"
