@@ -36,9 +36,15 @@ defmodule KeyfleetWeb.Plugs.UnreadBody do
 
     * an answer to a request whose body was read, or that had none: its
       connection stays open, as before;
-    * a caller that asked `Expect: 100-continue` and was never told to send
-      its body: Bandit answers it and closes the connection without asking
-      for the body (RFC 9110, section 10.1.1);
+    * an HTTP/1.1 request that asked `Expect: 100-continue`, in any letter
+      case and with nothing added, and was never told to send its body:
+      Bandit answers it at once and closes the connection without asking for
+      the body (RFC 9110, section 10.1.1). A caller that sends its body
+      anyway, without waiting to be asked, may find the connection closed
+      before it reads the answer, as Bandit alone does. An HTTP/1.0 request,
+      or one whose expectation is written any other way, is not left alone:
+      its body is read as any other, one sent with its length waited for up
+      to 10 seconds;
     * HTTP/2, where a client sends no more than the stream's window and Bandit
       resets a stream it has not read rather than reading it;
     * a connection upgraded to a websocket (`KeyfleetWeb.Plugs.NotebookGateway`);
