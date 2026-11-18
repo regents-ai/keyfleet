@@ -892,6 +892,381 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: an agent's body of exactly the limit, sent in chunks with
+  # no length, is refused as too large.
+  test "a signed body of exactly 64 KiB reaches the hub however it arrives, and one byte more is refused" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!(wallet)
+      )
+
+    subject = Notebooks.agent_subject(profile.id)
+    # Served on a real port, so a body arrives in chunks as it does from an agent.
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    created = ~s({"name":"orbit.py"})
+    exact = created <> String.duplicate(" ", 64 * 1024 - byte_size(created))
+    over = exact <> " "
+
+    answers =
+      for {bytes, sent} <- [
+            {exact, exact},
+            {exact, Stream.map([exact], & &1)},
+            {over, over},
+            {over, Stream.map([over], & &1)}
+          ] do
+        request = SignedAgentHelpers.sign(signer, secret, @host, "POST", notebooks, bytes)
+
+        answer =
+          Req.post!(site <> notebooks,
+            headers: Map.put(request.headers, "host", @host),
+            body: sent,
+            retry: false
+          )
+
+        forwarded =
+          receive do
+            {:hub, "POST", ^notebooks, ^subject, forwarded} -> forwarded == exact
+          after
+            0 -> :none
+          end
+
+        {answer.status, answer.body["error"]["code"], forwarded}
+      end
+
+    assert answers == [
+             {201, nil, true},
+             {201, nil, true},
+             {413, "request_too_large", :none},
+             {413, "request_too_large", :none}
+           ]
+  end
+
+  # Costly failure: a label the signature doesn't cover changes how the hub
+  # reads an agent's body: a JSON body sent as text is read as empty by a
+  # session start the door read as JSON, so a maker check is skipped, or an
+  # encoding label asks whatever reads the body to unpack bytes nobody signed.
+  test "an agent's body reaches the hub typed as this door takes it, never as sent, and an encoded one is refused unread",
+       c do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    test = self()
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    file = "/api/v1/projects/proj-fleet/notebooks/nb-0123456789abcdef/workspace/files"
+
+    # The hub as in every other test, telling this one how each notebook
+    # request's body was labelled.
+    hub =
+      server(fn conn ->
+        {:ok, body, conn} = read_body(conn)
+
+        if String.starts_with?(conn.request_path, notebooks) do
+          labels =
+            for {name, _value} = label <- conn.req_headers,
+                name in ~w(content-type content-encoding),
+                do: label
+
+          send(test, {:labels, conn.method, labels, body})
+          json(conn, 201, %{success: true, data: %{}})
+        else
+          hub_answer(conn, c.holder)
+        end
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => hub})
+    )
+
+    created = ~s({"name":"orbit.py"})
+
+    send_labelled = fn method, path, body, labels ->
+      request = SignedAgentHelpers.sign(signer, secret, @host, method, path, body)
+
+      request.headers
+      |> Map.drop(["content-type"])
+      |> Map.merge(Map.new(labels))
+      |> Enum.reduce(
+        %{build_conn() | host: @host, remote_ip: {198, 51, 100, 139}},
+        fn {name, value}, conn -> put_req_header(conn, name, value) end
+      )
+      |> dispatch(@endpoint, method, path, body || "")
+    end
+
+    encoded =
+      send_labelled.("POST", notebooks, created, [
+        {"content-type", "application/json"},
+        {"content-encoding", "gzip"}
+      ])
+
+    assert json_response(encoded, 400)["error"]["code"] == "invalid_request"
+    refute_received {:broker_payload, _payload}
+    refute_received {:labels, _method, _labels, _body}
+
+    as_json = [{"content-type", "application/json"}]
+    as_file = [{"content-type", "application/octet-stream"}]
+
+    for {method, path, body, labels, heard} <- [
+          {"POST", notebooks, created, [{"content-type", "text/plain"}], as_json},
+          {"PUT", file <> "?path=data.csv&create=true", "a,b\n1,2\n", as_json, as_file},
+          {"GET", notebooks, nil, as_json, []}
+        ] do
+      assert send_labelled.(method, path, body, labels).status == 201
+      sent = body || ""
+      assert_receive {:labels, ^method, ^heard, ^sent}
+    end
+  end
+
+  # Costly failure: a person's session start labelled as text is read by this
+  # door as an app session, so no maker is checked, and by the hub as an edit
+  # session of someone else's notebook that saves back to it.
+  test "a person's body sent to the notebook API reaches the hub labelled as this door reads it, runtime traffic as sent, and an encoded one is refused unread",
+       c do
+    test = self()
+
+    hub =
+      server(fn conn ->
+        {:ok, body, conn} = read_body(conn)
+
+        labels =
+          for {name, _value} = label <- conn.req_headers,
+              name in ~w(content-type content-encoding),
+              do: label
+
+        send(test, {:labels, conn.method, conn.request_path, labels, body})
+        hub_answer(conn, c.holder)
+      end)
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.put(Notebooks.config(), :fleets, %{@fleet => hub})
+    )
+
+    cookie = enter!(c.holder)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    theirs = notebooks <> "/nb-0000000000000001"
+    mine = notebooks <> "/nb-0000000000000002"
+    kernel = "/proxy/edge/api/kernel/run"
+
+    send_labelled = fn method, path, body, labels ->
+      labels
+      |> Enum.reduce(%{build_conn() | host: @host}, fn {name, value}, conn ->
+        put_req_header(conn, name, value)
+      end)
+      |> put_req_header("cookie", "__Host-kf_notebooks=" <> cookie)
+      |> dispatch(@endpoint, method, path, body)
+    end
+
+    encoded =
+      send_labelled.("POST", notebooks, :zlib.gzip(~s({"title":"orbit"})), [
+        {"content-type", "application/json"},
+        {"content-encoding", "gzip"}
+      ])
+
+    assert json_response(encoded, 400)["error"]["code"] == "invalid_request"
+    refute_received {:labels, "POST", ^notebooks, _labels, _body}
+
+    as_json = [{"content-type", "application/json"}]
+    as_text = [{"content-type", "text/plain"}]
+    as_form = [{"content-type", "application/x-www-form-urlencoded"}]
+
+    for {method, path, body, labels, status, heard} <- [
+          {"GET", mine, "", as_json, 200, {[], ""}},
+          {"POST", theirs <> "/sessions", ~s({"mode":"app"}), as_text, 201,
+           {as_json, ~s({"mode":"app"})}},
+          {"POST", theirs <> "/sessions", "", as_text, 201,
+           {as_json, ~s({"edit_intent":"temporary"})}},
+          {"POST", mine <> "/sessions", ~s({"mode":"edit"}), as_json, 201,
+           {as_json, ~s({"mode":"edit"})}},
+          {"PATCH", mine <> "/source", ~s({"code":"x = 1"}), as_json, 200,
+           {as_json, ~s({"code":"x = 1"})}},
+          {"POST", mine <> "/jobs/job-mine/runs", "{}", as_json, 201, {as_json, "{}"}},
+          {"PUT", mine <> "/workspace/files?path=data.csv&create=true", "a,b\n1,2\n",
+           [{"content-type", "text/csv"}], 200,
+           {[{"content-type", "application/octet-stream"}], "a,b\n1,2\n"}},
+          {"POST", kernel, ~s({"cellIds":[]}), as_json, 200, {as_json, ~s({"cellIds":[]})}},
+          {"POST", kernel, "a=1&b=2", as_form, 200, {as_form, "a=1&b=2"}}
+        ] do
+      assert send_labelled.(method, path, body, labels).status == status
+      bare = path |> String.split("?") |> hd()
+      {labels_heard, body_heard} = heard
+      assert_receive {:labels, ^method, ^bare, ^labels_heard, ^body_heard}
+    end
+  end
+
+  # Costly failure: this door keeps the first of a field named twice and the
+  # hub the last, so a session start the door reads as an app session opens an
+  # edit session of someone else's notebook that saves back to it, or a job
+  # the door reads as unscheduled runs on a schedule.
+  test "a body naming a field twice, at any depth, is refused and never reaches the hub, from a person or an agent",
+       c do
+    cookie = enter!(c.holder)
+    sessions = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/sessions"
+    jobs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/jobs"
+    folders = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/workspace/directories"
+    schedule = ~s({"cron":"0 6 * * *","timezone":"UTC"})
+
+    for {path, body} <- [
+          {sessions, ~s({"mode":"app","mode":"edit"})},
+          {sessions,
+           ~s({"mode":"app","replace_app_session_id":"a","replace_app_session_id":"b"})},
+          {jobs, ~s({"name":"nightly","schedule":null,"schedule":#{schedule}})},
+          {jobs, ~s({"name":"nightly","parameters":{"day":"mon","day":"tue"}})},
+          {jobs, ~s({"name":"nightly","parameters":[{"day":"mon","d\\u0061y":"tue"}]})},
+          {folders, ~s({"path":"theirs/","path":"notes/"})}
+        ] do
+      refused = send_notebook(:post, path, cookie, body)
+      assert json_response(refused, 400)["error"]["code"] == "invalid_request", body
+      refute_received {:hub, "POST", ^path, _subject, _body}
+    end
+
+    # The same reading for an agent's signed body.
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    twice = ~s({"mode":"app","mode":"edit"})
+    request = SignedAgentHelpers.sign(signer, secret, @host, "POST", sessions, twice)
+    refused = send_signed(request, {198, 51, 100, 140})
+    assert json_response(refused, 400)["error"]["code"] == "invalid_request"
+    refute_received {:hub, "POST", ^sessions, _subject, _body}
+
+    # A body naming each field once is read as before.
+    for {path, body, status} <- [
+          {sessions, ~s({"mode":"app"}), 201},
+          {jobs, ~s({"name":"nightly","schedule":null,"parameters":{"day":"mon"}}), 201},
+          {jobs, ~s({"name":"nightly","schedule":#{schedule}}), 403},
+          {folders, ~s({"path":"notes/"}), 201}
+        ] do
+      assert send_notebook(:post, path, cookie, body).status == status, body
+    end
+
+    assert_received {:hub, "POST", ^sessions, "u_" <> _, ~s({"mode":"app"})}
+    assert_received {:hub, "POST", ^jobs, "u_" <> _, ~s({"name":"nightly","schedule":null) <> _}
+    refute_received {:hub, "POST", ^jobs, _subject, _body}
+    assert_received {:hub, "POST", ^folders, "u_" <> _, ~s({"path":"notes/"})}
+  end
+
+  # Costly failure: reading a body to decide who may send it costs the site
+  # many times the body's length, gigabytes for one person's largest body.
+  test "a person's body this door decodes is read no further than an agent's, and every other body as far as before",
+       c do
+    cookie = enter!(c.holder)
+    mine = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000002"
+    jobs = mine <> "/jobs"
+    limit = 64 * 1024
+    job = fn length -> ~s({"name":") <> String.duplicate("a", length - 11) <> ~s("}) end
+
+    for {method, path} <- [
+          {:post, mine <> "/sessions"},
+          {:post, jobs},
+          {:patch, jobs <> "/job-mine"},
+          {:post, mine <> "/workspace/directories"}
+        ] do
+      refused = send_notebook(method, path, cookie, job.(limit + 1))
+      assert json_response(refused, 413)["error"]["code"] == "request_too_large", path
+      refute_received {:hub, _method, ^path, _subject, _body}
+    end
+
+    whole = job.(limit)
+    assert send_notebook(:post, jobs, cookie, whole).status == 201
+    assert_received {:hub, "POST", ^jobs, "u_" <> _, ^whole}
+
+    # Served on a real port, so a body arrives in chunks as it does from a browser.
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+
+    chunked =
+      for body <- [whole, whole <> " "] do
+        Req.post!(site <> jobs,
+          headers: %{
+            "host" => @host,
+            "cookie" => "__Host-kf_notebooks=" <> cookie,
+            "content-type" => "application/json"
+          },
+          body: Stream.map([body], & &1),
+          retry: false
+        ).status
+      end
+
+    assert chunked == [201, 413]
+    assert_receive {:hub, "POST", ^jobs, "u_" <> _, ^whole}
+    refute_received {:hub, "POST", ^jobs, _subject, _body}
+
+    file = String.duplicate("a", 1024 * 1024)
+    files = mine <> "/workspace/files"
+    written = send_notebook(:put, files <> "?path=big.csv&create=true", cookie, file)
+    assert written.status == 200
+    assert_received {:hub, "PUT", ^files, "u_" <> _, ^file}
+  end
+
+  # Costly failure: a session start whose replacement isn't text crashes the
+  # door, from a person or an agent, where it should be refused.
+  test "a session start whose mode or replacement isn't text, or whose text can't be read, is refused and never reaches the hub, from a person or an agent",
+       c do
+    cookie = enter!(c.holder)
+    sessions = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001/sessions"
+
+    for body <- [
+          ~s({"mode":"app","replace_app_session_id":123}),
+          ~s({"mode":"app","replace_app_session_id":null}),
+          ~s({"mode":"app","replace_app_session_id":["s1"]}),
+          ~s({"mode":"app","replace_app_session_id":{"id":"s1"}}),
+          ~s({"mode":"app","replace_app_session_id":true}),
+          ~s({"mode":null}),
+          ~s({"mode":["app"]}),
+          ~s({"mode":"edit","compute_profile":"\\ud800"}),
+          ~s({"mode":"edit","compute_profile":") <> <<255>> <> ~s("})
+        ] do
+      refused = send_notebook(:post, sessions, cookie, body)
+      assert json_response(refused, 400)["error"]["code"] == "invalid_request", inspect(body)
+      refute_received {:hub, "POST", ^sessions, _subject, _body}
+    end
+
+    # A replacement named as text is checked as before: someone else's
+    # session is theirs to stop.
+    replacing = ~s({"mode":"app","replace_app_session_id":"s1"})
+    stopping = send_notebook(:post, sessions, cookie, replacing)
+    assert json_response(stopping, 403)["error"]["code"] == "notebooks_maker_only"
+
+    # The same reading for an agent's signed body.
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_real_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+      actor: Keyfleet.PairingHelpers.pair_wallet!(String.downcase(signer.address))
+    )
+
+    for body <- [~s({"mode":"app","replace_app_session_id":123}), ~s({"mode":7})] do
+      request = SignedAgentHelpers.sign(signer, secret, @host, "POST", sessions, body)
+      refused = send_signed(request, {198, 51, 100, 141})
+      assert json_response(refused, 400)["error"]["code"] == "invalid_request", body
+    end
+
+    refute_received {:hub, "POST", ^sessions, _subject, _body}
+  end
+
   # Costly failure: a content-digest the site can't read, or a signature
   # header sent twice, crashes the notebook host or reaches the hub.
   test "a content-digest that isn't one sha-256 digest, or a header sent twice, is refused and reaches nothing" do
@@ -1031,6 +1406,41 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert %{"code" => "http_headers_missing", "hint" => ^hint} =
              json_response(refused, 401)["error"]
 
+    refute_received {:hub, _method, _path, _subject, _body}
+  end
+
+  # Costly failure: a request that carries a content-digest but no signature is
+  # taken for an agent's, spends its address's budget, asks the sign-in server,
+  # and turns a person opening a shared link away instead of sending them to
+  # sign in.
+  test "a request with SIWA headers but no signature is answered as an unsigned one, and spends nothing" do
+    SignedAgentHelpers.start_real_broker!(self(), :crypto.strong_rand_bytes(32))
+    budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
+    Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+    body = ~s({"name":"orbit.py"})
+
+    send_unsigned = fn method, path, headers ->
+      %{
+        build_conn()
+        | host: @host,
+          remote_ip: {198, 51, 100, 138},
+          req_headers: [{"content-type", "application/json"} | headers]
+      }
+      |> dispatch(@endpoint, method, path, body)
+    end
+
+    for unsigned <- [
+          [{"content-digest", Siwa.content_digest_for_body(body)}],
+          [{"x-key-id", @holder_wallet}, {"x-timestamp", "1"}]
+        ],
+        _again <- 1..2 do
+      refused = send_unsigned.(:post, "/api/v1/projects/proj-fleet/notebooks", unsigned)
+      assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
+      assert send_unsigned.(:get, "/", unsigned).status == 303
+    end
+
+    refute_received {:broker_payload, _payload}
     refute_received {:hub, _method, _path, _subject, _body}
   end
 

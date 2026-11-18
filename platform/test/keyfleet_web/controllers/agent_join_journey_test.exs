@@ -151,6 +151,62 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     refute_receive {:broker_payload, _}
   end
 
+  # Costly failure: a body of exactly its operation's limit, sent in chunks
+  # with no length, is refused as too large.
+  test "a body of exactly its limit is read whole however it arrives, and one byte more is refused",
+       c do
+    limit = KeyfleetWeb.Plugs.SignedAgent.body_limit(@path)
+    exact = @body <> String.duplicate(" ", limit - byte_size(@body))
+    over = exact <> " "
+    pieces = [binary_part(exact, 0, 100), binary_part(exact, 100, limit - 100)]
+
+    answers =
+      for {bytes, sent} <- [
+            {exact, exact},
+            {exact, Stream.map([exact], & &1)},
+            {exact, Stream.map(pieces, & &1)},
+            {over, over},
+            {over, Stream.map([over], & &1)}
+          ] do
+        outcome(send_request(c, %{signed(c, bytes) | body: sent}))
+      end
+
+    assert answers == [
+             {200, nil},
+             {200, nil},
+             {200, nil},
+             {413, "request_too_large"},
+             {413, "request_too_large"}
+           ]
+
+    exact_digest = digest(exact)
+
+    for _read_whole <- 1..3,
+        do: assert_receive({:broker_payload, %{"body_digest" => ^exact_digest}})
+
+    refute_receive {:broker_payload, _}
+  end
+
+  # Costly failure: over HTTP/2 one frame carries more than a read asks for,
+  # and the agent is answered with the site's error page, not its refusal.
+  test "over HTTP/2, a body past its limit in one frame gets the door's own too-large refusal",
+       c do
+    limit = KeyfleetWeb.Plugs.SignedAgent.body_limit(@path)
+    over = @body <> String.duplicate(" ", 4 * limit)
+    request = signed(c, over)
+
+    answer =
+      Req.post!(c.app <> request.path,
+        headers: request.headers,
+        body: over,
+        retry: false,
+        connect_options: [protocols: [:http2]]
+      )
+
+    assert outcome(answer) == {413, "request_too_large"}
+    refute_receive {:broker_payload, _}
+  end
+
   test "a profile update body changed after signing is refused", c do
     request = signed(c, ~s({"name":"Updated"}), "keyfleet", 8453, @update_path)
     response = send_request(c, %{request | body: ~s({"name":"Changed"})})
@@ -262,6 +318,33 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     refute_receive {:broker_payload, _}
     assert send_request(c, signed).status == 200
+  end
+
+  # Costly failure: an agent address spelled with percent-escapes crashes the
+  # site, or reaches a handler past the checks that read it as written.
+  test "an agent address with a percent-escape in its first three parts is no operation's, signed or not",
+       c do
+    for path <- [
+          "/api/%61gents/v1/pair",
+          "/%61pi/agents/v1/pair",
+          "/api/agents/%761/pair",
+          "/api/v1/%70rofile",
+          "/%61pi/v1/profile",
+          "/api/%761/profile",
+          "/api/v1/%61gent/join/status",
+          "/api/v1/%61ccount/points",
+          "/api/v1/%66eed",
+          "/api/v1/%6dessages/hello"
+        ],
+        headers <- [
+          signed(c, @body, "keyfleet", 8453, path).headers,
+          %{"content-type" => "application/json"}
+        ] do
+      answer = Req.post!(c.app <> path, headers: headers, body: @body, retry: false)
+      assert outcome(answer) == {404, "operation_unknown"}, path
+    end
+
+    refute_receive {:broker_payload, _}
   end
 
   # Costly failure: a header the signature does not cover changes who the

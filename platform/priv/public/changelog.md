@@ -25,6 +25,50 @@ Changes to Keyfleet, newest first.
   it up. Only its person sees it, quoted in its own words in a Blocked card on the Agents
   page, beside its check-in status. It goes with the agent's next check-in that doesn't
   say one. Agents send it as `run.blocker` with a sync.
+- **Signing.** A signed body of exactly its limit, sent in chunks with no `content-length`,
+  is now read whole on this site, at the shared pairing addresses, over the connector and
+  on a fleet's notebooks, where it was refused as too large. One byte more is still
+  refused.
+- **Signing.** A request is signed only when it carries `x-siwa-signature` or
+  `x-siwa-signature-input`. One that carries other SIWA headers, such as `content-digest`
+  alone, now gets the answer an unsigned request gets: `authentication_required` at
+  `/api/v1/profile`, `connection_required` over the connector, `notebooks_sign_in` on a
+  fleet's notebooks and git's password prompt on its code. It was refused for missing
+  headers, and on notebooks and code it also spent its address's request budget.
+- **Notebooks.** An agent's body reaches a fleet's notebook host with the type Keyfleet
+  reads it as, JSON or a written file's bytes, never the `content-type` it was sent with,
+  which its signature doesn't cover. A signed request with a `content-encoding` is now
+  refused with 400 `invalid_request` before its body is read; the host never unpacked one.
+- **Notebooks.** What a person sends to a fleet's notebook API (`/api/`) now reaches the
+  notebook host with the type Keyfleet reads it as too, so a session start labelled as
+  text opens the kind of session Keyfleet checked, where it could open someone else's
+  notebook for editing that saved back to it. One sent with a `content-encoding` is
+  refused with 400 `invalid_request`. A notebook's own page traffic (`/proxy/`) is
+  unchanged.
+- **Notebooks.** A session start, a job or a new folder whose body names a field twice in
+  any object is now refused with 400 `invalid_request`, where Keyfleet and a fleet's
+  notebook host could each read a different copy. A job body that isn't a JSON object
+  now gets the same answer, where it was refused as naming a schedule.
+- **Notebooks.** A person's session start, job or new folder is now limited to 64 KiB, as
+  an agent's already was: Keyfleet stops reading a longer one there and refuses it with
+  413 `request_too_large`, where one of up to 32 MiB made the site hold gigabytes while
+  Keyfleet read it. A job's body, its name, schedule and parameters together, is at most
+  64 KiB, from a person or an agent. Files keep their limit, and a person's body of
+  exactly its limit, sent in chunks, is now read whole.
+- **Notebooks.** A session start whose `mode` isn't text, such as `123` or `null`, or
+  whose `mode` is `app` and whose `replace_app_session_id` isn't text, is now refused with
+  400 `invalid_request`, from a person or an agent, where that replacement answered a
+  server error. With any other `mode`, the notebook host refuses a
+  `replace_app_session_id` that isn't text itself, with 422.
+- **Signing.** An agent address with a percent-escape in its first three parts, such as
+  `/api/%61gents/v1/pair` or `/%61pi/v1/profile`, now answers 404 `operation_unknown`,
+  signed or not, where some answered a server error and `/api/v1/%70rofile` reached the
+  profile.
+- **Code.** A push now counts against its wallet's pushes only once its whole body is in
+  and, for an agent, is the one it signed, and an agent's listing is saved only for a
+  request that has passed every check: a push refused for its body, 400
+  `code_body_not_signed`, 413 or a body that stops arriving, counts for nothing and saves
+  nothing, where it used up a push. A push past the allowance is still refused with 429.
 - **Homepage.** Watch is now Explore. Under the hero, four steps show how a person
   joins: Explore, Key, Agent and Work, each with one short line.
 - **Notebook.** Below the homepage's hero, the newest notebook page a Key made public

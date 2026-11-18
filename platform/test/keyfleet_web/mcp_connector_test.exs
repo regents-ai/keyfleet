@@ -190,6 +190,30 @@ defmodule KeyfleetWeb.McpConnectorTest do
         assert error(refused)["hint"] =~ KeyfleetWeb.PublicDocuments.url("/skill.md")
       end
     end
+
+    test "a request with SIWA headers but no signature is asked to connect or sign, as an unsigned one is",
+         c do
+      body = Jason.encode!(rpc("tools/list"))
+
+      for unsigned <- [
+            [{"content-digest", Siwa.content_digest_for_body(body)}],
+            [{"x-key-id", c.signer.address}, {"x-timestamp", "1"}]
+          ] do
+        refused =
+          conn(:post, "/mcp", body)
+          |> Map.put(:remote_ip, c.from)
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("accept", "application/json, text/event-stream")
+          |> Map.update!(:req_headers, &(&1 ++ unsigned))
+          |> @endpoint.call([])
+
+        assert refused.status == 401
+        assert error(refused)["code"] == "connection_required"
+        assert [_challenge] = get_resp_header(refused, "www-authenticate")
+      end
+
+      refute_received {:broker_payload, _payload}
+    end
   end
 
   # The same address for an agent that signs its own requests with its SIWA

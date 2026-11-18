@@ -66,8 +66,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   What reaches the hub carries a pass for that person or agent
   (`Keyfleet.Notebooks.Pass`) in place of any `Authorization`,
   `X-Keyfleet-Assertion`, forwarded-identity or SIWA header the client sent,
-  and without this site's cookie. Answers stream straight back, with only the
-  headers a notebook page needs (`@kept_response`). A WebSocket
+  and without this site's cookie. A body this door reads, an agent's or any
+  sent to the notebook API (`/api/`), reaches the hub labelled as this door
+  read it, and one sent encoded is refused, as is one this door decides by
+  that names a field twice (`decoded/1`) or is longer than an agent's body may
+  be (`body_limit/1`). Answers stream straight back,
+  with only the headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
 
@@ -314,7 +318,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   ## Who sent it
 
   defp identify(conn, fleet_id) do
-    if Siwa.AgentAuthPlug.signed_request?(conn),
+    if KeyfleetWeb.BodyReader.signed?(conn),
       do: identify_agent(conn, fleet_id),
       else: identify_person(conn, fleet_id)
   end
@@ -326,34 +330,24 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     if conn.halted, do: {:refused, conn}, else: read_signed(conn, fleet_id)
   end
 
+  # A signature covers a body's bytes, not how they are encoded, so an encoded
+  # body is refused before it is read.
   defp read_signed(conn, fleet_id) do
-    case read_body_signed(conn) do
-      {:ok, _raw, conn} ->
-        conn =
-          Siwa.AgentAuthPlug.call(conn,
-            client: Keyfleet.SiwaBroker,
-            hooks: __MODULE__,
-            audience: "keyfleet",
-            query: :signed
-          )
+    with [] <- get_req_header(conn, "content-encoding"),
+         {:ok, _raw, conn} <- KeyfleetWeb.BodyReader.read_signed(conn, [], @signed_max_body) do
+      conn =
+        Siwa.AgentAuthPlug.call(conn,
+          client: Keyfleet.SiwaBroker,
+          hooks: __MODULE__,
+          audience: "keyfleet",
+          query: :signed
+        )
 
-        agent_subject(conn, fleet_id)
-
-      {:more, _partial, conn} ->
-        {:refused, Refusal.json(conn, 413, "request_too_large")}
-
-      :too_large ->
-        {:refused, Refusal.json(conn, 413, "request_too_large")}
-
-      {:error, _reason} ->
-        {:refused, Refusal.json(conn, 400, "invalid_request")}
+      agent_subject(conn, fleet_id)
+    else
+      {:more, _partial, conn} -> {:refused, Refusal.json(conn, 413, "request_too_large")}
+      _encoded_or_unreadable -> {:refused, Refusal.json(conn, 400, "invalid_request")}
     end
-  end
-
-  defp read_body_signed(conn) do
-    Siwa.AgentAuthPlug.read_body(conn, [], @signed_max_body)
-  rescue
-    Plug.Parsers.RequestTooLargeError -> :too_large
   end
 
   defp agent_subject(%Plug.Conn{halted: true} = conn, _fleet_id), do: {:refused, conn}
@@ -612,36 +606,61 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     {body, conn} = request_body(conn)
 
     cond do
+      body == :encoded ->
+        Refusal.json(conn, 400, "invalid_request")
+
       body == :too_large ->
         Refusal.json(conn, 413, "request_too_large")
 
-      not job_unscheduled?(conn, body) ->
-        Refusal.json(conn, 403, "notebooks_schedules_refused")
-
       true ->
-        case made(conn, fleet_id, subject, {headers, body}) do
-          {:ok, {headers, body}, done} ->
-            Req.request(
-              method: conn.method,
-              url: address <> target(conn),
-              headers: headers,
-              body: body,
-              into: :self,
-              raw: true,
-              redirect: false,
-              retry: false,
-              # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-              connect_options: [transport_opts: [inet6: true]],
-              receive_timeout: http_timeout(conn)
-            )
-            |> answered(done)
-            |> answer_back(conn, fleet_id, subject)
-
-          {:error, reason} ->
-            maker_refusal(conn, reason)
+        with :ok <- unscheduled(conn, body),
+             {:ok, {headers, body}, done} <-
+               made(conn, fleet_id, subject, {typed(conn, headers, body), body}) do
+          Req.request(
+            method: conn.method,
+            url: address <> target(conn),
+            headers: headers,
+            body: body,
+            into: :self,
+            raw: true,
+            redirect: false,
+            retry: false,
+            # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+            connect_options: [transport_opts: [inet6: true]],
+            receive_timeout: http_timeout(conn)
+          )
+          |> answered(done)
+          |> answer_back(conn, fleet_id, subject)
+        else
+          {:error, :scheduled} -> Refusal.json(conn, 403, "notebooks_schedules_refused")
+          {:error, reason} -> maker_refusal(conn, reason)
         end
     end
   end
+
+  # The hub reads a body by its label, and this door reads an agent's body, and
+  # anything sent to the notebook API, as JSON or a written file's bytes
+  # whatever its label. So such a body reaches the hub labelled as this door
+  # read it, never as it was sent. A person's runtime traffic, under `/proxy/`
+  # and `/surface-proxy/`, keeps its own labels.
+  defp typed(conn, headers, body) do
+    if Map.has_key?(conn.assigns, :agent_actor) or match?(["api" | _], conn.path_info),
+      do: Enum.reject(headers, &match?({"content-type", _type}, &1)) ++ label(conn, body),
+      else: headers
+  end
+
+  defp label(_conn, ""), do: []
+
+  defp label(
+         %Plug.Conn{
+           method: "PUT",
+           path_info: ["api", "v1", "projects", _, "notebooks", _, "workspace", "files"]
+         },
+         _file
+       ),
+       do: [{"content-type", "application/octet-stream"}]
+
+  defp label(_conn, _json), do: [{"content-type", "application/json"}]
 
   # When what the hub made can't keep its maker (`done`), the person is told
   # to try again instead of the hub's answer.
@@ -673,34 +692,63 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # A job runs only when a member starts it: one that names a schedule is
   # refused (clearing a schedule with `null` is not naming one).
-  defp job_unscheduled?(
+  defp unscheduled(
          %Plug.Conn{
            method: "POST",
            path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs"]
-         } = conn,
+         },
          body
        ),
-       do: no_schedule?(conn, body)
+       do: no_schedule(body)
 
-  defp job_unscheduled?(
+  defp unscheduled(
          %Plug.Conn{
            method: "PATCH",
            path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs", _]
-         } = conn,
+         },
          body
        ),
-       do: no_schedule?(conn, body)
+       do: no_schedule(body)
 
-  defp job_unscheduled?(_conn, _body), do: true
+  defp unscheduled(_conn, _body), do: :ok
 
-  defp no_schedule?(conn, body) do
-    with [] <- get_req_header(conn, "content-encoding"),
-         {:ok, %{} = job} <- Jason.decode(body) do
-      is_nil(job["schedule"])
-    else
-      _ -> false
+  defp no_schedule(body) do
+    case decoded(body) do
+      {:ok, %{"schedule" => schedule}} when not is_nil(schedule) -> {:error, :scheduled}
+      {:ok, _job} -> :ok
+      unreadable -> unreadable
     end
   end
+
+  # Every body this door reads to decide who may send it is read here, once.
+  # Jason keeps the first of a field named twice and the hub the last, so a
+  # body that names a field twice in any object, at any depth, would be read
+  # two ways: it is refused. Only an object is a body this door reads.
+  defp decoded(body) do
+    case Jason.decode(body, objects: :ordered_objects) do
+      {:ok, %Jason.OrderedObject{} = object} ->
+        if repeats?(object), do: {:error, :invalid}, else: {:ok, plain(object)}
+
+      _unreadable ->
+        {:error, :invalid}
+    end
+  end
+
+  defp repeats?(%Jason.OrderedObject{values: pairs}) do
+    names = Enum.map(pairs, fn {name, _value} -> name end)
+
+    length(Enum.uniq(names)) != length(names) or
+      Enum.any?(pairs, fn {_name, value} -> repeats?(value) end)
+  end
+
+  defp repeats?(values) when is_list(values), do: Enum.any?(values, &repeats?/1)
+  defp repeats?(_value), do: false
+
+  defp plain(%Jason.OrderedObject{values: pairs}),
+    do: Map.new(pairs, fn {name, value} -> {name, plain(value)} end)
+
+  defp plain(values) when is_list(values), do: Enum.map(values, &plain/1)
+  defp plain(value), do: value
 
   ## Makers
 
@@ -813,15 +861,24 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # Starting an app session in place of another stops that one, so only its
   # starter does; editing another member's notebook opens a sandbox of one's
-  # own that saves nothing (the hub's temporary sandbox).
+  # own that saves nothing (the hub's temporary sandbox). A mode that isn't
+  # text is refused, and so is an app session's replacement that isn't text.
+  # With any other mode this door doesn't read the replacement: the hub
+  # refuses one that isn't text itself.
   defp session_start(conn, ids, {_headers, body} = request) do
-    with {:ok, start} <- session_body(conn, body) do
+    with {:ok, start} <- session_body(body) do
       case start do
-        %{"mode" => "app", "replace_app_session_id" => session_id} ->
+        %{"mode" => "app", "replace_app_session_id" => session_id} when is_binary(session_id) ->
           only_maker(:session, ids, [session_id], request)
 
-        %{"mode" => mode} when mode != "edit" ->
+        %{"mode" => "app", "replace_app_session_id" => _not_text} ->
+          {:error, :invalid}
+
+        %{"mode" => mode} when is_binary(mode) and mode != "edit" ->
           {:ok, request, &done/1}
+
+        %{"mode" => mode} when not is_binary(mode) ->
+          {:error, :invalid}
 
         _edit ->
           edit_session(conn, ids, start, request)
@@ -845,14 +902,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # A start with no body is an edit session.
-  defp session_body(conn, body) do
-    with [] <- get_req_header(conn, "content-encoding"),
-         {:ok, %{} = start} <- if(body == "", do: {:ok, %{}}, else: Jason.decode(body)) do
-      {:ok, start}
-    else
-      _unreadable -> {:error, :invalid}
-    end
-  end
+  defp session_body(""), do: {:ok, %{}}
+
+  defp session_body(body), do: decoded(body)
 
   # A new file is kept as its writer's; writing over one is its maker's.
   defp file_write(conn, [fleet_id, subject, project_id, notebook_id] = ids, request) do
@@ -875,7 +927,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A new folder is kept as its maker's. It is never removed again when that
   # can't be kept: the hub may answer for one that was there already.
   defp folder_made([fleet_id, subject, _project_id, notebook_id], {_headers, body} = request) do
-    with {:ok, %{"path" => path}} when is_binary(path) <- Jason.decode(body),
+    with {:ok, %{"path" => path}} when is_binary(path) <- decoded(body),
          {:ok, key} <- Makers.folder_key(path) do
       {:ok, request,
        fn
@@ -940,15 +992,47 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # An agent's body was read to check its signature.
   defp request_body(%Plug.Conn{assigns: %{raw_body: raw}} = conn), do: {raw, conn}
 
-  defp request_body(conn) do
-    cap = Notebooks.config()[:max_request_bytes]
+  # This door reads what the notebook API is sent to decide who may send it,
+  # and never unpacks a body: an encoded one is refused unread.
+  defp request_body(%Plug.Conn{path_info: ["api" | _]} = conn) do
+    case get_req_header(conn, "content-encoding") do
+      [] -> read_capped(conn)
+      _encoded -> {:encoded, conn}
+    end
+  end
 
-    case read_body(conn, length: cap, read_length: min(cap, 1_000_000)) do
-      {:ok, body, conn} -> {body, conn}
+  defp request_body(conn), do: read_capped(conn)
+
+  # A read asks for one byte past the limit: a body sent in chunks that fills a
+  # read exactly comes back unfinished (`KeyfleetWeb.BodyReader.read_signed/3`).
+  defp read_capped(conn) do
+    limit = body_limit(conn)
+
+    case read_body(conn, length: limit + 1, read_length: min(limit + 1, 1_000_000)) do
+      {:ok, body, conn} when byte_size(body) <= limit -> {body, conn}
+      {:ok, _longer, conn} -> {:too_large, conn}
       {:more, _partial, conn} -> {:too_large, conn}
       {:error, _reason} -> {:too_large, conn}
     end
   end
+
+  # A body this door decodes to decide who may send it (`decoded/1`) is read no
+  # further than an agent's: decoding costs many times its length. Every other
+  # body is read up to this door's own request limit (`max_request_bytes`).
+  defp body_limit(%Plug.Conn{
+         method: method,
+         path_info: ["api", "v1", "projects", _project, "notebooks", _notebook | rest]
+       }) do
+    case {method, rest} do
+      {"POST", ["sessions"]} -> @signed_max_body
+      {"POST", ["jobs"]} -> @signed_max_body
+      {"PATCH", ["jobs", _job]} -> @signed_max_body
+      {"POST", ["workspace", "directories"]} -> @signed_max_body
+      _undecoded -> Notebooks.config()[:max_request_bytes]
+    end
+  end
+
+  defp body_limit(_conn), do: Notebooks.config()[:max_request_bytes]
 
   defp stream_back({:error, error}, conn, fleet_id, _subject) do
     HubSilentError.report(

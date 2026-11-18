@@ -164,14 +164,16 @@ and what the code on this branch does:
 
 On hold or not yet done:
 
-- The Regents Club is deployed on Base; its deployment record is not yet
-  committed here as `deployments/base.deployed.json`. Classic #1 and the other
-  founding fleets are not deployed. Before each further deploy: the internal
+- The Regents Club and Classic #1 are deployed on Base, and Classic #1 is
+  selling its Keys; the deployment record is not yet committed here as
+  `deployments/base.deployed.json`. Syndicate #1, Accelerant #1 and Cascade #1
+  are not deployed. Before each further deploy: the internal
   audit of every Keyfleet contract the founder chose on 9 Oct in place of an
   outside one, its findings resolved subject to the founder's accepted risks
   above, and the founder's go.
-- Key sales stay off until the founder explicitly says so. On chain no key of
-  any fleet can be minted before the Safe's phase step that opens it.
+- Key sales of the three fleets not yet deployed stay off until the founder
+  explicitly says so. On chain no key of any fleet can be minted before the
+  Safe's phase step that opens it.
 - `deployments/base.json` carries the trait table's hash
   (`0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, eight
   traits of sixteen values each, every trait's weights adding up to 1,000), the

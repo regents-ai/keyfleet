@@ -22,12 +22,18 @@ defmodule Keyfleet.Limits do
   @spec admit(atom(), term()) :: :ok | {:limited, pos_integer()}
   def admit(name, who) do
     config = config(name)
-
-    case RequestRateLimiter.admit({name, who}, config[:limit], config[:window_seconds]) do
-      {:ok, _budget} -> :ok
-      {:error, :rate_limited, budget} -> {:limited, budget.reset}
-    end
+    limited(RequestRateLimiter.admit({name, who}, config[:limit], config[:window_seconds]))
   end
+
+  @doc "What `admit/2` would answer for `who` now, spending none of `name`'s allowance."
+  @spec check(atom(), term()) :: :ok | {:limited, pos_integer()}
+  def check(name, who) do
+    config = config(name)
+    limited(RequestRateLimiter.check({name, who}, config[:limit], config[:window_seconds]))
+  end
+
+  defp limited({:ok, _budget}), do: :ok
+  defp limited({:error, :rate_limited, budget}), do: {:limited, budget.reset}
 
   @doc "The seconds `name`'s allowance lasts before it starts again."
   @spec window(atom()) :: pos_integer()

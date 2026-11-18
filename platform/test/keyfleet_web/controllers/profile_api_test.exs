@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.ProfileApiTest do
   # - a person who signed in before sign-in made profiles has none, and saves
   #   once they sign in again;
   # - an agent the person paired reads and saves it for them; one paired with a
-  #   person who has no account here is refused.
+  #   person who has no account here is refused;
+  # - a request with SIWA headers but no signature is the person's, not an agent's.
   use KeyfleetWeb.ConnCase, async: false
 
   alias Keyfleet.Accounts
@@ -100,6 +101,24 @@ defmodule KeyfleetWeb.ProfileApiTest do
              stranger |> signed(secret, "PATCH", %{display_name: "Nobody"}) |> answer(403)
   end
 
+  test "a request with SIWA headers but no signature is the person's, not an agent's" do
+    SignedAgentHelpers.start_broker!(self(), :crypto.strong_rand_bytes(32))
+    signed_in = sign_in()
+
+    for unsigned <- [
+          [{"content-digest", Siwa.content_digest_for_body("{}")}],
+          [{"x-key-id", wallet()}, {"x-timestamp", "1"}]
+        ] do
+      assert %{"profile" => %{"display_name" => nil}} =
+               signed_in |> again() |> with_headers(unsigned) |> read() |> answer(200)
+
+      assert %{"error" => %{"code" => "authentication_required"}} =
+               build_conn() |> with_headers(unsigned) |> read() |> answer(401)
+    end
+
+    refute_received {:broker_payload, _payload}
+  end
+
   # The site's own sign-in step, as the page takes it, for the account `@person`.
   defp sign_in do
     signed_in =
@@ -158,6 +177,10 @@ defmodule KeyfleetWeb.ProfileApiTest do
 
   defp enforce_csrf(conn),
     do: %{conn | private: Map.delete(conn.private, :plug_skip_csrf_protection)}
+
+  defp with_headers(conn, headers),
+    do:
+      Enum.reduce(headers, conn, fn {name, value}, conn -> put_req_header(conn, name, value) end)
 
   defp read(conn), do: get(conn, @path)
 

@@ -137,7 +137,7 @@ defmodule KeyfleetWeb.Plugs.McpAgent do
   defp caller(conn) do
     cond do
       get_req_header(conn, "authorization") != [] -> connected_app(conn)
-      Siwa.AgentAuthPlug.signed_request?(conn) -> signed_agent(conn)
+      KeyfleetWeb.BodyReader.signed?(conn) -> signed_agent(conn)
       true -> connect(conn)
     end
   end

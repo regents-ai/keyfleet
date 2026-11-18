@@ -359,7 +359,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @impl Plug
   def call(conn, _opts) do
-    if agent_request?(conn), do: authenticate(conn), else: conn
+    cond do
+      escaped_agent_address?(conn) -> escaped(conn)
+      agent_request?(conn) -> authenticate(conn)
+      true -> conn
+    end
   end
 
   # A paired agent's Points read sits at /api/v1/account, its person's profile
@@ -367,21 +371,44 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # and the messages it leaves for the site's team at /api/v1/messages, the
   # addresses every Regent site gives them; everything else an agent signs is
   # under /api/v1/agent.
+  @agent_prefixes [
+    ["api", "v1", "agent"],
+    ["api", "v1", "account"],
+    ["api", "v1", "feed"],
+    ["api", "v1", "messages"]
+  ]
+
   # The person reads and changes their profile with their session instead, so
   # only a signed request there is an agent's.
   defp agent_request?(conn) do
-    case Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) do
-      ["api", "v1", "profile"] ->
-        Siwa.AgentAuthPlug.signed_request?(conn)
-
-      first ->
-        first in [
-          ["api", "v1", "agent"],
-          ["api", "v1", "account"],
-          ["api", "v1", "feed"],
-          ["api", "v1", "messages"]
-        ]
+    case Enum.take(conn.path_info, 3) do
+      ["api", "v1", "profile"] -> KeyfleetWeb.BodyReader.signed?(conn)
+      first -> first in @agent_prefixes
     end
+  end
+
+  # The router reads an address with its percent-escapes undone, but a
+  # forward (`/api/v1/profile`, the shared pairing addresses at
+  # `/api/agents/v1`) and every check here read it as it came. So an address
+  # whose first three parts name an agent prefix only once their escapes are
+  # undone is no operation's, signed or not. An escape further on is an
+  # ordinary part of the path, for whatever answers it.
+  defp escaped_agent_address?(conn) do
+    first = Enum.take(conn.path_info, 3)
+    decoded = Enum.map(first, &URI.decode/1)
+
+    decoded != first and
+      decoded in [["api", "v1", "profile"], ["api", "agents", "v1"] | @agent_prefixes]
+  end
+
+  defp escaped(conn) do
+    send_refusal(
+      conn,
+      404,
+      KeyfleetWeb.Refusal.operation_unknown(
+        "Send the address as it is written, without percent-escapes."
+      )
+    )
   end
 
   # An address no operation has, a method its operation doesn't take and a
@@ -407,9 +434,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         send_refusal(conn, 400, KeyfleetWeb.Refusal.body("invalid_request"))
 
       {:more, _raw, conn} ->
-        too_large(conn)
-
-      :too_large ->
         too_large(conn)
     end
   end
@@ -504,11 +528,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # The shared reader keeps the exact bytes the signature covers, and no more
   # than the operation takes.
-  defp read_signed(conn) do
-    Siwa.AgentAuthPlug.read_body(conn, [], body_limit(conn.request_path))
-  rescue
-    Plug.Parsers.RequestTooLargeError -> :too_large
-  end
+  defp read_signed(conn),
+    do: KeyfleetWeb.BodyReader.read_signed(conn, [], body_limit(conn.request_path))
 
   # The raw body is signed, through its content digest, and checked against
   # it before anything is read from it; `accept/3` then reads it. An empty body
@@ -533,17 +554,34 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def accept(conn, data, _context) do
     with {:ok, actor} <- actor(conn, data),
          {:ok, conn} <- take_body(conn),
-         do: admit(conn, actor)
+         do: conn |> admit(actor) |> listed()
   end
 
   @doc """
   Admits the agent a verified answer names without reading the request's
-  body. The notebook gateway carries that body to the fleet's hub as it
-  came, and the hub checks it.
+  body, and saves its listing. The notebook gateway carries that body to the
+  fleet's hub as it came, and the hub checks it.
   """
-  def accept_agent(conn, data) do
+  def accept_agent(conn, data), do: conn |> admit_agent(data) |> listed()
+
+  @doc """
+  Admits the agent a verified answer names as `accept_agent/2` does, but
+  saves nothing: the code gateway saves its listing
+  (`Keyfleet.Agents.save_listing/1`) only for a request that has passed every
+  check, once the body proved to be the one signed.
+  """
+  def admit_agent(conn, data) do
     with {:ok, actor} <- actor(conn, data), do: admit(conn, actor)
   end
+
+  # A listing that could not be saved is logged there and saved by the agent's
+  # next request; this request goes on.
+  defp listed({:ok, %{assigns: %{agent_actor: agent}}} = admitted) do
+    _saved_or_logged = Keyfleet.Agents.save_listing(agent)
+    admitted
+  end
+
+  defp listed(refused), do: refused
 
   # The fields Keyfleet acts on; anything else the sign-in server says is
   # its own. The agent's page in the agent registry and the World ID person
@@ -625,9 +663,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Agent.authenticated?(actor) ->
         case Keyfleet.Agents.with_pairing(actor) do
           {:ok, paired} ->
-            # A listing that could not be saved is logged there and saved by
-            # the agent's next request; this request goes on.
-            _saved_or_logged = Keyfleet.Agents.save_listing(paired)
             {:ok, assign(conn, :agent_actor, paired)}
 
           {:error, :not_paired} ->
