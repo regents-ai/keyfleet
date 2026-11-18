@@ -75,16 +75,24 @@ defmodule KeyfleetWeb.OnchainSteps do
   def remember(socket, review),
     do: assign(socket, presses: Presses.remember(socket.assigns.presses, review))
 
-  @doc "The wallet sent a step; it is read from now on against the review it was sent from."
+  @doc """
+  The wallet sent a step; it is read from now on against the review it was
+  sent from, whoever pressed. The person's own send lets go of the note above
+  the buttons, which spoke of an earlier press; the browser agent's, marked
+  `"agent" => true`, leaves it.
+  """
   def sent(socket, params) do
     case Presses.sent(socket.assigns.presses, params) do
       {:ok, entry, presses} ->
-        socket |> assign(presses: presses, press_note: nil) |> check(entry)
+        socket |> assign(presses: presses) |> let_go_of_note(params) |> check(entry)
 
       :error ->
         socket
     end
   end
+
+  defp let_go_of_note(socket, %{"agent" => true}), do: socket
+  defp let_go_of_note(socket, _params), do: assign(socket, press_note: nil)
 
   @doc "Starts reading a step again after the page stopped on its own."
   def check_again(socket, hash) do

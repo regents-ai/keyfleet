@@ -103,8 +103,36 @@ it("answers a press the server refused to prepare with the note it sent", async 
   const leaving = offerPageTool(root as unknown as HTMLElement, press)!
 
   const note = "The page's note."
-  press.mockResolvedValueOnce({reason: "step_unknown", note})
+  press.mockResolvedValueOnce({reason: "step_unknown", cause: "state", note})
   expect(await offered[0].execute({asset}, {})).toMatchObject({ok: false, error: {code: "step_unknown", message: note}})
+  leaving.abort()
+})
+
+// Costly failure: a call refused for its own Key, wallet or amount, or a field
+// too long, was told to wait for the chain or look at the page, so the agent
+// called again with the same values, or stopped.
+it("hints by what the server says is why: a value the call used, or the state alone", async () => {
+  const offered: ModelContextTool[] = []
+  vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
+  const {offerPageTool} = await import("../js/page_tools")
+
+  const button = {dataset: {onchainStep: "propose"}, disabled: false}
+  const root = {dataset: {webmcpTool: "proposals_create"}, querySelectorAll: () => [button]}
+  const press = vi.fn()
+  const leaving = offerPageTool(root as unknown as HTMLElement, press)!
+  const hint = async (refused: {reason: string; cause: string}) => {
+    press.mockResolvedValueOnce({...refused, note: "The server's note."})
+    const answer = (await offered[0].execute({kind: "decision", key: "7", text: "Hire"}, {})) as {error: {hint: string}}
+    return answer.error.hint
+  }
+
+  const values = [await hint({reason: "blocked", cause: "values"}), await hint({reason: "step_unknown", cause: "values"})]
+  const chain = await hint({reason: "blocked", cause: "state"})
+  const page = await hint({reason: "step_unknown", cause: "state"})
+
+  // A value the call used is why, whatever the reason: one hint, and neither of the others.
+  expect(values[0]).toBe(values[1])
+  expect(new Set([values[0], chain, page]).size).toBe(3)
   leaving.abort()
 })
 
@@ -127,7 +155,7 @@ it("presses a button held back for the person's form with the agent's values, an
   expect(press).toHaveBeenCalledWith(button, proposal)
 
   const words = "Not your Key"
-  press.mockResolvedValueOnce({reason: "blocked", note: words})
+  press.mockResolvedValueOnce({reason: "blocked", cause: "values", note: words})
   expect(await offered[0].execute({...proposal, key: "8"}, {})).toMatchObject({ok: false, error: {code: "blocked", message: words}})
   leaving.abort()
 })

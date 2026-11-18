@@ -799,9 +799,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     # A press the server won't prepare, from a wallet the account doesn't link
     # or for a step the chain's state holds back, gets no steps. The refusal
     # itself shows the note beside the buttons and counts the failure, and the
-    # reply carries that same note, so the browser's own agent hears what the
-    # person reads with nothing more from the page. A held-back step's note is
-    # the words beside its button.
+    # reply carries that same note and that the state, not a value typed, is
+    # why. A held-back step's note is the words beside its button.
     test "a refused press shows the note it is answered with, and counts it once",
          %{conn: conn} do
       deploy!()
@@ -828,8 +827,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         end)
 
       assert {[mismatch, blocked], [{:buy, "step_unknown"}, {:buy, "blocked"}]} = replies
-      assert %{reason: "step_unknown", note: "Your wallet is on " <> _} = mismatch
-      assert blocked == %{reason: "blocked", note: text(view, "#buy-key-button-why")}
+      assert %{reason: "step_unknown", cause: "state", note: "Your wallet is on " <> _} = mismatch
+
+      assert blocked == %{
+               reason: "blocked",
+               cause: "state",
+               note: text(view, "#buy-key-button-why")
+             }
     end
 
     # A press whose wallet stays on another network sends nothing, and the

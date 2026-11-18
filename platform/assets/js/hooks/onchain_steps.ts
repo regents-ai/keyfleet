@@ -31,9 +31,11 @@ export type Review = {
 /**
  * A press the server refused to prepare, with the note it shows the person for
  * it: one the chain's state makes certain to fail ("blocked"), in the words
- * beside its button, or any other ("step_unknown").
+ * beside its button, or any other ("step_unknown"); and its cause, "values"
+ * when a value the press was built from is why, or "state" when the chain's or
+ * the page's own state alone is.
  */
-type Refused = {reason: "step_unknown" | "blocked"; note: string}
+export type Refused = {reason: "step_unknown" | "blocked"; cause: "values" | "state"; note: string}
 
 /**
  * What the wallet answered one press: the hash or signature, or why nothing was
@@ -90,22 +92,28 @@ export const OnchainSteps: Hook = {
     // holds back, asks the server for the matching review and sends what comes
     // back. The browser's own agent presses the same way, through the tool the
     // group names (page_tools.ts), with its values over the form's, and the
-    // server judges those values: the person's form stays as it is.
+    // server judges those values. All its press tells the server is marked as
+    // the agent's, and the agent hears every answer in its own: the person's
+    // form and the note above their buttons stay as they are.
     const pressWith = async (button: HTMLElement, form: Record<string, string>, ask: Ask): Promise<Pressed | "lost"> => {
       const name = button.dataset.onchainStep!
+      const agent = ask === "prepare_for_agent"
+      const tell: Push = agent ? (event, payload) => push(event, {...(payload as object), agent: true}) : push
       const release = mark(button)
       const asks = (button as HTMLButtonElement).disabled === true || asksServer(this.review, name, form)
       const wallet = activeEthereumWallet()
       lost(this.el, false)
       // The server hears the press, and the form it was made from, just before
       // the wallet does and once its steps are built from that form: a
-      // proposal's words are saved then. The press never waits on this.
-      const heard = () => push("step_pressed", {step: name, form})
+      // proposal's words are saved then. The press never waits on this. With
+      // no wallet open no wallet is asked, so the press is not heard.
+      const heard = () => tell("step_pressed", {step: name, form})
 
       try {
-        if (!(wallet && asks)) {
+        if (!wallet) return await press(this.review, name, null, tell)
+        if (!asks) {
           heard()
-          return await press(this.review, name, wallet, push)
+          return await press(this.review, name, wallet, tell)
         }
         // The ask names the open wallet: a page that has just joined again can ask
         // before the server has heard which wallet is open. The steps that come
@@ -113,13 +121,14 @@ export const OnchainSteps: Hook = {
         const [result] = await this.pushEventTo(this.el, ask, {form, step: name, address: wallet.address})
         if (result?.status !== "fulfilled") return lostPress(this.el, name)
         const reply = result.value.reply as {review: Review; send: string} | Refused
-        // Refused: the server has already shown its note beside the buttons, and
-        // the reply carries that note, so the browser's own agent hears it too.
+        // Refused: the reply says why. For the person's press the server has
+        // already written the same note above the buttons; the agent hears it
+        // alone.
         if ("note" in reply) return reply
         // The agent's steps were built from the agent's values alone, and the
         // server has already done what hearing that press does.
-        if (ask === "prepare_and_send") heard()
-        return await press(reply.review, reply.send, wallet, push)
+        if (!agent) heard()
+        return await press(reply.review, reply.send, wallet, tell)
       } catch {
         return lostPress(this.el, name)
       } finally {
@@ -189,7 +198,7 @@ export const OnchainSteps: Hook = {
  * Sends or signs the named step through `wallet`, the wallet that was open at
  * the press (Privy's active wallet then, the only wallet that acts), even when
  * another is open by the time the steps arrive. With no wallet open at the
- * press, it sends nothing and the server's note says why. Reports only what the
+ * press, it sends nothing and reports why. Reports only what the
  * wallet answered, against the review it sent from: the hash or signature, or
  * why nothing was sent, and returns the same answer. The server decides what
  * the hash did.

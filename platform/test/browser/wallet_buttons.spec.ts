@@ -507,28 +507,29 @@ async function claimedAndDone(page: Page) {
   )
 }
 
-test("a browser agent's claim from a wallet the account doesn't link sends nothing, and the agent hears the note the person reads", async ({
+test("a browser agent's claim from a wallet the account doesn't link sends nothing, and the agent alone hears why", async ({
   page,
 }) => {
   await installModelContext(page)
   const {errors} = await openClaim(page)
   await useStandInWallet(page, stranger)
-  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeVisible()
+  const mismatch = page.locator("#key-profile-claim-action-mismatch")
+  await expect(mismatch).toBeVisible()
 
   const answer = await callTool(page, "keys_claim", {asset: usdc})
 
-  const note = page.locator("#key-profile-claim-action-press-note")
-  await expect(note).toBeVisible()
-  expect(answer).toMatchObject({ok: false, error: {message: await note.innerText()}})
+  expect(answer).toMatchObject({ok: false, error: {code: "step_unknown"}})
+  expect(answer.error!.message).toContain(await mismatch.innerText())
+  await expect(page.locator("#key-profile-claim-action-press-note")).toHaveCount(0)
   expect(await sentByStandIn(page)).toEqual([])
   expect(errors).toEqual([])
 })
 
 // The race: the server refuses the agent's ask from a wallet the account
 // doesn't link, and the person opens the account's wallet before that answer
-// is back. The refusal is the only thing that writes its note, so the page
-// never shows words other than the ones the agent heard.
-test("a browser agent's refused claim, then a wallet switch before the answer is back: the page shows no note but the one the agent heard", async ({
+// is back. The refusal goes to the agent alone, so the page shows no note for
+// it before or after the switch.
+test("a browser agent's refused claim, then a wallet switch before the answer is back: the page shows no note for it", async ({
   page,
 }) => {
   const connection = await holdConnection(page)
@@ -556,10 +557,8 @@ test("a browser agent's refused claim, then a wallet switch before the answer is
   await expect.poll(() => connection.unanswered()).toBe(0)
   await expect(page.locator("#key-profile-claim-action-mismatch")).toBeHidden()
   expect(answer).toMatchObject({ok: false, error: {code: "step_unknown"}})
-  // The switch clears the note about the wallet open before, so the person may
-  // see none; never other words than the agent heard.
   const shown = await page.evaluate(() => (window as unknown as {notesShown: string[]}).notesShown)
-  expect(shown.filter(note => note !== answer.error!.message)).toEqual([])
+  expect(shown).toEqual([])
   expect(await sentByStandIn(page)).toEqual([])
   expect(errors).toEqual([])
 })

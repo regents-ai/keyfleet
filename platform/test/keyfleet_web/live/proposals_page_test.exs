@@ -1497,11 +1497,118 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       render_async(view, @async_wait)
       refute has_element?(view, "#propose-button[disabled]")
 
+      # The Key the agent typed is why, and the agent alone hears it.
       agent.("8")
-      assert_reply(view, %{reason: "blocked", note: ^beside})
-      assert text(view, "#propose-action-press-note") == beside
+      assert_reply(view, %{reason: "blocked", cause: "values", note: ^beside})
+      refute has_element?(view, "#propose-action-press-note")
       assert shown(view) == {["7"], "The person's words"}
       refute has_element?(view, "#propose-button[disabled]")
+    end
+
+    # Costly failure: the note above the person's buttons speaks for the
+    # agent's press, and stays until the wallet answers the person's next
+    # one. Whatever the agent's press comes to, refused for its Key or a
+    # field too long, turned down in the wallet or sent, the person's note,
+    # form and button stay as their own press left them; what the wallet
+    # answered the agent is still counted.
+    test "an agent's press leaves the note above the person's buttons, whatever it comes to",
+         %{conn: conn} do
+      ProposalHelpers.keys_sold!(@fleet, [7], @holder)
+      ProposalHelpers.keys_sold!(@fleet, [8], @other)
+
+      ChainViews.put!(
+        list_views(keys: [{7, @holder, 0}, {8, @other, 0}]) ++
+          [{@shards, "mayGovern(uint256,address)", [id(8), @holder], {"bool", [false]}}]
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @list)
+      active!(view, "#propose-action", @holder)
+
+      theirs = %{"kind" => "decision", "key" => "8", "text" => "The person's words"}
+      view |> form("#propose-action-form", theirs) |> render_change()
+      render_async(view, @async_wait)
+
+      hook = fn event, params ->
+        view |> with_target("#propose-action") |> render_hook(event, params)
+      end
+
+      hook.("prepare_and_send", %{"form" => theirs, "step" => "propose", "address" => @holder})
+      assert_reply(view, %{reason: "blocked", note: note})
+      assert text(view, "#propose-action-press-note") == note
+
+      person = %{
+        note: note,
+        form: shown(view),
+        held: has_element?(view, "#propose-button[disabled]")
+      }
+
+      page = fn ->
+        %{
+          note: text(view, "#propose-action-press-note"),
+          form: shown(view),
+          held: has_element?(view, "#propose-button[disabled]")
+        }
+      end
+
+      agent = fn form ->
+        hook.("prepare_for_agent", %{"form" => form, "step" => "propose", "address" => @holder})
+        assert_reply(view, reply)
+        reply
+      end
+
+      counted =
+        wallet_failures(view.pid, fn ->
+          assert %{reason: "blocked", cause: "values"} =
+                   agent.(%{theirs | "text" => "The agent's words"})
+
+          assert page.() == person
+
+          too_long = String.duplicate("9", box(view, "rate"))
+
+          assert %{reason: "step_unknown", cause: "values"} =
+                   agent.(%{
+                     "kind" => "rate",
+                     "key" => "7",
+                     "text" => "Raise it",
+                     "rate" => too_long
+                   })
+
+          assert page.() == person
+
+          assert %{send: "propose", review: review} =
+                   agent.(%{theirs | "key" => "7", "text" => "The agent's words"})
+
+          hook.("step_failed", %{
+            "step" => "propose",
+            "reason" => "wallet_declined",
+            "agent" => true
+          })
+
+          assert page.() == person
+
+          hash = "0x" <> String.duplicate("4", 64)
+
+          hook.("step_sent", %{
+            "review_id" => review.id,
+            "step" => "propose",
+            "transaction_hash" => hash,
+            "agent" => true
+          })
+
+          assert has_element?(view, "#propose-action-sent-#{hash}")
+          assert page.() == person
+
+          # The person's own answer from the wallet writes the note again.
+          hook.("step_failed", %{"step" => "propose", "reason" => "wallet_declined"})
+          refute text(view, "#propose-action-press-note") == note
+        end)
+
+      assert counted == [
+               {:propose, "blocked"},
+               {:propose, "step_unknown"},
+               {:propose, "wallet_declined"},
+               {:propose, "wallet_declined"}
+             ]
     end
 
     test "the split preview cuts long amounts to four decimal places", %{conn: conn} do
@@ -1766,6 +1873,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       view |> form("#proposals-convert-form", form) |> render_change()
       assert has_element?(view, ~s(#{amount}[value="12.5"]))
 
+      # The browser agent's press of the same amount leaves the person's.
+      view
+      |> with_target("#proposals-convert")
+      |> render_hook("step_pressed", %{"step" => "convert", "form" => form, "agent" => true})
+
+      assert has_element?(view, ~s(#{amount}[value="12.5"]))
+
       view
       |> with_target("#proposals-convert")
       |> render_hook("step_pressed", %{"step" => "convert", "form" => form})
@@ -1930,10 +2044,22 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
 
       {:ok, view, _html} = open(signed_in_as(conn, @holder), "#{@list}/1")
-      render_async(view, @async_wait)
+      active!(view, "#proposal-cancel-action", @holder)
 
       assert why(view, "#proposal-cancel-button") == "Not your Key"
       assert why(view, "#proposal-vote-yes") == "No Keys to use"
+
+      # Nothing typed names the proposal's Key, so the chain's state alone is
+      # why, for a press of the agent's too.
+      view
+      |> with_target("#proposal-cancel-action")
+      |> render_hook("prepare_for_agent", %{
+        "form" => %{},
+        "step" => "cancel",
+        "address" => @holder
+      })
+
+      assert_reply(view, %{reason: "blocked", cause: "state"})
     end
 
     # A ballot the contract turns down says why it may have been, and the
@@ -2244,6 +2370,37 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   defp open(conn, path) do
     Enum.each(Fleets.catalog_ids(), &FleetProposals.read/1)
     live(conn, path)
+  end
+
+  # Each wallet failure the page process `pid` counted while `fun` ran, as
+  # `{flow, reason}`, in order.
+  defp wallet_failures(pid, fun) do
+    test_pid = self()
+    id = "proposals-page-wallet-failures-#{System.unique_integer([:positive])}"
+
+    :telemetry.attach(
+      id,
+      [:keyfleet, :wallet, :failure],
+      fn _event, _measurements, %{flow: flow, reason: reason}, _config ->
+        if self() == pid, do: send(test_pid, {:wallet_failure, flow, reason})
+      end,
+      nil
+    )
+
+    try do
+      fun.()
+      counted_failures([])
+    after
+      :telemetry.detach(id)
+    end
+  end
+
+  defp counted_failures(failures) do
+    receive do
+      {:wallet_failure, flow, reason} -> counted_failures([{flow, reason} | failures])
+    after
+      0 -> Enum.reverse(failures)
+    end
   end
 
   # The browser limit of the proposal form's box `name`.

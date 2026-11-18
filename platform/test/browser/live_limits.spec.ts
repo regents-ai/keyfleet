@@ -337,7 +337,8 @@ test("words and an image link pasted after blank lines or spaces past their box 
 // its own Key, which would go through, never reaches the wallet. The agent's
 // values are judged for its press alone: its proposal reaches the wallet, the
 // person's form and held-back button stay as they were, and the agent's own
-// Key that can't propose is answered with the words beside the button for it.
+// Key that can't propose is answered with the words beside the button for it,
+// to the agent alone.
 test("a browser agent's proposal with its own Key reaches the wallet while the form holds one that can't, and the form stays", async ({
   page,
 }) => {
@@ -379,7 +380,7 @@ test("a browser agent's proposal with its own Key reaches the wallet while the f
   await expect(press).toBeEnabled()
   const refused = await callTool(page, "proposals_create", {kind: "decision", key: String(unsold), text: words})
   expect(refused).toMatchObject({ok: false, error: {code: "blocked", message: beside}})
-  await expect(page.locator("#propose-action-press-note")).toHaveText(beside)
+  await expect(page.locator("#propose-action-press-note")).toHaveCount(0)
   await expect(keyBox).toHaveValue(String(key))
   await expect(press).toBeEnabled()
   expect(await sentByStandIn(page)).toHaveLength(1)

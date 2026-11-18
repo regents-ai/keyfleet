@@ -274,19 +274,25 @@ const proposeReview: Review = {
   inputs: {kind: "decision", key: "7", text: "The agent's words"},
 }
 
+// The person's own form on the proposal group, and the steps the page holds
+// for it.
+const theirs = {kind: "decision", key: "8", text: "The person's words"}
+const theirReview: Review = {...proposeReview, id: "review-person", inputs: theirs}
+
+// Each proposal group's leaving, run after its test whatever became of it, so
+// a test that fails leaves no tool offered for the next.
+const leaving: (() => void)[] = []
+
 // The hook on the proposal group, offering its browser agent's tool, with the
-// person's form holding Key 8 and its Propose button held back for it, and
-// the server answering an agent's ask with `reply`.
-function proposalGroup(reply: () => unknown) {
+// person's form holding Key 8 and its Propose button held back for it unless
+// `held` is false, and the server answering an agent's ask with `reply`.
+function proposalGroup(reply: () => unknown, held = true) {
   const pushed: [string, unknown][] = []
   const offered: ModelContextTool[] = []
+  const handlers: Record<string, (payload: unknown) => void> = {}
   vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
-  const button = {dataset: {onchainStep: "propose"}, disabled: true}
-  const fields = [
-    {dataset: {onchainInput: "kind"}, value: "decision"},
-    {dataset: {onchainInput: "key"}, value: "8"},
-    {dataset: {onchainInput: "text"}, value: "The person's words"},
-  ]
+  const button = {dataset: {onchainStep: "propose"}, disabled: held}
+  const fields = Object.entries(theirs).map(([name, value]) => ({dataset: {onchainInput: name}, value}))
   const el = {
     id: "propose-action",
     dataset: {webmcpTool: "proposals_create"},
@@ -298,21 +304,26 @@ function proposalGroup(reply: () => unknown) {
   }
   const hook = {
     el,
-    handleEvent: () => undefined,
+    handleEvent: (event: string, handler: (payload: unknown) => void) => {
+      handlers[event] = handler
+    },
     pushEventTo: async (_target: unknown, event: string, payload: unknown) => {
       pushed.push([event, payload])
       return [{status: "fulfilled", value: {reply: event === "prepare_for_agent" ? reply() : {}}}]
     },
   }
   OnchainSteps.mounted!.call(hook)
+  leaving.push(() => OnchainSteps.destroyed!.call(hook))
 
   return {
     pushed,
+    // What the press told the server, leaving out the wallet the page reports on its own.
+    told: () => pushed.filter(([event]) => event !== "onchain_active_wallet"),
+    held: (steps: Review) => handlers["onchain-steps:review"]({component_id: el.id, review: steps}),
     call: async (input: Record<string, string>) => {
       await vi.waitFor(() => expect(offered).toHaveLength(1))
       return offered[0].execute(input, {})
     },
-    leave: () => OnchainSteps.destroyed!.call(hook),
   }
 }
 
@@ -324,6 +335,8 @@ describe("a browser agent's press is judged on its own values", () => {
     vi.stubGlobal("window", Object.assign(new EventTarget(), {localStorage: memoryStorage()}))
     vi.stubGlobal("HTMLInputElement", class {})
   })
+
+  afterEach(() => leaving.splice(0).forEach(leave => leave()))
 
   it("asks for steps built from its values while the person's button is held back, and sends them", async () => {
     const active = wallet()
@@ -339,18 +352,93 @@ describe("a browser agent's press is judged on its own values", () => {
       {form: {kind: "decision", key: "7", text: "The agent's words"}, step: "propose", address: signer},
     ])
     expect(page.pushed.map(([event]) => event)).not.toContain("step_pressed")
-    page.leave()
   })
 
   it("answers the server's words for a press of its values the chain's state holds back, and asks no wallet", async () => {
     const active = wallet()
     replaceActiveEthereumWallet(active.selected)
-    const page = proposalGroup(() => ({reason: "blocked", note: "Not your Key"}))
+    const page = proposalGroup(() => ({reason: "blocked", cause: "values", note: "Not your Key"}))
 
     const answer = await page.call({kind: "decision", key: "9", text: "The agent's words"})
 
     expect(answer).toMatchObject({ok: false, error: {code: "blocked", message: "Not your Key"}})
     expect(active.sent).toEqual([])
-    page.leave()
+  })
+
+  // Costly failure: the agent's values are the person's, so the steps the page
+  // holds match them, and the person's button is held back; sent from the page
+  // as they are, the held steps would reach the wallet and fail on the chain.
+  it("asks for its steps when its values are the person's and their button is held back, so the held steps never reach the wallet", async () => {
+    const active = wallet()
+    replaceActiveEthereumWallet(active.selected)
+    const page = proposalGroup(() => ({reason: "blocked", cause: "values", note: "Not your Key"}))
+    page.held(theirReview)
+
+    const answer = await page.call(theirs)
+
+    expect(answer).toMatchObject({ok: false, error: {code: "blocked", message: "Not your Key"}})
+    expect(active.sent).toEqual([])
+    expect(page.told()).toEqual([["prepare_for_agent", {form: theirs, step: "propose", address: signer}]])
+  })
+
+  // Costly failure: with no wallet open the press was heard as the person's,
+  // with the agent's values, clearing what the person typed and saving the
+  // agent's words as theirs.
+  it("tells the server nothing as the person when no wallet is open", async () => {
+    const page = proposalGroup(() => ({review: proposeReview, send: "propose"}))
+
+    const answer = await page.call({kind: "decision", key: "7", text: "The agent's words"})
+
+    expect(answer).toMatchObject({ok: false, error: {code: "wallet_unavailable"}})
+    expect(page.told()).toEqual([["step_failed", {step: "propose", reason: "wallet_unavailable", agent: true}]])
+  })
+
+  it("sends from the steps the page holds when its values match them, and says each report is the agent's", async () => {
+    const active = wallet()
+    replaceActiveEthereumWallet(active.selected)
+    const page = proposalGroup(() => ({review: proposeReview, send: "propose"}), false)
+    page.held(theirReview)
+
+    const answer = await page.call(theirs)
+
+    expect(answer).toMatchObject({ok: true, transaction_hash: hash})
+    expect(active.sent).toHaveLength(1)
+    expect(page.told()).toEqual([
+      ["step_pressed", {step: "propose", form: theirs, agent: true}],
+      ["step_sent", {review_id: "review-person", step: "propose", transaction_hash: hash, agent: true}],
+    ])
+  })
+
+  it("reports a decline in the wallet as the agent's", async () => {
+    const active = wallet({answer: () => { throw Object.assign(new Error("User rejected"), {code: 4001}) }})
+    replaceActiveEthereumWallet(active.selected)
+    const page = proposalGroup(() => ({review: proposeReview, send: "propose"}))
+
+    const answer = await page.call({kind: "decision", key: "7", text: "The agent's words"})
+
+    expect(answer).toMatchObject({ok: false, error: {code: "wallet_declined"}})
+    expect(page.told().at(-1)).toEqual(["step_failed", {step: "propose", reason: "wallet_declined", agent: true}])
+  })
+})
+
+// Invariant: with no wallet open no wallet is asked, so the person's press is
+// not heard either: nothing typed is cleared and no words are saved for a
+// press that sent nothing.
+describe("a press with no wallet open", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", Object.assign(new EventTarget(), {localStorage: memoryStorage()}))
+    vi.stubGlobal("document", {})
+  })
+
+  it("reports only that no wallet answered", async () => {
+    const page = group(() => ({review, send: "buy"}))
+    page.held(review)
+
+    page.press()
+
+    await vi.waitFor(() =>
+      expect(page.pushed).toContainEqual(["step_failed", {step: "buy", reason: "wallet_unavailable"}]),
+    )
+    expect(page.pushed.map(([event]) => event)).toEqual(["onchain_active_wallet", "step_failed"])
   })
 })

@@ -12,7 +12,7 @@
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
-import type {Pressed} from "./hooks/onchain_steps"
+import type {Pressed, Refused} from "./hooks/onchain_steps"
 import {described} from "./tool_description"
 import {inputProblem, type Schema} from "./tool_input"
 import type {Failure} from "./wallet_actions/send_step"
@@ -57,11 +57,10 @@ type Offered = {groups: Group[]; registration: AbortController}
 const offered = new Map<string, Offered>()
 
 // What the agent hears when a press sent nothing, or may have sent: what the
-// note the page shows the person says, in words for the agent. A press answers
-// at once and never waits for that note. A press the server refused to prepare
-// carries the server's note, and the agent hears that instead (onchain_steps.ts),
-// with the hint here; one the chain's state makes certain to fail, with
-// `blockedHint`.
+// note the page shows the person for such a press says, in words for the
+// agent. A press answers at once and never waits for the server. A press the
+// server refused to prepare carries the server's note, and the agent hears that
+// instead (onchain_steps.ts), with the hint for its cause (`refusedHint`).
 const failures: Record<Failure, {message: string; hint: string}> = {
   step_unknown: {
     message: "This can't be sent as it stands. Nothing was sent.",
@@ -97,9 +96,15 @@ const failures: Record<Failure, {message: string; hint: string}> = {
   },
 }
 
-// The chain's state, read for the values this call sent, makes the press
-// certain to fail.
-const blockedHint = "Nothing was sent: the chain's state makes this call certain to fail now. Call again once that changes."
+// A refused press's hint, by what the server says is why. A value the call
+// used, its own or the form's where it sent none: another value may go through
+// now. The chain's state alone: the same call goes through once that changes.
+// Anything else on the page, such as the wallet open there.
+function refusedHint({reason, cause}: Refused): string {
+  if (cause === "values") return "Nothing was sent: a value this call used is why, as the message says. Change it in the call, then call again."
+  if (reason === "blocked") return "Nothing was sent: the chain's state makes this call certain to fail now. Call again once that changes."
+  return failures.step_unknown.hint
+}
 
 // JSON imports widen every literal, so the manifest is read as the shape it is written in.
 const entries = manifest.tools as unknown as Entry[]
@@ -120,9 +125,7 @@ function answer(pressed: Pressed | "lost") {
     return {ok: true, transaction_hash: pressed.transaction_hash, note: "Sent from the wallet. The page shows when it lands."}
   }
   if ("signature" in pressed) return {ok: true, signature: pressed.signature}
-  if ("note" in pressed) {
-    return refusal(pressed.reason, pressed.note, pressed.reason === "blocked" ? blockedHint : failures[pressed.reason].hint)
-  }
+  if ("note" in pressed) return refusal(pressed.reason, pressed.note, refusedHint(pressed))
   const {message, hint} = failures[pressed.reason]
   return refusal(pressed.reason, message, hint)
 }
