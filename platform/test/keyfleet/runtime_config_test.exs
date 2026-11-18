@@ -149,15 +149,26 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("PHX_HOST", "shadow.example.test")
     System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
     shared = [gc_every_n_keepalive_requests: 1]
+    websocket = [max_fragmented_message_size: 40_000]
 
     # As a release boots: what the build baked in, with runtime.exs merged over it.
     production = Config.Reader.merge(build_config(:prod), read_runtime_config(:prod))
 
     assert production |> get_in([:keyfleet, KeyfleetWeb.Endpoint, :http]) |> Enum.sort() ==
-             [http_1_options: shared, ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 4000]
+             [
+               http_1_options: shared,
+               ip: {0, 0, 0, 0, 0, 0, 0, 0},
+               port: 4000,
+               websocket_options: websocket
+             ]
 
     assert build_config(:dev) |> get_in([:keyfleet, KeyfleetWeb.Endpoint, :http]) |> Enum.sort() ==
-             [http_1_options: shared, ip: {127, 0, 0, 1}, port: 4000]
+             [
+               http_1_options: shared,
+               ip: {127, 0, 0, 1},
+               port: 4000,
+               websocket_options: websocket
+             ]
 
     System.put_env("KEYFLEET_BROWSER_TEST", "1")
     browser = Config.Reader.merge(build_config(:test), read_runtime_config(:test))
@@ -165,6 +176,7 @@ defmodule Keyfleet.RuntimeConfigTest do
 
     assert endpoint[:http] == false
     assert endpoint[:https][:http_1_options] == shared
+    assert endpoint[:https][:websocket_options] == websocket
     assert endpoint[:https][:certfile] =~ "localhost.pem"
   end
 

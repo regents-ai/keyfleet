@@ -15,13 +15,23 @@ defmodule KeyfleetWeb.Endpoint do
     "referrer-policy" => "no-referrer"
   }
 
+  # The largest message a live page sends, which config/config.exs works out.
+  @live_message_bytes Application.compile_env!(:keyfleet, [
+                        __MODULE__,
+                        :http,
+                        :websocket_options,
+                        :max_fragmented_message_size
+                      ])
+
   # fullsweep_after: 0 has each page's connection give back what it used to send
   # the page: 1.67 MB down to 0.09 MB a page where it was measured
-  # (ash-frontend, references/public-figures.md).
+  # (ash-frontend, references/public-figures.md). A frame larger than a live
+  # page's largest message closes the connection before it is read.
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [
       connect_info: [:peer_data, :uri, session: @session_options],
-      fullsweep_after: 0
+      fullsweep_after: 0,
+      max_frame_size: @live_message_bytes
     ],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 

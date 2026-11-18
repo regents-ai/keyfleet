@@ -1354,7 +1354,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
             sign_in_ends_at: sign_in_ends_at(conn)
           }),
           timeout: :infinity,
-          compress: false
+          compress: false,
+          # Bandit's own, which the site's listener lowers for the live
+          # pages' socket (config/config.exs).
+          max_fragmented_message_size: 8_000_000
         )
 
       {:error, reason} ->

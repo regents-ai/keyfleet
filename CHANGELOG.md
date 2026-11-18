@@ -11449,3 +11449,44 @@ a scratch walk that is not kept.
   1 MiB body it does not read, a chunked body, a refused 7.5 MB body, a body a route reads
   (the connection stays open for a second request) and a sender that stops short (heard
   within 9 to 12 seconds); without the plug, four of its six fail.
+
+## 2026-11-18 — A live page's socket takes no message larger than a page sends
+
+- In the reviewers' round-six proof 303, 20 anonymous 1 MB messages nested half a million
+  deep peaked at 1,525 MiB over the LiveView websocket. WebSockAdapter gives every
+  upgrade frames of up to 10,000,000 bytes and Bandit takes messages in parts up to
+  8,000,000; Phoenix's V2 serializer decodes each whole, then crashes on its shape.
+- The endpoint's `/live` websocket now takes frames of at most 40,000 bytes, header
+  included (`max_frame_size`), and the listener's `websocket_options` take messages in
+  parts up to the same 40,000 (`max_fragmented_message_size`, config/config.exs, which
+  Phoenix's socket options do not take). `KeyfleetWeb.Plugs.NotebookGateway` passes Bandit's
+  own 8,000,000 on its upgrade, so a notebook's socket is as it was.
+- 40,000 is the largest message a live page sends, rounded up. That is a post of 4,000
+  characters (rooms, direct messages and a Key's wall: `maxlength` 4,000 in the browser,
+  4,000 on the server), each a three-byte letter, which LiveView's form encoding writes
+  as nine characters: 36,000, and under 36,200 with the field's name and the message
+  around it; a 36,340-byte message was sent here and answered. Below it: a poll at its server limits (notes 2,000 × 9,
+  question 200 × 9, ten choices of 100 four-byte letters × 12) about 32,000; a proposal
+  with its launch fields (5,104 bytes × 3) about 15,500; the wallet steps send the same
+  fields as JSON, at most two bytes a byte for text a person types; the key map asks for
+  pictures a hundred Keys at a time. No live page takes a file.
+- After: proof 303's websocket half has all 20 closed at the frame's header, 59 MiB peak
+  with the test's own 20 MB of messages in the same machine. Through a real port, a
+  40,001-byte frame is closed with 1009, a 40,000-byte one is read, two parts of 30,000
+  are closed with 1009, and a 36,340-byte message is answered.
+- Not covered:
+  - Long-poll. Phoenix's long-poll reads each message with Plug's default of 8 MB and
+    has no setting to lower it, and the page's script falls back to it when the
+    websocket has not connected within 2.5 seconds (`longPollFallbackMs`,
+    assets/js/app.ts), so it stays on: proof 303's long-poll half peaks at 1,988 MiB
+    here, as before.
+  - A deep message inside the bound still costs: decoding 39,980 bytes of nesting grows
+    the process by 1.5 MiB, and its crash adds the rest. 20 at once peaked at 28 MiB,
+    100 at once at 360 MiB.
+  - Each such crash writes about 85 KB to production's JSON log whatever the message's
+    size past a nesting of about 1,000: LoggerJSON has no length setting, and Elixir's
+    8 KiB truncation applies to its own formatter only.
+  - A person who pastes more than 40,000 bytes into a field the browser does not limit
+    (a proposal's text, a poll's choices, the Keys list on a Key's page) has the
+    connection closed and reconnected instead of seeing the field's own message, and the
+    page sends the form again when it reconnects.
