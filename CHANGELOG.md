@@ -11663,9 +11663,10 @@ fails, as above.
   `/classic/1`, which crashed the page's process (the walk saw the server's error and one
   more rejoin), and the prompts on a Key page; either way nothing reached the wallet and
   the person saw no note. Held steps reached the wallet, and their reports went to the same
-  wrong part. The homepage's numbers match and its press worked. Shape (b), the window in the address, draws it at
-  mount too and shifts the numbers the same way. Without either, such an ask reaches no
-  part and nothing is sent, as before. Reported to the Keyfleet chief with what a fix takes.
+  wrong part. The homepage's numbers match and its press worked. Shape (b), the window in
+  the address, draws it at mount too and shifts the numbers the same way. Without either,
+  such an ask reaches no part and nothing is sent, as before. Reported to the Keyfleet
+  chief with what a fix takes.
 - Words: the round-three entry no longer says the agent hears exactly the note the report
   leaves; round two's line 413 is a paired agent's Issue shard, not Claim; "does not arise
   here" now says it still arises in the Buy Key window. `verification/features.yml` no
@@ -11673,3 +11674,28 @@ fails, as above.
   wallet in the Buy Key window. The public 17 November entry has one Wallet buttons line,
   which says the Buy Key window still closes then, and an 18 November entry says what
   changed for customers.
+- Tests (ebaf892d1): the hook's ask test now has a server that builds steps only for the
+  wallet the ask names, so it fails for the reason it names; the test that passed without
+  the form it described is gone, as the shard walks cover that case. The agent's refusal
+  test in `platform/assets/test/page_tools.test.ts` no longer asserts a reason the code
+  never gives.
+- Gaps (b40a9e55d): `verification/features.yml` lists the agent's open wallet gaps: an
+  asked press that never answers once the page moves away, a dropped connection during the
+  ask that makes the agent wait about 30 seconds, offline words the person never sees, two
+  close failures that leave the later note, the signed-out note the agent hears differently,
+  and "Sent" for a hash the page then marks as not this step.
+
+Checks on the six commits together: `mix format --check-formatted`, `mix compile
+--warnings-as-errors` and `mix credo --strict` clean; the type check exit 0; Vitest 503 of
+503 (38 files, the review's files left out); the wallet ExUnit files 257 passed, 17
+excluded; chain walks in Chromium 148 of 148. The review's proofs: round four's unit file
+passes 3 of 3. Round four's walks pass 11 of 13: FINDING 1 fails as it should, since the
+switch now clears the note and the person reads nothing untrue (the walk expects a note on
+screen); CHECK 5b fails as it should, as the kept shard walk catches an ask with its
+address taken out (the wallet is asked 0 times). Round three's walks are as on 1215900c2:
+HELD 1 and HELD 5 fail on words only, CHECK 6a and 6b fail as they should. Round three's
+unit cases V1 and V2 fail because `press` now takes the wallet before `push`; with the
+wallet passed, both pass. Round two's walks pass 10 of 18: FINDING 2, 3, 4, 5, 6, 12 and
+13 stay open as before, and BEFORE b fails because the ask now names the wallet (fixed on
+17 November). Round one's server file passes 6 of 7; the missing `step_signed` handler in
+`KeyfleetWeb.WalletPanel` is unchanged, as recorded earlier.
