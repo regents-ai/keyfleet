@@ -751,8 +751,9 @@ Fleet's treasury owes REGENT revenue staking on to staking, with
 `sendToStaking()` on that treasury. On Base the keeper is the Regents Safe, so
 each Trading Fleet's staking send there is a Safe transaction, and the share
 waits in the fleet's treasury until one is made. For a send made by the Safe,
-the signer who completes the signatures submits the transaction themselves in
-the same step; a fully signed send is never left waiting to be submitted.
+complete the signatures only once the send's Safe transaction number is the
+next one, and the signer who completes them submits the transaction themselves
+in the same step; a fully signed send is never left waiting to be submitted.
 
 ## The trait table
 

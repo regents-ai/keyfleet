@@ -12362,3 +12362,15 @@ step's report).
   in phase 2 opens phase 3.
 - The Safe-step suite drops its checks of the old trigger and cancelling sentences and checks that
   each phase file, landed in phase 4, is refused as its description says. No contract changed.
+
+## 2026-11-18 — A Safe staking send is signed in full only once its number is next
+
+- The rule for a Trading Fleet's staking send made by the Safe, in `docs/deployment.md`'s
+  Trading Fleets section and `contracts/README.md`'s Paybacks paragraph, now reads the same in
+  both: for a send made by the Safe, complete the signatures only once the send's Safe
+  transaction number is the next one, and the signer who completes them submits the transaction
+  themselves in the same step; a fully signed send is never left waiting to be submitted.
+- This corrects the entry "The separate-keeper step is withdrawn; on Base the keeper stays the
+  Regents Safe", which gave the rule without its first part.
+- Only the keeper or the Regents Safe may send what is owed on to staking, as before. The guide and
+  README only; no script or contract changed.

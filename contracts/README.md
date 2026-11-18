@@ -1692,9 +1692,10 @@ longer send, and the Safe is the collection's `SAFE`. Anyone else, the creator
 included, is refused (`OnlyKeeperOrSafe(caller)`). On Base the keeper is the
 Regents Safe, so each Trading Fleet's staking send there is a Safe transaction,
 and the share waits in the fleet's treasury until one is made. For a send made
-by the Safe, the signer who completes the signatures submits the transaction
-themselves in the same step; a fully signed send is never left waiting to be
-submitted. All of `stakingOwed` goes
+by the Safe, complete the signatures only once the send's Safe transaction
+number is the next one, and the signer who completes them submits the
+transaction themselves in the same step; a fully signed send is never left
+waiting to be submitted. All of `stakingOwed` goes
 into REGENT revenue staking through `depositUSDC`, tagged
 `keccak256("keyfleet.trading_payback")` with the fleet's manager as the source
 reference, through an exact approval the deposit must use up
