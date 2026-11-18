@@ -60,6 +60,10 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// Cascade, which sell past their decks, and phase 4 lets anyone create a fleet. The steps to it
     /// and to every phase after it wait for the randomness subscription.
     uint8 public constant FIRST_DRAWING_PHASE = 3;
+    /// @notice The native ETH, in wei, that the signers read the randomness subscription holds
+    /// before signing the calls to phases 3 and 4: the 0.5 ETH the deployment guide asks it to be
+    /// funded with. The step itself reads no balance.
+    uint256 public constant SUBSCRIPTION_FUNDING = 0.5 ether;
 
     /// @notice The step named by `KEYFLEET_STEP` is not `founding-fleets`, `advance-phase` or
     /// `club-gifts`.
@@ -148,7 +152,8 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// with no check of the subscription. Its description says so, says to throw the file away once
     /// its phase has opened, and names what the signers read on the chain before signing: the phase
     /// the collection is in now and, for the calls to phases 3 and 4, that the subscription lists the
-    /// collection and, on Base, that the Regents Safe owns it.
+    /// collection, on Base that the Regents Safe owns it, and that it holds at least
+    /// `SUBSCRIPTION_FUNDING` of native ETH.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -275,23 +280,29 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// @dev What the signers read of the randomness subscription before the calls to phases 3 and
     /// 4, by its id and coordinator as the collection names them: what `requireSubscriptionReady`
     /// checks on this chain, that the subscription lists the collection and, on Base, that the
-    /// Regents Safe owns it.
-    function _subscriptionChecks(Subscription memory subscription) private view returns (string memory) {
+    /// Regents Safe owns it, and that it holds `SUBSCRIPTION_FUNDING`, which the step does not read.
+    function _subscriptionChecks(Subscription memory subscription) private pure returns (string memory) {
         string memory named = string.concat(
             "randomness subscription ",
             vm.toString(subscription.id),
             " on the coordinator ",
             vm.toString(address(subscription.coordinator))
         );
+        string memory funded = string.concat(
+            ", and that its native ETH balance, the second value getSubscription returns, is at least ",
+            vm.toString(SUBSCRIPTION_FUNDING),
+            " wei"
+        );
         if (subscription.requiredOwner == address(0)) {
-            return string.concat(", and that ", named, " lists the collection");
+            return string.concat(", that ", named, " lists the collection", funded);
         }
         return string.concat(
             ", that the Regents Safe ",
             vm.toString(subscription.requiredOwner),
             " owns ",
             named,
-            ", and that the subscription lists the collection"
+            ", that the subscription lists the collection",
+            funded
         );
     }
 

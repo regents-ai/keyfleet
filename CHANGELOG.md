@@ -12217,3 +12217,22 @@ step's report).
   description warns of exactly that. The test of every phase file's description also checks the
   throw-away sentence on every file and the warning only on the files to phases 1 and 2.
 - No contract changed.
+
+## 2026-11-18 — The phase-3 and phase-4 files ask the signers to read the subscription's balance
+
+- The deployment guide asks for the randomness subscription to be funded with 0.5 ETH before the
+  first sale, but no phase file asked the signers to read its balance. The descriptions of the
+  calls to phases 3 and 4 now also ask them to read that its native ETH balance, the second
+  value `getSubscription` returns, is at least 500000000000000000 wei, on every chain.
+- The figure is in one place, `SUBSCRIPTION_FUNDING` (0.5 ether) in
+  `contracts/script/KeyfleetSafeSteps.s.sol`, and the descriptions print it from there.
+  `docs/deployment.md` agrees in "Keeping the subscription funded" and in "Before signing a
+  phase file", whose `getSubscription` read now names the balance too, and the README's
+  paragraph on phase files names the constant.
+- The step itself reads no balance. `requireSubscriptionReady` is shared with the record step
+  and the trading factory's approval, where a balance floor would stop the record, and a balance
+  read when the file is written says nothing of it when the file is signed; so the signers read
+  it, as they read the owner and the consumers.
+- The Safe-step suite checks that the calls to phases 3 and 4, and only they, name the balance.
+  `_subscriptionChecks` is now `pure`, which clears the compiler's warning on it. No contract
+  changed.

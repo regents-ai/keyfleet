@@ -1859,7 +1859,10 @@ latest broadcast there.
   what the signers read on the chain before signing, since `advancePhase` names
   no phase and opens whichever is next: the collection's phase now and, for
   phases 3 and 4, what the step checks on that chain, that the subscription lists the
-  collection and, on Base only, that the Regents Safe owns it. It also says to
+  collection and, on Base only, that the Regents Safe owns it, and that it holds
+  at least `SUBSCRIPTION_FUNDING` (0.5 ETH, as "Keeping the subscription funded"
+  in [../docs/deployment.md](../docs/deployment.md) asks), which the step does
+  not read. It also says to
   throw the file away once its phase has opened, and the files to phases 1 and
   2 that, landed once phase 2 has opened, either opens phase 3 with no check of
   the subscription. A rehearsal's files carry the same description.

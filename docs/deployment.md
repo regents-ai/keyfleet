@@ -209,7 +209,9 @@ the coordinator. It never permits a second request. Expiry requires this call;
 time passing alone does not release the lock.
 
 - **Fund it with 0.5 ETH before the first sale.** That covers 500 keys waiting
-  at once at the cap, and about 100,000 answers at today's prices.
+  at once at the cap, and about 100,000 answers at today's prices. The phase-3
+  and phase-4 files ask the signers to read that it holds at least that,
+  500000000000000000 wei, before signing them.
 - **Never let it fall below 0.25 ETH**, enough for 250 keys waiting at once at
   the cap.
 - **Check it by hand.** Nothing watches the balance for you. When it is
@@ -508,9 +510,11 @@ written for a phase already open must therefore be thrown away, never signed.
 Each file's own description (`meta.description`) says so, and says what the
 signers read on Base before signing: the phase the collection is in now, and
 in `base.phase-3.json` and `base.phase-4.json` also that the Regents Safe owns
-the randomness subscription and the subscription lists the collection. The
-description says what the step saw when it wrote the file. Read the facts on
-Base yourselves, not from the file:
+the randomness subscription, that the subscription lists the collection, and
+that it holds at least the 0.5 ETH asked for under "Keeping the subscription
+funded". The description says what the step saw when it wrote the file, and
+the step reads no balance. Read the facts on Base yourselves, not from the
+file:
 
 ```sh
 # The phase the collection is in now.
@@ -521,8 +525,9 @@ cast call 0xaBC959B463542497639adA57388c65D05AB34A30 \
   "randomness()(address,uint256,bytes32)" --rpc-url "$BASE_RPC_URL"
 
 # The subscription's owner, the fourth value, must be the Regents Safe,
-# 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e, and its consumers, the fifth,
-# must include the collection.
+# 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e, its consumers, the fifth,
+# must include the collection, and its native ETH balance, the second, must be
+# at least 500000000000000000 (0.5 ETH).
 cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
   "getSubscription(uint256)(uint96,uint96,uint64,address,address[])" <subscription id> \
   --rpc-url "$BASE_RPC_URL"

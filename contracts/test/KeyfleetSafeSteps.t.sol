@@ -272,8 +272,8 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     /// opening time and says to throw the file away once its phase has opened for every phase, warns
     /// only in the calls to phases 1 and 2 that landed once phase 2 has opened either opens phase 3
     /// with no check of the subscription, and only for the calls to phases 3 and 4 names the
-    /// subscription the signers read first, by its id and its coordinator, and the Safe as its owner
-    /// when `namesOwner`.
+    /// subscription the signers read first, by its id and its coordinator, the balance it must hold,
+    /// and the Safe as its owner when `namesOwner`.
     function _assertPhaseBatches(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, bool namesOwner)
         private
     {
@@ -309,6 +309,18 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
                 "The subscription, before phases 3 and 4"
             );
             assertEq(_names(description, vm.toString(address(coordinator))), reads, "Its coordinator");
+            assertEq(
+                _names(
+                    description,
+                    string.concat(
+                        "its native ETH balance, the second value getSubscription returns, is at least ",
+                        vm.toString(safeSteps.SUBSCRIPTION_FUNDING()),
+                        " wei."
+                    )
+                ),
+                reads,
+                "Its balance, before phases 3 and 4"
+            );
             assertEq(_names(description, vm.toString(signers)), reads && namesOwner, "Its owner, where checked");
 
             _make(calls, signers);
