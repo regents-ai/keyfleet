@@ -123,6 +123,85 @@ test("an owner issues a shard to another wallet, renews it and ends it, and ever
   expect(errors).toEqual([])
 })
 
+// When the page joins again after its connection drops, LiveView first sends
+// its forms back to the fresh server, and draws the page and runs the hooks'
+// `reconnected` only once the server has answered. This holds that answer, and
+// everything the server sends after it, until `release`, as a slow network
+// would. It counts the presses that ask the server for their steps meanwhile.
+async function holdRecovery(page: Page) {
+  let armed = false
+  let asks = 0
+  let held: (() => void)[] | null = null
+  const recovering = new Set<string>()
+  await page.routeWebSocket(/\/live\/websocket/, socket => {
+    const server = socket.connectToServer()
+    socket.onMessage(message => {
+      if (armed && typeof message === "string") {
+        const [, ref, , kind, payload] = JSON.parse(message)
+        if (kind === "event" && payload?.type === "form") recovering.add(ref)
+        if (kind === "event" && payload?.event === "prepare_and_send") asks += 1
+      }
+      server.send(message)
+    })
+    server.onMessage(message => {
+      if (!held && typeof message === "string") {
+        const [, ref, , kind] = JSON.parse(message)
+        if (kind === "phx_reply" && recovering.has(ref)) held = []
+      }
+      if (held) held.push(() => socket.send(message))
+      else socket.send(message)
+    })
+  })
+  return {
+    arm: () => {
+      armed = true
+    },
+    holding: () => held !== null,
+    asks: () => asks,
+    release: () => {
+      const waiting = held ?? []
+      held = null
+      armed = false
+      for (const send of waiting) send()
+    },
+  }
+}
+
+type Live = {liveSocket: {disconnect(done: () => void): void; connect(): void}}
+
+test("a shard pressed while the page joins again, after its days changed, reaches the wallet and is followed until it lands", async ({
+  page,
+}) => {
+  const recovery = await holdRecovery(page)
+  const key = sellKey(fleet, me)
+  const errors = await openKey(page, key)
+  await page.locator("#key-other-wallet summary").click()
+  await page.locator("#key-shard-wallet").fill(agentWallet)
+  await expect(page.locator("#key-issue-shard-action-line")).toContainText("30 days")
+
+  await page.evaluate(() => new Promise<void>(resolve => (window as unknown as Live).liveSocket.disconnect(resolve)))
+  await page.locator("#key-shard-days").fill("45")
+  recovery.arm()
+  await page.evaluate(() => (window as unknown as Live).liveSocket.connect())
+  await expect.poll(() => recovery.holding()).toBe(true)
+
+  // The page holds the steps for 30 days and shows 45, so the press asks the
+  // fresh server for the steps for 45 before the page has told it which wallet
+  // is open: the ask names it.
+  await page.locator("#key-issue-shard-button").click()
+  await expect.poll(() => recovery.asks()).toBe(1)
+  recovery.release()
+
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [issued] = await sentByStandIn(page)
+  expect(issued.transaction.to.toLowerCase()).toBe(shardsContract)
+  expect(days(issued.transaction.data)).toBe(45)
+
+  landStep(issued.hash, issued.transaction, true)
+  await expect(sentLine(page, "key-issue-shard-action", issued.hash)).toContainText("Done.")
+  expect(errors).toEqual([])
+})
+
 // Signed out, the key's present card asks Privy for the open wallet, and this
 // test server has no Privy app for it, so the page's own errors aren't
 // checked here.

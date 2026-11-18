@@ -84,6 +84,9 @@ Changes to Keyfleet, newest first.
 - **Wallet buttons.** When a page loses its connection and gets it back, as open pages do
   while Keyfleet updates, its wallet buttons work again without a reload. Your account
   page knows your wallet again too.
+- **Wallet buttons.** A wallet button pressed while the page is getting its connection
+  back, after you changed the form beside it, now reaches your wallet, where it sent
+  nothing.
 - **Browser agents.** When your browser's own agent presses a wallet button while a wallet
   your account doesn't link is open, nothing is sent, and the agent now hears the same
   note you see beside the button, naming which of your wallets to switch to.

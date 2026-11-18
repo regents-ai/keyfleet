@@ -11564,3 +11564,57 @@ words: they expect the server's "Your wallet declined this…" where the agent n
 "The wallet declined this…". CHECK 6a and 6b now fail as they should: the note no longer
 rides on `step_failed`'s answer, and a report that fails offline no longer turns a possible
 send into "nothing was sent".
+
+## 2026-11-17 — A press that asks for its steps names the open wallet
+
+- Found by the review's round two (its walk at line 476): when a page joins again,
+  LiveView sends the page's forms back to the fresh server before the hook's
+  `reconnected` tells it which wallet is open. A press in that moment that asked
+  `prepare_and_send` for its steps (its form changed, or it held no steps) reached a group
+  with no wallet to build them for, and nothing reached the wallet.
+- Changed, as ash-template d60a9b31 did: the hook names the open wallet in that ask
+  (`address`, the shape `onchain_active_wallet` uses), and `KeyfleetWeb.WalletPanel` takes
+  it as the page's wallet (`take_active/2`, shared with `onchain_active_wallet`) before it
+  builds the steps. It says only which wallet is open: steps are built for it only when the
+  account links it (`OnchainSteps.signer/2`), and a wallet the account doesn't link gets no
+  steps and the note naming both. Nothing holds back, defers or repeats a press.
+- Where Keyfleet differs from the template: a refused ask answers with the note
+  (`%{note: ...}`, from 1215900c2) where the template's answers `%{}`; the steps are built
+  before the reply (`sync_now/1`), and a step the chain's state holds back is refused, as
+  before. Keyfleet's hook asks whenever it holds no steps for the button, not only when a
+  form changed, and every Keyfleet group is a `WalletPanel`, which answers the ask, so the
+  template's open case (a button with no form, pressed after a reconnect before its steps
+  come back, sends nothing) does not arise here. `KeyfleetWeb.OnchainSteps` needed no
+  change. The hook never asks with no wallet open, so `prepare_and_send` no longer refuses
+  for "no wallet open as the server knows it"; its test now covers an unlinked wallet and a
+  step the chain holds back.
+- Buttons with no form beside them, pressed after a reconnect before the fresh steps come
+  back, walked in Chromium with a stand-in wallet. Claim, once the hook's `reconnected` has
+  run: it asks, gets steps, reaches the wallet and is followed to Done, as before this
+  change. Claim, while LiveView still sends the Key page's form back: the hook still holds
+  its old steps and sends from them; it reaches the wallet and shows as not this page's
+  step (round two's line 413, unchanged). Holding no steps then, it asks, and now reaches
+  the wallet and is followed; before this change it sent nothing. Approve and Buy Key: the
+  page comes back with the Buy Key window closed; reopened, a press the moment the window
+  is back reaches the wallet and is followed. While LiveView still sends the form back, the
+  window is still on screen: holding its steps, the press reaches the wallet and nothing
+  shows it once the window closes; holding none yet, its ask goes to a window the fresh
+  server doesn't have, the answer is empty and nothing is sent. Reported, not fixed;
+  `verification/features.yml` lists both under the wallet row's gaps.
+- Tests: `platform/test/browser/key_shards.spec.ts` presses Issue shard with its days
+  changed while LiveView sends the form back (the walk holds the server's answer to the
+  form, and everything after it, in order), and the press reaches the wallet with 45 days
+  and is followed to Done; with the panel not taking the named wallet, the wallet is asked
+  0 times. `platform/assets/test/onchain_steps.test.ts` (2 new) fails without the hook's
+  `address`. `platform/test/keyfleet_web/live/fleet_page_test.exs` (1 new) fails without
+  `take_active/2` in the ask. The Key page's and the fleet page's other asks name the open
+  wallet, as the hook now sends them.
+
+Checks on the four commits together: `mix format --check-formatted`, `mix compile
+--warnings-as-errors` and `mix credo --strict` clean; the type check exit 0; Vitest 503 of
+503 (38 files, the review's files left out); the wallet ExUnit files with
+`fleet_page_test.exs` and `key_profile_test.exs` 237 passed, 17 excluded; chain walks in
+Chromium 147 of 147, the new walk among them, and the 16 Firefox and WebKit walks of the Key
+profile did not start, as neither browser is installed on the Mac. The review's round-three
+proofs are as on 1215900c2. Round two's walk at line 476 now passes, and its line 413 still
+fails, as above.

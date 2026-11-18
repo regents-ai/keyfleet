@@ -364,7 +364,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       end)
 
       render_hook(panel, "onchain_active_wallet", %{"address" => signer})
-      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "reveal"})
+
+      render_hook(panel, "prepare_and_send", %{
+        "form" => %{},
+        "step" => "reveal",
+        "address" => signer
+      })
 
       assert_reply(view, %{
         send: "reveal",
@@ -392,7 +397,11 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
                "Can’t reach the network right now. Trying again."
              )
 
-      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "reveal"})
+      render_hook(panel, "prepare_and_send", %{
+        "form" => %{},
+        "step" => "reveal",
+        "address" => signer
+      })
 
       assert_reply(view, %{
         send: "reveal",
@@ -427,7 +436,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       render_async(view)
 
       refute has_element?(view, "#key-profile-reveal-expire[disabled]")
-      render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "expire_reveal"})
+
+      render_hook(panel, "prepare_and_send", %{
+        "form" => %{},
+        "step" => "expire_reveal",
+        "address" => signer
+      })
+
       assert_reply(view, %{send: "expire_reveal", review: %{signer: ^signer}})
     end
 

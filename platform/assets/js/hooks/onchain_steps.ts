@@ -86,6 +86,7 @@ export const OnchainSteps: Hook = {
       const name = button.dataset.onchainStep!
       const release = mark(button)
       const asks = asksServer(this.review, name, form)
+      const wallet = activeEthereumWallet()
       lost(this.el, false)
       // The server hears the press, and the form it was made from, just before
       // the wallet does and once its steps are built from that form: a
@@ -93,11 +94,13 @@ export const OnchainSteps: Hook = {
       const heard = () => push("step_pressed", {step: name, form})
 
       try {
-        if (!(activeEthereumWallet() && asks)) {
+        if (!(wallet && asks)) {
           heard()
           return await press(this.review, name, push)
         }
-        const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
+        // The ask names the open wallet: a page that has just joined again can ask
+        // before the server has heard which wallet is open.
+        const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name, address: wallet.address})
         if (result?.status !== "fulfilled") return lostPress(this.el, name)
         const reply = result.value.reply as {review: Review; send: string} | {note: string}
         // Refused: the reply carries the note the person reads, and the press

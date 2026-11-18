@@ -769,9 +769,37 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to 0xaaaa..aaaa. Nothing was sent."
     end
 
-    # A press the server won't prepare, with another wallet open or none as the
-    # server knows it, is answered with the note its report then leaves, so the
-    # browser's own agent hears what the person reads.
+    # A page that has just joined again meets a fresh group, which has not yet
+    # heard which wallet is open, and its press can ask for steps before the
+    # wallet is reported. The press names the open wallet, and the group builds
+    # the steps for it when the account links it.
+    test "a press that names the account's wallet gets the steps for it before the wallet is reported",
+         %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("prepare_and_send", %{
+        "form" => %{},
+        "step" => "approve",
+        "address" => @owner
+      })
+
+      assert_reply(view, %{
+        send: "approve",
+        review: %{signer: @owner, steps: [%{step: "approve"}, %{step: "buy"}]}
+      })
+    end
+
+    # A press the server won't prepare, from a wallet the account doesn't link
+    # or for a step the chain's state holds back, gets no steps and is answered
+    # with the note its report then leaves, so the browser's own agent hears
+    # what the person reads.
     test "a press refused its steps is answered with the note its report leaves",
          %{conn: conn} do
       deploy!()
@@ -783,16 +811,26 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       panel = with_target(view, "#buy-key-order")
 
       notes =
-        for wallet <- [@stranger, nil] do
-          active!(view, wallet)
-          render_hook(panel, "prepare_and_send", %{"form" => %{}, "step" => "buy"})
-          assert_reply(view, %{note: note})
+        for wallet <- [@stranger, @owner] do
+          render_hook(panel, "prepare_and_send", %{
+            "form" => %{},
+            "step" => "buy",
+            "address" => wallet
+          })
+
+          assert_reply(view, reply)
+          assert [:note] = Map.keys(reply)
           render_hook(panel, "step_failed", %{"step" => "buy", "reason" => "step_unknown"})
-          assert text(view, "#buy-key-order-press-note") == note
-          note
+          assert text(view, "#buy-key-order-press-note") == reply.note
+          reply.note
         end
 
-      assert length(Enum.uniq(notes)) == 2
+      assert [
+               "Your wallet is on 0xbbbb..bbbb, which isn't linked to this account. " <>
+                 "Switch to 0xaaaa..aaaa. Nothing was sent.",
+               "This can't be sent as it stands. Check the details above, then press again. " <>
+                 "Nothing was sent."
+             ] = notes
     end
 
     # A press whose wallet stays on another network sends nothing, and the

@@ -1974,7 +1974,10 @@ features:
       Switch it in your wallet app, then press again. Nothing was sent."
       When the page loses its connection and gets it back, as at a release,
       the page tells the server the open wallet again with nothing pressed, so
-      its wallet buttons work again without a reload.
+      its wallet buttons work again without a reload. A press that asks the
+      server for its steps names the open wallet, so one made while the page
+      is still getting its connection back is built for that wallet too, when
+      the account links it.
     who: person
     level: protected
     paths:
@@ -1986,6 +1989,7 @@ features:
       - platform/lib/keyfleet/wallet_steps.ex
       - platform/lib/keyfleet_web/components/layouts/root.html.heex
       - platform/lib/keyfleet_web/wallet/onchain_steps.ex
+      - platform/lib/keyfleet_web/wallet/wallet_panel.ex
     entry:
       - live: KeyfleetWeb.ShellLive
       - live: KeyfleetWeb.HomeLive
@@ -1995,6 +1999,7 @@ features:
       - platform/assets/test/privy_bridge.test.ts
       - platform/test/keyfleet_web/live/fleet_page_test.exs
       - platform/test/browser/wallet_buttons.spec.ts
+      - platform/test/browser/key_shards.spec.ts
     regressions:
       - id: R-20261117-press-after-reconnect
         from: Keyfleet chief's review of d193a8183, 17 November 2026
@@ -2008,7 +2013,11 @@ features:
       - id: R-20261117-agent-answered-at-once
         from: Keyfleet chief's third review of kf/wallet-press-1118 (fe425e59a), 17 November 2026
         test: platform/assets/test/onchain_steps.test.ts
+      - id: R-20261117-ask-names-open-wallet
+        from: Keyfleet chief's second review of kf/wallet-press-1118, fixed as ash-template d60a9b31 fixed it, 17 November 2026
+        test: platform/test/browser/key_shards.spec.ts
     gaps:
+      - Following a press across a reconnect waits on Sean's decision. A press made while the page is still getting its connection back, from the steps the page already holds, reaches the wallet but is shown as not this page's step. In the Buy Key window, which the page closes when it comes back, such a press is not shown at all, and one made before the window had its steps sends nothing.
       - The walks press from another network with a stand-in wallet whose switch stands in for Privy's; a real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release.
       - The anvil lab's network, which Privy does not list, reaches Privy with the site's own name and node (a unit test checks this); the lab needs a real Privy sign-in, so it is not walked end to end, and it has not been tried by hand since this change.
       - WebKit is not run on the Mac.
