@@ -485,6 +485,42 @@ Regents Safe owns the subscription
 subscription does not list the collection
 (`CollectionNotVrfConsumer(collection)`).
 
+### Before signing a phase file
+
+The call in a phase file is `advancePhase(<opening>)`. It names no phase, so
+landed at any time before its opening it moves the collection on from
+whatever phase it is in then: a `base.phase-3.json` that lands after phase 3
+has opened opens phase 4, without the phase-4 step's check. Each file's own
+description (`meta.description`) therefore says what the signers read on Base
+before signing: the phase the collection is in now, and in
+`base.phase-4.json` also that the Regents Safe owns the randomness
+subscription and the subscription lists the collection. The description says
+what the step saw when it wrote the file. Read the facts on Base yourselves,
+not from the file:
+
+```sh
+# The phase the collection is in now.
+cast call 0xaBC959B463542497639adA57388c65D05AB34A30 "phase()(uint8)" --rpc-url "$BASE_RPC_URL"
+
+# Before phase 4: the coordinator and the subscription id, the first two values.
+cast call 0xaBC959B463542497639adA57388c65D05AB34A30 \
+  "randomness()(address,uint256,bytes32)" --rpc-url "$BASE_RPC_URL"
+
+# The subscription's owner, the fourth value, must be the Regents Safe,
+# 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e, and its consumers, the fifth,
+# must include the collection.
+cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
+  "getSubscription(uint256)(uint96,uint96,uint64,address,address[])" <subscription id> \
+  --rpc-url "$BASE_RPC_URL"
+```
+
+Load only files from `deployments/safe/` into the Safe. A file under
+`contracts/rehearsal/` is never loaded into the Safe: it is a real batch for
+the Regents Safe on Base, signable as it stands, with nothing in it to show it
+was written on a fork, and signed on Base it does what its call does on Base's
+own state. A `base.phase-4.json` written on a fork after the rehearsal's
+pretended handover would open phase 4 on Base before the real one.
+
 ## Step 7: Regents Club gifts
 
 Run once phase 1 has opened:
@@ -702,7 +738,10 @@ KEYFLEET_MANIFEST=base \
 ```
 
 The Safe steps create the folder they are given; the record step writes
-`base.deployed.json` into a folder that exists, as `rehearsal/` always does. To
+`base.deployed.json` into a folder that exists, as `rehearsal/` always does.
+Nothing under `rehearsal/` is ever loaded into the Safe: a batch written there
+is a real, signable Base batch with nothing in it to show it came from a fork
+(see "Before signing a phase file" in step 6). To
 see what the next step prepares, make a batch's call on the fork from the
 Safe's address, impersonated as below. The step to phase 4 and the trading
 factory's deployment stop on the fork, as on Base, until the Safe owns the

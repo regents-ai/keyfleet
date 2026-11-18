@@ -114,6 +114,7 @@ contract DeployTradingFactory is KeyfleetManifest {
         requireSubscriptionReady(_subscription(keys));
         return KeyfleetSafeSteps.SafeCall({
             name: "add-trading-factory",
+            description: "",
             to: address(keys),
             data: abi.encodeCall(KeyfleetKeys.addFactory, (address(trading)))
         });

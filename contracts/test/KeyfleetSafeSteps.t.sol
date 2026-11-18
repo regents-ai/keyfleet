@@ -5,6 +5,7 @@ import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../script/KeyfleetSafeSteps.s.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
@@ -204,6 +205,39 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonAddress(file, ".transactions[0].to"), call.to, "To");
         assertEq(vm.parseJsonString(file, ".transactions[0].value"), "0", "No value");
         assertEq(vm.parseJsonBytes(file, ".transactions[0].data"), call.data, "The call");
+    }
+
+    /// @dev Each phase's batch, as the step writes it, carries its phase's name and its own
+    /// description: the collection and the opening time for every phase, and only for the call to
+    /// phase 4 the subscription the signers read first, by its id, its coordinator and its owner.
+    function test_eachPhaseBatchSaysWhatTheSignersReadFirst() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        _found(manifest, deployed);
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = collection.randomness();
+        for (uint256 phase = 1; phase <= collection.FINAL_PHASE(); ++phase) {
+            uint64 opensAt = uint64(block.timestamp + 1);
+            KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.advancePhaseCalls(manifest, deployed, opensAt);
+            string memory file = safeSteps.safeBatch(safe, calls[0]);
+
+            assertEq(vm.parseJsonString(file, ".meta.name"), string.concat("Keyfleet ", calls[0].name), "Name");
+            assertEq(calls[0].name, string.concat("phase-", vm.toString(phase)), "Its phase");
+            string memory description = vm.parseJsonString(file, ".meta.description");
+            assertEq(description, calls[0].description, "The call's own description");
+            assertTrue(_names(description, vm.toString(address(collection))), "The collection");
+            assertTrue(_names(description, vm.toString(uint256(opensAt))), "The opening");
+            bool last = phase == collection.FINAL_PHASE();
+            assertEq(_names(description, vm.toString(subscriptionId)), last, "The subscription, before phase 4");
+            assertEq(_names(description, vm.toString(address(coordinator))), last, "Its coordinator");
+            assertEq(_names(description, vm.toString(manifest.bindings.safe)), last, "Its owner");
+
+            _make(calls, safe);
+            vm.warp(opensAt);
+        }
+    }
+
+    /// @dev Whether `text` holds `value`.
+    function _names(string memory text, string memory value) private pure returns (bool) {
+        return vm.indexOf(text, value) != type(uint256).max;
     }
 
     /// @dev The gift step gives every Regents Club key, `CLUB_GIFT_BATCH` to a call: key N to the

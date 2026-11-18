@@ -12047,3 +12047,20 @@ step's report).
   `Base fork proofs: run against BASE_RPC_URL.`), every suite in which a test skipped itself, and
   the path the gate leaves out, the audit's fork proofs. The bytecode check now runs before the
   tests. The gate still passes without an endpoint and has no endpoint of its own.
+
+## 2026-11-18 — Each phase batch says what the signers read on Base
+
+- A phase batch the Safe steps write (`base.phase-1.json` to `base.phase-4.json`) had an empty
+  description, and its call, `advancePhase(opensAt)`, names no phase: landed at any time before
+  its opening it opens whichever phase is next. A phase-4 batch written on a rehearsal fork after
+  the rehearsal's pretended handover was a real, signable Base batch with nothing in it to show
+  where it came from. Each phase batch's own description (`meta.description`) now names the
+  collection, the phase it moves to and its opening, says that the call opens whichever phase is
+  next, and says what the signers read on the chain before signing: the phase the collection is
+  in now and, for phase 4, that the Regents Safe owns the randomness subscription, by its id and
+  coordinator, and that the subscription lists the collection. A real run and a rehearsal write
+  the same description; there is no rehearsal-only branch. The other batches' descriptions stay
+  empty. A Safe call now carries its description beside its name.
+- `docs/deployment.md` says, in step 6 and in "Rehearsing", that a file under
+  `contracts/rehearsal/` is never loaded into the Safe, and gives the signers the reads that show
+  those facts on Base. `contracts/README.md` says so too.

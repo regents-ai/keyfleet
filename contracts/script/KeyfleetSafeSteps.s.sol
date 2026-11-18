@@ -7,6 +7,7 @@ import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 
@@ -19,7 +20,9 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 ///
 /// On Base the steps are written, not sent: each call becomes its own file under
 /// `deployments/safe/`, in the Safe Transaction Builder's batch format, for the Safe's signers to
-/// load, check and sign. Nothing is signed or sent from here. On a local anvil chain the Safe is an
+/// load, check and sign. A phase batch's own description says what the signers read on Base before
+/// signing it, since its call names no phase: the same description on a real run and a rehearsal,
+/// and nothing in a batch says which wrote it. Nothing is signed or sent from here. On a local anvil chain the Safe is an
 /// account anvil has unlocked and the calls are sent directly, from the Safe's address.
 ///
 /// Moving to phase 1 opens only the Regents Club's gifts once its own fleet exists.
@@ -38,10 +41,13 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 contract KeyfleetSafeSteps is KeyfleetManifest {
     /// @notice One call for the Safe to make.
     /// @param name What the call does, which also names its file.
+    /// @param description What the Safe's signers must read on the chain before signing, written
+    /// into the batch's own description; empty for a call that asks nothing of them.
     /// @param to The contract called.
     /// @param data The call data.
     struct SafeCall {
         string name;
+        string description;
         address to;
         bytes data;
     }
@@ -118,6 +124,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             FoundingFleet memory fleet = manifest.founding[id - 1];
             calls[index++] = SafeCall({
                 name: string.concat("founding-fleet-", vm.toString(id)),
+                description: "",
                 to: address(factory),
                 data: abi.encodeCall(
                     KeyfleetFactory.createFoundingFleet, (fleet.preset, fleet.deckHash, fleet.deckSize, fleet.profile)
@@ -129,7 +136,11 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// @notice The Safe's call moving the collection to its next phase, which opens at `opensAt`.
     /// The call to phase 4 is prepared only while the randomness subscription lists the collection
     /// and, on Base, the Regents Safe owns it, as the record step requires once any fleet past the
-    /// founding ones exists: from phase 4 anyone may create one.
+    /// founding ones exists: from phase 4 anyone may create one. The call names no phase, so landed
+    /// at any time before `opensAt` it opens whichever phase is next. Its description says so, and
+    /// names what the signers read on the chain before signing: the phase the collection is in now
+    /// and, for the call to phase 4, that the Regents Safe owns the subscription and the
+    /// subscription lists the collection.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -137,10 +148,29 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     {
         _requireManifestFitsChain(manifest);
         KeyfleetKeys keys = factory.KEYS();
-        if (keys.phase() + 1 == keys.FINAL_PHASE()) requireSubscriptionReady(_subscription(keys));
+        uint256 next = keys.phase() + 1;
+        string memory checks = string.concat("the collection is in phase ", vm.toString(next - 1));
+        if (next == keys.FINAL_PHASE()) {
+            requireSubscriptionReady(_subscription(keys));
+            checks = string.concat(checks, _subscriptionChecks(keys, manifest.bindings.safe));
+        }
         calls = new SafeCall[](1);
         calls[0] = SafeCall({
-            name: string.concat("phase-", vm.toString(keys.phase() + 1)),
+            name: string.concat("phase-", vm.toString(next)),
+            description: string.concat(
+                "Moves the collection ",
+                vm.toString(address(keys)),
+                " to phase ",
+                vm.toString(next),
+                ", opening at Unix time ",
+                vm.toString(uint256(opensAt)),
+                ". The call names no phase: landed at any time before then, it opens whichever phase is next.",
+                " Sign only after reading on chain ",
+                vm.toString(block.chainid),
+                " that ",
+                checks,
+                "."
+            ),
             to: address(keys),
             data: abi.encodeCall(KeyfleetKeys.advancePhase, (opensAt))
         });
@@ -171,6 +201,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             }
             calls[index] = SafeCall({
                 name: string.concat("club-gifts-", vm.toString(from), "-", vm.toString(to)),
+                description: "",
                 to: address(club),
                 data: abi.encodeCall(KeyfleetManager.give, (receivers))
             });
@@ -209,13 +240,31 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             vm.toString(vm.unixTime()),
             ",\"meta\":{\"name\":\"Keyfleet ",
             call.name,
-            "\",\"description\":\"\",\"createdFromSafeAddress\":\"",
+            "\",\"description\":\"",
+            call.description,
+            "\",\"createdFromSafeAddress\":\"",
             vm.toString(safe),
             "\"},\"transactions\":[{\"to\":\"",
             vm.toString(call.to),
             "\",\"value\":\"0\",\"data\":\"",
             vm.toString(call.data),
             "\"}]}"
+        );
+    }
+
+    /// @dev What the signers read of the randomness subscription before the call to phase 4: that
+    /// `safe` owns it, by its id and coordinator as the collection names them, and that it lists
+    /// the collection.
+    function _subscriptionChecks(KeyfleetKeys keys, address safe) private view returns (string memory) {
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        return string.concat(
+            ", that the Regents Safe ",
+            vm.toString(safe),
+            " owns randomness subscription ",
+            vm.toString(subscriptionId),
+            " on the coordinator ",
+            vm.toString(address(coordinator)),
+            ", and that the subscription lists the collection"
         );
     }
 
