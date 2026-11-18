@@ -12163,3 +12163,14 @@ step's report).
 - Only the trading treasury's code changed, and with it the code that carries it: the trading
   treasury's deployer and the trading factory. Every other contract compiled from
   `contracts/src`, the 31 already deployed among them, compiles to the same bytes.
+
+## 2026-11-18 — The treasury suite proves the send to staking after the close
+
+- `contracts/test/KeyfleetTradingTreasury.t.sol` gains
+  `test_afterTheCloseOnlyTheKeeperAndTheRegentsSafeSend`: once the fleet is closed and paid
+  back, the creator, a Key holder and a stranger are each refused, leaving what is owed, the
+  approval and every balance as they were; the keeper sends, a payback after it sets more aside,
+  and the Regents Safe sends that. Only the keeper or the Regents Safe may send what is owed on to
+  staking, before the close and after it.
+- A changed rule that let anyone send once the fleet is closed passed the whole treasury suite
+  before; this test fails on it. Only tests changed.

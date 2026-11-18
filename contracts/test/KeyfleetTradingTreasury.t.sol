@@ -651,6 +651,35 @@ contract KeyfleetTradingTreasuryTest is KeyfleetTradingFixture {
         assertEq(treasury.available(), usdc.balanceOf(address(treasury)));
     }
 
+    /// @dev After the close the rule is the same: the creator, a Key holder and a stranger are each
+    /// refused, and the keeper and the Regents Safe each send.
+    function test_afterTheCloseOnlyTheKeeperAndTheRegentsSafeSend() public {
+        address holder = makeAddr("key holder");
+        _tbuy(holder);
+        _oweStaking();
+        vm.prank(creator);
+        treasury.close();
+        treasury.paybackAll();
+        _assertSendToStakingRefused(creator);
+        _assertSendToStakingRefused(holder);
+        _assertSendToStakingRefused(stranger);
+
+        uint256 owed = treasury.stakingOwed();
+        vm.prank(keeper);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived(), owed, "the keeper sent");
+        assertEq(treasury.stakingOwed(), 0);
+
+        _return(100e6);
+        treasury.paybackAll();
+        uint256 more = treasury.stakingOwed();
+        assertGt(more, 0, "the payback after it set more aside");
+        vm.prank(safe);
+        treasury.sendToStaking();
+        assertEq(staking.totalUsdcReceived(), owed + more, "the Safe sent");
+        assertEq(treasury.stakingOwed(), 0);
+    }
+
     /// @dev The creator pays back 100 USDC once every Key counts, so staking is owed 1 USDC.
     function _oweStaking() private returns (uint256 owed) {
         _tcount();
