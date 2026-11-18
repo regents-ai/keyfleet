@@ -1857,7 +1857,12 @@ latest broadcast there.
   errors otherwise: on Base, a subscription anyone but the Regents Safe owns
   (`VrfSubscriptionNotOwnedByRegentsSafe(owner)`), then, on every chain, one
   that does not list the collection (`CollectionNotVrfConsumer(collection)`).
-  The Regents Club's and Classic's founding calls check nothing of it.
+  With none of fleets 2 to 4 missing, `founding-fleets` in phase 2 prepares
+  nothing and checks none of this, as in any phase with no founding fleet
+  missing. The Regents Club's and Classic's founding calls are prepared
+  whoever owns the subscription and whether or not it lists the collection;
+  like every step, `founding-fleets` refuses a subscription the coordinator
+  does not know.
   It takes the factory from `readDeployment`:
   on Base the first release's pinned factory, elsewhere the deployment step's
   latest broadcast on the chain. On Base it runs every call from the Safe's address
@@ -1877,19 +1882,23 @@ latest broadcast there.
   [../docs/deployment.md](../docs/deployment.md) asks), which no step reads.
   The founding files for fleets 2 to 4 ask for the same reads of the
   subscription, with the collection in phase 2. The phase number moves when a
-  phase file lands, not when the phase opens, so once any file for a phase has
-  landed every other file written for it is dangerous and must be thrown away:
-  landed after that, before its own opening time, it can move the collection
-  on one more phase, with no check of the subscription. A phase-1 file landed
-  in phase 1 opens phase 2 (Classic #1's sales), in phase 2 phase 3
-  (Syndicate #1, Accelerant #1 and Cascade #1, whose Keys past their decks
-  draw) and in phase 3 phase 4 (anyone may create a fleet); a phase-2 file
-  landed in phase 2 opens phase 3 and in phase 3 phase 4; a phase-3 file
-  landed in phase 3 opens phase 4; a phase-4 file landed in phase 4 is
-  refused. Each description says so for its own phase. A file that already
-  carries Safe signatures cannot simply be thrown away: it is cancelled by
-  using up its Safe transaction number with another transaction. A rehearsal's
-  files carry the same description.
+  phase file lands, not when the phase opens, and the file moves the collection
+  on from whatever phase it is in then. So once the collection is no longer in
+  the phase a file's signers read, whichever file moved it on (that file, a
+  copy, another file for the same phase or one left from an earlier phase),
+  the file is dangerous and must be thrown away: landed after that, before its
+  own opening time, it can move the collection on one more phase, with no
+  check of the subscription. A phase-1 file landed in phase 1 opens phase 2
+  (Classic #1's sales), in phase 2 phase 3 (Syndicate #1, Accelerant #1 and
+  Cascade #1, whose Keys past their decks draw) and in phase 3 phase 4 (anyone
+  may create a fleet); a phase-2 file landed in phase 2 opens phase 3 and in
+  phase 3 phase 4; a phase-3 file landed in phase 3 opens phase 4; every phase
+  file landed in phase 4 is refused. Each description says so for its own
+  phase. A file that already carries Safe signatures cannot simply be thrown
+  away: it is cancelled only when another transaction lands at its own Safe
+  transaction number. Signing that transaction is not enough: until it has
+  landed, anyone holding enough signatures for the file can land the file when
+  its number comes up. A rehearsal's files carry the same description.
   Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
   has unlocked. `run` is `runInto("deployments/safe")`; a rehearsal or a test

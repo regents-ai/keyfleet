@@ -31,10 +31,12 @@ import {requireSubscriptionReady} from "./RecordKeyfleets.s.sol";
 /// decks, and phase 4 lets anyone create a fleet, so neither the phase step to either phase nor
 /// the founding step for fleets 2 to 4, without which phase 3 cannot open, prepares anything until
 /// the randomness subscription is ready for a Key that draws: on Base the Regents Safe owns it, and
-/// on every chain it lists the collection. A phase call names no phase, so the phase moves when any
-/// file for it lands: from then on, every other file written for that phase can move the collection
-/// on one more phase, with no check of the subscription. Each phase file's description says what
-/// each such landing opens and to throw the file away.
+/// on every chain it lists the collection. A phase call names no phase, so it moves the collection
+/// on from whatever phase it is in when it lands. Once the collection has left the phase a phase
+/// file was written in, whichever file moved it on, that file can move the collection on one more
+/// phase, with no check of the subscription, until phase 4, where it is refused. Each phase file's
+/// description says what each such landing opens and to throw the file away once the collection
+/// is no longer in the phase its signers read.
 ///
 /// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
 /// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key
@@ -114,11 +116,14 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     }
 
     /// @notice The Safe's calls creating missing founding fleets for the current launch stage, in
-    /// reserved id order within that stage, each with the manifest's deck and profile. In phase 2,
-    /// which founds Syndicate, Accelerant and Cascade, the calls are prepared only while the
-    /// randomness subscription is ready as the step to phase 3 requires, since phase 3 cannot open
-    /// without those fleets; each call's description then names what the signers read of it, as
-    /// the phase-3 call's does. The Regents Club and Classic calls check nothing of it.
+    /// reserved id order within that stage, each with the manifest's deck and profile; none when
+    /// none is missing, in any phase. Like every step it first refuses a subscription the
+    /// coordinator does not know. In phase 2, which founds Syndicate, Accelerant and Cascade, the
+    /// missing ones' calls are prepared only while the randomness subscription is ready as the step
+    /// to phase 3 requires, since phase 3 cannot open without those fleets; each call's description
+    /// then names what the signers read of it, as the phase-3 call's does. The Regents Club and
+    /// Classic calls are prepared whoever owns the subscription and whether or not it lists the
+    /// collection.
     function foundingFleetCalls(Manifest memory manifest, KeyfleetFactory factory)
         public
         view
@@ -128,12 +133,6 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         KeyfleetKeys keys = factory.KEYS();
         uint8 phase = keys.phase();
         if (phase >= 3) return new SafeCall[](0);
-        string memory checks;
-        if (phase == 2) {
-            Subscription memory subscription = _subscription(keys);
-            requireSubscriptionReady(subscription);
-            checks = _subscriptionChecks(subscription);
-        }
         uint256 first = phase == 0 ? 5 : phase == 1 ? 1 : 2;
         uint256 last = phase == 2 ? 4 : first;
         uint256 missing;
@@ -141,6 +140,12 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             if (!keys.fleetExists(id)) ++missing;
         }
         calls = new SafeCall[](missing);
+        string memory checks;
+        if (phase == 2 && missing != 0) {
+            Subscription memory subscription = _subscription(keys);
+            requireSubscriptionReady(subscription);
+            checks = _subscriptionChecks(subscription);
+        }
         uint256 index;
         for (uint256 id = first; id <= last; ++id) {
             if (keys.fleetExists(id)) continue;
@@ -174,16 +179,17 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// The calls to phases 3 and 4 are prepared only while the randomness subscription lists the
     /// collection and, on Base, the Regents Safe owns it, as the record step requires once any Key
     /// draws: from phase 3 anyone may buy a founding Key past its deck, and from phase 4 create a
-    /// fleet. The call names no phase, so the phase moves when any file for it lands, at any time
-    /// before its `opensAt`. Landed after another file for the same phase, and before its own
-    /// `opensAt`, a call can move the collection on one more phase, with no check of the
-    /// subscription: a call to phase 1 to phase 2, 3 or 4, a call to phase 2 to phase 3 or 4, and a
-    /// call to phase 3 to phase 4. A call to phase 4 landed after another is refused.
-    /// Its description says what each such landing opens, to throw the file away once any other
-    /// file for its phase has landed and how a signed copy is cancelled, and what the signers read
-    /// on the chain before signing: the phase the collection is in now and, for the calls to phases
-    /// 3 and 4, that the subscription lists the collection, on Base that the Regents Safe owns it,
-    /// and that it holds at least `SUBSCRIPTION_FUNDING` of native ETH.
+    /// fleet. The call names no phase, so it moves the collection on from whatever phase it is in
+    /// when it lands, at any time before its `opensAt`. Once the collection has left the phase the
+    /// call was written in, whichever file moved it on, the call landed before its own `opensAt`
+    /// can move the collection on one more phase, with no check of the subscription: a call to
+    /// phase 1 to phase 2, 3 or 4, a call to phase 2 to phase 3 or 4, and a call to phase 3 to
+    /// phase 4. In phase 4 every call is refused. Its description says what each such landing
+    /// opens, that it is refused in phase 4, to throw the file away once the collection is no
+    /// longer in the phase its signers read and how a signed copy is cancelled, and what the
+    /// signers read on the chain before signing: the phase the collection is in now and, for the
+    /// calls to phases 3 and 4, that the subscription lists the collection, on Base that the
+    /// Regents Safe owns it, and that it holds at least `SUBSCRIPTION_FUNDING` of native ETH.
     function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
@@ -298,14 +304,17 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         );
     }
 
-    /// @dev What a call to phase `phase` does once any other file for that phase has landed, which
-    /// moves the phase: before its own opening it can move the collection on one more phase, from
-    /// each phase it can land in up to `finalPhase`, and in `finalPhase` it is refused. Then how a
-    /// copy the Safe's signers have signed is cancelled.
+    /// @dev What a call to phase `phase`, written while the collection is in phase `phase - 1`,
+    /// does once the collection has left that phase, whichever file moved it on: before its own
+    /// opening it can move the collection on one more phase from each phase before `finalPhase`,
+    /// and in `finalPhase` it is refused. Then how a copy the Safe's signers have signed is
+    /// cancelled.
     function _landedLate(uint256 phase, uint256 finalPhase) private pure returns (string memory late) {
-        late = string.concat(" Once any other file for phase ", vm.toString(phase), " has landed, ");
+        late = string.concat(
+            " Once the collection is no longer in phase ", vm.toString(phase - 1), ", whichever file moved it on, "
+        );
         if (phase == finalPhase) {
-            late = string.concat(late, "throw this file away: landed after that, it is refused.");
+            late = string.concat(late, "throw this file away: in phase ", vm.toString(finalPhase), " it is refused.");
         } else {
             late = string.concat(
                 late,
@@ -321,12 +330,14 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
                     _opens(landed + 1)
                 );
             }
-            late = string.concat(late, ".");
+            late = string.concat(late, "; in phase ", vm.toString(finalPhase), " it is refused.");
         }
         late = string.concat(
             late,
-            " A copy that already carries Safe signatures cannot simply be thrown away: cancel it by using up",
-            " its Safe transaction number with another transaction."
+            " A copy that already carries Safe signatures cannot simply be thrown away: it is cancelled only",
+            " when another transaction lands at the copy's own Safe transaction number. Signing that",
+            " transaction is not enough: until it has landed, anyone holding enough signatures for the copy",
+            " can land the copy when its number comes up."
         );
     }
 

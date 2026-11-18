@@ -343,7 +343,12 @@ description (`meta.description`) asks the signers to read on Base what the
 phase-3 file's does: that the collection is in phase 2, that the Regents Safe
 owns the subscription, that it lists the collection, and that its native ETH
 balance is at least 0.5 ETH (see "Before signing a phase file" for the reads).
-The Regents Club's and Classic's files ask nothing of the subscription. Each creation uses about 11.9
+With all three created, the step in phase 2 writes nothing and checks none of
+this, as in any phase with no founding fleet missing. The Regents Club's and
+Classic's files ask nothing of the subscription, and the step writes them
+whoever owns it and whether or not it lists the collection; like every step,
+it stops while the coordinator does not know the subscription (the
+coordinator's own `InvalidSubscription`). Each creation uses about 11.9
 million gas, so each is its own transaction. Run the step again after some have
 landed and it writes files only for the fleets still missing. Each founding
 fleet is created with its deck and no joining requirements, and its sales stay
@@ -508,8 +513,9 @@ written, on Base while anyone but the Regents Safe owns the subscription
 subscription does not list the collection
 (`CollectionNotVrfConsumer(collection)`); no step reads the balance. The steps
 to phases 1 and 2 do not check the subscription, since no Key sold before
-phase 3 draws, yet a file either writes can open phase 3 or phase 4 once
-another file for its phase has landed (see "Before signing a phase file").
+phase 3 draws, yet a file either writes can open phase 3 or phase 4 once the
+collection has left the phase it was written in (see "Before signing a phase
+file").
 There is no step back, and nothing else moves a phase.
 
 Should the subscription stop being ready once phase 3 has opened, the Safe
@@ -529,9 +535,12 @@ handing it on or removing the collection, then from the next Key that draws:
 The call in a phase file is `advancePhase(<opening>)`. It names no phase, and
 the phase number moves when the call lands, not when the phase opens at its
 named time: landed at any time before its own opening, it moves the collection
-on from whatever phase it is in then. So once any file for a phase has landed,
-every other file written for that phase is dangerous and must be thrown away,
-whether or not that phase has opened yet. Landed after that and before its own
+on from whatever phase it is in then. Each file is written in one phase, the
+one its signers read before signing. So once the collection is no longer in
+that phase, the file is dangerous and must be thrown away, whichever file
+moved the collection on: that file itself, a copy of it, another file for the
+same phase, or a file left from an earlier phase. This holds whether or not
+the phase the file names has opened yet. Landed after that and before its own
 opening time, such a file can move the collection on one more phase, with no
 check of the randomness subscription when it lands:
 
@@ -543,15 +552,18 @@ check of the randomness subscription when it lands:
   phase 4;
 - a `base.phase-3.json` landed in phase 3 opens phase 4, checked only as the
   subscription stood when it was written;
-- a `base.phase-4.json` landed in phase 4 is refused (`NoNextPhase`).
+- every phase file landed in phase 4, `base.phase-4.json` included, is
+  refused (`NoNextPhase`).
 
 Phase 3 cannot open without fleets 2 to 4, and the founding step writes their
 files only while the subscription is ready, so a phase-1 or phase-2 file can
 open phase 3 only after a check made when those files were written; nothing
 checks it when the phase file lands. A file that already carries Safe
-signatures cannot simply be thrown away: it is cancelled by using up its Safe
-transaction number with another transaction, such as the Safe app's on-chain
-rejection at that number.
+signatures cannot simply be thrown away: it is cancelled only when another
+transaction lands at the file's own Safe transaction number, such as the Safe
+app's on-chain rejection at that number. Signing that rejection is not enough:
+until it has landed, anyone holding enough signatures for the file can land the
+file when its number comes up.
 
 Each file's own description (`meta.description`) says the same for its phase,
 and says what the signers read on Base before signing: the phase the
@@ -586,7 +598,9 @@ the Regents Safe on Base, signable as it stands, with nothing in it to show it
 was written on a fork, and signed on Base it does what its call does on Base's
 own state. A `base.phase-3.json` or `base.phase-4.json` written on a fork after
 the rehearsal's pretended handover would open that phase on Base before the
-real one.
+real one. Founding files for fleets 2 to 4 written there are the same danger:
+signed on Base, they create those fleets before the real handover, and then
+any phase file that can still land in phase 2 opens phase 3 there.
 
 ## Step 7: Regents Club gifts
 

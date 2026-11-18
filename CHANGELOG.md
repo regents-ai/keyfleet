@@ -12333,3 +12333,32 @@ step's report).
   local suite that fails and skips: plain, `--summary`, `--summary --detailed`, `--summary --md`
   and `-vv` each list the failing fork suite once, as failed; `--json`, `--junit` and `-q` say
   NOT RUN as before. No contract changed.
+
+## 2026-11-18 — A phase file is thrown away once the collection leaves the phase its signers read
+
+- Every phase file's description in `contracts/script/KeyfleetSafeSteps.s.sol` named the wrong
+  moment to throw it away: "once any other file for phase N has landed". A phase can also be
+  reached by a file left from an earlier phase, or by the same file landed twice, and then the
+  warning never applied. The trigger is now the collection itself: once it is no longer in the
+  phase the signers read when signing, whichever file moved it on, the file is dangerous and must
+  be thrown away. Every phase file's description now also says it is refused in phase 4, not only
+  the phase-4 file's.
+- The cancelling sentence is now complete: a copy carrying Safe signatures is cancelled only when
+  another transaction lands at the copy's own Safe transaction number; signing that transaction is
+  not enough, and until it has landed anyone holding enough signatures for the copy can land it
+  when its number comes up.
+- This corrects the entry "The founding step for fleets 2 to 4 waits for the subscription; phase
+  files say what a later landing opens", which said the Regents Club and Classic calls "check
+  nothing" of the subscription. Like every step, the founding step refuses a subscription the
+  coordinator does not know (the coordinator's own `InvalidSubscription`); the Club and Classic
+  calls are prepared whoever owns the subscription and whether or not it lists the collection.
+- In phase 2 the founding step no longer refuses an unready subscription when none of fleets 2 to
+  4 is missing: it prepares nothing, as in any phase with nothing missing, and checks the
+  subscription only when there is a call to prepare.
+- `docs/deployment.md` (step 4, step 6 and "Before signing a phase file") and
+  `contracts/README.md` say the same. The guide's rehearsal warning now names founding files for
+  fleets 2 to 4 written on a fork as the same danger as phase-3 and phase-4 files: signed on Base
+  they create those fleets before the real handover, and then any phase file that can still land
+  in phase 2 opens phase 3.
+- The Safe-step suite drops its checks of the old trigger and cancelling sentences and checks that
+  each phase file, landed in phase 4, is refused as its description says. No contract changed.

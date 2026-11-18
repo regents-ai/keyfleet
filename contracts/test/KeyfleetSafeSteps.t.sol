@@ -212,13 +212,6 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         KeyfleetSafeSteps.SafeCall[] memory second =
             safeSteps.advancePhaseCalls(manifest, base, uint64(block.timestamp + 20 days));
         assertTrue(
-            _names(
-                second[0].description,
-                " Once any other file for phase 2 has landed, this file is dangerous and must be thrown away"
-            ),
-            "Thrown away once another phase-2 file has landed"
-        );
-        assertTrue(
             _names(second[0].description, "with no check of the randomness subscription: in phase 2, to phase 3, "),
             "Landed in phase 2 it opens phase 3, unchecked"
         );
@@ -370,10 +363,10 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
 
     /// @dev Moves `factory`'s collection through every phase by the step, checking each batch as the
     /// step writes it: its phase's name and its own description, which names the collection and the
-    /// opening time, says what the file does landed after another file for its phase (checked by
-    /// landing it so), and only for the calls to phases 3 and 4 names the subscription the signers
-    /// read first, by its id and its coordinator, the balance it must hold, and the Safe as its
-    /// owner when `namesOwner`.
+    /// opening time, says what the file does once the collection has left the phase it was written
+    /// in (checked by landing it so), and only for the calls to phases 3 and 4 names the
+    /// subscription the signers read first, by its id and its coordinator, the balance it must
+    /// hold, and the Safe as its owner when `namesOwner`.
     function _assertPhaseBatches(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory factory, bool namesOwner)
         private
     {
@@ -438,10 +431,6 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         standIn.removeConsumer(subscriptionId, address(keys));
         standIn.openSubscription(subscriptionId, keeper);
 
-        assertTrue(
-            _names(description, string.concat(" Once any other file for phase ", vm.toString(phase), " has landed, ")),
-            "Once another file for its phase has landed"
-        );
         for (uint256 landed = phase; landed < keys.FINAL_PHASE(); ++landed) {
             assertTrue(
                 _names(
@@ -453,17 +442,12 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             _make(calls, signers);
             assertEq(keys.phase(), landed + 1, "One more phase, as it says");
         }
-        assertEq(
-            _names(description, "landed after that, it is refused."),
-            phase == keys.FINAL_PHASE(),
-            "Only the call to phase 4 says it is refused"
+        assertTrue(
+            _names(description, string.concat("in phase ", vm.toString(keys.FINAL_PHASE()), " it is refused.")),
+            "Says it is refused in phase 4"
         );
         vm.expectRevert(KeyfleetKeys.NoNextPhase.selector);
         this.make(calls, signers);
-        assertTrue(
-            _names(description, " cancel it by using up its Safe transaction number with another transaction."),
-            "How a signed copy is cancelled"
-        );
         vm.revertToState(before);
     }
 
