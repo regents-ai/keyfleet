@@ -3,7 +3,9 @@ defmodule Keyfleet.Early.Signup do
   One address on the early-access list.
 
   An address is stored trimmed and lowercased, so each one is on the list once
-  whatever its case. Leaving an address that is already there changes nothing.
+  whatever its case, and one with a character inside it that shows as nothing
+  or as a space is refused. Leaving an address that is already there changes
+  nothing.
   """
   use Ash.Resource,
     domain: Keyfleet.Early,
@@ -20,6 +22,11 @@ defmodule Keyfleet.Early.Signup do
 
     create :sign_up do
       accept [:email]
+
+      # Nothing unseen inside the address once trimmed: no space of any kind,
+      # no control character and nothing drawn as nothing, such as a
+      # zero-width space.
+      validate match(:email, ~r/\A[^\s\p{Cc}\p{DI}]+\z/u)
 
       # An address that failed its check is nil here and stays refused.
       change fn changeset, _context ->

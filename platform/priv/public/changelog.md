@@ -4,10 +4,14 @@ Changes to Keyfleet, newest first.
 
 ## 18 November 2026
 
-- **Early access.** The email field takes 256 characters, any spaces before the address
-  counting, and an address over 254, the most one can have, is refused with a note saying
-  it is too long, so whatever is pasted into it is answered by the form and an address
-  the field cut short is never kept. It still brings up the email keyboard on phones.
+- **Early access.** The email field takes 256 characters, and anything typed in it
+  counts toward the 254 an address can have at most, spaces, tabs and line ends before or
+  after the address included. More is refused with a note saying it is too long, so
+  whatever is pasted into the field is answered by the form and an address the field cut
+  short is never kept; a 254-character address with a space before or after it is refused
+  too. An address with a character that shows as nothing, such as a zero-width space,
+  before or inside it, or a space of any kind inside it, is refused as not an address. It
+  still brings up the email keyboard on phones.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000
   bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message
   a page sends, rounded up: the first message of a page reached by a link from one opened

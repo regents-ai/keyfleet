@@ -141,6 +141,47 @@ defmodule KeyfleetWeb.EarlyControllerTest do
     assert emails() == [kept]
   end
 
+  # Everything typed in the field counts toward its most, so the longest
+  # address with anything typed before or after it is too long.
+  test "the longest address is kept, and with a space, tab or no-break space around it refused" do
+    longest = String.duplicate("a", 254 - byte_size("@example.com")) <> "@example.com"
+
+    for {typed, client} <- [
+          {" " <> longest, "198.51.100.21"},
+          {longest <> " ", "198.51.100.22"},
+          {"\t" <> longest, "198.51.100.23"},
+          {<<0xA0::utf8>> <> longest, "198.51.100.24"}
+        ] do
+      assert %{"email" => typed} |> sign_up(client) |> html_response(422) =~ "too long"
+    end
+
+    assert emails() == []
+    assert redirected_to(sign_up(%{"email" => longest}, "198.51.100.25")) == "/early"
+    assert emails() == [longest]
+  end
+
+  # Costly failure: an address with a character in it that shows as nothing
+  # is kept as typed, so the same person is on the list twice and the kept
+  # address may never reach them.
+  test "an address with a space or an unseen character inside or before it is not an address" do
+    for {typed, client} <- [
+          {<<0x200B::utf8>> <> "ada@example.com", "198.51.100.31"},
+          {<<0xFEFF::utf8>> <> "ada@example.com", "198.51.100.32"},
+          {"ada@exa" <> <<0x2060::utf8>> <> "mple.com", "198.51.100.33"},
+          {"ada" <> <<0xA0::utf8>> <> "@example.com", "198.51.100.34"},
+          {"ada@example" <> <<0x3164::utf8>> <> ".com", "198.51.100.35"}
+        ] do
+      page =
+        %{"email" => typed} |> sign_up(client) |> html_response(422) |> LazyHTML.from_document()
+
+      assert text(page, "#early-email-errors") == @unreadable
+    end
+
+    assert emails() == []
+    assert redirected_to(sign_up(%{"email" => "ada@example.com"}, "198.51.100.36")) == "/early"
+    assert emails() == ["ada@example.com"]
+  end
+
   test "a filled-in trap field gets the same answer and keeps nothing" do
     conn = sign_up(%{"email" => "bot@example.com", "website" => "https://spam.example"})
 
