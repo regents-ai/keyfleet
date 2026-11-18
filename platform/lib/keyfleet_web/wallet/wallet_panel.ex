@@ -220,11 +220,14 @@ defmodule KeyfleetWeb.WalletPanel do
       {%{} = review, nil} ->
         {:reply, %{review: review, send: step}, socket}
 
-      # Refused: the press reports `step_unknown`, and this reply carries the
-      # note that report leaves, so the browser's own agent hears what the
-      # person reads without waiting for anything more.
+      # Refused: nothing reaches the wallet. The note beside the buttons is
+      # written here, from the wallet the press named, and the reply carries
+      # that same note, so the browser's own agent hears what the person reads.
+      # The page reports nothing more for this press.
       _none_or_blocked ->
-        {:reply, %{note: failure_note(socket, "step_unknown")}, socket}
+        note = failure_note(socket, "step_unknown")
+        KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
+        {:reply, %{note: note}, assign(socket, press_note: note)}
     end
   end
 

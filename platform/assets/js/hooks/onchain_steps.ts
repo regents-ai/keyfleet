@@ -103,12 +103,9 @@ export const OnchainSteps: Hook = {
         const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name, address: wallet.address})
         if (result?.status !== "fulfilled") return lostPress(this.el, name)
         const reply = result.value.reply as {review: Review; send: string} | {note: string}
-        // Refused: the reply carries the note the person reads, and the press
-        // answers with it, so the browser's own agent hears it too.
-        if ("note" in reply) {
-          push("step_failed", {step: name, reason: "step_unknown"})
-          return {reason: "step_unknown", note: reply.note}
-        }
+        // Refused: the server has already shown its note beside the buttons, and
+        // the reply carries that note, so the browser's own agent hears it too.
+        if ("note" in reply) return {reason: "step_unknown", note: reply.note}
         heard()
         return await press(reply.review, reply.send, push)
       } catch {

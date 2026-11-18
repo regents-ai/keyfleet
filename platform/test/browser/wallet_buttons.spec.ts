@@ -2,6 +2,7 @@ import {expect, test, type Locator, type Page} from "@playwright/test"
 import {callTool, installModelContext} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {allowUsdc, landStep, offerRewards, prepareFleet, refuseDraw, sellKey} from "./support/fleet_chain"
+import {holdConnection} from "./support/held_connection"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 
 // Wallet buttons send the steps the server built for them, from a stand-in
@@ -519,6 +520,46 @@ test("a browser agent's claim from a wallet the account doesn't link sends nothi
   const note = page.locator("#key-profile-claim-action-press-note")
   await expect(note).toBeVisible()
   expect(answer).toMatchObject({ok: false, error: {message: await note.innerText()}})
+  expect(await sentByStandIn(page)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The race: the server refuses the agent's ask from a wallet the account
+// doesn't link, and the person opens the account's wallet before that answer
+// is back. The refusal is the only thing that writes its note, so the page
+// never shows words other than the ones the agent heard.
+test("a browser agent's refused claim, then a wallet switch before the answer is back: the page shows no note but the one the agent heard", async ({
+  page,
+}) => {
+  const connection = await holdConnection(page)
+  await installModelContext(page)
+  const {errors} = await openClaim(page)
+  await useStandInWallet(page, stranger)
+  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeVisible()
+  // Every note the group shows from here on, in order.
+  await page.evaluate(() => {
+    const shown: string[] = []
+    ;(window as unknown as {notesShown: string[]}).notesShown = shown
+    new MutationObserver(() => {
+      const note = document.getElementById("key-profile-claim-action-press-note")?.textContent?.trim()
+      if (note && note !== shown.at(-1)) shown.push(note)
+    }).observe(document.body, {childList: true, subtree: true, characterData: true})
+  })
+
+  connection.hold("ask")
+  const call = callTool(page, "keys_claim", {asset: usdc})
+  await expect.poll(() => connection.holding()).toBe(true)
+  await useStandInWallet(page, me)
+  connection.release()
+  const answer = await call
+
+  await expect.poll(() => connection.unanswered()).toBe(0)
+  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeHidden()
+  expect(answer).toMatchObject({ok: false, error: {code: "step_unknown"}})
+  // The switch clears the note about the wallet open before, so the person may
+  // see none; never other words than the agent heard.
+  const shown = await page.evaluate(() => (window as unknown as {notesShown: string[]}).notesShown)
+  expect(shown.filter(note => note !== answer.error!.message)).toEqual([])
   expect(await sentByStandIn(page)).toEqual([])
   expect(errors).toEqual([])
 })

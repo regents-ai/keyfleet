@@ -6,7 +6,8 @@ defmodule KeyfleetWeb.Telemetry do
   `[:keyfleet, :repo, :query]` (`queue_time` is the wait for a connection),
   `[:keyfleet, :chain, :failure]` for each chain request that got no answer
   (`Keyfleet.ChainClient`), and `[:keyfleet, :wallet, :failure]` for each
-  press the browser reported as not sent or not confirmed (`wallet_failed/2`).
+  press the browser reported as not sent or not confirmed, or the server
+  refused to build steps for (`wallet_failed/2`).
   The figures every reader they admit sees alike (`Keyfleet.SharedReading`)
   report, for each kind, how many keys are held, how many have never been read,
   how long ago the oldest was read, the size of each reading offered as a percent
@@ -58,8 +59,9 @@ defmodule KeyfleetWeb.Telemetry do
     do: @reporter |> Peep.get_all_metrics() |> Peep.Prometheus.export() |> IO.iodata_to_binary()
 
   @doc """
-  Counts one press the browser reported as not sent or not confirmed, for the
-  wallet flow `flow`. A reason the hook never sends is not counted.
+  Counts one press the browser reported as not sent or not confirmed, or the
+  server refused to build steps for (`step_unknown`), for the wallet flow
+  `flow`. A reason the hook never sends is not counted.
   """
   def wallet_failed(flow, reason) when reason in @wallet_failures do
     :telemetry.execute([:keyfleet, :wallet, :failure], %{count: 1}, %{
