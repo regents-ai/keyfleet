@@ -12,9 +12,10 @@ Changes to Keyfleet, newest first.
   too. An address may hold letters, accents and digits in any script, the few signs some
   languages write inside a domain name, such as the middle dot of Catalan's l·l, and the
   dot, the @ and the punctuation email allows, such as + or '. The other dots a Japanese
-  or Chinese keyboard types, such as 。, are taken after the @, where they count as the
-  dot of a domain name, and refused before it. Anything else, such as a character that
-  shows as nothing or a space of any kind inside the address, is refused as not an
+  or Chinese keyboard types, such as 。, are taken after the @ when an ordinary dot is
+  there too, and count as the dot of a domain name; before the @ they are refused, and
+  so is a domain name typed with those dots alone. Anything else, such as a character
+  that shows as nothing or a space of any kind inside the address, is refused as not an
   address. An address with an underscore or an emoji after the @, or an IP address in
   brackets there, can't join. It still brings up the email keyboard on phones.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000

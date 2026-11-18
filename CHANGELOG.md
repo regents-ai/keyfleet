@@ -13218,9 +13218,20 @@ step's report).
   of them has an @ after it, so before the @ they are refused as not an address, with
   the ordinary "Enter an email address" note. It stays one expression, not a module of
   its own. Nothing else the allow-list takes or refuses changed; no row is touched.
-- c3f9b6285 The poll's too-long note groups its thousands as the site's other numbers
-  are (`Keyfleet.Fleets.Rules.grouped/1`): "The choices are too long: 2,009 characters
-  at most."
+- c3f9b6285 The poll's too-long note groups its thousands
+  (`Keyfleet.Fleets.Rules.grouped/1`): "The choices are too long: 2,009 characters at
+  most." Not every note does yet: the wallet notes still write "4000" and "1000"
+  (`KeyfleetWeb.WalletWords`), as do the page tools' length note and the byte count in
+  `KeyfleetWeb.Refusal`.
+- Round thirteen (20b1cafbc) found nothing at medium or above on round twelve's six
+  commits and no code change needed before release. Two sentences it found false are
+  corrected here and in the public changelog: this entry's line on the poll note, and
+  the public line on the other dots (a host typed with those dots alone, such as
+  name@example。jp, is refused: the field's own rule wants a plain dot after the @).
+  Left as they are: a Buy REGENT of 1 USDC or less refused with `cause: "state"` while
+  a smaller amount would go through (amounts under 1 USDC are never tried), and a No
+  handed over with no Keys when the chain's list of the signer's Keys could not be
+  read (a revert is an accepted outcome).
 - The public changelog's 18 November entry, edited in place: "Browser agents" says the
   lost line stays as it was too, and that the agent hears the connection was lost; and
   gives the two causes as examples. "Early access" says the other dots a Japanese or
