@@ -861,8 +861,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # Starting an app session in place of another stops that one, so only its
   # starter does; editing another member's notebook opens a sandbox of one's
-  # own that saves nothing (the hub's temporary sandbox). A mode or a
-  # replacement that isn't text is no start this door reads.
+  # own that saves nothing (the hub's temporary sandbox). A mode that isn't
+  # text is refused, and so is an app session's replacement that isn't text.
+  # With any other mode this door doesn't read the replacement: the hub
+  # refuses one that isn't text itself.
   defp session_start(conn, ids, {_headers, body} = request) do
     with {:ok, start} <- session_body(body) do
       case start do
@@ -1016,7 +1018,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # A body this door decodes to decide who may send it (`decoded/1`) is read no
   # further than an agent's: decoding costs many times its length. Every other
-  # body is read up to the hub's own limit.
+  # body is read up to this door's own request limit (`max_request_bytes`).
   defp body_limit(%Plug.Conn{
          method: method,
          path_info: ["api", "v1", "projects", _project, "notebooks", _notebook | rest]
