@@ -11480,3 +11480,38 @@ tests: 203 passed. Browser walks: `wallet_buttons.spec.ts`, 17 passed. The revie
 round-two walk on the lost line (line 324) still fails on its own check, which asks for the
 line to stay after a reconnect; its log now shows the line hidden once at the rejoin and
 nothing at the next reconnect.
+
+## 2026-11-17 — Wallet presses on the homepage release, and a press that may have sent is never called unsent
+
+- Merged origin/main at 2fd9f4407, the homepage release, into `kf/wallet-press-1118` as
+  2577309ec, so the third review and the release check run on what will ship. Only this
+  file, `platform/priv/public/changelog.md` and `verification/features.yml` conflicted, each
+  where both sides added entries in the same place; both sides' entries are kept, main's
+  first. The agent contract stays at main's 36.2.0 and the agent guide at main's 3.35.0:
+  the browser agent's new answers are the page tools' refusals, which neither describes,
+  and their shape and codes are as they were.
+- A press whose wallet fails mid-send while the page is offline. The press then reports
+  `send_unconfirmed`, and the report can't reach the server. With LiveView 1.2.13 a hook's
+  push while offline settles rather than rejecting, so the press answers that the server
+  never heard: the browser agent hears that the page lost its connection before it could
+  say what the wallet answered, never that nothing was sent, and the page's "nothing was
+  sent" line stays hidden. A kept walk in `platform/test/browser/wallet_buttons.spec.ts`
+  shows this with the connection down and a stand-in wallet that fails once the send has
+  started; run against a hook whose report rejects instead, it fails on the "nothing was
+  sent" answer.
+- `KeyfleetWeb.WalletPanel` answers nothing to a `step_failed` report that
+  `RegentChain.Presses.failed/1` refuses. No Keyfleet page sends one: a page reports only
+  the reasons the shared list holds, for the step named on the button pressed. A report
+  sent by hand over the page's connection gets no note, and nothing about it reaches the
+  browser agent.
+
+Check after the merge (partition `_kf_s3`, PORT unset), leaving out the review's untracked
+`adversarial_*` files: compile with warnings as errors (585 files), unused dependencies,
+the Hex audit, format, Credo (772 files, no issues), Sobelow, the compile graph at 138 or
+fewer, codegen, usage rules and route handoff all passed. Typecheck passed over 160 site
+files, and vitest 499 of 499, both with the two review files excluded by name. Graph host
+333 passed. ExUnit, given the 179 tracked test files: 1,568 passed (22 properties, 1,546
+tests), 19 excluded. Browser suite 128 of 128, with `--grep-invert adversarial_` taking out
+the two review specs' 20 walks; devices 72 of 72; chain walks in Chromium 146 of 146, the
+new walk among them. The 16 Firefox and WebKit walks of the Key profile did not start, as
+neither browser is installed on the Mac.
