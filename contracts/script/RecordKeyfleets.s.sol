@@ -39,7 +39,7 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// else the record writes, is the same as before Trading Fleets existed.
 ///
 /// `record` takes values and returns JSON, so the suite runs it against systems deployed in the
-/// test; `run` is the only part that reads or writes a file or reads the environment.
+/// test; `run` and `runInto` are the only parts that read or write a file or read the environment.
 contract RecordKeyfleets is KeyfleetManifest {
     /// @notice The deployment's factory has no code on this chain.
     error FactoryMissing(address factory);
@@ -55,9 +55,16 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// @notice Reads the manifest named by `KEYFLEET_MANIFEST` and what the deployment step
     /// established (`readDeployment`), and writes `deployments/<manifestName>.deployed.json`.
     function run() external {
+        runInto("deployments");
+    }
+
+    /// @notice What `run` does, writing the record as `<folder>/<manifestName>.deployed.json` into
+    /// a folder that already exists. `run` gives `deployments`; a rehearsal or a test gives a folder
+    /// under `rehearsal/`, so it never touches the published record.
+    function runInto(string memory folder) public {
         string memory manifestName = vm.envString("KEYFLEET_MANIFEST");
         string memory deployed = record(readManifest(manifestName), readDeployment());
-        vm.writeJson(deployed, string.concat("deployments/", manifestName, ".deployed.json"));
+        vm.writeJson(deployed, string.concat(folder, "/", manifestName, ".deployed.json"));
     }
 
     /// @notice Reads the system and its fleets back from the chain, checks them against the

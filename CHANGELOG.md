@@ -11863,3 +11863,17 @@ step's report).
   subscription and list the collection before any fleet past the founding ones is recorded.
 - `docs/chain-reader.md`: seeding leaves a Trading Fleet's entry out, with the same facts in
   short.
+
+## 2026-11-18 — The fork tests stay out of the record and the Safe's batch files
+
+- The record's and the Safe steps' `run` now each call `runInto` with the real folder,
+  `deployments` and `deployments/safe`; `runInto` takes any folder and otherwise does exactly
+  what `run` did. A new `contracts/rehearsal/` folder, ignored by git apart from its own note, is
+  where a rehearsal or a test gives `runInto` a folder of its own.
+- The Base release fork tests write there, each into its own subfolder, which they remove. They
+  no longer look for, read, overwrite or delete `deployments/base.deployed.json`, the Safe's
+  batch files or a broadcast log, so they pass whether those are in the checkout or not; the
+  trading deployment's fork test no longer requires the absence of a broadcast log either.
+- `foundry.toml` is back to letting scripts and tests only write the record and the batch
+  folder, not read them, and lets them read and write `rehearsal/`.
+- Every existing contract still compiles to the same bytes. Nothing was deployed, signed or sent.

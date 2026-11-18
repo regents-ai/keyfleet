@@ -54,6 +54,13 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     /// on the factory `readDeployment` gives: on Base, the first release's; on any other chain, the
     /// one the deployment step's latest broadcast there created.
     function run() external {
+        runInto("deployments/safe");
+    }
+
+    /// @notice What `run` does, writing the batch files, off anvil, into `folder`, which it creates
+    /// when missing. `run` gives `deployments/safe`; a rehearsal or a test gives a folder under
+    /// `rehearsal/`, so it never touches the Safe's real batch files.
+    function runInto(string memory folder) public {
         string memory manifestName = vm.envString("KEYFLEET_MANIFEST");
         string memory step = vm.envString("KEYFLEET_STEP");
         Manifest memory manifest = readManifest(manifestName);
@@ -74,10 +81,10 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             _send(manifest.bindings.safe, calls);
         } else {
             _simulate(manifest.bindings.safe, calls);
-            vm.createDir("deployments/safe", true);
+            vm.createDir(folder, true);
             for (uint256 index = 0; index < calls.length; ++index) {
                 vm.writeFile(
-                    string.concat("deployments/safe/", manifestName, ".", calls[index].name, ".json"),
+                    string.concat(folder, "/", manifestName, ".", calls[index].name, ".json"),
                     safeBatch(manifest.bindings.safe, calls[index])
                 );
             }

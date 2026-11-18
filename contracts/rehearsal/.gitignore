@@ -1,0 +1,4 @@
+# Rehearsals and the fork tests write the record and the Safe's batch files here, through the
+# scripts' runInto, instead of into deployments/. Nothing here is deployment evidence: delete it.
+*
+!.gitignore

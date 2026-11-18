@@ -384,10 +384,10 @@ contract KeyfleetTradingForkTest is Test {
 }
 
 /// @dev `DeployTradingFactory.run`, the whole path an honest run takes, on a fork of Base at its
-/// latest block exactly as it stands: the live factory taken from the script itself with no
-/// broadcast record, every check, the trading factory's deployment and the Safe's call, which the
-/// run then makes from the Safe's address on the fork. Nothing is signed or sent to Base. It runs
-/// only when `BASE_RPC_URL` is set and skips itself otherwise.
+/// latest block exactly as it stands: the live factory taken from the script's own pins, whatever
+/// broadcast log the repository holds, every check, the trading factory's deployment and the Safe's
+/// call, which the run then makes from the Safe's address on the fork. Nothing is signed or sent to
+/// Base. It runs only when `BASE_RPC_URL` is set and skips itself otherwise.
 contract DeployTradingFactoryForkTest is Test {
     KeyfleetKeys private constant COLLECTION = KeyfleetKeys(0xaBC959B463542497639adA57388c65D05AB34A30);
     KeyfleetFactory private constant FLEETS = KeyfleetFactory(0x82F62aE092DcF99fFa7fF15a9ac63488D5b4F5C7);
@@ -401,15 +401,14 @@ contract DeployTradingFactoryForkTest is Test {
         vm.createSelectFork(rpc);
     }
 
-    /// @dev The run finds the live factory with no broadcast record of the release in the
-    /// repository, deploys on it, and prints the live collection's `addFactory` for the address it
-    /// deployed, which the Safe's call then lists.
+    /// @dev The run finds the live factory without opening a broadcast log, deploys on it, and
+    /// prints the live collection's `addFactory` for the address it deployed, which the Safe's call
+    /// then lists.
     function test_runOnBaseFindsTheLiveFactoryAndPrintsTheSafesCall() public {
         DeployTradingFactory script = new DeployTradingFactory();
         assertEq(script.BASE_KEYFLEET_FACTORY(), address(FLEETS), "the pinned factory");
         assertEq(address(FLEETS.KEYS()), address(COLLECTION), "names the live collection");
         assertEq(vm.computeCreateAddress(address(FLEETS), 1), address(COLLECTION), "which it created first");
-        assertFalse(vm.exists("broadcast/DeployKeyfleets.s.sol/8453/run-latest.json"), "no release broadcast");
 
         vm.setEnv("KEYFLEET_MANIFEST", "base");
         (KeyfleetTradingFactory trading, KeyfleetSafeSteps.SafeCall memory call) = script.run();

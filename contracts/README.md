@@ -1831,7 +1831,9 @@ latest broadcast there.
   `club-gifts-1921-1998`), for the Safe's signers to load,
   check and sign. Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
-  has unlocked.
+  has unlocked. `run` is `runInto("deployments/safe")`; a rehearsal or a test
+  calls `runInto` with a folder under `rehearsal/`, which git ignores, so it
+  never writes over the Safe's real batch files.
 - `script/RecordKeyfleets.s.sol` reads the system and every fleet back from the
   chain, checks them against the manifest, and writes
   `deployments/<manifest>.deployed.json`. It takes the factory and the
@@ -1850,7 +1852,9 @@ latest broadcast there.
   (`CollectionNotVrfConsumer`) and, on Base, a subscription the Regents Safe
   does not own (`VrfSubscriptionNotOwnedByRegentsSafe`). It lists every fleet
   in the collection's registry, so it can be rerun at any time to add fleets
-  created since.
+  created since. `run` is `runInto("deployments")`; a rehearsal or a test calls
+  `runInto` with a folder under `rehearsal/` instead, so it never writes over
+  the published record.
 
   A fleet whose manager is not where the existing factory places its fleets'
   managers is recorded as a Trading Fleet only if its manager names a trading
@@ -2220,20 +2224,22 @@ themselves unless `BASE_RPC_URL` is set:
   the fork, as the record requires for any fleet past the founding ones.
   With `--isolate` its gas lines are the figures in [Trading
   Fleets](#trading-fleets-1). Apart from that, it runs `DeployTradingFactory`'s
-  whole `run` on Base as it stands, with no broadcast record: it finds the
-  pinned live factory, deploys the trading factory, and prints the Safe's
-  `addFactory` call for that trading factory on the live collection.
-- `KeyfleetReleaseFork.t.sol` runs the record's and the Safe steps' whole
-  `run` on Base as it stands, with no broadcast record: it checks the first
-  release's pins against the live system, that the record written has the
-  pinned factory and deployment block and is the record `record` gives for
-  them, and that the founding-fleets step writes one Safe batch per founding
-  fleet still missing, each a call to the pinned factory. Each run writes into
-  `deployments/` as a real one does, so the test first requires that
-  `deployments/base.deployed.json` and those batch files are not there, never
-  overwriting a real one, and removes what the run wrote. For that,
-  `foundry.toml` lets scripts and tests read as well as write
-  `deployments/base.deployed.json` and `deployments/safe`.
+  whole `run` on Base as it stands, whatever broadcast log the repository
+  holds: it takes the pinned live factory, deploys the trading factory, and
+  prints the Safe's `addFactory` call for that trading factory on the live
+  collection.
+- `KeyfleetReleaseFork.t.sol` checks the first release's pinned factory and
+  collection against the live system and that Base's reader gives the pins,
+  then runs the record's and the Safe steps' whole run on Base as it stands:
+  the record written has the pinned factory and deployment block and is the
+  record `record` gives for them, and the founding-fleets step writes one Safe
+  batch per founding fleet still missing, each a call to the pinned factory.
+  Each run goes through `runInto`, the function `run` calls with the real
+  folder, into a folder of the test's own under `rehearsal/`, which git
+  ignores, and the test removes that folder. No test opens
+  `deployments/base.deployed.json`, `deployments/safe` or a broadcast log, so
+  the tests pass whether those are there or not, and `foundry.toml` lets scripts
+  and tests only write the record and the batch folder, never read them.
 
 Run them one suite at a time, as a public endpoint may refuse a burst of
 requests.

@@ -8,16 +8,16 @@ import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {RecordKeyfleets} from "../../script/RecordKeyfleets.s.sol";
 
-/// @dev The record's and the Safe steps' whole `run` on a fork of Base at its latest block, exactly
-/// as it stands, with no broadcast record of the release: both take Base's first release from
-/// `KeyfleetManifest`. Each run writes its files under `deployments/` as a real run does, so each
-/// test first requires that none of them is there, never overwriting a real record or batch, and
-/// removes what the run wrote. Nothing is signed or sent to Base. It runs only when `BASE_RPC_URL`
-/// is set and skips itself otherwise.
+/// @dev The record's and the Safe steps' whole run on a fork of Base at its latest block, exactly as
+/// it stands: both take Base's first release from `KeyfleetManifest`, whatever broadcast log the
+/// repository holds. Each run writes through `runInto`, the function the real `run` calls with its
+/// own folder, into a folder of this test's own under `rehearsal/`, which git ignores, and the test
+/// removes that folder; no test opens the published record, a Safe batch or a broadcast log, so
+/// each passes whether those are there or not. Nothing is signed or sent to Base. It runs only when
+/// `BASE_RPC_URL` is set and skips itself otherwise.
 contract KeyfleetReleaseForkTest is Test {
-    string private constant RELEASE_BROADCAST = "broadcast/DeployKeyfleets.s.sol/8453/run-latest.json";
-    string private constant RECORD_FILE = "deployments/base.deployed.json";
-    string private constant SAFE_FOLDER = "deployments/safe";
+    string private constant RECORD_FOLDER = "rehearsal/release-fork-record";
+    string private constant SAFE_FOLDER = "rehearsal/release-fork-safe";
 
     function setUp() public {
         string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
@@ -29,7 +29,7 @@ contract KeyfleetReleaseForkTest is Test {
     }
 
     /// @dev The pinned factory is the live one: it names the pinned collection, which is its first
-    /// creation and lists it as a factory. Base's own run gives exactly the pins.
+    /// creation and lists it as a factory. Base's own reader gives exactly the pins.
     function test_thePinnedReleaseIsTheLiveSystem() public {
         RecordKeyfleets recorder = new RecordKeyfleets();
         KeyfleetFactory factory = KeyfleetFactory(recorder.BASE_KEYFLEET_FACTORY());
@@ -38,24 +38,22 @@ contract KeyfleetReleaseForkTest is Test {
         assertEq(address(factory.KEYS()), address(collection), "the factory names the collection");
         assertEq(vm.computeCreateAddress(address(factory), 1), address(collection), "which it created first");
         assertTrue(collection.isFactory(address(factory)), "and which lists it");
-        assertFalse(vm.exists(RELEASE_BROADCAST), "no release broadcast");
 
         KeyfleetManifest.BroadcastSummary memory deployment = recorder.readDeployment();
         assertEq(address(deployment.factory), address(factory), "Base's factory");
-        assertEq(deployment.deploymentBlock, 52_396_666, "Base's first block");
+        assertEq(deployment.deploymentBlock, recorder.BASE_DEPLOYMENT_BLOCK(), "Base's first block");
     }
 
     /// @dev The record's run writes Base's record with the pinned factory and first block, the
     /// same record `record` gives for them.
     function test_theRecordRunsOnBaseFromThePinnedRelease() public {
         RecordKeyfleets recorder = new RecordKeyfleets();
-        assertFalse(vm.exists(RELEASE_BROADCAST), "no release broadcast");
-        assertFalse(vm.exists(RECORD_FILE), "no record to overwrite");
+        vm.createDir(RECORD_FOLDER, true);
         vm.setEnv("KEYFLEET_MANIFEST", "base");
 
-        recorder.run();
-        string memory written = vm.readFile(RECORD_FILE);
-        vm.removeFile(RECORD_FILE);
+        recorder.runInto(RECORD_FOLDER);
+        string memory written = vm.readFile(string.concat(RECORD_FOLDER, "/base.deployed.json"));
+        vm.removeDir(RECORD_FOLDER, true);
 
         assertEq(vm.parseJsonUint(written, ".chainId"), 8453);
         assertEq(vm.parseJsonUint(written, ".deploymentBlock"), recorder.BASE_DEPLOYMENT_BLOCK(), "first block");
@@ -74,26 +72,18 @@ contract KeyfleetReleaseForkTest is Test {
     /// running it from the Safe's address on the fork.
     function test_theSafeStepsRunOnBaseFromThePinnedRelease() public {
         KeyfleetSafeSteps steps = new KeyfleetSafeSteps();
-        assertFalse(vm.exists(RELEASE_BROADCAST), "no release broadcast");
         KeyfleetManifest.Manifest memory manifest = steps.readManifest("base");
         KeyfleetFactory factory = KeyfleetFactory(steps.BASE_KEYFLEET_FACTORY());
         KeyfleetSafeSteps.SafeCall[] memory calls = steps.foundingFleetCalls(manifest, factory);
-        string[] memory files = new string[](calls.length);
-        for (uint256 i = 0; i < calls.length; ++i) {
-            files[i] = string.concat(SAFE_FOLDER, "/base.", calls[i].name, ".json");
-            assertFalse(vm.exists(files[i]), "no batch to overwrite");
-        }
-        bool hadFolder = vm.exists(SAFE_FOLDER);
         vm.setEnv("KEYFLEET_MANIFEST", "base");
         vm.setEnv("KEYFLEET_STEP", "founding-fleets");
 
-        steps.run();
+        steps.runInto(SAFE_FOLDER);
         string[] memory written = new string[](calls.length);
         for (uint256 i = 0; i < calls.length; ++i) {
-            written[i] = vm.readFile(files[i]);
-            vm.removeFile(files[i]);
+            written[i] = vm.readFile(string.concat(SAFE_FOLDER, "/base.", calls[i].name, ".json"));
         }
-        if (!hadFolder) vm.removeDir(SAFE_FOLDER, false);
+        vm.removeDir(SAFE_FOLDER, true);
 
         for (uint256 i = 0; i < calls.length; ++i) {
             assertEq(calls[i].to, address(factory), "a call to the pinned factory");
