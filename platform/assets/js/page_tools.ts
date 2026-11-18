@@ -55,22 +55,26 @@ type Group = {root: HTMLElement; pressButton: PressButton}
 type Offered = {groups: Group[]; registration: AbortController}
 const offered = new Map<string, Offered>()
 
+// What the agent hears when a press sent nothing, or may have sent: what the
+// note the page shows the person says, in words for the agent. A press answers
+// at once and never waits for that note. A press the server refused to prepare
+// carries the server's note, and the agent hears that instead (onchain_steps.ts).
 const failures: Record<Failure, {message: string; hint: string}> = {
   step_unknown: {
     message: "This can't be sent as it stands. Nothing was sent.",
     hint: "Check the details on the page, then call again.",
   },
   wallet_unavailable: {
-    message: "No wallet on the signed-in account is open, so nothing was sent.",
-    hint: "Sign in, open a wallet on your account in the wallet app, then call again.",
+    message: "The wallet app has no wallet open, or didn't answer, so nothing was sent.",
+    hint: "Check the wallet app is unlocked and open on a wallet of the signed-in account, then call again.",
   },
   switch_declined: {
-    message: "The wallet declined the switch to the page's network. Nothing was sent.",
-    hint: "Ask the person signed in before calling again.",
+    message: "The wallet didn't switch to the page's network, so nothing was sent.",
+    hint: "Calling again asks the wallet to switch again; ask the person signed in first.",
   },
   network_mismatch: {
-    message: "The wallet isn't on the page's network. Nothing was sent.",
-    hint: "Change the wallet's network to the one the page names in the wallet app, then call again.",
+    message: "The wallet couldn't switch to the page's network, so nothing was sent.",
+    hint: "Switch the wallet to the page's network in the wallet app, then call again.",
   },
   wallet_declined: {
     message: "The wallet declined this. Nothing was sent.",
@@ -83,6 +87,10 @@ const failures: Record<Failure, {message: string; hint: string}> = {
   send_unconfirmed: {
     message: "The wallet may have sent this.",
     hint: "Check the wallet's activity before calling again.",
+  },
+  sign_unconfirmed: {
+    message: "The wallet may have signed this.",
+    hint: "Check the wallet before calling again.",
   },
 }
 
@@ -105,6 +113,7 @@ function answer(pressed: Pressed | "lost") {
     return {ok: true, transaction_hash: pressed.transaction_hash, note: "Sent from the wallet. The page shows when it lands."}
   }
   if ("signature" in pressed) return {ok: true, signature: pressed.signature}
+  if ("note" in pressed) return refusal(pressed.reason, pressed.note, failures[pressed.reason].hint)
   const {message, hint} = failures[pressed.reason]
   return refusal(pressed.reason, message, hint)
 }

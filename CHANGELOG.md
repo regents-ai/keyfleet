@@ -11178,6 +11178,108 @@ a scratch walk that is not kept.
   Its tag commit was read from GitHub and its wheel hash from PyPI by `scripts/check-siwa-latest.sh`.
 - The command line section of the public documents says which Python it runs on (3.12 to 3.14).
 
+## 2026-11-17: the homepage's Watch is Explore, with the four steps under the hero (Sean's 34)
+
+- The hero's link to Classic #1 says "Explore" (`#home-explore`). Its press is still
+  counted as step `watch` (`data-step`, `/steps` and `keyfleet_launch_steps_total`), so
+  the totals carry on; only the words around it say Explore. The privacy policy names the
+  Explore button (effective November 17, still version 1.3).
+- Under the hero, after the Key on offer, an ordered list of four steps (`#home-steps`):
+  Explore, Key, Agent and Work, each a one-word title with one line. It holds no links and
+  no motion. At 1280 wide it runs across both columns under the facts and the card; on a
+  phone it is two by two after "Sales open soon", so the first screen is as it was.
+- Measured on the test page at 1280 by 800, light and dark: Buy Key ends at 613 px, the
+  facts at 680, the steps run from 704 to 777. A goal of two lines (the live goal is about
+  105 letters) puts the steps' foot at 853, past the screen's foot; Buy Key and the facts
+  do not move. At 390 by 844 the facts end at 487 and Buy Key at 927, as before; the steps
+  run from 1004 to 1202. Nothing scrolls sideways.
+- The verification list (`home-ways-in`, `launch-step-counters`) says the same, with the
+  phone and two-line goal placement as a gap. The public changelog says Watch is now
+  Explore. No database, contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, metrics, launch
+steps, public pages and launch gate tests: 58 passed. Typecheck passed; vitest 498 passed,
+leaving out the untracked review file `assets/test/adversarial_send_step.test.ts`; the
+asset budgets pass on a minified build. Walks: homepage, homepage details and launch
+steps, 20 passed. The whole suite and the chain and phone walks are run once, with the
+next homepage change on this branch.
+
+## 2026-11-17: the homepage shows Classic #1's newest notebook page made public (Sean's 44 a)
+
+- Below the hero, in a row of its own, Notebook (`#home-notebook`): the newest notebook
+  page a Key made public in Classic #1, by its project's title (one line, at most 64
+  characters, cut on a whole word) and its Key, with "Open the page", a plain link that
+  opens the page on Classic's notebook host in a new tab; anyone can open it, signed out.
+  While there is none (the live site today) the row is not drawn: no empty slot, no words.
+- It comes from Classic's shared reading (`KeyfleetWeb.FleetNow`, field `page`): the
+  fleet's project titles (`Project :titles`) and the newest page from
+  `Publication :in_fleet` with no actor, both actions anyone may read, so 2 more queries
+  a pass (a notice, at most once a second, or the minute's heal), not per visit. Making a
+  page public sends no notice, so it shows within the minute. A page in a deleted project
+  is passed over. The homepage itself reads nothing more: a test counts its queries with
+  and without pages made public.
+- The verification list has a `home-recent-work` row and `home-ways-in` names Notebook;
+  the public changelog says it. No database, contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
+as errors and Credo (no issues) passed. Homepage, harbour sea and fleet page tests: 111
+passed. The whole suite, the walks and the asset budgets were run on the next commit,
+which builds on this one.
+
+## 2026-11-17: Recent, what Classic #1's Keys made public, slides by under the hero (Sean's 44 a)
+
+- Below the hero, above Notebook, Recent (`#home-recent`): the newest things Classic #1's
+  Keys made public, as the Public place lists them (task, finding, note and the other
+  item kinds, posts, notebook pages, code), up to 8, newest first. Each is a diamond, its
+  kind, its title in the Key's own words (an item's title, the first post's words with
+  Markdown taken out, or the project's title for a page or code) and its Key, all one
+  plain link to `/classic/1/workspace?place=public#public-<id>`. Titles are drawn as
+  text, never markup, on one line, at most 64 characters, cut on a whole word with "…".
+  One with no words is left out. With nothing public the row is not drawn.
+- From 4 things the line slides leftward without stopping: one CSS animation on a track
+  holding the list twice, moved by half its length, linear, 10 s per thing (measured
+  45.6 px/s with 7 things and 51.5 px/s with 5). A pointer over it pauses it where it is;
+  keyboard focus in it stops it at its first thing, so Tab meets the links in order and
+  the browser brings each into view. The second copy is `aria-hidden` and `inert`, so a
+  screen reader or Tab meets each thing once. Under reduced motion, or with 3 or fewer,
+  the newest 3 stand still in a row (swiped sideways on a phone). No script, timer or
+  polling of its own: it arrives with the page and its live updates.
+- Why 8: enough to run more than twice across the widest band (one copy of 7 measured
+  3,193 px) and all on the Public place's first page of 12, so every link's place exists.
+- It comes from Classic's shared reading (`KeyfleetWeb.FleetNow`, field `public`): the
+  first page of the Public place exactly as a signed-out visitor reads it
+  (`WorkspacePage.board/3` with no actor). Measured on the test database: the reading of
+  Classic took 22 queries (about 6.7 ms) with nothing public and 24 (about 5.5 ms) with
+  12 things public; the Public place's part is 4 to 6 queries (1 to 2 ms), plus about 2
+  for each posts span and 1 for each code item on its first page; Notebook's newest page
+  now reuses the board's projects, 1 query. Once a pass, not per visit. The reading with
+  8 things is 2,020 bytes of its 65,536. The homepage itself reads nothing more (counted
+  by a test).
+- Measured at 1280 by 800 with both rows: Buy Key ends at 613 px and the facts at 680,
+  as before; Recent runs from 826 to 885 and Notebook to 934. At 390 by 844 the facts end
+  at 487 and Buy Key at 927, as before. Nothing scrolls sideways at either width; the
+  band never shifts the page as it arrives or slides.
+- A kept chain walk, `homepage_recent.spec.ts`, publishes pages through the test chain
+  server and covers the arrival, the plain links, the pause on hover, the stop on focus,
+  reduced motion and the row going away. The verification list (`home-recent-work`) and
+  the public changelog say it, with no visible pause control as a gap. No database,
+  contract or agent-facing change.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, Public place,
+fleet page, harbour sea, shared reading, metrics, launch gate, launch steps and public
+pages tests: 157 passed (1 property, 156 tests). The whole suite in two parts:
+`test/keyfleet` 582 passed (13 properties, 569 tests, 19 excluded) and
+`test/keyfleet_web` 970 passed (9 properties, 961 tests). Typecheck passed; vitest 498
+passed in 38 files, leaving out the untracked review file
+`assets/test/adversarial_send_step.test.ts`; the asset budgets, 3 passed, on a minified
+build. Walks: homepage, homepage details, launch steps and launch gate, 23 passed; the
+whole chain project in Chromium, 142 passed, with the three new ones; the devices
+project, 72 passed. Pictures at 1280 and 390, light and dark, with things public and
+with none, with the notebook page and without, and under reduced motion, were taken by
+a scratch walk that is not kept.
+
 ## 2026-11-17 — The install line and checker pin name regents-cli 1.10.32
 
 - `Makefile`, `platform/priv/public/agents.md`, `platform/priv/public/docs.md` and
@@ -11190,6 +11292,427 @@ a scratch walk that is not kept.
 - `contracts/README.md` said Classic #1 was not deployed and that Key sales were off. Classic #1
   is deployed on Base and selling, beside the Regents Club; Syndicate #1, Accelerant #1 and
   Cascade #1 are not deployed, and it is their sales that wait for the founder's word.
+
+## 2026-11-17: Notebook's link says Open; the privacy policy keeps its November 11 date
+
+- The Notebook row under the homepage's hero links its page with "Open" (was "Open the
+  page"), since a label is one or two words. Its ↗ and its description, the project's
+  title (`aria-describedby`), stay, so a screen reader still hears which page it opens.
+  Tests and walks find it by its id, so none changed.
+- `platform/priv/public/privacy.md` is effective November 11, 2026 again, still version
+  1.3. Renaming the homepage's button from Watch to Explore, in the entry for Sean's 34
+  above, is not a change of policy, and no test or written rule in the repository moves
+  the date with an edit.
+
+Check (partition `_kf_s3`, PORT unset, this commit alone): format, compile with warnings
+as errors and Credo (no issues) passed; homepage tests, 20 passed. The walks were run
+with the next commit, which builds on this one.
+
+## 2026-11-17: Recent has Pause, and keyboard focus shows each link whole (the chief's 1 a)
+
+- Beside the Recent label, while the line slides, a button (`#home-recent-pause`):
+  "Pause" stops the line where it is and becomes "Play"; Play lets it go on. It stays
+  stopped until pressed again, through the page's live updates, and is forgotten when
+  the page closes. Pressing it runs LiveView's own `JS.toggle_attribute` of `data-paused`
+  on the section, with no script of the page's own. A checkbox would have needed no
+  script, but its name would have stayed "Pause" while it showed "Play", or a checked
+  "Play" would have read as playing. Like every button on the page, it answers once the
+  page has connected, a moment after it first draws.
+- It is absent with 3 or fewer things, when the line stands still, and hidden under
+  reduced motion. It is one muted word in a hairline box, 51 by 24 px, 44 px tall on a
+  touch screen, with the site's own focus ring, and Tab meets it before the first thing.
+  The label column is 7rem wide on wide screens (was 6rem), so Recent and Pause fit side
+  by side; Notebook's row keeps lining up with it. Hover still pauses the line; keyboard
+  focus still stops it.
+- Keyboard focus: the sliding line scrolls only while a link in it has keyboard focus,
+  and then that link is the line's one snap position, so the line rests with it at its
+  start, and while focused a link is no wider than the line (a longer title ends in
+  "…"). Each of five links was measured wholly in view at 1280, and at 390, where before
+  the long ones sat partly past the edge. When focus leaves, the line cannot scroll, so
+  it slides again from its start; before, it could come back offset by the last scroll.
+- Measured at 1280 by 800 with Pause: Buy Key, the figures and the steps (704 to 777 px)
+  do not move; Recent's line runs from 838 to 873 and Notebook to 934. At 390 by 844,
+  Pause sits beside the label and Recent's row is 24 px taller on touch. Nothing scrolls
+  sideways at either width. The Recent walk presses Pause and Play (the line holds one
+  place over two reads, then moves), finds Pause before the first thing by Tab, and
+  finds no Pause with two things or with less motion. The verification list
+  (`home-recent-work`, whose gaps no longer name a missing pause or a half-shown link)
+  and the public changelog say it.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors, Credo
+(no issues) and xref (at most 138 compile-connected) passed. Homepage, Public place,
+fleet page, harbour sea, shared reading, metrics, launch gate, launch steps and public
+pages tests: 159 passed (1 property, 158 tests). Typecheck passed; vitest 498 passed in
+38 files, leaving out the untracked review file
+`assets/test/adversarial_send_step.test.ts`; the asset budgets, 3 passed, on a minified
+build. Walks: homepage, homepage details, launch steps and launch gate, 23 passed; the
+chain project's Recent and value card walks in Chromium, 9 passed; the devices project,
+72 passed. Pictures of Pause and Play at 1280 and 390, light and dark, on touch, and
+with keyboard focus, were taken by a scratch walk that is not kept.
+
+## 2026-11-17: the Public place's notebook page link says Open (the chief's 1 a)
+
+- In a fleet's Public place, a notebook page made public is linked with "Open" (was
+  "Open the page"), since a label is one or two words. Its description is the line above
+  it, which says it is a notebook page and, when every project is listed, which project
+  (`aria-describedby` to `public-<id>-kind`), so a screen reader still hears what it
+  opens. The homepage's Notebook row already reads the same way.
+- The homepage test that opens the Public place now finds the page's link described by
+  that line, naming its project, and the Recent walk, landing there, finds the link named
+  Open with that line as its description.
+
+Check (partition `_kf_s3`, PORT unset for ExUnit): format, compile with warnings as
+errors and Credo (no issues) passed. Homepage, workspace and public workspace tests, 109
+passed. The chain project's Recent walk in Chromium, 3 passed.
+
+## 2026-11-17 — Wallet presses: no account check, and a wallet off Base is asked to switch first
+
+The template's 8011292d ("Wallet presses: no account check, a prompt to switch network"),
+ported for Sean's wallet ruling. Its 8f28f899 (Privy's own wallet switching through the
+provider the page holds) was already here from de15c661b.
+
+- `platform/assets/js/wallet_actions/send_step.ts`: `sendStep` and `signStep` take the
+  wallet Privy has active, which `press` in `platform/assets/js/hooks/onchain_steps.ts` reads
+  once per press. Gone: the account read compared with the signer, the network read after the
+  switch and again before the send, and the check that Privy had not swapped the wallet during
+  the press. A wallet on another chain is asked to switch on every press, through its own
+  switch, and once that resolves the same press sends or signs. A declined switch (4001) is
+  `switch_declined`, any other failed switch `network_mismatch`; either sends nothing, and the
+  next press asks again. `wallet_unavailable` now means only that no wallet answered.
+- The smart-wallet send path is unchanged: the capability question with its two-second limit,
+  the builder-code suffix, `wallet_sendCalls` and its wait, and the plain transaction when the
+  wallet can't append. Both sends carry the step's chain.
+- `platform/lib/keyfleet_web/wallet/onchain_steps.ex`: the notes for a wallet that didn't
+  answer, a declined switch and a failed switch say what happened and what to do, naming Base.
+  The signed-out, no-wallet-open and unlinked-wallet notes stay; the server still builds the
+  steps for a linked wallet only.
+- `platform/assets/test/send_step.test.ts` mirrors the template's tests: a wallet answering for
+  another account sends and signs; each press off Base asks to switch, then sends; a declined
+  or failed switch sends nothing and the next press asks again; the step goes as built; no
+  active wallet sends nothing. The first two fail on the code before this change.
+  `onchain_steps.test.ts` and `send_calls.test.ts` lose the cases and assertions of the removed
+  checks, the fleet page test and the declined-switch walk read the new notes, and the walks'
+  stand-in wallet no longer answers an account read.
+- `verification/features.yml` (`wallet-network-switch`) says the same. No database, contract or
+  agent-visible change, so no version bump.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors (585 files),
+Credo (771 files, no issues) and xref (within the 138 compile-connected limit) passed.
+Typecheck passed leaving out the untracked review file
+`platform/assets/test/adversarial_send_step.test.ts`, whose two errors are its own calls in
+the old shape; vitest 497 passed, leaving out that file. Wallet step, fleet page, proposals,
+telemetry and visit log tests: 202 passed. The whole suite: 1,562 passed (22 properties, 1,540
+tests), 19 excluded. The asset budgets pass on a minified build. Browser walks: homepage and
+launch, 22 passed; the whole chain project, 139 passed; the device walks, 72 passed.
+
+## 2026-11-17 — Wallet presses after the review of d193a8183
+
+- After a reconnect, as at every release, the server a page rejoins no longer knew the open
+  wallet: a press with steps the page already had was sent but could not be followed ("This
+  transaction is not the one this page prepared"), and a press that asked the server for its
+  steps sent nothing and said the wallet app had no wallet open, until a reload.
+  `platform/assets/js/hooks/onchain_steps.ts` now has the template's `reconnected` callback
+  (a5c80d5a): it lets go of the review it holds and tells the new server process the open
+  wallet again. Unlike the template's, it does not put back its lost line: the rejoin redraws
+  the component and hides the line, which spoke of a press made before the page was back. Put
+  back, the line was hidden again by the server's next render within milliseconds and
+  flashed at every later reconnect until the next press (the review's second round).
+  `account_wallets.ts` and
+  `privy_showcase.ts`, which also report the open wallet on mount, report it again on
+  `reconnected`. Two kept walks in `platform/test/browser/wallet_buttons.spec.ts` drop and
+  restore the socket, then claim: one with the steps the page had, one that asks the server
+  for its steps. Both fail on d193a8183 and are followed to "Done." now.
+- The shared press list (`RegentChain.Presses`) accepts `sign_unconfirmed`, which had no note
+  here, so a hand-made report of it stopped its sender's page process. It now has the
+  template's note, "Your wallet may have signed this. Check your wallet before pressing
+  again.", so every reason the shared list accepts has one; a fleet page test reports each
+  and checks each leaves its own note. Keyfleet builds no signature steps; a hand-made
+  `step_signed` report still has no handler in `KeyfleetWeb.WalletPanel` and stops only its
+  sender's page, as the chief ruled.
+- Leftovers and words: the stand-in wallet in `platform/assets/test/send_step.test.ts` no
+  longer answers an account read nothing asks for. In `platform/assets/js/page_tools.ts` the
+  browser agent hears what the person reads: a wallet app with no wallet open or that didn't
+  answer, a switch the wallet didn't make (calling again asks again), and a switch it
+  couldn't make (switch it in the wallet app). The public changelog and the
+  `wallet-network-switch` row say the press goes on once the wallet answers the switch
+  request, not once it has switched. The page tools' words change as they did in af7ce6ad7,
+  without a contract or guide version bump.
+- Not built, as the chief ruled: a wallet that refuses a request outright (a chain id not its
+  network, or a sender it doesn't hold) still reads "may have sent" until the shared list and
+  the template add `wallet_refused`; the review's A2 and F1 fail until then, and A1 and A3 stay
+  as the owner's ruling leaves them.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors (585 files),
+Credo (772 files, no issues) and xref (within the 138 compile-connected limit) passed.
+Typecheck passed leaving out the two untracked review files; vitest 497 passed, leaving them
+out. Wallet step, fleet page, proposals, telemetry and visit log tests: 203 passed. The whole
+suite: 1,569 of 1,570 passed (22 properties), 19 excluded; the one failure is the review's own
+`step_signed` case in its untracked file. The asset budgets pass on a minified build. Browser
+walks: the two kept reconnect walks fail with d193a8183's hooks and pass now, as do the
+review's two; the whole chain project, 141 passed; the device walks, 72 passed.
+
+## 2026-11-17 — Wallet presses after the review's second round
+
+- The browser's own agent hears the note the person reads. A press that sent nothing, or may
+  have sent, answered the agent with `platform/assets/js/page_tools.ts`'s own words, so for
+  a wallet the account doesn't link, or with no wallet open as the server knows it, the
+  agent heard "This can't be sent as it stands" while the person read which wallet to switch
+  to. `KeyfleetWeb.WalletPanel` now answers the `step_failed` report with the note it
+  shows; the press hook waits for that answer and hands the note on, and the page tools
+  keep only a hint for each reason. A report the server never hears answers the agent
+  that the page lost its connection before it could say what the wallet answered. A kept
+  walk in `platform/test/browser/wallet_buttons.spec.ts` claims through the agent's tool
+  from an unlinked wallet and checks the agent hears the page's note (it fails on
+  0f9b3aefd); the fleet page test checks every reason's answer carries its note. The page
+  tools' answers change as they did in af7ce6ad7, without a contract or guide version bump.
+- Words: the public changelog and the `wallet-network-switch` row said that after a
+  reconnect a press reaches the wallet and is followed until it's done, which is not so for
+  a prompt confirmed in the first moments after the page is back, or a press on a panel
+  with a form during the first round trip. They now say the wallet buttons work again
+  without a reload. Those two, a wallet answer that arrives while the page is offline, and
+  a claim confirmed after moving to another Keyfleet page and back go to a follow-up the
+  template leads.
+
+Check (partition `_kf_s3`, PORT unset): format, compile with warnings as errors (585 files)
+and Credo (772 files, no issues) passed. Typecheck passed and vitest 499 passed, leaving out
+the two untracked review files. Wallet step, fleet page, proposals, telemetry and visit log
+tests: 203 passed. Browser walks: `wallet_buttons.spec.ts`, 17 passed. The review's
+round-two walk on the lost line (line 324) still fails on its own check, which asks for the
+line to stay after a reconnect; its log now shows the line hidden once at the rejoin and
+nothing at the next reconnect.
+
+## 2026-11-17 — Wallet presses on the homepage release, and a press that may have sent is never called unsent
+
+- Merged origin/main at 2fd9f4407, the homepage release, into `kf/wallet-press-1118` as
+  2577309ec, so the third review and the release check run on what will ship. Only this
+  file and `platform/priv/public/changelog.md` conflicted, each where both sides added
+  entries at the end of 17 November; both sides' entries are kept, main's first.
+  `verification/features.yml` merged on its own. The merge also reworded three of the
+  branch's own statements so they claim only what holds: this file's first wallet entry,
+  titled "Every wallet press reaches the wallet, and asks to switch to Base first", is now
+  "Wallet presses: no account check, and a wallet off Base is asked to switch first"; the
+  public wallet entry no longer opens with "Every press now reaches your
+  wallet"; and the `wallet-network-switch` row's "Every press reaches Privy's active
+  wallet" now reads "A press the server has built steps for reaches Privy's active wallet
+  with the step as built". The agent contract stays at main's 36.2.0 and the agent guide
+  at main's 3.35.0: the browser agent's new answers are the page tools' refusals, which
+  neither describes, and their shape and codes are as they were.
+- A press whose wallet fails mid-send while the page is offline. The press then reports
+  `send_unconfirmed`, and the report can't reach the server. With LiveView 1.2.13 a hook's
+  push while offline settles rather than rejecting, so the press answers that the server
+  never heard: the browser agent hears that the page lost its connection before it could
+  say what the wallet answered, never that nothing was sent, and the page's "nothing was
+  sent" line stays hidden. A kept walk in `platform/test/browser/wallet_buttons.spec.ts`
+  shows this with the connection down and a stand-in wallet that fails once the send has
+  started; run against a hook whose report rejects instead, it fails on the "nothing was
+  sent" answer.
+- `KeyfleetWeb.WalletPanel` answers nothing to a `step_failed` report that
+  `RegentChain.Presses.failed/1` refuses. No Keyfleet page sends one: a page reports only
+  the reasons the shared list holds, for the step named on the button pressed. A report
+  sent by hand over the page's connection gets no note, and nothing about it reaches the
+  browser agent.
+
+Check after the merge (partition `_kf_s3`, PORT unset), leaving out the review's untracked
+`adversarial_*` files: compile with warnings as errors (585 files), unused dependencies,
+the Hex audit, format, Credo (772 files, no issues), Sobelow, the compile graph at 138 or
+fewer, codegen, usage rules and route handoff all passed. Typecheck passed over 160 site
+files, and vitest 499 of 499, both with the two review files excluded by name. Graph host
+333 passed. ExUnit, given the 179 tracked test files: 1,568 passed (22 properties, 1,546
+tests), 19 excluded. Browser suite 128 of 128, with `--grep-invert adversarial_` taking out
+the two review specs' 20 walks; devices 72 of 72; chain walks in Chromium 146 of 146, the
+new walk among them. The 16 Firefox and WebKit walks of the Key profile did not start, as
+neither browser is installed on the Mac.
+
+## 2026-11-17 — Wallet presses after the review's third round
+
+- Found: making a press that sent nothing wait for the server's answer to its
+  `step_failed` report (3d1479c31) broke what the browser's own agent hears, four ways. A
+  move to another page while that answer was on its way left the agent's call open for
+  good. A connection lost between the report and the answer kept the agent waiting 30
+  seconds, then told it the wallet's answer was unknown, about a press the wallet had
+  declined. Offline, all seven reasons read to the agent as a lost connection with the
+  wallet's answer unknown, though for six of them the page knows nothing was sent. Online,
+  a report whose panel had left the page read as a lost connection.
+- Changed (1215900c2): a press answers the agent at once from what the page knows, as at
+  c41f17083. The report is told and not waited for, `step_failed` no longer replies, and
+  `platform/assets/js/page_tools.ts` says each reason in words for the agent, meaning what
+  the server's notes say. The case that started round two stays: a press the server
+  refuses to prepare (the account doesn't link the open wallet, or no wallet is open as
+  the server knows it) already waits for the answer to `prepare_and_send`, and that answer
+  carries the server's note, which the agent hears. The press's report then left a note of
+  its own beside the buttons, written for the wallet open by then, so a switch in between
+  could show the person other words than the agent heard; round four made the refusal the
+  one writer. The walk for an unlinked wallet still checks it, and fails when the hook
+  drops the note.
+  Offline, a send that may have gone answers the agent that the wallet may have sent it.
+  A kept test checks a press answers without waiting on its report.
+- Changed (2da4fdd87): a signature step the wallet may have made is reported as
+  `sign_unconfirmed`, as the template's `failure/3` does, so its note says "Your wallet may
+  have signed this" and the agent hears that the wallet may have signed it; the counted and
+  logged reasons take it in. The template's `wallet_refused` is not taken: it needs a shared
+  library move Keyfleet has not made. No Keyfleet page builds a signature step today.
+- Words: the merge entry above said three files conflicted; two did, and it now says how
+  the merge reworded three of the branch's statements. The public "Browser agents" entry
+  says only what holds after this round: the agent hears the person's note when a wallet
+  the account doesn't link is open. The offline walk's regression row credited a review
+  that had not happened; it now credits the question asked at the merge.
+- Not built, as asked: the older wait when the page moves away while a press is still
+  asking the server for its steps; which note shows when two presses fail close together;
+  and the round-two list (an answer that arrives offline, a prompt confirmed before the
+  rebuild, a form panel's first round trip, a claim across a navigation).
+
+On 1215900c2, the review's round-three proofs: its findings at lines 247, 303, 326 and
+351 pass, and both unit findings (lines 147 and 178). HELD 1 and HELD 5 now fail only on
+words: they expect the server's "Your wallet declined this…" where the agent now hears
+"The wallet declined this…". CHECK 6a and 6b now fail as they should: the note no longer
+rides on `step_failed`'s answer, and a report that fails offline no longer turns a possible
+send into "nothing was sent".
+
+## 2026-11-17 — A press that asks for its steps names the open wallet
+
+- Found by the review's round two (its walk at line 476): when a page joins again,
+  LiveView sends the page's forms back to the fresh server before the hook's
+  `reconnected` tells it which wallet is open. A press in that moment that asked
+  `prepare_and_send` for its steps (its form changed, or it held no steps) reached a group
+  with no wallet to build them for, and nothing reached the wallet.
+- Changed, as ash-template d60a9b31 did: the hook names the open wallet in that ask
+  (`address`, the shape `onchain_active_wallet` uses), and `KeyfleetWeb.WalletPanel` takes
+  it as the page's wallet (`take_active/2`, shared with `onchain_active_wallet`) before it
+  builds the steps. It says only which wallet is open: steps are built for it only when the
+  account links it (`OnchainSteps.signer/2`), and a wallet the account doesn't link gets no
+  steps and the note naming both. Nothing holds back, defers or repeats a press.
+- Where Keyfleet differs from the template: a refused ask answers with the note
+  (`%{note: ...}`, from 1215900c2) where the template's answers `%{}`; the steps are built
+  before the reply (`sync_now/1`), and a step the chain's state holds back is refused, as
+  before. Keyfleet's hook asks whenever it holds no steps for the button, not only when a
+  form changed, and every Keyfleet group is a `WalletPanel`, which answers the ask, so the
+  template's open case (a button with no form, pressed after a reconnect before its steps
+  come back, sends nothing) does not arise once the page is back. It still arises while
+  LiveView sends the form back, in the Buy Key window, as the walks below show.
+  `KeyfleetWeb.OnchainSteps` needed no
+  change. The hook never asks with no wallet open, so `prepare_and_send` no longer refuses
+  for "no wallet open as the server knows it"; its test now covers an unlinked wallet and a
+  step the chain holds back.
+- Buttons with no form beside them, pressed after a reconnect before the fresh steps come
+  back, walked in Chromium with a stand-in wallet. Claim, once the hook's `reconnected` has
+  run: it asks, gets steps, reaches the wallet and is followed to Done, as before this
+  change. Claim, while LiveView still sends the Key page's form back: the hook still holds
+  its old steps and sends from them; it reaches the wallet and shows as not this page's
+  step, unchanged (round two's walk at line 413 shows the same for a paired agent's
+  one-press Issue shard). Holding no steps then, it asks, and now reaches
+  the wallet and is followed; before this change it sent nothing. Approve and Buy Key: the
+  page comes back with the Buy Key window closed; reopened, a press the moment the window
+  is back reaches the wallet and is followed. While LiveView still sends the form back, the
+  window is still on screen: holding its steps, the press reaches the wallet and nothing
+  shows it once the window closes; holding none yet, its ask goes to a window the fresh
+  server doesn't have, the answer is empty and nothing is sent. Reported, not fixed;
+  `verification/features.yml` lists both under the wallet row's gaps.
+- Tests: `platform/test/browser/key_shards.spec.ts` presses Issue shard with its days
+  changed while LiveView sends the form back (the walk holds the server's answer to the
+  form, and everything after it, in order), and the press reaches the wallet with 45 days
+  and is followed to Done; with the panel not taking the named wallet, the wallet is asked
+  0 times. `platform/assets/test/onchain_steps.test.ts` (2 new) fails without the hook's
+  `address`. `platform/test/keyfleet_web/live/fleet_page_test.exs` (1 new) fails without
+  `take_active/2` in the ask. The Key page's and the fleet page's other asks name the open
+  wallet, as the hook now sends them.
+
+Checks on the four commits together: `mix format --check-formatted`, `mix compile
+--warnings-as-errors` and `mix credo --strict` clean; the type check exit 0; Vitest 503 of
+503 (38 files, the review's files left out); the wallet ExUnit files with
+`fleet_page_test.exs` and `key_profile_test.exs` 237 passed, 17 excluded; chain walks in
+Chromium 147 of 147, the new walk among them, and the 16 Firefox and WebKit walks of the Key
+profile did not start, as neither browser is installed on the Mac. The review's round-three
+proofs are as on 1215900c2. Round two's walk at line 476 now passes, and its line 413 still
+fails, as above.
+
+## 2026-11-18 — Wallet presses after the review's fourth round
+
+- Found: a refused ask had two writers for its note. `prepare_and_send` answered with the
+  note for the wallet the press named, and the hook's `step_failed` report then left a note
+  written for the wallet open by then. A switch between the two showed the person words the
+  browser's agent never heard.
+- Changed (402702eb3): the refusal is the one writer. `KeyfleetWeb.WalletPanel` sets the
+  note beside the buttons, counts the failure (`step_unknown`) and replies with that same
+  note; the hook reports nothing more for a refused ask. A kept walk in
+  `platform/test/browser/wallet_buttons.spec.ts` races it: the agent's claim from an
+  unlinked wallet is refused while the person opens the account's wallet before the answer
+  is back, and the page never shows words the agent did not hear (the switch may clear the
+  note, so the person may see none). With the hook's report put back, the walk fails. The
+  connection relay it uses (`platform/test/browser/support/held_connection.ts`) is shared
+  with the shard walk.
+- Changed (0776f86f7), as ash-template ef4074c4: `press(review, name, wallet, push)` takes
+  the wallet the click handler read at the press, on both paths, with and without an ask.
+  Steps that come back from an ask go to that wallet even when another opened meanwhile.
+  No re-read, no gate, no comparison with the signer. A new test fails with the wallet read
+  again inside `press`.
+- On the agent's path: `platform/assets/js/page_tools.ts` answers `ok: true` and "Sent from
+  the wallet. The page shows when it lands." for any hash the wallet returns, before the
+  server checks it; `RegentChain.Outcome` marks a hash from another sender "not this step"
+  only on the page. So the agent hears "Sent" for such a press. After 0776f86f7 it is still
+  possible from held steps: a press that doesn't ask sends the steps the page holds, built
+  for the wallet the server last heard, through the wallet open at the press, with `from`
+  set to the steps' signer; a wallet that sends from its own account anyway returns a hash
+  from another sender. An asked press can no longer cross wallets. Reported, not built.
+- Not built: the Buy Key window kept open across a rejoin. Shape (a), the window naming its
+  fleet in the connection's params and both pages opening it at mount, keeps it open, but
+  a press made while LiveView still sends the forms back carries the page's component
+  numbers from before the rejoin. The window opened after the page loaded, so the fresh
+  server numbers it, and the parts after it, differently: on `/classic/1` the window's
+  panel goes from 4 to 3 and 4 becomes the pairing box; on a Key page, 5 to 3, and 5
+  becomes a part of the fleet's prompts. An ask in that moment reached the pairing box on
+  `/classic/1`, which crashed the page's process (the walk saw the server's error and one
+  more rejoin), and the prompts on a Key page; either way nothing reached the wallet and
+  the person saw no note. Held steps reached the wallet, and their reports went to the same
+  wrong part. The homepage's numbers match and its press worked. Shape (b), the window in
+  the address, draws it at mount too and shifts the numbers the same way. Without either,
+  such an ask reaches no part and nothing is sent, as before. Reported to the Keyfleet
+  chief with what a fix takes.
+- Words: the round-three entry no longer says the agent hears exactly the note the report
+  leaves; round two's line 413 is a paired agent's Issue shard, not Claim; "does not arise
+  here" now says it still arises in the Buy Key window. `verification/features.yml` no
+  longer says a press asked while the page gets its connection back is built for the open
+  wallet in the Buy Key window. The public 17 November entry has one Wallet buttons line,
+  which says the Buy Key window still closes then, and an 18 November entry says what
+  changed for customers.
+- Tests (ebaf892d1): the hook's ask test now has a server that builds steps only for the
+  wallet the ask names, so it fails for the reason it names; the test that passed without
+  the form it described is gone, as the shard walks cover that case. The agent's refusal
+  test in `platform/assets/test/page_tools.test.ts` no longer covers the words for a press
+  whose steps came back without the step. The code can still give that reason
+  (`press/4` in `platform/assets/js/hooks/onchain_steps.ts`); its words are untested.
+- Gaps (b40a9e55d): `verification/features.yml` lists the agent's open wallet gaps: an
+  asked press that never answers once the page moves away, a dropped connection during the
+  ask that makes the agent wait about 30 seconds, offline words the person never sees, two
+  close failures that leave the later note, the signed-out note the agent hears differently,
+  and "Sent" for a hash the page then marks as not this step.
+
+Checks on the six commits together: `mix format --check-formatted`, `mix compile
+--warnings-as-errors` and `mix credo --strict` clean; the type check exit 0; Vitest 503 of
+503 (38 files, the review's files left out); the wallet ExUnit files 257 passed, 17
+excluded; chain walks in Chromium 148 of 148. The review's proofs: round four's unit file
+passes 3 of 3. Round four's walks pass 11 of 13: FINDING 1 fails as it should, since the
+switch now clears the note and the person reads nothing untrue (the walk expects a note on
+screen); CHECK 5b fails as it should, as the kept shard walk catches an ask with its
+address taken out (the wallet is asked 0 times). Round three's walks are as on 1215900c2:
+HELD 1 and HELD 5 fail on words only, CHECK 6a and 6b fail as they should. Round three's
+unit cases V1 and V2 fail because `press` now takes the wallet before `push`; with the
+wallet passed, both pass. Round two's walks pass 10 of 18: FINDING 2, 3, 4, 5, 6, 12 and
+13 stay open as before, and BEFORE b fails because the ask now names the wallet (fixed on
+17 November). Round one's server file passes 6 of 7; the missing `step_signed` handler in
+`KeyfleetWeb.WalletPanel` is unchanged, as recorded earlier.
+
+Round five of the review (158802d85..a7697cd63) found nothing of medium severity or above
+and no code changed after it. Round four's two-notes finding is closed in every order
+tried, a refused press is counted once, and a press asked from the server goes to the
+wallet open at the press. What it found is written down, not fixed: the public 18 November
+line no longer says the note "always" says what the agent hears, and the 17 November line
+says a press in the Buy Key window as the page reconnects may not reach the wallet;
+`verification/features.yml` says a press reaches the wallet open when it was pressed, and
+lists eight more gaps (a press just before the wallet is let go, held steps pressed as
+another wallet opens, no note after a person's refused press and a quick switch, the visit
+log's "ok" for a refused press, a wallet app that never answers, the lost line gone at the
+next redraw, a claim not followed across a move away and back, no handler for a signature
+step's report).
 
 ## 2026-11-17 — A request waiting for a busy notebook hub is answered
 

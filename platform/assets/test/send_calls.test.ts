@@ -1,11 +1,7 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
+import {afterEach, describe, expect, it, vi} from "vitest"
 
 import {press, type Review} from "../js/hooks/onchain_steps"
-import {
-  forgetWalletDisconnected,
-  replaceActiveEthereumWallet,
-  type EthereumProvider,
-} from "../js/wallet_actions/connected_wallet"
+import type {EthereumProvider} from "../js/wallet_actions/connected_wallet"
 import {builderCodeSuffix, sendStep, type TransactionStep} from "../js/wallet_actions/send_step"
 
 const signer = "0x1111111111111111111111111111111111111111"
@@ -71,8 +67,6 @@ function wallet({
       switch (method) {
         case "eth_chainId":
           return "0x2105"
-        case "eth_accounts":
-          return [signer]
         case "wallet_getCapabilities":
           return capabilities()
         case "wallet_sendCalls":
@@ -88,38 +82,19 @@ function wallet({
     },
   }
   const sends = () => requests.filter(({method}) => method === "eth_sendTransaction" || method === "wallet_sendCalls")
-  // The request made just before each send.
-  const beforeSends = () =>
-    requests.flatMap((request, index) => (sends().includes(request) ? [requests[index - 1].method] : []))
-  return {provider, requests, sends, beforeSends, statusReads}
+  return {provider, requests, sends, statusReads}
 }
 
 const send = (provider: EthereumProvider, sent: TransactionStep = step) =>
-  sendStep(base, signer, sent, () => ({address: signer, provider, switchChain}), () => {})
-
-function memoryStorage() {
-  const values = new Map<string, string>()
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => void values.set(key, value),
-    removeItem: (key: string) => void values.delete(key),
-  }
-}
+  sendStep(base, signer, sent, {address: signer, provider, switchChain}, () => {})
 
 function pushes() {
   const pushed: [string, unknown][] = []
   return {pushed, push: (event: string, payload: unknown) => void pushed.push([event, payload])}
 }
 
-beforeEach(() => {
-  vi.stubGlobal("window", {localStorage: memoryStorage(), dispatchEvent: () => true})
-  forgetWalletDisconnected()
-  replaceActiveEthereumWallet(null)
-})
-
 afterEach(() => {
   vi.useRealTimers()
-  vi.unstubAllGlobals()
 })
 
 describe("a wallet that appends the builder code itself gets the step as one call", () => {
@@ -146,7 +121,6 @@ describe("a wallet that appends the builder code itself gets the step as one cal
     expect(active.requests.filter(({method}) => method === "wallet_getCallsStatus")).toEqual([
       {method: "wallet_getCallsStatus", params: ["0xbatch1"]},
     ])
-    expect(active.beforeSends()).toEqual(["eth_chainId"])
   })
 
   it("takes a code the wallet reports for every chain, under 0x0", async () => {
@@ -164,10 +138,10 @@ describe("a wallet that appends the builder code itself gets the step as one cal
 
   it("reports a press of it as sent with the included hash", async () => {
     const active = wallet({capabilities: () => onBase})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
+    const selected = {address: signer, provider: active.provider, switchChain}
     const {pushed, push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({transaction_hash: includedHash})
+    expect(await press(review, "buy", selected, push)).toEqual({transaction_hash: includedHash})
     expect(pushed).toEqual([["step_sent", {review_id: "review-1", step: "buy", transaction_hash: includedHash}]])
   })
 })
@@ -189,7 +163,6 @@ describe("every other wallet gets the step as a transaction, as before", () => {
 
     expect(await send(active.provider)).toBe(sentHash)
     expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
-    expect(active.beforeSends()).toEqual(["eth_chainId"])
   })
 
   it("a wallet that never says what it can do gets one eth_sendTransaction two seconds on", async () => {
@@ -203,7 +176,6 @@ describe("every other wallet gets the step as a transaction, as before", () => {
 
     expect(await sent).toBe(sentHash)
     expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
-    expect(active.beforeSends()).toEqual(["eth_chainId"])
   })
 
   it("a wallet that appends the code gets one eth_sendTransaction when its calls could not be followed here", async () => {
@@ -214,11 +186,10 @@ describe("every other wallet gets the step as a transaction, as before", () => {
     try {
       const fresh = await import("../js/wallet_actions/send_step")
       const active = wallet({capabilities: () => onBase})
-      const selected = () => ({address: signer, provider: active.provider, switchChain})
+      const selected = {address: signer, provider: active.provider, switchChain}
 
       expect(await fresh.sendStep(base, signer, step, selected, () => {})).toBe(sentHash)
       expect(active.sends()).toEqual([{method: "eth_sendTransaction", params: today}])
-      expect(active.beforeSends()).toEqual(["eth_chainId"])
     } finally {
       vi.doUnmock("viem/actions")
       vi.resetModules()
@@ -232,7 +203,7 @@ describe("every other wallet gets the step as a transaction, as before", () => {
     try {
       const fresh = await import("../js/wallet_actions/send_step")
       const active = wallet({capabilities: () => onBase})
-      const selected = () => ({address: signer, provider: active.provider, switchChain})
+      const selected = {address: signer, provider: active.provider, switchChain}
 
       const sent = fresh.sendStep(base, signer, step, selected, () => {})
       await vi.advanceTimersByTimeAsync(1_999)
@@ -265,10 +236,10 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
         throw Object.assign(new Error("User rejected the request."), {code: 4001})
       },
     })
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
+    const selected = {address: signer, provider: active.provider, switchChain}
     const {pushed, push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
+    expect(await press(review, "buy", selected, push)).toEqual({reason: "wallet_declined"})
     expect(active.sends().map(({method}) => method)).toEqual(["wallet_sendCalls"])
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
@@ -276,10 +247,10 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
   it("maps a status that never arrives to send_unconfirmed, without a second send", async () => {
     vi.useFakeTimers({toFake: ["setTimeout", "clearTimeout"]})
     const active = wallet({capabilities: () => onBase, status: () => callsStatus(100)})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
+    const selected = {address: signer, provider: active.provider, switchChain}
     const {pushed, push} = pushes()
 
-    const pressed = press(review, "buy", push)
+    const pressed = press(review, "buy", selected, push)
     await active.statusReads(1)
     await vi.advanceTimersByTimeAsync(60_000)
 
@@ -290,10 +261,10 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
 
   it("maps calls the wallet gave up on, with no transaction, to send_unconfirmed", async () => {
     const active = wallet({capabilities: () => onBase, status: () => callsStatus(400)})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
+    const selected = {address: signer, provider: active.provider, switchChain}
     const {push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({reason: "send_unconfirmed"})
+    expect(await press(review, "buy", selected, push)).toEqual({reason: "send_unconfirmed"})
     expect(active.sends().map(({method}) => method)).toEqual(["wallet_sendCalls"])
   })
 
@@ -304,12 +275,12 @@ describe("a press through wallet_sendCalls reports only what the wallet said", (
       capabilities: () => onBase,
       status: () => (included ? callsStatus(200, [receipt("0x1")]) : callsStatus(100)),
     })
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain})
+    const selected = {address: signer, provider: active.provider, switchChain}
     const {pushed, push} = pushes()
 
-    const first = press(review, "buy", push)
+    const first = press(review, "buy", selected, push)
     await active.statusReads(1)
-    const second = press(review, "buy", push)
+    const second = press(review, "buy", selected, push)
     await active.statusReads(2)
     included = true
     await vi.advanceTimersByTimeAsync(1_000)

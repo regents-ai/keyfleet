@@ -34,3 +34,19 @@ it("offers Claim for all your Keys once for every fleet's group, and presses the
   club.leaving.abort()
   expect(offered).toHaveLength(0)
 })
+
+it("answers a press the server refused to prepare with the note it sent", async () => {
+  const offered: ModelContextTool[] = []
+  vi.stubGlobal("document", {modelContext: {registerTool: async (tool: ModelContextTool) => void offered.push(tool)}})
+  const {offerPageTool} = await import("../js/page_tools")
+
+  const button = {dataset: {onchainStep: `claim-${asset}`}, disabled: false}
+  const root = {dataset: {webmcpTool: "keys_claim"}, querySelectorAll: () => [button]}
+  const press = vi.fn()
+  const leaving = offerPageTool(root as unknown as HTMLElement, press)!
+
+  const note = "The page's note."
+  press.mockResolvedValueOnce({reason: "step_unknown", note})
+  expect(await offered[0].execute({asset}, {})).toMatchObject({ok: false, error: {code: "step_unknown", message: note}})
+  leaving.abort()
+})

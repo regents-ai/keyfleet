@@ -2,6 +2,7 @@ import {expect, test, type Page} from "@playwright/test"
 import {newAgent, pairPerson} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {endShard, issueShard, landStep, prepareFleet, sellKey} from "./support/fleet_chain"
+import {holdConnection} from "./support/held_connection"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 
 // A key's owner issues, renews and ends shards from the key's page: a paired
@@ -120,6 +121,41 @@ test("an owner issues a shard to another wallet, renews it and ends it, and ever
   endShard(fleet, key, agentWallet, me)
   await expect(shard).toBeHidden()
   await expect(page.locator("#key-no-shards")).toBeVisible()
+  expect(errors).toEqual([])
+})
+
+type Live = {liveSocket: {disconnect(done: () => void): void; connect(): void}}
+
+test("a shard pressed while the page joins again, after its days changed, reaches the wallet and is followed until it lands", async ({
+  page,
+}) => {
+  const connection = await holdConnection(page)
+  const key = sellKey(fleet, me)
+  const errors = await openKey(page, key)
+  await page.locator("#key-other-wallet summary").click()
+  await page.locator("#key-shard-wallet").fill(agentWallet)
+  await expect(page.locator("#key-issue-shard-action-line")).toContainText("30 days")
+
+  await page.evaluate(() => new Promise<void>(resolve => (window as unknown as Live).liveSocket.disconnect(resolve)))
+  await page.locator("#key-shard-days").fill("45")
+  connection.hold("recovery")
+  await page.evaluate(() => (window as unknown as Live).liveSocket.connect())
+  await expect.poll(() => connection.holding()).toBe(true)
+
+  // The page holds the steps for 30 days and shows 45, so the press asks the
+  // fresh server for the steps for 45 before the page has told it which wallet
+  // is open: the ask names it.
+  await page.locator("#key-issue-shard-button").click()
+  await expect.poll(() => connection.asks()).toBe(1)
+  connection.release()
+
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [issued] = await sentByStandIn(page)
+  expect(issued.transaction.to.toLowerCase()).toBe(shardsContract)
+  expect(days(issued.transaction.data)).toBe(45)
+
+  landStep(issued.hash, issued.transaction, true)
+  await expect(sentLine(page, "key-issue-shard-action", issued.hash)).toContainText("Done.")
   expect(errors).toEqual([])
 })
 

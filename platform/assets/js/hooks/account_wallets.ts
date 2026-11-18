@@ -9,7 +9,7 @@ interface AccountWalletsHook {
 
 // The person's wallets (`KeyfleetWeb.AccountWallets`) learn from this browser
 // which wallet is active and which one Privy made at sign-in: when the page
-// arrives and each time the wallet changes.
+// arrives, when it reconnects and each time the wallet changes.
 export const AccountWallets: Hook = {
   mounted(this: AccountWalletsHook) {
     this.report = () =>
@@ -19,6 +19,11 @@ export const AccountWallets: Hook = {
       })
     window.addEventListener("ash:wallet-state", this.report)
     this.report()
+  },
+
+  // The page that rejoins starts with no wallet on the server; tell it again.
+  reconnected(this: AccountWalletsHook) {
+    this.report?.()
   },
 
   destroyed(this: AccountWalletsHook) {

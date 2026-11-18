@@ -1,6 +1,8 @@
 import {expect, test, type Locator, type Page} from "@playwright/test"
+import {callTool, installModelContext} from "./support/agent_tools"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {allowUsdc, landStep, offerRewards, prepareFleet, refuseDraw, sellKey} from "./support/fleet_chain"
+import {holdConnection} from "./support/held_connection"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
 
 // Wallet buttons send the steps the server built for them, from a stand-in
@@ -68,6 +70,25 @@ async function shownDone(approve: Locator) {
     const {edge, green} = await edgeAndGreen(approve)
     return edge === green
   }).toBe(true)
+}
+
+// Drops the page's connection and lets it join again, as every open page does
+// at a release. The page then talks to a fresh server, which starts with no
+// wallet and no steps. LiveView puts its connected class back only once the
+// page has joined again, so the class is taken off first and waited for.
+async function reconnect(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>(resolve => {
+        const socket = (window as unknown as {liveSocket: {disconnect(done: () => void): void; connect(): void}}).liveSocket
+        socket.disconnect(() => {
+          document.querySelector("[data-phx-main]")!.classList.remove("phx-connected")
+          socket.connect()
+          resolve()
+        })
+      }),
+  )
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
 }
 
 test.beforeAll(() => {
@@ -240,7 +261,7 @@ test("a switch the wallet declines sends nothing and says so, and the next press
   await useStandInWallet(page, me, "send", {on: 1, switching: "decline"})
 
   await page.locator("#buy-key-approve").click()
-  await expect(pressNote(page)).toHaveText("Your wallet declined the switch to Base. Nothing was sent.")
+  await expect(pressNote(page)).toHaveText("Press again to switch your wallet to Base. Nothing was sent.")
   expect(await sentByStandIn(page)).toEqual([])
 
   await useStandInWallet(page, me, "send", {on: 1})
@@ -456,6 +477,161 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
   await expect(page.locator(`#key-profile-claim-action-sent li:has(#key-profile-claim-action-sent-${claimed.hash})`)).toContainText(
     "Done.",
   )
+  expect(errors).toEqual([])
+})
+
+// A Key's page with its income to claim, signed in, the stand-in wallet active.
+// Returns the Claim button and the page's uncaught errors.
+async function openClaim(page: Page) {
+  const key = sellKey(fleet, me)
+  offerRewards(fleet, key, 2_500_000)
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(`/classic/1?key=${key}`)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  await useStandInWallet(page, me)
+  const claim = page.locator(`#key-profile-claim-${usdc}`)
+  await expect(claim).toHaveText("Claim 2.5 USDC")
+  return {claim, errors}
+}
+
+// The claim reached the wallet once, and the server follows it until it lands.
+async function claimedAndDone(page: Page) {
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [claimed] = await sentByStandIn(page)
+  expect(claimed.transaction.to.toLowerCase()).toBe(rewardsContract)
+  landStep(claimed.hash, claimed.transaction, true)
+  await expect(page.locator(`#key-profile-claim-action-sent li:has(#key-profile-claim-action-sent-${claimed.hash})`)).toContainText(
+    "Done.",
+  )
+}
+
+test("a browser agent's claim from a wallet the account doesn't link sends nothing, and the agent hears the note the person reads", async ({
+  page,
+}) => {
+  await installModelContext(page)
+  const {errors} = await openClaim(page)
+  await useStandInWallet(page, stranger)
+  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeVisible()
+
+  const answer = await callTool(page, "keys_claim", {asset: usdc})
+
+  const note = page.locator("#key-profile-claim-action-press-note")
+  await expect(note).toBeVisible()
+  expect(answer).toMatchObject({ok: false, error: {message: await note.innerText()}})
+  expect(await sentByStandIn(page)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// The race: the server refuses the agent's ask from a wallet the account
+// doesn't link, and the person opens the account's wallet before that answer
+// is back. The refusal is the only thing that writes its note, so the page
+// never shows words other than the ones the agent heard.
+test("a browser agent's refused claim, then a wallet switch before the answer is back: the page shows no note but the one the agent heard", async ({
+  page,
+}) => {
+  const connection = await holdConnection(page)
+  await installModelContext(page)
+  const {errors} = await openClaim(page)
+  await useStandInWallet(page, stranger)
+  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeVisible()
+  // Every note the group shows from here on, in order.
+  await page.evaluate(() => {
+    const shown: string[] = []
+    ;(window as unknown as {notesShown: string[]}).notesShown = shown
+    new MutationObserver(() => {
+      const note = document.getElementById("key-profile-claim-action-press-note")?.textContent?.trim()
+      if (note && note !== shown.at(-1)) shown.push(note)
+    }).observe(document.body, {childList: true, subtree: true, characterData: true})
+  })
+
+  connection.hold("ask")
+  const call = callTool(page, "keys_claim", {asset: usdc})
+  await expect.poll(() => connection.holding()).toBe(true)
+  await useStandInWallet(page, me)
+  connection.release()
+  const answer = await call
+
+  await expect.poll(() => connection.unanswered()).toBe(0)
+  await expect(page.locator("#key-profile-claim-action-mismatch")).toBeHidden()
+  expect(answer).toMatchObject({ok: false, error: {code: "step_unknown"}})
+  // The switch clears the note about the wallet open before, so the person may
+  // see none; never other words than the agent heard.
+  const shown = await page.evaluate(() => (window as unknown as {notesShown: string[]}).notesShown)
+  expect(shown.filter(note => note !== answer.error!.message)).toEqual([])
+  expect(await sentByStandIn(page)).toEqual([])
+  expect(errors).toEqual([])
+})
+
+test("a browser agent's claim that the wallet may have sent while the page is offline is never answered as nothing sent", async ({
+  page,
+}) => {
+  await installModelContext(page)
+  // The claim step's name in each review the group is sent, as its hook keeps them.
+  await page.addInitScript(() => {
+    window.addEventListener("phx:onchain-steps:review", event => {
+      const {component_id, review} = (event as CustomEvent<{component_id: string; review: {steps: {step: string}[]} | null}>)
+        .detail
+      if (component_id === "key-profile-claim-action") {
+        document.documentElement.dataset.claimSteps = review?.steps.map(({step}) => step.toLowerCase()).join(" ") ?? ""
+      }
+    })
+  })
+  const {errors} = await openClaim(page)
+  await useStandInWallet(page, me, "fail")
+  // The page holds the claim's step, so the press goes straight to the wallet
+  // without asking the server first.
+  await expect(page.locator("html")).toHaveAttribute("data-claim-steps", new RegExp(`\\bclaim-${usdc}\\b`))
+  await page.evaluate(
+    () =>
+      new Promise<void>(resolve =>
+        (window as unknown as {liveSocket: {disconnect(done: () => void): void}}).liveSocket.disconnect(resolve),
+      ),
+  )
+
+  const answer = await callTool(page, "keys_claim", {asset: usdc})
+
+  // The wallet was asked and failed mid-send, and the page could not tell the
+  // server: the agent hears at once that the wallet may have sent it, never
+  // that nothing was sent, and the page doesn't say so either.
+  expect(await page.evaluate(() => window.standInWallet!.asked)).toBe(1)
+  expect(answer).toMatchObject({ok: false, error: {code: "send_unconfirmed"}})
+  expect(answer.error!.message).not.toMatch(/nothing was sent/i)
+  await expect(page.locator("#key-profile-claim-action [data-onchain-lost]")).toBeHidden()
+  expect(errors).toEqual([])
+})
+
+test("after the page reconnects, a claim whose steps the page already had reaches the wallet and is followed until it lands", async ({
+  page,
+}) => {
+  const {claim, errors} = await openClaim(page)
+
+  await reconnect(page)
+  await claim.click()
+
+  await claimedAndDone(page)
+  expect(errors).toEqual([])
+})
+
+test("after the page reconnects, a claim that asks the server for its steps reaches the wallet and is followed until it lands", async ({
+  page,
+}) => {
+  const {claim, errors} = await openClaim(page)
+
+  await reconnect(page)
+  // A field the steps weren't built from, as when the person has changed a
+  // form (the propose and shard forms): the press asks the server for steps
+  // built from the form on screen.
+  await page.locator("#key-profile-claim-action").evaluate(root => {
+    const field = document.createElement("input")
+    field.type = "hidden"
+    field.dataset.onchainInput = "changed"
+    root.append(field)
+  })
+  await claim.click()
+
+  await claimedAndDone(page)
   expect(errors).toEqual([])
 })
 

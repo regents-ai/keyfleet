@@ -132,20 +132,20 @@ defmodule KeyfleetWeb.OnchainSteps do
       reason == "step_unknown" ->
         "This can't be sent as it stands. Check the details above, then press again. Nothing was sent."
 
-      # The wallet app didn't answer for the wallet the steps were built for:
-      # it is locked, open on another account, changed during the press, or
-      # failed before the send.
+      # No wallet answered the press: the wallet app is locked, or failed
+      # before the send.
       reason == "wallet_unavailable" ->
-        "Your wallet app didn't answer for #{short(signer(linked, active))}, so nothing was sent. Check it's unlocked and open on #{short(signer(linked, active))}, then press again."
+        "Your wallet app didn't answer, so nothing was sent. Check it's unlocked, then press again."
     end
   end
 
+  # The wallet declined or failed the switch; the next press asks again.
   def failure_note("switch_declined", _linked, _active, chain_name),
-    do: "Your wallet declined the switch to #{chain_name}. Nothing was sent."
+    do: "Press again to switch your wallet to #{chain_name}. Nothing was sent."
 
   def failure_note("network_mismatch", _linked, _active, chain_name),
     do:
-      "Your wallet isn't on #{chain_name}. Change the network to #{chain_name} in your wallet app, then press again. Nothing was sent."
+      "Your wallet couldn't switch to #{chain_name}. Switch it in your wallet app, then press again. Nothing was sent."
 
   def failure_note("wallet_declined", _linked, _active, _chain_name),
     do: "Your wallet declined this. Nothing was sent."
@@ -156,6 +156,9 @@ defmodule KeyfleetWeb.OnchainSteps do
 
   def failure_note("send_unconfirmed", _linked, _active, _chain_name),
     do: "Your wallet may have sent this. Check your wallet activity."
+
+  def failure_note("sign_unconfirmed", _linked, _active, _chain_name),
+    do: "Your wallet may have signed this. Check your wallet before pressing again."
 
   @doc """
   The note beside the buttons while the wallet app has open a wallet the

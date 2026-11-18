@@ -3,7 +3,7 @@ import type {Address, Hash, Hex} from "viem"
 import type {Hook} from "../hook_composition"
 import type {PressButton} from "../page_tools"
 import {report} from "../visit_log"
-import {activeEthereumWallet} from "../wallet_actions/connected_wallet"
+import {activeEthereumWallet, type SelectedWallet} from "../wallet_actions/connected_wallet"
 import {
   failure,
   NothingSent,
@@ -28,8 +28,16 @@ export type Review = {
   inputs: Record<string, string>
 }
 
-/** What the wallet answered one press: the hash or signature, or why nothing was sent. */
-export type Pressed = {transaction_hash: Hash} | {signature: Hex} | {reason: Failure}
+/**
+ * What the wallet answered one press: the hash or signature, or why nothing was
+ * sent, or may have been. A press the server refused to prepare carries the
+ * note the server shows the person for it.
+ */
+export type Pressed =
+  | {transaction_hash: Hash}
+  | {signature: Hex}
+  | {reason: Failure}
+  | {reason: "step_unknown"; note: string}
 
 type Push = (event: string, payload: unknown) => void
 
@@ -78,6 +86,7 @@ export const OnchainSteps: Hook = {
       const name = button.dataset.onchainStep!
       const release = mark(button)
       const asks = asksServer(this.review, name, form)
+      const wallet = activeEthereumWallet()
       lost(this.el, false)
       // The server hears the press, and the form it was made from, just before
       // the wallet does and once its steps are built from that form: a
@@ -85,19 +94,21 @@ export const OnchainSteps: Hook = {
       const heard = () => push("step_pressed", {step: name, form})
 
       try {
-        if (!(activeEthereumWallet() && asks)) {
+        if (!(wallet && asks)) {
           heard()
-          return await press(this.review, name, push)
+          return await press(this.review, name, wallet, push)
         }
-        const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
+        // The ask names the open wallet: a page that has just joined again can ask
+        // before the server has heard which wallet is open. The steps that come
+        // back go to that same wallet.
+        const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name, address: wallet.address})
         if (result?.status !== "fulfilled") return lostPress(this.el, name)
-        const reply = result.value.reply as {review?: Review; send?: string}
-        if (reply.review && reply.send) {
-          heard()
-          return await press(reply.review, reply.send, push)
-        }
-        push("step_failed", {step: name, reason: "step_unknown"})
-        return {reason: "step_unknown"}
+        const reply = result.value.reply as {review: Review; send: string} | {note: string}
+        // Refused: the server has already shown its note beside the buttons, and
+        // the reply carries that note, so the browser's own agent hears it too.
+        if ("note" in reply) return {reason: "step_unknown", note: reply.note}
+        heard()
+        return await press(reply.review, reply.send, wallet, push)
       } catch {
         return lostPress(this.el, name)
       } finally {
@@ -140,6 +151,16 @@ export const OnchainSteps: Hook = {
     }
   },
 
+  // A page that rejoins gets a fresh component on the server, which no longer
+  // knows the active wallet or the review this hook holds. The review is let go
+  // and the wallet told again, so the next press is sent from a review the
+  // server remembers. The rejoin redraws the component, which hides its lost
+  // line: that press was made before the page was back.
+  reconnected(this: OnchainStepsHook) {
+    this.review = undefined
+    this.walletChanged?.()
+  },
+
   destroyed(this: OnchainStepsHook) {
     void this.tool?.then(registration => registration?.abort())
     if (this.clicked) this.el.removeEventListener("click", this.clicked)
@@ -153,14 +174,20 @@ export const OnchainSteps: Hook = {
 }
 
 /**
- * Sends or signs the named step from Privy's active wallet, the only wallet that
- * acts, when it is the signer the server built the review for. With no wallet
- * active, the press sends nothing and the server's note says why. Reports only
- * what the wallet answered, against the review it sent from: the hash or
- * signature, or why nothing was sent, and returns the same answer. The server
- * decides what the hash did.
+ * Sends or signs the named step through `wallet`, the wallet that was open at
+ * the press (Privy's active wallet then, the only wallet that acts), even when
+ * another is open by the time the steps arrive. With no wallet open at the
+ * press, it sends nothing and the server's note says why. Reports only what the
+ * wallet answered, against the review it sent from: the hash or signature, or
+ * why nothing was sent, and returns the same answer. The server decides what
+ * the hash did.
  */
-export async function press(review: Review | undefined, name: string, push: Push): Promise<Pressed> {
+export async function press(
+  review: Review | undefined,
+  name: string,
+  wallet: SelectedWallet | null,
+  push: Push,
+): Promise<Pressed> {
   const step = review?.steps.find(candidate => candidate.step === name)
   let sending = false
   const started = () => {
@@ -168,13 +195,8 @@ export async function press(review: Review | undefined, name: string, push: Push
   }
 
   try {
-    if (!activeEthereumWallet()) throw new NothingSent("wallet_unavailable")
+    if (!wallet) throw new NothingSent("wallet_unavailable")
     if (!review || !step) throw new NothingSent("step_unknown")
-    const wallet = () => {
-      const active = activeEthereumWallet()
-      return active?.address.toLowerCase() === review.signer.toLowerCase() ? active : null
-    }
-    if (!wallet()) throw new NothingSent("wallet_unavailable")
 
     if (step.kind === "signature") {
       const signature = await signStep(review.chain, review.signer, step, wallet, started)
@@ -185,7 +207,7 @@ export async function press(review: Review | undefined, name: string, push: Push
     push("step_sent", {review_id: review.id, step: name, transaction_hash})
     return {transaction_hash}
   } catch (error) {
-    const reason = failure(sending, error)
+    const reason = failure(sending, error, step?.kind === "signature")
     push("step_failed", {step: name, reason})
     return {reason}
   }

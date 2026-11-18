@@ -2426,7 +2426,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # What the fleet's Keys made public, newest first: for posts, the posts
   # that Key wrote in that range of one room, word for word, each with its
   # writer and when it was written; for an item, the item as it stands; for
-  # a saved notebook page, a link that opens it for anyone. The Key that made
+  # a saved notebook page, Open, which opens it for anyone and is described
+  # by the line above naming it and its project. The Key that made
   # something public takes it back, and a member's Key makes its own posts
   # and saved pages public into the active project on show.
   defp public(assigns) do
@@ -2458,7 +2459,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <p :if={record.kind == :item} class="workspace-kicker">
             {type_label(record.item.type)} <span :if={record.label}>· {record.label}</span>
           </p>
-          <p :if={record.kind == :page} class="workspace-kicker">
+          <p :if={record.kind == :page} id={"public-#{record.id}-kind"} class="workspace-kicker">
             Notebook page <span :if={record.label}>· {record.label}</span>
           </p>
           <p :if={record.kind == :commit} class="workspace-kicker">
@@ -2516,8 +2517,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
             href={record.page_url}
             target="_blank"
             rel="noopener noreferrer"
+            aria-describedby={"public-#{record.id}-kind"}
           >
-            Open the page
+            Open
           </a>
         </p>
         <p :if={record.kind == :commit}>

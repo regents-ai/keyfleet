@@ -1,15 +1,15 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest"
 
-import {asksServer, press, type Review} from "../js/hooks/onchain_steps"
+import {asksServer, OnchainSteps, press, type Review} from "../js/hooks/onchain_steps"
 import {
   forgetWalletDisconnected,
   replaceActiveEthereumWallet,
   type EthereumProvider,
+  type SelectedWallet,
   type SwitchChain,
 } from "../js/wallet_actions/connected_wallet"
 
 const signer = "0x1111111111111111111111111111111111111111"
-const other = "0x2222222222222222222222222222222222222222"
 const fleet = "0x3333333333333333333333333333333333333333"
 const hash = `0x${"ab".repeat(32)}`
 
@@ -23,18 +23,19 @@ const review: Review = {
 }
 
 type Wallet = {
+  selected: SelectedWallet
   provider: EthereumProvider
   switchChain: SwitchChain
   sent: unknown[]
 }
 
-// A stand-in wallet: on `chainId`, holding `account`, moved by its own switch,
+// A stand-in wallet holding `address`: on `chainId`, moved by its own switch,
 // answering each send with `answer` (a hash, or an error it throws).
 function wallet({
+  address = signer,
   chainId = 8453,
-  account = signer,
   answer = () => hash as unknown,
-}: {chainId?: number; account?: string; answer?: () => unknown} = {}): Wallet {
+}: {address?: string; chainId?: number; answer?: () => unknown} = {}): Wallet {
   const sent: unknown[] = []
   let current = chainId
   const provider: EthereumProvider = {
@@ -42,8 +43,6 @@ function wallet({
       switch (method) {
         case "eth_chainId":
           return `0x${current.toString(16)}`
-        case "eth_accounts":
-          return [account]
         case "eth_sendTransaction":
           sent.push(params)
           return answer()
@@ -55,7 +54,7 @@ function wallet({
   const switchChain: SwitchChain = async wanted => {
     current = wanted
   }
-  return {provider, switchChain, sent}
+  return {selected: {address, provider, switchChain}, provider, switchChain, sent}
 }
 
 function memoryStorage() {
@@ -80,13 +79,12 @@ function pushes() {
   return {pushed, push: (event: string, payload: unknown) => void pushed.push([event, payload])}
 }
 
-describe("a press sends the server's step from the wallet it was built for", () => {
+describe("a press sends the server's step through the wallet open at the press", () => {
   it("two presses in a row both reach eth_sendTransaction", async () => {
     const active = wallet()
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
-    const answers = await Promise.all([press(review, "buy", push), press(review, "buy", push)])
+    const answers = await Promise.all([press(review, "buy", active.selected, push), press(review, "buy", active.selected, push)])
 
     expect(answers).toEqual([{transaction_hash: hash}, {transaction_hash: hash}])
     expect(active.sent).toHaveLength(2)
@@ -99,10 +97,9 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
   it("switches the wallet to the step's chain before sending", async () => {
     const active = wallet({chainId: 1})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
-    await press(review, "buy", push)
+    await press(review, "buy", active.selected, push)
 
     expect(active.sent).toHaveLength(1)
     expect(pushed[0][0]).toBe("step_sent")
@@ -110,62 +107,40 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
   it("reports a decline in the wallet as wallet_declined", async () => {
     const active = wallet({answer: () => { throw Object.assign(new Error("User rejected"), {code: 4001}) }})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
-    expect(await press(review, "buy", push)).toEqual({reason: "wallet_declined"})
+    expect(await press(review, "buy", active.selected, push)).toEqual({reason: "wallet_declined"})
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_declined"}]])
   })
 
-  it("sends nothing from a wallet the steps weren't built for", async () => {
-    const active = wallet({account: other})
-    replaceActiveEthereumWallet({address: other, provider: active.provider, switchChain: active.switchChain})
-    const {pushed, push} = pushes()
+  // A press answers from what the wallet did, at once, whatever becomes of its
+  // report: offline, on a page left behind, or never answered at all.
+  it("answers at once, without waiting on its report to the server", async () => {
+    const active = wallet({answer: () => { throw Object.assign(new Error("User rejected"), {code: 4001}) }})
+    const unanswered = () => new Promise<never>(() => {})
 
-    await press(review, "buy", push)
+    const answered = await Promise.race([
+      press(review, "buy", active.selected, unanswered),
+      new Promise(resolve => setTimeout(() => resolve("still waiting"), 200)),
+    ])
 
-    expect(active.sent).toHaveLength(0)
-    expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
+    expect(answered).toEqual({reason: "wallet_declined"})
   })
 
-  it("sends when the wallet names the signer in other letter case", async () => {
-    const checksummed = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01"
-    const active = wallet({account: checksummed})
-    replaceActiveEthereumWallet({address: checksummed, provider: active.provider, switchChain: active.switchChain})
+  it("sends nothing when no wallet is open", async () => {
     const {pushed, push} = pushes()
 
-    await press({...review, signer: checksummed.toLowerCase() as Review["signer"]}, "buy", push)
-
-    expect(active.sent).toHaveLength(1)
-    expect(pushed).toEqual([["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}]])
-  })
-
-  it("sends nothing when the wallet answers for another account", async () => {
-    const active = wallet({account: other})
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
-    const {pushed, push} = pushes()
-
-    await press(review, "buy", push)
-
-    expect(active.sent).toHaveLength(0)
-    expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
-  })
-
-  it("sends nothing when no wallet is active", async () => {
-    const {pushed, push} = pushes()
-
-    await press(review, "buy", push)
+    await press(review, "buy", null, push)
 
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
   })
 
   it("sends nothing for a step the server didn't build, or with no steps at all", async () => {
     const active = wallet()
-    replaceActiveEthereumWallet({address: signer, provider: active.provider, switchChain: active.switchChain})
     const {pushed, push} = pushes()
 
-    await press(review, "approve", push)
-    await press(undefined, "buy", push)
+    await press(review, "approve", active.selected, push)
+    await press(undefined, "buy", active.selected, push)
 
     expect(active.sent).toHaveLength(0)
     expect(pushed).toEqual([
@@ -193,5 +168,100 @@ describe("a press asks the server for its review when the page's won't do", () =
   it("sends straight away when the review has the step and matches the form", () => {
     expect(asksServer(review, "buy", {})).toBe(false)
     expect(asksServer(withInputs, "buy", {days: "30"})).toBe(false)
+  })
+})
+
+// The hook on a group with no form fields, with the server answering an ask for
+// steps with `reply`.
+function group(reply: (payload: {address?: string}) => unknown) {
+  const pushed: [string, unknown][] = []
+  const handlers: Record<string, (payload: unknown) => void> = {}
+  let clicked: ((event: unknown) => void) | undefined
+  const button = {dataset: {onchainStep: "buy"} as Record<string, string>, closest: () => button}
+  const el = {
+    id: "buy-key-order",
+    addEventListener: (_type: string, listener: (event: unknown) => void) => {
+      clicked = listener
+    },
+    removeEventListener: () => undefined,
+    contains: () => true,
+    hasAttribute: () => false,
+    querySelectorAll: () => [],
+    querySelector: () => null,
+  }
+  const hook = {
+    el,
+    handleEvent: (event: string, handler: (payload: unknown) => void) => {
+      handlers[event] = handler
+    },
+    pushEventTo: async (_target: unknown, event: string, payload: unknown) => {
+      pushed.push([event, payload])
+      const answer = event === "prepare_and_send" ? reply(payload as {address?: string}) : {}
+      return [{status: "fulfilled", value: {reply: answer}}]
+    },
+  }
+  OnchainSteps.mounted!.call(hook)
+
+  return {
+    pushed,
+    held: (steps: Review) => handlers["onchain-steps:review"]({component_id: el.id, review: steps}),
+    rejoined: () => OnchainSteps.reconnected!.call(hook),
+    press: () => clicked!({target: button}),
+  }
+}
+
+// Invariant: a press that asks the server for its steps names the open wallet,
+// so a page that has just joined again, whose server has not yet heard which
+// wallet is open, still gets steps back and the press reaches the wallet.
+describe("a press that asks the server for its steps names the open wallet", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", Object.assign(new EventTarget(), {localStorage: memoryStorage()}))
+    vi.stubGlobal("document", {})
+  })
+
+  it("after the page joins again, and sends the steps that come back", async () => {
+    const active = wallet()
+    replaceActiveEthereumWallet(active.selected)
+    // A server that has not heard which wallet is open builds steps only for
+    // the wallet the ask names, and refuses an ask that names none.
+    const page = group(({address}) => (address === signer ? {review, send: "buy"} : {note: "Open your wallet."}))
+    page.held(review)
+    page.rejoined()
+
+    page.press()
+
+    await vi.waitFor(() =>
+      expect(page.pushed).toContainEqual(["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}]),
+    )
+    expect(active.sent).toHaveLength(1)
+  })
+})
+
+// Invariant: the wallet open at the press is the one that acts for it. A press
+// that asks the server for its steps sends them through that wallet, even when
+// another wallet is open by the time they arrive.
+describe("a press goes to the wallet open when it was pressed", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", Object.assign(new EventTarget(), {localStorage: memoryStorage()}))
+    vi.stubGlobal("document", {})
+  })
+
+  it("sends the steps it asked for through that wallet, when another opens meanwhile", async () => {
+    const pressed = wallet()
+    const other = wallet({address: "0x2222222222222222222222222222222222222222"})
+    replaceActiveEthereumWallet(pressed.selected)
+    // The person opens another wallet while the server builds the steps.
+    const page = group(() => {
+      replaceActiveEthereumWallet(other.selected)
+      return {review, send: "buy"}
+    })
+
+    page.press()
+
+    await vi.waitFor(() =>
+      expect(page.pushed).toContainEqual(["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}]),
+    )
+    expect(pressed.sent).toHaveLength(1)
+    expect(other.sent).toEqual([])
   })
 })

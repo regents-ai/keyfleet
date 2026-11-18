@@ -114,12 +114,16 @@ defmodule Keyfleet.SharedReading do
           "record, and the Keys sold " <>
           "(Keyfleet.Chain.minted/2), which the chain shows anyone, and the holders of the Keys " <>
           "in its activity with the Key each writes as (Keyfleet.Keys.faces/2), as open as the " <>
-          "Member List and what they write; if any of these tightens, this kind changes with it",
+          "Member List and what they write, and the first page of its Public place as a " <>
+          "signed-out visitor reads it (KeyfleetWeb.WorkspacePage.board/3 with no actor: " <>
+          "Keyfleet.Projects.Publication :in_fleet, which anyone reads, and what each Key chose " <>
+          "to show); if any of these tightens, this kind changes with it",
       # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
       keys: 5,
       # Not yet measured at its fullest: a page of 30 activity items, the
-      # projects and their open goals, and a few numbers. A reading over it is refused and
-      # counted, and pages keep the one before.
+      # projects and their open goals, eight things made public, each title
+      # at most 64 characters, and a few numbers. A reading over it is refused
+      # and counted, and pages keep the one before.
       bytes: 65_536,
       within: 120
     },

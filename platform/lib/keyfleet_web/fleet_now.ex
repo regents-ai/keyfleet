@@ -18,7 +18,18 @@ defmodule KeyfleetWeb.FleetNow do
       of its open goals (`KeyfleetWeb.FleetPage.read_recent_work/1`);
     * `goal`: the title of its most recently changed open goal, and
       `headline`: the item it features (`Keyfleet.Activity.headline/2`), which
-      the homepage shows.
+      the homepage shows;
+    * `public`: the newest things its Keys made public, up to
+      `@public_shown`, from the first page of its Public place as a
+      signed-out visitor reads it (`KeyfleetWeb.WorkspacePage.board/3`), each
+      by its kind, its title in the Key's own words (an item's title, the
+      first post's words, or a notebook page's or code's project title), cut
+      to `@title_length` characters, its Key, and the address of its place on
+      that page. One with no words to show, such as a notebook page in a
+      project since deleted, is left out;
+    * `page`: the newest notebook page a Key made public in a project the
+      fleet still has, by that project's title, cut as a title is, its Key and
+      the page's own address, which opens for anyone; nil while there is none.
 
   Pages showing a fleet to a reader who isn't a member draw it from here: the
   homepage, the fleet hall and the harbour's sea; the header's "Buy Key"
@@ -33,8 +44,9 @@ defmodule KeyfleetWeb.FleetNow do
   each fleet named, a second after the first. Each minute
   `Keyfleet.SharedReading.Heal` asks for every fleet again, which mends a lost
   notice and brings in a fleet's record when it opens; a coming-soon fleet
-  costs that one read. It holds nothing but which fleets are due a read, and
-  it never writes the database.
+  costs that one read. Making something public, or taking it back, sends no
+  notice, so the minute's heal brings it in. It holds nothing but which
+  fleets are due a read, and it never writes the database.
 
   Before, every open page read its fleet itself, all of them after the same
   notice, so a crowd cost the database a read each in the same instant, and
@@ -48,9 +60,17 @@ defmodule KeyfleetWeb.FleetNow do
 
   use GenServer
 
-  alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms, SharedReading}
-  alias KeyfleetWeb.{FleetPage, HarbourCrew, PageRead}
+  alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Notebooks, Projects, Proposals, Rooms}
+  alias Keyfleet.SharedReading
+  alias KeyfleetWeb.{ActivityLines, FleetPage, HarbourCrew, PageRead, WorkspacePage}
   alias Phoenix.Socket.Broadcast
+
+  # How many things made public the reading keeps: enough to run twice
+  # across a wide screen, and each one on the Public place's first page.
+  @public_shown 8
+
+  # The most characters of a title the reading keeps.
+  @title_length 64
 
   @doc "Where the reading of `fleet_id` is held."
   def key(fleet_id), do: {:fleet_now, fleet_id}
@@ -159,6 +179,7 @@ defmodule KeyfleetWeb.FleetNow do
   defp open(fleet_id, recorded, now) do
     deployed? = recorded != nil and recorded.manager_address != nil
     %{items: items, cursor: cursor} = Activity.page(fleet_id, nil)
+    board = WorkspacePage.board(fleet_id, %{"place" => "public"}, nil)
 
     %{
       coming_soon?: false,
@@ -170,8 +191,80 @@ defmodule KeyfleetWeb.FleetNow do
       faces: Keys.faces(fleet_id, HarbourCrew.keys(items)),
       recent_work: FleetPage.read_recent_work(fleet_id),
       goal: goal(fleet_id),
-      headline: Activity.headline(fleet_id, now)
+      headline: Activity.headline(fleet_id, now),
+      public: board.public |> Enum.flat_map(&public(fleet_id, &1)) |> Enum.take(@public_shown),
+      page: page(fleet_id, board.projects)
     }
+  end
+
+  defp public(fleet_id, record) do
+    case record |> words() |> clipped() do
+      "" ->
+        []
+
+      title ->
+        [
+          %{
+            id: record.id,
+            kind: kind(record),
+            title: title,
+            key: ActivityLines.key_name(record.key, nil),
+            link: WorkspacePage.place_path(fleet_id, :public) <> "#public-" <> record.id
+          }
+        ]
+    end
+  end
+
+  # The kind as the Public place names it.
+  defp kind(%{kind: :item, item: item}),
+    do: item.type |> WorkspacePage.type_name() |> elem(0) |> String.capitalize()
+
+  defp kind(%{kind: :posts}), do: "Posts"
+  defp kind(%{kind: :page}), do: "Notebook page"
+  defp kind(%{kind: :commit}), do: "Code"
+
+  defp words(%{kind: :item, item: item}), do: item.title
+  defp words(%{kind: :posts, posts: [first | _]}), do: ActivityLines.plain(first.body)
+  defp words(%{kind: :posts, posts: []}), do: nil
+  defp words(%{kind: kind, label: label}) when kind in [:page, :commit], do: label
+
+  # On one line, and at most `@title_length` characters: one longer ends on
+  # its last whole word that fits, with "…" for the rest. No words is "".
+  defp clipped(nil), do: ""
+
+  defp clipped(words) do
+    line = words |> String.split() |> Enum.join(" ")
+
+    if String.length(line) <= @title_length do
+      line
+    else
+      cut = String.slice(line, 0, @title_length - 1)
+
+      whole =
+        if String.at(line, @title_length - 1) == " ",
+          do: cut,
+          else: String.replace(cut, ~r/ \S*\z/u, "")
+
+      String.replace(whole, ~r/[.,;:]+\z/u, "") <> "…"
+    end
+  end
+
+  defp page(fleet_id, projects) do
+    titles = Map.new(projects, &{&1.name, &1.title})
+
+    case Projects.publications!(fleet_id, nil,
+           query: [filter: [kind: :page, project: [in: Map.keys(titles)]], limit: 1]
+         ) do
+      [newest] ->
+        %{
+          title: clipped(titles[newest.project]),
+          key: ActivityLines.key_name(newest.key, nil),
+          url: Notebooks.url(fleet_id, newest.page)
+        }
+
+      [] ->
+        nil
+    end
   end
 
   defp minted!(fleet_id) do

@@ -769,6 +769,68 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to 0xaaaa..aaaa. Nothing was sent."
     end
 
+    # A page that has just joined again meets a fresh group, which has not yet
+    # heard which wallet is open, and its press can ask for steps before the
+    # wallet is reported. The press names the open wallet, and the group builds
+    # the steps for it when the account links it.
+    test "a press that names the account's wallet gets the steps for it before the wallet is reported",
+         %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("prepare_and_send", %{
+        "form" => %{},
+        "step" => "approve",
+        "address" => @owner
+      })
+
+      assert_reply(view, %{
+        send: "approve",
+        review: %{signer: @owner, steps: [%{step: "approve"}, %{step: "buy"}]}
+      })
+    end
+
+    # A press the server won't prepare, from a wallet the account doesn't link
+    # or for a step the chain's state holds back, gets no steps. The refusal
+    # itself shows the note beside the buttons and counts the failure, and the
+    # reply carries that same note, so the browser's own agent hears what the
+    # person reads with nothing more from the page.
+    test "a refused press shows the note it is answered with, and counts it once",
+         %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+      panel = with_target(view, "#buy-key-order")
+
+      notes =
+        wallet_failures(view.pid, fn ->
+          for wallet <- [@stranger, @owner] do
+            render_hook(panel, "prepare_and_send", %{
+              "form" => %{},
+              "step" => "buy",
+              "address" => wallet
+            })
+
+            assert_reply(view, reply)
+            assert [:note] = Map.keys(reply)
+            assert text(view, "#buy-key-order-press-note") == reply.note
+            reply.note
+          end
+        end)
+
+      assert {[mismatch, blocked], [{:buy, "step_unknown"}, {:buy, "step_unknown"}]} = notes
+      assert mismatch != blocked
+    end
+
     # A press whose wallet stays on another network sends nothing, and the
     # note tells a switch the person declined apart from one that failed.
     test "a declined or failed network switch leaves a note that nothing was sent",
@@ -790,6 +852,27 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert [declined, mismatch] = notes
       assert declined != mismatch
       assert Enum.all?(notes, &(&1 =~ "Base" and String.ends_with?(&1, "Nothing was sent.")))
+    end
+
+    # Every reason the shared press list (`RegentChain.Presses`) accepts from a
+    # page leaves its own note, and the page goes on.
+    test "every reason a press can report leaves its own note", %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      open_buy_key(view)
+      active!(view, @owner)
+
+      notes =
+        for reason <-
+              ~w(step_unknown wallet_unavailable network_mismatch switch_declined wallet_declined insufficient_funds send_unconfirmed sign_unconfirmed) do
+          press_fails!(view, reason)
+          text(view, "#buy-key-order-press-note")
+        end
+
+      assert length(Enum.uniq(notes)) == 8
     end
 
     # Costly failure: with no wallet of the account open, or another wallet
@@ -822,8 +905,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       press_fails!(view, "wallet_unavailable")
 
-      assert text(view, "#buy-key-order-press-note") =~
-               "Check it's unlocked and open on 0xaaaa..aaaa"
+      assert text(view, "#buy-key-order-press-note") =~ "didn't answer"
     end
 
     # Costly failure: a press on the wallet panel is acted on for a sign-in
@@ -2573,6 +2655,35 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     wait = Application.fetch_env!(:keyfleet, :fleet_feed_wait_ms)
     refute_receive {:trace, _pid, :receive, {:refresh_activity, _fleet_id}}, wait + 100
     render(view)
+  end
+
+  # What `fun` gives, and each wallet failure the page process `pid` counted
+  # while it ran, as `{flow, reason}`, in order.
+  defp wallet_failures(pid, fun) do
+    test_pid = self()
+
+    :telemetry.attach(
+      "fleet-page-wallet-failures",
+      [:keyfleet, :wallet, :failure],
+      fn _event, _measurements, %{flow: flow, reason: reason}, _config ->
+        if self() == pid, do: send(test_pid, {:wallet_failure, flow, reason})
+      end,
+      nil
+    )
+
+    try do
+      {fun.(), counted_failures([])}
+    after
+      :telemetry.detach("fleet-page-wallet-failures")
+    end
+  end
+
+  defp counted_failures(failures) do
+    receive do
+      {:wallet_failure, flow, reason} -> counted_failures([{flow, reason} | failures])
+    after
+      0 -> Enum.reverse(failures)
+    end
   end
 
   # How many reads the page process `pid` makes while `fun` runs.

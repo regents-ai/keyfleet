@@ -1086,11 +1086,14 @@ features:
   - id: home-ways-in
     what: >-
       The homepage opens on one screen: "A persistent team for your AI agent",
-      one line on what that means, "Watch", which opens Classic #1 with no
+      one line on what that means, "Explore", which opens Classic #1 with no
       wallet needed, and Classic #1's facts: Keys sold and agents here as
       separate numbers, the next Key's price and the goal it is working on.
       Beside them the next Key's card over "Buy Key", with the Key's number and
-      price under it. Then Overview (home-value-cards), then the footer.
+      price under it. Under both, four steps, Explore, Key, Agent and Work,
+      each with one line on what a person does there. Then Recent and
+      Notebook while there is something to show (home-recent-work), Overview
+      (home-value-cards) and the footer.
     who: person
     level: ordinary
     paths:
@@ -1106,6 +1109,44 @@ features:
       - platform/test/browser/homepage.spec.ts
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
+      - The steps come after Buy Key on a phone, below its first screen; at 1280 by 800 a goal of two lines leaves them at the screen's foot.
+
+  - id: home-recent-work
+    what: >-
+      Below the homepage's hero, Recent: the newest things Classic #1's Keys
+      made public, up to eight, each its kind, its title in the Key's own
+      words, cut to 64 characters and drawn as plain text, and its Key, each a
+      plain link to its place in the fleet's Public place. From four they
+      slide leftward in one line without stopping, about 40px a second, held
+      twice so the line loops without a jump: a pointer over it pauses it;
+      Pause beside the label stops it where it is, becoming Play, until
+      pressed again; keyboard focus in it stops it and brings each link
+      wholly to the line's start, a long one cut to the line's width while
+      focused; and a screen reader or Tab meets each thing once, Pause first.
+      With less motion, or fewer than four, the newest three stand still and
+      there is no Pause. Under it, Notebook: the newest notebook page a Key
+      made public, by its project's title and its Key, with Open, which opens
+      the page for anyone. Either is absent while there is nothing to show,
+      and neither moves Buy Key, the figures or the steps. Both come from
+      Classic's shared reading, so a visit reads nothing more; something made
+      public shows within the minute.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/fleet_now.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/assets/css/pages/home.css
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/browser/homepage_recent.spec.ts
+    gaps:
+      - Pause answers once the page has connected, a moment after it first draws; it is forgotten when the page closes.
+      - Checked in headless Chromium at 390 and 1280; WebKit and real phones are not run on the Mac.
+      - Nothing is public in Classic #1 on the live site yet, so neither shows there until a Key makes something public.
 
   - id: home-value-cards
     what: >-
@@ -1320,10 +1361,11 @@ features:
   - id: launch-step-counters
     what: >-
       The site counts, in running totals only, how many visits open the
-      homepage and press its "Watch". The browser reports each step once as
-      it happens; a reconnect is not a new visit and a browser a program drives
-      reports nothing. A report names only the step, never a person, address,
-      wallet or Key, and the totals are read in Fly's metrics dashboard.
+      homepage and press its "Explore" (kept as `watch`). The browser reports
+      each step once as it happens; a reconnect is not a new visit and a
+      browser a program drives reports nothing. A report names only the step,
+      never a person, address, wallet or Key, and the totals are read in Fly's
+      metrics dashboard.
     who: person
     level: ordinary
     paths:
@@ -1919,22 +1961,37 @@ features:
     what: >-
       A person presses a wallet button while their wallet is on another
       network, and their wallet asks to switch to Base through Privy's own
-      switch, which also adds Base to a wallet app that lacks it. Every press
-      asks again; nothing is remembered or held back. Privy connects every
-      wallet on Base and offers no other network. A declined switch leaves
-      "Your wallet declined the switch to Base. Nothing was sent." Any other
-      failed switch, or a wallet still elsewhere when the step is sent, leaves
-      "Your wallet isn't on Base. Change the network to Base in your wallet
-      app, then press again. Nothing was sent."
+      switch, which also adds Base to a wallet app that lacks it; Privy's own
+      wallet moves at once through the provider the page holds. Once the
+      wallet answers the switch request, the same press sends or signs: the
+      page reads neither the network nor the wallet's account again to refuse
+      it, and the step carries Base's chain id. A press the server has built
+      steps for reaches the wallet open when it was pressed, with the step as built, and every
+      press off Base asks again; nothing is remembered or held back. Privy connects every wallet on Base and offers
+      no other network. A declined switch sends nothing and leaves "Press
+      again to switch your wallet to Base. Nothing was sent." Any other failed
+      switch sends nothing and leaves "Your wallet couldn't switch to Base.
+      Switch it in your wallet app, then press again. Nothing was sent."
+      When the page loses its connection and gets it back, as at a release,
+      the page tells the server the open wallet again with nothing pressed, so
+      its wallet buttons work again without a reload. A press that asks the
+      server for its steps names the open wallet, so one made while the page
+      is still getting its connection back is built for that wallet too, when
+      the account links it, outside the Buy Key window. Each press sends
+      through the wallet open when it was pressed, even when another opens
+      before its steps come back.
     who: person
     level: protected
     paths:
       - platform/assets/js/wallet_actions/send_step.ts
+      - platform/assets/js/hooks/onchain_steps.ts
+      - platform/assets/js/hooks/account_wallets.ts
       - platform/assets/js/wallet_actions/connected_wallet.ts
       - platform/assets/js/privy_bridge.tsx
       - platform/lib/keyfleet/wallet_steps.ex
       - platform/lib/keyfleet_web/components/layouts/root.html.heex
       - platform/lib/keyfleet_web/wallet/onchain_steps.ex
+      - platform/lib/keyfleet_web/wallet/wallet_panel.ex
     entry:
       - live: KeyfleetWeb.ShellLive
       - live: KeyfleetWeb.HomeLive
@@ -1944,7 +2001,45 @@ features:
       - platform/assets/test/privy_bridge.test.ts
       - platform/test/keyfleet_web/live/fleet_page_test.exs
       - platform/test/browser/wallet_buttons.spec.ts
+      - platform/test/browser/key_shards.spec.ts
+    regressions:
+      - id: R-20261117-press-after-reconnect
+        from: Keyfleet chief's review of d193a8183, 17 November 2026
+        test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261117-agent-hears-press-note
+        from: Keyfleet chief's second review of kf/wallet-press-1118, 17 November 2026
+        test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261117-offline-press-never-nothing-sent
+        from: Keyfleet chief's question at the merge of the homepage release into kf/wallet-press-1118, 17 November 2026
+        test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261117-agent-answered-at-once
+        from: Keyfleet chief's third review of kf/wallet-press-1118 (fe425e59a), 17 November 2026
+        test: platform/assets/test/onchain_steps.test.ts
+      - id: R-20261117-ask-names-open-wallet
+        from: Keyfleet chief's second review of kf/wallet-press-1118, fixed as ash-template d60a9b31 fixed it, 17 November 2026
+        test: platform/test/browser/key_shards.spec.ts
+      - id: R-20261118-refusal-one-note
+        from: Keyfleet chief's fourth review of kf/wallet-press-1118, 18 November 2026
+        test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261118-press-wallet-at-press
+        from: Keyfleet chief's fourth review of kf/wallet-press-1118, fixed as ash-template ef4074c4 fixed it, 18 November 2026
+        test: platform/assets/test/onchain_steps.test.ts
     gaps:
+      - Following a press across a reconnect waits on Sean's decision. A press made while the page is still getting its connection back, from the steps the page already holds, reaches the wallet but is shown as not this page's step. In the Buy Key window, which the page closes when it comes back, such a press is not shown at all, and one that asks for its steps then (its form changed, or it held none) sends nothing; the ask names the window by the page's numbering from before, which the fresh page doesn't have.
+      - A browser agent's press that asks the server for its steps never answers the agent if the page moves to another page before the steps come back.
+      - When the connection drops while a press asks for its steps, the browser agent waits about 30 seconds after the page is back, then hears the page lost its connection.
+      - Offline, a press that sends nothing answers the browser agent in the right words, but the person sees no note beside the button, as the report can't reach the server.
+      - Two presses that fail close together leave one note beside the buttons, the later one's.
+      - Signed out, a browser agent's press leaves "Sign in to send this. Nothing was sent." beside the button, while the agent hears that the wallet app has no wallet open.
+      - The browser agent hears "Sent" for any hash the wallet returns, before the server checks it. A hash the page then marks as not this page's step, such as one from held steps sent by a wallet that ignores the steps' sender, is still "Sent" to the agent.
+      - A press made just before the person lets the wallet go still reaches that wallet when its steps arrive. If the wallet then refuses, the page and the browser agent both say the wallet may have sent it, though nothing was sent.
+      - A press from steps the page already holds, made as another wallet opens, goes through the new wallet with the old wallet's address as sender. A wallet that refuses that is reported to the person and the agent as "may have sent", though nothing was sent.
+      - A person's own press that the server refuses, followed at once by a wallet switch, leaves no note beside the buttons. Nothing was sent and the button still works.
+      - The visit log records a press the server refused to build steps for as "ok", with no line for the refusal. The failure count is right.
+      - A wallet app that never answers holds the press, and a browser agent's call, open without end. A second press still reaches the wallet.
+      - The lost-connection line disappears at the page's next redraw.
+      - A claim made, then the page left and come back to, is not followed on the page.
+      - The wallet panel handles no report of a signature step. No Keyfleet page builds one today.
       - The walks press from another network with a stand-in wallet whose switch stands in for Privy's; a real switch in Coinbase Wallet, Rabby, Zerion or MetaMask on a phone is checked by hand on keyfleet.ai after release.
       - The anvil lab's network, which Privy does not list, reaches Privy with the site's own name and node (a unit test checks this); the lab needs a real Privy sign-in, so it is not walked end to end, and it has not been tried by hand since this change.
       - WebKit is not run on the Mac.

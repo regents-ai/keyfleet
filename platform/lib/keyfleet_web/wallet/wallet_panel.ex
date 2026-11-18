@@ -198,29 +198,36 @@ defmodule KeyfleetWeb.WalletPanel do
   end
 
   @impl true
-  def handle_event("onchain_active_wallet", params, socket) do
-    active = OnchainSteps.active_wallet(params)
-    socket = if active == socket.assigns.active, do: socket, else: assign(socket, press_note: nil)
-    {:noreply, socket |> assign(active: active) |> sync()}
-  end
+  def handle_event("onchain_active_wallet", params, socket),
+    do: {:noreply, socket |> take_active(params) |> sync()}
 
   def handle_event("change", params, socket),
     do: {:noreply, socket |> take_inputs(params) |> sync()}
 
   # A press made before its step reached the page, or before the steps caught
-  # up with the form: the form is taken as the page's own, and the reply
-  # carries the steps built from it, read now even where the chain is read,
-  # so the press never waits on steps still being read elsewhere. A step those
-  # steps find certain to fail is not handed over: the button was pressed while
-  # the page still showed figures built for another wallet or form, and it now
-  # shows why it can't be pressed.
-  def handle_event("prepare_and_send", %{"form" => form, "step" => step}, socket)
+  # up with the form: the form and the open wallet are taken as the page's own,
+  # and the reply carries the steps built from them, read now even where the
+  # chain is read, so the press never waits on steps still being read
+  # elsewhere. A page that has just joined again can ask before it reports the
+  # wallet. A step those steps find certain to fail is not handed over: the
+  # button was pressed while the page still showed figures built for another
+  # wallet or form, and it now shows why it can't be pressed.
+  def handle_event("prepare_and_send", %{"form" => form, "step" => step} = params, socket)
       when is_map(form) and is_binary(step) do
-    socket = socket |> take_inputs(form) |> sync_now()
+    socket = socket |> take_inputs(form) |> take_active(params) |> sync_now()
 
     case {socket.assigns.review, blocked(socket.assigns, step)} do
-      {%{} = review, nil} -> {:reply, %{review: review, send: step}, socket}
-      _none_or_blocked -> {:reply, %{}, socket}
+      {%{} = review, nil} ->
+        {:reply, %{review: review, send: step}, socket}
+
+      # Refused: nothing reaches the wallet. The note beside the buttons is
+      # written here, from the wallet the press named, and the reply carries
+      # that same note, so the browser's own agent hears what the person reads.
+      # The page reports nothing more for this press.
+      _none_or_blocked ->
+        note = failure_note(socket, "step_unknown")
+        KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, "step_unknown")
+        {:reply, %{note: note}, assign(socket, press_note: note)}
     end
   end
 
@@ -266,16 +273,7 @@ defmodule KeyfleetWeb.WalletPanel do
     case Presses.failed(params) do
       {:ok, _step, reason} ->
         KeyfleetWeb.Telemetry.wallet_failed(socket.assigns.flow, reason)
-
-        note =
-          OnchainSteps.failure_note(
-            reason,
-            linked(socket),
-            socket.assigns.active,
-            chain_name(socket)
-          )
-
-        {:noreply, assign(socket, press_note: note)}
+        {:noreply, assign(socket, press_note: failure_note(socket, reason))}
 
       :error ->
         {:noreply, socket}
@@ -327,6 +325,15 @@ defmodule KeyfleetWeb.WalletPanel do
     if actor == socket.assigns.actor,
       do: socket,
       else: socket |> assign(actor: actor) |> drop_built() |> sync()
+  end
+
+  # Privy's active wallet as the page reported it. Another wallet clears the
+  # note about the one open before. It says only which wallet is open: steps
+  # are built for it only when the account links it (`OnchainSteps.signer/2`).
+  defp take_active(socket, params) do
+    active = OnchainSteps.active_wallet(params)
+    socket = if active == socket.assigns.active, do: socket, else: assign(socket, press_note: nil)
+    assign(socket, active: active)
   end
 
   defp take_inputs(socket, params) do
@@ -486,6 +493,10 @@ defmodule KeyfleetWeb.WalletPanel do
 
   defp linked(%{assigns: %{actor: %{wallet_addresses: wallets}}}), do: wallets
   defp linked(_socket), do: nil
+
+  defp failure_note(socket, reason),
+    do:
+      OnchainSteps.failure_note(reason, linked(socket), socket.assigns.active, chain_name(socket))
 
   defp chain_name(%{assigns: %{fleet: %{chain_id: chain_id}}}) do
     case WalletSteps.chain(chain_id) do

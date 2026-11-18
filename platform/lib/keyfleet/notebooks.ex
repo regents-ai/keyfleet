@@ -197,7 +197,9 @@ defmodule Keyfleet.Notebooks do
   page. The address shows Keyfleet's own copy of that page
   (`Keyfleet.Notebooks.SavedOutput`), whatever the hub keeps, until a member
   removes it or, for a run's page, until it is cleared 30 days after it was
-  made (`Keyfleet.Notebooks.RunPagePruner`). Only the fleet's members open it.
+  made (`Keyfleet.Notebooks.RunPagePruner`). Only the fleet's members open it,
+  unless a Key made it public (`Keyfleet.Projects.Publication`): then anyone
+  does, signed in or not.
   """
   def result_url(fleet_id, notebook_id, source_id, saved_at),
     do: url(fleet_id, result_path(notebook_id, source_id, saved_at))

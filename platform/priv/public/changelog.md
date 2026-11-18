@@ -28,6 +28,12 @@ Changes to Keyfleet, newest first.
   saying what to send; an empty body, or JSON that isn't an object, got a JSON-RPC
   "Invalid Request" error before. A token's scheme is now read in any case, `bearer` as
   `Bearer`, as HTTP allows; any other case was asked to connect.
+- **Wallet buttons.** A press now goes to the wallet that was open when you pressed it,
+  even if you open another one before your wallet asks you to approve.
+- **Browser agents.** When your browser's own agent presses a wallet button and Keyfleet
+  can't send that press, for example because a wallet your account doesn't link is open,
+  the agent hears the note that appears beside the button. If you switch wallets at that
+  moment, the note may clear, but it never says something else.
 
 ## 17 November 2026
 
@@ -123,6 +129,27 @@ Changes to Keyfleet, newest first.
   request that has passed every check: a push refused for its body, 400
   `code_body_not_signed`, 413 or a body that stops arriving, counts for nothing and saves
   nothing, where it used up a push. A push past the allowance is still refused with 429.
+- **Homepage.** Watch is now Explore. Under the hero, four steps show how a person
+  joins: Explore, Key, Agent and Work, each with one short line.
+- **Notebook.** Below the homepage's hero, the newest notebook page a Key made public
+  in Classic #1, with its project's title and its Key. Anyone can open it.
+- **Recent.** Below the homepage's hero, the newest things Classic #1's Keys made public
+  slide by slowly in one line, each opening its place in the fleet's Public place. Pause
+  beside the label stops the line until pressed again; it also pauses under the pointer,
+  and stands still for anyone whose device asks for less motion.
+- **Wallet buttons.** When your wallet is on another network, each press now asks it to
+  switch to Base, and once your wallet answers that request, the same press goes on to
+  your wallet. If you turn the switch down, nothing is sent and the note says to press
+  again; if your wallet can't switch, the note says to switch it in your wallet app. When
+  a page loses its connection and gets it back, as open pages do while Keyfleet updates,
+  its wallet buttons work again without a reload, and your account page knows your wallet
+  again too. A button pressed while the page is getting its connection back, after you
+  changed the form beside it, now reaches your wallet; before, that press sent nothing.
+  The Buy Key window still closes then, and a press made in it at that moment may not
+  reach your wallet; open it again to buy.
+- **Browser agents.** When your browser's own agent presses a wallet button while a wallet
+  your account doesn't link is open, nothing is sent, and the agent now hears the same
+  note you see beside the button, naming which of your wallets to switch to.
 
 ## 16 November 2026
 
