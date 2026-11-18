@@ -4,18 +4,22 @@ Changes to Keyfleet, newest first.
 
 ## 18 November 2026
 
-- **Early access.** The email field takes at most 254 characters, the most an address
-  can have, so whatever is pasted into it is answered by the form.
+- **Early access.** The email field takes 256 characters, and an address over 254, the
+  most one can have, is refused with a note saying it is too long, so whatever is pasted
+  into it is answered by the form and an address the field cut short is never kept.
 - **Live pages.** A page's live connection now closes, unread, on a message over 52,000
   bytes, whole or sent in parts; it took up to 10 MB before. That is the largest message
   a page sends, rounded up: the first message of a page reached by a link from one opened
-  at the longest address the site takes, 50,307 bytes, and the proposal form with every
-  box full, 49,540. Every text box now stops at its own length, so text pasted past it is
-  cut there, and the page still says when what is left is too long. A page opened at an
-  address whose part after `#` is over 256 characters drops that part, and goes live. The
-  boxes for a Key's number, a post's number, a pass and a quantity now take digits as
-  text, with the number keyboard on phones, and no longer have arrows. A browser on a
-  network that blocks websockets no longer gets live pages.
+  at the longest address the site takes, 50,309 bytes, and the proposal form with every
+  box full, 49,738. Every text box now stops two characters past the most the site takes
+  from it, an emoji counting as two there, and the site refuses anything longer than that
+  most with a note naming what is too long, so text a box cut short is never taken as it
+  was cut. A page opened at an address whose part after `#` is over 256 characters drops
+  that part, whatever its path, and goes live. The boxes for a Key's number, a post's
+  number, a pass and a quantity now take digits as text, with the number keyboard on
+  phones, and no longer have arrows; a post number below 1 or with decimals, or a
+  quantity out of range, gets a note saying what is wrong with it. A browser on a network
+  that blocks websockets no longer gets live pages.
 - **Requests.** A body no address reads, or the rest of one an address refused, is now
   read in small pieces and thrown away before the answer is sent, up to 8 MB, and the
   answer then closes the connection. A body sent with its length is waited for until ten
@@ -23,11 +27,15 @@ Changes to Keyfleet, newest first.
   answer then. A body sent in chunks is read only as far as it has arrived and is never
   waited for, so a caller still sending one may find the connection closed before it
   reads the answer. A caller whose whole body has arrived hears its answer as before. A
-  caller that asks before sending its body (`Expect: 100-continue`) is answered at once,
-  never asked for the body, and its connection closes, at every address that reads none.
-  Before, what was left was read after the answer in one piece of up to 8 MB and held
-  until its last byte came. A body an address reads whole leaves the connection open, as
-  before.
+  caller on HTTP/1.1 that asks before sending its body with `Expect: 100-continue`, in
+  any letter case and nothing added, is answered at once, never asked for the body, and
+  its connection closes, at every address that reads none; one that sends its body
+  anyway, without waiting to be asked, may find the connection closed before it reads
+  the answer, as before. An HTTP/1.0 request, or an expectation written any other way,
+  has its body read as any other, one sent with its length waited for up to ten
+  seconds. Before, what was left was read after the answer in one piece of up to 8 MB
+  and held until its last byte came. A body an address reads whole leaves the
+  connection open, as before.
 - **Known limit.** A request sent on the same connection right behind a body the site
   throws away is never answered: the connection closes after the first answer. Send each
   request only after the answer to the one before it, or on a connection of its own.
@@ -48,10 +56,12 @@ Changes to Keyfleet, newest first.
   can't send that press, for example because a wallet your account doesn't link is open,
   the agent hears the note that appears beside the button. If you switch wallets at that
   moment, the note may clear, but it never says something else. A proposal or an amount
-  the agent sends that is longer than the page's own box takes is refused, naming the
-  field and its most characters, and nothing is sent. The public reads offered to it
-  refuse a field longer than their description allows in the same way, before asking the
-  site.
+  the agent sends that is longer than the site takes from that field is refused, naming
+  the field and its most characters, counted as the page's box counts them, an emoji as
+  two, and nothing is sent. The site still counts a proposal's words and a launch's
+  fields in bytes, an emoji as four, and its note says which is too long. The public reads
+  offered to it refuse a field longer than their description allows in the same way,
+  before asking the site.
 
 ## 17 November 2026
 

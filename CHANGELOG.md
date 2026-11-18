@@ -12353,3 +12353,137 @@ step's report).
   bearer case, as expected. Round three's cost ratio failed once (2.2 times the memory,
   against its 2) and passed run again; it compares two copies of the door's reading inside
   the test, not the site.
+
+## 2026-11-18 — A box takes two characters more than the site, which says what a box cut
+
+- Round eight (b49fad45e..8ccfc0bb9) found five things.
+  - Proof R8 Q5: `proposals_create` took 4,000 emoji in its text, as
+    assets/js/tool_input.ts counted code points, where a box's `maxlength` counts UTF-16
+    units, two for an emoji. The wallet panel drew the agent's fields back as the boxes'
+    values, which a `maxlength` does not cut, so every box was past its own length, and
+    the person's next keystroke sent the form as a 61,758-byte message, which the socket
+    closed.
+  - Proof R8 Q3: assets/js/app.ts wrote the address back as `pathname + search`. At a path
+    that starts `//` the browser reads that as another host, `history.replaceState`
+    throws, and the page never went live. A `#` part of exactly 256 characters was
+    dropped, since `hash.length` counts the `#`.
+  - Proofs R8 Q2 (153) and Q6: a box as long as the most the server takes cut a paste to
+    a value the server takes. A list of 301 Keys cut at 1,000 characters ended mid-number
+    and named Key 640, never typed; a launch's image link and words were cut with nothing
+    said, and a launch's links are carried out on chain as written.
+  - Proof R8 Q2 (335): a first post of 0 or -3, a last post of 0 and a 20-digit post were
+    told "That didn't go through. Try again in a minute.", since `refusal/1` matched
+    `Ash.Error.Changes.InvalidArgument` where a generic action raises
+    `Ash.Error.Action.InvalidArgument`.
+  - Proofs R8 Q4: the Expect wording (below).
+- `KeyfleetWeb.BoxLimit`: a box's `maxlength` is two more than the most the site takes
+  from it, and the site refuses a value over that most, counted in UTF-16 units as a box
+  counts, before anything is trimmed. Chromium's `maxlength` never splits a letter
+  (measured: a box of 3 keeps "ab" of "ab😀cd"), so whatever a box cut is at least one
+  unit over the most and is refused with a note. A letter is never fewer bytes than
+  units, so a value of no more bytes than the most is not counted. Each field's own rule
+  still follows: bytes once trimmed for a proposal's words and a launch's fields,
+  characters for a poll's choices and the showcase title, the address rule for an email.
+- The most each box takes, and its box:
+  - the wallet panel (`KeyfleetWeb.WalletPanel`, every page with wallet buttons): a Key
+    and a target 20 (box 22); a proposal's words 4,000 (4,002); a launch's name 64,
+    symbol 16, description 512, website 256, image 256; a share, rate, recipient, amount
+    and wallet 100; days 10; a Keys list 1,000. A field over its most is refused before
+    any step is built, "The list of Keys is too long: 1000 characters at most." and so on
+    (`WalletWords`), and every value is drawn back no longer than its box (`kept/1`, in
+    `update/2` and `take_inputs/2`), whoever put it in the form;
+  - the Club pass 20 ("That Pass number is too long"); the Worldline filter 100 (its
+    unreadable note, and the filter drawn back cut to its box); the workspace's post
+    numbers 20 ("That post number is too long.") and page address 512 ("A page address
+    is at most 512 characters."); a poll's choices 1,100 (the choices' own note); the
+    showcase's title 80 and quantity 3; the early-access email 254 (box 256, "That
+    address is too long: 254 characters at most.").
+- The Keys list had no length on the page's path: `Typed.keys/1` has none, and the signed
+  API's 1,000 is `SignedAgent`'s `typed?/2`, before the shared reader. The page's rule is
+  the wallet panel's, the one place every panel field passes before a step is built.
+  `Keyfleet.WalletSteps.Typed` and `Build` are unchanged, so no API answer changes and the
+  contract stays 36.3.0. Proof 153 still fails: it reads `Typed.keys/1` with a list cut
+  at 1,000 by hand, the old box; the box now takes 1,002 and the panel refuses over 1,000.
+- `WorkspaceLive.refusal/1` matches `Ash.Error.Action.InvalidArgument` for `from_seq` and
+  `to_seq`: a whole number from 1 the action refuses is past the largest a post's number
+  can be, "No post has that number."; anything else "Post numbers are whole numbers from
+  1." The showcase's quantity answers 0, -3 and 1.5 with the action's own words ("must be
+  greater than 0", "is invalid"), as before.
+- assets/js/tool_input.ts counts a string as a box does (`value.length`), and says "takes
+  at most N characters, an emoji counting as two." The page tool's limits are the site's
+  own most, two under each box. The same check serves the public reads and the signed
+  tools the browser offers (assets/js/public_tool_list.ts). `proposals_create`'s
+  description says what each side counts, and its text field "at most 4,000 characters
+  here, and 4,000 bytes once trimmed on the site", where it said "up to 4,000 bytes".
+- assets/js/app.ts writes back the page's own whole address with only the `#` part taken
+  off (`new URL(location.href)`, `hash = ""`), and drops a `#` part of over 256
+  characters, the `#` not counted.
+- `WalletPanel.has_step?/2` matched a built group with no review and raised; a refused
+  field builds none, as an unread chain did before. It now answers false.
+- The live socket's largest messages, measured again: a page reached by a link from one
+  opened at the longest address 50,309 bytes (50,307 before, as the `#` part of 256 is now
+  kept, two bytes more in JSON); the proposal form's change with every box full of
+  three-byte letters 49,738 (49,540 before: eleven boxes two units longer, nine bytes a
+  unit in a form's change); its presses 33,717 and 33,776. 52,000 stays the limit, 1,683
+  bytes above the largest frame with its 8-byte header. config/config.exs says so.
+- Expect (`KeyfleetWeb.Plugs.UnreadBody`'s moduledoc and the public changelog): "answered
+  at once" holds only for HTTP/1.1 with `Expect: 100-continue`, in any letter case and
+  nothing added (proof R8 Q4: 32 and 0 ms). An HTTP/1.0 request, or an expectation
+  written any other way, has its body read as any other, one sent with its length waited
+  for up to 10 seconds (10,001 and 10,002 ms). A caller that sends its body at once,
+  without waiting to be asked, may find the connection closed before it reads the
+  answer: 10 of 20 here through the site, 2 of 20 through Bandit alone, 4 or 5 of 20 on
+  the reviewer's machine. Accepted, words only; nothing reads Bandit's state for it.
+- Corrected:
+  - "Every text field on every live page now has a `maxlength`, so a browser cannot send a
+    form larger than that" (above): a browser sends whatever the site drew into a box,
+    whatever its `maxlength`. Values are now drawn back no longer than their box, and each
+    box takes two characters more than the figures that entry gives, which are the site's
+    most.
+  - The same entry's "counted in characters as JSON Schema counts them" and "one of 4,000
+    emoji is pressed": the tools count as a box counts, and 4,000 emoji are refused.
+  - The public changelog's 18 November entry, edited in place: "Early access", "Live
+    pages" (the figures, what a box cut, the `#` part whatever the path, the number
+    notes), "Requests" (Expect) and "Browser agents" (what the tool counts).
+- Tests, each failing with its fix undone:
+  - `ProposalsPageTest` "a link or words a box cut are refused with a note, and leave
+    nothing to send"; `ShellLiveTest` "a Keys list its box cut is refused as too long";
+    `ShowcaseTest` "the sample's quantity says what is wrong with it"; `WorkspacePageTest`
+    "a post range says what is wrong with its numbers" (with the page address);
+    `EarlyControllerTest` "an address the field cut is refused as too long". With each box
+    back at the site's most, the first four fail; with the site's length rule off, all
+    five; with the post range clauses gone, the workspace test (four "Try again" notes).
+  - assets/test/page_tools.test.ts refuses 2,001 and 4,000 emoji and presses 2,000; it
+    fails counting code points.
+  - test/browser/live_limits.spec.ts: a page at `//syndicate/1/proposals` with a `#` part
+    of 300 goes live without it, and one of 256 is kept. It fails with app.ts's write-back
+    as it was (never live) and with the `#` counted (the 256 dropped).
+- The reviewers' proofs, now:
+  - round eight: the browser walks R8 Q3, Q5 and Q6 pass. Server: Q5's drawn-back launch,
+    the Club pass and the post range pass; 153 fails as above; Q4's two Expect cases fail
+    as accepted, and its other three pass.
+  - round seven: 4 of 7 pass. A3 (a request behind a thrown-away body, the known limit),
+    B2 (4,450 letters sent by hand, which no box sends) and A1's held memory for the docs
+    page (accepted as separate work) fail, as they did after round seven.
+- Not covered:
+  - Boxes this branch did not give a limit keep the one they had: a room's, a direct
+    message's and a Key's profile 4,000; a project's title 60, short name 32 and
+    description 160; a poll's question 200, notes 2,000 and reason 500; an agent's
+    message 2,000 and 200; the fleet search, 1,000 and 42; the showcase's step title 80.
+    Where that is the site's own most, a paste cut there may still be taken cut; they
+    were not checked one by one.
+  - A poll's choices are 1,100 units in all, so ten choices of 100 emoji, which the rule
+    takes, do not fit the box.
+  - The page refuses a proposal's words over 4,000 units before trimming, where the
+    signed API takes 4,000 bytes once trimmed; words padded with spaces past 4,000 units
+    are refused on the page only.
+  - The notes say "characters" for the words and a launch's fields, which the site counts
+    in bytes once trimmed.
+  - The browser's public reads and signed tools now refuse a string over its `maxLength`
+    in UTF-16 units, where the API counts characters: an emoji-heavy value the API takes
+    can be refused in the browser, never the other way.
+  - A refused field drops the panel's figures until the form changes, as an unread chain
+    does.
+  - The Worldline filter's too-long note is its unreadable one, "Enter a Key number or a
+    0x address."
+  - The wallet panel holds a hidden proposal kind's fields to their most too.
