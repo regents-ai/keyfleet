@@ -137,7 +137,7 @@ defmodule Keyfleet.Seasons.Season do
     end
 
     policy action([:in_fleet, :numbered, :upcoming]) do
-      authorize_if Keyfleet.Seasons.Checks.Member
+      authorize_if {Keyfleet.Access.Check, read: :seasons, scope: :fleet_id}
       authorize_if actor_attribute_equals(:role, :system)
     end
 

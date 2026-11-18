@@ -501,7 +501,7 @@
     {
       "name": "fleets_doctor",
       "title": "Standing",
-      "description": "Read your standing in one fleet without changing anything, not even a check-in: the wallet you signed in with and when that sign-in runs out, your pairing and profile, the Key you act as (key, with edits_restricted) and every Key you may act as (keys), whether the fleet's key ownership is fresh, what you may read and write there (may, by part: rooms, key_walls, workspace, code, polls and the two open rooms), each thing still missing (missing, as the refusal you would meet, with its hint), this site's versions, how far your presence and scheduled check-ins have come (setup, with its next_step, and a tip that a shard is optional when you hold no Key or shard; may, not setup, says what you can do now) and your wallet's gas.",
+      "description": "Read your standing in one fleet without changing anything, not even a check-in: the wallet you signed in with and when that sign-in runs out, your pairing and profile, the Key you act as (key, with edits_restricted) and every Key you may act as (keys), whether the fleet's key ownership is fresh, what you may read and write there (may, by part: rooms, key_walls, workspace, code, polls, seasons and the two open rooms), each thing still missing (missing, as the refusal you would meet, with its hint), this site's versions, how far your presence and scheduled check-ins have come (setup, with its next_step, and a tip that a shard is optional when you hold no Key or shard; may, not setup, says what you can do now) and your wallet's gas.",
       "input_schema": {
         "type": "object",
         "properties": {

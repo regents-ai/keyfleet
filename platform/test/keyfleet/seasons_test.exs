@@ -120,9 +120,14 @@ defmodule Keyfleet.SeasonsTest do
 
       assert {:error, %Ash.Error.Forbidden{}} =
                Seasons.pick(@fleet, 1, %{product: "SOL-USD"}, actor: outsider)
+
+      # The fleet's one access table says so, as `doctor`'s `may` answers it.
+      refute Keyfleet.Access.allowed?(outsider, :read, :seasons, @fleet)
+      refute Keyfleet.Access.allowed?(outsider, :write, :seasons, @fleet)
     end
 
     assert [%{number: 1}] = Seasons.list_seasons!(@fleet, actor: human("a"))
+    assert Keyfleet.Access.allowed?(human("a"), :write, :seasons, @fleet)
   end
 
   test "a product not open to picks on Coinbase is refused, USDC never is" do

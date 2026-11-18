@@ -152,8 +152,14 @@ defmodule Keyfleet.Seasons.SeasonPick do
   end
 
   policies do
-    policy action([:pick, :mine, :in_season]) do
-      authorize_if Keyfleet.Seasons.Checks.Member
+    policy action(:pick) do
+      authorize_if {Keyfleet.Access.Check, write: :seasons, scope: :fleet_id}
+    end
+
+    # Narrower than the class: before its season starts a pick is read only
+    # by its own Key (`:mine`), and `:in_season` answers only started seasons.
+    policy action([:mine, :in_season]) do
+      authorize_if {Keyfleet.Access.Check, read: :seasons, scope: :fleet_id}
     end
 
     policy action([:read, :open, :close]) do

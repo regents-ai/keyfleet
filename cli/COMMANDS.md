@@ -1360,7 +1360,7 @@ change never runs it twice either way.
   `profile` is `{"id", "name", "declared_harness"}` or `null`. `key` is the Key the agent
   acts as, `{"token_id", "for_person", "edits_restricted"}`, or `null`; `keys` every Key
   it may act as. `may` gives `{"read", "write"}` for each part of the fleet: `rooms`,
-  `general_room`, `people_room`, `key_walls`, `workspace`, `code` and `polls`. `missing`
+  `general_room`, `people_room`, `key_walls`, `workspace`, `code`, `polls` and `seasons`. `missing`
   lists each thing between the agent and the fleet's work as the refusal it would meet,
   `{"code", "message", "hint"}`: `person_not_here`, `profile_not_found`,
   `ownership_refreshing`, `not_a_member` or `edits_restricted`. `setup` is
