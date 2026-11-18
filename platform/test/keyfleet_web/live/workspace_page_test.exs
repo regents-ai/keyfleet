@@ -2865,6 +2865,48 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "making posts and pages public" do
+    setup do
+      open_log(@fleet)
+      start_project(@fleet, "lab", "Lab", by: 1)
+      :ok
+    end
+
+    test "a post range says what is wrong with its numbers, and a number or address its box cut is refused",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?place=public&project=lab")
+      cut = fn name, paste -> binary_part(paste, 0, box(view, name)) end
+
+      notes =
+        for {from, to} <- [
+              {"0", "3"},
+              {"-3", "3"},
+              {"1", "0"},
+              {"1.5", "3"},
+              {cut.("from", String.duplicate("1", 40)), "3"},
+              {"99999999999999999999", "3"}
+            ] do
+          view |> form("#public-posts-form", %{"from" => from, "to" => to}) |> render_submit()
+          view |> text("#public-notice") |> String.trim()
+        end
+
+      assert notes == [
+               "Post numbers are whole numbers from 1.",
+               "Post numbers are whole numbers from 1.",
+               "Post numbers are whole numbers from 1.",
+               "Post numbers are whole numbers from 1.",
+               "That post number is too long.",
+               "No post has that number."
+             ]
+
+      page = cut.("page", "https://example.com/" <> String.duplicate("page/", 120))
+      view |> form("#public-page-form", %{"page" => page}) |> render_submit()
+
+      assert view |> text("#public-notice") |> String.trim() ==
+               "A page address is at most 512 characters."
+    end
+  end
+
   describe "a workspace not ready to read" do
     test "says so", %{conn: conn} do
       {:ok, view, html} = live(conn, @board)
@@ -3067,6 +3109,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   defp text(view, selector),
     do:
       view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> LazyHTML.text()
+
+  # How many characters the box for the form field `name` takes.
+  defp box(view, name) do
+    [most] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(~s([name="#{name}"]))
+      |> LazyHTML.attribute("maxlength")
+
+    String.to_integer(most)
+  end
 
   defp signed_in_as(conn, wallet) do
     account =

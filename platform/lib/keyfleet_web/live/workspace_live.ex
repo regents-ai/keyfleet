@@ -23,6 +23,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   import KeyfleetWeb.Components.AgentPicture
   import KeyfleetWeb.Components.LoadFailed
 
+  alias Ash.Error.Action.InvalidArgument
   alias Keyfleet.Actors.Human
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.{Graph, Keys, Notebooks, Projects}
@@ -30,6 +31,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Projects.Errors.{ClosedError, HoldError, NameTakenError, PublishError}
   alias KeyfleetWeb.ActivityLines
+  alias KeyfleetWeb.BoxLimit
   alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
@@ -2595,10 +2597,22 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </select>
         </label>
         <label>
-          First post <input name="from" inputmode="numeric" maxlength="20" required />
+          First post
+          <input
+            name="from"
+            inputmode="numeric"
+            maxlength={BoxLimit.maxlength(longest(:post_number))}
+            required
+          />
         </label>
         <label>
-          Last post <input name="to" inputmode="numeric" maxlength="20" required />
+          Last post
+          <input
+            name="to"
+            inputmode="numeric"
+            maxlength={BoxLimit.maxlength(longest(:post_number))}
+            required
+          />
         </label>
         <p class="workspace-detail">
           Only the posts {ActivityLines.key_name(@board.you.key, nil)} wrote in that range show. The room itself stays with its members.
@@ -2611,7 +2625,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <Regent.Primitives.disclosure id="public-page" summary="Public page">
       <form id="public-page-form" class="workspace-project-form" phx-submit="publish_page">
         <label>
-          Page address <input name="page" type="url" maxlength="512" required />
+          Page address
+          <input
+            name="page"
+            type="url"
+            maxlength={BoxLimit.maxlength(longest(:page_address))}
+            required
+          />
         </label>
         <p class="workspace-detail">
           Paste the address of a saved page you made. Anyone with the link can then open it, signed in or not; the notebook itself stays with members.
@@ -3324,10 +3344,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
         %{"project" => project, "room" => room, "from" => from, "to" => to},
         socket
       ) do
-    with {from, ""} <- Integer.parse(from),
-         {to, ""} <- Integer.parse(to) do
+    with {from, ""} <- post_number(from),
+         {to, ""} <- post_number(to) do
       publish(socket, &Projects.publish_posts(&1, &2, project, room, from, to, &3))
     else
+      :too_long ->
+        {:noreply, assign(socket, :publish_notice, "That post number is too long.")}
+
       _not_numbers ->
         {:noreply, assign(socket, :publish_notice, "Post numbers are whole numbers from 1.")}
     end
@@ -3338,8 +3361,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
     publish(socket, &Projects.publish_item(&1, &2, item, &3))
   end
 
-  def handle_event("publish_page", %{"page" => page}, socket),
-    do: publish(socket, &Projects.publish_page(&1, &2, String.trim(page), &3))
+  def handle_event("publish_page", %{"page" => page}, socket) do
+    if BoxLimit.too_long?(page, longest(:page_address)),
+      do:
+        {:noreply,
+         assign(
+           socket,
+           :publish_notice,
+           "A page address is at most #{longest(:page_address)} characters."
+         )},
+      else: publish(socket, &Projects.publish_page(&1, &2, String.trim(page), &3))
+  end
 
   def handle_event("publish_commit", _params, socket) do
     %{project: project, hash: hash} = socket.assigns.workspace
@@ -3396,6 +3428,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
       {:error, error} ->
         {:noreply, socket |> assign(:project_notice, refused(error)) |> read_workspace()}
     end
+  end
+
+  # The longest value the public forms' boxes take (`KeyfleetWeb.BoxLimit`):
+  # room for any post's number, and a page address as the signed API takes it.
+  defp longest(:post_number), do: 20
+  defp longest(:page_address), do: 512
+
+  # A post number as typed: `:too_long` past its box's rule, read otherwise.
+  defp post_number(typed) do
+    if BoxLimit.too_long?(typed, longest(:post_number)),
+      do: :too_long,
+      else: Integer.parse(typed)
   end
 
   # Making posts public, or taking them back, acts as the member's Key; the
@@ -3461,6 +3505,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp refusal(%NameTakenError{} = error), do: Exception.message(error)
   defp refusal(%{field: :name}), do: "A short name is lowercase letters, digits and hyphens."
   defp refusal(%{field: :title}), do: "A title is 1 to 60 characters."
+
+  # A post range's own rules: from 1, and no larger than a post's number can be.
+  defp refusal(%InvalidArgument{field: field, value: value})
+       when field in [:from_seq, :to_seq] and is_integer(value) and value >= 1,
+       do: "No post has that number."
+
+  defp refusal(%InvalidArgument{field: field}) when field in [:from_seq, :to_seq],
+    do: "Post numbers are whole numbers from 1."
 
   defp refusal(%NotKeyHolderError{}),
     do: "Only holders of this fleet’s Keys work on its projects."
