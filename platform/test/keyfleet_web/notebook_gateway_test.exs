@@ -1258,6 +1258,26 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert for({_status, {:memory, bytes}} <- held, bytes > 256 * 1024, do: bytes) == []
   end
 
+  # Costly failure: a large file write stays held by its connection once
+  # answered, for as long as the connection stays open: 32 MiB each.
+  test "a large file write is let go once answered, while its connection stays open", c do
+    cookie = enter!(c.holder)
+    site = SignedAgentHelpers.serve_site!(:site)
+    files = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000002/workspace/files"
+    file = :binary.copy("f", 4 * 1024 * 1024)
+
+    written =
+      Req.put!(site.url <> files <> "?path=big.csv&create=true",
+        headers: %{"host" => @host, "cookie" => "__Host-kf_notebooks=" <> cookie},
+        body: file,
+        retry: false
+      )
+
+    assert written.status == 200
+    assert_received {:hub, "PUT", ^files, "u_" <> _, ^file}
+    assert SignedAgentHelpers.most_held(site.server) < 256 * 1024
+  end
+
   # Costly failure: a session start whose replacement isn't text crashes the
   # door, from a person or an agent, where it should be refused.
   test "a session start whose mode or replacement isn't text, or whose text can't be read, is refused and never reaches the hub, from a person or an agent",

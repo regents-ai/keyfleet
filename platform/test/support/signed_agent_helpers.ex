@@ -33,22 +33,58 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc "Serves `plug` on a free local port under the calling test and returns its address."
-  def serve!(id, plug), do: "http://127.0.0.1:#{listen!(id, plug, {127, 0, 0, 1})}"
+  def serve!(id, plug) do
+    {_server, port} = listen!(id, plug, {127, 0, 0, 1}, [])
+    "http://127.0.0.1:#{port}"
+  end
 
   @doc """
   Serves `plug` on IPv6 only and returns an address by name, as Fly's private
   addresses are: a client that looks the name up over IPv4 never reaches it.
   """
-  def serve_ipv6!(id, plug), do: "http://localhost:#{listen!(id, plug, {0, 0, 0, 0, 0, 0, 0, 1})}"
+  def serve_ipv6!(id, plug) do
+    {_server, port} = listen!(id, plug, {0, 0, 0, 0, 0, 0, 0, 1}, [])
+    "http://localhost:#{port}"
+  end
 
-  defp listen!(id, plug, ip) do
-    pid =
-      ExUnit.Callbacks.start_supervised!(
-        Supervisor.child_spec({Bandit, plug: plug, ip: ip, port: 0}, id: id)
+  @doc """
+  Serves the site on a free local port with the web server settings it runs
+  with (`config/runtime.exs`), and returns its address and its server.
+  """
+  def serve_site!(id) do
+    {server, port} =
+      listen!(id, KeyfleetWeb.Endpoint, {127, 0, 0, 1},
+        http_1_options: [gc_every_n_keepalive_requests: 1]
       )
 
-    {:ok, {_, port}} = ThousandIsland.listener_info(pid)
-    port
+    %{url: "http://127.0.0.1:#{port}", server: server}
+  end
+
+  @doc """
+  How much the largest of the server's open connections keeps, in bytes: its
+  process's memory and the large binaries it still points to, read once each
+  connection waits for its next request.
+  """
+  def most_held(server) do
+    {:ok, connections} = ThousandIsland.connection_pids(server)
+
+    connections
+    |> Enum.map(fn connection ->
+      _waiting = :sys.get_state(connection)
+      [memory: memory, binary: binaries] = Process.info(connection, [:memory, :binary])
+      memory + Enum.sum(for {_id, size, _refs} <- binaries, do: size)
+    end)
+    |> Enum.max()
+  end
+
+  defp listen!(id, plug, ip, options) do
+    server =
+      ExUnit.Callbacks.start_supervised!(
+        Supervisor.child_spec({Bandit, [plug: plug, ip: ip, port: 0] ++ options}, id: id)
+      )
+
+    {:ok, {_, port}} = ThousandIsland.listener_info(server)
+    {server, port}
   end
 
   @doc """

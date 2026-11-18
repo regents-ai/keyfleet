@@ -273,9 +273,12 @@ if config_env() == :prod do
     config :keyfleet, KeyfleetWeb.Endpoint,
       server: true,
       url: [host: host, port: 443, scheme: "https"],
+      # A connection kept open cleans up after every request it answers, not
+      # every fifth, so no large body or decoding stays held while it idles.
       http: [
         ip: {0, 0, 0, 0, 0, 0, 0, 0},
-        port: String.to_integer(System.get_env("PORT", "4000"))
+        port: String.to_integer(System.get_env("PORT", "4000")),
+        http_1_options: [gc_every_n_keepalive_requests: 1]
       ],
       secret_key_base: secret_key_base
 

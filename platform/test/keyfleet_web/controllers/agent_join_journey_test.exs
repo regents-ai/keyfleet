@@ -397,37 +397,21 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
   # Costly failure: decoding a deeply nested body takes its request megabytes,
   # which a connection kept open goes on holding.
-  test "a deeply nested body leaves its request holding little once judged", c do
-    path = "/api/v1/agent/fleets/fibonacci_syndicate/sync"
-    depth = div(64 * 1024 - 12, 2)
-    deep = ~s({"name":) <> :binary.copy("[", depth) <> :binary.copy("]", depth) <> "}"
+  test "a deeply nested body leaves its connection holding little once answered, refused or taken",
+       c do
+    site = SignedAgentHelpers.serve_site!(:site)
+    c = %{c | app: site.url}
+    depth = div(64 * 1024 - 40, 2)
+    nested = :binary.copy("[", depth) <> :binary.copy("]", depth)
+    sync = "/api/v1/agent/fleets/fibonacci_syndicate/sync"
+    preview = "/api/v1/agent/preview"
+    refused = signed(c, ~s({"name":#{nested}}), "keyfleet", 8453, sync)
+    taken = signed(c, ~s({"tool":"click","input":{"a":#{nested}}}), "keyfleet", 8453, preview)
 
-    # Many at once, each in a process of its own as each connection has: one
-    # request alone may happen to clean up after itself.
-    held =
-      for _ <- 1..50 do
-        request =
-          SignedAgentHelpers.sign(c.signer, c.secret, "www.example.com", "POST", path, deep)
-
-        Task.async(fn ->
-          conn =
-            request.headers
-            |> Enum.reduce(
-              %{Plug.Test.conn("POST", path, deep) | remote_ip: {198, 51, 100, 152}},
-              fn {name, value}, conn -> put_req_header(conn, name, value) end
-            )
-            |> KeyfleetWeb.Endpoint.call([])
-
-          {conn.status, Process.info(self(), :memory)}
-        end)
-      end
-      |> Task.await_many()
-
-    assert for(
-             {status, {:memory, bytes}} <- held,
-             status != 422 or bytes > 256 * 1024,
-             do: {status, bytes}
-           ) == []
+    assert misfit?(send_request(c, refused))
+    assert SignedAgentHelpers.most_held(site.server) < 256 * 1024
+    assert outcome(send_request(c, taken)) == {422, "preview_tool_unknown"}
+    assert SignedAgentHelpers.most_held(site.server) < 256 * 1024
   end
 
   # Costly failure: a body other than the one a signature declares is acted

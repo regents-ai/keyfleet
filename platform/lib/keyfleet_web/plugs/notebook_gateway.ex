@@ -645,12 +645,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # Deciding who may send a body can mean decoding it (`decoded/1`), which takes
   # this process some megabytes for a deeply nested 64 KiB one. It would hold
-  # them while it waits for the hub, and on a connection kept open until that
-  # connection next cleans up, so they are given back as soon as the checks are
-  # done, whatever they found.
+  # them while it waits for the hub, so they are given back as soon as the
+  # checks are done, whatever they found. Only a decoded body leaves anything to
+  # give back; the web server cleans up after every answer (`config/runtime.exs`).
   defp checked(conn, fleet_id, subject, {_headers, body} = request) do
     checked = with :ok <- unscheduled(conn, body), do: made(conn, fleet_id, subject, request)
-    :erlang.garbage_collect()
+    if decodes?(conn), do: :erlang.garbage_collect()
     checked
   end
 
@@ -1116,20 +1116,24 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A body this door decodes to decide who may send it (`decoded/1`) is read no
   # further than an agent's: decoding costs many times its length. Every other
   # body is read up to this door's own request limit (`max_request_bytes`).
-  defp body_limit(%Plug.Conn{
+  defp body_limit(conn),
+    do: if(decodes?(conn), do: @signed_max_body, else: Notebooks.config()[:max_request_bytes])
+
+  # The routes whose body this door decodes (`decoded/1`).
+  defp decodes?(%Plug.Conn{
          method: method,
          path_info: ["api", "v1", "projects", _project, "notebooks", _notebook | rest]
        }) do
     case {method, rest} do
-      {"POST", ["sessions"]} -> @signed_max_body
-      {"POST", ["jobs"]} -> @signed_max_body
-      {"PATCH", ["jobs", _job]} -> @signed_max_body
-      {"POST", ["workspace", "directories"]} -> @signed_max_body
-      _undecoded -> Notebooks.config()[:max_request_bytes]
+      {"POST", ["sessions"]} -> true
+      {"POST", ["jobs"]} -> true
+      {"PATCH", ["jobs", _job]} -> true
+      {"POST", ["workspace", "directories"]} -> true
+      _undecoded -> false
     end
   end
 
-  defp body_limit(_conn), do: Notebooks.config()[:max_request_bytes]
+  defp decodes?(_conn), do: false
 
   # A hub sends the browser on only within the fleet's notebooks: to a path
   # here, or an address naming this host. Any other location, or one a browser

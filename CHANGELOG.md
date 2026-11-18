@@ -11249,3 +11249,24 @@ a scratch walk that is not kept.
   0.7.5 never unpacks an answer passed on through `into:`, nor one it isn't asked to
   (`compressed:`), so this guards the header and any later change to how the door reads
   the hub's answer.
+
+## 2026-11-17 — A large file write is let go once answered
+
+- The notebook door collected after its checks on every request, so a file it passes on
+  unread, still to be sent to the hub, survived that collection, and a connection kept
+  open held it until Bandit next collected (every fifth request) or the connection idled
+  15 s. In the reviewers' proofs, 20 kept-open connections that had each written 32 MiB
+  held 24,618 KiB each a second after the answer; an 8 MiB write held 8,254 KiB, and an
+  agent's deeply nested body the agent API took 2,053 KiB.
+- The door now collects only after a body it decodes (a session start, a job, a job's
+  change, a new folder), still before it waits for the hub: without it, 150 deep jobs
+  waiting on a slow hub hold 635 MiB, with it 119. The site's web server collects a
+  kept-open connection after every request it answers (Bandit's
+  `gc_every_n_keepalive_requests: 1`, `config/runtime.exs`), so every request shape in
+  the proofs leaves its connection holding 5 KiB, those three included.
+- `SignedAgent.take_body/1` no longer collects. Once the answer is sent the server does,
+  and before that its collection made a waiting request hold more, not less: 100 agents'
+  24 KiB file adds waiting a second on the hub held 263 KiB each with it, 162 without.
+- A collection after an ordinary page costs 1 to 22 µs (a small job 2 µs; the docs page,
+  which holds 7 MiB until then, 85 µs). Tests serve the site with the same setting through
+  `SignedAgentHelpers.serve_site!/1`. Nothing is answered differently; no contract change.

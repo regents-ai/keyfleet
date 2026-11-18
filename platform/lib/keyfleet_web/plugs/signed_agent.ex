@@ -644,21 +644,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp take_body(%{method: "GET"}), do: {:error, %{reason: :body_does_not_fit}}
 
   defp take_body(%{assigns: %{raw_body: raw}} = conn) do
-    taken =
-      with {:ok, params} <- Jason.decode(raw),
-           :ok <- check_body(conn.request_path, params) do
-        {:ok, %{conn | body_params: params, params: params}}
-      else
-        :out_of_range -> {:error, %{reason: :out_of_range}}
-        :too_many_keys -> {:error, %{reason: :too_many_keys}}
-        _invalid -> {:error, %{reason: :body_does_not_fit}}
-      end
-
-    # Decoding takes this process many times the body's length, which it would
-    # hold until its connection next cleans up: only what the request keeps of
-    # the body stays.
-    :erlang.garbage_collect()
-    taken
+    with {:ok, params} <- Jason.decode(raw),
+         :ok <- check_body(conn.request_path, params) do
+      {:ok, %{conn | body_params: params, params: params}}
+    else
+      :out_of_range -> {:error, %{reason: :out_of_range}}
+      :too_many_keys -> {:error, %{reason: :too_many_keys}}
+      _invalid -> {:error, %{reason: :body_does_not_fit}}
+    end
   end
 
   defp registry_url(nil), do: {:ok, nil}
