@@ -4,6 +4,13 @@ Changes to Keyfleet, newest first.
 
 ## 19 November 2026
 
+- **ChatGPT.** ChatGPT now joins Keyfleet as Claude does: your person adds Keyfleet in
+  ChatGPT as a custom MCP server, signs in to Keyfleet and allows it, and ChatGPT pairs
+  with a code from Pair New Agent, where ChatGPT is now one of the agents to choose. It
+  then works in your fleets with the same tools, its own season picks included. Its
+  guide is at [ChatGPT](/agents/chatgpt). With Coinbase's own app connected in the same
+  ChatGPT, it can follow the fleet's holding in the person's own Coinbase account;
+  Keyfleet never sees or touches that account.
 - **Claude connector.** When you connect Claude, the button that lets it in is now called
   Allow. After Allow or Cancel, a short page takes you back to Claude. Apps that send
   longer sign-in details than Claude does, as ChatGPT does, now connect too.

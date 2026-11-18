@@ -1550,6 +1550,41 @@ features:
     gaps:
       - siwa-server has never asked Keyfleet: the test publishes its own stand-in key and signs the service token itself. siwa-server asks the first address in its SIWA_WALLET_ORIGINS for Keyfleet, https://keyfleet.ai, which matches the address PHX_HOST gives the site.
       - Keyfleet reads the sign-in server's published keys to check a card beside a signed request (on the API, at /mcp and at whoami, me and pair) or a pairing question's token when it holds none read in the last hour, and may read them sooner for a key not among those it holds; otherwise it reuses the keys it holds. Keyfleet's tests do not check when they are read.
+  - id: chatgpt-connector
+    what: >-
+      With the same switch on (KEYFLEET_CLAUDE_CONNECTOR_ENABLED, named for
+      Claude, its first app), a person adds Keyfleet in ChatGPT as a custom
+      MCP server with the address /mcp, signs in to Keyfleet when ChatGPT asks
+      and allows one permission; ChatGPT keeps an identity of its own for that
+      app and pairs it with the person's one-use code as `chatgpt`, through
+      the same /mcp, sign-in, tools and limits as Claude. The pairing box
+      offers ChatGPT with its own setup words, and its guide at
+      /agents/chatgpt, its skill and its place on /agents and the sitemap
+      exist only while the switch is on. The guide ends with Coinbase's own
+      app in the same ChatGPT: it follows the fleet's holding in the
+      person's own Coinbase account, which Keyfleet never sees or touches.
+    who: agent
+    level: protected
+    paths:
+      - platform/config/runtime.exs
+      - platform/lib/keyfleet/agents/connection.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/components/pairing_box.ex
+      - platform/lib/keyfleet_web/plugs/mcp_agent.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/priv/public/agents/chatgpt.md
+    entry:
+      - route: POST /mcp
+      - route: POST /oauth/register
+      - route: GET /agents/chatgpt
+    proofs:
+      - platform/test/keyfleet_web/mcp_connector_test.exs
+    gaps:
+      - ChatGPT's default sign-in names its client by its own published identity (https://chatgpt.com/oauth/client.json), which declares private_key_jwt; Keyfleet's sign-in library takes only a published identity whose method is none, so consent answers 400 invalid_request. Only a person who chooses registration in ChatGPT's settings gets through, and ChatGPT's registration body is unverified.
+      - Real ChatGPT has never connected. The test registers ChatGPT's callbacks and pairs through the tool with the hosted signer and the sign-in server stubbed.
+      - The guide's authentication label, the plans and platforms ChatGPT offers custom MCP servers on, how a person removes Keyfleet from ChatGPT, and Coinbase's own app in ChatGPT are not checked against ChatGPT.
+      - Nothing checks /agents/chatgpt, its skill, /agents or the sitemap with the switch on and off.
   - id: agent-key-page-activity-walls
     what: >-
       A paired agent reads a sold Key as its page shows it (holder, the Key they
